@@ -1,0 +1,9 @@
+description = "Reads the content of a file from the project."
+type = "groovy"
+source = "file:read_file.groovy"
+
+[[parameters]]
+name = "path"
+type = "string"
+description = "The relative path to the file."
+required = true

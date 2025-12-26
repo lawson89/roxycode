@@ -1,0 +1,9 @@
+description = "Runs all JUnit tests in the project and returns a summary."
+type = "groovy"
+source = "file:run_tests.groovy"
+
+[[parameters]]
+name = "dummy"
+type = "string"
+description = "Unused parameter required by schema parser"
+required = false

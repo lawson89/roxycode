@@ -1,0 +1,15 @@
+description = "Writes content to a file. Creates directories if needed."
+type = "groovy"
+source = "file:write_file.groovy"
+
+[[parameters]]
+name = "path"
+type = "string"
+description = "The relative path to the file."
+required = true
+
+[[parameters]]
+name = "content"
+type = "string"
+description = "The text content to write."
+required = true
