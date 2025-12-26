@@ -104,4 +104,8 @@ public class SettingsService {
             LOG.error("Failed to serialize recent projects", e);
         }
     }
+
+    public Path getCurrentProject() {
+        return Paths.get(".").toAbsolutePath().normalize();
+    }
 }

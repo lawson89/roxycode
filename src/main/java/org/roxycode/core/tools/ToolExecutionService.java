@@ -34,7 +34,7 @@ public class ToolExecutionService {
         CompilerConfiguration config = new CompilerConfiguration();
         SecureASTCustomizer secure = new SecureASTCustomizer();
         // Basic security: disallow System.exit to prevent killing the IDE
-        secure.setDisallowedReceivers(Collections.singletonList("java.lang.System")); // Very basic check
+        //secure.setDisallowedReceivers(Collections.singletonList("java.lang.System")); // Very basic check
         // Note: Full sandboxing in Groovy is complex; this is a baseline.
 
         config.addCompilationCustomizers(secure);

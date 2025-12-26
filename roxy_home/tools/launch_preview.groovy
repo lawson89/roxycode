@@ -8,9 +8,10 @@ import java.util.concurrent.TimeUnit
 
 // 1. Compile
 // Note: We use 'mvn' from the path. Ensure maven is in your system PATH or use ./mvnw
+// FIX: Changed sandbox.getProjectRoot() to sandbox.getRoot()
 new ProcessExecutor()
         .command("mvn", "compile")
-        .directory(sandbox.getProjectRoot().toFile())
+        .directory(sandbox.getRoot().toFile())
         .redirectOutput(System.out)
         .execute()
 
@@ -20,8 +21,9 @@ new ProcessExecutor()
 String classpath = System.getProperty("java.class.path")
 String javaHome = System.getProperty("java.home") + "/bin/java"
 
+// FIX: Changed sandbox.getProjectRoot() to sandbox.getRoot()
 def process = new ProcessBuilder(javaHome, "-cp", classpath, "org.roxycode.Application")
-        .directory(sandbox.getProjectRoot().toFile())
+        .directory(sandbox.getRoot().toFile())
         .start()
 
 try {

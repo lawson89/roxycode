@@ -73,14 +73,6 @@ public class GenAIService {
         this.cachedRoxyHome = roxyHome;
         LOG.info("🏠 Roxy Home detected at: {}", roxyHome);
 
-        // Ensure structure exists
-        try {
-            Files.createDirectories(roxyHome.resolve("tools"));
-            Files.createDirectories(roxyHome.resolve("context"));
-        } catch (IOException e) {
-            LOG.warn("Failed to create roxy_home directories", e);
-        }
-
         // 2. LOAD CONTEXT KNOWLEDGE
         contextRegistry.loadContexts(roxyHome.resolve("context"));
 
@@ -215,9 +207,20 @@ public class GenAIService {
                         try {
                             byte[] imageBytes = Files.readAllBytes(Paths.get(toolOutput));
                             Blob imageBlob = Blob.builder().mimeType("image/png").data(imageBytes).build();
-                            subsequentUserMessages.add(Content.builder().role("user").parts(List.of(Part.builder().inlineData(imageBlob).text("Screenshot captured.").build())).build());
+
+                            // FIX: Create TWO separate parts: one for image, one for text
+                            subsequentUserMessages.add(Content.builder()
+                                    .role("user")
+                                    .parts(List.of(
+                                            Part.builder().inlineData(imageBlob).build(),       // Part 1: Image
+                                            Part.builder().text("Screenshot captured.").build() // Part 2: Text
+                                    ))
+                                    .build());
+
                             toolOutput = "Screenshot captured.";
-                        } catch (Exception e) { LOG.error("Image load fail", e); }
+                        } catch (Exception e) {
+                            LOG.error("Image load fail", e);
+                        }
                     }
 
                     functionResponseParts.add(Part.builder()
