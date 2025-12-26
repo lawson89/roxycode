@@ -7,6 +7,7 @@ import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.GitService;
+import org.roxycode.core.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,8 +17,6 @@ import javax.swing.tree.DefaultTreeModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
-import java.nio.file.Paths;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.FileSystems;
 import java.util.Arrays;
@@ -32,6 +31,9 @@ public class MainFrame extends JFrame implements Runnable {
     // Dependencies
     private final GitService gitService;
     private final GenAIService genAIService;
+    private final SettingsService settingsService;
+
+    private Path currentProjectRoot;
 
     // Outlets (Mapped from XML IDs)
     @Outlet
@@ -49,18 +51,33 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton rescanButton;
     @Outlet
-    private JButton settingsButton;
+    private JMenuItem settingsMenuItem;
     @Outlet
     private JLabel currentProjectLabel;
+    @Outlet
+    private JMenuItem exitMenuItem;
+    @Outlet
+    private JMenuItem aboutMenuItem;
+    @Outlet
+    private JMenuItem openFolderMenuItem;
+
+    // New Outlets for Settings Tab
+    @Outlet
+    private JTabbedPane mainTabbedPane;
+    @Outlet
+    private JPasswordField apiKeyField;
+    @Outlet
+    private JTextField maxTurnsField;
+    @Outlet
+    private JButton saveSettingsButton;
 
     private final MarkdownPane chatArea = new MarkdownPane();
 
-    private JDialog settingsDialog;
-
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService) {
+    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService) {
         this.gitService = gitService;
         this.genAIService = genAIService;
+        this.settingsService = settingsService;
 
         setTitle("RoxyCode AI Environment");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -76,31 +93,38 @@ public class MainFrame extends JFrame implements Runnable {
             chatScrollPane.setViewportView(chatArea);
         }
 
+        // Initialize project root to current directory
+        currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
+
         initGitInfo();
         initListeners();
+        initSettings();
         populateFileTree(); // Populate the file tree
 
         // --- STARTUP SCAN ---
         performRescan();
 
-        // Set the project path
-        Path projectPath = FileSystems.getDefault().getPath("").toAbsolutePath();
-        if (currentProjectLabel != null) {
-            currentProjectLabel.setText(projectPath.toString());
-        }
+        // Set the project path label
+        updateProjectLabel();
 
         setSize(1200, 800);
         setLocationRelativeTo(null);
         setVisible(true);
     }
 
+    private void updateProjectLabel() {
+        if (currentProjectLabel != null) {
+            currentProjectLabel.setText(currentProjectRoot.toString());
+        }
+    }
+
     private void initGitInfo() {
         if (gitBranchLabel != null) {
-            String branch = gitService.getCurrentBranch(Paths.get("."));
+            String branch = gitService.getCurrentBranch(currentProjectRoot);
             gitBranchLabel.setText(branch != null ? branch : "No Git Repo");
         }
         if (projectNameLabel != null) {
-            projectNameLabel.setText("roxycode");
+            projectNameLabel.setText(currentProjectRoot.getFileName().toString());
         }
     }
 
@@ -121,17 +145,80 @@ public class MainFrame extends JFrame implements Runnable {
             inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
         }
         if (rescanButton != null) rescanButton.addActionListener(e -> performRescan());
-        if (settingsButton != null) settingsButton.addActionListener(this::onSettings);
+        if (settingsMenuItem != null) settingsMenuItem.addActionListener(this::onSettings);
+        if (exitMenuItem != null) exitMenuItem.addActionListener(e -> System.exit(0));
+        if (aboutMenuItem != null) aboutMenuItem.addActionListener(this::onAbout);
+        if (openFolderMenuItem != null) openFolderMenuItem.addActionListener(this::onOpenFolder);
+
+        if (saveSettingsButton != null) saveSettingsButton.addActionListener(this::onSaveSettings);
+    }
+
+    private void initSettings() {
+        if (apiKeyField != null) {
+            apiKeyField.setText(settingsService.getGeminiApiKey());
+        }
+        if (maxTurnsField != null) {
+            maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
+        }
+    }
+
+    private void onSaveSettings(ActionEvent e) {
+        Component parent = (Component) e.getSource();
+        if (apiKeyField != null) {
+            String key = new String(apiKeyField.getPassword()).trim();
+            settingsService.setGeminiApiKey(key);
+        }
+        
+        if (maxTurnsField != null) {
+            try {
+                String txt = maxTurnsField.getText().trim();
+                if (!txt.isEmpty()) {
+                    int turns = Integer.parseInt(txt);
+                    if (turns > 0) {
+                        settingsService.setMaxTurns(turns);
+                    } else {
+                        JOptionPane.showMessageDialog(parent, "Max Turns must be positive.", "Error", JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
+                }
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(parent, "Invalid number for Max Turns.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        }
+            
+        JOptionPane.showMessageDialog(parent, "Settings saved.", "Settings", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void onOpenFolder(ActionEvent e) {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        fileChooser.setCurrentDirectory(currentProjectRoot.toFile());
+
+        int result = fileChooser.showOpenDialog((Component) e.getSource());
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            currentProjectRoot = selectedFile.toPath().toAbsolutePath();
+
+            updateProjectLabel();
+            initGitInfo();
+            populateFileTree();
+            performRescan();
+
+            if (chatArea != null) {
+                chatArea.appendMarkdown("*System: Switched project to " + currentProjectRoot.toString() + "*");
+            }
+        }
     }
 
     private void performRescan() {
-        log.info("Triggering Knowledge Rescan...");
+        log.info("Triggering Knowledge Rescan for " + currentProjectRoot);
         // Run in background to not block UI startup
         new Thread(() -> {
-            genAIService.refreshKnowledge(".");
+            genAIService.refreshKnowledge(currentProjectRoot.toString());
             SwingUtilities.invokeLater(() -> {
                 if (chatArea != null) {
-                    chatArea.appendMarkdown("*System: Knowledge base reloaded from roxy_home.*");
+                    chatArea.appendMarkdown("*System: Knowledge base reloaded.*");
                 }
             });
         }).start();
@@ -146,7 +233,7 @@ public class MainFrame extends JFrame implements Runnable {
             chatArea.appendMarkdown("**User:** " + prompt);
 
             new Thread(() -> {
-                String response = genAIService.chat(prompt, ".", (toolLog) -> {
+                String response = genAIService.chat(prompt, currentProjectRoot.toString(), (toolLog) -> {
                     SwingUtilities.invokeLater(() -> {
                         chatArea.appendMarkdown(toolLog);
                     });
@@ -159,32 +246,21 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void onSettings(ActionEvent e) {
-        if (settingsDialog == null) {
-            try {
-                JPanel settingsPanel = (JPanel) UILoader.load(this, "SettingsPanel.xml");
-                settingsDialog = new JDialog(this, "Settings", true);
-                settingsDialog.setContentPane(settingsPanel);
-                settingsDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-                settingsDialog.pack();
-                settingsDialog.setLocationRelativeTo(this);
-            } catch (Exception ex) {
-                log.error("Failed to load settings panel", ex);
-                JOptionPane.showMessageDialog(this, "Failed to load settings panel: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                return;
+        if (mainTabbedPane != null) {
+            // Select the settings tab (index 1)
+            if (mainTabbedPane.getTabCount() > 1) {
+                mainTabbedPane.setSelectedIndex(1);
             }
         }
-        settingsDialog.setVisible(true);
     }
-
-    public void closeSettings(ActionEvent e) {
-        if (settingsDialog != null) {
-            settingsDialog.dispose();
-        }
+    
+    private void onAbout(ActionEvent e) {
+        JOptionPane.showMessageDialog((Component) e.getSource(), "RoxyCode AI Environment\nVersion 1.0", "About RoxyCode", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void populateFileTree() {
         // Use the current working directory as the root
-        File rootDir = new File(".").getAbsoluteFile();
+        File rootDir = currentProjectRoot.toFile();
 
         // Create the root node (Use folder name or "Project")
         String rootName = rootDir.getName().equals(".") ? "Project" : rootDir.getName();

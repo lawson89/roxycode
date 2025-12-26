@@ -144,7 +144,7 @@ public class GenAIService {
 
         // 3. Conversation Loop
         int turns = 0;
-        int maxTurns = 15;
+        int maxTurns = settingsService.getMaxTurns();
 
         while (turns++ < maxTurns) {
             LOG.info("Turn {}: Sending message to model...", turns);
@@ -208,7 +208,7 @@ public class GenAIService {
                         ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow();
                         toolOutput = executionService.execute(toolDef, fixedArgs).get();
                     } catch (Exception e) {
-                        toolOutput = "Error: " + e.getMessage();
+                        toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
                     }
                     LOG.info("Tool output: {}", toolOutput);
 

@@ -1,19 +1,23 @@
-def file = new File(sandbox.getRoot().toFile(), path)
+import java.nio.file.Files
+
+def p = sandbox.resolve(args.path)
+def file = p.toFile()
+
 if (!file.exists()) {
-    return "File not found: " + path
+    return "File not found: " + args.path
 }
 
 try {
     def content = file.text
     // Use replaceAll which takes a regex
-    def newContent = content.replaceAll(search, replace)
+    def newContent = content.replaceAll(args.search, args.replace)
     
     if (content.equals(newContent)) {
-        return "No matches found for pattern: " + search
+        return "No matches found for pattern: " + args.search
     }
     
     file.text = newContent
-    return "Successfully updated " + path
+    return "Successfully updated " + args.path
 } catch (Exception e) {
     return "Error replacing text: " + e.message
 }

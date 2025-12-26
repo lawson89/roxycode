@@ -3,14 +3,16 @@ import org.xml.sax.InputSource
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.EntityResolver
 
-def xmlFile = new File(sandbox.getRoot().toFile(), path)
+def p = sandbox.resolve(args.path)
+def xmlFile = p.toFile()
+
 if (!xmlFile.exists()) {
-    return "File not found: " + path
+    return "File not found: " + args.path
 }
 
 // Locate sierra.dtd
 // Try relative to project root first
-def dtdFile = new File(sandbox.getRoot().toFile(), "roxycode/roxy_home/context/sierra.dtd")
+def dtdFile = new File(sandbox.getRoot().toFile(), "roxy_home/context/sierra.dtd")
 if (!dtdFile.exists()) {
     // Try absolute path known from environment
     dtdFile = new File("/home/rlawson/code/roxycode/roxy_home/context/sierra.dtd")

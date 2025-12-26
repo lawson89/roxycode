@@ -3,7 +3,19 @@
 
 <column-panel background="white" opaque="true">
 
+    <menu-bar>
+        <menu text="File">
+            <menu-item name="openFolderMenuItem" text="Open Folder..."/>
+            <menu-item name="settingsMenuItem" text="Settings"/>
+            <menu-item name="exitMenuItem" text="Exit"/>
+        </menu>
+        <menu text="About">
+            <menu-item name="aboutMenuItem" text="About RoxyCode"/>
+        </menu>
+    </menu-bar>
+
     <row-panel spacing="8" padding="8" background="#f0f0f0" opaque="true" alignToBaseline="true">
+        <component class="org.roxycode.ui.IconView" iconName="bi-robot" iconSize="24" color="#555555"/>
         <label text="RoxyCode AI" styleClass="h3"/>
         <spacer size="16"/>
         <label text="Project: " foreground="gray"/>
@@ -12,7 +24,6 @@
         <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
         <spacer weight="1"/>
         <button name="rescanButton" text="Rescan"/>
-        <button name="settingsButton" text="Settings"/>
 
     </row-panel>
 
@@ -23,18 +34,45 @@
         </scroll-pane>
 
         <column-panel weight="1">
-            <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
+            <tabbed-pane weight="1" name="mainTabbedPane">
+                
+                <!-- Tab 1: Chat -->
+                <column-panel tabTitle="Chat" weight="1">
+                    <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
+                        <!-- Chat content injected manually -->
+                    </scroll-pane>
 
+                    <row-panel spacing="4" padding="8" background="#e0e0e0" opaque="true">
+                        <scroll-pane weight="1">
+                            <text-area name="inputField" rows="3"/>
+                        </scroll-pane>
+                        <button name="sendButton" text="Send"/>
+                    </row-panel>
+                </column-panel>
+                
+                <!-- Tab 2: Settings -->
+                <column-panel tabTitle="Settings" padding="16" spacing="8" name="settingsTab">
+                    <label text="Global Settings" font="h1"/>
+                    <spacer size="16"/>                    <label text="Gemini API Key:"/>
+                    <row-panel spacing="8">
+                        <password-field name="apiKeyField" columns="30" weight="1"/>
+                    </row-panel>
+                    
+                    <spacer size="8"/>
+                    <label text="Max Turns (Chat History):"/>
+                    <row-panel spacing="8">
+                        <text-field name="maxTurnsField" columns="10"/>
+                    </row-panel>
+                    
+                    <spacer size="16"/>
+                    <row-panel>
+                        <button name="saveSettingsButton" text="Save Settings"/>
+                    </row-panel>
+                    
+                    <spacer weight="1"/>
+                </column-panel>
 
-            </scroll-pane>
-
-            <row-panel spacing="4" padding="8" background="#e0e0e0" opaque="true">
-                <scroll-pane weight="1">
-                    <text-area name="inputField" rows="3"/>
-                </scroll-pane>
-
-                <button name="sendButton" text="Send"/>
-            </row-panel>
+            </tabbed-pane>
         </column-panel>
 
     </split-pane>

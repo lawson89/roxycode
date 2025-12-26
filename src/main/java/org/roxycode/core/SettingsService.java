@@ -23,6 +23,8 @@ public class SettingsService {
     private static final String KEY_RECENT_PROJECTS = "recentProjects";
     private static final String ENV_GEMINI_API_KEY = "GEMINI_API_KEY";
     private static final String ENV_ROXY_HOME = "ROXY_HOME";
+    private static final String KEY_MAX_TURNS = "maxTurns";
+    private static final int MAX_TURNS = 15;
 
     private final Preferences preferences;
     private final ObjectMapper objectMapper;
@@ -107,5 +109,13 @@ public class SettingsService {
 
     public Path getCurrentProject() {
         return Paths.get(".").toAbsolutePath().normalize();
+    }
+
+    public int getMaxTurns() {
+        return preferences.getInt(KEY_MAX_TURNS, MAX_TURNS);
+    }
+
+    public void setMaxTurns(int turns) {
+        preferences.putInt(KEY_MAX_TURNS, turns);
     }
 }
