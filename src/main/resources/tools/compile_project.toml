@@ -1,0 +1,9 @@
+description = "Runs a Maven clean compile to check for syntax errors and build the project. Returns the build log."
+type = "groovy"
+source = "file:compile_project.groovy"
+
+[[parameters]]
+name = "dummy"
+type = "string"
+description = "Unused parameter required by schema parser"
+required = false

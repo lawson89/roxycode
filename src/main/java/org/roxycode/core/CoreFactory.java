@@ -14,9 +14,4 @@ public class CoreFactory {
         return new ObjectMapper();
     }
 
-    @Singleton
-    public Sandbox sandbox() {
-        // Initialize Sandbox with the current working directory
-        return new Sandbox(Paths.get("."));
-    }
 }

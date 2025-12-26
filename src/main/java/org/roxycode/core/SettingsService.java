@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.prefs.Preferences;
@@ -28,14 +30,20 @@ public class SettingsService {
         this.objectMapper = objectMapper;
         this.preferences = Preferences.userNodeForPackage(SettingsService.class);
 
-        // Initialize Dotenv (safely handle if .env is missing)
+        // Smart .env loading: Check current dir, then check parent dir (for Maven/Target issues)
+        String envDir = ".";
+        if (!Files.exists(Paths.get(".env")) && Files.exists(Paths.get("../.env"))) {
+            envDir = "..";
+            LOG.info("📄 Found .env in parent directory. Adjusting search path.");
+        }
+
         try {
             this.dotenv = Dotenv.configure()
+                    .directory(envDir)
                     .ignoreIfMissing()
-                    .directory(".") // Look in current working directory
                     .load();
         } catch (Exception e) {
-            LOG.warn("Failed to load .env file: {}", e.getMessage());
+            LOG.warn("⚠️ Failed to load .env file: {}", e.getMessage());
         }
     }
 

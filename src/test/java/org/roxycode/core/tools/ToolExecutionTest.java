@@ -36,7 +36,9 @@ class ToolExecutionTest {
     void testFileResolution(@TempDir Path tempDir) throws Exception {
         // 1. Create a script file
         Path scriptPath = tempDir.resolve("myscript.groovy");
-        Files.writeString(scriptPath, "return sandbox.getProjectRoot().toString()");
+
+        // FIX: Updated method name from getProjectRoot() to getRoot()
+        Files.writeString(scriptPath, "return sandbox.getRoot().toString()");
 
         // 2. Mock a ToolDefinition located in the same folder
         ToolDefinition tool = new ToolDefinition();

@@ -1,35 +1,45 @@
 package org.roxycode.core;
 
+import jakarta.inject.Singleton;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+@Singleton
 public class Sandbox {
-    private final Path projectRoot;
+    // Default to current directory, but allow updates
+    private Path sandboxRoot = Paths.get(".").toAbsolutePath().normalize();
 
-    // Initializes holding the projectRoot [cite: 49]
-    public Sandbox(Path projectRoot) {
-        this.projectRoot = projectRoot.toAbsolutePath().normalize();
+    /**
+     * Updates the Sandbox root. Called by GenAIService when --root is passed.
+     */
+    public void setRoot(String rootPath) {
+        this.sandboxRoot = Paths.get(rootPath).toAbsolutePath().normalize();
+    }
+
+    public Path getRoot() {
+        return sandboxRoot;
     }
 
     /**
-     * Resolves a path relative to the root and validates it.
-     * @param path The relative path string.
-     * @return The resolved absolute path.
-     * @throws SecurityException if result is not a child of projectRoot[cite: 50, 51].
+     * Validates that a path is safe and inside the sandbox.
+     * @param pathStr The path to check (relative or absolute)
+     * @return The resolved, absolute Path
+     * @throws SecurityException if the path is outside the root
      */
-    public Path resolve(String path) {
-        // Resolve and normalize [cite: 49]
-        Path resolved = projectRoot.resolve(path).normalize();
+    public Path resolve(String pathStr) {
+        Path inputPath = Paths.get(pathStr);
 
-        // Security check: ensure the resolved path starts with the project root
-        if (!resolved.startsWith(projectRoot)) {
+        // Resolve against root if relative
+        Path resolved = inputPath.isAbsolute()
+                ? inputPath
+                : sandboxRoot.resolve(inputPath);
+
+        resolved = resolved.toAbsolutePath().normalize();
+
+        if (!resolved.startsWith(sandboxRoot)) {
             throw new SecurityException("Access denied: Path escapes sandbox root. " + resolved);
         }
 
         return resolved;
-    }
-
-    public Path getProjectRoot() {
-        return projectRoot;
     }
 }

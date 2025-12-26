@@ -15,14 +15,21 @@
     <packaging>jar</packaging>
 
     <properties>
+        <packaging>jar</packaging>
         <jdk.version>21</jdk.version>
         <release.version>21</release.version>
         <micronaut.version>4.2.0</micronaut.version>
         <groovy.version>5.0.3</groovy.version>
         <logback.version>1.4.14</logback.version>
+        <exec.mainClass>org.roxycode.Application</exec.mainClass>
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>33.0.0-jre</version>
+        </dependency>
         <dependency>
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-inject-java</artifactId>
