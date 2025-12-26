@@ -1,0 +1,21 @@
+description = "Replaces text in a file using a regex pattern."
+type = "groovy"
+source = "file:replace_in_file.groovy"
+
+[[parameters]]
+name = "path"
+type = "string"
+description = "The file path relative to project root."
+required = true
+
+[[parameters]]
+name = "search"
+type = "string"
+description = "The regex pattern to search for."
+required = true
+
+[[parameters]]
+name = "replace"
+type = "string"
+description = "The replacement text."
+required = true

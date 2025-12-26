@@ -1,0 +1,9 @@
+description = "Shows the status of the git repository."
+type = "groovy"
+source = "file:git_status.groovy"
+
+[[parameters]]
+name = "dummy"
+type = "string"
+description = "Unused"
+required = false

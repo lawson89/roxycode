@@ -1,0 +1,15 @@
+description = "Finds files whose names match a regex pattern."
+type = "groovy"
+source = "file:find_files.groovy"
+
+[[parameters]]
+name = "pattern"
+type = "string"
+description = "The regex pattern to match filename (e.g. '.*\\.java')."
+required = true
+
+[[parameters]]
+name = "path"
+type = "string"
+description = "Relative path to start search from."
+required = false

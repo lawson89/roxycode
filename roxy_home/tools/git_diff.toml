@@ -1,0 +1,15 @@
+description = "Shows changes in the working directory."
+type = "groovy"
+source = "file:git_diff.groovy"
+
+[[parameters]]
+name = "path"
+type = "string"
+description = "Specific file path to check."
+required = false
+
+[[parameters]]
+name = "cached"
+type = "boolean"
+description = "Show staged changes."
+required = false

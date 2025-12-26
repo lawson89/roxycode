@@ -1,0 +1,21 @@
+description = "Searches for a text pattern (regex) in files within the project."
+type = "groovy"
+source = "file:grep.groovy"
+
+[[parameters]]
+name = "pattern"
+type = "string"
+description = "The regular expression to search for."
+required = true
+
+[[parameters]]
+name = "path"
+type = "string"
+description = "The root path to start searching from. Defaults to project root."
+required = false
+
+[[parameters]]
+name = "filePattern"
+type = "string"
+description = "Glob pattern for file names to include (e.g. '*.java'). Defaults to all files."
+required = false
