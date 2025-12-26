@@ -29,7 +29,10 @@
             </scroll-pane>
 
             <row-panel spacing="4" padding="8" background="#e0e0e0" opaque="true">
-                <text-field name="inputField" weight="1" placeholderText="Ask RoxyCode..."/>
+                <scroll-pane weight="1">
+                    <text-area name="inputField" rows="3"/>
+                </scroll-pane>
+
                 <button name="sendButton" text="Send"/>
             </row-panel>
         </column-panel>

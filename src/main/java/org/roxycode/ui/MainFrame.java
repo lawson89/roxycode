@@ -41,7 +41,7 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JTree fileTree;
     @Outlet
-    private JTextField inputField;
+    private JTextArea inputField;
     @Outlet
     private JButton sendButton;
     @Outlet
@@ -106,7 +106,20 @@ public class MainFrame extends JFrame implements Runnable {
 
     private void initListeners() {
         if (sendButton != null) sendButton.addActionListener(this::onSend);
-        if (inputField != null) inputField.addActionListener(this::onSend);
+        // FIX: Use KeyBindings for JTextArea
+        if (inputField != null) {
+            // Map "Enter" key to the 'onSend' method
+            inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
+            inputField.getActionMap().put("send-message", new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    onSend(e);
+                }
+            });
+
+            // Ensure "Shift+Enter" still creates a new line
+            inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
+        }
         if (rescanButton != null) rescanButton.addActionListener(e -> performRescan());
         if (settingsButton != null) settingsButton.addActionListener(this::onSettings);
     }

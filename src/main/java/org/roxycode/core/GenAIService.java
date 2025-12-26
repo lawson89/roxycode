@@ -154,7 +154,7 @@ public class GenAIService {
             }
 
             GenerateContentResponse response = getClient().models.generateContent(
-                    "gemini-2.0-flash-exp",
+                    "gemini-3-pro-preview",
                     history,
                     configBuilder.build()
             );

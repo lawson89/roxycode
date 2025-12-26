@@ -1,26 +1,24 @@
-import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder
-import org.junit.platform.launcher.core.LauncherFactory
-import org.junit.platform.launcher.listeners.SummaryGeneratingListener
-import org.junit.platform.engine.discovery.DiscoverySelectors
-import java.io.PrintWriter
-import java.io.StringWriter
+import java.util.concurrent.TimeUnit
 
-// Use the sandbox root to find test classes (simplified for MVP: assumes compiled classes on classpath)
-// In a real IDE, we might need to compile first or point to build/classes.
-// For this MVP "Dog-fooding", we assume the app itself is the classpath.
+def isWindows = System.getProperty("os.name").toLowerCase().contains("win")
+def mvnCommand = isWindows ? ".\\mvnw.cmd" : "./mvnw"
 
-def request = LauncherDiscoveryRequestBuilder.request()
-        .selectors(DiscoverySelectors.selectPackage("org.roxycode"))
-        .build()
+def processBuilder = new ProcessBuilder(mvnCommand, "test")
+processBuilder.redirectErrorStream(true)
+processBuilder.directory(new File(".")) // Project root
 
-def launcher = LauncherFactory.create()
-def listener = new SummaryGeneratingListener()
+def process = processBuilder.start()
+def output = new StringBuilder()
+def reader = new BufferedReader(new InputStreamReader(process.getInputStream()))
+String line
+while ((line = reader.readLine()) != null) {
+    output.append(line).append("\n")
+}
 
-launcher.registerTestExecutionListeners(listener)
-launcher.execute(request)
+def exitCode = process.waitFor()
 
-def summary = listener.getSummary()
-def writer = new StringWriter()
-summary.printTo(new PrintWriter(writer))
+if (exitCode != 0) {
+    return "Tests failed. Exit code: " + exitCode + "\nOutput:\n" + output.toString()
+}
 
-return writer.toString()
+return output.toString()

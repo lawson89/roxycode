@@ -105,12 +105,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-launcher</artifactId>
-            <version>1.10.1</version>
-        </dependency>
-
-        <dependency>
             <groupId>io.github.cdimascio</groupId>
             <artifactId>dotenv-java</artifactId>
             <version>3.0.0</version>
@@ -140,6 +134,7 @@
             <version>0.64.8</version>
         </dependency>
 
+        <!-- Testing Dependencies -->
         <dependency>
             <groupId>io.micronaut.test</groupId>
             <artifactId>micronaut-test-junit5</artifactId>
@@ -147,24 +142,19 @@
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
+            <artifactId>junit-jupiter-api</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.10.1</version>
             <scope>test</scope>
         </dependency>
+        <!-- Launcher needed for programmatic test execution if used by tools -->
         <dependency>
             <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-launcher</artifactId>
-            <version>1.9.3</version>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>5.10.1</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>

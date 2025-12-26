@@ -117,6 +117,8 @@ To use a custom Java class that extends `JComponent`:
 
 ```
 
+You have the sierra dtd and example files. Please ensure all sierra xml files you generate pass dtd validation and conform to the syntax described above.
+
 """
 
-files = ["sierra.dtd", "BlockLayoutTest.java", "BlockLayoutTest.xml"]
+files = ["sierra.dtd", "BlockLayoutTest.java", "BlockLayoutTest.xml", "MenuTest.java", "MenuTest.xml"]
