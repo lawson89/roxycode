@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE column-panel SYSTEM "sierra.dtd">
+
+<column-panel background="white" opaque="true">
+
+    <row-panel spacing="8" padding="8" background="#f0f0f0" opaque="true" alignToBaseline="true">
+        <label text="RoxyCode AI" styleClass="h3"/>
+        <spacer size="16"/>
+        <label text="Branch:" foreground="gray"/>
+        <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
+        <spacer weight="1"/>
+        <button text="Settings"/>
+    </row-panel>
+
+    <split-pane weight="1" dividerLocation="250">
+
+        <scroll-pane>
+            <tree name="fileTree"/>
+        </scroll-pane>
+
+        <column-panel weight="1">
+            <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
+
+
+            </scroll-pane>
+
+            <row-panel spacing="4" padding="8" background="#e0e0e0" opaque="true">
+                <text-field name="inputField" weight="1" placeholderText="Ask RoxyCode..."/>
+                <button name="sendButton" text="Send"/>
+            </row-panel>
+        </column-panel>
+
+    </split-pane>
+</column-panel>

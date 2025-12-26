@@ -110,6 +110,30 @@
         </dependency>
 
         <dependency>
+            <groupId>org.httprpc</groupId>
+            <artifactId>sierra</artifactId>
+            <version>3.6.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-extras</artifactId>
+            <version>3.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.vladsch.flexmark</groupId>
+            <artifactId>flexmark-all</artifactId>
+            <version>0.64.8</version>
+        </dependency>
+
+        <dependency>
             <groupId>io.micronaut.test</groupId>
             <artifactId>micronaut-test-junit5</artifactId>
             <scope>test</scope>
@@ -148,6 +172,22 @@
                             <version>4.7.5</version>
                         </path>
                     </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>-classpath</argument>
+                        <classpath />
+                        <argument>org.roxycode.Application</argument>
+                        <argument>--cli</argument>
+                        <argument>--root=/home/rlawson/code/roxycode</argument>
+                        <argument>--prompt="Resuming previous task..."</argument>
+                    </arguments>
                 </configuration>
             </plugin>
             <plugin>

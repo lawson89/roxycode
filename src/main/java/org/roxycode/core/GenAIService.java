@@ -3,6 +3,7 @@ package org.roxycode.core;
 import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Singleton;
+import org.roxycode.core.context.ContextRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
@@ -30,16 +31,19 @@ public class GenAIService {
     private final ToolRegistry toolRegistry;
     private final ToolExecutionService executionService;
     private final Sandbox sandbox;
+    private final ContextRegistry contextRegistry; // <--- ADDED THIS
     private Client client;
 
     public GenAIService(SettingsService settingsService,
                         ToolRegistry toolRegistry,
                         ToolExecutionService executionService,
-                        Sandbox sandbox) {
+                        Sandbox sandbox,
+                        ContextRegistry contextRegistry) { // <--- ADDED THIS
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
         this.sandbox = sandbox;
+        this.contextRegistry = contextRegistry; // <--- ADDED THIS
     }
 
     private Client getClient() {
@@ -60,7 +64,11 @@ public class GenAIService {
         sandbox.setRoot(projectRoot);
         LOG.info("🛡️ Sandbox root updated to: {}", sandbox.getRoot());
 
-        // 2. DISCOVER AND LOAD TOOLS DYNAMICALLY
+        // 2. LOAD CONTEXT KNOWLEDGE
+        LOG.info("Attempting to load context knowledge");
+        contextRegistry.loadContexts(projectRoot); // <--- LOAD CONTEXTS
+
+        // 3. DISCOVER AND LOAD TOOLS DYNAMICALLY
         Path toolsPath = Paths.get(projectRoot, "src/main/resources/tools");
         if (!Files.exists(toolsPath)) {
             // Fallback for different environments
@@ -90,7 +98,7 @@ public class GenAIService {
             LOG.warn("⚠️ Tools directory not found at: {}", toolsPath.toAbsolutePath());
         }
 
-        // 3. Register Function Declarations from Discovered Tools
+        // 4. Register Function Declarations from Discovered Tools
         List<FunctionDeclaration> functionDeclarations = new ArrayList<>();
 
         for (String toolName : availableToolNames) {
@@ -113,18 +121,26 @@ public class GenAIService {
             });
         }
 
-        // 4. Initial History
+        // 5. Build Initial Prompt (Injecting Context Menu)
+        String contextMenu = contextRegistry.getContextMenu(); // <--- GET MENU
+        String systemPrompt = "Project Root: " + projectRoot + "\n" +
+                              contextMenu + "\n" +
+                              "Task: " + prompt;
+
         List<Content> history = new ArrayList<>();
         history.add(Content.builder()
                 .role("user")
-                .parts(List.of(Part.builder().text("Project Root: " + projectRoot + "\nTask: " + prompt).build()))
+                .parts(List.of(Part.builder().text(systemPrompt).build()))
                 .build());
 
-        // 5. Conversation Loop
+        // 6. Conversation Loop
         int turns = 0;
-        int maxTurns = 15;
+        int maxTurns = 1;
 
+        LOG.info(systemPrompt);
         while (turns++ < maxTurns) {
+            LOG.info("Turn {}: Sending message to model...", turns);
+
             GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
             if (!functionDeclarations.isEmpty()) {
                 Tool toolConfig = Tool.builder()
@@ -134,7 +150,7 @@ public class GenAIService {
             }
 
             GenerateContentResponse response = getClient().models.generateContent(
-                    "gemini-2.0-flash-exp",
+                    "gemini-3-flash-preview",
                     history,
                     configBuilder.build()
             );
