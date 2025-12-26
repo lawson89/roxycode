@@ -1,0 +1,9 @@
+description = "Compiles and launches the application, waits 5 seconds, takes a screenshot, and returns the image path."
+type = "groovy"
+source = "file:launch_preview.groovy"
+
+[[parameters]]
+name = "dummy"
+type = "string"
+description = "Required placeholder"
+required = false

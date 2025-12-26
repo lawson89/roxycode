@@ -9,6 +9,8 @@ import org.roxycode.core.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -48,26 +50,28 @@ public class GenAIService {
     public String chat(String prompt, String projectContext) {
         LOG.info("Starting chat with prompt: {}", prompt);
 
-        // 1. Prepare Tools for Gemini
+        // 1. Prepare Tools
         if (toolRegistry.getTool("read_file").isEmpty()) {
+            // Load default tools if missing
             toolRegistry.loadTools("src/main/resources/tools");
         }
 
         List<FunctionDeclaration> functionDeclarations = new ArrayList<>();
 
-        for (String toolName : List.of("read_file", "write_file", "run_tests")) {
+        // Scan standard tools
+        for (String toolName : List.of("read_file", "write_file", "run_tests", "launch_preview")) {
             toolRegistry.getTool(toolName).ifPresent(td -> {
 
-                // Fix 1: Build properties Map separately
                 Map<String, Schema> properties = new HashMap<>();
-                td.getParameters().forEach(p -> {
-                    properties.put(p.getName(), Schema.builder()
-                            .type("STRING")
-                            .description(p.getDescription())
-                            .build());
-                });
+                if (td.getParameters() != null) {
+                    td.getParameters().forEach(p -> {
+                        properties.put(p.getName(), Schema.builder()
+                                .type("STRING")
+                                .description(p.getDescription())
+                                .build());
+                    });
+                }
 
-                // Fix: Pass map to .properties()
                 Schema schema = Schema.builder()
                         .type("OBJECT")
                         .properties(properties)
@@ -85,22 +89,23 @@ public class GenAIService {
                 .functionDeclarations(functionDeclarations)
                 .build();
 
-        // 2. Initial Message
+        // 2. Initial History
         List<Content> history = new ArrayList<>();
         history.add(Content.builder()
                 .role("user")
                 .parts(List.of(Part.builder().text("Project Context:\n" + projectContext + "\n\nTask: " + prompt).build()))
                 .build());
 
-        // 3. The Loop
+        // 3. The Conversation Loop
         int turns = 0;
-        int maxTurns = 10;
+        int maxTurns = 15;
 
         while (turns++ < maxTurns) {
             GenerateContentConfig config = GenerateContentConfig.builder()
                     .tools(List.of(toolConfig))
                     .build();
 
+            // Call Model
             GenerateContentResponse response = getClient().models.generateContent(
                     "gemini-2.0-flash-exp",
                     history,
@@ -112,13 +117,14 @@ public class GenAIService {
                 return "Error: No response candidates from AI.";
             }
 
-            // Fix 2: Unwrap Optional content
+            // Get Content
             Content modelMessage = candidatesOpt.get().get(0).content().orElseThrow(() ->
                     new RuntimeException("Received candidate with no content")
             );
 
             history.add(modelMessage);
 
+            // Process Parts
             List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
             boolean hasFunctionCall = false;
 
@@ -129,12 +135,12 @@ public class GenAIService {
                     hasFunctionCall = true;
                     FunctionCall call = callOpt.get();
 
-                    // Fix 3: Unwrap Optional name
-                    String fnName = call.name().orElse("unknown_tool");
+                    String fnName = call.name().orElse("unknown");
                     Map<String, Object> args = call.args().orElse(Collections.emptyMap());
 
                     LOG.info("AI calling tool: {} with args {}", fnName, args);
 
+                    // Execute
                     String toolOutput;
                     try {
                         ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow();
@@ -142,22 +148,66 @@ public class GenAIService {
                     } catch (Exception e) {
                         toolOutput = "Error executing tool: " + e.getMessage();
                     }
-
                     LOG.info("Tool output: {}", toolOutput);
+
+                    // --- Handle Multimodal Output (Screenshots) ---
+                    if (toolOutput.endsWith(".png") && Files.exists(Paths.get(toolOutput))) {
+                        try {
+                            byte[] imageBytes = Files.readAllBytes(Paths.get(toolOutput));
+
+                            // 1. Respond to function call with text summary
+                            Part functionResponsePart = Part.builder()
+                                    .functionResponse(FunctionResponse.builder()
+                                            .name(fnName)
+                                            .response(Map.of("result", "Screenshot captured. See next message."))
+                                            .build())
+                                    .build();
+
+                            history.add(Content.builder()
+                                    .role("function")
+                                    .parts(List.of(functionResponsePart))
+                                    .build());
+
+                            // 2. Inject Image as User Observation
+                            Blob imageBlob = Blob.builder()
+                                    .mimeType("image/png")
+                                    .data(imageBytes)
+                                    .build();
+
+                            history.add(Content.builder()
+                                    .role("user")
+                                    .parts(List.of(Part.builder()
+                                            .inlineData(imageBlob)
+                                            .text("I have captured this screenshot of the application. Please analyze it.")
+                                            .build()))
+                                    .build());
+
+                            // Continue loop immediately so we don't double-add
+                            continue;
+
+                        } catch (Exception e) {
+                            LOG.error("Failed to attach image", e);
+                            toolOutput += " (Failed to load image bytes)";
+                        }
+                    }
+
+                    // --- Standard Text Response ---
+                    Part responsePart = Part.builder()
+                            .functionResponse(FunctionResponse.builder()
+                                    .name(fnName)
+                                    .response(Map.of("result", toolOutput))
+                                    .build())
+                            .build();
 
                     history.add(Content.builder()
                             .role("function")
-                            .parts(List.of(Part.builder()
-                                    .functionResponse(FunctionResponse.builder()
-                                            .name(fnName)
-                                            .response(Map.of("result", toolOutput))
-                                            .build())
-                                    .build()))
+                            .parts(List.of(responsePart))
                             .build());
                 }
             }
 
             if (!hasFunctionCall) {
+                // Return final text
                 return parts.stream()
                         .map(p -> p.text().orElse(""))
                         .collect(Collectors.joining(""));
