@@ -19,9 +19,9 @@ class ContextRegistryTest {
 
     @Test
     void testLoadContexts(@TempDir Path tempRoot) throws IOException {
-        // 1. Setup fake context directory MATCHING the production code's expectation
-        // Production code looks in: root + "src/main/resources/context"
-        Path contextDir = tempRoot.resolve("src/main/resources/context");
+        // 1. Setup a specific folder for contexts
+        // Since the registry now accepts any Path, we don't need to match the old src/main/resources structure
+        Path contextDir = tempRoot.resolve("roxy_contexts");
         Files.createDirectories(contextDir);
 
         // 2. Create a complex TOML file
@@ -40,12 +40,13 @@ class ContextRegistryTest {
         // 3. Create a simple TOML file (just description)
         Files.writeString(contextDir.resolve("simple.toml"), "description = \"Simple Description\"");
 
-        // 4. Load contexts (passing tempRoot as the project root)
-        contextRegistry.loadContexts(tempRoot.toString());
+        // 4. Load contexts
+        // FIX: Pass the Path object directly, not a String
+        contextRegistry.loadContexts(contextDir);
 
         // 5. Verify Menu Generation
         String menu = contextRegistry.getContextMenu();
-        System.out.println("Generated Menu:\n" + menu); // For debugging visibility
+        System.out.println("Generated Menu:\n" + menu);
 
         assertNotNull(menu);
         assertTrue(menu.contains("complex.toml: Test Description"));
@@ -58,7 +59,10 @@ class ContextRegistryTest {
 
     @Test
     void testMissingDirectoryHandlesGracefully(@TempDir Path emptyRoot) {
-        assertDoesNotThrow(() -> contextRegistry.loadContexts(emptyRoot.toString()));
+        Path missingDir = emptyRoot.resolve("does_not_exist");
+
+        // FIX: Pass Path object
+        assertDoesNotThrow(() -> contextRegistry.loadContexts(missingDir));
         assertEquals("", contextRegistry.getContextMenu());
     }
 }

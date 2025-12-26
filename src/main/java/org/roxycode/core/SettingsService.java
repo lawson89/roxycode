@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,7 @@ public class SettingsService {
     private static final String KEY_GEMINI_API_KEY = "geminiApiKey";
     private static final String KEY_RECENT_PROJECTS = "recentProjects";
     private static final String ENV_GEMINI_API_KEY = "GEMINI_API_KEY";
+    private static final String ENV_ROXY_HOME = "ROXY_HOME";
 
     private final Preferences preferences;
     private final ObjectMapper objectMapper;
@@ -30,49 +32,55 @@ public class SettingsService {
         this.objectMapper = objectMapper;
         this.preferences = Preferences.userNodeForPackage(SettingsService.class);
 
-        // Smart .env loading: Check current dir, then check parent dir (for Maven/Target issues)
+        // Load .env logic
         String envDir = ".";
         if (!Files.exists(Paths.get(".env")) && Files.exists(Paths.get("../.env"))) {
             envDir = "..";
-            LOG.info("📄 Found .env in parent directory. Adjusting search path.");
         }
-
         try {
-            this.dotenv = Dotenv.configure()
-                    .directory(envDir)
-                    .ignoreIfMissing()
-                    .load();
+            this.dotenv = Dotenv.configure().directory(envDir).ignoreIfMissing().load();
         } catch (Exception e) {
             LOG.warn("⚠️ Failed to load .env file: {}", e.getMessage());
         }
     }
 
-    public String getGeminiApiKey() {
-        // Priority 1: Check .env file
+    /**
+     * Resolves the Roxy Home directory.
+     * Default: ./roxy_home
+     * Override: ROXY_HOME environment variable
+     */
+    public Path getRoxyHome() {
+        // 1. Check Env Var
+        String envHome = System.getenv(ENV_ROXY_HOME);
+        if (envHome != null && !envHome.isBlank()) {
+            return Paths.get(envHome).toAbsolutePath().normalize();
+        }
+
+        // 2. Check .env
         if (dotenv != null) {
-            String envKey = dotenv.get(ENV_GEMINI_API_KEY);
-            if (envKey != null && !envKey.isBlank()) {
-                return envKey;
+            String dotEnvHome = dotenv.get(ENV_ROXY_HOME);
+            if (dotEnvHome != null && !dotEnvHome.isBlank()) {
+                return Paths.get(dotEnvHome).toAbsolutePath().normalize();
             }
         }
 
-        // Priority 2: Check System Environment Variables (Docker/CI friendly)
-        String sysEnvKey = System.getenv(ENV_GEMINI_API_KEY);
-        if (sysEnvKey != null && !sysEnvKey.isBlank()) {
-            return sysEnvKey;
-        }
+        // 3. Default to current working directory / roxy_home
+        return Paths.get("roxy_home").toAbsolutePath().normalize();
+    }
 
-        // Priority 3: Check Java Preferences
+    public String getGeminiApiKey() {
+        if (dotenv != null) {
+            String envKey = dotenv.get(ENV_GEMINI_API_KEY);
+            if (envKey != null && !envKey.isBlank()) return envKey;
+        }
+        String sysEnvKey = System.getenv(ENV_GEMINI_API_KEY);
+        if (sysEnvKey != null && !sysEnvKey.isBlank()) return sysEnvKey;
         return preferences.get(KEY_GEMINI_API_KEY, null);
     }
 
     public void setGeminiApiKey(String key) {
-        // We only write to Preferences, never to .env programmatically for security
-        if (key == null) {
-            preferences.remove(KEY_GEMINI_API_KEY);
-        } else {
-            preferences.put(KEY_GEMINI_API_KEY, key);
-        }
+        if (key == null) preferences.remove(KEY_GEMINI_API_KEY);
+        else preferences.put(KEY_GEMINI_API_KEY, key);
     }
 
     public List<String> getRecentProjects() {
@@ -89,7 +97,6 @@ public class SettingsService {
         List<String> current = getRecentProjects();
         current.remove(path);
         current.add(0, path);
-
         try {
             String json = objectMapper.writeValueAsString(current);
             preferences.put(KEY_RECENT_PROJECTS, json);

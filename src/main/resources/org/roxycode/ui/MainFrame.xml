@@ -9,7 +9,9 @@
         <label text="Branch:" foreground="gray"/>
         <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
         <spacer weight="1"/>
-        <button text="Settings"/>
+        <button name="rescanButton" text="Rescan"/>
+        <button name="settingsButton" text="Settings"/>
+
     </row-panel>
 
     <split-pane weight="1" dividerLocation="250">

@@ -7,7 +7,6 @@ import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.GitService;
-import org.roxycode.core.context.ContextRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,6 +16,8 @@ import java.nio.file.Paths;
 
 @Singleton
 public class MainFrame extends JFrame implements Runnable {
+
+    private static final Logger log = LoggerFactory.getLogger(MainFrame.class);
 
     // Dependencies
     private final GitService gitService;
@@ -28,11 +29,9 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet private JTextField inputField;
     @Outlet private JButton sendButton;
     @Outlet private JScrollPane chatScrollPane;
+    @Outlet private JButton rescanButton; // <--- NEW
 
-    // not managed by Sierra, created manually
     private final MarkdownPane chatArea = new MarkdownPane();
-
-    private static final Logger log = LoggerFactory.getLogger(MainFrame.class);
 
     @Inject
     public MainFrame(GitService gitService, GenAIService genAIService) {
@@ -45,22 +44,20 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Override
     public void run() {
-        // 1. Setup Theme
         FlatLightLaf.setup();
-        // 2. Load UI from Sierra XML
-        setContentPane(UILoader.load(this, "MainFrame.xml"));
+        setContentPane(UILoader.load(this, "MainFrame.xml")); // Ensure leading slash for classpath
 
-        // FIX: Use setViewportView instead of add
+        // Manual Viewport injection
         if (chatScrollPane != null) {
             chatScrollPane.setViewportView(chatArea);
-        } else {
-            log.error("Chat Scroll Pane was not injected correctly!");
         }
 
-        // 3. Initialize State
         initGitInfo();
         initListeners();
-        // 4. Show Window
+
+        // --- STARTUP SCAN ---
+        performRescan();
+
         setSize(1200, 800);
         setLocationRelativeTo(null);
         setVisible(true);
@@ -76,28 +73,36 @@ public class MainFrame extends JFrame implements Runnable {
     private void initListeners() {
         if (sendButton != null) sendButton.addActionListener(this::onSend);
         if (inputField != null) inputField.addActionListener(this::onSend);
+        if (rescanButton != null) rescanButton.addActionListener(e -> performRescan()); // <--- WIRE BUTTON
+    }
+
+    private void performRescan() {
+        log.info("Triggering Knowledge Rescan...");
+        // Run in background to not block UI startup
+        new Thread(() -> {
+            genAIService.refreshKnowledge(".");
+            SwingUtilities.invokeLater(() -> {
+                if (chatArea != null) {
+                    chatArea.appendMarkdown("*System: Knowledge base reloaded from roxy_home.*");
+                }
+            });
+        }).start();
     }
 
     private void onSend(ActionEvent e) {
         String prompt = inputField.getText().trim();
-        log.info("User question: {}", prompt);
         if (prompt.isEmpty()) return;
 
         inputField.setText("");
         if (chatArea != null) {
-
             chatArea.appendMarkdown("**User:** " + prompt);
-            // Run AI in background thread to avoid freezing UI
+
             new Thread(() -> {
                 String response = genAIService.chat(prompt, ".");
-                log.info("AI response: {}", response);
                 SwingUtilities.invokeLater(() -> {
-                    log.info("Appending response to chat area: {}", response);
                     chatArea.appendMarkdown("**Roxy:** " + response);
                 });
             }).start();
-        }else{
-            log.error("Chat area is not initialized.");
         }
     }
 }

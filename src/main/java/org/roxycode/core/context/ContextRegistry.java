@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,18 +27,21 @@ public class ContextRegistry {
 
     private final Map<String, ContextInfo> availableContexts = new HashMap<>();
 
-    public void loadContexts(String rootPath) {
+    /**
+     * Loads context definitions from the specified directory.
+     * @param contextDir The absolute path to the 'context' folder.
+     */
+    public void loadContexts(Path contextDir) {
         availableContexts.clear();
-        Path contextPath = Paths.get(rootPath, "src/main/resources/context");
 
-        if (!Files.exists(contextPath)) {
-            LOG.info("ℹ️ No context directory found at: {}", contextPath);
+        if (!Files.exists(contextDir)) {
+            LOG.warn("⚠️ Context directory not found at: {}", contextDir);
             return;
         }
 
-        LOG.info("🔍 Scanning for knowledge context in: {}", contextPath);
+        LOG.info("🔍 Scanning for knowledge context in: {}", contextDir);
 
-        try (Stream<Path> stream = Files.list(contextPath)) {
+        try (Stream<Path> stream = Files.list(contextDir)) {
             stream.filter(p -> p.toString().endsWith(".toml"))
                     .forEach(this::parseContextFile);
 
@@ -51,51 +53,34 @@ public class ContextRegistry {
 
     private void parseContextFile(Path path) {
         try {
-            LOG.debug("Parsing context file: {}", path.getFileName());
-
             String content = Files.readString(path);
-            String fileName = "context/" + path.getFileName().toString();
+            String fileName = path.getFileName().toString(); // Store just filename
             ContextInfo info = new ContextInfo();
 
-            // 1. Extract Description
             info.description = extractField(content, "description");
-
-            // 2. Extract Inline Context
             String ctx = extractField(content, "context");
-            if (ctx != null && !ctx.isBlank()) {
-                info.inlineContext = ctx;
-            }
+            if (ctx != null && !ctx.isBlank()) info.inlineContext = ctx;
 
-            // 3. Extract Files List (files = ["a", "b"])
             Matcher filesMatcher = Pattern.compile("files\\s*=\\s*\\[(.*?)\\]", Pattern.DOTALL).matcher(content);
             if (filesMatcher.find()) {
                 String listContent = filesMatcher.group(1);
                 for (String part : listContent.split(",")) {
                     String clean = part.trim().replaceAll("^\"|\"$", "").trim();
-                    if (!clean.isEmpty()) {
-                        info.relatedFiles.add(clean);
-                    }
+                    if (!clean.isEmpty()) info.relatedFiles.add(clean);
                 }
             }
 
             availableContexts.put(fileName, info);
-
-            // LOGGING THE SUCCESSFUL LOAD
-            LOG.info("✅ Loaded Context: {} | Inline: {} | Files: {}",
-                    fileName,
-                    (info.inlineContext != null),
-                    info.relatedFiles);
+            LOG.info("✅ Loaded Context: {}", fileName);
 
         } catch (IOException e) {
             LOG.error("❌ Failed to parse context file: {}", path, e);
         }
     }
 
-    // Helper to extract string fields (supports """ and ")
     private String extractField(String content, String fieldName) {
         Matcher m = Pattern.compile(fieldName + "\\s*=\\s*(\"\"\"(.*?)\"\"\"|\"(.*?)\")", Pattern.DOTALL).matcher(content);
         if (m.find()) {
-            // Group 2 is triple-quoted, Group 3 is single-quoted
             String raw = m.group(2) != null ? m.group(2) : m.group(3);
             return raw != null ? raw.trim() : null;
         }
@@ -110,16 +95,11 @@ public class ContextRegistry {
 
         availableContexts.forEach((fileName, info) -> {
             sb.append(String.format("- %s: %s\n", fileName, info.description.replace("\n", " ")));
-
             List<String> details = new ArrayList<>();
             if (info.inlineContext != null) details.add("Contains inline documentation");
             if (!info.relatedFiles.isEmpty()) details.add("Refers to: " + String.join(", ", info.relatedFiles));
-
-            if (!details.isEmpty()) {
-                sb.append("  [" + String.join(" | ", details) + "]\n");
-            }
+            if (!details.isEmpty()) sb.append("  [" + String.join(" | ", details) + "]\n");
         });
-
         return sb.toString();
     }
 }

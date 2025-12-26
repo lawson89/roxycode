@@ -31,19 +31,23 @@ public class GenAIService {
     private final ToolRegistry toolRegistry;
     private final ToolExecutionService executionService;
     private final Sandbox sandbox;
-    private final ContextRegistry contextRegistry; // <--- ADDED THIS
+    private final ContextRegistry contextRegistry;
     private Client client;
+
+    // Cache function declarations to avoid re-scanning every chat turn
+    private final List<FunctionDeclaration> cachedFunctions = new ArrayList<>();
+    private Path cachedRoxyHome; // Track where we loaded from
 
     public GenAIService(SettingsService settingsService,
                         ToolRegistry toolRegistry,
                         ToolExecutionService executionService,
                         Sandbox sandbox,
-                        ContextRegistry contextRegistry) { // <--- ADDED THIS
+                        ContextRegistry contextRegistry) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
         this.sandbox = sandbox;
-        this.contextRegistry = contextRegistry; // <--- ADDED THIS
+        this.contextRegistry = contextRegistry;
     }
 
     private Client getClient() {
@@ -57,40 +61,43 @@ public class GenAIService {
         return client;
     }
 
-    public String chat(String prompt, String projectRoot) {
-        LOG.info("Starting chat. Root: {}, Prompt: {}", projectRoot, prompt);
+    /**
+     * Scans directories, loads tools/contexts, and rebuilds function definitions.
+     * Should be called on startup or when the user clicks "Rescan".
+     */
+    public void refreshKnowledge(String projectRoot) {
+        LOG.info("🔄 Refreshing Knowledge Base. Root: {}", projectRoot);
 
-        // 1. CONFIGURE SANDBOX
-        sandbox.setRoot(projectRoot);
-        LOG.info("🛡️ Sandbox root updated to: {}", sandbox.getRoot());
+        // 1. LOCATE ROXY_HOME
+        Path roxyHome = settingsService.getRoxyHome();
+        this.cachedRoxyHome = roxyHome;
+        LOG.info("🏠 Roxy Home detected at: {}", roxyHome);
 
-        // 2. LOAD CONTEXT KNOWLEDGE
-        LOG.info("Attempting to load context knowledge");
-        contextRegistry.loadContexts(projectRoot); // <--- LOAD CONTEXTS
-
-        // 3. DISCOVER AND LOAD TOOLS DYNAMICALLY
-        Path toolsPath = Paths.get(projectRoot, "src/main/resources/tools");
-        if (!Files.exists(toolsPath)) {
-            // Fallback for different environments
-            toolsPath = Paths.get("src/main/resources/tools");
+        // Ensure structure exists
+        try {
+            Files.createDirectories(roxyHome.resolve("tools"));
+            Files.createDirectories(roxyHome.resolve("context"));
+        } catch (IOException e) {
+            LOG.warn("Failed to create roxy_home directories", e);
         }
 
+        // 2. LOAD CONTEXT KNOWLEDGE
+        contextRegistry.loadContexts(roxyHome.resolve("context"));
+
+        // 3. DISCOVER AND LOAD TOOLS
+        cachedFunctions.clear();
+        Path toolsPath = roxyHome.resolve("tools");
         List<String> availableToolNames = new ArrayList<>();
 
         if (Files.exists(toolsPath)) {
             LOG.info("🔧 Loading tools from: {}", toolsPath.toAbsolutePath());
-
-            // Load them into the registry
             toolRegistry.loadTools(toolsPath.toString());
 
-            // Scan the directory to find all .toml files
             try (Stream<Path> stream = Files.list(toolsPath)) {
                 availableToolNames = stream
                         .filter(p -> p.toString().endsWith(".toml"))
                         .map(p -> p.getFileName().toString().replace(".toml", ""))
                         .collect(Collectors.toList());
-
-                LOG.info("📝 Discovered tools: {}", availableToolNames);
             } catch (IOException e) {
                 LOG.error("Failed to list tool files", e);
             }
@@ -98,32 +105,37 @@ public class GenAIService {
             LOG.warn("⚠️ Tools directory not found at: {}", toolsPath.toAbsolutePath());
         }
 
-        // 4. Register Function Declarations from Discovered Tools
-        List<FunctionDeclaration> functionDeclarations = new ArrayList<>();
-
+        // 4. BUILD GEMINI FUNCTION DECLARATIONS
         for (String toolName : availableToolNames) {
             toolRegistry.getTool(toolName).ifPresent(td -> {
                 Map<String, Schema> properties = new HashMap<>();
                 if (td.getParameters() != null) {
                     td.getParameters().forEach(p -> {
                         properties.put(p.getName(), Schema.builder()
-                                .type("STRING")
+                                .type("STRING") // Simplifying types for MVP
                                 .description(p.getDescription())
                                 .build());
                     });
                 }
                 Schema schema = Schema.builder().type("OBJECT").properties(properties).build();
-                functionDeclarations.add(FunctionDeclaration.builder()
+                cachedFunctions.add(FunctionDeclaration.builder()
                         .name(toolName)
                         .description(td.getDescription())
                         .parameters(schema)
                         .build());
             });
         }
+        LOG.info("✅ Knowledge Refresh Complete. Loaded {} tools.", cachedFunctions.size());
+    }
 
-        // 5. Build Initial Prompt (Injecting Context Menu)
-        String contextMenu = contextRegistry.getContextMenu(); // <--- GET MENU
+    public String chat(String prompt, String projectRoot) {
+        // 1. CONFIGURE SANDBOX (Always do this per chat to ensure safety)
+        sandbox.setRoot(projectRoot);
+
+        // 2. Build Initial Prompt
+        String contextMenu = contextRegistry.getContextMenu();
         String systemPrompt = "Project Root: " + projectRoot + "\n" +
+                              "Roxy Home: " + (cachedRoxyHome != null ? cachedRoxyHome : "Not loaded") + "\n" +
                               contextMenu + "\n" +
                               "Task: " + prompt;
 
@@ -133,24 +145,24 @@ public class GenAIService {
                 .parts(List.of(Part.builder().text(systemPrompt).build()))
                 .build());
 
-        // 6. Conversation Loop
+        // 3. Conversation Loop
         int turns = 0;
-        int maxTurns = 1;
+        int maxTurns = 15;
 
-        LOG.info(systemPrompt);
         while (turns++ < maxTurns) {
             LOG.info("Turn {}: Sending message to model...", turns);
 
+            // USE CACHED FUNCTIONS
             GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
-            if (!functionDeclarations.isEmpty()) {
+            if (!cachedFunctions.isEmpty()) {
                 Tool toolConfig = Tool.builder()
-                        .functionDeclarations(functionDeclarations)
+                        .functionDeclarations(cachedFunctions)
                         .build();
                 configBuilder.tools(List.of(toolConfig));
             }
 
             GenerateContentResponse response = getClient().models.generateContent(
-                    "gemini-3-flash-preview",
+                    "gemini-2.0-flash-exp",
                     history,
                     configBuilder.build()
             );
@@ -179,19 +191,17 @@ public class GenAIService {
                     String fnName = call.name().orElse("unknown");
                     Map<String, Object> originalArgs = call.args().orElse(Collections.emptyMap());
 
-                    // --- EXPLICIT ROOT PATH FIX ---
+                    // Path Resolution Logic
                     Map<String, Object> fixedArgs = new HashMap<>(originalArgs);
                     if (fixedArgs.containsKey("path")) {
                         String originalPath = (String) fixedArgs.get("path");
                         if (!Paths.get(originalPath).isAbsolute()) {
                             Path resolvedPath = Paths.get(projectRoot, originalPath);
                             fixedArgs.put("path", resolvedPath.toString());
-                            LOG.info("🔄 Resolved path: {} -> {}", originalPath, resolvedPath);
                         }
                     }
 
                     LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
-
                     String toolOutput;
                     try {
                         ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow();
@@ -201,7 +211,6 @@ public class GenAIService {
                     }
                     LOG.info("Tool output: {}", toolOutput);
 
-                    // Screenshot handling
                     if (toolOutput.endsWith(".png") && Files.exists(Paths.get(toolOutput))) {
                         try {
                             byte[] imageBytes = Files.readAllBytes(Paths.get(toolOutput));
