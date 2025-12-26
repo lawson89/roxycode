@@ -5,6 +5,8 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
+import org.kordamp.ikonli.bootstrapicons.BootstrapIcons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.GitService;
 import org.roxycode.core.SettingsService;
@@ -70,6 +72,8 @@ public class MainFrame extends JFrame implements Runnable {
     private JTextField maxTurnsField;
     @Outlet
     private JButton saveSettingsButton;
+    @Outlet
+    private JLabel icon;
 
     private final MarkdownPane chatArea = new MarkdownPane();
 
@@ -87,6 +91,8 @@ public class MainFrame extends JFrame implements Runnable {
     public void run() {
         FlatLightLaf.setup();
         setContentPane(UILoader.load(this, "MainFrame.xml")); // Ensure leading slash for classpath
+        FontIcon alarmIcon = FontIcon.of(BootstrapIcons.CHAT, 24);
+        icon.setIcon(alarmIcon);
 
         // Manual Viewport injection
         if (chatScrollPane != null) {
