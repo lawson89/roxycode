@@ -146,7 +146,11 @@ public class MainFrame extends JFrame implements Runnable {
             chatArea.appendMarkdown("**User:** " + prompt);
 
             new Thread(() -> {
-                String response = genAIService.chat(prompt, ".");
+                String response = genAIService.chat(prompt, ".", (toolLog) -> {
+                    SwingUtilities.invokeLater(() -> {
+                        chatArea.appendMarkdown(toolLog);
+                    });
+                });
                 SwingUtilities.invokeLater(() -> {
                     chatArea.appendMarkdown("**Roxy:** " + response);
                 });

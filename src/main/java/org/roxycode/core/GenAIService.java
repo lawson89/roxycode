@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -121,6 +122,10 @@ public class GenAIService {
     }
 
     public String chat(String prompt, String projectRoot) {
+        return chat(prompt, projectRoot, null);
+    }
+
+    public String chat(String prompt, String projectRoot, Consumer<String> onToolCall) {
         // 1. CONFIGURE SANDBOX (Always do this per chat to ensure safety)
         sandbox.setRoot(projectRoot);
 
@@ -194,6 +199,10 @@ public class GenAIService {
                     }
 
                     LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
+                    if (onToolCall != null) {
+                        onToolCall.accept("toolname:[" + fnName + "] called with args:[" + fixedArgs + "]");
+                    }
+                    
                     String toolOutput;
                     try {
                         ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow();

@@ -1,21 +1,22 @@
 package org.roxycode.ui;
 
+import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.util.ast.KeepType;
+import com.vladsch.flexmark.util.data.DataHolder;
+import com.vladsch.flexmark.util.data.MutableDataSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.swing.JEditorPane;
-import javax.swing.JTextPane;
+import javax.swing.*;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.Element;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class MarkdownPane extends JTextPane {
     private final Parser parser;
@@ -23,8 +24,21 @@ public class MarkdownPane extends JTextPane {
     private static final Logger log = LoggerFactory.getLogger(MarkdownPane.class);
 
     public MarkdownPane() {
-        this.parser = Parser.builder().build();
-        this.renderer = HtmlRenderer.builder().build();
+        final DataHolder OPTIONS = new MutableDataSet()
+                .set(Parser.REFERENCES_KEEP, KeepType.LAST)
+                .set(HtmlRenderer.INDENT_SIZE, 2)
+                .set(HtmlRenderer.PERCENT_ENCODE_URLS, true)
+
+                // for full GFM table compatibility add the following table extension options:
+                .set(TablesExtension.COLUMN_SPANS, false)
+                .set(TablesExtension.APPEND_MISSING_COLUMNS, true)
+                .set(TablesExtension.DISCARD_EXTRA_COLUMNS, true)
+                .set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true)
+                .set(Parser.EXTENSIONS, Arrays.asList(TablesExtension.create()))
+                .toImmutable();
+
+        this.parser = Parser.builder(OPTIONS).build();
+        this.renderer = HtmlRenderer.builder(OPTIONS).build();
 
         this.setEditable(false);
         this.setContentType("text/html");
