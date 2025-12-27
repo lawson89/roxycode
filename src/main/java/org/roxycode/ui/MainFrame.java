@@ -1,6 +1,6 @@
 package org.roxycode.ui;
 
-import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.*;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
@@ -94,6 +94,8 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton saveSettingsButton;
     @Outlet
+    private JComboBox<String> themeComboBox;
+    @Outlet
     private JLabel icon;
 
     private final MarkdownPane chatArea = new MarkdownPane();
@@ -110,7 +112,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Override
     public void run() {
-        FlatLightLaf.setup();
+        applyTheme(settingsService.getTheme());
         setContentPane(UILoader.load(this, "MainFrame.xml")); // Ensure leading slash for classpath
         FontIcon alarmIcon = FontIcon.of(BootstrapIcons.CHAT, 24);
         if (icon != null) icon.setIcon(alarmIcon);
@@ -214,6 +216,14 @@ public class MainFrame extends JFrame implements Runnable {
         if (maxTurnsField != null) {
             maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
         }
+        if (themeComboBox != null) {
+            themeComboBox.removeAllItems();
+            themeComboBox.addItem("Light");
+            themeComboBox.addItem("Dark");
+            themeComboBox.addItem("IntelliJ");
+            themeComboBox.addItem("Darcula");
+            themeComboBox.setSelectedItem(settingsService.getTheme());
+        }
     }
 
     private void onAttach(ActionEvent e) {
@@ -272,6 +282,14 @@ public class MainFrame extends JFrame implements Runnable {
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(parent, "Invalid number for Max Turns.", "Error", JOptionPane.ERROR_MESSAGE);
                 return;
+            }
+        }
+        
+        if (themeComboBox != null) {
+            String selectedTheme = (String) themeComboBox.getSelectedItem();
+            if (selectedTheme != null) {
+                settingsService.setTheme(selectedTheme);
+                applyTheme(selectedTheme);
             }
         }
 
@@ -383,6 +401,24 @@ public class MainFrame extends JFrame implements Runnable {
             if (child.isDirectory()) {
                 buildTreeNodes(childNode, child);
             }
+        }
+    }
+    
+    private void applyTheme(String themeName) {
+        try {
+            switch (themeName) {
+                case "Dark": UIManager.setLookAndFeel(new FlatDarkLaf()); break;
+                case "IntelliJ": UIManager.setLookAndFeel(new FlatIntelliJLaf()); break;
+                case "Darcula": UIManager.setLookAndFeel(new FlatDarculaLaf()); break;
+                case "Light":
+                default: UIManager.setLookAndFeel(new FlatLightLaf()); break;
+            }
+                        FlatLaf.updateUI();
+            if (chatArea != null) {
+                chatArea.updateStyle();
+            }
+        } catch (Exception ex) {
+            log.error("Failed to apply theme", ex);
         }
     }
 

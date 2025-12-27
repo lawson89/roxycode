@@ -25,6 +25,8 @@ public class SettingsService {
     private static final String ENV_ROXY_HOME = "ROXY_HOME";
     private static final String KEY_MAX_TURNS = "maxTurns";
     private static final int MAX_TURNS = 15;
+    private static final String KEY_THEME = "theme";
+    private static final String DEFAULT_THEME = "Light";
 
     private final Preferences preferences;
     private final ObjectMapper objectMapper;
@@ -117,5 +119,13 @@ public class SettingsService {
 
     public void setMaxTurns(int turns) {
         preferences.putInt(KEY_MAX_TURNS, turns);
+    }
+
+    public String getTheme() {
+        return preferences.get(KEY_THEME, DEFAULT_THEME);
+    }
+
+    public void setTheme(String theme) {
+        preferences.put(KEY_THEME, theme);
     }
 }

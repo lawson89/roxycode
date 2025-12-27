@@ -1,5 +1,6 @@
 package org.roxycode.ui;
 
+import com.formdev.flatlaf.FlatLaf;
 import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
@@ -46,15 +47,31 @@ public class MarkdownPane extends JTextPane {
         // --- FIX: Force HTML to use the LookAndFeel's (smooth) fonts ---
         this.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
 
-        // Basic styling
         HTMLEditorKit kit = new HTMLEditorKit();
-        StyleSheet styleSheet = kit.getStyleSheet();
-        styleSheet.addRule("body { font-family: sans-serif; font-size: 14px; padding: 10px; }");
-        styleSheet.addRule("code { background-color: #f0f0f0; font-family: monospace; }");
         this.setEditorKit(kit);
         this.setDocument(kit.createDefaultDocument());
+        
+        updateStyle();
 
         this.setText("<html><body></body></html>");
+    }
+    
+    public void updateStyle() {
+        HTMLEditorKit kit = (HTMLEditorKit) this.getEditorKit();
+        StyleSheet styleSheet = kit.getStyleSheet();
+        
+        // Clear previous rules if possible or just overwrite
+        // StyleSheet doesn't easily allow clearing, but adding rules with same selector overrides properties.
+        
+        styleSheet.addRule("body { font-family: sans-serif; font-size: 14px; padding: 10px; }");
+        
+        if (FlatLaf.isLafDark()) {
+            styleSheet.addRule("code { background-color: #3e3e42; color: #a9b7c6; font-family: monospace; }");
+            styleSheet.addRule("pre { background-color: #3e3e42; color: #a9b7c6; padding: 10px; }");
+        } else {
+            styleSheet.addRule("code { background-color: #f0f0f0; color: #333333; font-family: monospace; }");
+            styleSheet.addRule("pre { background-color: #f0f0f0; color: #333333; padding: 10px; }");
+        }
     }
 
     // --- FIX: Force Graphics2D Anti-Aliasing during paint ---
