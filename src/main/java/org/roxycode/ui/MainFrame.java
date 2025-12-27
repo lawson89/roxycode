@@ -91,11 +91,7 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet private JComponent viewSettings;
 
     // Usage Outlets
-    @Outlet private JLabel usageCallsLabel;
-    @Outlet private JLabel usageTokensLabel;
-    @Outlet private JLabel usageCostLabel;
-    @Outlet private JLabel usagePromptTokensLabel;
-    @Outlet private JLabel usageCandidateTokensLabel;
+    @Outlet private JLabel usageHtmlLabel;
     @Outlet private JButton resetUsageButton;
 
     // Settings Outlets
@@ -245,11 +241,22 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void updateUsageView() {
-        if (usageCallsLabel != null) usageCallsLabel.setText(String.valueOf(usageService.getApiCalls()));
-        if (usageTokensLabel != null) usageTokensLabel.setText(String.format("%,d", usageService.getTotalTokens()));
-        if (usageCostLabel != null) usageCostLabel.setText(String.format("$%.4f", usageService.getEstimatedCost()));
-        if (usagePromptTokensLabel != null) usagePromptTokensLabel.setText(String.format("%,d", usageService.getPromptTokens()));
-        if (usageCandidateTokensLabel != null) usageCandidateTokensLabel.setText(String.format("%,d", usageService.getCandidateTokens()));
+        if (usageHtmlLabel == null) return;
+
+        StringBuilder html = new StringBuilder();
+        html.append("<html>");
+        html.append("<table border='0' cellspacing='0' cellpadding='8'>");
+        
+        html.append("<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>").append(usageService.getApiCalls()).append("</td></tr>");
+        html.append("<tr><td><b><font color='#888888'>TOTAL TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getTotalTokens())).append("</td></tr>");
+        html.append("<tr><td><b><font color='#888888'>PROMPT TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getPromptTokens())).append("</td></tr>");
+        html.append("<tr><td><b><font color='#888888'>CANDIDATE TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getCandidateTokens())).append("</td></tr>");
+        html.append("<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>").append(String.format("$%.4f", usageService.getEstimatedCost())).append("</td></tr>");
+
+        html.append("</table>");
+        html.append("</html>");
+
+        usageHtmlLabel.setText(html.toString());
     }
 
     private void initSettings() {

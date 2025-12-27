@@ -75,42 +75,13 @@
             </column-panel>
 
             <!-- VIEW 3: USAGE -->
-            <column-panel name="viewUsage" visible="false" padding="16" spacing="12">
+            <column-panel name="viewUsage" visible="false" padding="32" spacing="20">
                 <label text="API Usage Statistics" font="h1"/>
-                <spacer size="16"/>
                 
-                <row-panel spacing="20">
-                    <column-panel spacing="4">
-                        <label text="API CALLS" font="bold-12" foreground="#888888"/>
-                        <label name="usageCallsLabel" text="0" font="h2"/>
-                    </column-panel>
-                    
-                    <column-panel spacing="4">
-                        <label text="TOTAL TOKENS" font="bold-12" foreground="#888888"/>
-                        <label name="usageTokensLabel" text="0" font="h2"/>
-                    </column-panel>
-                    
-                    <column-panel spacing="4">
-                        <label text="ESTIMATED COST" font="bold-12" foreground="#888888"/>
-                        <label name="usageCostLabel" text="0" font="h2"/>
-                    </column-panel>
+                <label name="usageHtmlLabel" text=""/>
 
-
-                <spacer size="16"/>
-                <label text="Token Breakdown" font="bold-14"/>
-                <row-panel spacing="8">
-                    <label text="Prompt Tokens:"/>
-                    <label name="usagePromptTokensLabel" text="0"/>
-                </row-panel>
-                <row-panel spacing="8">
-                    <label text="Candidate Tokens:"/>
-                    <label name="usageCandidateTokensLabel" text="0"/>
-                </row-panel>
-
-                <spacer size="32"/>
                 <button name="resetUsageButton" text="Reset Statistics"/>
                 <spacer weight="1"/>
-                </row-panel>
             </column-panel>
 
             <!-- VIEW 4: SETTINGS -->
