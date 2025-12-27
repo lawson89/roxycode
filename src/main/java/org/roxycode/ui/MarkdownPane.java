@@ -157,12 +157,56 @@ public class MarkdownPane extends JTextPane {
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
 
             // Insert the new HTML at the end of the body
-            kit.insertHTML(doc, doc.getLength(), combinedHtml + "<hr/>", 0, 0, null);
+            kit.insertHTML(doc, doc.getLength(), combinedHtml, 0, 0, null);
 
             this.setCaretPosition(doc.getLength());
 
         } catch (BadLocationException | IOException e) {
             log.error("Failed to append tool log", e);
+        }
+    }
+
+    public void appendStatus(String markdown) {
+        log.info("Rendering status: {}", markdown);
+        
+        String imgTag = "";
+        try {
+            FontIcon icon = FontIcon.of(BootstrapIcons.GEAR_WIDE_CONNECTED, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
+            BufferedImage image = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = image.createGraphics();
+            icon.paintIcon(this, g2, 0, 0);
+            g2.dispose();
+            
+            String imageName = "status-" + System.nanoTime() + ".png";
+            URL imageURL = new URL("http://roxycode.local/" + imageName);
+            
+            HTMLDocument doc = (HTMLDocument) getDocument();
+            Dictionary cache = (Dictionary) doc.getProperty("imageCache");
+            if (cache == null) {
+                cache = new Hashtable();
+                doc.putProperty("imageCache", cache);
+            }
+            cache.put(imageURL, image);
+            
+            imgTag = "<img src=\"" + imageURL + "\" style=\"vertical-align:middle\">&nbsp;";
+        } catch (Exception e) {
+            log.error("Failed to generate icon", e);
+        }
+        
+        String html = renderer.render(parser.parse(markdown));
+        if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
+             html = html.substring(3, html.length() - 5);
+        }
+        
+        String combinedHtml = "<div style='color: gray; font-style: italic;'>" + imgTag + "<span>" + html + "</span></div>";
+
+        try {
+            HTMLDocument doc = (HTMLDocument) getDocument();
+            HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
+            kit.insertHTML(doc, doc.getLength(), combinedHtml, 0, 0, null);
+            this.setCaretPosition(doc.getLength());
+        } catch (BadLocationException | IOException e) {
+            log.error("Failed to append status", e);
         }
     }
 }

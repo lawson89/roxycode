@@ -126,11 +126,11 @@ public class GenAIService {
         return chat(prompt, projectRoot, null, null);
     }
 
-    public String chat(String prompt, String projectRoot, Consumer<String> onToolCall) {
-        return chat(prompt, projectRoot, null, onToolCall);
+    public String chat(String prompt, String projectRoot, Consumer<String> onStatusUpdate) {
+        return chat(prompt, projectRoot, null, onStatusUpdate);
     }
 
-    public String chat(String prompt, String projectRoot, List<File> attachedFiles, Consumer<String> onToolCall) {
+    public String chat(String prompt, String projectRoot, List<File> attachedFiles, Consumer<String> onStatusUpdate) {
         // 1. CONFIGURE SANDBOX (Always do this per chat to ensure safety)
         sandbox.setRoot(projectRoot);
 
@@ -170,6 +170,9 @@ public class GenAIService {
 
         while (turns++ < maxTurns) {
             LOG.info("Turn {}: Sending message to model...", turns);
+            if (onStatusUpdate != null) {
+                onStatusUpdate.accept("Thinking...");
+            }
 
             // USE CACHED FUNCTIONS
             GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
@@ -221,8 +224,8 @@ public class GenAIService {
                     }
 
                     LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
-                    if (onToolCall != null) {
-                        onToolCall.accept("toolname:[" + fnName + "] called with args:[" + fixedArgs + "]");
+                    if (onStatusUpdate != null) {
+                        onStatusUpdate.accept("Tool: " + fnName + " | args: " + fixedArgs);
                     }
                     
                     String toolOutput;

@@ -359,7 +359,13 @@ public class MainFrame extends JFrame implements Runnable {
             }
 
             new Thread(() -> {
-                String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (toolLog) -> SwingUtilities.invokeLater(() -> chatArea.appendToolLog(toolLog)));
+                String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
+                    if (status.equals("Thinking...")) {
+                        chatArea.appendStatus(status);
+                    } else {
+                        chatArea.appendToolLog(status);
+                    }
+                }));
                 SwingUtilities.invokeLater(() -> chatArea.appendMarkdown("**Roxy:** " + response));
             }).start();
         }
