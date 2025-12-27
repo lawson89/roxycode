@@ -14,6 +14,7 @@
         </menu>
     </menu-bar>
 
+    <!-- Header -->
     <row-panel spacing="8" padding="8" background="#f0f0f0" opaque="true" alignToBaseline="true">
         <label text="" name="icon"/>
         <label text="RoxyCode AI" styleClass="h3"/>
@@ -24,56 +25,77 @@
         <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
         <spacer weight="1"/>
         <button name="rescanButton" text="Rescan"/>
-
     </row-panel>
 
-    <split-pane weight="1" dividerLocation="250">
+    <!-- MAIN BODY: Row Panel to split Left Menu and Right Content -->
+    <row-panel weight="1" alignToBaseline="false">
 
-        <scroll-pane>
-            <tree name="fileTree"/>
-        </scroll-pane>
-
-        <column-panel weight="1">
-            <tabbed-pane weight="1" name="mainTabbedPane">
-                
-                <!-- Tab 1: Chat -->
-                <column-panel tabTitle="Chat" weight="1">
-                    <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
-                        <!-- Chat content injected manually -->
-                    </scroll-pane>
-
-                    <row-panel spacing="4" padding="8" background="#e0e0e0" opaque="true">
-                        <scroll-pane weight="1">
-                            <text-area name="inputField" rows="3"/>
-                        </scroll-pane>
-                        <button name="sendButton" text="Send"/>
-                    </row-panel>
-                </column-panel>
-                
-                <!-- Tab 2: Settings -->
-                <column-panel tabTitle="Settings" padding="16" spacing="8" name="settingsTab">
-                    <label text="Global Settings" font="h1"/>
-                    <spacer size="16"/>                    <label text="Gemini API Key:"/>
-                    <row-panel spacing="8">
-                        <password-field name="apiKeyField" columns="30" weight="1"/>
-                    </row-panel>
-                    
-                    <spacer size="8"/>
-                    <label text="Max Turns (Chat History):"/>
-                    <row-panel spacing="8">
-                        <text-field name="maxTurnsField" columns="10"/>
-                    </row-panel>
-                    
-                    <spacer size="16"/>
-                    <row-panel>
-                        <button name="saveSettingsButton" text="Save Settings"/>
-                    </row-panel>
-                    
-                    <spacer weight="1"/>
-                </column-panel>
-
-            </tabbed-pane>
+        <!-- LEFT SIDEBAR -->
+        <column-panel padding="12" spacing="8" background="#2d2d2d" opaque="true">
+            <label text="MENU" foreground="#808080" font="bold-12"/>
+            
+            <!-- Navigation Buttons -->
+            <button name="navChatButton" text="Chat" foreground="white" background="#2d2d2d" borderPainted="false" horizontalAlignment="left"/>
+            <button name="navFilesButton" text="Project Files" foreground="white" background="#2d2d2d" borderPainted="false" horizontalAlignment="left"/>
+            <button name="navSettingsButton" text="Settings" foreground="white" background="#2d2d2d" borderPainted="false" horizontalAlignment="left"/>
+            
+            <spacer weight="1"/>
         </column-panel>
 
-    </split-pane>
+        <!-- RIGHT CONTENT AREA -->
+        <stack-panel weight="1">
+
+            <!-- VIEW 1: CHAT (Default) -->
+            <column-panel name="viewChat" visible="true" weight="1">
+                <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
+                    <!-- Chat content injected manually -->
+                </scroll-pane>
+                <!-- Attachments & Input Area -->
+                <row-panel spacing="8" padding="4" background="#f0f0f0" opaque="true">
+                    <label text="Attachments:"/>
+                    <label name="attachmentsLabel" text="None" weight="1"/>
+                    <button name="clearAttachmentsButton" text="Clear"/>
+                </row-panel>
+                <row-panel spacing="4" padding="8" background="#e0e0e0" opaque="true">
+                    <button name="attachButton" text="Attach"/>
+                    <scroll-pane weight="1">
+                        <text-area name="inputField" rows="3"/>
+                    </scroll-pane>
+                    <button name="sendButton" text="Send"/>
+                </row-panel>
+            </column-panel>
+
+            <!-- VIEW 2: PROJECT FILES -->
+            <column-panel name="viewFiles" visible="false" weight="1">
+                <label text="Project Files" styleClass="h2" padding="10"/>
+                <scroll-pane weight="1">
+                    <tree name="fileTree"/>
+                </scroll-pane>
+            </column-panel>
+
+            <!-- VIEW 3: SETTINGS -->
+            <column-panel name="viewSettings" visible="false" padding="16" spacing="8">
+                <label text="Global Settings" font="h1"/>
+                <spacer size="16"/>
+                <label text="Gemini API Key:"/>
+                <row-panel spacing="8">
+                    <password-field name="apiKeyField" columns="30" weight="1"/>
+                </row-panel>
+                
+                <spacer size="8"/>
+                <label text="Max Turns (Chat History):"/>
+                <row-panel spacing="8">
+                    <text-field name="maxTurnsField" columns="10"/>
+                </row-panel>
+                
+                <spacer size="16"/>
+                <row-panel>
+                    <button name="saveSettingsButton" text="Save Settings"/>
+                </row-panel>
+                <spacer weight="1"/>
+            </column-panel>
+
+        </stack-panel>
+
+    </row-panel>
 </column-panel>

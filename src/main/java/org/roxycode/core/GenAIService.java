@@ -10,6 +10,7 @@ import org.roxycode.core.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -122,19 +123,40 @@ public class GenAIService {
     }
 
     public String chat(String prompt, String projectRoot) {
-        return chat(prompt, projectRoot, null);
+        return chat(prompt, projectRoot, null, null);
     }
 
     public String chat(String prompt, String projectRoot, Consumer<String> onToolCall) {
+        return chat(prompt, projectRoot, null, onToolCall);
+    }
+
+    public String chat(String prompt, String projectRoot, List<File> attachedFiles, Consumer<String> onToolCall) {
         // 1. CONFIGURE SANDBOX (Always do this per chat to ensure safety)
         sandbox.setRoot(projectRoot);
 
         // 2. Build Initial Prompt
         String contextMenu = contextRegistry.getContextMenu();
-        String systemPrompt = "Project Root: " + projectRoot + "\n" +
-                              "Roxy Home: " + (cachedRoxyHome != null ? cachedRoxyHome : "Not loaded") + "\n" +
-                              contextMenu + "\n" +
-                              "Task: " + prompt;
+        StringBuilder promptBuilder = new StringBuilder();
+        promptBuilder.append("Project Root: ").append(projectRoot).append("\n");
+        promptBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
+        promptBuilder.append(contextMenu).append("\n");
+
+        if (attachedFiles != null && !attachedFiles.isEmpty()) {
+            promptBuilder.append("\n--- ATTACHED FILES ---\n");
+            for (File file : attachedFiles) {
+                promptBuilder.append("File: ").append(file.getName()).append("\n");
+                promptBuilder.append("Content:\n");
+                try {
+                    promptBuilder.append(Files.readString(file.toPath())).append("\n");
+                } catch (IOException e) {
+                    promptBuilder.append("[Error reading file: ").append(e.getMessage()).append("]\n");
+                }
+                promptBuilder.append("----------------------\n");
+            }
+        }
+
+        promptBuilder.append("Task: ").append(prompt);
+        String systemPrompt = promptBuilder.toString();
 
         List<Content> history = new ArrayList<>();
         history.add(Content.builder()
