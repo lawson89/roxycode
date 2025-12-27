@@ -6,6 +6,7 @@ import io.micronaut.context.ApplicationContext;
 import jakarta.inject.Singleton;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.customizers.SecureASTCustomizer;
+import org.roxycode.core.FileSystemService;
 import org.roxycode.core.Sandbox;
 
 import java.io.IOException;
@@ -19,12 +20,14 @@ import java.util.concurrent.*;
 public class ToolExecutionService {
     private final ExecutorService executorService;
     private final Sandbox sandbox;
+    private final FileSystemService fs;
     private final ApplicationContext applicationContext;
 
-    public ToolExecutionService(Sandbox sandbox, ApplicationContext applicationContext) {
+    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, ApplicationContext applicationContext) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
         this.sandbox = sandbox;
+        this.fs = fs;
         this.applicationContext = applicationContext;
     }
 
@@ -45,6 +48,7 @@ public class ToolExecutionService {
         Binding binding = new Binding();
         // Inject dependencies
         binding.setVariable("sandbox", sandbox);
+        binding.setVariable("fs", fs);
         binding.setVariable("ctx", applicationContext);
         binding.setVariable("args", args);
 

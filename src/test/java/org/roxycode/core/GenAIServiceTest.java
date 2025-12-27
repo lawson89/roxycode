@@ -126,7 +126,7 @@ class GenAIServiceTest {
     @Replaces(ToolExecutionService.class)
     @Requires(property = "spec.name", value = "GenAIServiceTest")
     static class StubToolExecutionService extends ToolExecutionService {
-        public StubToolExecutionService() { super(null, null); }
+        public StubToolExecutionService() { super(null, null, null); }
 
         @Override
         public Future<String> execute(ToolDefinition tool, Map<String, Object> args) {
