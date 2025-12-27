@@ -10,6 +10,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.GitService;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.UsageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +37,7 @@ public class MainFrame extends JFrame implements Runnable {
     private final GitService gitService;
     private final GenAIService genAIService;
     private final SettingsService settingsService;
+    private final UsageService usageService;
 
     private Path currentProjectRoot;
 
@@ -79,12 +81,22 @@ public class MainFrame extends JFrame implements Runnable {
     // Navigation Outlets
     @Outlet private JButton navChatButton;
     @Outlet private JButton navFilesButton;
+    @Outlet private JButton navUsageButton;
     @Outlet private JButton navSettingsButton;
 
     // View Outlets
     @Outlet private JComponent viewChat;
     @Outlet private JComponent viewFiles;
+    @Outlet private JComponent viewUsage;
     @Outlet private JComponent viewSettings;
+
+    // Usage Outlets
+    @Outlet private JLabel usageCallsLabel;
+    @Outlet private JLabel usageTokensLabel;
+    @Outlet private JLabel usageCostLabel;
+    @Outlet private JLabel usagePromptTokensLabel;
+    @Outlet private JLabel usageCandidateTokensLabel;
+    @Outlet private JButton resetUsageButton;
 
     // Settings Outlets
     @Outlet
@@ -101,10 +113,11 @@ public class MainFrame extends JFrame implements Runnable {
     private final MarkdownPane chatArea = new MarkdownPane();
 
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService) {
+    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, UsageService usageService) {
         this.gitService = gitService;
         this.genAIService = genAIService;
         this.settingsService = settingsService;
+        this.usageService = usageService;
 
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -179,7 +192,13 @@ public class MainFrame extends JFrame implements Runnable {
         // Navigation listeners
         if (navChatButton != null) navChatButton.addActionListener(e -> showView("CHAT"));
         if (navFilesButton != null) navFilesButton.addActionListener(e -> showView("FILES"));
+        if (navUsageButton != null) navUsageButton.addActionListener(e -> showView("USAGE"));
         if (navSettingsButton != null) navSettingsButton.addActionListener(e -> showView("SETTINGS"));
+
+        if (resetUsageButton != null) resetUsageButton.addActionListener(e -> {
+            usageService.reset();
+            updateUsageView();
+        });
 
         // FIX: Use KeyBindings for JTextArea
         if (inputField != null) {
@@ -208,14 +227,29 @@ public class MainFrame extends JFrame implements Runnable {
         // Hide all
         if(viewChat != null) viewChat.setVisible(false);
         if(viewFiles != null) viewFiles.setVisible(false);
+        if(viewUsage != null) viewUsage.setVisible(false);
         if(viewSettings != null) viewSettings.setVisible(false);
 
         // Show selected
         switch (viewName) {
             case "CHAT": if(viewChat != null) viewChat.setVisible(true); break;
             case "FILES": if(viewFiles != null) viewFiles.setVisible(true); break;
+            case "USAGE":
+                if(viewUsage != null) {
+                    updateUsageView();
+                    viewUsage.setVisible(true);
+                }
+                break;
             case "SETTINGS": if(viewSettings != null) viewSettings.setVisible(true); break;
         }
+    }
+
+    private void updateUsageView() {
+        if (usageCallsLabel != null) usageCallsLabel.setText(String.valueOf(usageService.getApiCalls()));
+        if (usageTokensLabel != null) usageTokensLabel.setText(String.format("%,d", usageService.getTotalTokens()));
+        if (usageCostLabel != null) usageCostLabel.setText(String.format("$%.4f", usageService.getEstimatedCost()));
+        if (usagePromptTokensLabel != null) usagePromptTokensLabel.setText(String.format("%,d", usageService.getPromptTokens()));
+        if (usageCandidateTokensLabel != null) usageCandidateTokensLabel.setText(String.format("%,d", usageService.getCandidateTokens()));
     }
 
     private void initSettings() {
@@ -360,7 +394,7 @@ public class MainFrame extends JFrame implements Runnable {
 
             new Thread(() -> {
                 String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
-                    if (status.equals("Thinking...")) {
+                    if (status.startsWith("Thinking")) {
                         chatArea.appendStatus(status);
                     } else {
                         chatArea.appendToolLog(status);

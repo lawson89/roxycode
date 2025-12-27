@@ -34,6 +34,7 @@ public class GenAIService {
     private final ToolExecutionService executionService;
     private final Sandbox sandbox;
     private final ContextRegistry contextRegistry;
+    private final UsageService usageService;
     private Client client;
 
     // Cache function declarations to avoid re-scanning every chat turn
@@ -44,12 +45,14 @@ public class GenAIService {
                         ToolRegistry toolRegistry,
                         ToolExecutionService executionService,
                         Sandbox sandbox,
-                        ContextRegistry contextRegistry) {
+                        ContextRegistry contextRegistry,
+                        UsageService usageService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
         this.sandbox = sandbox;
         this.contextRegistry = contextRegistry;
+        this.usageService = usageService;
     }
 
     private Client getClient() {
@@ -171,7 +174,7 @@ public class GenAIService {
         while (turns++ < maxTurns) {
             LOG.info("Turn {}: Sending message to model...", turns);
             if (onStatusUpdate != null) {
-                onStatusUpdate.accept("Thinking...");
+                onStatusUpdate.accept(String.format("Thinking (%d/%d)...", turns, maxTurns));
             }
 
             // USE CACHED FUNCTIONS
@@ -183,11 +186,17 @@ public class GenAIService {
                 configBuilder.tools(List.of(toolConfig));
             }
 
-            GenerateContentResponse response = getClient().models.generateContent(
+                        GenerateContentResponse response = getClient().models.generateContent(
                     "gemini-3-flash-preview",
                     history,
                     configBuilder.build()
             );
+
+            response.usageMetadata().ifPresent(usage -> {
+                int promptTokens = usage.promptTokenCount().orElse(0);
+                int candidatesTokens = usage.candidatesTokenCount().orElse(0);
+                usageService.recordUsage(promptTokens, candidatesTokens);
+            });
 
             Optional<List<Candidate>> candidatesOpt = response.candidates();
             if (candidatesOpt.isEmpty() || candidatesOpt.get().isEmpty()) {
