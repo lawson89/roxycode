@@ -106,7 +106,7 @@ public class MainFrame extends JFrame implements Runnable {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
 
-        setTitle("RoxyCode AI Environment");
+        setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }
 
@@ -114,8 +114,17 @@ public class MainFrame extends JFrame implements Runnable {
     public void run() {
         applyTheme(settingsService.getTheme());
         setContentPane(UILoader.load(this, "MainFrame.xml")); // Ensure leading slash for classpath
-        FontIcon alarmIcon = FontIcon.of(BootstrapIcons.CHAT, 24);
-        if (icon != null) icon.setIcon(alarmIcon);
+                // Load stylized Roxy cat icon
+        java.net.URL iconUrl = getClass().getResource("roxy_logo_transparent.png");
+        if (iconUrl != null && icon != null) {
+            ImageIcon roxyIcon = new ImageIcon(iconUrl);
+            Image img = roxyIcon.getImage();
+            Image newImg = img.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
+            icon.setIcon(new ImageIcon(newImg));
+        } else {
+            FontIcon alarmIcon = FontIcon.of(BootstrapIcons.CHAT, 64);
+            if (icon != null) icon.setIcon(alarmIcon);
+        }
 
         // Manual Viewport injection
         if (chatScrollPane != null) {
