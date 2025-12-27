@@ -7,17 +7,26 @@ import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.ast.KeepType;
 import com.vladsch.flexmark.util.data.DataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
+import org.kordamp.ikonli.bootstrapicons.BootstrapIcons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
 import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.Dictionary;
+import java.util.Hashtable;
 
 public class MarkdownPane extends JTextPane {
     private final Parser parser;
@@ -103,6 +112,57 @@ public class MarkdownPane extends JTextPane {
 
         } catch (BadLocationException | IOException e) {
             log.error("Failed to append markdown", e);
+        }
+    }
+
+    public void appendToolLog(String markdown) {
+        log.info("Rendering tool log: {}", markdown);
+        
+        // Generate Icon via Document Image Cache (JEditorPane doesn't reliably support data: URIs)
+        String imgTag = "";
+        try {
+            FontIcon icon = FontIcon.of(BootstrapIcons.WRENCH, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
+            BufferedImage image = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = image.createGraphics();
+            icon.paintIcon(this, g2, 0, 0);
+            g2.dispose();
+            
+            // Generate a unique virtual URL for the icon
+            String imageName = "wrench-" + System.nanoTime() + ".png";
+            URL imageURL = new URL("http://roxycode.local/" + imageName);
+            
+            HTMLDocument doc = (HTMLDocument) getDocument();
+            Dictionary cache = (Dictionary) doc.getProperty("imageCache");
+            if (cache == null) {
+                cache = new Hashtable();
+                doc.putProperty("imageCache", cache);
+            }
+            cache.put(imageURL, image);
+            
+            imgTag = "<img src=\"" + imageURL + "\" style=\"vertical-align:middle\">&nbsp;";
+        } catch (Exception e) {
+            log.error("Failed to generate icon", e);
+        }
+        
+        String html = renderer.render(parser.parse(markdown));
+        // Remove surrounding <p> tags if present to align nicely with image
+        if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
+             html = html.substring(3, html.length() - 5);
+        }
+        
+        String combinedHtml = "<div>" + imgTag + "<span>" + html + "</span></div>";
+
+        try {
+            HTMLDocument doc = (HTMLDocument) getDocument();
+            HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
+
+            // Insert the new HTML at the end of the body
+            kit.insertHTML(doc, doc.getLength(), combinedHtml + "<hr/>", 0, 0, null);
+
+            this.setCaretPosition(doc.getLength());
+
+        } catch (BadLocationException | IOException e) {
+            log.error("Failed to append tool log", e);
         }
     }
 }
