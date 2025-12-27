@@ -169,7 +169,7 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void onSaveSettings(ActionEvent e) {
-        Component parent = (Component) e.getSource();
+        Component parent = this;
         if (apiKeyField != null) {
             String key = new String(apiKeyField.getPassword()).trim();
             settingsService.setGeminiApiKey(key);
@@ -201,7 +201,7 @@ public class MainFrame extends JFrame implements Runnable {
         fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         fileChooser.setCurrentDirectory(currentProjectRoot.toFile());
 
-        int result = fileChooser.showOpenDialog((Component) e.getSource());
+        int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
             currentProjectRoot = selectedFile.toPath().toAbsolutePath();
@@ -261,7 +261,7 @@ public class MainFrame extends JFrame implements Runnable {
     }
     
     private void onAbout(ActionEvent e) {
-        JOptionPane.showMessageDialog((Component) e.getSource(), "RoxyCode AI Environment\nVersion 1.0", "About RoxyCode", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(MainFrame.this, "RoxyCode AI EnvironmentnVersion 1.0", "About RoxyCode", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void populateFileTree() {

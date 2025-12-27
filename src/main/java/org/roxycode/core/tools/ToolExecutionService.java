@@ -2,6 +2,7 @@ package org.roxycode.core.tools;
 
 import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
+import io.micronaut.context.ApplicationContext;
 import jakarta.inject.Singleton;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.customizers.SecureASTCustomizer;
@@ -18,11 +19,13 @@ import java.util.concurrent.*;
 public class ToolExecutionService {
     private final ExecutorService executorService;
     private final Sandbox sandbox;
+    private final ApplicationContext applicationContext;
 
-    public ToolExecutionService(Sandbox sandbox) {
+    public ToolExecutionService(Sandbox sandbox, ApplicationContext applicationContext) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
         this.sandbox = sandbox;
+        this.applicationContext = applicationContext;
     }
 
     public Future<String> execute(ToolDefinition tool, Map<String, Object> args) {
@@ -42,6 +45,7 @@ public class ToolExecutionService {
         Binding binding = new Binding();
         // Inject dependencies
         binding.setVariable("sandbox", sandbox);
+        binding.setVariable("ctx", applicationContext);
         binding.setVariable("args", args);
 
         GroovyShell shell = new GroovyShell(binding, config);

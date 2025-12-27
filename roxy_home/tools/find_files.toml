@@ -11,5 +11,5 @@ required = true
 [[parameters]]
 name = "path"
 type = "string"
-description = "Relative path to start search from."
-required = false
+description = "Relative path to start search from. Defaults to project root."
+required = true
