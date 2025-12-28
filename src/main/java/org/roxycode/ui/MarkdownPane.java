@@ -106,7 +106,7 @@ public class MarkdownPane extends JTextPane {
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
 
             // Insert the new HTML at the end of the body
-            kit.insertHTML(doc, doc.getLength(), newHtml + "<hr/>", 0, 0, null);
+            kit.insertHTML(doc, doc.getLength(), newHtml + "<div style='height: 1px; background-color: #A0A0A0; font-size: 1px; border: none; margin: 5px 0;'></div>", 0, 0, null);
 
             this.setCaretPosition(doc.getLength());
 
