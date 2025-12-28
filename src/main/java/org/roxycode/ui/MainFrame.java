@@ -400,14 +400,29 @@ public class MainFrame extends JFrame implements Runnable {
             }
 
             new Thread(() -> {
-                String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
-                    if (status.startsWith("Thinking")) {
-                        chatArea.appendStatus(status);
-                    } else {
-                        chatArea.appendToolLog(status);
-                    }
-                }));
-                SwingUtilities.invokeLater(() -> chatArea.appendMarkdown("**Roxy:** " + response));
+                try {
+                    String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
+                        if (status.startsWith("Thinking")) {
+                            chatArea.appendStatus(status);
+                        } else {
+                            chatArea.appendToolLog(status);
+                        }
+                    }));
+                    SwingUtilities.invokeLater(() -> chatArea.appendMarkdown("**Roxy:** " + response));
+                } catch (Exception ex) {
+                    log.error("Chat error", ex);
+                    SwingUtilities.invokeLater(() -> {
+                        String errorMsg = ex.getMessage();
+                        if (errorMsg != null && errorMsg.contains("Quota exceeded")) {
+                             chatArea.appendMarkdown("⚠️ **API Quota Exceeded**n" +
+                                     "You have hit the rate limit for the Gemini API. " +
+                                     "Please wait a few moments before trying again.n" +
+                                     "> " + errorMsg);
+                        } else {
+                            chatArea.appendMarkdown("❌ **Error:** " + errorMsg);
+                        }
+                    });
+                }
             }).start();
         }
     }
