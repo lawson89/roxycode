@@ -1,6 +1,6 @@
 description = "Searches for a text pattern (regex) in files within the project."
-type = "groovy"
-source = "file:grep.groovy"
+type = "graaljs"
+source = "file:grep.js"
 
 [[parameters]]
 name = "pattern"

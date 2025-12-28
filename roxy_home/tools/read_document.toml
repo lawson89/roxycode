@@ -1,9 +1,9 @@
 description = "Extracts text from a document (PDF, DOCX, etc.) using Apache Tika."
-type = "groovy"
-source = "file:read_document.groovy"
+type = "graaljs"
+source = "file:read_document.js"
 
 [[parameters]]
 name = "path"
 type = "string"
 description = "The relative path to the document file."
-required = true
+required = false

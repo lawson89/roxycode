@@ -91,7 +91,7 @@ public class ContextRegistry {
         if (availableContexts.isEmpty()) return "";
 
         StringBuilder sb = new StringBuilder("\n\n📚 Available Knowledge Contexts:\n");
-        sb.append("(Use read_file to load these definitions)\n");
+        sb.append("(Use read_file to load these definitions as needed if applicable to task)\n");
 
         availableContexts.forEach((fileName, info) -> {
             sb.append(String.format("- %s: %s\n", fileName, info.description.replace("\n", " ")));

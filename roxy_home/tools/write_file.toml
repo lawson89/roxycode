@@ -1,6 +1,6 @@
 description = "Writes content to a file. Creates directories if needed."
-type = "groovy"
-source = "file:write_file.groovy"
+type = "graaljs"
+source = "file:write_file.js"
 
 [[parameters]]
 name = "path"

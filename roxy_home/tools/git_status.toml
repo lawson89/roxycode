@@ -1,6 +1,6 @@
 description = "Shows the status of the git repository."
-type = "groovy"
-source = "file:git_status.groovy"
+type = "graaljs"
+source = "file:git_status.js"
 
 [[parameters]]
 name = "dummy"

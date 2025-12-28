@@ -203,7 +203,7 @@ public class GenAIService {
                 return "Error: No response candidates.";
             }
 
-            Content modelMessage = candidatesOpt.get().get(0).content().orElseThrow();
+            Content modelMessage = candidatesOpt.get().get(0).content().orElse(Content.builder().build());
             history.add(modelMessage);
 
             List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
@@ -239,7 +239,7 @@ public class GenAIService {
                     
                     String toolOutput;
                     try {
-                        ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow();
+                        ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow(() -> new IllegalStateException("Tool not found: " + fnName));
                         toolOutput = executionService.execute(toolDef, fixedArgs).get();
                     } catch (Exception e) {
                         toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();

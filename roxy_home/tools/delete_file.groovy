@@ -1,1 +1,0 @@
-try { fs.delete(args.path); return "✅ Deleted: " + args.path } catch (Exception e) { return "❌ Failed to delete: " + e.message }

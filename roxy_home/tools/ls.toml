@@ -1,6 +1,6 @@
 description = "Lists the contents of a directory in a tree-like format. Use this to understand the project structure."
-type = "groovy"
-source = "file:ls.groovy"
+type = "graaljs"
+source = "file:ls.js"
 
 [[parameters]]
 name = "path"

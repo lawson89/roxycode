@@ -1,1 +1,0 @@
-try { fs.writeFile(args.path, args.content); return "Successfully wrote to " + args.path } catch (Exception e) { return "Error: " + e.message }

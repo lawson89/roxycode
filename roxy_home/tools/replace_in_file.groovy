@@ -1,1 +1,0 @@
-try { return fs.replaceInFile(args.path, args.search, args.replace) } catch (Exception e) { return "Error: " + e.message }

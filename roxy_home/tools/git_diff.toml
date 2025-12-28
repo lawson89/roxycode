@@ -1,6 +1,6 @@
 description = "Shows changes in the working directory."
-type = "groovy"
-source = "file:git_diff.groovy"
+type = "graaljs"
+source = "file:git_diff.js"
 
 [[parameters]]
 name = "path"

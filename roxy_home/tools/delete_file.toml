@@ -1,6 +1,6 @@
 description = "Deletes a file or directory (recursively)."
-type = "groovy"
-source = "file:delete_file.groovy"
+type = "graaljs"
+source = "file:delete_file.js"
 
 [[parameters]]
 name = "path"

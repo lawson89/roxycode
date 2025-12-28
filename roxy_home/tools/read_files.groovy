@@ -1,1 +1,0 @@
-if (!(args.paths instanceof List)) return "Error: 'paths' must be a List"; return fs.readFiles(args.paths)

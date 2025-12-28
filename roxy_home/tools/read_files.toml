@@ -1,9 +1,9 @@
 description = "Reads the content of multiple files from the project."
-type = "groovy"
-source = "file:read_files.groovy"
+type = "graaljs"
+source = "file:read_files.js"
 
 [[parameters]]
 name = "paths"
 type = "array"
 description = "A list of relative paths to the files to read."
-required = true
+required = false

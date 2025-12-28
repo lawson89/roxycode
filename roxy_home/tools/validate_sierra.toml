@@ -1,9 +1,0 @@
-description = "Validates a Sierra DSL XML file against its DTD."
-type = "groovy"
-source = "file:validate_sierra.groovy"
-
-[[parameters]]
-name = "path"
-type = "string"
-description = "The path to the XML file."
-required = true

@@ -1,1 +1,0 @@
-try { return fs.readFile(args.path) } catch (Exception e) { return "Error: " + e.message }

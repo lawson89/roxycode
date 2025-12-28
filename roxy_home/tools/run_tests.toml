@@ -1,6 +1,6 @@
 description = "Runs all JUnit tests in the project and returns a summary."
-type = "groovy"
-source = "file:run_tests.groovy"
+type = "graaljs"
+source = "file:run_tests.js"
 
 [[parameters]]
 name = "dummy"
