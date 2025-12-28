@@ -9,6 +9,8 @@ import org.kordamp.ikonli.bootstrapicons.BootstrapIcons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.GitService;
+import org.roxycode.core.RoxyProjectService;
+import org.roxycode.core.Sandbox;
 import org.roxycode.core.SettingsService;
 import org.roxycode.core.UsageService;
 import org.slf4j.Logger;
@@ -38,6 +40,8 @@ public class MainFrame extends JFrame implements Runnable {
     private final GenAIService genAIService;
     private final SettingsService settingsService;
     private final UsageService usageService;
+    private final RoxyProjectService roxyProjectService;
+    private final Sandbox sandbox;
 
     private Path currentProjectRoot;
 
@@ -109,11 +113,13 @@ public class MainFrame extends JFrame implements Runnable {
     private final MarkdownPane chatArea = new MarkdownPane();
 
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, UsageService usageService) {
+    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox) {
         this.gitService = gitService;
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.usageService = usageService;
+        this.roxyProjectService = roxyProjectService;
+        this.sandbox = sandbox;
 
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -142,6 +148,8 @@ public class MainFrame extends JFrame implements Runnable {
 
         // Initialize project root to current directory
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
+        sandbox.setRoot(currentProjectRoot.toString());
+        roxyProjectService.ensureProjectStructure();
 
         initGitInfo();
         initListeners();
@@ -355,6 +363,8 @@ public class MainFrame extends JFrame implements Runnable {
         if (result == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
             currentProjectRoot = selectedFile.toPath().toAbsolutePath();
+            sandbox.setRoot(currentProjectRoot.toString());
+            roxyProjectService.ensureProjectStructure();
 
             updateProjectLabel();
             initGitInfo();
