@@ -4,8 +4,10 @@ import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
 import io.micronaut.context.ApplicationContext;
 import jakarta.inject.Singleton;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.customizers.SecureASTCustomizer;
+import org.graalvm.polyglot.proxy.ProxyObject;
 import org.roxycode.core.FileSystemService;
 import org.roxycode.core.Sandbox;
 
@@ -76,15 +78,26 @@ public class ToolExecutionService {
     private String executeJavaScript(String script, Map<String, Object> args) {
         try (Context context = Context.newBuilder("js")
                 .allowAllAccess(true)
+                // Optional: specifically allow experimental options if needed in your version
+                // .allowExperimentalOptions(true)
                 .build()) {
+
+            // 1. Bind your services as before
             context.getBindings("js").putMember("sandbox", this.sandbox);
             context.getBindings("js").putMember("fs", this.fs);
             context.getBindings("js").putMember("ctx", this.applicationContext);
-            context.getBindings("js").putMember("args", args);
+
+            // 2. THE FIX: Wrap the Java Map in ProxyObject
+            // This makes 'args.pattern' in JS call 'args.get("pattern")' in Java
+            context.getBindings("js").putMember("args", ProxyObject.fromMap(args));
+
+            // 3. Execute
             Value result = context.eval(Source.create("js", script));
             return result != null ? result.toString() : "";
+
         } catch (Exception e) {
-            return "Error executing JavaScript: " + e.getMessage();
+            String stackTrace = ExceptionUtils.getStackTrace(e);
+            return "Error executing JavaScript: " + e.getMessage() + "\n" + stackTrace;
         }
     }
 

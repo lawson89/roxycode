@@ -1,11 +1,11 @@
-description = "Finds files whose names match a regex pattern."
-type = "groovy"
-source = "file:find_files.groovy"
+description = "Finds files whose names match a a shell-style wildcard pattern."
+type = "graaljs"
+source = "file:find_files.js"
 
 [[parameters]]
 name = "pattern"
 type = "string"
-description = "The regex pattern to match filename (e.g. '.*\\.java')."
+description = "The shell-style wildcard pattern to match filenames (e.g. '*.java')."
 required = true
 
 [[parameters]]
