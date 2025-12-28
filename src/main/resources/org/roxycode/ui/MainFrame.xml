@@ -94,6 +94,12 @@
                 </row-panel>
                 
                 <spacer size="8"/>
+                <label text="Gemini Model:"/>
+                <row-panel spacing="8">
+                    <combo-box name="modelComboBox" weight="1"/>
+                </row-panel>
+                
+                <spacer size="8"/>
                 <label text="Max Turns (Chat History):"/>
                 <row-panel spacing="8">
                     <text-field name="maxTurnsField" columns="10"/>

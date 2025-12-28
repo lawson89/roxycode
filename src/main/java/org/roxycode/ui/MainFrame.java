@@ -108,6 +108,8 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JComboBox<String> themeComboBox;
     @Outlet
+    private JComboBox<String> modelComboBox;
+    @Outlet
     private JLabel icon;
 
     private final MarkdownPane chatArea = new MarkdownPane();
@@ -282,6 +284,15 @@ public class MainFrame extends JFrame implements Runnable {
             themeComboBox.addItem("Darcula");
             themeComboBox.setSelectedItem(settingsService.getTheme());
         }
+        if (modelComboBox != null) {
+            modelComboBox.removeAllItems();
+            modelComboBox.addItem("gemini-3-pro-preview");
+            modelComboBox.addItem("gemini-3-flash-preview");
+            modelComboBox.addItem("gemini-2.5-flash");
+            modelComboBox.addItem("gemini-2.5-pro");
+            modelComboBox.addItem("gemini-2.0-flash");
+            modelComboBox.setSelectedItem(settingsService.getGeminiModel());
+        }
     }
 
     private void onAttach(ActionEvent e) {
@@ -348,6 +359,13 @@ public class MainFrame extends JFrame implements Runnable {
             if (selectedTheme != null) {
                 settingsService.setTheme(selectedTheme);
                 applyTheme(selectedTheme);
+            }
+        }
+
+        if (modelComboBox != null) {
+            String selectedModel = (String) modelComboBox.getSelectedItem();
+            if (selectedModel != null) {
+                settingsService.setGeminiModel(selectedModel);
             }
         }
 

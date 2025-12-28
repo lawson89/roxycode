@@ -27,6 +27,8 @@ public class SettingsService {
     private static final int MAX_TURNS = 15;
     private static final String KEY_THEME = "theme";
     private static final String DEFAULT_THEME = "Light";
+    private static final String KEY_GEMINI_MODEL = "geminiModel";
+    private static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
     private final Preferences preferences;
     private final ObjectMapper objectMapper;
@@ -127,5 +129,13 @@ public class SettingsService {
 
     public void setTheme(String theme) {
         preferences.put(KEY_THEME, theme);
+    }
+
+    public String getGeminiModel() {
+        return preferences.get(KEY_GEMINI_MODEL, DEFAULT_GEMINI_MODEL);
+    }
+
+    public void setGeminiModel(String model) {
+        preferences.put(KEY_GEMINI_MODEL, model);
     }
 }
