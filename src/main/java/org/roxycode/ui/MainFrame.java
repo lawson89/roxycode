@@ -5,7 +5,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
-import org.kordamp.ikonli.bootstrapicons.BootstrapIcons;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.GitService;
@@ -139,7 +139,7 @@ public class MainFrame extends JFrame implements Runnable {
             Image newImg = img.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
             icon.setIcon(new ImageIcon(newImg));
         } else {
-            FontIcon alarmIcon = FontIcon.of(BootstrapIcons.CHAT, 64);
+            FontIcon alarmIcon = FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 64);
             if (icon != null) icon.setIcon(alarmIcon);
         }
 
@@ -396,7 +396,7 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void performRescan() {
-        log.info("Triggering Knowledge Rescan for " + currentProjectRoot);
+        log.info("Triggering Knowledge Rescan for {}", currentProjectRoot);
         // Run in background to not block UI startup
         new Thread(() -> {
             genAIService.refreshKnowledge(currentProjectRoot.toString());

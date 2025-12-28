@@ -1,7 +1,8 @@
 package org.roxycode.ui;
 
 import org.junit.jupiter.api.Test;
-import org.kordamp.ikonli.bootstrapicons.BootstrapIcons;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
 
 import java.awt.Color;
@@ -14,7 +15,7 @@ public class IkonliSupportTest {
     @Test
     public void testIkonliAvailable() {
         // Just verifying classes are present
-        BootstrapIcons icon = BootstrapIcons.ALARM;
+        MaterialDesignW icon = MaterialDesignW.WALL;
         assertNotNull(icon);
         FontIcon fontIcon = FontIcon.of(icon, 16, Color.RED);
         assertNotNull(fontIcon);
@@ -23,14 +24,14 @@ public class IkonliSupportTest {
 
     @Test
     public void testLookupByString() {
-        String iconName = "bi-alarm";
-        BootstrapIcons found = null;
-        for (BootstrapIcons b : BootstrapIcons.values()) {
+        String iconName = "mdi2w-walk";
+        MaterialDesignW found = null;
+        for (MaterialDesignW b : MaterialDesignW.values()) {
             if (b.getDescription().equals(iconName)) {
                 found = b;
                 break;
             }
         }
-        assertNotNull(found, "Should find 'bi-alarm'");
+        assertNotNull(found, "Should find 'mdi2w-walk'");
     }
 }

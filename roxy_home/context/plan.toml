@@ -1,6 +1,7 @@
 description = """
 If asked to plan a feature or fix a bug, you should name the feature based on the user prompt and save the plan as a md file in the roxy_project/plans directory.
-When asked to inplement a feature or fix a bug, you should look for the plan in the roxy_project/plans directory and follow it.
+When asked to inplement a feature or fix a bug, you should look for the plan in the roxy_project/plans directory and follow it and update it as you go.
+In all cases (plan or implement) read the full context in this file before responding.
 """
 
 

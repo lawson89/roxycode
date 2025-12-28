@@ -7,7 +7,9 @@ import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.ast.KeepType;
 import com.vladsch.flexmark.util.data.DataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
-import org.kordamp.ikonli.bootstrapicons.BootstrapIcons;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -121,7 +123,7 @@ public class MarkdownPane extends JTextPane {
         // Generate Icon via Document Image Cache (JEditorPane doesn't reliably support data: URIs)
         String imgTag = "";
         try {
-            FontIcon icon = FontIcon.of(BootstrapIcons.WRENCH, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
+            FontIcon icon = FontIcon.of(MaterialDesignW.WRENCH_OUTLINE, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
             BufferedImage image = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
             Graphics2D g2 = image.createGraphics();
             icon.paintIcon(this, g2, 0, 0);
@@ -171,7 +173,7 @@ public class MarkdownPane extends JTextPane {
         
         String imgTag = "";
         try {
-            FontIcon icon = FontIcon.of(BootstrapIcons.GEAR_WIDE_CONNECTED, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
+            FontIcon icon = FontIcon.of(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 22, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
             BufferedImage image = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
             Graphics2D g2 = image.createGraphics();
             icon.paintIcon(this, g2, 0, 0);
