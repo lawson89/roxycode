@@ -9,6 +9,10 @@ import org.codehaus.groovy.control.customizers.SecureASTCustomizer;
 import org.roxycode.core.FileSystemService;
 import org.roxycode.core.Sandbox;
 
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Source;
+import org.graalvm.polyglot.Value;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,6 +40,15 @@ public class ToolExecutionService {
     }
 
     private String runScript(ToolDefinition tool, Map<String, Object> args) throws IOException {
+        String scriptContent = resolveScriptContent(tool);
+        if (tool.getSource().endsWith(".js")) {
+            return executeJavaScript(scriptContent, args);
+        } else {
+            return executeGroovy(tool, args);
+        }
+    }
+
+    private String executeGroovy(ToolDefinition tool, Map<String, Object> args) throws IOException {
         // Prepare Shell
         CompilerConfiguration config = new CompilerConfiguration();
         SecureASTCustomizer secure = new SecureASTCustomizer();
@@ -58,6 +71,21 @@ public class ToolExecutionService {
         Object result = shell.evaluate(scriptContent);
 
         return result != null ? result.toString() : "";
+    }
+
+    private String executeJavaScript(String script, Map<String, Object> args) {
+        try (Context context = Context.newBuilder("js")
+                .allowAllAccess(true)
+                .build()) {
+            context.getBindings("js").putMember("sandbox", this.sandbox);
+            context.getBindings("js").putMember("fs", this.fs);
+            context.getBindings("js").putMember("ctx", this.applicationContext);
+            context.getBindings("js").putMember("args", args);
+            Value result = context.eval(Source.create("js", script));
+            return result != null ? result.toString() : "";
+        } catch (Exception e) {
+            return "Error executing JavaScript: " + e.getMessage();
+        }
     }
 
     private String resolveScriptContent(ToolDefinition tool) throws IOException {

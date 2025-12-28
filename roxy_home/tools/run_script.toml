@@ -1,9 +1,0 @@
-description = "Executes an arbitrary Groovy script. The script has access to the 'sandbox' object for file path resolution."
-type = "groovy"
-source = "file:run_script.groovy"
-
-[[parameters]]
-name = "script"
-type = "string"
-description = "The Groovy script code to execute."
-required = true
