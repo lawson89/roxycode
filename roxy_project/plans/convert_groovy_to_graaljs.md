@@ -30,9 +30,9 @@ For each Groovy tool:
 
 - [x] **compile_project**:
     - [x] Read `compile_project.groovy`
-    - [x] Write `compile_project.js`
+    - [x] Write `build_compile.js`
     - [x] Update `compile_project.toml`
-    - [x] Test `compile_project.js`
+    - [x] Test `build_compile.js`
     - [x] Delete `compile_project.groovy`
 - [x] **delete_file**:
     - [x] Read `delete_file.groovy`
@@ -103,9 +103,9 @@ For each Groovy tool:
     - [x] Delete `replace_in_file.groovy`
 - [x] **run_tests**:
     - [x] Read `run_tests.groovy`
-    - [x] Write `run_tests.js`
+    - [x] Write `build_run_tests.js`
     - [x] Update `run_tests.toml`
-    - [x] Test `run_tests.js`
+    - [x] Test `build_run_tests.js`
     - [x] Delete `run_tests.groovy`
 - [x] **write_file**:
     - [x] Read `write_file.groovy`

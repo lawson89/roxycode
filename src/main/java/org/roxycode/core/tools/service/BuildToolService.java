@@ -1,0 +1,136 @@
+package org.roxycode.core.tools.service;
+
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
+import org.roxycode.core.Sandbox;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+@Singleton
+public class BuildToolService {
+
+    private final Sandbox sandbox;
+
+    public enum BuildTool {
+
+        MAVEN, GRADLE, ANT, UNKNOWN
+    }
+
+    @Inject
+    public BuildToolService(Sandbox sandbox) {
+        this.sandbox = sandbox;
+    }
+
+    public BuildTool detect() {
+        Path projectRoot = sandbox.getRoot();
+        if (Files.exists(projectRoot.resolve("pom.xml"))) {
+            return BuildTool.MAVEN;
+        } else // Gradle can use Groovy (.gradle) or Kotlin (.gradle.kts) DSL
+        if (Files.exists(projectRoot.resolve("build.gradle")) || Files.exists(projectRoot.resolve("build.gradle.kts"))) {
+            return BuildTool.GRADLE;
+        } else if (Files.exists(projectRoot.resolve("build.xml"))) {
+            return BuildTool.ANT;
+        }
+        return BuildTool.UNKNOWN;
+    }
+
+    public String compile() {
+        BuildTool tool = detect();
+        if (tool == BuildTool.UNKNOWN) {
+            return "❌ Could not detect build tool (no pom.xml, build.gradle, or build.xml found).";
+        }
+        return executeCommand(getCompileCommand(tool), "Compilation");
+    }
+
+    public String runTests() {
+        BuildTool tool = detect();
+        if (tool == BuildTool.UNKNOWN) {
+            return "❌ Could not detect build tool (no pom.xml, build.gradle, or build.xml found).";
+        }
+        return executeCommand(getTestCommand(tool), "Tests");
+    }
+
+    List<String> getCompileCommand(BuildTool tool) {
+        List<String> command = new ArrayList<>();
+        command.add(resolveExecutable(tool));
+        switch(tool) {
+            case MAVEN:
+                command.addAll(Arrays.asList("clean", "compile"));
+                break;
+            case GRADLE:
+                command.add("classes");
+                break;
+            case ANT:
+                command.add("compile");
+                break;
+        }
+        return command;
+    }
+
+    List<String> getTestCommand(BuildTool tool) {
+        List<String> command = new ArrayList<>();
+        command.add(resolveExecutable(tool));
+        command.add("test");
+        return command;
+    }
+
+    String resolveExecutable(BuildTool tool) {
+        return resolveExecutable(tool, System.getProperty("os.name").toLowerCase().contains("win"));
+    }
+
+    String resolveExecutable(BuildTool tool, boolean isWindows) {
+        Path projectRoot = sandbox.getRoot();
+        switch(tool) {
+            case MAVEN:
+                if (isWindows) {
+                    Path wrapper = projectRoot.resolve("mvnw.cmd");
+                    return Files.exists(wrapper) ? wrapper.toAbsolutePath().toString() : "mvn";
+                } else {
+                    Path wrapper = projectRoot.resolve("mvnw");
+                    return Files.exists(wrapper) ? "./mvnw" : "mvn";
+                }
+            case GRADLE:
+                if (isWindows) {
+                    Path wrapper = projectRoot.resolve("gradlew.bat");
+                    return Files.exists(wrapper) ? wrapper.toAbsolutePath().toString() : "gradle";
+                } else {
+                    Path wrapper = projectRoot.resolve("gradlew");
+                    return Files.exists(wrapper) ? "./gradlew" : "gradle";
+                }
+            case ANT:
+                return isWindows ? "ant.bat" : "ant";
+            default:
+                return "";
+        }
+    }
+
+    private String executeCommand(List<String> command, String context) {
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.directory(sandbox.getRoot().toFile());
+        processBuilder.redirectErrorStream(true);
+        StringBuilder output = new StringBuilder();
+        try {
+            Process process = processBuilder.start();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                return "✅ " + context + " SUCCESSFUL\n" + output.toString();
+            } else {
+                return "❌ " + context + " FAILED (Exit Code: " + exitCode + ")\n" + output.toString();
+            }
+        } catch (IOException | InterruptedException e) {
+            return "❌ ERROR executing " + context + ": " + String.join(" ", command) + "\n" + e.getMessage();
+        }
+    }
+}

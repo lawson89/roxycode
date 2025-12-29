@@ -1,6 +1,6 @@
 description = "Runs a Maven clean compile to check for syntax errors and build the project. Returns the build log."
 type = "graaljs"
-source = "file:compile_project.js"
+source = "file:build_compile.js"
 
 [[parameters]]
 name = "dummy"
