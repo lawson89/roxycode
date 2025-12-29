@@ -35,6 +35,7 @@ public class GenAIService {
     private final Sandbox sandbox;
     private final ContextRegistry contextRegistry;
     private final UsageService usageService;
+    private final HistoryService historyService;
     private Client client;
 
     // Cache function declarations to avoid re-scanning every chat turn
@@ -46,13 +47,14 @@ public class GenAIService {
                         ToolExecutionService executionService,
                         Sandbox sandbox,
                         ContextRegistry contextRegistry,
-                        UsageService usageService) {
+                        UsageService usageService, HistoryService historyService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
         this.sandbox = sandbox;
         this.contextRegistry = contextRegistry;
         this.usageService = usageService;
+        this.historyService = historyService;
     }
 
     private Client getClient() {
@@ -70,7 +72,7 @@ public class GenAIService {
                                     .attempts(5) // Retry up to 5 times
                                     .httpStatusCodes(429, 503) // Trigger on Rate Limit (429) or Service Unavailable (503)
                                     .build())
-                            .timeout(60_000) // Increase timeout to 60s to accommodate backoff delays
+                            .timeout(90_000) // Increase timeout to 90s to accommodate backoff delays
                             .build())
                     .build();
         }
@@ -105,7 +107,7 @@ public class GenAIService {
                 availableToolNames = stream
                         .filter(p -> p.toString().endsWith(".toml"))
                         .map(p -> p.getFileName().toString().replace(".toml", ""))
-                        .collect(Collectors.toList());
+                        .toList();
             } catch (IOException e) {
                 LOG.error("Failed to list tool files", e);
             }
@@ -118,12 +120,10 @@ public class GenAIService {
             toolRegistry.getTool(toolName).ifPresent(td -> {
                 Map<String, Schema> properties = new HashMap<>();
                 if (td.getParameters() != null) {
-                    td.getParameters().forEach(p -> {
-                        properties.put(p.getName(), Schema.builder()
-                                .type("STRING") // Simplifying types for MVP
-                                .description(p.getDescription())
-                                .build());
-                    });
+                    td.getParameters().forEach(p -> properties.put(p.getName(), Schema.builder()
+                            .type("STRING") // Simplifying types for MVP
+                            .description(p.getDescription())
+                            .build()));
                 }
                 Schema schema = Schema.builder().type("OBJECT").properties(properties).build();
                 cachedFunctions.add(FunctionDeclaration.builder()
@@ -136,13 +136,9 @@ public class GenAIService {
         LOG.info("✅ Knowledge Refresh Complete. Loaded {} tools.", cachedFunctions.size());
     }
 
-    public String chat(String prompt, String projectRoot) {
-        return chat(prompt, projectRoot, null, null);
-    }
-
-    public String chat(String prompt, String projectRoot, Consumer<String> onStatusUpdate) {
-        return chat(prompt, projectRoot, null, onStatusUpdate);
-    }
+    private final List<Content> history = new ArrayList<>();
+    private int inTokens = 0;
+    private int outTokens = 0;
 
     public String chat(String prompt, String projectRoot, List<File> attachedFiles, Consumer<String> onStatusUpdate) {
         // 1. CONFIGURE SANDBOX (Always do this per chat to ensure safety)
@@ -172,7 +168,6 @@ public class GenAIService {
         promptBuilder.append("Task: ").append(prompt);
         String systemPrompt = promptBuilder.toString();
 
-        List<Content> history = new ArrayList<>();
         history.add(Content.builder()
                 .role("user")
                 .parts(List.of(Part.builder().text(systemPrompt).build()))
@@ -185,8 +180,15 @@ public class GenAIService {
         while (turns++ < maxTurns) {
             LOG.info("Turn {}: Sending message to model...", turns);
             if (onStatusUpdate != null) {
-                onStatusUpdate.accept(String.format("Thinking (%d/%d)...", turns, maxTurns));
+                onStatusUpdate.accept(String.format("Thinking (%d/%d)... <small style='margin-left: 10px;'>messages: %d | in tokens: %d | out tokens: %d</small>", turns, maxTurns, history.size(), inTokens, outTokens));
             }
+
+            historyService.compactHistory(
+                    client,
+                    "gemini-2.0-flash", // Use a fast/cheap model for summarization
+                    history,            // The Mutable List<Content>
+                    systemPrompt    // Your original "You are Roxy..." string
+            );
 
             // USE CACHED FUNCTIONS
             GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
@@ -203,18 +205,22 @@ public class GenAIService {
                     configBuilder.build()
             );
 
-            response.usageMetadata().ifPresent(usage -> {
-                int promptTokens = usage.promptTokenCount().orElse(0);
-                int candidatesTokens = usage.candidatesTokenCount().orElse(0);
-                usageService.recordUsage(promptTokens, candidatesTokens);
-            });
+            if (response.usageMetadata().isPresent()) {
+                GenerateContentResponseUsageMetadata usage = response.usageMetadata().get();
+                // input tokens
+                inTokens = usage.promptTokenCount().orElse(0);
+                //output tokens
+                outTokens = usage.candidatesTokenCount().orElse(0);
+                usageService.recordUsage(inTokens, outTokens);
+            }
 
             Optional<List<Candidate>> candidatesOpt = response.candidates();
             if (candidatesOpt.isEmpty() || candidatesOpt.get().isEmpty()) {
                 return "Error: No response candidates.";
             }
 
-            Content modelMessage = candidatesOpt.get().get(0).content().orElse(Content.builder().build());
+            Content modelMessage = candidatesOpt.get().getFirst().content().orElse(Content.builder().build());
+
             history.add(modelMessage);
 
             List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
@@ -245,7 +251,7 @@ public class GenAIService {
 
                     LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
                     if (onStatusUpdate != null) {
-                        onStatusUpdate.accept("Tool: " + fnName + " | args: " + fixedArgs);
+                        onStatusUpdate.accept("```Tool: " + fnName + " | args: " + fixedArgs + "```");
                     }
 
                     String toolOutput;
