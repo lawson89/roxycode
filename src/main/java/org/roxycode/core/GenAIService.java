@@ -178,11 +178,7 @@ public class GenAIService {
                 onStatusUpdate.accept(String.format("Thinking (%d/%d)... <small style='margin-left: 10px;'>messages: %d | in tokens: %d | out tokens: %d</small>", turns, maxTurns, history.size(), inTokens, outTokens));
             }
             // Use a fast/cheap model for summarization
-            // Use a fast/cheap model for summarization
-            historyService.// Use a fast/cheap model for summarization
-            compactHistory(// The Mutable List<Content>
-            client, // Your original "You are Roxy..." string
-            "gemini-2.0-flash", history, systemPrompt);
+            historyService.compactHistory(client, "gemini-2.0-flash", history, systemPrompt);
             // USE CACHED FUNCTIONS
             GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
             if (!cachedFunctions.isEmpty()) {
