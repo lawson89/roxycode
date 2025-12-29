@@ -8,7 +8,7 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.customizers.SecureASTCustomizer;
 import org.graalvm.polyglot.proxy.ProxyObject;
-import org.roxycode.core.FileSystemService;
+import org.roxycode.core.tools.service.FileSystemService;
 import org.roxycode.core.Sandbox;
 
 import org.graalvm.polyglot.Context;
@@ -18,7 +18,6 @@ import org.graalvm.polyglot.Value;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.*;
 

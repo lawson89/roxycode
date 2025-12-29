@@ -8,7 +8,7 @@ import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
-import org.roxycode.core.GitService;
+import org.roxycode.core.tools.service.GitService;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.SettingsService;

@@ -1,4 +1,4 @@
-package org.roxycode.core.service;
+package org.roxycode.core.tools.service;
 
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
@@ -10,13 +10,14 @@ import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Singleton
-public class JavaAnalysisServiceImpl implements JavaAnalysisService {
+public class JavaAnalysisService {
 
     @PostConstruct
     public void init() {
@@ -24,7 +25,6 @@ public class JavaAnalysisServiceImpl implements JavaAnalysisService {
                 .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
     }
 
-    @Override
     public JavaFileSummary analyzeFile(Path path) throws IOException {
         CompilationUnit cu = StaticJavaParser.parse(path);
 
@@ -55,7 +55,6 @@ public class JavaAnalysisServiceImpl implements JavaAnalysisService {
         );
     }
 
-    @Override
     public Optional<String> getMethodSource(Path path, String className, String methodName) {
         try {
             CompilationUnit cu = StaticJavaParser.parse(path);
@@ -67,5 +66,34 @@ public class JavaAnalysisServiceImpl implements JavaAnalysisService {
         } catch (IOException e) {
             return Optional.empty();
         }
+    }
+
+    public void replaceMethod(Path path, String className, String methodName, String newMethodSource) throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse(path);
+        Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
+                .filter(c -> c.getNameAsString().equals(className))
+                .findFirst();
+
+        if (classDecl.isPresent()) {
+            List<MethodDeclaration> methods = classDecl.get().getMethodsByName(methodName);
+            if (!methods.isEmpty()) {
+                MethodDeclaration newMethod = StaticJavaParser.parseMethodDeclaration(newMethodSource);
+                methods.get(0).replace(newMethod);
+                Files.writeString(path, cu.toString());
+            } else {
+                throw new RuntimeException("Method " + methodName + " not found in class " + className);
+            }
+        } else {
+            throw new RuntimeException("Class " + className + " not found in file " + path);
+        }
+    }
+
+    public record JavaFileSummary(List<ClassSummary> classes, List<String> imports) {
+    }
+
+    public record ClassSummary(String name, List<MethodSummary> methods, boolean isInterface) {
+    }
+
+    public record MethodSummary(String name, String signature, int beginLine, int endLine) {
     }
 }

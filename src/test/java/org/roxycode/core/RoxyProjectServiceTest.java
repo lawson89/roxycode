@@ -3,6 +3,7 @@ package org.roxycode.core;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.core.tools.service.FileSystemService;
 
 import java.io.IOException;
 import java.nio.file.Files;

@@ -4,6 +4,7 @@ import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.core.tools.service.GitService;
 import org.zeroturnaround.exec.ProcessExecutor;
 
 import java.io.File;

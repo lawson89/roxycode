@@ -2,6 +2,7 @@ package org.roxycode.core;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.service.FileSystemService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

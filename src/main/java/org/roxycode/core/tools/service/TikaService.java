@@ -1,4 +1,4 @@
-package org.roxycode.core.service;
+package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
 import org.apache.tika.exception.TikaException;
@@ -15,14 +15,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Singleton
-public class TikaServiceImpl implements TikaService {
+public class TikaService {
 
-    @Override
     public String extractText(InputStream inputStream) throws IOException {
         return extractAll(inputStream).text();
     }
 
-    @Override
     public ExtractionResult extractAll(InputStream inputStream) throws IOException {
         Parser parser = new AutoDetectParser();
         // BodyContentHandler(-1) disables the write limit, allowing large documents
@@ -43,4 +41,6 @@ public class TikaServiceImpl implements TikaService {
 
         return new ExtractionResult(handler.toString(), metaMap);
     }
+
+    public record ExtractionResult(String text, Map<String, String> metadata) {}
 }

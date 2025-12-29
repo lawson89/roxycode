@@ -25,7 +25,7 @@ The `JavaAnalysisService` will allow the system to programmatically understand a
 - Add `com.github.javaparser:javaparser-core:3.27.1` to `pom.xml`.
 
 ### 2. Service Definition
-- Create `org.roxycode.core.service.JavaAnalysisService` interface.
+- Create `org.roxycode.core.tools.service.JavaAnalysisService` interface.
 - Create `org.roxycode.core.service.JavaAnalysisServiceImpl` implementation.
 
 ### 3. API Design (Initial Version)

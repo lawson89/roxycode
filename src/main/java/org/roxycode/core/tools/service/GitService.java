@@ -1,4 +1,4 @@
-package org.roxycode.core;
+package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
