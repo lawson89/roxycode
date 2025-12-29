@@ -1,6 +1,6 @@
 description = "Finds files whose names match a a shell-style wildcard pattern."
 type = "graaljs"
-source = "file:find_files.js"
+source = "file:fs_find_files.js"
 
 [[parameters]]
 name = "pattern"

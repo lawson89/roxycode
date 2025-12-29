@@ -43,6 +43,18 @@ class FileSystemServiceTest {
     }
 
     @Test
+    void testWriteFileWithParentDirectories() throws IOException {
+        String filename = "subdir1/subdir2/test.txt";
+        String content = "Nested content";
+        
+        fileSystemService.writeFile(filename, content);
+        
+        Path filePath = tempDir.resolve(filename);
+        assertTrue(Files.exists(filePath));
+        assertEquals(content, Files.readString(filePath));
+    }
+
+    @Test
     void testDeleteFile() throws IOException {
         String filename = "delete-me.txt";
         Path filePath = tempDir.resolve(filename);

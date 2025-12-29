@@ -42,10 +42,10 @@ For each Groovy tool:
     - [x] Delete `delete_file.groovy`
 - [x] **find_files**:
     - [x] Read `find_files.groovy`
-    - [x] Investigate existing `find_files.js` and determine if `find_files.groovy` is still in use or if `find_files.js` is a partial/complete conversion.
-    - [x] If needed, write `find_files.js` (or update existing)
+    - [x] Investigate existing `fs_find_files.js` and determine if `find_files.groovy` is still in use or if `fs_find_files.js` is a partial/complete conversion.
+    - [x] If needed, write `fs_find_files.js` (or update existing)
     - [x] Update `find_files.toml`
-    - [x] Test `find_files.js`
+    - [x] Test `fs_find_files.js`
     - [x] Delete `find_files.groovy`
 - [x] **git_diff**:
     - [x] Read `git_diff.groovy`
@@ -73,33 +73,33 @@ For each Groovy tool:
     - [x] Delete `launch_preview.groovy`
 - [x] **ls**:
     - [x] Read `ls.groovy`
-    - [x] Write `ls.js`
+    - [x] Write `fs_tree.js`
     - [x] Update `ls.toml`
-    - [x] Test `ls.js`
+    - [x] Test `fs_tree.js`
     - [x] Delete `ls.groovy`
 - [x] **read_document**:
     - [x] Read `read_document.groovy`
-    - [x] Write `read_document.js`
+    - [x] Write `tika_read_document.js`
     - [x] Update `read_document.toml`
-    - [x] Test `read_document.js`
+    - [x] Test `tika_read_document.js`
     - [x] Delete `read_document.groovy`
 - [x] **read_file**:
     - [x] Read `read_file.groovy`
-    - [x] Write `read_file.js`
+    - [x] Write `fs_read_file.js`
     - [x] Update `read_file.toml`
-    - [x] Test `read_file.js`
+    - [x] Test `fs_read_file.js`
     - [x] Delete `read_file.groovy`
 - [x] **read_files**:
     - [x] Read `read_files.groovy`
-    - [x] Write `read_files.js`
+    - [x] Write `fs_read_files.js`
     - [x] Update `read_files.toml`
-    - [x] Test `read_files.js`
+    - [x] Test `fs_read_files.js`
     - [x] Delete `read_files.groovy`
 - [x] **replace_in_file**:
     - [x] Read `replace_in_file.groovy`
-    - [x] Write `replace_in_file.js`
+    - [x] Write `fs_replace_in_file.js`
     - [x] Update `replace_in_file.toml`
-    - [x] Test `replace_in_file.js`
+    - [x] Test `fs_replace_in_file.js`
     - [x] Delete `replace_in_file.groovy`
 - [x] **run_tests**:
     - [x] Read `run_tests.groovy`
@@ -109,9 +109,9 @@ For each Groovy tool:
     - [x] Delete `run_tests.groovy`
 - [x] **write_file**:
     - [x] Read `write_file.groovy`
-    - [x] Write `write_file.js`
+    - [x] Write `fs_write.js`
     - [x] Update `write_file.toml`
-    - [x] Test `write_file.js`
+    - [x] Test `fs_write.js`
     - [x] Delete `write_file.groovy`
 
 ## 5. Implementation Progress

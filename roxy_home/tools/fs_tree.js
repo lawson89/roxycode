@@ -1,0 +1,1 @@
+fs.tree(args.path || ".");

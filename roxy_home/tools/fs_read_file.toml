@@ -1,6 +1,6 @@
 description = "Reads the content of a file from the project."
 type = "graaljs"
-source = "file:read_file.js"
+source = "file:fs_read_file.js"
 
 [[parameters]]
 name = "path"

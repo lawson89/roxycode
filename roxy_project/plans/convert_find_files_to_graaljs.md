@@ -9,8 +9,8 @@
 
 ## 3. Conversion Steps:
 
-   a. **Create `find_files.js`:**
-      - Create a new file at `roxy_home/tools/find_files.js`.
+   a. **Create `fs_find_files.js`:**
+      - Create a new file at `roxy_home/tools/fs_find_files.js`.
 
    b. **Translate Groovy to GraalJS:**
       - Translate the Groovy script `return fs.listFiles(args.path ?: ".", args.pattern, true)` to GraalJS.
@@ -19,14 +19,14 @@
         ```javascript
         return fs.listFiles(args.path || ".", args.pattern, true);
         ```
-      - Write this content into `roxy_home/tools/find_files.js`.
+      - Write this content into `roxy_home/tools/fs_find_files.js`.
 
    c. **Update `find_files.toml`:**
-      - Modify the `roxy_home/tools/find_files.toml` file to point to the new `find_files.js` script. This involves changing the `script` field within the TOML file.
-      - The `script` field should be updated from `script = "find_files.groovy"` to `script = "find_files.js"`.
+      - Modify the `roxy_home/tools/find_files.toml` file to point to the new `fs_find_files.js` script. This involves changing the `script` field within the TOML file.
+      - The `script` field should be updated from `script = "find_files.groovy"` to `script = "fs_find_files.js"`.
 
    d. **Test:**
       - After the conversion, perform a test to ensure the `find_files` tool functions correctly with the GraalJS implementation. This would involve invoking the `find_files` tool with various paths and patterns and verifying the output.
 
 ## 4. Rollback Plan (if needed):
-   - In case of any issues or unexpected behavior after the conversion, revert the changes made in `roxy_home/tools/find_files.js` and `roxy_home/tools/find_files.toml` to restore the original Groovy version.
+   - In case of any issues or unexpected behavior after the conversion, revert the changes made in `roxy_home/tools/fs_find_files.js` and `roxy_home/tools/find_files.toml` to restore the original Groovy version.

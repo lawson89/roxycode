@@ -167,6 +167,7 @@ public class GenAIService {
 
         promptBuilder.append("Task: ").append(prompt);
         String systemPrompt = promptBuilder.toString();
+        LOG.info("System prompt {}", systemPrompt);
 
         history.add(Content.builder()
                 .role("user")

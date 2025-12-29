@@ -1,6 +1,6 @@
 description = "Writes content to a file. Creates directories if needed."
 type = "graaljs"
-source = "file:write_file.js"
+source = "file:fs_write.js"
 
 [[parameters]]
 name = "path"

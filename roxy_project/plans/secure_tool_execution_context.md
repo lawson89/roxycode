@@ -33,7 +33,7 @@ Several scripts currently rely on `ctx.getBean()` or have outdated service refer
 - **`grep.js`**: Update to use the `grep` object directly.
 - **`java_analyze_file.js`**: Update to use `java` and `json` objects.
 - **`java_get_method_source.js`**: Update to use `java` object.
-- **`read_document.js`**: Update to use `tika` object.
+- **`tika_read_document.js`**: Update to use `tika` object.
 - **`git_status.js`**: Refactor to use the `git` service instead of manual `ProcessBuilder`.
 - **`git_diff.js`**: Refactor to use the `git` service.
 - **Other scripts**: Audit for any remaining `ctx` usage.
@@ -50,7 +50,7 @@ Several scripts currently rely on `ctx.getBean()` or have outdated service refer
 - [ ] Update `roxy_home/tools/grep.js`
 - [ ] Update `roxy_home/tools/java_analyze_file.js`
 - [ ] Update `roxy_home/tools/java_get_method_source.js`
-- [ ] Update `roxy_home/tools/read_document.js`
+- [ ] Update `roxy_home/tools/tika_read_document.js`
 - [ ] Update `roxy_home/tools/git_status.js`
 - [ ] Update `roxy_home/tools/git_diff.js`
 - [ ] Audit and update any other `.js` or `.groovy` files in `roxy_home/tools`.

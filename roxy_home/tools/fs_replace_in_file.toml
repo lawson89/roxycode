@@ -1,6 +1,6 @@
 description = "Replaces text in a file using a regex pattern."
 type = "graaljs"
-source = "file:replace_in_file.js"
+source = "file:fs_replace_in_file.js"
 
 [[parameters]]
 name = "path"
