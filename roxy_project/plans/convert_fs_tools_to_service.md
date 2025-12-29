@@ -53,11 +53,11 @@ The goal is to refactor all tools starting with `fs_` in `roxy_home/tools` to us
 
 ## Implementation Progress
 
-- [ ] Update `FileSystemService.writeFile` to create parent directories.
-- [ ] Add unit test for `FileSystemService.writeFile` directory creation.
-- [ ] Convert `fs_read_file.js` to use `fs.readFile`.
-- [ ] Convert `fs_read_files.js` to use `fs.readFiles`.
-- [ ] Convert `fs_replace_in_file.js` to use `fs.replaceInFile`.
-- [ ] Convert `fs_tree.js` to use `fs.tree`.
-- [ ] Convert `fs_write.js` to use `fs.writeFile`.
-- [ ] Convert `delete_file.js` to use `fs.delete`.
+- [x] Update `FileSystemService.writeFile` to create parent directories.
+- [x] Add unit test for `FileSystemService.writeFile` directory creation.
+- [x] Convert `fs_read_file.js` to use `fs.readFile`.
+- [x] Convert `fs_read_files.js` to use `fs.readFiles`.
+- [x] Convert `fs_replace_in_file.js` to use `fs.replaceInFile`.
+- [x] Convert `fs_tree.js` to use `fs.tree`.
+- [x] Convert `fs_write.js` to use `fs.writeFile`.
+- [x] Convert `delete_file.js` to use `fs.delete`.
