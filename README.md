@@ -11,7 +11,7 @@ RoxyCode is built as a Java-based desktop application using modern frameworks an
 ### Key Features
 
 *   **Self-Bootstrapping Architecture:** RoxyCode loads tools and context dynamically from its configuration directory (`roxy_home`). This allows the AI to understand its own capabilities and environment.
-*   **Dynamic Tooling:** The AI can invoke external tools (implemented as Groovy scripts) to perform tasks such as file system operations, running tests, or managing git repositories.
+*   **Dynamic Tooling:** The AI can invoke external tools (implemented as JavaScript scripts via GraalJS) to perform tasks such as file system operations, running tests, or managing git repositories.
 *   **Context Awareness:** A dedicated context registry provides the LLM with documentation and project-specific knowledge.
 *   **Modern Swing UI:** Built with the Sierra declarative UI engine and FlatLaf, providing a clean, responsive, and themeable interface.
 *   **Interactive Chat:** A rich chat interface supporting Markdown, tool execution logs, and multi-turn conversations.
@@ -22,7 +22,7 @@ RoxyCode is built as a Java-based desktop application using modern frameworks an
 ## Project Structure
 
 *   `src/main/java`: The core Java application source code.
-*   `roxy_home/tools`: Groovy scripts defining the AI's toolset.
+*   `roxy_home/tools`: JavaScript scripts defining the AI's toolset.
 *   `roxy_home/context`: Knowledge base and persona definitions for the LLM.
 *   `docs/design`: Architecture documents and developer notes.
 *   `pom.xml`: Maven configuration.
@@ -34,7 +34,7 @@ RoxyCode is built as a Java-based desktop application using modern frameworks an
 *   **UI Engine:** Sierra DSL (Swing-based declarative layout)
 *   **Look & Feel:** FlatLaf
 *   **AI Model:** Google Gemini
-*   **Scripting:** Groovy (for dynamic tool implementation)
+*   **Scripting:** JavaScript (via GraalJS for dynamic tool implementation)
 
 ## Getting Started
 

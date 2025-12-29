@@ -1,12 +1,8 @@
 package org.roxycode.core.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import groovy.lang.Binding;
-import groovy.lang.GroovyShell;
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.codehaus.groovy.control.CompilerConfiguration;
-import org.codehaus.groovy.control.customizers.SecureASTCustomizer;
 import org.graalvm.polyglot.proxy.ProxyObject;
 import org.roxycode.core.tools.service.*;
 import org.roxycode.core.Sandbox;
@@ -59,48 +55,13 @@ public class ToolExecutionService {
 
     private String runScript(ToolDefinition tool, Map<String, Object> args) throws IOException {
         String scriptContent = resolveScriptContent(tool);
-        if (tool.getSource().endsWith(".js")) {
-            return executeJavaScript(scriptContent, args);
-        } else {
-            return executeGroovy(tool, args);
-        }
-    }
-
-    private String executeGroovy(ToolDefinition tool, Map<String, Object> args) throws IOException {
-        // Prepare Shell
-        CompilerConfiguration config = new CompilerConfiguration();
-        SecureASTCustomizer secure = new SecureASTCustomizer();
-        // Basic security: disallow System.exit to prevent killing the IDE
-        //secure.setDisallowedReceivers(Collections.singletonList("java.lang.System")); // Very basic check
-        // Note: Full sandboxing in Groovy is complex; this is a baseline.
-
-        config.addCompilationCustomizers(secure);
-
-        Binding binding = new Binding();
-        // Inject dependencies
-        binding.setVariable("sandbox", sandbox);
-        binding.setVariable("fs", fs);
-        binding.setVariable("grep", grepService);
-        binding.setVariable("git", gitService);
-        binding.setVariable("tika", tikaService);
-        binding.setVariable("java", javaAnalysisService);
-        binding.setVariable("xml", xmlService);
-        binding.setVariable("json", objectMapper);
-        binding.setVariable("args", args);
-
-        GroovyShell shell = new GroovyShell(binding, config);
-
-        String scriptContent = resolveScriptContent(tool);
-        Object result = shell.evaluate(scriptContent);
-
-        return result != null ? result.toString() : "";
+        // All scripts are now treated as JavaScript
+        return executeJavaScript(scriptContent, args);
     }
 
     private String executeJavaScript(String script, Map<String, Object> args) {
         try (Context context = Context.newBuilder("js")
                 .allowAllAccess(true)
-                // Optional: specifically allow experimental options if needed in your version
-                // .allowExperimentalOptions(true)
                 .build()) {
 
             // 1. Bind your services
@@ -113,8 +74,7 @@ public class ToolExecutionService {
             context.getBindings("js").putMember("xml", this.xmlService);
             context.getBindings("js").putMember("json", this.objectMapper);
 
-            // 2. THE FIX: Wrap the Java Map in ProxyObject
-            // This makes 'args.pattern' in JS call 'args.get("pattern")' in Java
+            // 2. Wrap the Java Map in ProxyObject
             context.getBindings("js").putMember("args", ProxyObject.fromMap(args));
 
             // 3. Execute

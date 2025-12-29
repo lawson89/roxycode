@@ -23,7 +23,8 @@ class ToolExecutionTest {
     @Test
     void testInlineExecution() throws ExecutionException, InterruptedException {
         ToolDefinition tool = new ToolDefinition();
-        tool.setSource("return 'Hello ' + args.name");
+        // Updated to JavaScript syntax
+        tool.setSource("'Hello ' + args.name");
 
         Map<String, Object> args = new HashMap<>();
         args.put("name", "Roxy");
@@ -34,20 +35,18 @@ class ToolExecutionTest {
 
     @Test
     void testFileResolution(@TempDir Path tempDir) throws Exception {
-        // 1. Create a script file
-        Path scriptPath = tempDir.resolve("myscript.groovy");
+        // 1. Create a script file (Updated to .js)
+        Path scriptPath = tempDir.resolve("myscript.js");
 
-        // FIX: Updated method name from getProjectRoot() to getRoot()
-        Files.writeString(scriptPath, "return sandbox.getRoot().toString()");
+        // Valid JavaScript syntax
+        Files.writeString(scriptPath, "sandbox.getRoot().toString()");
 
         // 2. Mock a ToolDefinition located in the same folder
         ToolDefinition tool = new ToolDefinition();
-        tool.setSource("file:myscript.groovy");
+        tool.setSource("file:myscript.js");
         tool.setDefinitionLocation(tempDir);
 
         // 3. Execute
-        // Note: The Sandbox in the service is likely bound to '.' or a default.
-        // We just want to ensure the script runs and can access the sandbox variable.
         Future<String> result = executionService.execute(tool, new HashMap<>());
 
         assertNotNull(result.get());
