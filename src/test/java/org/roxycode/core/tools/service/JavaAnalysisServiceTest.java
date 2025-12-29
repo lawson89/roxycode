@@ -42,6 +42,40 @@ class JavaAnalysisServiceTest {
     }
 
     @Test
+    void testAnalyzeFileWithFields() throws IOException {
+        Path path = tempDir.resolve("TestClassWithFields.java");
+        Files.writeString(path, """
+            package test;
+            public class TestClassWithFields {
+                private String field1;
+                public int field2 = 10;
+                
+                public void method1() {}
+            }
+            """);
+
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path);
+
+        assertNotNull(summary);
+        assertEquals(1, summary.classes().size());
+        JavaService.ClassSummary classSummary = summary.classes().get(0);
+        assertEquals("TestClassWithFields", classSummary.name());
+        assertEquals(2, classSummary.fields().size());
+        
+        JavaService.FieldSummary field1 = classSummary.fields().stream()
+                .filter(f -> f.name().equals("field1"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("String", field1.type());
+        
+        JavaService.FieldSummary field2 = classSummary.fields().stream()
+                .filter(f -> f.name().equals("field2"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("int", field2.type());
+    }
+
+    @Test
     void testGetMethodSource() throws IOException {
         Path path = tempDir.resolve("TestClass.java");
         Files.writeString(path, """
@@ -82,5 +116,40 @@ class JavaAnalysisServiceTest {
         String updatedContent = Files.readString(path);
         assertTrue(updatedContent.contains("System.out.println(\"New\");"));
         assertFalse(updatedContent.contains("System.out.println(\"Old\");"));
+    }
+
+    @Test
+    void testGetFieldSource() throws IOException {
+        Path path = tempDir.resolve("TestClassWithFields.java");
+        Files.writeString(path, """
+            package test;
+            public class TestClassWithFields {
+                private String field1 = "Original";
+            }
+            """);
+
+        Optional<String> source = javaAnalysisService.getFieldSource(path, "TestClassWithFields", "field1");
+
+        assertTrue(source.isPresent());
+        assertTrue(source.get().contains("private String field1 = \"Original\";"));
+    }
+
+    @Test
+    void testReplaceField() throws IOException {
+        Path path = tempDir.resolve("TestClassWithFields.java");
+        Files.writeString(path, """
+            package test;
+            public class TestClassWithFields {
+                private String field1 = "OldValue";
+            }
+            """);
+
+        String newField = "private String field1 = \"NewValue\";";
+
+        javaAnalysisService.replaceField(path, "TestClassWithFields", "field1", newField);
+
+        String updatedContent = Files.readString(path);
+        assertTrue(updatedContent.contains("private String field1 = \"NewValue\";"));
+        assertFalse(updatedContent.contains("OldValue"));
     }
 }

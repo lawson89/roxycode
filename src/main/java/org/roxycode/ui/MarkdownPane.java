@@ -143,7 +143,7 @@ public class MarkdownPane extends JTextPane {
             log.error("Failed to generate icon", e);
         }
 
-        String html = renderer.render(parser.parse(markdown));
+        String html = renderer.render(parser.parse("```" + markdown + "```"));
         // Remove surrounding <p> tags if present to align nicely with image
         if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
             html = html.substring(3, html.length() - 5);
