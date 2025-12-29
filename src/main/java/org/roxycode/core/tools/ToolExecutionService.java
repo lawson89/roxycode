@@ -27,6 +27,8 @@ public class ToolExecutionService {
     private final TikaService tikaService;
     private final JavaService javaAnalysisService;
     private final XmlService xmlService;
+    private final TomlService tomlService;
+    
     private final ObjectMapper objectMapper;
 
     public ToolExecutionService(Sandbox sandbox,
@@ -36,6 +38,8 @@ public class ToolExecutionService {
                                 TikaService tikaService,
                                 JavaService javaAnalysisService,
                                 XmlService xmlService,
+                                TomlService tomlService,
+                                
                                 ObjectMapper objectMapper) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
@@ -46,6 +50,8 @@ public class ToolExecutionService {
         this.tikaService = tikaService;
         this.javaAnalysisService = javaAnalysisService;
         this.xmlService = xmlService;
+        this.tomlService = tomlService;
+        
         this.objectMapper = objectMapper;
     }
 
@@ -72,6 +78,7 @@ public class ToolExecutionService {
             context.getBindings("js").putMember("tika", this.tikaService);
             context.getBindings("js").putMember("java", this.javaAnalysisService);
             context.getBindings("js").putMember("xml", this.xmlService);
+            context.getBindings("js").putMember("toml", this.tomlService);
             context.getBindings("js").putMember("json", this.objectMapper);
 
             // 2. Wrap the Java Map in ProxyObject
