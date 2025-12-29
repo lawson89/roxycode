@@ -73,6 +73,7 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton sendButton;
 
+    @Outlet
     private JButton stopButton;
 
     @Outlet
@@ -495,6 +496,23 @@ public class MainFrame extends JFrame implements Runnable {
         return false;
     }
 
+    private void setInputEnabled(boolean enabled) {
+        if (sendButton != null)
+            sendButton.setEnabled(enabled);
+        if (stopButton != null)
+            stopButton.setEnabled(!enabled);
+        if (inputField != null) {
+            inputField.setEnabled(enabled);
+            if (enabled) {
+                inputField.requestFocusInWindow();
+            }
+        }
+        if (attachButton != null)
+            attachButton.setEnabled(enabled);
+        if (clearAttachmentsButton != null)
+            clearAttachmentsButton.setEnabled(enabled);
+    }
+
     private void onSend(ActionEvent e) {
         String prompt = inputField.getText().trim();
         if (prompt.isEmpty())
@@ -510,8 +528,7 @@ public class MainFrame extends JFrame implements Runnable {
             if (!currentAttachments.isEmpty()) {
                 chatArea.appendMarkdown(" *(Attached: " + currentAttachments.stream().map(File::getName).collect(Collectors.joining(", ")) + ")*");
             }
-            sendButton.setEnabled(false);
-            stopButton.setEnabled(true);
+            setInputEnabled(false);
             new Thread(() -> {
                 try {
                     String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
@@ -536,8 +553,7 @@ public class MainFrame extends JFrame implements Runnable {
                     });
                 } finally {
                     SwingUtilities.invokeLater(() -> {
-                        sendButton.setEnabled(true);
-                        stopButton.setEnabled(false);
+                        setInputEnabled(true);
                     });
                 }
             }).start();
