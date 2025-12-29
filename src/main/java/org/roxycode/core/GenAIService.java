@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -68,14 +69,15 @@ public class GenAIService {
                 throw new IllegalStateException("Gemini API Key not found in Settings.");
             }
             // Updated to handle 429 Rate Limits automatically
-            client = Client.builder().apiKey(key).httpOptions(HttpOptions.builder().retryOptions(// Retry up to 5 times
-            HttpRetryOptions.builder().// Retry up to 5 times
+            client = Client.builder().apiKey(key).httpOptions(// Retry up to 5 times
+            HttpOptions.builder().// Retry up to 5 times
+            retryOptions(// Retry up to 5 times
+            HttpRetryOptions.builder().// Trigger on Rate Limit (429) or Service Unavailable (503)
             attempts(// Trigger on Rate Limit (429) or Service Unavailable (503)
             5).// Trigger on Rate Limit (429) or Service Unavailable (503)
-            httpStatusCodes(// Trigger on Rate Limit (429) or Service Unavailable (503)
-            429, 503).// Increase timeout to 90s to accommodate backoff delays
-            build()).// Increase timeout to 90s to accommodate backoff delays
-            timeout(90_000).build()).build();
+            httpStatusCodes(429, // Increase timeout to 90s to accommodate backoff delays
+            503).// Increase timeout to 90s to accommodate backoff delays
+            build()).timeout(90_000).build()).build();
         }
         return client;
     }
@@ -112,9 +114,11 @@ public class GenAIService {
             toolRegistry.getTool(toolName).ifPresent(td -> {
                 Map<String, Schema> properties = new HashMap<>();
                 if (td.getParameters() != null) {
-                    td.getParameters().forEach(p -> properties.put(p.getName(), // Simplifying types for MVP
-                    Schema.builder().// Simplifying types for MVP
-                    type("STRING").description(p.getDescription()).build()));
+                    td.getParameters().forEach(p -> // Simplifying types for MVP
+                    properties.// Simplifying types for MVP
+                    put(// Simplifying types for MVP
+                    p.getName(), // Simplifying types for MVP
+                    Schema.builder().type("STRING").description(p.getDescription()).build()));
                 }
                 Schema schema = Schema.builder().type("OBJECT").properties(properties).build();
                 cachedFunctions.add(FunctionDeclaration.builder().name(toolName).description(td.getDescription()).parameters(schema).build());
@@ -129,6 +133,8 @@ public class GenAIService {
 
     private int outTokens = 0;
 
+    private final AtomicBoolean isChatting = new AtomicBoolean(false);
+
     private volatile boolean stopRequested = false;
 
     public void stopChat() {
@@ -140,129 +146,132 @@ public class GenAIService {
     }
 
     public String chat(String prompt, String projectRoot, List<File> attachedFiles, Consumer<String> onStatusUpdate) {
-        this.stopRequested = false;
-        // 1. CONFIGURE SANDBOX (Always do this per chat to ensure safety)
-        sandbox.setRoot(projectRoot);
-        // 2. Build Initial Prompt
-        String contextMenu = contextRegistry.getContextMenu();
-        StringBuilder promptBuilder = new StringBuilder();
-        promptBuilder.append("Project Root: ").append(projectRoot).append("\n");
-        promptBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
-        promptBuilder.append(contextMenu).append("\n");
-        if (attachedFiles != null && !attachedFiles.isEmpty()) {
-            promptBuilder.append("\n--- ATTACHED FILES ---\n");
-            for (File file : attachedFiles) {
-                promptBuilder.append("File: ").append(file.getName()).append("\n");
-                promptBuilder.append("Content:\n");
-                try {
-                    promptBuilder.append(Files.readString(file.toPath())).append("\n");
-                } catch (IOException e) {
-                    promptBuilder.append("[Error reading file: ").append(e.getMessage()).append("]\n");
-                }
-                promptBuilder.append("----------------------\n");
-            }
+        if (!isChatting.compareAndSet(false, true)) {
+            return "A chat is already in progress.";
         }
-        promptBuilder.append("Task: ").append(prompt);
-        String systemPrompt = promptBuilder.toString();
-        LOG.info("System prompt {}", systemPrompt);
-        history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemPrompt).build())).build());
-        // 3. Conversation Loop
-        int turns = 0;
-        int maxTurns = settingsService.getMaxTurns();
-        while (turns++ < maxTurns) {
-            if (stopRequested) {
-                return "Chat stopped by user.";
+        try {
+            this.stopRequested = false;
+            // 1. CONFIGURE SANDBOX (Always do this per chat to ensure safety)
+            sandbox.setRoot(projectRoot);
+            // 2. Build Initial Prompt
+            String contextMenu = contextRegistry.getContextMenu();
+            StringBuilder promptBuilder = new StringBuilder();
+            promptBuilder.append("Project Root: ").append(projectRoot).append("\n");
+            promptBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
+            promptBuilder.append(contextMenu).append("\n");
+            if (attachedFiles != null && !attachedFiles.isEmpty()) {
+                promptBuilder.append("\n--- ATTACHED FILES ---\n");
+                for (File file : attachedFiles) {
+                    promptBuilder.append("File: ").append(file.getName()).append("\n");
+                    promptBuilder.append("Content:\n");
+                    try {
+                        promptBuilder.append(Files.readString(file.toPath())).append("\n");
+                    } catch (IOException e) {
+                        promptBuilder.append("[Error reading file: ").append(e.getMessage()).append("]\n");
+                    }
+                    promptBuilder.append("----------------------\n");
+                }
             }
-            LOG.info("Turn {}: Sending message to model...", turns);
-            if (onStatusUpdate != null) {
-                onStatusUpdate.accept(String.format("Thinking (%d/%d)... <small style='margin-left: 10px;'>messages: %d | in tokens: %d | out tokens: %d</small>", turns, maxTurns, history.size(), inTokens, outTokens));
-            }
-            // Use a fast/cheap model for summarization
-            historyService.compactHistory(client, "gemini-2.0-flash", history, systemPrompt);
-            // USE CACHED FUNCTIONS
-            GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
-            if (!cachedFunctions.isEmpty()) {
-                Tool toolConfig = Tool.builder().functionDeclarations(cachedFunctions).build();
-                configBuilder.tools(List.of(toolConfig));
-            }
-            GenerateContentResponse response = doGenerateContent(settingsService.getGeminiModel(), history, configBuilder.build());
-            if (response.usageMetadata().isPresent()) {
-                GenerateContentResponseUsageMetadata usage = response.usageMetadata().get();
-                // input tokens
-                inTokens = usage.promptTokenCount().orElse(0);
-                //output tokens
-                outTokens = usage.candidatesTokenCount().orElse(0);
-                usageService.recordUsage(inTokens, outTokens);
-            }
-            Optional<List<Candidate>> candidatesOpt = response.candidates();
-            if (candidatesOpt.isEmpty() || candidatesOpt.get().isEmpty()) {
-                return "Error: No response candidates.";
-            }
-            Content modelMessage = candidatesOpt.get().getFirst().content().orElse(Content.builder().build());
-            history.add(modelMessage);
-            List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
-            // --- PARALLEL FUNCTION HANDLING ---
-            List<Part> functionResponseParts = new ArrayList<>();
-            List<Content> subsequentUserMessages = new ArrayList<>();
-            boolean hasFunctionCall = false;
-            for (Part part : parts) {
+            promptBuilder.append("Task: ").append(prompt);
+            String systemPrompt = promptBuilder.toString();
+            LOG.info("System prompt {}", systemPrompt);
+            history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemPrompt).build())).build());
+            // 3. Conversation Loop
+            int turns = 0;
+            int maxTurns = settingsService.getMaxTurns();
+            while (turns++ < maxTurns) {
                 if (stopRequested) {
                     return "Chat stopped by user.";
                 }
-                Optional<FunctionCall> callOpt = part.functionCall();
-                if (callOpt.isPresent()) {
-                    hasFunctionCall = true;
-                    FunctionCall call = callOpt.get();
-                    String fnName = call.name().orElse("unknown");
-                    Map<String, Object> originalArgs = call.args().orElse(Collections.emptyMap());
-                    // Path Resolution Logic
-                    Map<String, Object> fixedArgs = new HashMap<>(originalArgs);
-                    if (fixedArgs.containsKey("path")) {
-                        String originalPath = (String) fixedArgs.get("path");
-                        if (!Paths.get(originalPath).isAbsolute()) {
-                            Path resolvedPath = Paths.get(projectRoot, originalPath);
-                            fixedArgs.put("path", resolvedPath.toString());
+                LOG.info("Turn {}: Sending message to model...", turns);
+                if (onStatusUpdate != null) {
+                    onStatusUpdate.accept(String.format("Thinking (%d/%d)... <small style='margin-left: 10px;'>messages: %d | in tokens: %d | out tokens: %d</small>", turns, maxTurns, history.size(), inTokens, outTokens));
+                }
+                // Use a fast/cheap model for summarization
+                historyService.compactHistory(client, "gemini-2.0-flash", history, systemPrompt);
+                // USE CACHED FUNCTIONS
+                GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
+                if (!cachedFunctions.isEmpty()) {
+                    Tool toolConfig = Tool.builder().functionDeclarations(cachedFunctions).build();
+                    configBuilder.tools(List.of(toolConfig));
+                }
+                GenerateContentResponse response = doGenerateContent(settingsService.getGeminiModel(), history, configBuilder.build());
+                if (response.usageMetadata().isPresent()) {
+                    GenerateContentResponseUsageMetadata usage = response.usageMetadata().get();
+                    // input tokens
+                    inTokens = usage.promptTokenCount().orElse(0);
+                    //output tokens
+                    outTokens = usage.candidatesTokenCount().orElse(0);
+                    usageService.recordUsage(inTokens, outTokens);
+                }
+                Optional<List<Candidate>> candidatesOpt = response.candidates();
+                if (candidatesOpt.isEmpty() || candidatesOpt.get().isEmpty()) {
+                    return "Error: No response candidates.";
+                }
+                Content modelMessage = candidatesOpt.get().getFirst().content().orElse(Content.builder().build());
+                history.add(modelMessage);
+                List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
+                // --- PARALLEL FUNCTION HANDLING ---
+                List<Part> functionResponseParts = new ArrayList<>();
+                List<Content> subsequentUserMessages = new ArrayList<>();
+                boolean hasFunctionCall = false;
+                for (Part part : parts) {
+                    if (stopRequested) {
+                        return "Chat stopped by user.";
+                    }
+                    Optional<FunctionCall> callOpt = part.functionCall();
+                    if (callOpt.isPresent()) {
+                        hasFunctionCall = true;
+                        FunctionCall call = callOpt.get();
+                        String fnName = call.name().orElse("unknown");
+                        Map<String, Object> originalArgs = call.args().orElse(Collections.emptyMap());
+                        // Path Resolution Logic
+                        Map<String, Object> fixedArgs = new HashMap<>(originalArgs);
+                        if (fixedArgs.containsKey("path")) {
+                            String originalPath = (String) fixedArgs.get("path");
+                            if (!Paths.get(originalPath).isAbsolute()) {
+                                Path resolvedPath = Paths.get(projectRoot, originalPath);
+                                fixedArgs.put("path", resolvedPath.toString());
+                            }
                         }
-                    }
-                    LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
-                    if (onStatusUpdate != null) {
-                        onStatusUpdate.accept("```Tool: " + fnName + " | args: " + fixedArgs + "```");
-                    }
-                    String toolOutput;
-                    try {
-                        ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow(() -> new IllegalStateException("Tool not found: " + fnName));
-                        toolOutput = executionService.execute(toolDef, fixedArgs).get();
-                    } catch (Exception e) {
-                        toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
-                    }
-                    LOG.info("Tool output: {}", toolOutput);
-                    if (toolOutput.endsWith(".png") && Files.exists(Paths.get(toolOutput))) {
+                        LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
+                        if (onStatusUpdate != null) {
+                            onStatusUpdate.accept("```Tool: " + fnName + " | args: " + fixedArgs + "```");
+                        }
+                        String toolOutput;
                         try {
-                            byte[] imageBytes = Files.readAllBytes(Paths.get(toolOutput));
-                            Blob imageBlob = Blob.builder().mimeType("image/png").data(imageBytes).build();
-                            // FIX: Create TWO separate parts: one for image, one for text
-                            subsequentUserMessages.add(// Part 1: Image
-                            Content.builder().role("user").// Part 1: Image
-                            parts(// Part 1: Image
-                            List.// Part 2: Text
-                            of(Part.builder().inlineData(imageBlob).build(), Part.builder().text("Screenshot captured.").build())).build());
-                            toolOutput = "Screenshot captured.";
+                            ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow(() -> new IllegalStateException("Tool not found: " + fnName));
+                            toolOutput = executionService.execute(toolDef, fixedArgs).get();
                         } catch (Exception e) {
-                            LOG.error("Image load fail", e);
+                            toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
                         }
+                        LOG.info("Tool output: {}", toolOutput);
+                        if (toolOutput.endsWith(".png") && Files.exists(Paths.get(toolOutput))) {
+                            try {
+                                byte[] imageBytes = Files.readAllBytes(Paths.get(toolOutput));
+                                Blob imageBlob = Blob.builder().mimeType("image/png").data(imageBytes).build();
+                                // FIX: Create TWO separate parts: one for image, one for text
+                                subsequentUserMessages.add(Content.builder().role("user").parts(List.of(Part.builder().inlineData(imageBlob).build(), Part.builder().text("Screenshot captured.").build())).build());
+                                toolOutput = "Screenshot captured.";
+                            } catch (Exception e) {
+                                LOG.error("Image load fail", e);
+                            }
+                        }
+                        functionResponseParts.add(Part.builder().functionResponse(FunctionResponse.builder().name(fnName).response(Map.of("result", toolOutput)).build()).build());
                     }
-                    functionResponseParts.add(Part.builder().functionResponse(FunctionResponse.builder().name(fnName).response(Map.of("result", toolOutput)).build()).build());
                 }
-            }
-            if (hasFunctionCall) {
-                if (!functionResponseParts.isEmpty()) {
-                    history.add(Content.builder().role("function").parts(functionResponseParts).build());
+                if (hasFunctionCall) {
+                    if (!functionResponseParts.isEmpty()) {
+                        history.add(Content.builder().role("function").parts(functionResponseParts).build());
+                    }
+                    history.addAll(subsequentUserMessages);
+                    continue;
                 }
-                history.addAll(subsequentUserMessages);
-                continue;
+                return parts.stream().map(p -> p.text().orElse("")).collect(Collectors.joining(""));
             }
-            return parts.stream().map(p -> p.text().orElse("")).collect(Collectors.joining(""));
+            return "Max turns reached.";
+        } finally {
+            isChatting.set(false);
         }
-        return "Max turns reached.";
     }
 }
