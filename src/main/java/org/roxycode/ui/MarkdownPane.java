@@ -14,7 +14,6 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.kordamp.ikonli.Ikon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.html.HTMLDocument;
@@ -29,51 +28,36 @@ import java.util.Dictionary;
 import java.util.Hashtable;
 
 public class MarkdownPane extends JTextPane {
+
     private final Parser parser;
+
     private final HtmlRenderer renderer;
+
     private static final Logger log = LoggerFactory.getLogger(MarkdownPane.class);
 
     public MarkdownPane() {
-        final DataHolder OPTIONS = new MutableDataSet()
-                .set(Parser.REFERENCES_KEEP, KeepType.LAST)
-                .set(HtmlRenderer.INDENT_SIZE, 2)
-                .set(HtmlRenderer.PERCENT_ENCODE_URLS, true)
-
-                // for full GFM table compatibility add the following table extension options:
-                .set(TablesExtension.COLUMN_SPANS, false)
-                .set(TablesExtension.APPEND_MISSING_COLUMNS, true)
-                .set(TablesExtension.DISCARD_EXTRA_COLUMNS, true)
-                .set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true)
-                .set(Parser.EXTENSIONS, Arrays.asList(TablesExtension.create()))
-                .toImmutable();
-
+        final DataHolder // for full GFM table compatibility add the following table extension options:
+        // for full GFM table compatibility add the following table extension options:
+        OPTIONS = new MutableDataSet().set(Parser.REFERENCES_KEEP, KeepType.LAST).set(HtmlRenderer.INDENT_SIZE, 2).set(HtmlRenderer.PERCENT_ENCODE_URLS, true).set(TablesExtension.COLUMN_SPANS, false).set(TablesExtension.APPEND_MISSING_COLUMNS, true).set(TablesExtension.DISCARD_EXTRA_COLUMNS, true).set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true).set(Parser.EXTENSIONS, Arrays.asList(TablesExtension.create())).toImmutable();
         this.parser = Parser.builder(OPTIONS).build();
         this.renderer = HtmlRenderer.builder(OPTIONS).build();
-
         this.setEditable(false);
         this.setContentType("text/html");
-
         // --- FIX: Force HTML to use the LookAndFeel's (smooth) fonts ---
         this.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
-
         HTMLEditorKit kit = new HTMLEditorKit();
         this.setEditorKit(kit);
         this.setDocument(kit.createDefaultDocument());
-
         updateStyle();
-
         this.setText("<html><body></body></html>");
     }
 
     public void updateStyle() {
         HTMLEditorKit kit = (HTMLEditorKit) this.getEditorKit();
         StyleSheet styleSheet = kit.getStyleSheet();
-
         // Clear previous rules if possible or just overwrite
         // StyleSheet doesn't easily allow clearing, but adding rules with same selector overrides properties.
-
         styleSheet.addRule("body { font-family: sans-serif; font-size: 14px; padding: 10px; }");
-
         if (FlatLaf.isLafDark()) {
             styleSheet.addRule("code { background-color: #3e3e42; color: #a9b7c6; font-family: monospace; }");
             styleSheet.addRule("pre { background-color: #3e3e42; color: #a9b7c6; padding: 10px; }");
@@ -100,16 +84,12 @@ public class MarkdownPane extends JTextPane {
     public void appendMarkdown(String markdown) {
         log.info("Rendering markdown: {}", markdown);
         String newHtml = renderer.render(parser.parse(markdown));
-
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
-
             // Insert the new HTML at the end of the body
-            kit.insertHTML(doc, doc.getLength(), newHtml + "<div style='height: 1px; background-color: #A0A0A0; font-size: 1px; border: none; margin: 5px 0;'></div>", 0, 0, null);
-
+            kit.insertHTML(doc, doc.getLength(), newHtml + "<div style='height: 1px; background-color: " + (FlatLaf.isLafDark() ? "#444444" : "#D0D0D0") + "; font-size: 1px; border: none; margin: 10px 0;'></div>", 0, 0, null);
             this.setCaretPosition(doc.getLength());
-
         } catch (BadLocationException | IOException e) {
             log.error("Failed to append markdown", e);
         }
@@ -117,29 +97,22 @@ public class MarkdownPane extends JTextPane {
 
     public void appendToolLog(String markdown) {
         log.info("Rendering tool log: {}", markdown);
-
         String imgTag = generateIconTag(MaterialDesignW.WRENCH_OUTLINE, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "wrench");
         if (!imgTag.isEmpty()) {
             imgTag += "&nbsp;";
         }
-
-        String html = renderer.render(parser.parse( markdown));
+        String html = renderer.render(parser.parse(markdown));
         // Remove surrounding <p> tags if present to align nicely with image
         if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
             html = html.substring(3, html.length() - 5);
         }
-
-        String combinedHtml = "<div>" + imgTag + "<span>" + html + "</span></div>";
-
+        String combinedHtml = "<div style='background-color: " + (FlatLaf.isLafDark() ? "#2b2d30" : "#f2f2f2") + "; padding: 4px; border-radius: 4px; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
-
             // Insert the new HTML at the end of the body
             kit.insertHTML(doc, doc.getLength(), combinedHtml, 0, 0, null);
-
             this.setCaretPosition(doc.getLength());
-
         } catch (BadLocationException | IOException e) {
             log.error("Failed to append tool log", e);
         }
@@ -147,19 +120,15 @@ public class MarkdownPane extends JTextPane {
 
     public void appendStatus(String markdown) {
         log.info("Rendering status: {}", markdown);
-
-        String imgTag = generateIconTag(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 22, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "status");
+        String imgTag = generateIconTag(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 18, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "status");
         if (!imgTag.isEmpty()) {
             imgTag += "&nbsp;";
         }
-
         String html = renderer.render(parser.parse(markdown));
         if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
             html = html.substring(3, html.length() - 5);
         }
-
-        String combinedHtml = "<div style='color: gray; font-style: italic;'>" + imgTag + "<span>" + html + "</span></div>";
-
+        String combinedHtml = "<div style='color: gray; font-style: italic; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
@@ -172,20 +141,14 @@ public class MarkdownPane extends JTextPane {
 
     public void appendRoxyMarkdown(String markdown) {
         log.info("Rendering Roxy markdown: {}", markdown);
-
         String imgTag = generateIconTag(MaterialDesignC.CAT, 24, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "roxy");
-
         String html = renderer.render(parser.parse(markdown));
         String combinedHtml = "<div>" + imgTag + "</div>" + html;
-
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
-
-            kit.insertHTML(doc, doc.getLength(), combinedHtml + "<div style='height: 1px; background-color: #A0A0A0; font-size: 1px; border: none; margin: 5px 0;'></div>", 0, 0, null);
-
+            kit.insertHTML(doc, doc.getLength(), combinedHtml + "<div style='height: 1px; background-color: " + (FlatLaf.isLafDark() ? "#444444" : "#D0D0D0") + "; font-size: 1px; border: none; margin: 10px 0;'></div>", 0, 0, null);
             this.setCaretPosition(doc.getLength());
-
         } catch (BadLocationException | IOException e) {
             log.error("Failed to append Roxy markdown", e);
         }
@@ -198,11 +161,9 @@ public class MarkdownPane extends JTextPane {
             Graphics2D g2 = image.createGraphics();
             icon.paintIcon(this, g2, 0, 0);
             g2.dispose();
-
             // Generate a unique virtual URL for the icon
             String imageName = namePrefix + "-" + System.nanoTime() + ".png";
             URL imageURL = new URL("http://roxycode.local/" + imageName);
-
             HTMLDocument doc = (HTMLDocument) getDocument();
             Dictionary cache = (Dictionary) doc.getProperty("imageCache");
             if (cache == null) {
@@ -210,7 +171,6 @@ public class MarkdownPane extends JTextPane {
                 doc.putProperty("imageCache", cache);
             }
             cache.put(imageURL, image);
-
             return "<img src=\"" + imageURL + "\" style=\"vertical-align:middle\">";
         } catch (Exception e) {
             log.error("Failed to generate icon: " + namePrefix, e);

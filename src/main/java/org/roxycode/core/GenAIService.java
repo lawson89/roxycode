@@ -7,6 +7,7 @@ import org.roxycode.core.context.ContextRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.File;
@@ -236,7 +237,14 @@ public class GenAIService {
                         }
                         LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
                         if (onStatusUpdate != null) {
-                            onStatusUpdate.accept("`Tool: " + fnName + " | args: " + fixedArgs + "`");
+                            StringBuilder sb = new StringBuilder();
+                            sb.append("Tool: ").append(fnName).append(" | ");
+                            fixedArgs.forEach((k, v) -> {
+                                String val = String.valueOf(v);
+                                String truncated = StringUtils.abbreviate(val, 100);
+                                sb.append(k).append("=").append(truncated).append(", ");
+                            });
+                            onStatusUpdate.accept(sb.toString().trim());
                         }
                         String toolOutput;
                         try {
