@@ -1,4 +1,5 @@
-var os = java.lang.System.getProperty("os.name").toLowerCase();
+var System = Java.type("java.lang.System");
+var os = System.getProperty("os.name").toLowerCase();
 var isWindows = os.includes("win");
 
 var command;
@@ -21,7 +22,8 @@ var InputStreamReader = Java.type("java.io.InputStreamReader");
 
 var reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
 var line;
-var output = new java.lang.StringBuilder();
+var StringBuilder = Java.type("java.lang.StringBuilder");
+var output = new StringBuilder();
 while ((line = reader.readLine()) != null) {
     output.append(line).append("\n");
 }

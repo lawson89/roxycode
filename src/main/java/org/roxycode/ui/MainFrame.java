@@ -15,7 +15,6 @@ import org.roxycode.core.SettingsService;
 import org.roxycode.core.UsageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
@@ -29,7 +28,6 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
-
 @Singleton
 public class MainFrame extends JFrame implements Runnable {
 
@@ -37,10 +35,15 @@ public class MainFrame extends JFrame implements Runnable {
 
     // Dependencies
     private final GitService gitService;
+
     private final GenAIService genAIService;
+
     private final SettingsService settingsService;
+
     private final UsageService usageService;
+
     private final RoxyProjectService roxyProjectService;
+
     private final Sandbox sandbox;
 
     private Path currentProjectRoot;
@@ -51,64 +54,99 @@ public class MainFrame extends JFrame implements Runnable {
     // Outlets (Mapped from XML IDs)
     @Outlet
     private JLabel gitBranchLabel;
+
     @Outlet
     private JLabel projectNameLabel;
+
     @Outlet
     private JTree fileTree;
+
     @Outlet
     private JTextArea inputField;
+
     @Outlet
     private JButton sendButton;
+
     @Outlet
     private JScrollPane chatScrollPane;
+
     @Outlet
     private JButton rescanButton;
+
     @Outlet
     private JMenuItem settingsMenuItem;
+
     @Outlet
     private JLabel currentProjectLabel;
+
     @Outlet
     private JMenuItem exitMenuItem;
+
     @Outlet
     private JMenuItem aboutMenuItem;
+
     @Outlet
     private JMenuItem openFolderMenuItem;
 
     // Attachments Outlets
     @Outlet
     private JButton attachButton;
+
     @Outlet
     private JLabel attachmentsLabel;
+
     @Outlet
     private JButton clearAttachmentsButton;
 
     // Navigation Outlets
-    @Outlet private JButton navChatButton;
-    @Outlet private JButton navFilesButton;
-    @Outlet private JButton navUsageButton;
-    @Outlet private JButton navSettingsButton;
+    @Outlet
+    private JButton navChatButton;
+
+    @Outlet
+    private JButton navFilesButton;
+
+    @Outlet
+    private JButton navUsageButton;
+
+    @Outlet
+    private JButton navSettingsButton;
 
     // View Outlets
-    @Outlet private JComponent viewChat;
-    @Outlet private JComponent viewFiles;
-    @Outlet private JComponent viewUsage;
-    @Outlet private JComponent viewSettings;
+    @Outlet
+    private JComponent viewChat;
+
+    @Outlet
+    private JComponent viewFiles;
+
+    @Outlet
+    private JComponent viewUsage;
+
+    @Outlet
+    private JComponent viewSettings;
 
     // Usage Outlets
-    @Outlet private JLabel usageHtmlLabel;
-    @Outlet private JButton resetUsageButton;
+    @Outlet
+    private JLabel usageHtmlLabel;
+
+    @Outlet
+    private JButton resetUsageButton;
 
     // Settings Outlets
     @Outlet
     private JPasswordField apiKeyField;
+
     @Outlet
     private JTextField maxTurnsField;
+
     @Outlet
     private JButton saveSettingsButton;
+
     @Outlet
     private JComboBox<String> themeComboBox;
+
     @Outlet
     private JComboBox<String> modelComboBox;
+
     @Outlet
     private JLabel icon;
 
@@ -122,7 +160,6 @@ public class MainFrame extends JFrame implements Runnable {
         this.usageService = usageService;
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
-
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }
@@ -130,43 +167,43 @@ public class MainFrame extends JFrame implements Runnable {
     @Override
     public void run() {
         applyTheme(settingsService.getTheme());
-        setContentPane(UILoader.load(this, "MainFrame.xml")); // Ensure leading slash for classpath
-                // Load stylized Roxy cat icon
+        // Ensure leading slash for classpath
+        setContentPane(UILoader.load(this, "MainFrame.xml"));
+        // Load stylized Roxy cat icon
         java.net.URL iconUrl = getClass().getResource("roxy_logo_transparent.png");
-        if (iconUrl != null && icon != null) {
+        if (iconUrl != null) {
             ImageIcon roxyIcon = new ImageIcon(iconUrl);
             Image img = roxyIcon.getImage();
-            Image newImg = img.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
-            icon.setIcon(new ImageIcon(newImg));
+            // Set application window icon
+            setIconImage(img);
+            if (icon != null) {
+                Image newImg = img.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
+                icon.setIcon(new ImageIcon(newImg));
+            }
         } else {
             FontIcon alarmIcon = FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 64);
-            if (icon != null) icon.setIcon(alarmIcon);
+            if (icon != null)
+                icon.setIcon(alarmIcon);
         }
-
         // Manual Viewport injection
         if (chatScrollPane != null) {
             chatScrollPane.setViewportView(chatArea);
         }
-
         // Initialize project root to current directory
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
         sandbox.setRoot(currentProjectRoot.toString());
         roxyProjectService.ensureProjectStructure();
-
         initGitInfo();
         initListeners();
         initSettings();
-        populateFileTree(); // Populate the file tree
-
+        // Populate the file tree
+        populateFileTree();
         // --- STARTUP SCAN ---
         performRescan();
-
         // Set the project path label
         updateProjectLabel();
-
         // Set initial view
         showView("CHAT");
-
         setSize(1200, 800);
         setLocationRelativeTo(null);
         setVisible(true);
@@ -189,83 +226,101 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void initListeners() {
-        if (sendButton != null) sendButton.addActionListener(this::onSend);
-        
+        if (sendButton != null)
+            sendButton.addActionListener(this::onSend);
         // Attachments listeners
-        if (attachButton != null) attachButton.addActionListener(this::onAttach);
-        if (clearAttachmentsButton != null) clearAttachmentsButton.addActionListener(this::onClearAttachments);
-
+        if (attachButton != null)
+            attachButton.addActionListener(this::onAttach);
+        if (clearAttachmentsButton != null)
+            clearAttachmentsButton.addActionListener(this::onClearAttachments);
         // Navigation listeners
-        if (navChatButton != null) navChatButton.addActionListener(e -> showView("CHAT"));
-        if (navFilesButton != null) navFilesButton.addActionListener(e -> showView("FILES"));
-        if (navUsageButton != null) navUsageButton.addActionListener(e -> showView("USAGE"));
-        if (navSettingsButton != null) navSettingsButton.addActionListener(e -> showView("SETTINGS"));
-
-        if (resetUsageButton != null) resetUsageButton.addActionListener(e -> {
-            usageService.reset();
-            updateUsageView();
-        });
-
+        if (navChatButton != null)
+            navChatButton.addActionListener(e -> showView("CHAT"));
+        if (navFilesButton != null)
+            navFilesButton.addActionListener(e -> showView("FILES"));
+        if (navUsageButton != null)
+            navUsageButton.addActionListener(e -> showView("USAGE"));
+        if (navSettingsButton != null)
+            navSettingsButton.addActionListener(e -> showView("SETTINGS"));
+        if (resetUsageButton != null)
+            resetUsageButton.addActionListener(e -> {
+                usageService.reset();
+                updateUsageView();
+            });
         // FIX: Use KeyBindings for JTextArea
         if (inputField != null) {
             // Map "Enter" key to the 'onSend' method
             inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
             inputField.getActionMap().put("send-message", new AbstractAction() {
+
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     onSend(e);
                 }
             });
-
             // Ensure "Shift+Enter" still creates a new line
             inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
         }
-        if (rescanButton != null) rescanButton.addActionListener(e -> performRescan());
-        if (settingsMenuItem != null) settingsMenuItem.addActionListener(this::onSettings);
-        if (exitMenuItem != null) exitMenuItem.addActionListener(e -> System.exit(0));
-        if (aboutMenuItem != null) aboutMenuItem.addActionListener(this::onAbout);
-        if (openFolderMenuItem != null) openFolderMenuItem.addActionListener(this::onOpenFolder);
-
-        if (saveSettingsButton != null) saveSettingsButton.addActionListener(this::onSaveSettings);
+        if (rescanButton != null)
+            rescanButton.addActionListener(e -> performRescan());
+        if (settingsMenuItem != null)
+            settingsMenuItem.addActionListener(this::onSettings);
+        if (exitMenuItem != null)
+            exitMenuItem.addActionListener(e -> System.exit(0));
+        if (aboutMenuItem != null)
+            aboutMenuItem.addActionListener(this::onAbout);
+        if (openFolderMenuItem != null)
+            openFolderMenuItem.addActionListener(this::onOpenFolder);
+        if (saveSettingsButton != null)
+            saveSettingsButton.addActionListener(this::onSaveSettings);
     }
 
     private void showView(String viewName) {
         // Hide all
-        if(viewChat != null) viewChat.setVisible(false);
-        if(viewFiles != null) viewFiles.setVisible(false);
-        if(viewUsage != null) viewUsage.setVisible(false);
-        if(viewSettings != null) viewSettings.setVisible(false);
-
+        if (viewChat != null)
+            viewChat.setVisible(false);
+        if (viewFiles != null)
+            viewFiles.setVisible(false);
+        if (viewUsage != null)
+            viewUsage.setVisible(false);
+        if (viewSettings != null)
+            viewSettings.setVisible(false);
         // Show selected
-        switch (viewName) {
-            case "CHAT": if(viewChat != null) viewChat.setVisible(true); break;
-            case "FILES": if(viewFiles != null) viewFiles.setVisible(true); break;
+        switch(viewName) {
+            case "CHAT":
+                if (viewChat != null)
+                    viewChat.setVisible(true);
+                break;
+            case "FILES":
+                if (viewFiles != null)
+                    viewFiles.setVisible(true);
+                break;
             case "USAGE":
-                if(viewUsage != null) {
+                if (viewUsage != null) {
                     updateUsageView();
                     viewUsage.setVisible(true);
                 }
                 break;
-            case "SETTINGS": if(viewSettings != null) viewSettings.setVisible(true); break;
+            case "SETTINGS":
+                if (viewSettings != null)
+                    viewSettings.setVisible(true);
+                break;
         }
     }
 
     private void updateUsageView() {
-        if (usageHtmlLabel == null) return;
-
+        if (usageHtmlLabel == null)
+            return;
         StringBuilder html = new StringBuilder();
         html.append("<html>");
         html.append("<table border='0' cellspacing='0' cellpadding='8'>");
-        
         html.append("<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>").append(usageService.getApiCalls()).append("</td></tr>");
         html.append("<tr><td><b><font color='#888888'>TOTAL TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getTotalTokens())).append("</td></tr>");
         html.append("<tr><td><b><font color='#888888'>PROMPT TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getPromptTokens())).append("</td></tr>");
         html.append("<tr><td><b><font color='#888888'>CANDIDATE TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getCandidateTokens())).append("</td></tr>");
         html.append("<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>").append(String.format("$%.4f", usageService.getEstimatedCost())).append("</td></tr>");
-
         html.append("</table>");
         html.append("</html>");
-
         usageHtmlLabel.setText(html.toString());
     }
 
@@ -299,7 +354,6 @@ public class MainFrame extends JFrame implements Runnable {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setMultiSelectionEnabled(true);
         fileChooser.setCurrentDirectory(currentProjectRoot.toFile());
-
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             File[] files = fileChooser.getSelectedFiles();
@@ -318,13 +372,12 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void updateAttachmentsLabel() {
-        if (attachmentsLabel == null) return;
+        if (attachmentsLabel == null)
+            return;
         if (attachedFiles.isEmpty()) {
             attachmentsLabel.setText("None");
         } else {
-            String names = attachedFiles.stream()
-                    .map(File::getName)
-                    .collect(Collectors.joining(", "));
+            String names = attachedFiles.stream().map(File::getName).collect(Collectors.joining(", "));
             attachmentsLabel.setText(names);
         }
     }
@@ -335,7 +388,6 @@ public class MainFrame extends JFrame implements Runnable {
             String key = new String(apiKeyField.getPassword()).trim();
             settingsService.setGeminiApiKey(key);
         }
-
         if (maxTurnsField != null) {
             try {
                 String txt = maxTurnsField.getText().trim();
@@ -353,7 +405,6 @@ public class MainFrame extends JFrame implements Runnable {
                 return;
             }
         }
-        
         if (themeComboBox != null) {
             String selectedTheme = (String) themeComboBox.getSelectedItem();
             if (selectedTheme != null) {
@@ -361,14 +412,12 @@ public class MainFrame extends JFrame implements Runnable {
                 applyTheme(selectedTheme);
             }
         }
-
         if (modelComboBox != null) {
             String selectedModel = (String) modelComboBox.getSelectedItem();
             if (selectedModel != null) {
                 settingsService.setGeminiModel(selectedModel);
             }
         }
-
         JOptionPane.showMessageDialog(parent, "Settings saved.", "Settings", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -376,19 +425,16 @@ public class MainFrame extends JFrame implements Runnable {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         fileChooser.setCurrentDirectory(currentProjectRoot.toFile());
-
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
             currentProjectRoot = selectedFile.toPath().toAbsolutePath();
             sandbox.setRoot(currentProjectRoot.toString());
             roxyProjectService.ensureProjectStructure();
-
             updateProjectLabel();
             initGitInfo();
             populateFileTree();
             performRescan();
-
             if (chatArea != null) {
                 chatArea.appendMarkdown("*System: Switched project to " + currentProjectRoot.toString() + "*");
             }
@@ -410,23 +456,19 @@ public class MainFrame extends JFrame implements Runnable {
 
     private void onSend(ActionEvent e) {
         String prompt = inputField.getText().trim();
-        if (prompt.isEmpty()) return;
-
+        if (prompt.isEmpty())
+            return;
         inputField.setText("");
-        
         // Capture attachments state
         List<File> currentAttachments = new ArrayList<>(attachedFiles);
-        
         // Clear UI attachments
         attachedFiles.clear();
         updateAttachmentsLabel();
-
         if (chatArea != null) {
             chatArea.appendMarkdown("**User:** " + prompt);
             if (!currentAttachments.isEmpty()) {
-                 chatArea.appendMarkdown(" *(Attached: " + currentAttachments.stream().map(File::getName).collect(Collectors.joining(", ")) + ")*");
+                chatArea.appendMarkdown(" *(Attached: " + currentAttachments.stream().map(File::getName).collect(Collectors.joining(", ")) + ")*");
             }
-
             new Thread(() -> {
                 try {
                     String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
@@ -442,10 +484,7 @@ public class MainFrame extends JFrame implements Runnable {
                     SwingUtilities.invokeLater(() -> {
                         String errorMsg = ex.getMessage();
                         if (errorMsg != null && errorMsg.contains("Quota exceeded")) {
-                             chatArea.appendMarkdown("⚠️ **API Quota Exceeded**n" +
-                                     "You have hit the rate limit for the Gemini API. " +
-                                     "Please wait a few moments before trying again.n" +
-                                     "> " + errorMsg);
+                            chatArea.appendMarkdown("⚠️ **API Quota Exceeded**n" + "You have hit the rate limit for the Gemini API. " + "Please wait a few moments before trying again.n" + "> " + errorMsg);
                         } else {
                             chatArea.appendMarkdown("❌ **Error:** " + errorMsg);
                         }
@@ -466,14 +505,11 @@ public class MainFrame extends JFrame implements Runnable {
     private void populateFileTree() {
         // Use the current working directory as the root
         File rootDir = currentProjectRoot.toFile();
-
         // Create the root node (Use folder name or "Project")
         String rootName = rootDir.getName().equals(".") ? "Project" : rootDir.getName();
         DefaultMutableTreeNode root = new DefaultMutableTreeNode(rootName);
-
         // Recursively build the tree
         buildTreeNodes(root, rootDir);
-
         // Set the model to the JTree
         DefaultTreeModel treeModel = new DefaultTreeModel(root);
         fileTree.setModel(treeModel);
@@ -481,38 +517,46 @@ public class MainFrame extends JFrame implements Runnable {
 
     private void buildTreeNodes(DefaultMutableTreeNode node, File file) {
         File[] files = file.listFiles();
-        if (files == null) return;
-
+        if (files == null)
+            return;
         // Sort: Directories first, then files, alphabetically
         Arrays.sort(files, (f1, f2) -> {
-            if (f1.isDirectory() && !f2.isDirectory()) return -1;
-            if (!f1.isDirectory() && f2.isDirectory()) return 1;
+            if (f1.isDirectory() && !f2.isDirectory())
+                return -1;
+            if (!f1.isDirectory() && f2.isDirectory())
+                return 1;
             return f1.getName().compareToIgnoreCase(f2.getName());
         });
-
         for (File child : files) {
             // Skip hidden files and the .git folder to keep UI clean
-            if (child.isHidden() || child.getName().startsWith(".")) continue;
-
+            if (child.isHidden() || child.getName().startsWith("."))
+                continue;
             DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(child.getName());
             node.add(childNode);
-
             if (child.isDirectory()) {
                 buildTreeNodes(childNode, child);
             }
         }
     }
-    
+
     private void applyTheme(String themeName) {
         try {
-            switch (themeName) {
-                case "Dark": UIManager.setLookAndFeel(new FlatDarkLaf()); break;
-                case "IntelliJ": UIManager.setLookAndFeel(new FlatIntelliJLaf()); break;
-                case "Darcula": UIManager.setLookAndFeel(new FlatDarculaLaf()); break;
+            switch(themeName) {
+                case "Dark":
+                    UIManager.setLookAndFeel(new FlatDarkLaf());
+                    break;
+                case "IntelliJ":
+                    UIManager.setLookAndFeel(new FlatIntelliJLaf());
+                    break;
+                case "Darcula":
+                    UIManager.setLookAndFeel(new FlatDarculaLaf());
+                    break;
                 case "Light":
-                default: UIManager.setLookAndFeel(new FlatLightLaf()); break;
+                default:
+                    UIManager.setLookAndFeel(new FlatLightLaf());
+                    break;
             }
-                        FlatLaf.updateUI();
+            FlatLaf.updateUI();
             if (chatArea != null) {
                 chatArea.updateStyle();
             }
@@ -520,5 +564,4 @@ public class MainFrame extends JFrame implements Runnable {
             log.error("Failed to apply theme", ex);
         }
     }
-
 }

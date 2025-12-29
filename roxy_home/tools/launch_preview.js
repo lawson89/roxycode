@@ -4,11 +4,13 @@ var System = Java.type('java.lang.System');
 var File = Java.type('java.io.File');
 
 // Assuming sandbox.getRoot() returns a Path or File object
-var projectRoot = sandbox.getRoot().toFile();
+var projectRoot = new File(sandbox.getRoot().toString());
 
-var compileProcessBuilder = new ProcessBuilder("mvn", "compile");
+var os = System.getProperty("os.name").toLowerCase();
+var mvn = os.includes("win") ? "mvnw.cmd" : "./mvnw";
+
+var compileProcessBuilder = new ProcessBuilder(mvn, "compile");
 compileProcessBuilder.directory(projectRoot);
-compileProcessBuilder.inheritIO(); // Redirects stdin, stdout, stderr to the current process
 var compileProcess = compileProcessBuilder.start();
 compileProcess.waitFor(); // Wait for compilation to complete
 
@@ -22,10 +24,9 @@ var javaHome = System.getProperty("java.home") + "/bin/java";
 
 var appProcessBuilder = new ProcessBuilder(javaHome, "-cp", classpath, "org.roxycode.Application");
 appProcessBuilder.directory(projectRoot);
-// Optional: If you want to see the application's output, you can inheritIO, but for background, it might be noisy.
-// For now, let's not inheritIO for the app process to keep it in the background.
 var appProcess = appProcessBuilder.start();
 
+var resultPath = "";
 try {
     // 3. Wait for UI to render
     Java.type('java.lang.Thread').sleep(5000);
@@ -44,7 +45,7 @@ try {
     var outputFile = File.createTempFile("roxy_preview_", ".png");
     ImageIO.write(image, "png", outputFile);
 
-    return outputFile.getAbsolutePath();
+    resultPath = outputFile.getAbsolutePath();
 
 } finally {
     // 5. Cleanup
@@ -52,3 +53,4 @@ try {
         appProcess.destroyForcibly();
     }
 }
+resultPath;
