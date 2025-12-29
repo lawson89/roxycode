@@ -1,14 +1,14 @@
 package org.roxycode.core.tools;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
-import io.micronaut.context.ApplicationContext;
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.customizers.SecureASTCustomizer;
 import org.graalvm.polyglot.proxy.ProxyObject;
-import org.roxycode.core.tools.service.FileSystemService;
+import org.roxycode.core.tools.service.*;
 import org.roxycode.core.Sandbox;
 
 import org.graalvm.polyglot.Context;
@@ -26,14 +26,28 @@ public class ToolExecutionService {
     private final ExecutorService executorService;
     private final Sandbox sandbox;
     private final FileSystemService fs;
-    private final ApplicationContext applicationContext;
+    private final GrepService grepService;
+    private final GitService gitService;
+    private final TikaService tikaService;
+    private final JavaAnalysisService javaAnalysisService;
+    private final ObjectMapper objectMapper;
 
-    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, ApplicationContext applicationContext) {
+    public ToolExecutionService(Sandbox sandbox,
+                                FileSystemService fs,
+                                GrepService grepService,
+                                GitService gitService,
+                                TikaService tikaService,
+                                JavaAnalysisService javaAnalysisService,
+                                ObjectMapper objectMapper) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
         this.sandbox = sandbox;
         this.fs = fs;
-        this.applicationContext = applicationContext;
+        this.grepService = grepService;
+        this.gitService = gitService;
+        this.tikaService = tikaService;
+        this.javaAnalysisService = javaAnalysisService;
+        this.objectMapper = objectMapper;
     }
 
     public Future<String> execute(ToolDefinition tool, Map<String, Object> args) {
@@ -63,7 +77,11 @@ public class ToolExecutionService {
         // Inject dependencies
         binding.setVariable("sandbox", sandbox);
         binding.setVariable("fs", fs);
-        binding.setVariable("ctx", applicationContext);
+        binding.setVariable("grep", grepService);
+        binding.setVariable("git", gitService);
+        binding.setVariable("tika", tikaService);
+        binding.setVariable("java", javaAnalysisService);
+        binding.setVariable("json", objectMapper);
         binding.setVariable("args", args);
 
         GroovyShell shell = new GroovyShell(binding, config);
@@ -81,10 +99,14 @@ public class ToolExecutionService {
                 // .allowExperimentalOptions(true)
                 .build()) {
 
-            // 1. Bind your services as before
+            // 1. Bind your services
             context.getBindings("js").putMember("sandbox", this.sandbox);
             context.getBindings("js").putMember("fs", this.fs);
-            context.getBindings("js").putMember("ctx", this.applicationContext);
+            context.getBindings("js").putMember("grep", this.grepService);
+            context.getBindings("js").putMember("git", this.gitService);
+            context.getBindings("js").putMember("tika", this.tikaService);
+            context.getBindings("js").putMember("java", this.javaAnalysisService);
+            context.getBindings("js").putMember("json", this.objectMapper);
 
             // 2. THE FIX: Wrap the Java Map in ProxyObject
             // This makes 'args.pattern' in JS call 'args.get("pattern")' in Java

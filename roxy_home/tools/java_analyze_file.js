@@ -1,14 +1,11 @@
-var JavaAnalysisService = Java.type('org.roxycode.core.service.JavaAnalysisService');
-var ObjectMapper = Java.type('com.fasterxml.jackson.databind.ObjectMapper');
-
 try {
-    var service = ctx.getBean(JavaAnalysisService.class);
-    var mapper = ctx.getBean(ObjectMapper.class);
+    // 'java' is bound to JavaAnalysisService
+    // 'json' is bound to ObjectMapper
     
     var path = sandbox.resolve(args.path);
-    var summary = service.analyzeFile(path);
+    var summary = java.analyzeFile(path);
     
-    mapper.writerWithDefaultPrettyPrinter().writeValueAsString(summary);
+    json.writerWithDefaultPrettyPrinter().writeValueAsString(summary);
 } catch (e) {
     "❌ Error analyzing Java file: " + e.message;
 }

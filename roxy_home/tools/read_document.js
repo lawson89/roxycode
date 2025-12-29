@@ -1,13 +1,8 @@
 var Files = Java.type('java.nio.file.Files');
-var Paths = Java.type('java.nio.file.Paths');
-var TikaService = Java.type('org.roxycode.core.service.TikaService');
 var FileInputStream = Java.type('java.io.FileInputStream');
 
 try {
-    // Assuming sandbox can provide the TikaService instance
-    // This might need adjustment based on how services are actually exposed in GraalJS context
-    var tikaService = sandbox.getTikaService();
-
+    // 'tika' is bound to TikaService in ToolExecutionService
     var path = sandbox.resolve(args.path);
 
     if (!Files.exists(path)) {
@@ -20,7 +15,7 @@ try {
 
     var fileInputStream = new FileInputStream(path.toFile());
     try {
-        var result = tikaService.extractText(fileInputStream);
+        var result = tika.extractText(fileInputStream);
         // The last evaluated expression is returned.
         result;
     } finally {

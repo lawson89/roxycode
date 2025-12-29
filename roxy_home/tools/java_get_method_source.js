@@ -1,9 +1,7 @@
-var JavaAnalysisService = Java.type('org.roxycode.core.service.JavaAnalysisService');
-
 try {
-    var service = ctx.getBean(JavaAnalysisService.class);
+    // 'java' is bound to JavaAnalysisService
     var path = sandbox.resolve(args.path);
-    var source = service.getMethodSource(path, args.className, args.methodName);
+    var source = java.getMethodSource(path, args.className, args.methodName);
     
     if (source.isPresent()) {
         source.get();
