@@ -1,0 +1,9 @@
+description = "Executes arbitrary JavaScript code. Available globals: fs, grep, git, tika, java, xml, toml, buildTool, preview, json, sandbox."
+type = "graaljs"
+source = "file:run_js.js"
+
+[[parameters]]
+name = "script"
+type = "string"
+description = "The JavaScript code to run."
+required = true

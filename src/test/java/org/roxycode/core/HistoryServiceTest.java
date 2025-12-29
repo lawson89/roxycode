@@ -4,6 +4,7 @@ import com.google.genai.types.Content;
 import com.google.genai.types.Part;
 import com.google.genai.types.FunctionResponse;
 import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +15,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class HistoryServiceTest {
 
-    private final HistoryService historyService = new HistoryService();
+    private final SettingsService settingsService = mock(SettingsService.class);
+    private final HistoryService historyService = new HistoryService(settingsService);
 
     @Test
     void testIsSafeStartNode() {

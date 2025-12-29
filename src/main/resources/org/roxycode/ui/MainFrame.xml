@@ -116,6 +116,26 @@
                 </row-panel>
                 
                 <spacer size="16"/>
+                <label text="Memory Compaction Settings" font="h2"/>
+                <spacer size="8"/>
+                <label text="History Threshold (Start Compacting at):"/>
+                <row-panel spacing="8">
+                    <text-field name="historyThresholdField" columns="10"/>
+                </row-panel>
+                
+                <spacer size="8"/>
+                <label text="Compaction Chunk Size (Messages to Summarize):"/>
+                <row-panel spacing="8">
+                    <text-field name="compactionChunkSizeField" columns="10"/>
+                </row-panel>
+
+                <spacer size="8"/>
+                <label text="Max Summary Chunks (Context Segments):"/>
+                <row-panel spacing="8">
+                    <text-field name="maxSummaryChunksField" columns="10"/>
+                </row-panel>
+                
+                <spacer size="16"/>
                 <row-panel>
                     <button name="saveSettingsButton" text="Save Settings"/>
                 </row-panel>

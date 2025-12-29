@@ -2,6 +2,7 @@ package org.roxycode.core;
 
 import com.google.genai.Client;
 import com.google.genai.types.*;
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,18 +15,20 @@ import java.util.List;
 public class HistoryService {
     private static final Logger log = LoggerFactory.getLogger(HistoryService.class);
 
-    // --- Configuration ---
-    // Increased thresholds for Gemini's large context window and tool-heavy tasks
-    private static final int HISTORY_THRESHOLD = 50;
-    private static final int CHUNK_SIZE = 15;
-    private static final int MAX_SUMMARY_CHUNKS = 5;
-
+    private final SettingsService settingsService;
+    
     // Store summaries in a FIFO queue
     private final LinkedList<String> summaryQueue = new LinkedList<>();
 
+    @Inject
+    public HistoryService(SettingsService settingsService) {
+        this.settingsService = settingsService;
+    }
+
     public void compactHistory(Client client, String modelName, List<Content> history, String staticSystemPrompt) {
         // 1. Check if we need to compact
-        if (history.size() <= HISTORY_THRESHOLD + 1) {
+        int historyThreshold = settingsService.getHistoryThreshold();
+        if (history.size() <= historyThreshold + 1) {
             return;
         }
 
@@ -33,7 +36,8 @@ public class HistoryService {
 
         // 2. Identify the slice to compact.
         //    We want to remove roughly CHUNK_SIZE messages.
-        int targetIndex = 1 + CHUNK_SIZE;
+        int chunkSize = settingsService.getCompactionChunkSize();
+        int targetIndex = 1 + chunkSize;
         int splitIndex = findSafeSplitIndex(history, targetIndex);
         boolean isForced = false;
 
@@ -56,14 +60,15 @@ public class HistoryService {
         }
 
         List<Content> messagesToSummarize = new ArrayList<>(history.subList(1, splitIndex));
-        log.info("✂️ Compacting {} messages (Target was {}, Forced={})...", messagesToSummarize.size(), CHUNK_SIZE, isForced);
+        log.info("✂️ Compacting {} messages (Target was {}, Forced={})...", messagesToSummarize.size(), chunkSize, isForced);
 
         // 3. Generate the Summary
         String newSummary = generateSummary(client, modelName, messagesToSummarize);
 
         // 4. Update the Summary Queue
         summaryQueue.add(newSummary);
-        if (summaryQueue.size() > MAX_SUMMARY_CHUNKS) {
+        int maxSummaryChunks = settingsService.getMaxSummaryChunks();
+        if (summaryQueue.size() > maxSummaryChunks) {
             log.info("🗑️ Flushing oldest summary chunk.");
             summaryQueue.removeFirst();
         }

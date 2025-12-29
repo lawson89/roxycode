@@ -148,6 +148,15 @@ public class MainFrame extends JFrame implements Runnable {
     private JTextField maxTurnsField;
 
     @Outlet
+    private JTextField historyThresholdField;
+
+    @Outlet
+    private JTextField compactionChunkSizeField;
+
+    @Outlet
+    private JTextField maxSummaryChunksField;
+
+    @Outlet
     private JButton saveSettingsButton;
 
     @Outlet
@@ -365,6 +374,15 @@ public class MainFrame extends JFrame implements Runnable {
             modelComboBox.addItem("gemini-2.0-flash");
             modelComboBox.setSelectedItem(settingsService.getGeminiModel());
         }
+        if (historyThresholdField != null) {
+            historyThresholdField.setText(String.valueOf(settingsService.getHistoryThreshold()));
+        }
+        if (compactionChunkSizeField != null) {
+            compactionChunkSizeField.setText(String.valueOf(settingsService.getCompactionChunkSize()));
+        }
+        if (maxSummaryChunksField != null) {
+            maxSummaryChunksField.setText(String.valueOf(settingsService.getMaxSummaryChunks()));
+        }
     }
 
     private void onStopChat(ActionEvent e) {
@@ -425,6 +443,42 @@ public class MainFrame extends JFrame implements Runnable {
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(parent, "Invalid number for Max Turns.", "Error", JOptionPane.ERROR_MESSAGE);
                 return;
+            }
+        }
+        if (historyThresholdField != null) {
+            try {
+                String txt = historyThresholdField.getText().trim();
+                if (!txt.isEmpty()) {
+                    int val = Integer.parseInt(txt);
+                    if (val > 0)
+                        settingsService.setHistoryThreshold(val);
+                }
+            } catch (NumberFormatException ex) {
+                // ignore
+            }
+        }
+        if (compactionChunkSizeField != null) {
+            try {
+                String txt = compactionChunkSizeField.getText().trim();
+                if (!txt.isEmpty()) {
+                    int val = Integer.parseInt(txt);
+                    if (val > 0)
+                        settingsService.setCompactionChunkSize(val);
+                }
+            } catch (NumberFormatException ex) {
+                // ignore
+            }
+        }
+        if (maxSummaryChunksField != null) {
+            try {
+                String txt = maxSummaryChunksField.getText().trim();
+                if (!txt.isEmpty()) {
+                    int val = Integer.parseInt(txt);
+                    if (val > 0)
+                        settingsService.setMaxSummaryChunks(val);
+                }
+            } catch (NumberFormatException ex) {
+                // ignore
             }
         }
         if (themeComboBox != null) {

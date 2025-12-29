@@ -30,6 +30,13 @@ public class SettingsService {
     private static final String KEY_GEMINI_MODEL = "geminiModel";
     private static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
+    private static final String KEY_HISTORY_THRESHOLD = "historyThreshold";
+    private static final int DEFAULT_HISTORY_THRESHOLD = 50;
+    private static final String KEY_COMPACTION_CHUNK_SIZE = "compactionChunkSize";
+    private static final int DEFAULT_COMPACTION_CHUNK_SIZE = 15;
+    private static final String KEY_MAX_SUMMARY_CHUNKS = "maxSummaryChunks";
+    private static final int DEFAULT_MAX_SUMMARY_CHUNKS = 5;
+
     private final Preferences preferences;
     private final ObjectMapper objectMapper;
     private Dotenv dotenv;
@@ -137,5 +144,29 @@ public class SettingsService {
 
     public void setGeminiModel(String model) {
         preferences.put(KEY_GEMINI_MODEL, model);
+    }
+
+    public int getHistoryThreshold() {
+        return preferences.getInt(KEY_HISTORY_THRESHOLD, DEFAULT_HISTORY_THRESHOLD);
+    }
+
+    public void setHistoryThreshold(int threshold) {
+        preferences.putInt(KEY_HISTORY_THRESHOLD, threshold);
+    }
+
+    public int getCompactionChunkSize() {
+        return preferences.getInt(KEY_COMPACTION_CHUNK_SIZE, DEFAULT_COMPACTION_CHUNK_SIZE);
+    }
+
+    public void setCompactionChunkSize(int chunkSize) {
+        preferences.putInt(KEY_COMPACTION_CHUNK_SIZE, chunkSize);
+    }
+
+    public int getMaxSummaryChunks() {
+        return preferences.getInt(KEY_MAX_SUMMARY_CHUNKS, DEFAULT_MAX_SUMMARY_CHUNKS);
+    }
+
+    public void setMaxSummaryChunks(int maxChunks) {
+        preferences.putInt(KEY_MAX_SUMMARY_CHUNKS, maxChunks);
     }
 }
