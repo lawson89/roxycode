@@ -11,6 +11,8 @@ import org.xml.sax.SAXException;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -19,6 +21,18 @@ public class TikaService {
 
     public String extractText(InputStream inputStream) throws IOException {
         return extractAll(inputStream).text();
+    }
+
+    public String readDocument(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            throw new IOException("File not found: " + path);
+        }
+        if (Files.isDirectory(path)) {
+            throw new IOException("Path is a directory: " + path);
+        }
+        try (InputStream is = Files.newInputStream(path)) {
+            return extractText(is);
+        }
     }
 
     public ExtractionResult extractAll(InputStream inputStream) throws IOException {

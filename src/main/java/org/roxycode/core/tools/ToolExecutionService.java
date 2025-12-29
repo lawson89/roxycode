@@ -6,6 +6,7 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.graalvm.polyglot.proxy.ProxyObject;
 import org.roxycode.core.tools.service.*;
 import org.roxycode.core.Sandbox;
+import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
@@ -19,6 +20,7 @@ import java.util.concurrent.*;
 public class ToolExecutionService {
 
     private final ExecutorService executorService;
+    private final ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
 
     private final Sandbox sandbox;
 
@@ -38,9 +40,11 @@ public class ToolExecutionService {
 
     private final BuildToolService buildToolService;
 
+    private final PreviewService previewService;
+
     private final ObjectMapper objectMapper;
 
-    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, GrepService grepService, GitService gitService, TikaService tikaService, JavaService javaAnalysisService, XmlService xmlService, TomlService tomlService, BuildToolService buildToolService, ObjectMapper objectMapper) {
+    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, GrepService grepService, GitService gitService, TikaService tikaService, JavaService javaAnalysisService, XmlService xmlService, TomlService tomlService, BuildToolService buildToolService, PreviewService previewService, ObjectMapper objectMapper) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
         this.sandbox = sandbox;
@@ -52,6 +56,7 @@ public class ToolExecutionService {
         this.xmlService = xmlService;
         this.tomlService = tomlService;
         this.buildToolService = buildToolService;
+        this.previewService = previewService;
         this.objectMapper = objectMapper;
     }
 
@@ -66,23 +71,38 @@ public class ToolExecutionService {
     }
 
     private String executeJavaScript(String script, Map<String, Object> args) {
-        try (Context context = Context.newBuilder("js").allowAllAccess(true).option("engine.WarnInterpreterOnly", "false").build()) {
-            // 1. Bind your services
-            context.getBindings("js").putMember("sandbox", this.sandbox);
-            context.getBindings("js").putMember("fs", this.fs);
-            context.getBindings("js").putMember("grep", this.grepService);
-            context.getBindings("js").putMember("git", this.gitService);
-            context.getBindings("js").putMember("tika", this.tikaService);
-            context.getBindings("js").putMember("java", this.javaAnalysisService);
-            context.getBindings("js").putMember("xml", this.xmlService);
-            context.getBindings("js").putMember("toml", this.tomlService);
-            context.getBindings("js").putMember("buildTool", this.buildToolService);
-            context.getBindings("js").putMember("json", this.objectMapper);
-            // 2. Wrap the Java Map in ProxyObject
-            context.getBindings("js").putMember("args", ProxyObject.fromMap(args));
-            // 3. Execute
-            Value result = context.eval(Source.create("js", script));
-            return result != null ? result.toString() : "";
+        try (Context context = Context.newBuilder("js")
+                .allowHostAccess(HostAccess.ALL)
+                .allowHostClassLookup(className -> false)
+                .option("engine.WarnInterpreterOnly", "false")
+                .build()) {
+            
+            // Set a timeout of 60 seconds
+            ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> {
+                context.close(true);
+            }, 60, TimeUnit.SECONDS);
+
+            try {
+                // 1. Bind your services
+                context.getBindings("js").putMember("sandbox", this.sandbox);
+                context.getBindings("js").putMember("fs", this.fs);
+                context.getBindings("js").putMember("grep", this.grepService);
+                context.getBindings("js").putMember("git", this.gitService);
+                context.getBindings("js").putMember("tika", this.tikaService);
+                context.getBindings("js").putMember("java", this.javaAnalysisService);
+                context.getBindings("js").putMember("xml", this.xmlService);
+                context.getBindings("js").putMember("toml", this.tomlService);
+                context.getBindings("js").putMember("buildTool", this.buildToolService);
+                context.getBindings("js").putMember("preview", this.previewService);
+                context.getBindings("js").putMember("json", this.objectMapper);
+                // 2. Wrap the Java Map in ProxyObject
+                context.getBindings("js").putMember("args", ProxyObject.fromMap(args));
+                // 3. Execute
+                Value result = context.eval(Source.create("js", script));
+                return result != null ? result.toString() : "";
+            } finally {
+                timeoutTask.cancel(false);
+            }
         } catch (Exception e) {
             String stackTrace = ExceptionUtils.getStackTrace(e);
             return "Error executing JavaScript: " + e.getMessage() + "\n" + stackTrace;

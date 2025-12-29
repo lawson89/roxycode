@@ -236,7 +236,7 @@ public class GenAIService {
                         }
                         LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
                         if (onStatusUpdate != null) {
-                            onStatusUpdate.accept("```Tool: " + fnName + " | args: " + fixedArgs + "```");
+                            onStatusUpdate.accept("`Tool: " + fnName + " | args: " + fixedArgs + "`");
                         }
                         String toolOutput;
                         try {
