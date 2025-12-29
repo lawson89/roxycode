@@ -73,6 +73,8 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton sendButton;
 
+    private JButton stopButton;
+
     @Outlet
     private JScrollPane chatScrollPane;
 
@@ -240,6 +242,8 @@ public class MainFrame extends JFrame implements Runnable {
     private void initListeners() {
         if (sendButton != null)
             sendButton.addActionListener(this::onSend);
+        if (stopButton != null)
+            stopButton.addActionListener(this::onStopChat);
         // Attachments listeners
         if (attachButton != null)
             attachButton.addActionListener(this::onAttach);
@@ -360,6 +364,11 @@ public class MainFrame extends JFrame implements Runnable {
             modelComboBox.addItem("gemini-2.0-flash");
             modelComboBox.setSelectedItem(settingsService.getGeminiModel());
         }
+    }
+
+    private void onStopChat(ActionEvent e) {
+        genAIService.stopChat();
+        stopButton.setEnabled(false);
     }
 
     private void onAttach(ActionEvent e) {
@@ -501,6 +510,8 @@ public class MainFrame extends JFrame implements Runnable {
             if (!currentAttachments.isEmpty()) {
                 chatArea.appendMarkdown(" *(Attached: " + currentAttachments.stream().map(File::getName).collect(Collectors.joining(", ")) + ")*");
             }
+            sendButton.setEnabled(false);
+            stopButton.setEnabled(true);
             new Thread(() -> {
                 try {
                     String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
@@ -522,6 +533,11 @@ public class MainFrame extends JFrame implements Runnable {
                         } else {
                             chatArea.appendMarkdown("❌ **Error:** " + errorMsg);
                         }
+                    });
+                } finally {
+                    SwingUtilities.invokeLater(() -> {
+                        sendButton.setEnabled(true);
+                        stopButton.setEnabled(false);
                     });
                 }
             }).start();

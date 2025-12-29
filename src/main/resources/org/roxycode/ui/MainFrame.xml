@@ -66,6 +66,7 @@
                         <text-area name="inputField" rows="3"/>
                     </scroll-pane>
                     <button name="sendButton" text="Send"/>
+                    <button name="stopButton" text="Stop" enabled="false"/>
                 </row-panel>
             </column-panel>
 
