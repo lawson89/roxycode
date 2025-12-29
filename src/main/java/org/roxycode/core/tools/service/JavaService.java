@@ -17,7 +17,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Singleton
-public class JavaAnalysisService {
+public class JavaService {
 
     @PostConstruct
     public void init() {

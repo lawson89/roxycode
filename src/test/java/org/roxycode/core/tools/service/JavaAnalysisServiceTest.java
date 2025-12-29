@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class JavaAnalysisServiceTest {
 
     @Inject
-    JavaAnalysisService javaAnalysisService;
+    JavaService javaAnalysisService;
 
     @TempDir
     Path tempDir;
@@ -32,7 +32,7 @@ class JavaAnalysisServiceTest {
             }
             """);
 
-        JavaAnalysisService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path);
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path);
 
         assertNotNull(summary);
         assertEquals(1, summary.classes().size());

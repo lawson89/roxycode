@@ -29,7 +29,8 @@ public class ToolExecutionService {
     private final GrepService grepService;
     private final GitService gitService;
     private final TikaService tikaService;
-    private final JavaAnalysisService javaAnalysisService;
+    private final JavaService javaAnalysisService;
+    private final XmlService xmlService;
     private final ObjectMapper objectMapper;
 
     public ToolExecutionService(Sandbox sandbox,
@@ -37,7 +38,8 @@ public class ToolExecutionService {
                                 GrepService grepService,
                                 GitService gitService,
                                 TikaService tikaService,
-                                JavaAnalysisService javaAnalysisService,
+                                JavaService javaAnalysisService,
+                                XmlService xmlService,
                                 ObjectMapper objectMapper) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
@@ -47,6 +49,7 @@ public class ToolExecutionService {
         this.gitService = gitService;
         this.tikaService = tikaService;
         this.javaAnalysisService = javaAnalysisService;
+        this.xmlService = xmlService;
         this.objectMapper = objectMapper;
     }
 
@@ -81,6 +84,7 @@ public class ToolExecutionService {
         binding.setVariable("git", gitService);
         binding.setVariable("tika", tikaService);
         binding.setVariable("java", javaAnalysisService);
+        binding.setVariable("xml", xmlService);
         binding.setVariable("json", objectMapper);
         binding.setVariable("args", args);
 
@@ -106,6 +110,7 @@ public class ToolExecutionService {
             context.getBindings("js").putMember("git", this.gitService);
             context.getBindings("js").putMember("tika", this.tikaService);
             context.getBindings("js").putMember("java", this.javaAnalysisService);
+            context.getBindings("js").putMember("xml", this.xmlService);
             context.getBindings("js").putMember("json", this.objectMapper);
 
             // 2. THE FIX: Wrap the Java Map in ProxyObject

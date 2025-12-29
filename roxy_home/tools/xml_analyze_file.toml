@@ -1,0 +1,9 @@
+description = "Analyzes an XML file and returns a summary of its structure (elements and XPaths)."
+type = "graaljs"
+source = "file:xml_analyze_file.js"
+
+[[parameters]]
+name = "path"
+type = "string"
+description = "The path to the XML file to analyze."
+required = true
