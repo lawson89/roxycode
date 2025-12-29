@@ -478,7 +478,7 @@ public class MainFrame extends JFrame implements Runnable {
                             chatArea.appendToolLog(status);
                         }
                     }));
-                    SwingUtilities.invokeLater(() -> chatArea.appendMarkdown("**Roxy:** " + response));
+                    SwingUtilities.invokeLater(() -> chatArea.appendRoxyMarkdown(response));
                 } catch (Exception ex) {
                     log.error("Chat error", ex);
                     SwingUtilities.invokeLater(() -> {
