@@ -9,7 +9,6 @@ This plan outlines the steps to replace the current `JTextPane`-based `MarkdownP
 
 - [ ] Does the user approve the addition of `flying-saucer-core`, `flying-saucer-swing`, and `jsoup` dependencies?
 - [ ] Should we support incremental rendering (rendering only the new part) or is re-rendering the whole chat history acceptable for now? (Re-rendering is simpler with `XHTMLPanel`).
- *User approves of the above and approved re-rendering*
 
 ## Proposed Changes
 
