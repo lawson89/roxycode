@@ -11,6 +11,7 @@ import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.kordamp.ikonli.Ikon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -117,30 +118,9 @@ public class MarkdownPane extends JTextPane {
     public void appendToolLog(String markdown) {
         log.info("Rendering tool log: {}", markdown);
 
-        // Generate Icon via Document Image Cache (JEditorPane doesn't reliably support data: URIs)
-        String imgTag = "";
-        try {
-            FontIcon icon = FontIcon.of(MaterialDesignW.WRENCH_OUTLINE, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
-            BufferedImage image = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g2 = image.createGraphics();
-            icon.paintIcon(this, g2, 0, 0);
-            g2.dispose();
-
-            // Generate a unique virtual URL for the icon
-            String imageName = "wrench-" + System.nanoTime() + ".png";
-            URL imageURL = new URL("http://roxycode.local/" + imageName);
-
-            HTMLDocument doc = (HTMLDocument) getDocument();
-            Dictionary cache = (Dictionary) doc.getProperty("imageCache");
-            if (cache == null) {
-                cache = new Hashtable();
-                doc.putProperty("imageCache", cache);
-            }
-            cache.put(imageURL, image);
-
-            imgTag = "<img src=\"" + imageURL + "\" style=\"vertical-align:middle\">&nbsp;";
-        } catch (Exception e) {
-            log.error("Failed to generate icon", e);
+        String imgTag = generateIconTag(MaterialDesignW.WRENCH_OUTLINE, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "wrench");
+        if (!imgTag.isEmpty()) {
+            imgTag += "&nbsp;";
         }
 
         String html = renderer.render(parser.parse("```" + markdown + "```"));
@@ -168,28 +148,9 @@ public class MarkdownPane extends JTextPane {
     public void appendStatus(String markdown) {
         log.info("Rendering status: {}", markdown);
 
-        String imgTag = "";
-        try {
-            FontIcon icon = FontIcon.of(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 22, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
-            BufferedImage image = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g2 = image.createGraphics();
-            icon.paintIcon(this, g2, 0, 0);
-            g2.dispose();
-
-            String imageName = "status-" + System.nanoTime() + ".png";
-            URL imageURL = new URL("http://roxycode.local/" + imageName);
-
-            HTMLDocument doc = (HTMLDocument) getDocument();
-            Dictionary cache = (Dictionary) doc.getProperty("imageCache");
-            if (cache == null) {
-                cache = new Hashtable();
-                doc.putProperty("imageCache", cache);
-            }
-            cache.put(imageURL, image);
-
-            imgTag = "<img src=\"" + imageURL + "\" style=\"vertical-align:middle\">&nbsp;";
-        } catch (Exception e) {
-            log.error("Failed to generate icon", e);
+        String imgTag = generateIconTag(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 22, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "status");
+        if (!imgTag.isEmpty()) {
+            imgTag += "&nbsp;";
         }
 
         String html = renderer.render(parser.parse(markdown));
@@ -212,32 +173,7 @@ public class MarkdownPane extends JTextPane {
     public void appendRoxyMarkdown(String markdown) {
         log.info("Rendering Roxy markdown: {}", markdown);
 
-        String imgTag = "";
-        try {
-            BufferedImage image;
-            int size = 24;
-
-            FontIcon icon = FontIcon.of(MaterialDesignC.CAT, size, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY);
-            image = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g2 = image.createGraphics();
-            icon.paintIcon(this, g2, 0, 0);
-            g2.dispose();
-
-            String imageName = "roxy-" + System.nanoTime() + ".png";
-            URL imageURL = new URL("http://roxycode.local/" + imageName);
-
-            HTMLDocument doc = (HTMLDocument) getDocument();
-            Dictionary cache = (Dictionary) doc.getProperty("imageCache");
-            if (cache == null) {
-                cache = new Hashtable();
-                doc.putProperty("imageCache", cache);
-            }
-            cache.put(imageURL, image);
-
-            imgTag = "<img src=\"" + imageURL + "\" style=\"vertical-align:middle\">";
-        } catch (Exception e) {
-            log.error("Failed to generate Roxy icon", e);
-        }
+        String imgTag = generateIconTag(MaterialDesignC.CAT, 24, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "roxy");
 
         String html = renderer.render(parser.parse(markdown));
         String combinedHtml = "<div>" + imgTag + "</div>" + html;
@@ -252,6 +188,33 @@ public class MarkdownPane extends JTextPane {
 
         } catch (BadLocationException | IOException e) {
             log.error("Failed to append Roxy markdown", e);
+        }
+    }
+
+    private String generateIconTag(Ikon iconCode, int size, Color color, String namePrefix) {
+        try {
+            FontIcon icon = FontIcon.of(iconCode, size, color);
+            BufferedImage image = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = image.createGraphics();
+            icon.paintIcon(this, g2, 0, 0);
+            g2.dispose();
+
+            // Generate a unique virtual URL for the icon
+            String imageName = namePrefix + "-" + System.nanoTime() + ".png";
+            URL imageURL = new URL("http://roxycode.local/" + imageName);
+
+            HTMLDocument doc = (HTMLDocument) getDocument();
+            Dictionary cache = (Dictionary) doc.getProperty("imageCache");
+            if (cache == null) {
+                cache = new Hashtable();
+                doc.putProperty("imageCache", cache);
+            }
+            cache.put(imageURL, image);
+
+            return "<img src=\"" + imageURL + "\" style=\"vertical-align:middle\">";
+        } catch (Exception e) {
+            log.error("Failed to generate icon: " + namePrefix, e);
+            return "";
         }
     }
 }
