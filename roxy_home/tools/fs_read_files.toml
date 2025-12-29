@@ -1,4 +1,4 @@
-description = "Reads the content of multiple files from the project."
+description = "Reads the content of multiple files from the project. !IMPORTANT: Agent should prefer this tool over making multiple calls to fs_read_file."
 type = "graaljs"
 source = "file:fs_read_files.js"
 

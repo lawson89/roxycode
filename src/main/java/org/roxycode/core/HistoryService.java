@@ -15,9 +15,10 @@ public class HistoryService {
     private static final Logger log = LoggerFactory.getLogger(HistoryService.class);
 
     // --- Configuration ---
-    private static final int HISTORY_THRESHOLD = 15;
-    private static final int CHUNK_SIZE = 6;
-    private static final int MAX_SUMMARY_CHUNKS = 4;
+    // Increased thresholds for Gemini's large context window and tool-heavy tasks
+    private static final int HISTORY_THRESHOLD = 50;
+    private static final int CHUNK_SIZE = 15;
+    private static final int MAX_SUMMARY_CHUNKS = 5;
 
     // Store summaries in a FIFO queue
     private final LinkedList<String> summaryQueue = new LinkedList<>();
@@ -28,23 +29,34 @@ public class HistoryService {
             return;
         }
 
-        log.info("🧹 History limit reached. Calculating safe compaction slice...");
+        log.info("🧹 History limit reached ({} messages). Calculating safe compaction slice...", history.size());
 
-        // 2. Identify the SAFE slice to compact.
+        // 2. Identify the slice to compact.
         //    We want to remove roughly CHUNK_SIZE messages.
-        //    But we must ensure the *next* message (which becomes the new start) 
-        //    is a valid "User Start" node.
         int targetIndex = 1 + CHUNK_SIZE;
-        int safeSplitIndex = findSafeSplitIndex(history, targetIndex);
+        int splitIndex = findSafeSplitIndex(history, targetIndex);
+        boolean isForced = false;
 
-        // Safety check: if we couldn't find a safe split point, abort to avoid corruption
-        if (safeSplitIndex == -1 || safeSplitIndex >= history.size()) {
-            log.warn("⚠️ Could not find a safe split point. Skipping compaction.");
+        // Safety check: if we couldn't find a safe split point, try a forced one
+        if (splitIndex == -1) {
+            log.info("🔍 No safe split point found. Attempting forced split point...");
+            splitIndex = findForcedSplitIndex(history, targetIndex);
+            isForced = true;
+        }
+
+        if (splitIndex == -1 || splitIndex >= history.size()) {
+            log.warn("⚠️ Could not find any split point (safe or forced) among {} messages. " +
+                     "History likely consists of an ongoing tool-call sequence. Skipping compaction.", history.size());
             return;
         }
 
-        List<Content> messagesToSummarize = new ArrayList<>(history.subList(1, safeSplitIndex));
-        System.out.printf("✂️ Compacting %d messages (Target was %d)...\n", messagesToSummarize.size(), CHUNK_SIZE);
+        if (splitIndex <= 1) {
+            log.info("ℹ️ Split point is at the beginning. Nothing to compact yet.");
+            return;
+        }
+
+        List<Content> messagesToSummarize = new ArrayList<>(history.subList(1, splitIndex));
+        log.info("✂️ Compacting {} messages (Target was {}, Forced={})...", messagesToSummarize.size(), CHUNK_SIZE, isForced);
 
         // 3. Generate the Summary
         String newSummary = generateSummary(client, modelName, messagesToSummarize);
@@ -65,25 +77,81 @@ public class HistoryService {
 
         history.set(0, newSystemMsg);
 
-        // 6. Remove the compacted messages safely
-        history.subList(1, safeSplitIndex).clear();
+        // 6. Remove the compacted messages and handle forced split
+        history.subList(1, splitIndex).clear();
+
+        if (isForced) {
+            // Insert a synthetic message to bridge the gap
+            String syntheticText = "Continuing from previous context. Summary of progress so far:\n" + newSummary +
+                                   "\n\nPlease proceed with the task.";
+            Content syntheticMsg = Content.builder()
+                    .role("user")
+                    .parts(List.of(Part.builder().text(syntheticText).build()))
+                    .build();
+            history.add(1, syntheticMsg);
+            log.info("➕ Inserted synthetic continuation message.");
+        }
 
         log.info("✅ Compaction complete. History size is now: {}", history.size());
     }
 
     /**
-     * Scans forward from the target index to find a message that serves as a valid
-     * "Start Node" for the remaining history.
+     * Finds a safe message index to start the new history.
+     * A safe index must point to a "pure" user message (not a tool response).
      */
     private int findSafeSplitIndex(List<Content> history, int targetIndex) {
-        // Start looking at the target. If it's not safe, keep grabbing more messages
-        // until we find a safe place to stop cutting.
-        for (int i = targetIndex; i < history.size(); i++) {
+        // 1. First, try looking forward from targetIndex to find a clean break.
+        // We stop before the last few messages to ensure the model keeps some recent context.
+        int lookAheadLimit = Math.max(targetIndex, history.size() - 5);
+        for (int i = targetIndex; i < lookAheadLimit; i++) {
             if (isSafeStartNode(history.get(i))) {
                 return i;
             }
         }
-        return -1; // No safe split point found
+
+        // 2. If no clean break is found forward, look backward from targetIndex.
+        // This is useful if the current tool chain started just before our target.
+        for (int i = targetIndex - 1; i >= 1; i--) {
+            if (isSafeStartNode(history.get(i))) {
+                return i;
+            }
+        }
+
+        // 3. If we still haven't found a pure user message, we might be in a very long tool chain.
+        // For now, we return -1 to allow the caller to decide if a forced split is needed.
+        return -1;
+    }
+
+    /**
+     * Finds a "forced" split index when no safe split point exists.
+     * It prefers a 'model' message because a 'model' message can follow a 'user' message.
+     */
+    private int findForcedSplitIndex(List<Content> history, int targetIndex) {
+        // Look forward first
+        int lookAheadLimit = Math.min(history.size() - 1, targetIndex + 5);
+        for (int i = targetIndex; i < lookAheadLimit; i++) {
+            if (isModelNode(history.get(i))) {
+                return i;
+            }
+        }
+
+        // Look backward
+        for (int i = targetIndex - 1; i >= 1; i--) {
+            if (isModelNode(history.get(i))) {
+                return i;
+            }
+        }
+
+        // Final fallback: just use targetIndex if it's not 0 and less than size
+        if (targetIndex >= 1 && targetIndex < history.size()) {
+            return targetIndex;
+        }
+
+        return -1;
+    }
+
+    private boolean isModelNode(Content content) {
+        return "model".equals(content.role().orElse("?"));
     }
 
     /**
