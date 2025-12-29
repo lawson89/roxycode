@@ -61,7 +61,18 @@ public class GenAIService {
             if (key == null || key.isEmpty()) {
                 throw new IllegalStateException("Gemini API Key not found in Settings.");
             }
-            client = Client.builder().apiKey(key).build();
+
+            // Updated to handle 429 Rate Limits automatically
+            client = Client.builder()
+                    .apiKey(key)
+                    .httpOptions(HttpOptions.builder()
+                            .retryOptions(HttpRetryOptions.builder()
+                                    .attempts(5) // Retry up to 5 times
+                                    .httpStatusCodes(429, 503) // Trigger on Rate Limit (429) or Service Unavailable (503)
+                                    .build())
+                            .timeout(60_000) // Increase timeout to 60s to accommodate backoff delays
+                            .build())
+                    .build();
         }
         return client;
     }
@@ -186,7 +197,7 @@ public class GenAIService {
                 configBuilder.tools(List.of(toolConfig));
             }
 
-                        GenerateContentResponse response = getClient().models.generateContent(
+            GenerateContentResponse response = getClient().models.generateContent(
                     settingsService.getGeminiModel(),
                     history,
                     configBuilder.build()
@@ -236,7 +247,7 @@ public class GenAIService {
                     if (onStatusUpdate != null) {
                         onStatusUpdate.accept("Tool: " + fnName + " | args: " + fixedArgs);
                     }
-                    
+
                     String toolOutput;
                     try {
                         ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow(() -> new IllegalStateException("Tool not found: " + fnName));
