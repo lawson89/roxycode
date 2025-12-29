@@ -15,7 +15,7 @@
     </menu-bar>
 
     <!-- Header -->
-    <row-panel spacing="8" padding="8" opaque="true" alignToBaseline="true">
+    <row-panel spacing="8" padding="8" opaque="true" alignToBaseline="false">
         <label text="" name="icon"/>
         <label text="RoxyCode AI" styleClass="h3"/>
         <spacer size="16"/>
@@ -23,6 +23,9 @@
         <label text="[PROJECT_NAME]" name="currentProjectLabel"/>
         <label text="Branch:"/>
         <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
+        <spacer size="16"/>
+        
+        <label name="currentModelLabel" text="[MODEL]" styleClass="monospaced"/>
         <spacer weight="1"/>
         <button name="rescanButton" text="Rescan"/>
     </row-panel>

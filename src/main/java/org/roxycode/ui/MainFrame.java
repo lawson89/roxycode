@@ -6,6 +6,7 @@ import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.tools.service.GitService;
@@ -21,6 +22,8 @@ import javax.swing.tree.DefaultTreeModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.io.InterruptedIOException;
+import java.net.SocketTimeoutException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -54,6 +57,9 @@ public class MainFrame extends JFrame implements Runnable {
     // Outlets (Mapped from XML IDs)
     @Outlet
     private JLabel gitBranchLabel;
+
+    @Outlet
+    private JLabel currentModelLabel;
 
     @Outlet
     private JLabel projectNameLabel;
@@ -184,6 +190,12 @@ public class MainFrame extends JFrame implements Runnable {
             FontIcon alarmIcon = FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 64);
             if (icon != null)
                 icon.setIcon(alarmIcon);
+        }
+        // Set Robot Icon for Model
+        if (currentModelLabel != null) {
+            currentModelLabel.setIcon(FontIcon.of(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 16));
+            currentModelLabel.setIconTextGap(6);
+            currentModelLabel.setText(settingsService.getGeminiModel());
         }
         // Manual Viewport injection
         if (chatScrollPane != null) {
@@ -416,6 +428,9 @@ public class MainFrame extends JFrame implements Runnable {
             String selectedModel = (String) modelComboBox.getSelectedItem();
             if (selectedModel != null) {
                 settingsService.setGeminiModel(selectedModel);
+                if (currentModelLabel != null) {
+                    currentModelLabel.setText(selectedModel);
+                }
             }
         }
         JOptionPane.showMessageDialog(parent, "Settings saved.", "Settings", JOptionPane.INFORMATION_MESSAGE);
@@ -454,6 +469,23 @@ public class MainFrame extends JFrame implements Runnable {
         }).start();
     }
 
+    private boolean isTimeout(Throwable t) {
+        while (t != null) {
+            if (t instanceof InterruptedIOException && t.getMessage() != null && t.getMessage().toLowerCase().contains("timeout")) {
+                return true;
+            }
+            if (t instanceof SocketTimeoutException) {
+                return true;
+            }
+            // Also check for common timeout messages if the exception type isn't enough
+            if (t.getMessage() != null && t.getMessage().toLowerCase().contains("timeout")) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
+    }
+
     private void onSend(ActionEvent e) {
         String prompt = inputField.getText().trim();
         if (prompt.isEmpty())
@@ -483,8 +515,10 @@ public class MainFrame extends JFrame implements Runnable {
                     log.error("Chat error", ex);
                     SwingUtilities.invokeLater(() -> {
                         String errorMsg = ex.getMessage();
-                        if (errorMsg != null && errorMsg.contains("Quota exceeded")) {
-                            chatArea.appendMarkdown("⚠️ **API Quota Exceeded**n" + "You have hit the rate limit for the Gemini API. " + "Please wait a few moments before trying again.n" + "> " + errorMsg);
+                        if (isTimeout(ex)) {
+                            chatArea.appendMarkdown("⏱️ **Request Timeout**\n" + "The request to the Gemini API timed out. This could be due to a slow internet connection or the model taking too long to respond.\n" + "> " + errorMsg);
+                        } else if (errorMsg != null && errorMsg.contains("Quota exceeded")) {
+                            chatArea.appendMarkdown("⚠️ **API Quota Exceeded**\n" + "You have hit the rate limit for the Gemini API. " + "Please wait a few moments before trying again.\n" + "> " + errorMsg);
                         } else {
                             chatArea.appendMarkdown("❌ **Error:** " + errorMsg);
                         }
