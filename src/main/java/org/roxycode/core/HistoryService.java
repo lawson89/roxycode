@@ -69,7 +69,6 @@ public class HistoryService {
         history.set(0, newSystemMsg);
         // 6. Remove the compacted messages
         history.subList(1, splitIndex).clear();
-        
         // 7. Handle consecutive User messages to maintain role alternation
         if (isForced) {
             // Insert a synthetic message to bridge the gap
@@ -78,15 +77,13 @@ public class HistoryService {
             history.add(1, syntheticMsg);
             log.info("➕ Inserted synthetic continuation message.");
         }
-
         // Merge consecutive User messages at the beginning if they exist
-        if (history.size() > 1 && isUserNode(history.get(0)) && isUserNode(history.get(1))) {
+        while (history.size() > 1 && isUserNode(history.get(0)) && isUserNode(history.get(1))) {
             log.info("Merging consecutive User messages at indices 0 and 1.");
             Content merged = mergeUserMessages(history.get(0), history.get(1));
             history.set(0, merged);
             history.remove(1);
         }
-        
         log.info("✅ Compaction complete. History size is now: {}", history.size());
     }
 
@@ -161,8 +158,22 @@ public class HistoryService {
             return "[No messages to summarize]";
         }
         List<Content> promptPayload = new ArrayList<>();
-        promptPayload.add(Content.builder().role("user").parts(List.of(Part.builder().text("Summarize the following conversation snippet concisely. Capture key decisions, user intents, and tool outputs. Ignore polite filler. Return ONLY the summary text.").build())).build());
-        promptPayload.addAll(messages);
+        String summaryPromptText = "Summarize the following conversation snippet concisely. Capture key decisions, user intents, and tool outputs. Ignore polite filler. Return ONLY the summary text.";
+        if (isUserNode(messages.get(0))) {
+            // Merge summary prompt with the first user message to avoid User-User sequence
+            Content firstMsg = messages.get(0);
+            List<Part> newParts = new ArrayList<>();
+            newParts.add(Part.builder().text(summaryPromptText + "\n\n--- CONVERSATION START ---\n").build());
+            newParts.addAll(firstMsg.parts().orElse(List.of()));
+            promptPayload.add(Content.builder().role("user").parts(newParts).build());
+            if (messages.size() > 1) {
+                promptPayload.addAll(messages.subList(1, messages.size()));
+            }
+        } else {
+            // First message is model (or other), so we can safely prepend a User message
+            promptPayload.add(Content.builder().role("user").parts(List.of(Part.builder().text(summaryPromptText).build())).build());
+            promptPayload.addAll(messages);
+        }
         try {
             GenerateContentResponse response = client.models.generateContent(modelName, promptPayload, null);
             return response.text();
