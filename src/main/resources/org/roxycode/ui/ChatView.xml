@@ -17,4 +17,10 @@
         <button name="sendButton" text="Send"/>
         <button name="stopButton" text="Stop" enabled="false"/>
     </row-panel>
+     <row-panel spacing="16" padding="4,12,4,12" opaque="true">
+        <spacer weight="1"/>
+        <label name="msgCountLabel" text="0 Messages" foreground="#888888"/>
+        <label name="inTokenLabel" text="0 In" foreground="#888888"/>
+        <label name="outTokenLabel" text="0 Out" foreground="#888888"/>
+    </row-panel>
 </column-panel>

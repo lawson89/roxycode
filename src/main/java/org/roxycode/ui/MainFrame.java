@@ -5,7 +5,9 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignM;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
@@ -130,6 +132,15 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton clearAttachmentsButton;
 
+    @Outlet
+    private JLabel msgCountLabel;
+
+    @Outlet
+    private JLabel inTokenLabel;
+
+    @Outlet
+    private JLabel outTokenLabel;
+
     // -- VIEW: FILES --
     @Outlet
     private JComponent viewFiles;
@@ -243,6 +254,18 @@ public class MainFrame extends JFrame implements Runnable {
             currentModelLabel.setIcon(FontIcon.of(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 16));
             currentModelLabel.setIconTextGap(6);
             currentModelLabel.setText(settingsService.getGeminiModel());
+        }
+        if (msgCountLabel != null) {
+            msgCountLabel.setIcon(FontIcon.of(MaterialDesignM.MESSAGE_TEXT_OUTLINE, 14));
+            msgCountLabel.setIconTextGap(4);
+        }
+        if (inTokenLabel != null) {
+            inTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_DOWN_BOLD_OUTLINE, 14));
+            inTokenLabel.setIconTextGap(4);
+        }
+        if (outTokenLabel != null) {
+            outTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_UP_BOLD_OUTLINE, 14));
+            outTokenLabel.setIconTextGap(4);
         }
     }
 
@@ -359,6 +382,21 @@ public class MainFrame extends JFrame implements Runnable {
         html.append("<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>").append(String.format("$%.4f", usageService.getEstimatedCost())).append("</td></tr>");
         html.append("</table></html>");
         usageHtmlLabel.setText(html.toString());
+    }
+
+    private void updateChatStats() {
+        int msgCount = genAIService.getHistory().size();
+        int in = genAIService.getInTokens();
+        int out = genAIService.getOutTokens();
+        if (msgCountLabel != null) {
+            msgCountLabel.setText(String.format("%d Messages", msgCount));
+        }
+        if (inTokenLabel != null) {
+            inTokenLabel.setText(String.format("%d In", in));
+        }
+        if (outTokenLabel != null) {
+            outTokenLabel.setText(String.format("%d Out", out));
+        }
     }
 
     private void initSettings() {
@@ -529,8 +567,12 @@ public class MainFrame extends JFrame implements Runnable {
                             chatArea.appendStatus(status);
                         else
                             chatArea.appendToolLog(status);
+                        updateChatStats();
                     }));
-                    SwingUtilities.invokeLater(() -> chatArea.appendRoxyMarkdown(response));
+                    SwingUtilities.invokeLater(() -> {
+                        chatArea.appendRoxyMarkdown(response);
+                        updateChatStats();
+                    });
                 } catch (Exception ex) {
                     log.error("Chat error", ex);
                     SwingUtilities.invokeLater(() -> {
@@ -540,7 +582,10 @@ public class MainFrame extends JFrame implements Runnable {
                             chatArea.appendMarkdown("❌ **Error:** " + ex.getMessage());
                     });
                 } finally {
-                    SwingUtilities.invokeLater(() -> setInputEnabled(true));
+                    SwingUtilities.invokeLater(() -> {
+                        setInputEnabled(true);
+                        updateChatStats();
+                    });
                 }
             }).start();
         }

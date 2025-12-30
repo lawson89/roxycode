@@ -134,6 +134,18 @@ public class GenAIService {
 
     private int outTokens = 0;
 
+    public int getInTokens() {
+        return inTokens;
+    }
+
+    public int getOutTokens() {
+        return outTokens;
+    }
+
+    public List<Content> getHistory() {
+        return Collections.unmodifiableList(history);
+    }
+
     private final AtomicBoolean isChatting = new AtomicBoolean(false);
 
     private volatile boolean stopRequested = false;
@@ -186,7 +198,7 @@ public class GenAIService {
                 }
                 LOG.info("Turn {}: Sending message to model...", turns);
                 if (onStatusUpdate != null) {
-                    onStatusUpdate.accept(String.format("Thinking (%d/%d)... <small style='margin-left: 10px;'>messages: %d | in tokens: %d | out tokens: %d</small>", turns, maxTurns, history.size(), inTokens, outTokens));
+                    onStatusUpdate.accept(String.format("Thinking (%d/%d)...", turns, maxTurns));
                 }
                 // Use a fast/cheap model for summarization
                 historyService.compactHistory(client, "gemini-2.0-flash", history, systemPrompt);
