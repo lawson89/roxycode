@@ -38,18 +38,24 @@ public class MainFrame extends JFrame implements Runnable {
 
     // Dependencies
     private final GitService gitService;
+
     private final GenAIService genAIService;
+
     private final SettingsService settingsService;
+
     private final UsageService usageService;
+
     private final RoxyProjectService roxyProjectService;
+
     private final Sandbox sandbox;
 
     private Path currentProjectRoot;
+
     private final List<File> attachedFiles = new ArrayList<>();
+
     private final MarkdownPane chatArea = new MarkdownPane();
 
     // --- OUTLETS ---
-
     // Container for Views (New Outlet)
     @Outlet
     private JComponent mainContentStack;
@@ -57,86 +63,115 @@ public class MainFrame extends JFrame implements Runnable {
     // Header & Shell Outlets
     @Outlet
     private JLabel gitBranchLabel;
+
     @Outlet
     private JLabel currentModelLabel;
+
     @Outlet
     private JLabel projectNameLabel;
+
     @Outlet
     private JLabel currentProjectLabel;
+
     @Outlet
     private JButton rescanButton;
+
     @Outlet
     private JLabel icon;
 
     // Navigation Outlets
     @Outlet
     private JButton navChatButton;
+
     @Outlet
     private JButton navFilesButton;
+
     @Outlet
     private JButton navUsageButton;
+
     @Outlet
     private JButton navSettingsButton;
 
     // Menu Outlets
     @Outlet
     private JMenuItem settingsMenuItem;
+
     @Outlet
     private JMenuItem exitMenuItem;
+
     @Outlet
     private JMenuItem aboutMenuItem;
+
     @Outlet
     private JMenuItem openFolderMenuItem;
 
     // -- VIEW: CHAT --
     @Outlet
     private JComponent viewChat;
+
     @Outlet
     private JTextArea inputField;
+
     @Outlet
     private JButton sendButton;
+
     @Outlet
     private JButton stopButton;
+
     @Outlet
     private JScrollPane chatScrollPane;
+
     @Outlet
     private JButton attachButton;
+
     @Outlet
     private JLabel attachmentsLabel;
+
     @Outlet
     private JButton clearAttachmentsButton;
 
     // -- VIEW: FILES --
     @Outlet
     private JComponent viewFiles;
+
     @Outlet
     private JTree fileTree;
 
     // -- VIEW: USAGE --
     @Outlet
     private JComponent viewUsage;
+
     @Outlet
     private JLabel usageHtmlLabel;
+
     @Outlet
     private JButton resetUsageButton;
 
     // -- VIEW: SETTINGS --
     @Outlet
     private JComponent viewSettings;
+
     @Outlet
     private JPasswordField apiKeyField;
+
     @Outlet
     private JTextField maxTurnsField;
+
     @Outlet
     private JTextField historyThresholdField;
+
     @Outlet
     private JTextField compactionChunkSizeField;
+
     @Outlet
     private JTextField maxSummaryChunksField;
+
     @Outlet
     private JButton saveSettingsButton;
+
     @Outlet
     private JComboBox<String> themeComboBox;
+
     @Outlet
     private JComboBox<String> modelComboBox;
 
@@ -149,16 +184,14 @@ public class MainFrame extends JFrame implements Runnable {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         setTitle("RoxyCode");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     }
 
     @Override
     public void run() {
         applyTheme(settingsService.getTheme());
-
         // 1. Load the Main Shell (Menu, Header, Nav, Empty Stack)
         setContentPane(UILoader.load(this, "MainFrame.xml"));
-
         // 2. Load individual Views and add them to the stack
         // Passing 'this' ensures the @Outlet fields in MainFrame are populated
         if (mainContentStack != null) {
@@ -167,15 +200,12 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add((JComponent) UILoader.load(this, "UsageView.xml"));
             mainContentStack.add((JComponent) UILoader.load(this, "SettingsView.xml"));
         }
-
         // 3. Initialize UI Components
         initIcons();
-
         // Manual Viewport injection for Chat
         if (chatScrollPane != null) {
             chatScrollPane.setViewportView(chatArea);
         }
-
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
         sandbox.setRoot(currentProjectRoot.toString());
@@ -184,14 +214,11 @@ public class MainFrame extends JFrame implements Runnable {
         initListeners();
         initSettings();
         populateFileTree();
-
         // Startup Scan
         performRescan();
         updateProjectLabel();
-
         // Set initial view
         showView("CHAT");
-
         setSize(1200, 800);
         setLocationRelativeTo(null);
         setVisible(true);
@@ -209,7 +236,8 @@ public class MainFrame extends JFrame implements Runnable {
             }
         } else {
             FontIcon alarmIcon = FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 64);
-            if (icon != null) icon.setIcon(alarmIcon);
+            if (icon != null)
+                icon.setIcon(alarmIcon);
         }
         if (currentModelLabel != null) {
             currentModelLabel.setIcon(FontIcon.of(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 16));
@@ -235,54 +263,93 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void initListeners() {
-        if (sendButton != null) sendButton.addActionListener(this::onSend);
-        if (stopButton != null) stopButton.addActionListener(this::onStopChat);
-        if (attachButton != null) attachButton.addActionListener(this::onAttach);
-        if (clearAttachmentsButton != null) clearAttachmentsButton.addActionListener(this::onClearAttachments);
+        addWindowListener(new java.awt.event.WindowAdapter() {
 
-        if (navChatButton != null) navChatButton.addActionListener(e -> showView("CHAT"));
-        if (navFilesButton != null) navFilesButton.addActionListener(e -> showView("FILES"));
-        if (navUsageButton != null) navUsageButton.addActionListener(e -> showView("USAGE"));
-        if (navSettingsButton != null) navSettingsButton.addActionListener(e -> showView("SETTINGS"));
-
-        if (resetUsageButton != null) resetUsageButton.addActionListener(e -> {
-            usageService.reset();
-            updateUsageView();
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                confirmExit();
+            }
         });
-
+        if (sendButton != null)
+            sendButton.addActionListener(this::onSend);
+        if (stopButton != null)
+            stopButton.addActionListener(this::onStopChat);
+        if (attachButton != null)
+            attachButton.addActionListener(this::onAttach);
+        if (clearAttachmentsButton != null)
+            clearAttachmentsButton.addActionListener(this::onClearAttachments);
+        if (navChatButton != null)
+            navChatButton.addActionListener(e -> showView("CHAT"));
+        if (navFilesButton != null)
+            navFilesButton.addActionListener(e -> showView("FILES"));
+        if (navUsageButton != null)
+            navUsageButton.addActionListener(e -> showView("USAGE"));
+        if (navSettingsButton != null)
+            navSettingsButton.addActionListener(e -> showView("SETTINGS"));
+        if (resetUsageButton != null)
+            resetUsageButton.addActionListener(e -> {
+                usageService.reset();
+                updateUsageView();
+            });
         if (inputField != null) {
             inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
             inputField.getActionMap().put("send-message", new AbstractAction() {
+
                 @Override
-                public void actionPerformed(ActionEvent e) { onSend(e); }
+                public void actionPerformed(ActionEvent e) {
+                    onSend(e);
+                }
             });
             inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
         }
-
-        if (rescanButton != null) rescanButton.addActionListener(e -> performRescan());
-        if (settingsMenuItem != null) settingsMenuItem.addActionListener(this::onSettings);
-        if (exitMenuItem != null) exitMenuItem.addActionListener(e -> System.exit(0));
-        if (aboutMenuItem != null) aboutMenuItem.addActionListener(this::onAbout);
-        if (openFolderMenuItem != null) openFolderMenuItem.addActionListener(this::onOpenFolder);
-        if (saveSettingsButton != null) saveSettingsButton.addActionListener(this::onSaveSettings);
+        if (rescanButton != null)
+            rescanButton.addActionListener(e -> performRescan());
+        if (settingsMenuItem != null)
+            settingsMenuItem.addActionListener(this::onSettings);
+        if (exitMenuItem != null)
+            exitMenuItem.addActionListener(e -> confirmExit());
+        if (aboutMenuItem != null)
+            aboutMenuItem.addActionListener(this::onAbout);
+        if (openFolderMenuItem != null)
+            openFolderMenuItem.addActionListener(this::onOpenFolder);
+        if (saveSettingsButton != null)
+            saveSettingsButton.addActionListener(this::onSaveSettings);
     }
 
     private void showView(String viewName) {
-        if (viewChat != null) viewChat.setVisible(false);
-        if (viewFiles != null) viewFiles.setVisible(false);
-        if (viewUsage != null) viewUsage.setVisible(false);
-        if (viewSettings != null) viewSettings.setVisible(false);
-
+        if (viewChat != null)
+            viewChat.setVisible(false);
+        if (viewFiles != null)
+            viewFiles.setVisible(false);
+        if (viewUsage != null)
+            viewUsage.setVisible(false);
+        if (viewSettings != null)
+            viewSettings.setVisible(false);
         switch(viewName) {
-            case "CHAT": if (viewChat != null) viewChat.setVisible(true); break;
-            case "FILES": if (viewFiles != null) viewFiles.setVisible(true); break;
-            case "USAGE": if (viewUsage != null) { updateUsageView(); viewUsage.setVisible(true); } break;
-            case "SETTINGS": if (viewSettings != null) viewSettings.setVisible(true); break;
+            case "CHAT":
+                if (viewChat != null)
+                    viewChat.setVisible(true);
+                break;
+            case "FILES":
+                if (viewFiles != null)
+                    viewFiles.setVisible(true);
+                break;
+            case "USAGE":
+                if (viewUsage != null) {
+                    updateUsageView();
+                    viewUsage.setVisible(true);
+                }
+                break;
+            case "SETTINGS":
+                if (viewSettings != null)
+                    viewSettings.setVisible(true);
+                break;
         }
     }
 
     private void updateUsageView() {
-        if (usageHtmlLabel == null) return;
+        if (usageHtmlLabel == null)
+            return;
         StringBuilder html = new StringBuilder();
         html.append("<html><table border='0' cellspacing='0' cellpadding='8'>");
         html.append("<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>").append(usageService.getApiCalls()).append("</td></tr>");
@@ -295,8 +362,10 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void initSettings() {
-        if (apiKeyField != null) apiKeyField.setText(settingsService.getGeminiApiKey());
-        if (maxTurnsField != null) maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
+        if (apiKeyField != null)
+            apiKeyField.setText(settingsService.getGeminiApiKey());
+        if (maxTurnsField != null)
+            maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
         if (themeComboBox != null) {
             themeComboBox.removeAllItems();
             themeComboBox.addItem("Light");
@@ -314,9 +383,12 @@ public class MainFrame extends JFrame implements Runnable {
             modelComboBox.addItem("gemini-2.0-flash");
             modelComboBox.setSelectedItem(settingsService.getGeminiModel());
         }
-        if (historyThresholdField != null) historyThresholdField.setText(String.valueOf(settingsService.getHistoryThreshold()));
-        if (compactionChunkSizeField != null) compactionChunkSizeField.setText(String.valueOf(settingsService.getCompactionChunkSize()));
-        if (maxSummaryChunksField != null) maxSummaryChunksField.setText(String.valueOf(settingsService.getMaxSummaryChunks()));
+        if (historyThresholdField != null)
+            historyThresholdField.setText(String.valueOf(settingsService.getHistoryThreshold()));
+        if (compactionChunkSizeField != null)
+            compactionChunkSizeField.setText(String.valueOf(settingsService.getCompactionChunkSize()));
+        if (maxSummaryChunksField != null)
+            maxSummaryChunksField.setText(String.valueOf(settingsService.getMaxSummaryChunks()));
     }
 
     private void onStopChat(ActionEvent e) {
@@ -331,7 +403,8 @@ public class MainFrame extends JFrame implements Runnable {
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             for (File f : fileChooser.getSelectedFiles()) {
-                if (!attachedFiles.contains(f)) attachedFiles.add(f);
+                if (!attachedFiles.contains(f))
+                    attachedFiles.add(f);
             }
             updateAttachmentsLabel();
         }
@@ -343,18 +416,26 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void updateAttachmentsLabel() {
-        if (attachmentsLabel == null) return;
-        if (attachedFiles.isEmpty()) attachmentsLabel.setText("None");
-        else attachmentsLabel.setText(attachedFiles.stream().map(File::getName).collect(Collectors.joining(", ")));
+        if (attachmentsLabel == null)
+            return;
+        if (attachedFiles.isEmpty())
+            attachmentsLabel.setText("None");
+        else
+            attachmentsLabel.setText(attachedFiles.stream().map(File::getName).collect(Collectors.joining(", ")));
     }
 
     private void onSaveSettings(ActionEvent e) {
-        if (apiKeyField != null) settingsService.setGeminiApiKey(new String(apiKeyField.getPassword()).trim());
+        if (apiKeyField != null)
+            settingsService.setGeminiApiKey(new String(apiKeyField.getPassword()).trim());
         try {
-            if (maxTurnsField != null) settingsService.setMaxTurns(Integer.parseInt(maxTurnsField.getText().trim()));
-            if (historyThresholdField != null) settingsService.setHistoryThreshold(Integer.parseInt(historyThresholdField.getText().trim()));
-            if (compactionChunkSizeField != null) settingsService.setCompactionChunkSize(Integer.parseInt(compactionChunkSizeField.getText().trim()));
-            if (maxSummaryChunksField != null) settingsService.setMaxSummaryChunks(Integer.parseInt(maxSummaryChunksField.getText().trim()));
+            if (maxTurnsField != null)
+                settingsService.setMaxTurns(Integer.parseInt(maxTurnsField.getText().trim()));
+            if (historyThresholdField != null)
+                settingsService.setHistoryThreshold(Integer.parseInt(historyThresholdField.getText().trim()));
+            if (compactionChunkSizeField != null)
+                settingsService.setCompactionChunkSize(Integer.parseInt(compactionChunkSizeField.getText().trim()));
+            if (maxSummaryChunksField != null)
+                settingsService.setMaxSummaryChunks(Integer.parseInt(maxSummaryChunksField.getText().trim()));
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "Please enter valid numbers.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
@@ -367,7 +448,8 @@ public class MainFrame extends JFrame implements Runnable {
         if (modelComboBox != null) {
             String model = (String) modelComboBox.getSelectedItem();
             settingsService.setGeminiModel(model);
-            if (currentModelLabel != null) currentModelLabel.setText(model);
+            if (currentModelLabel != null)
+                currentModelLabel.setText(model);
         }
         JOptionPane.showMessageDialog(this, "Settings saved.", "Settings", JOptionPane.INFORMATION_MESSAGE);
     }
@@ -384,7 +466,8 @@ public class MainFrame extends JFrame implements Runnable {
             initGitInfo();
             populateFileTree();
             performRescan();
-            if (chatArea != null) chatArea.appendMarkdown("*System: Switched project to " + currentProjectRoot.toString() + "*");
+            if (chatArea != null)
+                chatArea.appendMarkdown("*System: Switched project to " + currentProjectRoot.toString() + "*");
         }
     }
 
@@ -393,55 +476,68 @@ public class MainFrame extends JFrame implements Runnable {
         new Thread(() -> {
             genAIService.refreshKnowledge(currentProjectRoot.toString());
             SwingUtilities.invokeLater(() -> {
-                if (chatArea != null) chatArea.appendMarkdown("*System: Knowledge base reloaded.*");
+                if (chatArea != null)
+                    chatArea.appendMarkdown("*System: Knowledge base reloaded.*");
             });
         }).start();
     }
 
     private boolean isTimeout(Throwable t) {
         while (t != null) {
-            if (t instanceof InterruptedIOException || t instanceof SocketTimeoutException) return true;
-            if (t.getMessage() != null && t.getMessage().toLowerCase().contains("timeout")) return true;
+            if (t instanceof InterruptedIOException || t instanceof SocketTimeoutException)
+                return true;
+            if (t.getMessage() != null && t.getMessage().toLowerCase().contains("timeout"))
+                return true;
             t = t.getCause();
         }
         return false;
     }
 
     private void setInputEnabled(boolean enabled) {
-        if (sendButton != null) sendButton.setEnabled(enabled);
-        if (stopButton != null) stopButton.setEnabled(!enabled);
+        if (sendButton != null)
+            sendButton.setEnabled(enabled);
+        if (stopButton != null)
+            stopButton.setEnabled(!enabled);
         if (inputField != null) {
             inputField.setEnabled(enabled);
-            if (enabled) inputField.requestFocusInWindow();
+            if (enabled)
+                inputField.requestFocusInWindow();
         }
-        if (attachButton != null) attachButton.setEnabled(enabled);
-        if (clearAttachmentsButton != null) clearAttachmentsButton.setEnabled(enabled);
+        if (attachButton != null)
+            attachButton.setEnabled(enabled);
+        if (clearAttachmentsButton != null)
+            clearAttachmentsButton.setEnabled(enabled);
     }
 
     private void onSend(ActionEvent e) {
         String prompt = inputField.getText().trim();
-        if (prompt.isEmpty()) return;
+        if (prompt.isEmpty())
+            return;
         inputField.setText("");
         List<File> currentAttachments = new ArrayList<>(attachedFiles);
         attachedFiles.clear();
         updateAttachmentsLabel();
         if (chatArea != null) {
             chatArea.appendMarkdown("**User:** " + prompt);
-            if (!currentAttachments.isEmpty()) chatArea.appendMarkdown(" *(Attached: " + currentAttachments.size() + " files)*");
+            if (!currentAttachments.isEmpty())
+                chatArea.appendMarkdown(" *(Attached: " + currentAttachments.size() + " files)*");
             setInputEnabled(false);
             new Thread(() -> {
                 try {
-                    String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) ->
-                            SwingUtilities.invokeLater(() -> {
-                                if (status.startsWith("Thinking")) chatArea.appendStatus(status);
-                                else chatArea.appendToolLog(status);
-                            }));
+                    String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
+                        if (status.startsWith("Thinking"))
+                            chatArea.appendStatus(status);
+                        else
+                            chatArea.appendToolLog(status);
+                    }));
                     SwingUtilities.invokeLater(() -> chatArea.appendRoxyMarkdown(response));
                 } catch (Exception ex) {
                     log.error("Chat error", ex);
                     SwingUtilities.invokeLater(() -> {
-                        if (isTimeout(ex)) chatArea.appendMarkdown("⏱️ **Request Timeout**");
-                        else chatArea.appendMarkdown("❌ **Error:** " + ex.getMessage());
+                        if (isTimeout(ex))
+                            chatArea.appendMarkdown("⏱️ **Request Timeout**");
+                        else
+                            chatArea.appendMarkdown("❌ **Error:** " + ex.getMessage());
                     });
                 } finally {
                     SwingUtilities.invokeLater(() -> setInputEnabled(true));
@@ -450,8 +546,26 @@ public class MainFrame extends JFrame implements Runnable {
         }
     }
 
-    private void onSettings(ActionEvent e) { showView("SETTINGS"); }
-    private void onAbout(ActionEvent e) { JOptionPane.showMessageDialog(this, "RoxyCode AI\nVersion 1.0", "About", JOptionPane.INFORMATION_MESSAGE); }
+    private void onSettings(ActionEvent e) {
+        showView("SETTINGS");
+    }
+
+    private void onAbout(ActionEvent e) {
+        JOptionPane.showMessageDialog(this, "RoxyCode AInVersion 1.0", "About", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void confirmExit() {
+        log.info("Prompting for exit confirmation");
+        JOptionPane optionPane = new JOptionPane("Are you sure you want to exit RoxyCode?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
+        JDialog dialog = optionPane.createDialog(this, "Confirm Exit");
+        // Force center on screen to avoid positioning bugs relative to MainFrame
+        dialog.setLocationRelativeTo(null);
+        dialog.setVisible(true);
+        Object selectedValue = optionPane.getValue();
+        if (selectedValue instanceof Integer && (Integer) selectedValue == JOptionPane.YES_OPTION) {
+            System.exit(0);
+        }
+    }
 
     private void populateFileTree() {
         File rootDir = currentProjectRoot.toFile();
@@ -462,30 +576,47 @@ public class MainFrame extends JFrame implements Runnable {
 
     private void buildTreeNodes(DefaultMutableTreeNode node, File file) {
         File[] files = file.listFiles();
-        if (files == null) return;
+        if (files == null)
+            return;
         Arrays.sort(files, (f1, f2) -> {
-            if (f1.isDirectory() && !f2.isDirectory()) return -1;
-            if (!f1.isDirectory() && f2.isDirectory()) return 1;
+            if (f1.isDirectory() && !f2.isDirectory())
+                return -1;
+            if (!f1.isDirectory() && f2.isDirectory())
+                return 1;
             return f1.getName().compareToIgnoreCase(f2.getName());
         });
         for (File child : files) {
-            if (child.isHidden() || child.getName().startsWith(".")) continue;
+            if (child.isHidden() || child.getName().startsWith("."))
+                continue;
             DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(child.getName());
             node.add(childNode);
-            if (child.isDirectory()) buildTreeNodes(childNode, child);
+            if (child.isDirectory())
+                buildTreeNodes(childNode, child);
         }
     }
 
     private void applyTheme(String themeName) {
         try {
             switch(themeName) {
-                case "Dark": UIManager.setLookAndFeel(new FlatDarkLaf()); break;
-                case "IntelliJ": UIManager.setLookAndFeel(new FlatIntelliJLaf()); break;
-                case "Darcula": UIManager.setLookAndFeel(new FlatDarculaLaf()); break;
-                case "Light": default: UIManager.setLookAndFeel(new FlatLightLaf()); break;
+                case "Dark":
+                    UIManager.setLookAndFeel(new FlatDarkLaf());
+                    break;
+                case "IntelliJ":
+                    UIManager.setLookAndFeel(new FlatIntelliJLaf());
+                    break;
+                case "Darcula":
+                    UIManager.setLookAndFeel(new FlatDarculaLaf());
+                    break;
+                case "Light":
+                default:
+                    UIManager.setLookAndFeel(new FlatLightLaf());
+                    break;
             }
             FlatLaf.updateUI();
-            if (chatArea != null) chatArea.updateStyle();
-        } catch (Exception ex) { log.error("Theme Error", ex); }
+            if (chatArea != null)
+                chatArea.updateStyle();
+        } catch (Exception ex) {
+            log.error("Theme Error", ex);
+        }
     }
 }
