@@ -6,7 +6,9 @@
     </scroll-pane>
     <row-panel spacing="8" padding="4" opaque="true">
         <label text="Attachments:"/>
-        <label name="attachmentsLabel" text="None" weight="1"/>
+        <scroll-pane weight="1" verticalScrollBarPolicy="never">
+            <row-panel name="attachmentsContainer" spacing="8"/>
+        </scroll-pane>
         <button name="clearAttachmentsButton" text="Clear"/>
     </row-panel>
     <row-panel spacing="4" padding="8" opaque="true">

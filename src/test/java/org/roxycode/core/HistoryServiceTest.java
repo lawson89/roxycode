@@ -1,7 +1,9 @@
 package org.roxycode.core;
 
 import com.google.genai.Client;
+import com.google.genai.Models;
 import com.google.genai.types.Content;
+import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
 import com.google.genai.types.FunctionResponse;
 import org.junit.jupiter.api.Test;
@@ -140,7 +142,7 @@ class HistoryServiceTest {
     }
 
     @Test
-    void testCompactHistory_StandardFlow() {
+    void testCompactHistory_StandardFlow() throws Exception {
         // Setup settings
         when(settingsService.getHistoryThreshold()).thenReturn(5);
         when(settingsService.getCompactionChunkSize()).thenReturn(3);
@@ -164,17 +166,31 @@ class HistoryServiceTest {
 
         // Mock Client
         Client mockClient = mock(Client.class);
+        Models mockModels = mock(Models.class);
+        setClientModels(mockClient, mockModels);
+        GenerateContentResponse mockResponse = mock(GenerateContentResponse.class);
+        when(mockResponse.text()).thenReturn("Summary of conversation");
+        when(mockModels.generateContent(anyString(), anyList(), any())).thenReturn(mockResponse);
 
         // Execute
         historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
 
         // Verify
-        assertEquals(8, history.size(), "History should be compacted to size 8");
-        assertEquals("Msg 5", history.get(1).parts().get().get(0).text().get(), "First message after system should be Msg 5");
+        // Removed 1,2,3,4. 12 -> 8.
+        // Index 0 (System) and Index 1 (Msg 5) merge because both are User.
+        // Size 8 -> 7.
+        assertEquals(7, history.size(), "History should be compacted to size 7 (after merging adjacent users)");
+        
+        // Msg 5 content should be in the merged first message
+        Content merged = history.get(0);
+        boolean containsMsg5 = merged.parts().get().stream()
+                .anyMatch(p -> p.text().orElse("").contains("Msg 5"));
+        assertTrue(containsMsg5, "Merged first message should contain content of Msg 5");
         
         Content system = history.get(0);
-        String systemText = system.parts().get().get(0).text().get();
-        assertTrue(systemText.contains("[Context missing due to error]"), "Should contain error summary");
+        boolean containsError = system.parts().get().stream()
+                .anyMatch(p -> p.text().orElse("").contains("[Context missing due to error]"));
+        assertFalse(containsError, "Should NOT contain error summary");
     }
     
     @Test
@@ -199,7 +215,7 @@ class HistoryServiceTest {
     }
 
     @Test
-    void testCompactHistory_ForcedSplit() {
+    void testCompactHistory_ForcedSplit() throws Exception {
         // Setup settings
         when(settingsService.getHistoryThreshold()).thenReturn(5);
         when(settingsService.getCompactionChunkSize()).thenReturn(3);
@@ -222,18 +238,29 @@ class HistoryServiceTest {
         // Size 12.
 
         Client mockClient = mock(Client.class);
+        Models mockModels = mock(Models.class);
+        setClientModels(mockClient, mockModels);
+        GenerateContentResponse mockResponse = mock(GenerateContentResponse.class);
+        when(mockResponse.text()).thenReturn("Summary of conversation");
+        when(mockModels.generateContent(anyString(), anyList(), any())).thenReturn(mockResponse);
 
         // Execute
         historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
 
-        assertEquals(10, history.size(), "History should be compacted to size 10");
+        // Split at 4 (Msg 4). Removed 1,2,3. 12->9.
+        // Inserted Synthetic. 9->10.
+        // Merge 0 and 1. 10->9.
+        assertEquals(9, history.size(), "History should be compacted to size 9");
         
-        Content synthetic = history.get(1);
-        assertTrue(synthetic.parts().get().get(0).text().get().contains("Continuing from previous context"), "Should be synthetic message");
+        Content merged = history.get(0);
+        boolean containsSynthetic = merged.parts().get().stream()
+                .anyMatch(p -> p.text().orElse("").contains("Continuing from previous context"));
+        
+        assertTrue(containsSynthetic, "Merged message should contain synthetic continuation message");
     }
 
     @Test
-    void testCompactHistory_StuckAtBeginning() {
+    void testCompactHistory_StuckAtBeginning() throws Exception {
         // Setup settings
         when(settingsService.getHistoryThreshold()).thenReturn(5);
         when(settingsService.getCompactionChunkSize()).thenReturn(3);
@@ -257,14 +284,23 @@ class HistoryServiceTest {
 
         // Mock Client
         Client mockClient = mock(Client.class);
+        Models mockModels = mock(Models.class);
+        setClientModels(mockClient, mockModels);
+        GenerateContentResponse mockResponse = mock(GenerateContentResponse.class);
+        when(mockResponse.text()).thenReturn("Summary of conversation");
+        when(mockModels.generateContent(anyString(), anyList(), any())).thenReturn(mockResponse);
 
         // Execute
         historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
 
-        // EXPECTED BEHAVIOR: History should be compacted using forced split.
-        assertTrue(history.size() < 12, "History should have been compacted even if splitIndex was 1");
-        assertTrue(history.get(1).parts().get().get(0).text().get().contains("Continuing from previous context"), 
-                "Should have inserted synthetic message");
+        // Removed 1,2,3. 12->9. Inserted 1. 10. Merged 0,1. 9.
+        assertTrue(history.size() < 12, "History should have been compacted");
+        
+        Content merged = history.get(0);
+        boolean containsSynthetic = merged.parts().get().stream()
+                .anyMatch(p -> p.text().orElse("").contains("Continuing from previous context"));
+        
+        assertTrue(containsSynthetic, "Should have inserted synthetic message into merged node");
     }
 
     private Content createMsg(String role, String text) {
@@ -284,5 +320,15 @@ class HistoryServiceTest {
                                 .build())
                         .build()))
                 .build();
+    }
+    
+    private void setClientModels(Client client, Models models) {
+        try {
+            java.lang.reflect.Field field = Client.class.getDeclaredField("models");
+            field.setAccessible(true);
+            field.set(client, models);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

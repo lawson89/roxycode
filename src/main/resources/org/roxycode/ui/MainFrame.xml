@@ -16,7 +16,7 @@
 
     <row-panel spacing="8" padding="8" opaque="true" alignToBaseline="false">
         <label text="" name="icon"/>
-        <label text="RoxyCode AI" styleClass="h3"/>
+        <label text="RoxyCode" styleClass="h3"/>
         <spacer size="16"/>
         <label text="Project: "/>
         <label text="[PROJECT_NAME]" name="currentProjectLabel"/>

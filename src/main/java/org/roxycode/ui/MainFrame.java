@@ -9,6 +9,7 @@ import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignF;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignM;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -136,7 +137,7 @@ public class MainFrame extends JFrame implements Runnable {
     private JButton attachButton;
 
     @Outlet
-    private JLabel attachmentsLabel;
+    private JPanel attachmentsContainer;
 
     @Outlet
     private JButton clearAttachmentsButton;
@@ -520,13 +521,36 @@ public class MainFrame extends JFrame implements Runnable {
         updateAttachmentsLabel();
     }
 
+    private MaterialDesignF getIconForFile(File file) {
+        String name = file.getName().toLowerCase();
+        if (name.endsWith(".java") || name.endsWith(".py") || name.endsWith(".js") || name.endsWith(".html") || name.endsWith(".css") || name.endsWith(".xml") || name.endsWith(".json")) {
+            return MaterialDesignF.FILE_CODE_OUTLINE;
+        } else if (name.endsWith(".pdf")) {
+            return MaterialDesignF.FILE_PDF_BOX;
+        } else if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif")) {
+            return MaterialDesignF.FILE_IMAGE_OUTLINE;
+        } else if (name.endsWith(".txt") || name.endsWith(".md")) {
+            return MaterialDesignF.FILE_DOCUMENT_OUTLINE;
+        }
+        return MaterialDesignF.FILE_OUTLINE;
+    }
+
     private void updateAttachmentsLabel() {
-        if (attachmentsLabel == null)
+        if (attachmentsContainer == null)
             return;
-        if (attachedFiles.isEmpty())
-            attachmentsLabel.setText("None");
-        else
-            attachmentsLabel.setText(attachedFiles.stream().map(File::getName).collect(Collectors.joining(", ")));
+        attachmentsContainer.removeAll();
+        if (attachedFiles.isEmpty()) {
+            attachmentsContainer.add(new JLabel("None"));
+        } else {
+            for (File file : attachedFiles) {
+                JLabel label = new JLabel(file.getName());
+                label.setIcon(FontIcon.of(getIconForFile(file), 16));
+                label.setIconTextGap(4);
+                attachmentsContainer.add(label);
+            }
+        }
+        attachmentsContainer.revalidate();
+        attachmentsContainer.repaint();
     }
 
     private void onSaveSettings(ActionEvent e) {
