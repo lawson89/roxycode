@@ -47,6 +47,8 @@ public class GenAIService {
 
     private Client client;
 
+    private String lastUsedApiKey;
+
     // Cache function declarations to avoid re-scanning every chat turn
     private final List<FunctionDeclaration> cachedFunctions = new ArrayList<>();
 
@@ -63,22 +65,17 @@ public class GenAIService {
         this.historyService = historyService;
     }
 
-    private Client getClient() {
-        if (client == null) {
-            String key = settingsService.getGeminiApiKey();
-            if (key == null || key.isEmpty()) {
-                throw new IllegalStateException("Gemini API Key not found in Settings.");
-            }
-            // Updated to handle 429 Rate Limits automatically
-            client = Client.builder().apiKey(key).httpOptions(// Retry up to 5 times
-            HttpOptions.builder().// Retry up to 5 times
-            retryOptions(// Trigger on Rate Limit (429) or Service Unavailable (503)
-            HttpRetryOptions.builder().// Trigger on Rate Limit (429) or Service Unavailable (503)
-            attempts(// Trigger on Rate Limit (429) or Service Unavailable (503)
-            5).// Trigger on Rate Limit (429) or Service Unavailable (503)
-            httpStatusCodes(429, // Increase timeout to 90s to accommodate backoff delays
-            503).// Increase timeout to 90s to accommodate backoff delays
-            build()).timeout(90_000).build()).build();
+    private synchronized Client getClient() {
+        String key = settingsService.getGeminiApiKey();
+        if (key == null || key.isEmpty()) {
+            throw new IllegalStateException("Gemini API Key not found in Settings.");
+        }
+        // Recreate client if API key has changed or if it's not yet initialized
+        if (client == null || !key.equals(lastUsedApiKey)) {
+            LOG.info("Initializing/Refreshing Gemini Client with automatic retry (10 attempts, 5min timeout)...");
+            client = Client.builder().apiKey(key).httpOptions(HttpOptions.builder().retryOptions(HttpRetryOptions.builder().attempts(10).httpStatusCodes(429, 503).build()).timeout(// 5 minutes to allow for multiple backoff retries
+            300_000).build()).build();
+            lastUsedApiKey = key;
         }
         return client;
     }
@@ -115,11 +112,12 @@ public class GenAIService {
             toolRegistry.getTool(toolName).ifPresent(td -> {
                 Map<String, Schema> properties = new HashMap<>();
                 if (td.getParameters() != null) {
-                    td.getParameters().forEach(p -> // Simplifying types for MVP
-                    properties.// Simplifying types for MVP
-                    put(// Simplifying types for MVP
-                    p.getName(), // Simplifying types for MVP
-                    Schema.builder().type("STRING").description(p.getDescription()).build()));
+                    // Simplifying types for MVP
+                    // Simplifying types for MVP
+                    td.getParameters().// Simplifying types for MVP
+                    forEach(// Simplifying types for MVP
+                    p -> // Simplifying types for MVP
+                    properties.put(p.getName(), Schema.builder().type("STRING").description(p.getDescription()).build()));
                 }
                 Schema schema = Schema.builder().type("OBJECT").properties(properties).build();
                 cachedFunctions.add(FunctionDeclaration.builder().name(toolName).description(td.getDescription()).parameters(schema).build());
@@ -201,7 +199,8 @@ public class GenAIService {
                     onStatusUpdate.accept(String.format("Thinking (%d/%d)...", turns, maxTurns));
                 }
                 // Use a fast/cheap model for summarization
-                historyService.compactHistory(client, "gemini-2.0-flash", history, systemPrompt);
+                // FIX: Use getClient() to ensure it's initialized
+                historyService.compactHistory(getClient(), "gemini-2.0-flash", history, systemPrompt);
                 // USE CACHED FUNCTIONS
                 GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
                 if (!cachedFunctions.isEmpty()) {
