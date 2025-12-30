@@ -39,8 +39,8 @@ public class HistoryService {
         int splitIndex = findSafeSplitIndex(history, targetIndex);
         boolean isForced = false;
         // Safety check: if we couldn't find a safe split point, try a forced one
-        if (splitIndex == -1) {
-            log.info("🔍 No safe split point found. Attempting forced split point...");
+        if (splitIndex <= 1) {
+            log.info("🔍 No safe split point found (or split point at beginning). Attempting forced split point...");
             splitIndex = findForcedSplitIndex(history, targetIndex);
             isForced = true;
         }

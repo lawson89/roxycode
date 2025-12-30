@@ -232,6 +232,41 @@ class HistoryServiceTest {
         assertTrue(synthetic.parts().get().get(0).text().get().contains("Continuing from previous context"), "Should be synthetic message");
     }
 
+    @Test
+    void testCompactHistory_StuckAtBeginning() {
+        // Setup settings
+        when(settingsService.getHistoryThreshold()).thenReturn(5);
+        when(settingsService.getCompactionChunkSize()).thenReturn(3);
+        when(settingsService.getMaxSummaryChunks()).thenReturn(3);
+
+        // Setup History where only the first message is safe
+        List<Content> history = new ArrayList<>();
+        history.add(createMsg("user", "System Prompt")); // 0
+        history.add(createMsg("user", "Msg 1 (Safe)")); // 1
+        history.add(createToolMsg("user", "res 2")); // 2
+        history.add(createToolMsg("user", "res 3")); // 3
+        history.add(createToolMsg("user", "res 4")); // 4
+        history.add(createToolMsg("user", "res 5")); // 5
+        history.add(createToolMsg("user", "res 6")); // 6
+        history.add(createToolMsg("user", "res 7")); // 7
+        history.add(createToolMsg("user", "res 8")); // 8
+        history.add(createToolMsg("user", "res 9")); // 9
+        history.add(createToolMsg("user", "res 10")); // 10
+        history.add(createToolMsg("user", "res 11")); // 11
+        // Size 12.
+
+        // Mock Client
+        Client mockClient = mock(Client.class);
+
+        // Execute
+        historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
+
+        // EXPECTED BEHAVIOR: History should be compacted using forced split.
+        assertTrue(history.size() < 12, "History should have been compacted even if splitIndex was 1");
+        assertTrue(history.get(1).parts().get().get(0).text().get().contains("Continuing from previous context"), 
+                "Should have inserted synthetic message");
+    }
+
     private Content createMsg(String role, String text) {
         return Content.builder()
                 .role(role)
