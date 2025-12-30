@@ -94,16 +94,16 @@ public class MainFrame extends JFrame implements Runnable {
 
     // Navigation Outlets
     @Outlet
-    private JButton navChatButton;
+    private JToggleButton navChatButton;
 
     @Outlet
-    private JButton navFilesButton;
+    private JToggleButton navFilesButton;
 
     @Outlet
-    private JButton navUsageButton;
+    private JToggleButton navUsageButton;
 
     @Outlet
-    private JButton navSettingsButton;
+    private JToggleButton navSettingsButton;
 
     // Menu Outlets
     @Outlet
@@ -119,13 +119,13 @@ public class MainFrame extends JFrame implements Runnable {
     private JMenuItem openFolderMenuItem;
 
     @Outlet
-    private JButton navSystemPromptButton;
+    private JToggleButton navSystemPromptButton;
 
     @Outlet
-    private JButton navMessageHistoryButton;
+    private JToggleButton navMessageHistoryButton;
 
     @Outlet
-    private JButton navSummaryQueueButton;
+    private JToggleButton navSummaryQueueButton;
 
     // -- VIEW: CHAT --
     @Outlet

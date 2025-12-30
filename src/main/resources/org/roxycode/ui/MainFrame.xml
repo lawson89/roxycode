@@ -33,13 +33,13 @@
         <column-panel padding="12" spacing="8" opaque="true">
             <label text="MENU" font="bold-12"/>
 
-            <button name="navChatButton" text="Chat" borderPainted="false" horizontalAlignment="left"/>
-            <button name="navFilesButton" text="Project Files" borderPainted="false" horizontalAlignment="left"/>
-            <button name="navUsageButton" text="Usage" borderPainted="false" horizontalAlignment="left"/>
-            <button name="navSettingsButton" text="Settings" borderPainted="false" horizontalAlignment="left"/>
-            <button name="navSystemPromptButton" text="System Prompt" borderPainted="false" horizontalAlignment="left"/>
-            <button name="navMessageHistoryButton" text="Message History" borderPainted="false" horizontalAlignment="left"/>
-            <button name="navSummaryQueueButton" text="Summary Queue" borderPainted="false" horizontalAlignment="left"/>
+            <toggle-button name="navChatButton" text="Chat" borderPainted="false" horizontalAlignment="left" group="navGroup" selected="true"/>
+            <toggle-button name="navFilesButton" text="Project Files" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navUsageButton" text="Usage" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navSettingsButton" text="Settings" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navSystemPromptButton" text="System Prompt" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navMessageHistoryButton" text="Message History" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navSummaryQueueButton" text="Summary Queue" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
 
             <spacer weight="1"/>
         </column-panel>
