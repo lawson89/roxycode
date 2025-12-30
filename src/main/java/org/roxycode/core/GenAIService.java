@@ -155,6 +155,28 @@ public class GenAIService {
         return getClient().models.generateContent(model, history, config);
     }
 
+    public String buildSystemContext(String projectRoot, List<File> attachedFiles) {
+        String contextMenu = contextRegistry.getContextMenu();
+        StringBuilder contextBuilder = new StringBuilder();
+        contextBuilder.append("Project Root: ").append(projectRoot).append("n");
+        contextBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("n");
+        contextBuilder.append(contextMenu).append("n");
+        if (attachedFiles != null && !attachedFiles.isEmpty()) {
+            contextBuilder.append("n--- ATTACHED FILES ---n");
+            for (File file : attachedFiles) {
+                contextBuilder.append("File: ").append(file.getName()).append("n");
+                contextBuilder.append("Content:n");
+                try {
+                    contextBuilder.append(Files.readString(file.toPath())).append("n");
+                } catch (IOException e) {
+                    contextBuilder.append("[Error reading file: ").append(e.getMessage()).append("]n");
+                }
+                contextBuilder.append("----------------------n");
+            }
+        }
+        return contextBuilder.toString();
+    }
+
     public String chat(String prompt, String projectRoot, List<File> attachedFiles, Consumer<String> onStatusUpdate) {
         if (!isChatting.compareAndSet(false, true)) {
             return "A chat is already in progress.";
@@ -164,25 +186,8 @@ public class GenAIService {
             // 1. CONFIGURE SANDBOX
             sandbox.setRoot(projectRoot);
             // 2. Build Context (System info + Knowledge base)
-            String contextMenu = contextRegistry.getContextMenu();
-            StringBuilder contextBuilder = new StringBuilder();
-            contextBuilder.append("Project Root: ").append(projectRoot).append("\n");
-            contextBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
-            contextBuilder.append(contextMenu).append("\n");
-            if (attachedFiles != null && !attachedFiles.isEmpty()) {
-                contextBuilder.append("\n--- ATTACHED FILES ---\n");
-                for (File file : attachedFiles) {
-                    contextBuilder.append("File: ").append(file.getName()).append("\n");
-                    contextBuilder.append("Content:\n");
-                    try {
-                        contextBuilder.append(Files.readString(file.toPath())).append("\n");
-                    } catch (IOException e) {
-                        contextBuilder.append("[Error reading file: ").append(e.getMessage()).append("]\n");
-                    }
-                    contextBuilder.append("----------------------\n");
-                }
-            }
-            String systemContext = contextBuilder.toString();
+            String systemContext = buildSystemContext(projectRoot, attachedFiles);
+
             String taskMessage = "Task: " + prompt;
             if (history.isEmpty()) {
                 history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemContext + "\n" + taskMessage).build())).build());

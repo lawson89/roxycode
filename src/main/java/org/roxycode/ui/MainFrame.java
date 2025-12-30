@@ -107,6 +107,9 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JMenuItem openFolderMenuItem;
 
+    @Outlet
+    private JButton navSystemPromptButton;
+
     // -- VIEW: CHAT --
     @Outlet
     private JComponent viewChat;
@@ -186,6 +189,18 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JComboBox<String> modelComboBox;
 
+    // -- VIEW: SYSTEM PROMPT --
+    @Outlet
+    private JComponent viewSystemPrompt;
+
+    private final MarkdownPane systemPromptArea = new MarkdownPane();
+
+    @Outlet
+    private JScrollPane systemPromptScrollPane;
+
+    @Outlet
+    private JButton refreshSystemPromptButton;
+
     @Inject
     public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox) {
         this.gitService = gitService;
@@ -210,12 +225,16 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add((JComponent) UILoader.load(this, "FilesView.xml"));
             mainContentStack.add((JComponent) UILoader.load(this, "UsageView.xml"));
             mainContentStack.add((JComponent) UILoader.load(this, "SettingsView.xml"));
+            mainContentStack.add((JComponent) UILoader.load(this, "SystemPromptView.xml"));
         }
         // 3. Initialize UI Components
         initIcons();
-        // Manual Viewport injection for Chat
+        // Manual Viewport injection
         if (chatScrollPane != null) {
             chatScrollPane.setViewportView(chatArea);
+        }
+        if (systemPromptScrollPane != null) {
+            systemPromptScrollPane.setViewportView(systemPromptArea);
         }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
@@ -309,6 +328,8 @@ public class MainFrame extends JFrame implements Runnable {
             navUsageButton.addActionListener(e -> showView("USAGE"));
         if (navSettingsButton != null)
             navSettingsButton.addActionListener(e -> showView("SETTINGS"));
+        if (navSystemPromptButton != null)
+            navSystemPromptButton.addActionListener(e -> showView("SYSTEM_PROMPT"));
         if (resetUsageButton != null)
             resetUsageButton.addActionListener(e -> {
                 usageService.reset();
@@ -335,6 +356,8 @@ public class MainFrame extends JFrame implements Runnable {
             aboutMenuItem.addActionListener(this::onAbout);
         if (openFolderMenuItem != null)
             openFolderMenuItem.addActionListener(this::onOpenFolder);
+        if (refreshSystemPromptButton != null)
+            refreshSystemPromptButton.addActionListener(e -> onRefreshSystemPrompt());
         if (saveSettingsButton != null)
             saveSettingsButton.addActionListener(this::onSaveSettings);
     }
@@ -348,6 +371,8 @@ public class MainFrame extends JFrame implements Runnable {
             viewUsage.setVisible(false);
         if (viewSettings != null)
             viewSettings.setVisible(false);
+        if (viewSystemPrompt != null)
+            viewSystemPrompt.setVisible(false);
         switch(viewName) {
             case "CHAT":
                 if (viewChat != null)
@@ -366,6 +391,12 @@ public class MainFrame extends JFrame implements Runnable {
             case "SETTINGS":
                 if (viewSettings != null)
                     viewSettings.setVisible(true);
+                break;
+            case "SYSTEM_PROMPT":
+                if (viewSystemPrompt != null) {
+                    onRefreshSystemPrompt();
+                    viewSystemPrompt.setVisible(true);
+                }
                 break;
         }
     }
@@ -600,6 +631,16 @@ public class MainFrame extends JFrame implements Runnable {
         JOptionPane.showMessageDialog(this, "RoxyCode AInVersion 1.0", "About", JOptionPane.INFORMATION_MESSAGE);
     }
 
+    private void onRefreshSystemPrompt() {
+        if (systemPromptArea != null) {
+            systemPromptArea.setMarkdown("*Generating system prompt...*");
+            new Thread(() -> {
+                String prompt = genAIService.buildSystemContext(currentProjectRoot.toString(), new ArrayList<>(attachedFiles));
+                SwingUtilities.invokeLater(() -> systemPromptArea.setMarkdown(prompt));
+            }).start();
+        }
+    }
+
     private void confirmExit() {
         log.info("Prompting for exit confirmation");
         JOptionPane optionPane = new JOptionPane("Are you sure you want to exit RoxyCode?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
@@ -661,6 +702,8 @@ public class MainFrame extends JFrame implements Runnable {
             FlatLaf.updateUI();
             if (chatArea != null)
                 chatArea.updateStyle();
+            if (systemPromptArea != null)
+                systemPromptArea.updateStyle();
         } catch (Exception ex) {
             log.error("Theme Error", ex);
         }

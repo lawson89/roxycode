@@ -24,8 +24,7 @@
         <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
         <spacer size="16"/>
 
-        <label name="currentModelLabel" text="[MODEL]" styleClass="monospaced"/>
-        <spacer weight="1"/>
+
         <button name="rescanButton" text="Rescan"/>
     </row-panel>
 
@@ -38,6 +37,7 @@
             <button name="navFilesButton" text="Project Files" borderPainted="false" horizontalAlignment="left"/>
             <button name="navUsageButton" text="Usage" borderPainted="false" horizontalAlignment="left"/>
             <button name="navSettingsButton" text="Settings" borderPainted="false" horizontalAlignment="left"/>
+            <button name="navSystemPromptButton" text="System Prompt" borderPainted="false" horizontalAlignment="left"/>
 
             <spacer weight="1"/>
         </column-panel>

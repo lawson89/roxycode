@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE column-panel SYSTEM "sierra.dtd">
+
+<column-panel name="viewSystemPrompt" visible="false" padding="16" spacing="8" weight="1">
+    <label text="Current System Prompt" font="h1"/>
+    <label text="This is the context sent to the LLM with every message." foreground="#888888"/>
+    
+    <scroll-pane weight="1" name="systemPromptScrollPane">
+    </scroll-pane>
+
+    <row-panel spacing="8">
+        <button name="refreshSystemPromptButton" text="Refresh"/>
+        <spacer weight="1"/>
+    </row-panel>
+</column-panel>
