@@ -347,23 +347,19 @@ class HistoryServiceTest {
         when(mockResponse.text()).thenReturn("Summary");
         when(mockModels.generateContent(anyString(), anyList(), any())).thenReturn(mockResponse);
 
-        // Invoke private method
-        var method = HistoryService.class.getDeclaredMethod("generateSummary", Client.class, String.class, List.class);
-        method.setAccessible(true);
-        method.invoke(historyService, mockClient, "model-x", messages);
+        historyService.generateSummary(mockClient, "model-x", messages);
 
         // Verify that the first message sent to API has merged content
         ArgumentCaptor<List<Content>> captor = ArgumentCaptor.forClass(List.class);
         verify(mockModels).generateContent(eq("model-x"), captor.capture(), any());
         
         List<Content> payload = captor.getValue();
-        assertEquals(2, payload.size(), "Should have 2 messages (merged first user, then model)");
+        assertEquals(1, payload.size(), "Should have 1 message in payload after merging");
         
         Content firstMsg = payload.get(0);
         assertEquals("user", firstMsg.role().get());
-        assertTrue(firstMsg.parts().get().size() >= 2, "First message should have at least 2 parts (prompt + original)");
         
-        boolean hasPrompt = firstMsg.parts().get().stream().anyMatch(p -> p.text().orElse("").contains("Summarize the following"));
+        boolean hasPrompt = firstMsg.parts().get().stream().anyMatch(p -> p.text().orElse("").contains("Summarize"));
         boolean hasOriginal = firstMsg.parts().get().stream().anyMatch(p -> p.text().orElse("").contains("User Message 1"));
         
         assertTrue(hasPrompt, "Payload should contain summary prompt");

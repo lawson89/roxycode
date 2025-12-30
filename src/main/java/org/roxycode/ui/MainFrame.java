@@ -18,6 +18,7 @@ import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
+import org.roxycode.core.HistoryService;
 import org.roxycode.core.tools.service.GitService;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
@@ -50,6 +51,8 @@ public class MainFrame extends JFrame implements Runnable {
     private final GitService gitService;
 
     private final GenAIService genAIService;
+
+    private final HistoryService historyService;
 
     private final SettingsService settingsService;
 
@@ -120,6 +123,9 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Outlet
     private JButton navMessageHistoryButton;
+
+    @Outlet
+    private JButton navSummaryQueueButton;
 
     // -- VIEW: CHAT --
     @Outlet
@@ -223,10 +229,23 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton refreshMessageHistoryButton;
 
+    // -- VIEW: SUMMARY QUEUE --
+    @Outlet
+    private JComponent viewSummaryQueue;
+
+    @Outlet
+    private JButton refreshSummaryQueueButton;
+
+    @Outlet
+    private JScrollPane summaryQueueScrollPane;
+
+    private final MarkdownPane summaryQueueArea = new MarkdownPane();
+
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox) {
+    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox) {
         this.gitService = gitService;
         this.genAIService = genAIService;
+        this.historyService = historyService;
         this.settingsService = settingsService;
         this.usageService = usageService;
         this.roxyProjectService = roxyProjectService;
@@ -249,6 +268,7 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add((JComponent) UILoader.load(this, "SettingsView.xml"));
             mainContentStack.add((JComponent) UILoader.load(this, "SystemPromptView.xml"));
             mainContentStack.add((JComponent) UILoader.load(this, "MessageHistoryView.xml"));
+            mainContentStack.add((JComponent) UILoader.load(this, "SummaryQueueView.xml"));
         }
         // 3. Initialize UI Components
         initIcons();
@@ -261,6 +281,9 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (messageHistoryScrollPane != null) {
             messageHistoryScrollPane.setViewportView(messageHistoryArea);
+        }
+        if (summaryQueueScrollPane != null) {
+            summaryQueueScrollPane.setViewportView(summaryQueueArea);
         }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
@@ -330,6 +353,9 @@ public class MainFrame extends JFrame implements Runnable {
         if (navMessageHistoryButton != null) {
             navMessageHistoryButton.setIcon(FontIcon.of(MaterialDesignM.MESSAGE_TEXT_CLOCK_OUTLINE, 16));
         }
+        if (navSummaryQueueButton != null) {
+            navSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignA.ARCHIVE_OUTLINE, 16));
+        }
         if (rescanButton != null) {
             rescanButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
         }
@@ -369,7 +395,9 @@ public class MainFrame extends JFrame implements Runnable {
         if (refreshMessageHistoryButton != null) {
             refreshMessageHistoryButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
         }
-
+        if (refreshSummaryQueueButton != null) {
+            refreshSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
+        }
     }
 
     private void updateProjectLabel() {
@@ -416,6 +444,8 @@ public class MainFrame extends JFrame implements Runnable {
             navSystemPromptButton.addActionListener(e -> showView("SYSTEM_PROMPT"));
         if (navMessageHistoryButton != null)
             navMessageHistoryButton.addActionListener(e -> showView("MESSAGE_HISTORY"));
+        if (navSummaryQueueButton != null)
+            navSummaryQueueButton.addActionListener(e -> showView("SUMMARY_QUEUE"));
         if (resetUsageButton != null)
             resetUsageButton.addActionListener(e -> {
                 usageService.reset();
@@ -446,6 +476,8 @@ public class MainFrame extends JFrame implements Runnable {
             refreshSystemPromptButton.addActionListener(e -> onRefreshSystemPrompt());
         if (refreshMessageHistoryButton != null)
             refreshMessageHistoryButton.addActionListener(e -> updateMessageHistoryView());
+        if (refreshSummaryQueueButton != null)
+            refreshSummaryQueueButton.addActionListener(e -> updateSummaryQueueView());
         if (saveSettingsButton != null)
             saveSettingsButton.addActionListener(this::onSaveSettings);
     }
@@ -463,6 +495,8 @@ public class MainFrame extends JFrame implements Runnable {
             viewSystemPrompt.setVisible(false);
         if (viewMessageHistory != null)
             viewMessageHistory.setVisible(false);
+        if (viewSummaryQueue != null)
+            viewSummaryQueue.setVisible(false);
         switch(viewName) {
             case "CHAT":
                 if (viewChat != null)
@@ -492,6 +526,12 @@ public class MainFrame extends JFrame implements Runnable {
                 if (viewMessageHistory != null) {
                     updateMessageHistoryView();
                     viewMessageHistory.setVisible(true);
+                }
+                break;
+            case "SUMMARY_QUEUE":
+                if (viewSummaryQueue != null) {
+                    updateSummaryQueueView();
+                    viewSummaryQueue.setVisible(true);
                 }
                 break;
         }
@@ -841,6 +881,25 @@ public class MainFrame extends JFrame implements Runnable {
         return row.toString();
     }
 
+    private void updateSummaryQueueView() {
+        if (summaryQueueArea == null)
+            return;
+        List<String> queue = historyService.getSummaryQueue();
+        StringBuilder md = new StringBuilder();
+        md.append("# Summary Queue (").append(queue.size()).append(" segments)\n\n");
+        if (queue.isEmpty()) {
+            md.append("*The queue is empty. No history compaction has occurred yet.*");
+        } else {
+            int i = 1;
+            for (String summary : queue) {
+                md.append("## Segment ").append(i++).append("\n");
+                md.append(summary).append("\n\n");
+                md.append("---\n");
+            }
+        }
+        summaryQueueArea.setMarkdown(md.toString());
+    }
+
     private void applyTheme(String themeName) {
         try {
             switch(themeName) {
@@ -865,6 +924,8 @@ public class MainFrame extends JFrame implements Runnable {
                 systemPromptArea.updateStyle();
             if (messageHistoryArea != null)
                 messageHistoryArea.updateStyle();
+            if (summaryQueueArea != null)
+                summaryQueueArea.updateStyle();
         } catch (Exception ex) {
             log.error("Theme Error", ex);
         }

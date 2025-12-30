@@ -72,7 +72,7 @@ public class HistoryService {
         // 7. Handle consecutive User messages to maintain role alternation
         if (isForced) {
             // Insert a synthetic message to bridge the gap
-            String syntheticText = "Continuing from previous context. Summary of progress so far:\n" + newSummary + "\n\nPlease proceed with the task.";
+            String syntheticText = "### Context Continuation\nContinuing from previous context. **Summary of progress so far:**\n\n> " + newSummary + "\n\nPlease proceed with the task.";
             Content syntheticMsg = Content.builder().role("user").parts(List.of(Part.builder().text(syntheticText).build())).build();
             history.add(1, syntheticMsg);
             log.info("➕ Inserted synthetic continuation message.");
@@ -131,7 +131,7 @@ public class HistoryService {
     private Content mergeUserMessages(Content c1, Content c2) {
         List<Part> parts = new ArrayList<>();
         parts.addAll(c1.parts().orElse(List.of()));
-        parts.add(Part.builder().text("\n--- CONTINUATION ---\n").build());
+        parts.add(Part.builder().text("\n\n---\n\n").build());
         parts.addAll(c2.parts().orElse(List.of()));
         return Content.builder().role("user").parts(parts).build();
     }
@@ -153,47 +153,62 @@ public class HistoryService {
         return false;
     }
 
-    private String generateSummary(Client client, String modelName, List<Content> messages) {
+    protected String generateSummary(Client client, String modelName, List<Content> messages) {
         if (messages == null || messages.isEmpty()) {
             return "[No messages to summarize]";
         }
-        List<Content> promptPayload = new ArrayList<>();
-        String summaryPromptText = "Summarize the following conversation snippet concisely. Capture key decisions, user intents, and tool outputs. Ignore polite filler. Return ONLY the summary text.";
-        if (isUserNode(messages.get(0))) {
-            // Merge summary prompt with the first user message to avoid User-User sequence
-            Content firstMsg = messages.get(0);
-            List<Part> newParts = new ArrayList<>();
-            newParts.add(Part.builder().text(summaryPromptText + "\n\n--- CONVERSATION START ---\n").build());
-            newParts.addAll(firstMsg.parts().orElse(List.of()));
-            promptPayload.add(Content.builder().role("user").parts(newParts).build());
-            if (messages.size() > 1) {
-                promptPayload.addAll(messages.subList(1, messages.size()));
+        StringBuilder sb = new StringBuilder();
+        sb.append("## Conversation to Summarize\n\nPlease provide a very concise summary of the conversation below. Focus on key decisions, user intents, and the outcomes of any tool outputs. Ignore polite filler. Aim for 2-3 sentences max.\n\n");
+        for (Content content : messages) {
+            String role = content.role().orElse("unknown").toUpperCase();
+            sb.append("**").append(role).append("**:\n");
+            for (Part part : content.parts().orElse(List.of())) {
+                if (part.text().isPresent()) {
+                    sb.append(part.text().get()).append("\n");
+                } else if (part.functionCall().isPresent()) {
+                    String fnName = part.functionCall().get().name().orElse("unknown");
+                    sb.append("[TOOL CALL: ").append(fnName).append("]\n");
+                } else if (part.functionResponse().isPresent()) {
+                    String fnName = part.functionResponse().get().name().orElse("unknown");
+                    sb.append("[TOOL RESPONSE: ").append(fnName).append("]\n");
+                } else if (part.inlineData().isPresent()) {
+                    String mime = part.inlineData().get().mimeType().orElse("image/png");
+                    sb.append("[IMAGE DATA: ").append(mime).append("]\n");
+                } else {
+                    sb.append("[NON-TEXT CONTENT]\n");
+                }
             }
-        } else {
-            // First message is model (or other), so we can safely prepend a User message
-            promptPayload.add(Content.builder().role("user").parts(List.of(Part.builder().text(summaryPromptText).build())).build());
-            promptPayload.addAll(messages);
+            sb.append("\n");
         }
+        log.info("Sending conversation snippet ({} characters) to LLM for summarization...", sb.length());
+        List<Content> promptPayload = List.of(Content.builder().role("user").parts(List.of(Part.builder().text(sb.toString()).build())).build());
         try {
             GenerateContentResponse response = client.models.generateContent(modelName, promptPayload, null);
-            return response.text();
+            String summary = response.text();
+            if (summary == null || summary.isBlank()) {
+                return "[Summary generation returned empty result]";
+            }
+            return summary.trim();
         } catch (Exception e) {
             log.error("Failed to generate summary", e);
-            return "[Context missing due to error]";
+            return "[Context missing due to error: " + e.getMessage() + "]";
         }
     }
 
     private String buildDynamicSystemPrompt(String staticPrompt) {
         StringBuilder sb = new StringBuilder(staticPrompt);
         if (!summaryQueue.isEmpty()) {
-            sb.append("\n\n=== PREVIOUS CONTEXT (Oldest to Newest) ===\n");
+            sb.append("\n\n## Previous Conversation Context\n*(Summarized segments from oldest to newest)*\n");
             int i = 1;
             for (String summary : summaryQueue) {
-                sb.append("--- Segment ").append(i++).append(" ---\n");
+                sb.append("\n### Segment ").append(i++).append("\n");
                 sb.append(summary).append("\n");
             }
-            sb.append("===========================================\n");
         }
         return sb.toString();
+    }
+
+    public List<String> getSummaryQueue() {
+        return new ArrayList<>(summaryQueue);
     }
 }
