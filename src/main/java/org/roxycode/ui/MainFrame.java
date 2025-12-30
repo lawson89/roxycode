@@ -279,11 +279,11 @@ public class MainFrame extends JFrame implements Runnable {
             msgCountLabel.setIconTextGap(4);
         }
         if (inTokenLabel != null) {
-            inTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_DOWN_BOLD_OUTLINE, 14));
+            inTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_UP_BOLD_OUTLINE, 14));
             inTokenLabel.setIconTextGap(4);
         }
         if (outTokenLabel != null) {
-            outTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_UP_BOLD_OUTLINE, 14));
+            outTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_DOWN_BOLD_OUTLINE, 14));
             outTokenLabel.setIconTextGap(4);
         }
     }
