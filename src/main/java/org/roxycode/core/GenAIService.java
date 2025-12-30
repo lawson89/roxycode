@@ -72,9 +72,9 @@ public class GenAIService {
         }
         // Recreate client if API key has changed or if it's not yet initialized
         if (client == null || !key.equals(lastUsedApiKey)) {
-            LOG.info("Initializing/Refreshing Gemini Client with automatic retry (10 attempts, 5min timeout)...");
-            client = Client.builder().apiKey(key).httpOptions(HttpOptions.builder().retryOptions(HttpRetryOptions.builder().attempts(10).httpStatusCodes(429, 503).build()).timeout(// 5 minutes to allow for multiple backoff retries
-            300_000).build()).build();
+            LOG.info("Initializing/Refreshing Gemini Client with automatic retry (5 attempts, 2min timeout)...");
+            client = Client.builder().apiKey(key).
+            httpOptions(HttpOptions.builder().retryOptions(HttpRetryOptions.builder().attempts(5).httpStatusCodes(429, 503).build()).timeout(60_000).build()).build();
             lastUsedApiKey = key;
         }
         return client;
@@ -112,12 +112,7 @@ public class GenAIService {
             toolRegistry.getTool(toolName).ifPresent(td -> {
                 Map<String, Schema> properties = new HashMap<>();
                 if (td.getParameters() != null) {
-                    // Simplifying types for MVP
-                    // Simplifying types for MVP
-                    td.getParameters().// Simplifying types for MVP
-                    forEach(// Simplifying types for MVP
-                    p -> // Simplifying types for MVP
-                    properties.put(p.getName(), Schema.builder().type("STRING").description(p.getDescription()).build()));
+                    td.getParameters().forEach(p -> properties.put(p.getName(), Schema.builder().type("STRING").description(p.getDescription()).build()));
                 }
                 Schema schema = Schema.builder().type("OBJECT").properties(properties).build();
                 cachedFunctions.add(FunctionDeclaration.builder().name(toolName).description(td.getDescription()).parameters(schema).build());
@@ -138,6 +133,10 @@ public class GenAIService {
 
     public int getOutTokens() {
         return outTokens;
+    }
+
+    public void clearHistory() {
+        history.clear();
     }
 
     public List<Content> getHistory() {
@@ -162,31 +161,38 @@ public class GenAIService {
         }
         try {
             this.stopRequested = false;
-            // 1. CONFIGURE SANDBOX (Always do this per chat to ensure safety)
+            // 1. CONFIGURE SANDBOX
             sandbox.setRoot(projectRoot);
-            // 2. Build Initial Prompt
+            // 2. Build Context (System info + Knowledge base)
             String contextMenu = contextRegistry.getContextMenu();
-            StringBuilder promptBuilder = new StringBuilder();
-            promptBuilder.append("Project Root: ").append(projectRoot).append("\n");
-            promptBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
-            promptBuilder.append(contextMenu).append("\n");
+            StringBuilder contextBuilder = new StringBuilder();
+            contextBuilder.append("Project Root: ").append(projectRoot).append("\n");
+            contextBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
+            contextBuilder.append(contextMenu).append("\n");
             if (attachedFiles != null && !attachedFiles.isEmpty()) {
-                promptBuilder.append("\n--- ATTACHED FILES ---\n");
+                contextBuilder.append("\n--- ATTACHED FILES ---\n");
                 for (File file : attachedFiles) {
-                    promptBuilder.append("File: ").append(file.getName()).append("\n");
-                    promptBuilder.append("Content:\n");
+                    contextBuilder.append("File: ").append(file.getName()).append("\n");
+                    contextBuilder.append("Content:\n");
                     try {
-                        promptBuilder.append(Files.readString(file.toPath())).append("\n");
+                        contextBuilder.append(Files.readString(file.toPath())).append("\n");
                     } catch (IOException e) {
-                        promptBuilder.append("[Error reading file: ").append(e.getMessage()).append("]\n");
+                        contextBuilder.append("[Error reading file: ").append(e.getMessage()).append("]\n");
                     }
-                    promptBuilder.append("----------------------\n");
+                    contextBuilder.append("----------------------\n");
                 }
             }
-            promptBuilder.append("Task: ").append(prompt);
-            String systemPrompt = promptBuilder.toString();
-            LOG.info("System prompt {}", systemPrompt);
-            history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemPrompt).build())).build());
+            String systemContext = contextBuilder.toString();
+            String taskMessage = "Task: " + prompt;
+            if (history.isEmpty()) {
+                history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemContext + "\n" + taskMessage).build())).build());
+            } else {
+                // Update the context at index 0. Note: HistoryService might have added summaries here,
+                // but we want the LATEST knowledge base info. HistoryService.compactHistory will re-add summaries.
+                history.set(0, Content.builder().role("user").parts(List.of(Part.builder().text(systemContext).build())).build());
+                history.add(Content.builder().role("user").parts(List.of(Part.builder().text(taskMessage).build())).build());
+            }
+            LOG.info("History size before loop: {}", history.size());
             // 3. Conversation Loop
             int turns = 0;
             int maxTurns = settingsService.getMaxTurns();
@@ -198,10 +204,8 @@ public class GenAIService {
                 if (onStatusUpdate != null) {
                     onStatusUpdate.accept(String.format("Thinking (%d/%d)...", turns, maxTurns));
                 }
-                // Use a fast/cheap model for summarization
-                // FIX: Use getClient() to ensure it's initialized
-                historyService.compactHistory(getClient(), "gemini-2.0-flash", history, systemPrompt);
-                // USE CACHED FUNCTIONS
+                // historyService will update history.get(0) with summaries if needed, using systemContext as base
+                historyService.compactHistory(getClient(), "gemini-2.0-flash", history, systemContext);
                 GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
                 if (!cachedFunctions.isEmpty()) {
                     Tool toolConfig = Tool.builder().functionDeclarations(cachedFunctions).build();
@@ -210,17 +214,18 @@ public class GenAIService {
                 GenerateContentResponse response = doGenerateContent(settingsService.getGeminiModel(), history, configBuilder.build());
                 if (response.usageMetadata().isPresent()) {
                     GenerateContentResponseUsageMetadata usage = response.usageMetadata().get();
-                    // input tokens
                     inTokens = usage.promptTokenCount().orElse(0);
-                    //output tokens
                     outTokens = usage.candidatesTokenCount().orElse(0);
                     usageService.recordUsage(inTokens, outTokens);
                 }
                 Optional<List<Candidate>> candidatesOpt = response.candidates();
                 if (candidatesOpt.isEmpty() || candidatesOpt.get().isEmpty()) {
+                    LOG.error("No candidates in response.");
                     return "Error: No response candidates.";
                 }
-                Content modelMessage = candidatesOpt.get().getFirst().content().orElse(Content.builder().build());
+                Candidate firstCandidate = candidatesOpt.get().getFirst();
+                LOG.info("Response received. Finish reason: {}. Candidate count: {}", firstCandidate.finishReason().orElse(null), candidatesOpt.get().size());
+                Content modelMessage = firstCandidate.content().orElse(Content.builder().build());
                 history.add(modelMessage);
                 List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
                 // --- PARALLEL FUNCTION HANDLING ---
@@ -237,7 +242,6 @@ public class GenAIService {
                         FunctionCall call = callOpt.get();
                         String fnName = call.name().orElse("unknown");
                         Map<String, Object> originalArgs = call.args().orElse(Collections.emptyMap());
-                        // Path Resolution Logic
                         Map<String, Object> fixedArgs = new HashMap<>(originalArgs);
                         if (fixedArgs.containsKey("path")) {
                             String originalPath = (String) fixedArgs.get("path");
@@ -264,13 +268,10 @@ public class GenAIService {
                         } catch (Exception e) {
                             toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
                         }
-                        LOG.info("Tool output: {}", toolOutput);
                         if (toolOutput.endsWith(".png") && Files.exists(Paths.get(toolOutput))) {
-                            LOG.info("Tool output is an image {}", toolOutput);
                             try {
                                 byte[] imageBytes = Files.readAllBytes(Paths.get(toolOutput));
                                 Blob imageBlob = Blob.builder().mimeType("image/png").data(imageBytes).build();
-                                // FIX: Create TWO separate parts: one for image, one for text
                                 subsequentUserMessages.add(Content.builder().role("user").parts(List.of(Part.builder().inlineData(imageBlob).build(), Part.builder().text("Screenshot captured.").build())).build());
                                 toolOutput = "Screenshot captured.";
                             } catch (Exception e) {
@@ -287,7 +288,12 @@ public class GenAIService {
                     history.addAll(subsequentUserMessages);
                     continue;
                 }
-                return parts.stream().map(p -> p.text().orElse("")).collect(Collectors.joining(""));
+                String finalResponse = parts.stream().map(p -> p.text().orElse("")).collect(Collectors.joining(""));
+                if (finalResponse.isBlank()) {
+                    LOG.warn("Model returned an empty text response. Finish reason: {}", firstCandidate.finishReason().orElse(null));
+                    return "[Model returned an empty response. Finish reason: " + firstCandidate.finishReason().orElse(null) + "]";
+                }
+                return finalResponse;
             }
             return "Max turns reached.";
         } finally {

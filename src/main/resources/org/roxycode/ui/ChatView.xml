@@ -19,7 +19,7 @@
     </row-panel>
      <row-panel spacing="16" padding="4,12,4,12" opaque="true">
         <spacer weight="1"/>
-        <label name="msgCountLabel" size="100,15" text="0 Messages" foreground="#888888"  horizontalAlignment="trailing"/>
+        <label name="msgCountLabel" size="120,15" text="0 Messages" foreground="#888888"  horizontalAlignment="trailing"/>
         <label name="inTokenLabel" size="100,15" text="0 In" foreground="#888888"  horizontalAlignment="trailing"/>
         <label name="outTokenLabel" size="100, 15" text="0 Out" foreground="#888888" horizontalAlignment="trailing"/>
     </row-panel>

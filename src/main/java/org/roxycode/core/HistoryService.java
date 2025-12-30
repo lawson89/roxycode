@@ -45,7 +45,7 @@ public class HistoryService {
             isForced = true;
         }
         if (splitIndex == -1 || splitIndex >= history.size()) {
-            log.warn("⚠️ Could not find any split point (safe or forced) among {} messages. " + "History likely consists of an ongoing tool-call sequence. Skipping compaction.", history.size());
+            log.warn("⚠️ Could not find any split point (safe or forced) among {} messages. Skipping compaction.", history.size());
             return;
         }
         if (splitIndex <= 1) {
@@ -67,8 +67,10 @@ public class HistoryService {
         String dynamicSystemText = buildDynamicSystemPrompt(staticSystemPrompt);
         Content newSystemMsg = Content.builder().role("user").parts(List.of(Part.builder().text(dynamicSystemText).build())).build();
         history.set(0, newSystemMsg);
-        // 6. Remove the compacted messages and handle forced split
+        // 6. Remove the compacted messages
         history.subList(1, splitIndex).clear();
+        
+        // 7. Handle consecutive User messages to maintain role alternation
         if (isForced) {
             // Insert a synthetic message to bridge the gap
             String syntheticText = "Continuing from previous context. Summary of progress so far:\n" + newSummary + "\n\nPlease proceed with the task.";
@@ -76,53 +78,45 @@ public class HistoryService {
             history.add(1, syntheticMsg);
             log.info("➕ Inserted synthetic continuation message.");
         }
+
+        // Merge consecutive User messages at the beginning if they exist
+        if (history.size() > 1 && isUserNode(history.get(0)) && isUserNode(history.get(1))) {
+            log.info("Merging consecutive User messages at indices 0 and 1.");
+            Content merged = mergeUserMessages(history.get(0), history.get(1));
+            history.set(0, merged);
+            history.remove(1);
+        }
+        
         log.info("✅ Compaction complete. History size is now: {}", history.size());
     }
 
-    /**
-     * Finds a safe message index to start the new history.
-     * A safe index must point to a "pure" user message (not a tool response).
-     */
     private int findSafeSplitIndex(List<Content> history, int targetIndex) {
-        // 1. First, try looking forward from targetIndex to find a clean break.
-        // We stop before the last few messages to ensure the model keeps some recent context.
         int lookAheadLimit = Math.max(targetIndex, history.size() - 5);
         for (int i = targetIndex; i < lookAheadLimit; i++) {
             if (isSafeStartNode(history.get(i))) {
                 return i;
             }
         }
-        // 2. If no clean break is found forward, look backward from targetIndex.
-        // This is useful if the current tool chain started just before our target.
         for (int i = targetIndex - 1; i >= 1; i--) {
             if (isSafeStartNode(history.get(i))) {
                 return i;
             }
         }
-        // 3. If we still haven't found a pure user message, we might be in a very long tool chain.
-        // For now, we return -1 to allow the caller to decide if a forced split is needed.
         return -1;
     }
 
-    /**
-     * Finds a "forced" split index when no safe split point exists.
-     * It prefers a 'model' message because a 'model' message can follow a 'user' message.
-     */
     private int findForcedSplitIndex(List<Content> history, int targetIndex) {
-        // Look forward first
         int lookAheadLimit = Math.min(history.size(), targetIndex + 5);
         for (int i = targetIndex; i < lookAheadLimit; i++) {
             if (isModelNode(history.get(i))) {
                 return i;
             }
         }
-        // Look backward
         for (int i = targetIndex - 1; i >= 1; i--) {
             if (isModelNode(history.get(i))) {
                 return i;
             }
         }
-        // Final fallback: just use targetIndex if it's not 0 and less than size
         if (targetIndex >= 1 && targetIndex < history.size()) {
             return targetIndex;
         }
@@ -133,24 +127,27 @@ public class HistoryService {
         return "model".equals(content.role().orElse("?"));
     }
 
-    /**
-     * A node is a Safe Start Node if:
-     * 1. It is from the "user"
-     * 2. It is NOT a Function Response (Tool Output)
-     */
+    private boolean isUserNode(Content content) {
+        return "user".equals(content.role().orElse("?"));
+    }
+
+    private Content mergeUserMessages(Content c1, Content c2) {
+        List<Part> parts = new ArrayList<>();
+        parts.addAll(c1.parts().orElse(List.of()));
+        parts.add(Part.builder().text("\n--- CONTINUATION ---\n").build());
+        parts.addAll(c2.parts().orElse(List.of()));
+        return Content.builder().role("user").parts(parts).build();
+    }
+
     private boolean isSafeStartNode(Content content) {
         String role = content.role().orElse("?");
         boolean isToolResponse = hasFunctionResponse(content);
         return "user".equals(role) && !isToolResponse;
     }
 
-    /**
-     * Checks if the content contains a function response part.
-     */
     private boolean hasFunctionResponse(Content content) {
         if (content.parts().isEmpty())
             return false;
-        // In the new SDK, we check if the part has a functionResponse
         for (Part part : content.parts().orElse(List.of())) {
             if (part.functionResponse().isPresent()) {
                 return true;
@@ -164,7 +161,7 @@ public class HistoryService {
             return "[No messages to summarize]";
         }
         List<Content> promptPayload = new ArrayList<>();
-        promptPayload.add(Content.builder().role("user").parts(List.of(Part.builder().text("Summarize the following conversation snippet concisely. " + "Capture key decisions, user intents, and tool outputs. " + "Ignore polite filler. Return ONLY the summary text.").build())).build());
+        promptPayload.add(Content.builder().role("user").parts(List.of(Part.builder().text("Summarize the following conversation snippet concisely. Capture key decisions, user intents, and tool outputs. Ignore polite filler. Return ONLY the summary text.").build())).build());
         promptPayload.addAll(messages);
         try {
             GenerateContentResponse response = client.models.generateContent(modelName, promptPayload, null);
@@ -177,7 +174,6 @@ public class HistoryService {
 
     private String buildDynamicSystemPrompt(String staticPrompt) {
         StringBuilder sb = new StringBuilder(staticPrompt);
-        log.info("Building a dynamic system prompt with {} chunks of previous context.", summaryQueue.size());
         if (!summaryQueue.isEmpty()) {
             sb.append("\n\n=== PREVIOUS CONTEXT (Oldest to Newest) ===\n");
             int i = 1;

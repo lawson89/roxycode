@@ -500,6 +500,7 @@ public class MainFrame extends JFrame implements Runnable {
             currentProjectRoot = fileChooser.getSelectedFile().toPath().toAbsolutePath();
             sandbox.setRoot(currentProjectRoot.toString());
             roxyProjectService.ensureProjectStructure();
+            genAIService.clearHistory();
             updateProjectLabel();
             initGitInfo();
             populateFileTree();
