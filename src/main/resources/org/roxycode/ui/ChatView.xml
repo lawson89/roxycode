@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE column-panel SYSTEM "sierra.dtd">
+
+<column-panel name="viewChat" visible="true" weight="1">
+    <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
+    </scroll-pane>
+    <row-panel spacing="8" padding="4" opaque="true">
+        <label text="Attachments:"/>
+        <label name="attachmentsLabel" text="None" weight="1"/>
+        <button name="clearAttachmentsButton" text="Clear"/>
+    </row-panel>
+    <row-panel spacing="4" padding="8" opaque="true">
+        <button name="attachButton" text="Attach"/>
+        <scroll-pane weight="1">
+            <text-area name="inputField" rows="3"/>
+        </scroll-pane>
+        <button name="sendButton" text="Send"/>
+        <button name="stopButton" text="Stop" enabled="false"/>
+    </row-panel>
+</column-panel>

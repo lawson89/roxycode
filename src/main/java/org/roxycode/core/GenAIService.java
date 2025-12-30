@@ -72,7 +72,7 @@ public class GenAIService {
             // Updated to handle 429 Rate Limits automatically
             client = Client.builder().apiKey(key).httpOptions(// Retry up to 5 times
             HttpOptions.builder().// Retry up to 5 times
-            retryOptions(// Retry up to 5 times
+            retryOptions(// Trigger on Rate Limit (429) or Service Unavailable (503)
             HttpRetryOptions.builder().// Trigger on Rate Limit (429) or Service Unavailable (503)
             attempts(// Trigger on Rate Limit (429) or Service Unavailable (503)
             5).// Trigger on Rate Limit (429) or Service Unavailable (503)
@@ -255,6 +255,7 @@ public class GenAIService {
                         }
                         LOG.info("Tool output: {}", toolOutput);
                         if (toolOutput.endsWith(".png") && Files.exists(Paths.get(toolOutput))) {
+                            LOG.info("Tool output is an image {}", toolOutput);
                             try {
                                 byte[] imageBytes = Files.readAllBytes(Paths.get(toolOutput));
                                 Blob imageBlob = Blob.builder().mimeType("image/png").data(imageBytes).build();

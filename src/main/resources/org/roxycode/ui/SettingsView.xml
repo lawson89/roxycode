@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE column-panel SYSTEM "sierra.dtd">
+
+<column-panel name="viewSettings" visible="false" padding="16" spacing="8">
+    <label text="Global Settings" font="h1"/>
+    <spacer size="16"/>
+    <label text="Gemini API Key:"/>
+    <row-panel spacing="8">
+        <password-field name="apiKeyField" columns="30" weight="1"/>
+    </row-panel>
+
+    <spacer size="8"/>
+    <label text="Gemini Model:"/>
+    <row-panel spacing="8">
+        <combo-box name="modelComboBox" weight="1"/>
+    </row-panel>
+
+    <spacer size="8"/>
+    <label text="Max Turns (Chat History):"/>
+    <row-panel spacing="8">
+        <text-field name="maxTurnsField" columns="10"/>
+    </row-panel>
+
+    <spacer size="8"/>
+    <label text="Theme:"/>
+    <row-panel spacing="8">
+        <combo-box name="themeComboBox" weight="1"/>
+    </row-panel>
+
+    <spacer size="16"/>
+    <label text="Memory Compaction Settings" font="h2"/>
+    <spacer size="8"/>
+    <label text="History Threshold (Start Compacting at):"/>
+    <row-panel spacing="8">
+        <text-field name="historyThresholdField" columns="10"/>
+    </row-panel>
+
+    <spacer size="8"/>
+    <label text="Compaction Chunk Size (Messages to Summarize):"/>
+    <row-panel spacing="8">
+        <text-field name="compactionChunkSizeField" columns="10"/>
+    </row-panel>
+
+    <spacer size="8"/>
+    <label text="Max Summary Chunks (Context Segments):"/>
+    <row-panel spacing="8">
+        <text-field name="maxSummaryChunksField" columns="10"/>
+    </row-panel>
+
+    <spacer size="16"/>
+    <row-panel>
+        <button name="saveSettingsButton" text="Save Settings"/>
+    </row-panel>
+    <spacer weight="1"/>
+</column-panel>

@@ -20,6 +20,7 @@ import java.util.concurrent.*;
 public class ToolExecutionService {
 
     private final ExecutorService executorService;
+
     private final ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
 
     private final Sandbox sandbox;
@@ -40,11 +41,11 @@ public class ToolExecutionService {
 
     private final BuildToolService buildToolService;
 
-    private final PreviewService previewService;
+    private final SierraPreviewService sierraPreviewService;
 
     private final ObjectMapper objectMapper;
 
-    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, GrepService grepService, GitService gitService, TikaService tikaService, JavaService javaAnalysisService, XmlService xmlService, TomlService tomlService, BuildToolService buildToolService, PreviewService previewService, ObjectMapper objectMapper) {
+    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, GrepService grepService, GitService gitService, TikaService tikaService, JavaService javaAnalysisService, XmlService xmlService, TomlService tomlService, BuildToolService buildToolService, SierraPreviewService sierraPreviewService, ObjectMapper objectMapper) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
         this.sandbox = sandbox;
@@ -56,7 +57,7 @@ public class ToolExecutionService {
         this.xmlService = xmlService;
         this.tomlService = tomlService;
         this.buildToolService = buildToolService;
-        this.previewService = previewService;
+        this.sierraPreviewService = sierraPreviewService;
         this.objectMapper = objectMapper;
     }
 
@@ -71,17 +72,11 @@ public class ToolExecutionService {
     }
 
     private String executeJavaScript(String script, Map<String, Object> args) {
-        try (Context context = Context.newBuilder("js")
-                .allowHostAccess(HostAccess.ALL)
-                .allowHostClassLookup(className -> false)
-                .option("engine.WarnInterpreterOnly", "false")
-                .build()) {
-            
+        try (Context context = Context.newBuilder("js").allowHostAccess(HostAccess.ALL).allowHostClassLookup(className -> false).option("engine.WarnInterpreterOnly", "false").build()) {
             // Set a timeout of 60 seconds
             ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> {
                 context.close(true);
             }, 60, TimeUnit.SECONDS);
-
             try {
                 // 1. Bind your services
                 context.getBindings("js").putMember("sandbox", this.sandbox);
@@ -93,7 +88,7 @@ public class ToolExecutionService {
                 context.getBindings("js").putMember("xml", this.xmlService);
                 context.getBindings("js").putMember("toml", this.tomlService);
                 context.getBindings("js").putMember("buildTool", this.buildToolService);
-                context.getBindings("js").putMember("preview", this.previewService);
+                context.getBindings("js").putMember("sierra", this.sierraPreviewService);
                 context.getBindings("js").putMember("json", this.objectMapper);
                 // 2. Wrap the Java Map in ProxyObject
                 context.getBindings("js").putMember("args", ProxyObject.fromMap(args));

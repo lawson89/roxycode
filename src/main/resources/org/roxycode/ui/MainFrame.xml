@@ -14,7 +14,6 @@
         </menu>
     </menu-bar>
 
-    <!-- Header -->
     <row-panel spacing="8" padding="8" opaque="true" alignToBaseline="false">
         <label text="" name="icon"/>
         <label text="RoxyCode AI" styleClass="h3"/>
@@ -24,123 +23,26 @@
         <label text="Branch:"/>
         <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
         <spacer size="16"/>
-        
+
         <label name="currentModelLabel" text="[MODEL]" styleClass="monospaced"/>
         <spacer weight="1"/>
         <button name="rescanButton" text="Rescan"/>
     </row-panel>
 
-    <!-- MAIN BODY: Row Panel to split Left Menu and Right Content -->
     <row-panel weight="1" alignToBaseline="false">
 
-        <!-- LEFT SIDEBAR -->
         <column-panel padding="12" spacing="8" opaque="true">
             <label text="MENU" font="bold-12"/>
-            
-            <!-- Navigation Buttons -->
+
             <button name="navChatButton" text="Chat" borderPainted="false" horizontalAlignment="left"/>
             <button name="navFilesButton" text="Project Files" borderPainted="false" horizontalAlignment="left"/>
             <button name="navUsageButton" text="Usage" borderPainted="false" horizontalAlignment="left"/>
             <button name="navSettingsButton" text="Settings" borderPainted="false" horizontalAlignment="left"/>
-            
+
             <spacer weight="1"/>
         </column-panel>
 
-        <!-- RIGHT CONTENT AREA -->
-        <stack-panel weight="1">
-
-            <!-- VIEW 1: CHAT (Default) -->
-            <column-panel name="viewChat" visible="true" weight="1">
-                <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
-                    <!-- Chat content injected manually -->
-                </scroll-pane>
-                <!-- Attachments & Input Area -->
-                <row-panel spacing="8" padding="4" opaque="true">
-                    <label text="Attachments:"/>
-                    <label name="attachmentsLabel" text="None" weight="1"/>
-                    <button name="clearAttachmentsButton" text="Clear"/>
-                </row-panel>
-                <row-panel spacing="4" padding="8" opaque="true">
-                    <button name="attachButton" text="Attach"/>
-                    <scroll-pane weight="1">
-                        <text-area name="inputField" rows="3"/>
-                    </scroll-pane>
-                    <button name="sendButton" text="Send"/>
-                    <button name="stopButton" text="Stop" enabled="false"/>
-                </row-panel>
-            </column-panel>
-
-            <!-- VIEW 2: PROJECT FILES -->
-            <column-panel name="viewFiles" visible="false" weight="1">
-                <label text="Project Files" styleClass="h2" padding="10"/>
-                <scroll-pane weight="1">
-                    <tree name="fileTree"/>
-                </scroll-pane>
-            </column-panel>
-
-            <!-- VIEW 3: USAGE -->
-            <column-panel name="viewUsage" visible="false" padding="32" spacing="20">
-                <label text="API Usage Statistics" font="h1"/>
-                
-                <label name="usageHtmlLabel" text=""/>
-
-                <button name="resetUsageButton" text="Reset Statistics"/>
-                <spacer weight="1"/>
-            </column-panel>
-
-            <!-- VIEW 4: SETTINGS -->
-            <column-panel name="viewSettings" visible="false" padding="16" spacing="8">
-                <label text="Global Settings" font="h1"/>
-                <spacer size="16"/>
-                <label text="Gemini API Key:"/>
-                <row-panel spacing="8">
-                    <password-field name="apiKeyField" columns="30" weight="1"/>
-                </row-panel>
-                
-                <spacer size="8"/>
-                <label text="Gemini Model:"/>
-                <row-panel spacing="8">
-                    <combo-box name="modelComboBox" weight="1"/>
-                </row-panel>
-                
-                <spacer size="8"/>
-                <label text="Max Turns (Chat History):"/>
-                <row-panel spacing="8">
-                    <text-field name="maxTurnsField" columns="10"/>
-                </row-panel>
-
-                <spacer size="8"/>
-                <label text="Theme:"/>
-                <row-panel spacing="8">
-                    <combo-box name="themeComboBox" weight="1"/>
-                </row-panel>
-                
-                <spacer size="16"/>
-                <label text="Memory Compaction Settings" font="h2"/>
-                <spacer size="8"/>
-                <label text="History Threshold (Start Compacting at):"/>
-                <row-panel spacing="8">
-                    <text-field name="historyThresholdField" columns="10"/>
-                </row-panel>
-                
-                <spacer size="8"/>
-                <label text="Compaction Chunk Size (Messages to Summarize):"/>
-                <row-panel spacing="8">
-                    <text-field name="compactionChunkSizeField" columns="10"/>
-                </row-panel>
-
-                <spacer size="8"/>
-                <label text="Max Summary Chunks (Context Segments):"/>
-                <row-panel spacing="8">
-                    <text-field name="maxSummaryChunksField" columns="10"/>
-                </row-panel>
-                
-                <spacer size="16"/>
-                <row-panel>
-                    <button name="saveSettingsButton" text="Save Settings"/>
-                </row-panel>
-                <spacer weight="1"/>
-            </column-panel>
+        <stack-panel weight="1" name="mainContentStack">
 
         </stack-panel>
 

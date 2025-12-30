@@ -1,0 +1,44 @@
+package org.roxycode.core.tools.service;
+
+import jakarta.inject.Singleton;
+import org.roxycode.core.utils.ComponentScreenshot;
+
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+
+@Singleton
+public class SierraPreviewService {
+
+    private PreviewSierraFrame frame;
+
+    public String previewSierra(String path) {
+        if (frame == null) {
+            frame = new PreviewSierraFrame(Path.of(path));
+        }
+
+        try {
+            frame.preview();
+            BufferedImage image = ComponentScreenshot.captureComponent(frame);
+
+            // Save to temp file
+            File outputFile = File.createTempFile("sierra_preview_", ".png");
+            ImageIO.write(image, "png", outputFile);
+            outputFile.deleteOnExit();
+            close();
+            return outputFile.getAbsolutePath();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void close() {
+        if (frame != null) {
+            frame.close();
+            frame = null;
+        }
+    }
+}
