@@ -1,10 +1,9 @@
-package org.roxycode.core.service;
+package org.roxycode.core.tools.service;
 
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.roxycode.core.tools.service.TikaService;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

@@ -1,5 +1,6 @@
 package org.roxycode.core;
 
+import com.google.genai.Client;
 import com.google.genai.types.Content;
 import com.google.genai.types.Part;
 import com.google.genai.types.FunctionResponse;
@@ -136,6 +137,99 @@ class HistoryServiceTest {
         var method = HistoryService.class.getDeclaredMethod("findForcedSplitIndex", List.class, int.class);
         method.setAccessible(true);
         return (int) method.invoke(historyService, history, targetIndex);
+    }
+
+    @Test
+    void testCompactHistory_StandardFlow() {
+        // Setup settings
+        when(settingsService.getHistoryThreshold()).thenReturn(5);
+        when(settingsService.getCompactionChunkSize()).thenReturn(3);
+        when(settingsService.getMaxSummaryChunks()).thenReturn(3);
+
+        // Setup History with enough messages
+        List<Content> history = new ArrayList<>();
+        history.add(createMsg("user", "System Prompt")); // 0
+        history.add(createMsg("user", "Msg 1")); // 1
+        history.add(createMsg("model", "Msg 2")); // 2
+        history.add(createMsg("user", "Msg 3")); // 3
+        history.add(createMsg("model", "Msg 4")); // 4
+        history.add(createMsg("user", "Msg 5")); // 5 (Safe split point)
+        history.add(createMsg("model", "Msg 6")); // 6
+        history.add(createMsg("user", "Msg 7")); // 7
+        history.add(createMsg("model", "Msg 8")); // 8
+        history.add(createMsg("user", "Msg 9")); // 9
+        history.add(createMsg("model", "Msg 10")); // 10
+        history.add(createMsg("user", "Msg 11")); // 11
+        // Size 12.
+
+        // Mock Client
+        Client mockClient = mock(Client.class);
+
+        // Execute
+        historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
+
+        // Verify
+        assertEquals(8, history.size(), "History should be compacted to size 8");
+        assertEquals("Msg 5", history.get(1).parts().get().get(0).text().get(), "First message after system should be Msg 5");
+        
+        Content system = history.get(0);
+        String systemText = system.parts().get().get(0).text().get();
+        assertTrue(systemText.contains("[Context missing due to error]"), "Should contain error summary");
+    }
+    
+    @Test
+    void testCompactHistory_NoCompactionNeeded() {
+        // Setup settings
+        when(settingsService.getHistoryThreshold()).thenReturn(10);
+        when(settingsService.getCompactionChunkSize()).thenReturn(3);
+
+        // Setup History
+        List<Content> history = new ArrayList<>();
+        history.add(createMsg("user", "System Prompt")); // 0
+        history.add(createMsg("user", "Msg 1")); // 1
+        history.add(createMsg("model", "Msg 2")); // 2
+        
+        // Size 3. Threshold 10.
+        Client mockClient = mock(Client.class);
+        
+        historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
+        
+        assertEquals(3, history.size(), "History should not change");
+        assertEquals("System Prompt", history.get(0).parts().get().get(0).text().get());
+    }
+
+    @Test
+    void testCompactHistory_ForcedSplit() {
+        // Setup settings
+        when(settingsService.getHistoryThreshold()).thenReturn(5);
+        when(settingsService.getCompactionChunkSize()).thenReturn(3);
+        when(settingsService.getMaxSummaryChunks()).thenReturn(3);
+
+        // Setup History with UNSAFE messages in the split zone
+        List<Content> history = new ArrayList<>();
+        history.add(createMsg("user", "System Prompt")); // 0
+        history.add(createMsg("model", "Msg 1")); // 1 (Unsafe)
+        history.add(createMsg("model", "Msg 2")); // 2
+        history.add(createMsg("model", "Msg 3")); // 3
+        history.add(createMsg("model", "Msg 4")); // 4
+        history.add(createMsg("model", "Msg 5")); // 5
+        history.add(createMsg("model", "Msg 6")); // 6
+        history.add(createMsg("user", "Msg 7")); // 7
+        history.add(createMsg("model", "Msg 8")); // 8
+        history.add(createMsg("user", "Msg 9")); // 9
+        history.add(createMsg("model", "Msg 10")); // 10
+        history.add(createMsg("user", "Msg 11")); // 11
+        // Size 12.
+
+        Client mockClient = mock(Client.class);
+
+        // Execute
+        historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
+
+        assertEquals(10, history.size(), "History should be compacted to size 10");
+        
+        Content synthetic = history.get(1);
+        assertTrue(synthetic.parts().get().get(0).text().get().contains("Continuing from previous context"), "Should be synthetic message");
     }
 
     private Content createMsg(String role, String text) {

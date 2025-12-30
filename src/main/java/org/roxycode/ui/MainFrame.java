@@ -307,8 +307,11 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (modelComboBox != null) {
             modelComboBox.removeAllItems();
-            modelComboBox.addItem("gemini-1.5-pro");
-            modelComboBox.addItem("gemini-1.5-flash");
+            modelComboBox.addItem("gemini-3-pro-preview");
+            modelComboBox.addItem("gemini-3-flash-preview");
+            modelComboBox.addItem("gemini-2.5-flash");
+            modelComboBox.addItem("gemini-2.5-pro");
+            modelComboBox.addItem("gemini-2.0-flash");
             modelComboBox.setSelectedItem(settingsService.getGeminiModel());
         }
         if (historyThresholdField != null) historyThresholdField.setText(String.valueOf(settingsService.getHistoryThreshold()));
