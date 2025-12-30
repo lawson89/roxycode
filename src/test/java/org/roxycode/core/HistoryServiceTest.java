@@ -7,6 +7,7 @@ import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
 import com.google.genai.types.FunctionResponse;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
@@ -330,5 +331,72 @@ class HistoryServiceTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Test
+    void testGenerateSummary_MergeConsecutiveUser() throws Exception {
+        // Setup
+        List<Content> messages = new ArrayList<>();
+        messages.add(createMsg("user", "User Message 1"));
+        messages.add(createMsg("model", "Model Response 1"));
+
+        Client mockClient = mock(Client.class);
+        Models mockModels = mock(Models.class);
+        setClientModels(mockClient, mockModels);
+        GenerateContentResponse mockResponse = mock(GenerateContentResponse.class);
+        when(mockResponse.text()).thenReturn("Summary");
+        when(mockModels.generateContent(anyString(), anyList(), any())).thenReturn(mockResponse);
+
+        // Invoke private method
+        var method = HistoryService.class.getDeclaredMethod("generateSummary", Client.class, String.class, List.class);
+        method.setAccessible(true);
+        method.invoke(historyService, mockClient, "model-x", messages);
+
+        // Verify that the first message sent to API has merged content
+        ArgumentCaptor<List<Content>> captor = ArgumentCaptor.forClass(List.class);
+        verify(mockModels).generateContent(eq("model-x"), captor.capture(), any());
+        
+        List<Content> payload = captor.getValue();
+        assertEquals(2, payload.size(), "Should have 2 messages (merged first user, then model)");
+        
+        Content firstMsg = payload.get(0);
+        assertEquals("user", firstMsg.role().get());
+        assertTrue(firstMsg.parts().get().size() >= 2, "First message should have at least 2 parts (prompt + original)");
+        
+        boolean hasPrompt = firstMsg.parts().get().stream().anyMatch(p -> p.text().orElse("").contains("Summarize the following"));
+        boolean hasOriginal = firstMsg.parts().get().stream().anyMatch(p -> p.text().orElse("").contains("User Message 1"));
+        
+        assertTrue(hasPrompt, "Payload should contain summary prompt");
+        assertTrue(hasOriginal, "Payload should contain original user message");
+    }
+
+    @Test
+    void testCompactHistory_MergeMultipleConsecutiveUsers() throws Exception {
+        // Setup settings
+        when(settingsService.getHistoryThreshold()).thenReturn(5);
+        when(settingsService.getCompactionChunkSize()).thenReturn(3);
+        when(settingsService.getMaxSummaryChunks()).thenReturn(3);
+
+        Client mockClient = mock(Client.class);
+        Models mockModels = mock(Models.class);
+        setClientModels(mockClient, mockModels);
+        GenerateContentResponse mockResponse = mock(GenerateContentResponse.class);
+        when(mockResponse.text()).thenReturn("Summary");
+        when(mockModels.generateContent(anyString(), anyList(), any())).thenReturn(mockResponse);
+
+        // Setup History with multiple consecutive users (Tool responses)
+        List<Content> history = new ArrayList<>();
+        history.add(createMsg("user", "System"));
+        for(int i=0; i<10; i++) {
+            history.add(createToolMsg("user", "R" + i));
+        }
+        
+        // Execute
+        historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
+        
+        // Verify that all leading users are merged
+        // Since they are ALL users, they should ALL be merged into one.
+        assertEquals(1, history.size(), "All consecutive users should be merged into one");
+        assertEquals("user", history.get(0).role().get());
     }
 }
