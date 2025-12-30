@@ -38,6 +38,7 @@
             <button name="navUsageButton" text="Usage" borderPainted="false" horizontalAlignment="left"/>
             <button name="navSettingsButton" text="Settings" borderPainted="false" horizontalAlignment="left"/>
             <button name="navSystemPromptButton" text="System Prompt" borderPainted="false" horizontalAlignment="left"/>
+            <button name="navMessageHistoryButton" text="Message History" borderPainted="false" horizontalAlignment="left"/>
 
             <spacer weight="1"/>
         </column-panel>

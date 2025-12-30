@@ -1,6 +1,8 @@
 package org.roxycode.ui;
 
 import com.formdev.flatlaf.*;
+import com.google.genai.types.Content;
+import com.google.genai.types.Part;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
@@ -29,6 +31,7 @@ import java.net.SocketTimeoutException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
@@ -109,6 +112,9 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Outlet
     private JButton navSystemPromptButton;
+
+    @Outlet
+    private JButton navMessageHistoryButton;
 
     // -- VIEW: CHAT --
     @Outlet
@@ -201,6 +207,17 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton refreshSystemPromptButton;
 
+    @Outlet
+    private JComponent viewMessageHistory;
+
+    private final MarkdownPane messageHistoryArea = new MarkdownPane();
+
+    @Outlet
+    private JScrollPane messageHistoryScrollPane;
+
+    @Outlet
+    private JButton refreshMessageHistoryButton;
+
     @Inject
     public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox) {
         this.gitService = gitService;
@@ -226,6 +243,7 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add((JComponent) UILoader.load(this, "UsageView.xml"));
             mainContentStack.add((JComponent) UILoader.load(this, "SettingsView.xml"));
             mainContentStack.add((JComponent) UILoader.load(this, "SystemPromptView.xml"));
+            mainContentStack.add((JComponent) UILoader.load(this, "MessageHistoryView.xml"));
         }
         // 3. Initialize UI Components
         initIcons();
@@ -235,6 +253,9 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (systemPromptScrollPane != null) {
             systemPromptScrollPane.setViewportView(systemPromptArea);
+        }
+        if (messageHistoryScrollPane != null) {
+            messageHistoryScrollPane.setViewportView(messageHistoryArea);
         }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
@@ -286,6 +307,9 @@ public class MainFrame extends JFrame implements Runnable {
             outTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_DOWN_BOLD_OUTLINE, 14));
             outTokenLabel.setIconTextGap(4);
         }
+        if (navMessageHistoryButton != null) {
+            navMessageHistoryButton.setIcon(FontIcon.of(MaterialDesignM.MESSAGE_TEXT_CLOCK_OUTLINE, 16));
+        }
     }
 
     private void updateProjectLabel() {
@@ -330,6 +354,8 @@ public class MainFrame extends JFrame implements Runnable {
             navSettingsButton.addActionListener(e -> showView("SETTINGS"));
         if (navSystemPromptButton != null)
             navSystemPromptButton.addActionListener(e -> showView("SYSTEM_PROMPT"));
+        if (navMessageHistoryButton != null)
+            navMessageHistoryButton.addActionListener(e -> showView("MESSAGE_HISTORY"));
         if (resetUsageButton != null)
             resetUsageButton.addActionListener(e -> {
                 usageService.reset();
@@ -358,6 +384,8 @@ public class MainFrame extends JFrame implements Runnable {
             openFolderMenuItem.addActionListener(this::onOpenFolder);
         if (refreshSystemPromptButton != null)
             refreshSystemPromptButton.addActionListener(e -> onRefreshSystemPrompt());
+        if (refreshMessageHistoryButton != null)
+            refreshMessageHistoryButton.addActionListener(e -> updateMessageHistoryView());
         if (saveSettingsButton != null)
             saveSettingsButton.addActionListener(this::onSaveSettings);
     }
@@ -373,6 +401,8 @@ public class MainFrame extends JFrame implements Runnable {
             viewSettings.setVisible(false);
         if (viewSystemPrompt != null)
             viewSystemPrompt.setVisible(false);
+        if (viewMessageHistory != null)
+            viewMessageHistory.setVisible(false);
         switch(viewName) {
             case "CHAT":
                 if (viewChat != null)
@@ -396,6 +426,12 @@ public class MainFrame extends JFrame implements Runnable {
                 if (viewSystemPrompt != null) {
                     onRefreshSystemPrompt();
                     viewSystemPrompt.setVisible(true);
+                }
+                break;
+            case "MESSAGE_HISTORY":
+                if (viewMessageHistory != null) {
+                    updateMessageHistoryView();
+                    viewMessageHistory.setVisible(true);
                 }
                 break;
         }
@@ -682,6 +718,46 @@ public class MainFrame extends JFrame implements Runnable {
         }
     }
 
+    private void updateMessageHistoryView() {
+        if (messageHistoryArea == null)
+            return;
+        List<Content> history = new ArrayList<>(genAIService.getHistory());
+        Collections.reverse(history);
+        StringBuilder html = new StringBuilder();
+        html.append("<table width='100%' border='0' cellspacing='0' cellpadding='10'>");
+        for (Content content : history) {
+            html.append(renderContentToHtmlRow(content));
+        }
+        html.append("</table>");
+        messageHistoryArea.setMarkdown(html.toString());
+    }
+
+    private String renderContentToHtmlRow(Content content) {
+        String role = content.role().orElse("unknown");
+        String roleColor = "user".equals(role) ? "#4080FF" : ("model".equals(role) ? "#40C080" : "#888888");
+        String bgColor = FlatLaf.isLafDark() ? ("user".equals(role) ? "#2d3a4f" : "#2d3f35") : ("user".equals(role) ? "#eef4ff" : "#eefff4");
+        StringBuilder row = new StringBuilder();
+        row.append("<tr bgcolor='").append(bgColor).append("'>");
+        row.append("<td valign='top' width='80'><b><font color='").append(roleColor).append("'>").append(role.toUpperCase()).append("</font></b></td>");
+        row.append("<td>");
+        List<Part> parts = content.parts().orElse(new ArrayList<>());
+        for (Part part : parts) {
+            String text = part.text().orElse("");
+            if (part.functionCall().isPresent()) {
+                text = "<i>[Function Call: " + part.functionCall().get().name().orElse("?") + "]</i>";
+            } else if (part.functionResponse().isPresent()) {
+                text = "<i>[Function Response: " + part.functionResponse().get().name().orElse("?") + "]</i>";
+            } else if (part.inlineData().isPresent()) {
+                text = "<i>[Inline Data: " + part.inlineData().get().mimeType().orElse("?") + "]</i>";
+            }
+            if (!text.isEmpty()) {
+                row.append(messageHistoryArea.markdownToHtml(text));
+            }
+        }
+        row.append("</td></tr>");
+        return row.toString();
+    }
+
     private void applyTheme(String themeName) {
         try {
             switch(themeName) {
@@ -704,6 +780,8 @@ public class MainFrame extends JFrame implements Runnable {
                 chatArea.updateStyle();
             if (systemPromptArea != null)
                 systemPromptArea.updateStyle();
+            if (messageHistoryArea != null)
+                messageHistoryArea.updateStyle();
         } catch (Exception ex) {
             log.error("Theme Error", ex);
         }

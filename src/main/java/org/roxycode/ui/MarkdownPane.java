@@ -77,7 +77,7 @@ public class MarkdownPane extends JTextPane {
     }
 
     public void setMarkdown(String markdown) {
-        String html = renderer.render(parser.parse(markdown));
+        String html = markdownToHtml(markdown);
         this.setText("<html><body>" + html + "</body></html>");
     }
 
@@ -176,5 +176,9 @@ public class MarkdownPane extends JTextPane {
             log.error("Failed to generate icon: " + namePrefix, e);
             return "";
         }
+    }
+
+    public String markdownToHtml(String markdown) {
+        return renderer.render(parser.parse(markdown));
     }
 }

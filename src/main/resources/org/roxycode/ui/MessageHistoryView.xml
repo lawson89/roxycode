@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE column-panel SYSTEM "sierra.dtd">
+
+<column-panel name="viewMessageHistory" visible="false" padding="16" spacing="8" weight="1">
+    <label text="Message History" font="h1"/>
+    <label text="Full transcript of the current conversation." foreground="#888888"/>
+    
+    <scroll-pane weight="1" name="messageHistoryScrollPane">
+    </scroll-pane>
+
+    <row-panel spacing="8">
+        <button name="refreshMessageHistoryButton" text="Refresh"/>
+        <spacer weight="1"/>
+    </row-panel>
+</column-panel>
