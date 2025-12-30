@@ -106,7 +106,7 @@ public class PreviewSierraFrame extends JFrame {
     public void preview() {
         setSize(1200, 800);
         setLocationRelativeTo(null);
-        //setVisible(true);
+        setVisible(true);
     }
 
     public void close() {

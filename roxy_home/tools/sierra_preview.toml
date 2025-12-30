@@ -1,7 +1,9 @@
-description = "Previews a Sierra XML file in a dedicated frame. Returns path to an image of the file preview."
+description = "Previews a Sierra Swinf DSL XML file in a dedicated frame. Returns path to an image of the file preview."
 type = "graaljs"
 source = "file:sierra_preview.js"
 
-[parameters]
-path.type = "string"
-path.description = "The path to the Sierra XML file."
+[[parameters]]
+name = "path"
+type = "string"
+description = "The path to the Sierra Swing DSL XML file."
+required = true

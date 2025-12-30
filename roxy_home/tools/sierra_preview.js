@@ -1,1 +1,1 @@
-sierra.previewSierra(args.get('path'));
+sierra.previewSierra(args.path);
