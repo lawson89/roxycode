@@ -8,9 +8,13 @@ import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignI;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignF;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignM;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.GenAIService;
@@ -308,9 +312,64 @@ public class MainFrame extends JFrame implements Runnable {
             outTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_DOWN_BOLD_OUTLINE, 14));
             outTokenLabel.setIconTextGap(4);
         }
+        if (navChatButton != null) {
+            navChatButton.setIcon(FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 16));
+        }
+        if (navFilesButton != null) {
+            navFilesButton.setIcon(FontIcon.of(MaterialDesignF.FILE_TREE_OUTLINE, 16));
+        }
+        if (navUsageButton != null) {
+            navUsageButton.setIcon(FontIcon.of(MaterialDesignC.CHART_LINE, 16));
+        }
+        if (navSettingsButton != null) {
+            navSettingsButton.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
+        }
+        if (navSystemPromptButton != null) {
+            navSystemPromptButton.setIcon(FontIcon.of(MaterialDesignR.ROBOT_OUTLINE, 16));
+        }
         if (navMessageHistoryButton != null) {
             navMessageHistoryButton.setIcon(FontIcon.of(MaterialDesignM.MESSAGE_TEXT_CLOCK_OUTLINE, 16));
         }
+        if (rescanButton != null) {
+            rescanButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
+        }
+        if (settingsMenuItem != null) {
+            settingsMenuItem.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
+        }
+        if (exitMenuItem != null) {
+            exitMenuItem.setIcon(FontIcon.of(MaterialDesignL.LOGOUT, 16));
+        }
+        if (aboutMenuItem != null) {
+            aboutMenuItem.setIcon(FontIcon.of(MaterialDesignI.INFORMATION_OUTLINE, 16));
+        }
+        if (openFolderMenuItem != null) {
+            openFolderMenuItem.setIcon(FontIcon.of(MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
+        }
+        if (stopButton != null) {
+            stopButton.setIcon(FontIcon.of(MaterialDesignP.PAUSE_CIRCLE_OUTLINE, 16));
+        }
+        if (attachButton != null) {
+            attachButton.setIcon(FontIcon.of(MaterialDesignA.ATTACHMENT, 16));
+        }
+        if (clearAttachmentsButton != null) {
+            clearAttachmentsButton.setIcon(FontIcon.of(MaterialDesignC.CLOSE_CIRCLE_OUTLINE, 16));
+        }
+        if (sendButton != null) {
+            sendButton.setIcon(FontIcon.of(MaterialDesignS.SEND_OUTLINE, 16));
+        }
+        if (resetUsageButton != null) {
+            resetUsageButton.setIcon(FontIcon.of(MaterialDesignR.RELOAD, 16));
+        }
+        if (saveSettingsButton != null) {
+            saveSettingsButton.setIcon(FontIcon.of(MaterialDesignC.CONTENT_SAVE_OUTLINE, 16));
+        }
+        if (refreshSystemPromptButton != null) {
+            refreshSystemPromptButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
+        }
+        if (refreshMessageHistoryButton != null) {
+            refreshMessageHistoryButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
+        }
+
     }
 
     private void updateProjectLabel() {
