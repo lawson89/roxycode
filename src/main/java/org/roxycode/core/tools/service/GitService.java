@@ -38,6 +38,17 @@ public class GitService {
         return runGitCommand(projectRoot, args.toArray(new String[0]));
     }
 
+    public String log(Path projectRoot, String path, int limit) {
+        List<String> args = new ArrayList<>();
+        args.add("log");
+        args.add("-n");
+        args.add(String.valueOf(limit));
+        if (path != null && !path.isEmpty()) {
+            args.add(path);
+        }
+        return runGitCommand(projectRoot, args.toArray(new String[0]));
+    }
+
     private String runGitCommand(Path projectRoot, String... args) {
         try {
             List<String> command = new ArrayList<>();

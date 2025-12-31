@@ -1,0 +1,15 @@
+description = "Shows the commit history for the project or a specific file."
+type = "graaljs"
+source = "file:git_log.js"
+
+[[parameters]]
+name = "path"
+type = "string"
+description = "Specific file to check history for."
+required = false
+
+[[parameters]]
+name = "limit"
+type = "integer"
+description = "Number of commits to show (default 10)."
+required = false

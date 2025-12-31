@@ -48,6 +48,33 @@ class GitServiceTest {
         assertTrue(status.contains("?? new.txt") || status.contains("new.txt"));
     }
 
+    @Test
+    void testGitLog(@TempDir Path tempDir) throws Exception {
+        // Setup a real temp git repo
+        runCommand(tempDir.toFile(), "git", "init");
+        runCommand(tempDir.toFile(), "git", "config", "user.email", "test@test.com");
+        runCommand(tempDir.toFile(), "git", "config", "user.name", "Test User");
+
+        File testFile = tempDir.resolve("test.txt").toFile();
+        testFile.createNewFile();
+        runCommand(tempDir.toFile(), "git", "add", ".");
+        runCommand(tempDir.toFile(), "git", "commit", "-m", "Initial Commit");
+
+        // Make another commit
+        java.nio.file.Files.write(testFile.toPath(), "change".getBytes());
+        runCommand(tempDir.toFile(), "git", "add", ".");
+        runCommand(tempDir.toFile(), "git", "commit", "-m", "Second Commit");
+
+        // Verify log
+        String log = gitService.log(tempDir, null, 10);
+        assertTrue(log.contains("Initial Commit"));
+        assertTrue(log.contains("Second Commit"));
+
+        // Verify log for specific file
+        String fileLog = gitService.log(tempDir, "test.txt", 10);
+        assertTrue(fileLog.contains("Second Commit"));
+    }
+
     private void runCommand(File dir, String... command) throws Exception {
         new ProcessExecutor()
                 .command(command)
