@@ -183,4 +183,34 @@ class BuildToolServiceTest {
         List<String> command = buildToolService.getDependencyHealthCommand(BuildToolService.BuildTool.GRADLE);
         assertTrue(command.isEmpty());
     }
+
+    @Test
+    void testGetBuildFileContentsMaven() throws IOException {
+        Files.writeString(tempDir.resolve("pom.xml"), "<project>maven</project>");
+        assertEquals("<project>maven</project>", buildToolService.getBuildFileContents());
+    }
+
+    @Test
+    void testGetBuildFileContentsGradle() throws IOException {
+        Files.writeString(tempDir.resolve("build.gradle"), "apply plugin: 'java'");
+        assertEquals("apply plugin: 'java'", buildToolService.getBuildFileContents());
+    }
+
+    @Test
+    void testGetBuildFileContentsGradleKotlin() throws IOException {
+        Files.writeString(tempDir.resolve("build.gradle.kts"), "plugins { java }");
+        assertEquals("plugins { java }", buildToolService.getBuildFileContents());
+    }
+
+    @Test
+    void testGetBuildFileContentsAnt() throws IOException {
+        Files.writeString(tempDir.resolve("build.xml"), "<project>ant</project>");
+        assertEquals("<project>ant</project>", buildToolService.getBuildFileContents());
+    }
+
+    @Test
+    void testGetBuildFileContentsUnknown() {
+        String result = buildToolService.getBuildFileContents();
+        assertTrue(result.contains("Could not detect build file"));
+    }
 }

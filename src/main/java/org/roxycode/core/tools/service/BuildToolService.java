@@ -190,6 +190,9 @@ public class BuildToolService {
         report += "- Build Tool: " + detect() + "\n";
         report += "- OS: " + getOperatingSystem() + "\n";
         report += "\n";
+        report += "### Build file\n";
+        report += getBuildFileContents();
+        report += "\n";
         report += "### Project Files\n";
         report += "```" + fileSystemService.tree(sandbox.getRoot().toAbsolutePath().toString()) + "```\n";
         report += "### Project Structure\n";
@@ -276,6 +279,31 @@ public class BuildToolService {
                 return new ArrayList<>();
         }
         return command;
+    }
+
+    public String getBuildFileContents() {
+        Path projectRoot = sandbox.getRoot();
+        Path buildFile = null;
+
+        if (Files.exists(projectRoot.resolve("pom.xml"))) {
+            buildFile = projectRoot.resolve("pom.xml");
+        } else if (Files.exists(projectRoot.resolve("build.gradle"))) {
+            buildFile = projectRoot.resolve("build.gradle");
+        } else if (Files.exists(projectRoot.resolve("build.gradle.kts"))) {
+            buildFile = projectRoot.resolve("build.gradle.kts");
+        } else if (Files.exists(projectRoot.resolve("build.xml"))) {
+            buildFile = projectRoot.resolve("build.xml");
+        }
+
+        if (buildFile == null) {
+            return "❌ Could not detect build file.";
+        }
+
+        try {
+            return Files.readString(buildFile);
+        } catch (IOException e) {
+            return "❌ Error reading build file: " + e.getMessage();
+        }
     }
 
 
