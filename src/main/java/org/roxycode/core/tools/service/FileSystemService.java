@@ -6,8 +6,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.roxycode.core.Sandbox;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -20,8 +19,6 @@ import java.util.stream.Stream;
 
 @Singleton
 public class FileSystemService {
-
-    private static final Logger LOG = LoggerFactory.getLogger(FileSystemService.class);
 
     private final Sandbox sandbox;
 
@@ -66,7 +63,7 @@ public class FileSystemService {
         if (!dir.exists() || !dir.isDirectory()) {
             return "Error: Path not found or not a directory: " + path;
         }
-        Collection<File> files = FileUtils.listFiles(dir, new WildcardFileFilter(pattern), recursive ? TrueFileFilter.INSTANCE : null);
+        Collection<File> files = FileUtils.listFiles(dir, WildcardFileFilter.builder().setWildcards(pattern).get(), recursive ? TrueFileFilter.INSTANCE : null);
         Path projectRoot = sandbox.getRoot();
         return files.stream().map(f -> projectRoot.relativize(f.toPath()).toString()).sorted().collect(Collectors.joining("\n"));
     }
@@ -99,7 +96,7 @@ public class FileSystemService {
                 if (!aDir && bDir)
                     return 1;
                 return a.compareTo(b);
-            }).collect(Collectors.toList());
+            }).toList();
             for (int i = 0; i < contents.size(); i++) {
                 Path p = contents.get(i);
                 boolean isLast = (i == contents.size() - 1);
