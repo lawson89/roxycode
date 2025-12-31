@@ -23,6 +23,13 @@
             </row-panel>
 
             <spacer size="8"/>
+            <label text="System Log Lines:"/>
+            <row-panel spacing="8">
+                <text-field name="logLinesCountField" columns="10"/>
+                <check-box name="logAutoScrollCheckBox" text="Auto-scroll Logs" weight="1"/>
+            </row-panel>
+
+            <spacer size="8"/>
             <label text="Theme:"/>
             <row-panel spacing="8">
                 <combo-box name="themeComboBox" weight="1"/>

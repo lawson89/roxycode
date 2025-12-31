@@ -80,6 +80,10 @@ public class MarkdownPane extends JTextPane {
 
     public void setMarkdown(String markdown) {
         String html = markdownToHtml(markdown);
+        setHtml(html);
+    }
+
+    public void setHtml(String html) {
         this.setText("<html><body>" + html + "</body></html>");
     }
 

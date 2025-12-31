@@ -32,6 +32,10 @@ public class SettingsService {
     private static final int DEFAULT_COMPACTION_CHUNK_SIZE = 15;
     private static final String KEY_MAX_SUMMARY_CHUNKS = "maxSummaryChunks";
     private static final int DEFAULT_MAX_SUMMARY_CHUNKS = 5;
+    private static final String KEY_LOG_LINES_COUNT = "logLinesCount";
+    private static final int DEFAULT_LOG_LINES_COUNT = 100;
+    private static final String KEY_LOG_AUTO_SCROLL = "logAutoScroll";
+    private static final boolean DEFAULT_LOG_AUTO_SCROLL = true;
 
     private final Preferences preferences;
     private final ObjectMapper objectMapper;
@@ -132,5 +136,21 @@ public class SettingsService {
 
     public void setMaxSummaryChunks(int maxChunks) {
         preferences.putInt(KEY_MAX_SUMMARY_CHUNKS, maxChunks);
+    }
+
+    public int getLogLinesCount() {
+        return preferences.getInt(KEY_LOG_LINES_COUNT, DEFAULT_LOG_LINES_COUNT);
+    }
+
+    public void setLogLinesCount(int count) {
+        preferences.putInt(KEY_LOG_LINES_COUNT, count);
+    }
+
+    public boolean isLogAutoScroll() {
+        return preferences.getBoolean(KEY_LOG_AUTO_SCROLL, DEFAULT_LOG_AUTO_SCROLL);
+    }
+
+    public void setLogAutoScroll(boolean autoScroll) {
+        preferences.putBoolean(KEY_LOG_AUTO_SCROLL, autoScroll);
     }
 }

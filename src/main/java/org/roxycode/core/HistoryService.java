@@ -213,6 +213,7 @@ public class HistoryService {
     }
 
     public String renderContentToHtmlRow(Content content, boolean isDarkTheme, Function<String, String> markdownToHtml) {
+        int maxDisplayChars = 20000;
         String role = content.role().orElse("unknown");
         String roleColor = "user".equals(role) ? "#4080FF" : ("model".equals(role) ? "#40C080" : "#888888");
         String bgColor = isDarkTheme ? ("user".equals(role) ? "#2d3a4f" : "#2d3f35") : ("user".equals(role) ? "#eef4ff" : "#eefff4");
@@ -223,15 +224,24 @@ public class HistoryService {
         List<Part> parts = content.parts().orElse(new ArrayList<>());
         for (Part part : parts) {
             String text = part.text().orElse("");
+            boolean truncated = false;
             if (part.functionCall().isPresent()) {
                 text = "<i>[Function Call: " + part.functionCall().get().name().orElse("?") + "]</i>";
             } else if (part.functionResponse().isPresent()) {
                 text = "<i>[Function Response: " + part.functionResponse().get().name().orElse("?") + "]</i>";
             } else if (part.inlineData().isPresent()) {
                 text = "<i>[Inline Data: " + part.inlineData().get().mimeType().orElse("?") + "]</i>";
+            } else {
+                if (text.length() > maxDisplayChars) {
+                    text = text.substring(0, maxDisplayChars);
+                    truncated = true;
+                }
             }
             if (!text.isEmpty()) {
                 row.append(markdownToHtml.apply(text));
+                if (truncated) {
+                    row.append("<p><i>... (truncated for display) ...</i></p>");
+                }
             }
         }
         row.append("</td></tr>");

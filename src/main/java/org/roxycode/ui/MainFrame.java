@@ -12,7 +12,6 @@ import org.roxycode.core.*;
 import org.roxycode.core.tools.service.GitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
@@ -182,6 +181,12 @@ public class MainFrame extends JFrame implements Runnable {
     private JTextField maxSummaryChunksField;
 
     @Outlet
+    private JTextField logLinesCountField;
+
+    @Outlet
+    private JCheckBox logAutoScrollCheckBox;
+
+    @Outlet
     private JButton saveSettingsButton;
 
     @Outlet
@@ -225,8 +230,25 @@ public class MainFrame extends JFrame implements Runnable {
 
     private final MarkdownPane summaryQueueArea = new MarkdownPane();
 
+    // -- VIEW: LOGS --
+    @Outlet
+    private JComponent viewLogs;
+
+    @Outlet
+    private JScrollPane logsScrollPane;
+
+    @Outlet
+    private JButton refreshLogsButton;
+
+    @Outlet
+    private JToggleButton navLogsButton;
+
+    private final JTextArea logsArea = new JTextArea();
+
+    private final LogCaptureService logCaptureService;
+
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService) {
+    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, LogCaptureService logCaptureService) {
         this.gitService = gitService;
         this.genAIService = genAIService;
         this.historyService = historyService;
@@ -235,6 +257,7 @@ public class MainFrame extends JFrame implements Runnable {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.themeService = themeService;
+        this.logCaptureService = logCaptureService;
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     }
@@ -254,6 +277,7 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add(UILoader.load(this, "SystemPromptView.xml"));
             mainContentStack.add(UILoader.load(this, "MessageHistoryView.xml"));
             mainContentStack.add(UILoader.load(this, "SummaryQueueView.xml"));
+            mainContentStack.add(UILoader.load(this, "LogsView.xml"));
         }
         // 3. Initialize UI Components
         initIcons();
@@ -269,6 +293,11 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (summaryQueueScrollPane != null) {
             summaryQueueScrollPane.setViewportView(summaryQueueArea);
+        }
+        if (logsScrollPane != null) {
+            logsArea.setEditable(false);
+            logsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            logsScrollPane.setViewportView(logsArea);
         }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
@@ -341,6 +370,9 @@ public class MainFrame extends JFrame implements Runnable {
         if (navSummaryQueueButton != null) {
             navSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignA.ARCHIVE_OUTLINE, 16));
         }
+        if (navLogsButton != null) {
+            navLogsButton.setIcon(FontIcon.of(MaterialDesignF.FILE_DOCUMENT_OUTLINE, 16));
+        }
         if (settingsMenuItem != null) {
             settingsMenuItem.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
         }
@@ -379,6 +411,9 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (refreshSummaryQueueButton != null) {
             refreshSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
+        }
+        if (refreshLogsButton != null) {
+            refreshLogsButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
         }
     }
 
@@ -428,6 +463,8 @@ public class MainFrame extends JFrame implements Runnable {
             navMessageHistoryButton.addActionListener(e -> showView("MESSAGE_HISTORY"));
         if (navSummaryQueueButton != null)
             navSummaryQueueButton.addActionListener(e -> showView("SUMMARY_QUEUE"));
+        if (navLogsButton != null)
+            navLogsButton.addActionListener(e -> showView("LOGS"));
         if (resetUsageButton != null)
             resetUsageButton.addActionListener(e -> {
                 usageService.reset();
@@ -458,6 +495,8 @@ public class MainFrame extends JFrame implements Runnable {
             refreshMessageHistoryButton.addActionListener(e -> updateMessageHistoryView());
         if (refreshSummaryQueueButton != null)
             refreshSummaryQueueButton.addActionListener(e -> updateSummaryQueueView());
+        if (refreshLogsButton != null)
+            refreshLogsButton.addActionListener(e -> updateLogsView());
         if (saveSettingsButton != null)
             saveSettingsButton.addActionListener(this::onSaveSettings);
     }
@@ -477,7 +516,9 @@ public class MainFrame extends JFrame implements Runnable {
             viewMessageHistory.setVisible(false);
         if (viewSummaryQueue != null)
             viewSummaryQueue.setVisible(false);
-        switch (viewName) {
+        if (viewLogs != null)
+            viewLogs.setVisible(false);
+        switch(viewName) {
             case "CHAT":
                 if (viewChat != null)
                     viewChat.setVisible(true);
@@ -514,19 +555,19 @@ public class MainFrame extends JFrame implements Runnable {
                     viewSummaryQueue.setVisible(true);
                 }
                 break;
+            case "LOGS":
+                if (viewLogs != null) {
+                    updateLogsView();
+                    viewLogs.setVisible(true);
+                }
+                break;
         }
     }
 
     private void updateUsageView() {
         if (usageHtmlLabel == null)
             return;
-        String html = "<html><table border='0' cellspacing='0' cellpadding='8'>" +
-                      "<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>" + usageService.getApiCalls() + "</td></tr>" +
-                      "<tr><td><b><font color='#888888'>TOTAL TOKENS</font></b></td><td>" + String.format("%,d", usageService.getTotalTokens()) + "</td></tr>" +
-                      "<tr><td><b><font color='#888888'>PROMPT TOKENS</font></b></td><td>" + String.format("%,d", usageService.getPromptTokens()) + "</td></tr>" +
-                      "<tr><td><b><font color='#888888'>CANDIDATE TOKENS</font></b></td><td>" + String.format("%,d", usageService.getCandidateTokens()) + "</td></tr>" +
-                      "<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>" + String.format("$%.4f", usageService.getEstimatedCost()) + "</td></tr>" +
-                      "</table></html>";
+        String html = "<html><table border='0' cellspacing='0' cellpadding='8'>" + "<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>" + usageService.getApiCalls() + "</td></tr>" + "<tr><td><b><font color='#888888'>TOTAL TOKENS</font></b></td><td>" + String.format("%,d", usageService.getTotalTokens()) + "</td></tr>" + "<tr><td><b><font color='#888888'>PROMPT TOKENS</font></b></td><td>" + String.format("%,d", usageService.getPromptTokens()) + "</td></tr>" + "<tr><td><b><font color='#888888'>CANDIDATE TOKENS</font></b></td><td>" + String.format("%,d", usageService.getCandidateTokens()) + "</td></tr>" + "<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>" + String.format("$%.4f", usageService.getEstimatedCost()) + "</td></tr>" + "</table></html>";
         usageHtmlLabel.setText(html);
     }
 
@@ -550,6 +591,10 @@ public class MainFrame extends JFrame implements Runnable {
             apiKeyField.setText(settingsService.getGeminiApiKey());
         if (maxTurnsField != null)
             maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
+                if (logLinesCountField != null)
+            logLinesCountField.setText(String.valueOf(settingsService.getLogLinesCount()));
+        if (logAutoScrollCheckBox != null)
+            logAutoScrollCheckBox.setSelected(settingsService.isLogAutoScroll());
         if (themeComboBox != null) {
             themeComboBox.removeAllItems();
             themeComboBox.addItem("Light");
@@ -637,6 +682,10 @@ public class MainFrame extends JFrame implements Runnable {
         try {
             if (maxTurnsField != null)
                 settingsService.setMaxTurns(Integer.parseInt(maxTurnsField.getText().trim()));
+                        if (logLinesCountField != null)
+                settingsService.setLogLinesCount(Integer.parseInt(logLinesCountField.getText().trim()));
+            if (logAutoScrollCheckBox != null)
+                settingsService.setLogAutoScroll(logAutoScrollCheckBox.isSelected());
             if (historyThresholdField != null)
                 settingsService.setHistoryThreshold(Integer.parseInt(historyThresholdField.getText().trim()));
             if (compactionChunkSizeField != null)
@@ -831,9 +880,8 @@ public class MainFrame extends JFrame implements Runnable {
             html.append(historyService.renderContentToHtmlRow(content, FlatLaf.isLafDark(), messageHistoryArea::markdownToHtml));
         }
         html.append("</table>");
-        messageHistoryArea.setMarkdown(html.toString());
+        messageHistoryArea.setHtml(html.toString());
     }
-
 
     private void updateSummaryQueueView() {
         if (summaryQueueArea == null)
@@ -854,4 +902,13 @@ public class MainFrame extends JFrame implements Runnable {
         summaryQueueArea.setMarkdown(md.toString());
     }
 
+    private void updateLogsView() {
+        if (logsArea == null)
+            return;
+        List<String> logs = logCaptureService.getLogs(settingsService.getLogLinesCount());
+        logsArea.setText(String.join("\n", logs));
+        if (settingsService.isLogAutoScroll()) {
+            logsArea.setCaretPosition(logsArea.getDocument().getLength());
+        }
+    }
 }

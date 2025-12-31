@@ -37,6 +37,7 @@
             <toggle-button name="navSystemPromptButton" text="System Prompt" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
             <toggle-button name="navMessageHistoryButton" text="Message History" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
             <toggle-button name="navSummaryQueueButton" text="Summary Queue" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navLogsButton" text="System Logs" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
 
             <spacer weight="1"/>
         </column-panel>
