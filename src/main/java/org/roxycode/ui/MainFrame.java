@@ -1,31 +1,18 @@
 package org.roxycode.ui;
 
-import com.formdev.flatlaf.*;
+import com.formdev.flatlaf.FlatLaf;
 import com.google.genai.types.Content;
-import com.google.genai.types.Part;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignI;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignF;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignM;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
+import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.core.GenAIService;
-import org.roxycode.core.HistoryService;
+import org.roxycode.core.*;
 import org.roxycode.core.tools.service.GitService;
-import org.roxycode.core.RoxyProjectService;
-import org.roxycode.core.Sandbox;
-import org.roxycode.core.SettingsService;
-import org.roxycode.core.UsageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
@@ -33,14 +20,12 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.io.InterruptedIOException;
-import java.net.SocketTimeoutException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.ArrayList;
-import java.util.stream.Collectors;
 
 @Singleton
 public class MainFrame extends JFrame implements Runnable {
@@ -265,13 +250,13 @@ public class MainFrame extends JFrame implements Runnable {
         // 2. Load individual Views and add them to the stack
         // Passing 'this' ensures the @Outlet fields in MainFrame are populated
         if (mainContentStack != null) {
-            mainContentStack.add((JComponent) UILoader.load(this, "ChatView.xml"));
-            mainContentStack.add((JComponent) UILoader.load(this, "FilesView.xml"));
-            mainContentStack.add((JComponent) UILoader.load(this, "UsageView.xml"));
-            mainContentStack.add((JComponent) UILoader.load(this, "SettingsView.xml"));
-            mainContentStack.add((JComponent) UILoader.load(this, "SystemPromptView.xml"));
-            mainContentStack.add((JComponent) UILoader.load(this, "MessageHistoryView.xml"));
-            mainContentStack.add((JComponent) UILoader.load(this, "SummaryQueueView.xml"));
+            mainContentStack.add(UILoader.load(this, "ChatView.xml"));
+            mainContentStack.add(UILoader.load(this, "FilesView.xml"));
+            mainContentStack.add(UILoader.load(this, "UsageView.xml"));
+            mainContentStack.add(UILoader.load(this, "SettingsView.xml"));
+            mainContentStack.add(UILoader.load(this, "SystemPromptView.xml"));
+            mainContentStack.add(UILoader.load(this, "MessageHistoryView.xml"));
+            mainContentStack.add(UILoader.load(this, "SummaryQueueView.xml"));
         }
         // 3. Initialize UI Components
         initIcons();
@@ -500,7 +485,7 @@ public class MainFrame extends JFrame implements Runnable {
             viewMessageHistory.setVisible(false);
         if (viewSummaryQueue != null)
             viewSummaryQueue.setVisible(false);
-        switch(viewName) {
+        switch (viewName) {
             case "CHAT":
                 if (viewChat != null)
                     viewChat.setVisible(true);
@@ -543,15 +528,14 @@ public class MainFrame extends JFrame implements Runnable {
     private void updateUsageView() {
         if (usageHtmlLabel == null)
             return;
-        StringBuilder html = new StringBuilder();
-        html.append("<html><table border='0' cellspacing='0' cellpadding='8'>");
-        html.append("<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>").append(usageService.getApiCalls()).append("</td></tr>");
-        html.append("<tr><td><b><font color='#888888'>TOTAL TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getTotalTokens())).append("</td></tr>");
-        html.append("<tr><td><b><font color='#888888'>PROMPT TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getPromptTokens())).append("</td></tr>");
-        html.append("<tr><td><b><font color='#888888'>CANDIDATE TOKENS</font></b></td><td>").append(String.format("%,d", usageService.getCandidateTokens())).append("</td></tr>");
-        html.append("<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>").append(String.format("$%.4f", usageService.getEstimatedCost())).append("</td></tr>");
-        html.append("</table></html>");
-        usageHtmlLabel.setText(html.toString());
+        String html = "<html><table border='0' cellspacing='0' cellpadding='8'>" +
+                      "<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>" + usageService.getApiCalls() + "</td></tr>" +
+                      "<tr><td><b><font color='#888888'>TOTAL TOKENS</font></b></td><td>" + String.format("%,d", usageService.getTotalTokens()) + "</td></tr>" +
+                      "<tr><td><b><font color='#888888'>PROMPT TOKENS</font></b></td><td>" + String.format("%,d", usageService.getPromptTokens()) + "</td></tr>" +
+                      "<tr><td><b><font color='#888888'>CANDIDATE TOKENS</font></b></td><td>" + String.format("%,d", usageService.getCandidateTokens()) + "</td></tr>" +
+                      "<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>" + String.format("$%.4f", usageService.getEstimatedCost()) + "</td></tr>" +
+                      "</table></html>";
+        usageHtmlLabel.setText(html);
     }
 
     private void updateChatStats() {
@@ -716,7 +700,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     private boolean isTimeout(Throwable t) {
         while (t != null) {
-            if (t instanceof InterruptedIOException || t instanceof SocketTimeoutException)
+            if (t instanceof InterruptedIOException)
                 return true;
             if (t.getMessage() != null && t.getMessage().toLowerCase().contains("timeout"))
                 return true;
