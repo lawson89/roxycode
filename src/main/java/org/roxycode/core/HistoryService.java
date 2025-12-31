@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.function.Function;
 
 @Singleton
 public class HistoryService {
@@ -210,5 +211,31 @@ public class HistoryService {
 
     public List<String> getSummaryQueue() {
         return new ArrayList<>(summaryQueue);
+    }
+
+    public String renderContentToHtmlRow(Content content, boolean isDarkTheme, Function<String, String> markdownToHtml) {
+        String role = content.role().orElse("unknown");
+        String roleColor = "user".equals(role) ? "#4080FF" : ("model".equals(role) ? "#40C080" : "#888888");
+        String bgColor = isDarkTheme ? ("user".equals(role) ? "#2d3a4f" : "#2d3f35") : ("user".equals(role) ? "#eef4ff" : "#eefff4");
+        StringBuilder row = new StringBuilder();
+        row.append("<tr bgcolor='").append(bgColor).append("'>");
+        row.append("<td valign='top' width='80'><b><font color='").append(roleColor).append("'>").append(role.toUpperCase()).append("</font></b></td>");
+        row.append("<td>");
+        List<Part> parts = content.parts().orElse(new ArrayList<>());
+        for (Part part : parts) {
+            String text = part.text().orElse("");
+            if (part.functionCall().isPresent()) {
+                text = "<i>[Function Call: " + part.functionCall().get().name().orElse("?") + "]</i>";
+            } else if (part.functionResponse().isPresent()) {
+                text = "<i>[Function Response: " + part.functionResponse().get().name().orElse("?") + "]</i>";
+            } else if (part.inlineData().isPresent()) {
+                text = "<i>[Inline Data: " + part.inlineData().get().mimeType().orElse("?") + "]</i>";
+            }
+            if (!text.isEmpty()) {
+                row.append(markdownToHtml.apply(text));
+            }
+        }
+        row.append("</td></tr>");
+        return row.toString();
     }
 }

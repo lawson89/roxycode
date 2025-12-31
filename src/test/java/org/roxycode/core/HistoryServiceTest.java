@@ -395,4 +395,24 @@ class HistoryServiceTest {
         assertEquals(1, history.size(), "All consecutive users should be merged into one");
         assertEquals("user", history.get(0).role().get());
     }
+
+    @Test
+    void testRenderContentToHtmlRow() {
+        // Setup
+        Content content = Content.builder()
+                .role("user")
+                .parts(List.of(Part.builder().text("**Hello**").build()))
+                .build();
+        
+        // Use a simple mock renderer using lambda
+        java.util.function.Function<String, String> mockRenderer = s -> "<b>" + s.replace("**", "") + "</b>";
+
+        // Execute
+        String html = historyService.renderContentToHtmlRow(content, true, mockRenderer);
+        
+        // Verify
+        assertTrue(html.contains("<tr bgcolor='#2d3a4f'>"), "Should use dark theme user background");
+        assertTrue(html.contains("USER"), "Should contain role name");
+        assertTrue(html.contains("<b>Hello</b>"), "Should contain rendered markdown");
+    }
 }
