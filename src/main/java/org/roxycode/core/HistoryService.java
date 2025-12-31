@@ -130,8 +130,7 @@ public class HistoryService {
     }
 
     private Content mergeUserMessages(Content c1, Content c2) {
-        List<Part> parts = new ArrayList<>();
-        parts.addAll(c1.parts().orElse(List.of()));
+        List<Part> parts = new ArrayList<>(c1.parts().orElse(List.of()));
         parts.add(Part.builder().text("\n\n---\n\n").build());
         parts.addAll(c2.parts().orElse(List.of()));
         return Content.builder().role("user").parts(parts).build();

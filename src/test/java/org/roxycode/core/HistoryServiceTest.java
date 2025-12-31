@@ -3,19 +3,18 @@ package org.roxycode.core;
 import com.google.genai.Client;
 import com.google.genai.Models;
 import com.google.genai.types.Content;
+import com.google.genai.types.FunctionResponse;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
-import com.google.genai.types.FunctionResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class HistoryServiceTest {
 
@@ -29,7 +28,7 @@ class HistoryServiceTest {
                 .role("user")
                 .parts(List.of(Part.builder().text("Hello").build()))
                 .build();
-        
+
         // Tool response (User role)
         Content toolResponse = Content.builder()
                 .role("user")
@@ -51,7 +50,7 @@ class HistoryServiceTest {
                                 .build())
                         .build()))
                 .build();
-        
+
         // Model message
         Content modelMsg = Content.builder()
                 .role("model")
@@ -89,18 +88,18 @@ class HistoryServiceTest {
         history.add(createMsg("model", "Thinking 5")); // 9
         history.add(createMsg("model", "Thinking 6")); // 10
         history.add(createMsg("user", "Task 4")); // 11
-        
+
         // Target index 4 (at a tool message)
         // history.size() is 12. lookAheadLimit = max(4, 12-5=7) = 7.
         int index = invokeFindSafeSplitIndex(history, 4);
-        
+
         // Should look forward up to index 6 and find index 6 (Task 3)
         assertEquals(6, index);
-        
+
         // Now remove Task 3, 4 and more to force backward search
         // We want lookAheadLimit to be <= 4.
         // If history.size() is 9, lookAheadLimit = max(4, 9-5=4) = 4.
-        while(history.size() > 9) history.remove(history.size() - 1);
+        while (history.size() > 9) history.removeLast();
         index = invokeFindSafeSplitIndex(history, 4);
         // Should look backward from 4 and find index 3 (Task 2)
         assertEquals(3, index);
@@ -143,7 +142,7 @@ class HistoryServiceTest {
     }
 
     @Test
-    void testCompactHistory_StandardFlow() throws Exception {
+    void testCompactHistory_StandardFlow() {
         // Setup settings
         when(settingsService.getHistoryThreshold()).thenReturn(5);
         when(settingsService.getCompactionChunkSize()).thenReturn(3);
@@ -181,19 +180,19 @@ class HistoryServiceTest {
         // Index 0 (System) and Index 1 (Msg 5) merge because both are User.
         // Size 8 -> 7.
         assertEquals(7, history.size(), "History should be compacted to size 7 (after merging adjacent users)");
-        
+
         // Msg 5 content should be in the merged first message
-        Content merged = history.get(0);
+        Content merged = history.getFirst();
         boolean containsMsg5 = merged.parts().get().stream()
                 .anyMatch(p -> p.text().orElse("").contains("Msg 5"));
         assertTrue(containsMsg5, "Merged first message should contain content of Msg 5");
-        
-        Content system = history.get(0);
+
+        Content system = history.getFirst();
         boolean containsError = system.parts().get().stream()
                 .anyMatch(p -> p.text().orElse("").contains("[Context missing due to error]"));
         assertFalse(containsError, "Should NOT contain error summary");
     }
-    
+
     @Test
     void testCompactHistory_NoCompactionNeeded() {
         // Setup settings
@@ -205,18 +204,18 @@ class HistoryServiceTest {
         history.add(createMsg("user", "System Prompt")); // 0
         history.add(createMsg("user", "Msg 1")); // 1
         history.add(createMsg("model", "Msg 2")); // 2
-        
+
         // Size 3. Threshold 10.
         Client mockClient = mock(Client.class);
-        
+
         historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
-        
+
         assertEquals(3, history.size(), "History should not change");
-        assertEquals("System Prompt", history.get(0).parts().get().get(0).text().get());
+        assertEquals("System Prompt", history.getFirst().parts().get().getFirst().text().get());
     }
 
     @Test
-    void testCompactHistory_ForcedSplit() throws Exception {
+    void testCompactHistory_ForcedSplit() {
         // Setup settings
         when(settingsService.getHistoryThreshold()).thenReturn(5);
         when(settingsService.getCompactionChunkSize()).thenReturn(3);
@@ -252,16 +251,16 @@ class HistoryServiceTest {
         // Inserted Synthetic. 9->10.
         // Merge 0 and 1. 10->9.
         assertEquals(9, history.size(), "History should be compacted to size 9");
-        
-        Content merged = history.get(0);
+
+        Content merged = history.getFirst();
         boolean containsSynthetic = merged.parts().get().stream()
                 .anyMatch(p -> p.text().orElse("").contains("Continuing from previous context"));
-        
+
         assertTrue(containsSynthetic, "Merged message should contain synthetic continuation message");
     }
 
     @Test
-    void testCompactHistory_StuckAtBeginning() throws Exception {
+    void testCompactHistory_StuckAtBeginning() {
         // Setup settings
         when(settingsService.getHistoryThreshold()).thenReturn(5);
         when(settingsService.getCompactionChunkSize()).thenReturn(3);
@@ -296,11 +295,11 @@ class HistoryServiceTest {
 
         // Removed 1,2,3. 12->9. Inserted 1. 10. Merged 0,1. 9.
         assertTrue(history.size() < 12, "History should have been compacted");
-        
-        Content merged = history.get(0);
+
+        Content merged = history.getFirst();
         boolean containsSynthetic = merged.parts().get().stream()
                 .anyMatch(p -> p.text().orElse("").contains("Continuing from previous context"));
-        
+
         assertTrue(containsSynthetic, "Should have inserted synthetic message into merged node");
     }
 
@@ -322,7 +321,7 @@ class HistoryServiceTest {
                         .build()))
                 .build();
     }
-    
+
     private void setClientModels(Client client, Models models) {
         try {
             java.lang.reflect.Field field = Client.class.getDeclaredField("models");
@@ -334,7 +333,7 @@ class HistoryServiceTest {
     }
 
     @Test
-    void testGenerateSummary_MergeConsecutiveUser() throws Exception {
+    void testGenerateSummary_MergeConsecutiveUser() {
         // Setup
         List<Content> messages = new ArrayList<>();
         messages.add(createMsg("user", "User Message 1"));
@@ -352,22 +351,22 @@ class HistoryServiceTest {
         // Verify that the first message sent to API has merged content
         ArgumentCaptor<List<Content>> captor = ArgumentCaptor.forClass(List.class);
         verify(mockModels).generateContent(eq("model-x"), captor.capture(), any());
-        
+
         List<Content> payload = captor.getValue();
         assertEquals(1, payload.size(), "Should have 1 message in payload after merging");
-        
-        Content firstMsg = payload.get(0);
+
+        Content firstMsg = payload.getFirst();
         assertEquals("user", firstMsg.role().get());
-        
+
         boolean hasPrompt = firstMsg.parts().get().stream().anyMatch(p -> p.text().orElse("").contains("Summarize"));
         boolean hasOriginal = firstMsg.parts().get().stream().anyMatch(p -> p.text().orElse("").contains("User Message 1"));
-        
+
         assertTrue(hasPrompt, "Payload should contain summary prompt");
         assertTrue(hasOriginal, "Payload should contain original user message");
     }
 
     @Test
-    void testCompactHistory_MergeMultipleConsecutiveUsers() throws Exception {
+    void testCompactHistory_MergeMultipleConsecutiveUsers() {
         // Setup settings
         when(settingsService.getHistoryThreshold()).thenReturn(5);
         when(settingsService.getCompactionChunkSize()).thenReturn(3);
@@ -383,17 +382,17 @@ class HistoryServiceTest {
         // Setup History with multiple consecutive users (Tool responses)
         List<Content> history = new ArrayList<>();
         history.add(createMsg("user", "System"));
-        for(int i=0; i<10; i++) {
+        for (int i = 0; i < 10; i++) {
             history.add(createToolMsg("user", "R" + i));
         }
-        
+
         // Execute
         historyService.compactHistory(mockClient, "model-x", history, "Static System Prompt");
-        
+
         // Verify that all leading users are merged
         // Since they are ALL users, they should ALL be merged into one.
         assertEquals(1, history.size(), "All consecutive users should be merged into one");
-        assertEquals("user", history.get(0).role().get());
+        assertEquals("user", history.getFirst().role().get());
     }
 
     @Test
@@ -403,13 +402,13 @@ class HistoryServiceTest {
                 .role("user")
                 .parts(List.of(Part.builder().text("**Hello**").build()))
                 .build();
-        
+
         // Use a simple mock renderer using lambda
         java.util.function.Function<String, String> mockRenderer = s -> "<b>" + s.replace("**", "") + "</b>";
 
         // Execute
         String html = historyService.renderContentToHtmlRow(content, true, mockRenderer);
-        
+
         // Verify
         assertTrue(html.contains("<tr bgcolor='#2d3a4f'>"), "Should use dark theme user background");
         assertTrue(html.contains("USER"), "Should contain role name");

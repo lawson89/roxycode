@@ -1,6 +1,7 @@
 package org.roxycode.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.genai.types.*;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Replaces;
 import io.micronaut.context.annotation.Requires;
@@ -13,23 +14,16 @@ import org.mockito.Mockito;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
-import com.google.genai.types.*;
-import java.io.File;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
-import java.util.stream.Collectors;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @MicronautTest
 @Property(name = "spec.name", value = "GenAIServiceTest")
@@ -40,11 +34,11 @@ class GenAIServiceTest {
 
     @Inject
     ToolRegistry // This is StubToolRegistry
-    toolRegistry;
+            toolRegistry;
 
     @Inject
     SettingsService // This is StubSettingsService
-    settingsService;
+            settingsService;
 
     @Test
     void testServiceInitialization() {

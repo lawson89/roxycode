@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micronaut.context.annotation.Factory;
 import jakarta.inject.Singleton;
 
-import java.nio.file.Paths;
-
 @Factory
 public class CoreFactory {
 

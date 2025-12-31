@@ -10,8 +10,6 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,6 +27,7 @@ public class PreviewService {
     }
 
     public String launchAndScreenshot() throws Exception {
+        LOG.info("Launching Preview Service to take screenshot.");
         // 1. Compile
         String compileResult = buildToolService.compile();
         if (compileResult.contains("FAILED")) {
@@ -38,7 +37,7 @@ public class PreviewService {
         // 2. Launch in background
         String classpath = System.getProperty("java.class.path");
         String javaHome = System.getProperty("java.home") + "/bin/java";
-        
+
         List<String> command = new ArrayList<>();
         command.add(javaHome);
         command.add("-cp");

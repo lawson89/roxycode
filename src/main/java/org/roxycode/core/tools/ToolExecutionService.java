@@ -74,9 +74,7 @@ public class ToolExecutionService {
     private String executeJavaScript(String script, Map<String, Object> args) {
         try (Context context = Context.newBuilder("js").allowHostAccess(HostAccess.ALL).allowHostClassLookup(className -> false).option("engine.WarnInterpreterOnly", "false").build()) {
             // Set a timeout of 60 seconds
-            ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> {
-                context.close(true);
-            }, 60, TimeUnit.SECONDS);
+            ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> context.close(true), 60, TimeUnit.SECONDS);
             try {
                 // 1. Bind your services
                 context.getBindings("js").putMember("sandbox", this.sandbox);

@@ -10,7 +10,7 @@ public class Sandbox {
     private Path sandboxRoot = Paths.get(".").toAbsolutePath().normalize();
 
     /**
-     * Updates the Sandbox root. Called by GenAIService when --root is passed.
+     * Updates the Sandbox root.
      */
     public void setRoot(String rootPath) {
         this.sandboxRoot = Paths.get(rootPath).toAbsolutePath().normalize();

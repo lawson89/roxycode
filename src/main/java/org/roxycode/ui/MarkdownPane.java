@@ -7,13 +7,14 @@ import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.ast.KeepType;
 import com.vladsch.flexmark.util.data.DataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
+import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.kordamp.ikonli.Ikon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.html.HTMLDocument;
@@ -22,10 +23,11 @@ import javax.swing.text.html.StyleSheet;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.Hashtable;
+import java.util.List;
 
 public class MarkdownPane extends JTextPane {
 
@@ -37,8 +39,8 @@ public class MarkdownPane extends JTextPane {
 
     public MarkdownPane() {
         final DataHolder // for full GFM table compatibility add the following table extension options:
-        // for full GFM table compatibility add the following table extension options:
-        OPTIONS = new MutableDataSet().set(Parser.REFERENCES_KEEP, KeepType.LAST).set(HtmlRenderer.INDENT_SIZE, 2).set(HtmlRenderer.PERCENT_ENCODE_URLS, true).set(TablesExtension.COLUMN_SPANS, false).set(TablesExtension.APPEND_MISSING_COLUMNS, true).set(TablesExtension.DISCARD_EXTRA_COLUMNS, true).set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true).set(Parser.EXTENSIONS, Arrays.asList(TablesExtension.create())).toImmutable();
+                // for full GFM table compatibility add the following table extension options:
+                OPTIONS = new MutableDataSet().set(Parser.REFERENCES_KEEP, KeepType.LAST).set(HtmlRenderer.INDENT_SIZE, 2).set(HtmlRenderer.PERCENT_ENCODE_URLS, true).set(TablesExtension.COLUMN_SPANS, false).set(TablesExtension.APPEND_MISSING_COLUMNS, true).set(TablesExtension.DISCARD_EXTRA_COLUMNS, true).set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true).set(Parser.EXTENSIONS, List.of(TablesExtension.create())).toImmutable();
         this.parser = Parser.builder(OPTIONS).build();
         this.renderer = HtmlRenderer.builder(OPTIONS).build();
         this.setEditable(false);
@@ -154,6 +156,7 @@ public class MarkdownPane extends JTextPane {
         }
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private String generateIconTag(Ikon iconCode, int size, Color color, String namePrefix) {
         try {
             FontIcon icon = FontIcon.of(iconCode, size, color);
@@ -163,7 +166,7 @@ public class MarkdownPane extends JTextPane {
             g2.dispose();
             // Generate a unique virtual URL for the icon
             String imageName = namePrefix + "-" + System.nanoTime() + ".png";
-            URL imageURL = new URL("http://roxycode.local/" + imageName);
+            URL imageURL = new URI("http://roxycode.local/" + imageName).toURL();
             HTMLDocument doc = (HTMLDocument) getDocument();
             Dictionary cache = (Dictionary) doc.getProperty("imageCache");
             if (cache == null) {

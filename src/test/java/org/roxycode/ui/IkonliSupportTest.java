@@ -1,14 +1,12 @@
 package org.roxycode.ui;
 
 import org.junit.jupiter.api.Test;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
 
-import java.awt.Color;
+import java.awt.*;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class IkonliSupportTest {
 

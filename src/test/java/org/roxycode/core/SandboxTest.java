@@ -4,9 +4,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SandboxTest {
 
@@ -39,9 +39,7 @@ class SandboxTest {
         sandbox.setRoot(tempDir.toString());
 
         // This attempts to go up out of the temp dir
-        assertThrows(SecurityException.class, () -> {
-            sandbox.resolve("../secret.txt");
-        });
+        assertThrows(SecurityException.class, () -> sandbox.resolve("../secret.txt"));
     }
 
     @Test
@@ -49,8 +47,6 @@ class SandboxTest {
         Sandbox sandbox = new Sandbox();
         sandbox.setRoot(tempDir.toString());
 
-        assertThrows(SecurityException.class, () -> {
-            sandbox.resolve("/etc/passwd");
-        });
+        assertThrows(SecurityException.class, () -> sandbox.resolve("/etc/passwd"));
     }
 }

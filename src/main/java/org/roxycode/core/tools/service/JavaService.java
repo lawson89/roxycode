@@ -4,6 +4,7 @@ import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -75,7 +76,7 @@ public class JavaService {
                     .filter(c -> c.getNameAsString().equals(className))
                     .flatMap(c -> c.getMethodsByName(methodName).stream())
                     .findFirst()
-                    .map(m -> m.toString());
+                    .map(Node::toString);
         } catch (IOException e) {
             return Optional.empty();
         }
@@ -91,7 +92,7 @@ public class JavaService {
             List<MethodDeclaration> methods = classDecl.get().getMethodsByName(methodName);
             if (!methods.isEmpty()) {
                 MethodDeclaration newMethod = StaticJavaParser.parseMethodDeclaration(newMethodSource);
-                methods.get(0).replace(newMethod);
+                methods.getFirst().replace(newMethod);
                 Files.writeString(path, cu.toString());
             } else {
                 throw new RuntimeException("Method " + methodName + " not found in class " + className);
@@ -109,7 +110,7 @@ public class JavaService {
                     .flatMap(c -> c.getFields().stream())
                     .filter(f -> f.getVariables().stream().anyMatch(v -> v.getNameAsString().equals(fieldName)))
                     .findFirst()
-                    .map(f -> f.toString());
+                    .map(Node::toString);
         } catch (IOException e) {
             return Optional.empty();
         }

@@ -30,7 +30,7 @@ class SettingsServiceTest {
 
         // Verify it exists and order is correct (most recent first)
         Assertions.assertTrue(projects.contains(path1));
-        Assertions.assertEquals(path2, projects.get(0));
+        Assertions.assertEquals(path2, projects.getFirst());
 
         // Verify JSON persistence logic (implicitly tested by reading back)
         Assertions.assertTrue(projects.size() >= 2);

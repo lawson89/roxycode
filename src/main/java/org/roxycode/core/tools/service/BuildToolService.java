@@ -125,9 +125,9 @@ public class BuildToolService {
             }
             int exitCode = process.waitFor();
             if (exitCode == 0) {
-                return "✅ " + context + " SUCCESSFUL\n" + output.toString();
+                return "✅ " + context + " SUCCESSFUL\n" + output;
             } else {
-                return "❌ " + context + " FAILED (Exit Code: " + exitCode + ")\n" + output.toString();
+                return "❌ " + context + " FAILED (Exit Code: " + exitCode + ")\n" + output;
             }
         } catch (IOException | InterruptedException e) {
             return "❌ ERROR executing " + context + ": " + String.join(" ", command) + "\n" + e.getMessage();

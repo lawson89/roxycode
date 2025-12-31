@@ -62,7 +62,7 @@ public class SettingsService {
     public List<String> getRecentProjects() {
         String json = preferences.get(KEY_RECENT_PROJECTS, "[]");
         try {
-            return objectMapper.readValue(json, new TypeReference<List<String>>() {
+            return objectMapper.readValue(json, new TypeReference<>() {
             });
         } catch (IOException e) {
             LOG.error("Failed to deserialize recent projects", e);
@@ -73,7 +73,7 @@ public class SettingsService {
     public void addRecentProject(String path) {
         List<String> current = getRecentProjects();
         current.remove(path);
-        current.add(0, path);
+        current.addFirst(path);
         try {
             String json = objectMapper.writeValueAsString(current);
             preferences.put(KEY_RECENT_PROJECTS, json);
