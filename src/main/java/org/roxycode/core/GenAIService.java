@@ -133,6 +133,15 @@ public class GenAIService {
 
     private int outTokens = 0;
 
+    private RoxyMode roxyMode = RoxyMode.DISCOVERY;
+
+    public RoxyMode getRoxyMode() {
+        return roxyMode;
+    }
+    public void setRoxyMode(RoxyMode roxyMode) {
+        this.roxyMode = roxyMode;
+    }
+
     public int getInTokens() {
         return inTokens;
     }
