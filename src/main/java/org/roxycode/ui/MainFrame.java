@@ -62,6 +62,8 @@ public class MainFrame extends JFrame implements Runnable {
 
     private final Sandbox sandbox;
 
+    private final ThemeService themeService;
+
     private Path currentProjectRoot;
 
     private final List<File> attachedFiles = new ArrayList<>();
@@ -242,7 +244,7 @@ public class MainFrame extends JFrame implements Runnable {
     private final MarkdownPane summaryQueueArea = new MarkdownPane();
 
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox) {
+    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService) {
         this.gitService = gitService;
         this.genAIService = genAIService;
         this.historyService = historyService;
@@ -250,13 +252,14 @@ public class MainFrame extends JFrame implements Runnable {
         this.usageService = usageService;
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
+        this.themeService = themeService;
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     }
 
     @Override
     public void run() {
-        applyTheme(settingsService.getTheme());
+        themeService.applyTheme(settingsService.getTheme(), chatArea, systemPromptArea, messageHistoryArea, summaryQueueArea);
         // 1. Load the Main Shell (Menu, Header, Nav, Empty Stack)
         setContentPane(UILoader.load(this, "MainFrame.xml"));
         // 2. Load individual Views and add them to the stack
@@ -671,7 +674,7 @@ public class MainFrame extends JFrame implements Runnable {
         if (themeComboBox != null) {
             String theme = (String) themeComboBox.getSelectedItem();
             settingsService.setTheme(theme);
-            applyTheme(theme);
+            themeService.applyTheme(theme, chatArea, systemPromptArea, messageHistoryArea, summaryQueueArea);
         }
         if (modelComboBox != null) {
             String model = (String) modelComboBox.getSelectedItem();
@@ -875,34 +878,4 @@ public class MainFrame extends JFrame implements Runnable {
         summaryQueueArea.setMarkdown(md.toString());
     }
 
-    private void applyTheme(String themeName) {
-        try {
-            switch(themeName) {
-                case "Dark":
-                    UIManager.setLookAndFeel(new FlatDarkLaf());
-                    break;
-                case "IntelliJ":
-                    UIManager.setLookAndFeel(new FlatIntelliJLaf());
-                    break;
-                case "Darcula":
-                    UIManager.setLookAndFeel(new FlatDarculaLaf());
-                    break;
-                case "Light":
-                default:
-                    UIManager.setLookAndFeel(new FlatLightLaf());
-                    break;
-            }
-            FlatLaf.updateUI();
-            if (chatArea != null)
-                chatArea.updateStyle();
-            if (systemPromptArea != null)
-                systemPromptArea.updateStyle();
-            if (messageHistoryArea != null)
-                messageHistoryArea.updateStyle();
-            if (summaryQueueArea != null)
-                summaryQueueArea.updateStyle();
-        } catch (Exception ex) {
-            log.error("Theme Error", ex);
-        }
-    }
 }
