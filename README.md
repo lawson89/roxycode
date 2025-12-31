@@ -19,6 +19,15 @@ RoxyCode is built as a Java-based desktop application using modern frameworks an
 *   **Usage & Cost Tracking:** Monitors API calls and token consumption with real-time cost estimation.
 *   **Safe Execution:** All AI-driven tool executions are sandboxed within the project root.
 
+## Modes of Operation
+
+RoxyCode operates in one of several distinct modes to ensure a structured and safe development process:
+
+*   **Discovery:** RoxyCode answers questions about the current project to help understand the codebase.
+*   **Planning:** RoxyCode asks clarifying questions and develops a detailed plan, which is stored in the `roxy_project/plans` folder. No code changes are made in this mode.
+*   **Implementing:** Once a plan is approved, RoxyCode uses its full suite of tools to implement the feature. Code changes are only permitted in this mode.
+*   **Feedback:** After implementation, RoxyCode processes user feedback to either finalize the feature or return to the Planning or Implementing stages.
+
 ## Project Structure
 
 *   `src/main/java`: The core Java application source code.
