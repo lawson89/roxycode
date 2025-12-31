@@ -135,4 +135,51 @@ class BuildToolServiceTest {
         String result = buildToolService.runTests();
         assertTrue(result.contains("Could not detect build tool"));
     }
+    @Test
+    void testGetDependencyTreeCommandMaven() {
+        List<String> command = buildToolService.getDependencyTreeCommand(BuildToolService.BuildTool.MAVEN);
+        assertTrue(command.contains("dependency:tree"));
+    }
+
+    @Test
+    void testGetDependencyTreeCommandGradle() {
+        List<String> command = buildToolService.getDependencyTreeCommand(BuildToolService.BuildTool.GRADLE);
+        assertTrue(command.contains("dependencies"));
+    }
+
+    @Test
+    void testGetProjectStructureCommandGradle() {
+        List<String> command = buildToolService.getProjectStructureCommand(BuildToolService.BuildTool.GRADLE);
+        assertTrue(command.contains("projects"));
+    }
+
+    @Test
+    void testGetProjectStructureCommandMaven() {
+        List<String> command = buildToolService.getProjectStructureCommand(BuildToolService.BuildTool.MAVEN);
+        assertTrue(command.isEmpty());
+    }
+
+    @Test
+    void testGetEffectiveConfigCommandMaven() {
+        List<String> command = buildToolService.getEffectiveConfigCommand(BuildToolService.BuildTool.MAVEN);
+        assertTrue(command.contains("help:effective-pom"));
+    }
+
+    @Test
+    void testGetEffectiveConfigCommandGradle() {
+        List<String> command = buildToolService.getEffectiveConfigCommand(BuildToolService.BuildTool.GRADLE);
+        assertTrue(command.contains("properties"));
+    }
+
+    @Test
+    void testGetDependencyHealthCommandMaven() {
+        List<String> command = buildToolService.getDependencyHealthCommand(BuildToolService.BuildTool.MAVEN);
+        assertTrue(command.contains("dependency:analyze"));
+    }
+
+    @Test
+    void testGetDependencyHealthCommandGradle() {
+        List<String> command = buildToolService.getDependencyHealthCommand(BuildToolService.BuildTool.GRADLE);
+        assertTrue(command.isEmpty());
+    }
 }

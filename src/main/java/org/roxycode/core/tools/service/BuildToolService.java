@@ -133,4 +133,121 @@ public class BuildToolService {
             return "❌ ERROR executing " + context + ": " + String.join(" ", command) + "\n" + e.getMessage();
         }
     }
+    public String getDependencyTree() {
+        BuildTool tool = detect();
+        if (tool == BuildTool.UNKNOWN) {
+            return "❌ Could not detect build tool.";
+        }
+        List<String> command = getDependencyTreeCommand(tool);
+        if (command.isEmpty()) {
+            return "❌ Dependency Tree is not available for " + tool;
+        }
+        return executeCommand(command, "Dependency Tree");
+    }
+
+    List<String> getDependencyTreeCommand(BuildTool tool) {
+        List<String> command = new ArrayList<>();
+        String executable = resolveExecutable(tool);
+        if (executable.isEmpty()) return command;
+        
+        command.add(executable);
+        switch(tool) {
+            case MAVEN:
+                command.add("dependency:tree");
+                break;
+            case GRADLE:
+                command.add("dependencies");
+                break;
+            default:
+                return new ArrayList<>();
+        }
+        return command;
+    }
+
+    public String getProjectStructure() {
+        BuildTool tool = detect();
+        if (tool == BuildTool.UNKNOWN) {
+            return "❌ Could not detect build tool.";
+        }
+        List<String> command = getProjectStructureCommand(tool);
+        if (command.isEmpty()) {
+            return "❌ Project Structure view is not available for " + tool;
+        }
+        return executeCommand(command, "Project Structure");
+    }
+
+    List<String> getProjectStructureCommand(BuildTool tool) {
+        List<String> command = new ArrayList<>();
+        String executable = resolveExecutable(tool);
+        if (executable.isEmpty()) return command;
+        
+        command.add(executable);
+        switch(tool) {
+            case GRADLE:
+                command.add("projects");
+                break;
+            default:
+                return new ArrayList<>();
+        }
+        return command;
+    }
+
+    public String getEffectiveConfig() {
+        BuildTool tool = detect();
+        if (tool == BuildTool.UNKNOWN) {
+            return "❌ Could not detect build tool.";
+        }
+        List<String> command = getEffectiveConfigCommand(tool);
+        if (command.isEmpty()) {
+            return "❌ Effective Config is not available for " + tool;
+        }
+        return executeCommand(command, "Effective Config");
+    }
+
+    List<String> getEffectiveConfigCommand(BuildTool tool) {
+        List<String> command = new ArrayList<>();
+        String executable = resolveExecutable(tool);
+        if (executable.isEmpty()) return command;
+        
+        command.add(executable);
+        switch(tool) {
+            case MAVEN:
+                command.add("help:effective-pom");
+                break;
+            case GRADLE:
+                command.add("properties");
+                break;
+            default:
+                return new ArrayList<>();
+        }
+        return command;
+    }
+
+    public String getDependencyHealth() {
+        BuildTool tool = detect();
+        if (tool == BuildTool.UNKNOWN) {
+            return "❌ Could not detect build tool.";
+        }
+        List<String> command = getDependencyHealthCommand(tool);
+        if (command.isEmpty()) {
+            return "❌ Dependency Health check is not available for " + tool;
+        }
+        return executeCommand(command, "Dependency Health");
+    }
+
+    List<String> getDependencyHealthCommand(BuildTool tool) {
+        List<String> command = new ArrayList<>();
+        String executable = resolveExecutable(tool);
+        if (executable.isEmpty()) return command;
+        
+        command.add(executable);
+        switch(tool) {
+            case MAVEN:
+                command.add("dependency:analyze");
+                break;
+            default:
+                return new ArrayList<>();
+        }
+        return command;
+    }
 }
