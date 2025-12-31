@@ -74,9 +74,6 @@ public class MainFrame extends JFrame implements Runnable {
     private JLabel currentProjectLabel;
 
     @Outlet
-    private JButton rescanButton;
-
-    @Outlet
     private JLabel icon;
 
     // Navigation Outlets
@@ -344,9 +341,6 @@ public class MainFrame extends JFrame implements Runnable {
         if (navSummaryQueueButton != null) {
             navSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignA.ARCHIVE_OUTLINE, 16));
         }
-        if (rescanButton != null) {
-            rescanButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
-        }
         if (settingsMenuItem != null) {
             settingsMenuItem.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
         }
@@ -450,8 +444,6 @@ public class MainFrame extends JFrame implements Runnable {
             });
             inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
         }
-        if (rescanButton != null)
-            rescanButton.addActionListener(e -> performRescan());
         if (settingsMenuItem != null)
             settingsMenuItem.addActionListener(this::onSettings);
         if (exitMenuItem != null)

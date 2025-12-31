@@ -23,9 +23,6 @@
         <label text="Branch:"/>
         <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
         <spacer size="16"/>
-
-
-        <button name="rescanButton" text="Rescan"/>
     </row-panel>
 
     <row-panel weight="1" alignToBaseline="false">
