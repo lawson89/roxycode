@@ -4,11 +4,13 @@ import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 @Singleton
@@ -171,6 +173,9 @@ public class HistoryService {
                 } else if (part.functionResponse().isPresent()) {
                     String fnName = part.functionResponse().get().name().orElse("unknown");
                     sb.append("[TOOL RESPONSE: ").append(fnName).append("]\n");
+                    Map<String, Object> toolOutput = part.functionResponse().get().response().orElse(null);
+                    String toolOutputStr = toolOutput != null ? toolOutput.toString() : "null";
+                    sb.append("[TOOL OUTPUT: ").append(StringUtils.abbreviate(toolOutputStr, 5000)).append("]\n");
                 } else if (part.inlineData().isPresent()) {
                     String mime = part.inlineData().get().mimeType().orElse("image/png");
                     sb.append("[IMAGE DATA: ").append(mime).append("]\n");
@@ -229,6 +234,9 @@ public class HistoryService {
                 text = "<i>[Function Call: " + part.functionCall().get().name().orElse("?") + "]</i>";
             } else if (part.functionResponse().isPresent()) {
                 text = "<i>[Function Response: " + part.functionResponse().get().name().orElse("?") + "]</i>";
+                Map<String, Object> toolOutput = part.functionResponse().get().response().orElse(null);
+                String toolOutputStr = toolOutput != null ? toolOutput.toString() : "null";
+                text += "<br/><pre>" + StringUtils.abbreviate(toolOutputStr, 250) + "</pre>";
             } else if (part.inlineData().isPresent()) {
                 text = "<i>[Inline Data: " + part.inlineData().get().mimeType().orElse("?") + "]</i>";
             } else {

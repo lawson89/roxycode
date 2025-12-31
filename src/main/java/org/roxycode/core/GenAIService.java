@@ -277,6 +277,8 @@ public class GenAIService {
                         try {
                             ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow(() -> new IllegalStateException("Tool not found: " + fnName));
                             toolOutput = executionService.execute(toolDef, fixedArgs).get();
+                            LOG.info("Tool {} executed successfully.", fnName);
+                            LOG.info("Tool output: {}", toolOutput);
                         } catch (Exception e) {
                             toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
                         }
