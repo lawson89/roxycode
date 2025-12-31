@@ -213,4 +213,22 @@ class BuildToolServiceTest {
         String result = buildToolService.getBuildFileContents();
         assertTrue(result.contains("Could not detect build file"));
     }
+
+    @Test
+    void testGetReadmeContentsMd() throws IOException {
+        Files.writeString(tempDir.resolve("README.md"), "# Project Readme");
+        assertEquals("# Project Readme", buildToolService.getReadmeContents());
+    }
+
+    @Test
+    void testGetReadmeContentsTxt() throws IOException {
+        Files.writeString(tempDir.resolve("README.txt"), "Text Readme");
+        assertEquals("Text Readme", buildToolService.getReadmeContents());
+    }
+
+    @Test
+    void testGetReadmeContentsNone() {
+        String result = buildToolService.getReadmeContents();
+        assertTrue(result.contains("No README file found"));
+    }
 }

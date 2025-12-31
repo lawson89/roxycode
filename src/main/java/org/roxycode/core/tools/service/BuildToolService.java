@@ -198,6 +198,9 @@ public class BuildToolService {
         report += "### Project Structure\n";
         report += getProjectStructure();
         report += "\n";
+        report += "### Project Readme\n";
+        report += getReadmeContents();
+        report += "\n";
 //        report += "### Dependency Tree\n";
 //        report += getDependencyTree();
         report += "\n";
@@ -306,5 +309,23 @@ public class BuildToolService {
         }
     }
 
+    public String getReadmeContents() {
+        Path projectRoot = sandbox.getRoot();
+        List<String> potentialFilenames = Arrays.asList(
+                "README.md", "README.txt", "README", "readme.md", "readme.txt", "readme"
+        );
 
+        for (String filename : potentialFilenames) {
+            Path readmePath = projectRoot.resolve(filename);
+            if (Files.exists(readmePath)) {
+                try {
+                    return Files.readString(readmePath);
+                } catch (IOException e) {
+                    return "❌ Error reading README file: " + e.getMessage();
+                }
+            }
+        }
+
+        return "❌ No README file found.";
+    }
 }
