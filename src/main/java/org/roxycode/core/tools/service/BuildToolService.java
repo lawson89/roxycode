@@ -3,6 +3,7 @@ package org.roxycode.core.tools.service;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.Sandbox;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -16,15 +17,17 @@ import java.util.List;
 public class BuildToolService {
 
     private final Sandbox sandbox;
+    private final FileSystemService fileSystemService;
+
 
     public enum BuildTool {
-
         MAVEN, GRADLE, ANT, UNKNOWN
     }
 
     @Inject
-    public BuildToolService(Sandbox sandbox) {
+    public BuildToolService(Sandbox sandbox, FileSystemService fileSystemService) {
         this.sandbox = sandbox;
+        this.fileSystemService = fileSystemService;
     }
 
     public BuildTool detect() {
@@ -32,11 +35,11 @@ public class BuildToolService {
         if (Files.exists(projectRoot.resolve("pom.xml"))) {
             return BuildTool.MAVEN;
         } else // Gradle can use Groovy (.gradle) or Kotlin (.gradle.kts) DSL
-        if (Files.exists(projectRoot.resolve("build.gradle")) || Files.exists(projectRoot.resolve("build.gradle.kts"))) {
-            return BuildTool.GRADLE;
-        } else if (Files.exists(projectRoot.resolve("build.xml"))) {
-            return BuildTool.ANT;
-        }
+            if (Files.exists(projectRoot.resolve("build.gradle")) || Files.exists(projectRoot.resolve("build.gradle.kts"))) {
+                return BuildTool.GRADLE;
+            } else if (Files.exists(projectRoot.resolve("build.xml"))) {
+                return BuildTool.ANT;
+            }
         return BuildTool.UNKNOWN;
     }
 
@@ -59,7 +62,7 @@ public class BuildToolService {
     List<String> getCompileCommand(BuildTool tool) {
         List<String> command = new ArrayList<>();
         command.add(resolveExecutable(tool));
-        switch(tool) {
+        switch (tool) {
             case MAVEN:
                 command.addAll(Arrays.asList("clean", "compile"));
                 break;
@@ -84,9 +87,13 @@ public class BuildToolService {
         return resolveExecutable(tool, System.getProperty("os.name").toLowerCase().contains("win"));
     }
 
+    String getOperatingSystem() {
+        return System.getProperty("os.name").toLowerCase();
+    }
+
     String resolveExecutable(BuildTool tool, boolean isWindows) {
         Path projectRoot = sandbox.getRoot();
-        switch(tool) {
+        switch (tool) {
             case MAVEN:
                 if (isWindows) {
                     Path wrapper = projectRoot.resolve("mvnw.cmd");
@@ -133,6 +140,7 @@ public class BuildToolService {
             return "❌ ERROR executing " + context + ": " + String.join(" ", command) + "\n" + e.getMessage();
         }
     }
+
     public String getDependencyTree() {
         BuildTool tool = detect();
         if (tool == BuildTool.UNKNOWN) {
@@ -142,16 +150,16 @@ public class BuildToolService {
         if (command.isEmpty()) {
             return "❌ Dependency Tree is not available for " + tool;
         }
-        return executeCommand(command, "Dependency Tree");
+        return "```" + executeCommand(command, "Dependency Tree") + "```";
     }
 
     List<String> getDependencyTreeCommand(BuildTool tool) {
         List<String> command = new ArrayList<>();
         String executable = resolveExecutable(tool);
         if (executable.isEmpty()) return command;
-        
+
         command.add(executable);
-        switch(tool) {
+        switch (tool) {
             case MAVEN:
                 command.add("dependency:tree");
                 break;
@@ -176,13 +184,32 @@ public class BuildToolService {
         return executeCommand(command, "Project Structure");
     }
 
+    //@todo add cache as this can be really slow
+    public String getProjectSummary() {
+        String report = "### Project Info\n";
+        report += "- Build Tool: " + detect() + "\n";
+        report += "- OS: " + getOperatingSystem() + "\n";
+        report += "\n";
+        report += "### Project Files\n";
+        report += "```" + fileSystemService.tree(sandbox.getRoot().toAbsolutePath().toString()) + "```\n";
+        report += "### Project Structure\n";
+        report += getProjectStructure();
+        report += "\n";
+//        report += "### Dependency Tree\n";
+//        report += getDependencyTree();
+        report += "\n";
+//        report += "### Effective Dependencies\n";
+//        report += getEffectiveConfig();
+        return report;
+    }
+
     List<String> getProjectStructureCommand(BuildTool tool) {
         List<String> command = new ArrayList<>();
         String executable = resolveExecutable(tool);
         if (executable.isEmpty()) return command;
-        
+
         command.add(executable);
-        switch(tool) {
+        switch (tool) {
             case GRADLE:
                 command.add("projects");
                 break;
@@ -208,9 +235,9 @@ public class BuildToolService {
         List<String> command = new ArrayList<>();
         String executable = resolveExecutable(tool);
         if (executable.isEmpty()) return command;
-        
+
         command.add(executable);
-        switch(tool) {
+        switch (tool) {
             case MAVEN:
                 command.add("help:effective-pom");
                 break;
@@ -239,9 +266,9 @@ public class BuildToolService {
         List<String> command = new ArrayList<>();
         String executable = resolveExecutable(tool);
         if (executable.isEmpty()) return command;
-        
+
         command.add(executable);
-        switch(tool) {
+        switch (tool) {
             case MAVEN:
                 command.add("dependency:analyze");
                 break;
@@ -250,4 +277,6 @@ public class BuildToolService {
         }
         return command;
     }
+
+
 }

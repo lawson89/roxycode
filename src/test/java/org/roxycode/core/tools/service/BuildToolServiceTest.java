@@ -25,7 +25,8 @@ class BuildToolServiceTest {
     void setUp() {
         sandbox = new Sandbox();
         sandbox.setRoot(tempDir.toString());
-        buildToolService = new BuildToolService(sandbox);
+        FileSystemService fileSystemService = new FileSystemService(sandbox);
+        buildToolService = new BuildToolService(sandbox, fileSystemService);
     }
 
     @Test

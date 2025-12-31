@@ -8,6 +8,7 @@ import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.File;
@@ -45,6 +46,8 @@ public class GenAIService {
 
     private final HistoryService historyService;
 
+    private final BuildToolService buildToolService;
+
     private Client client;
 
     private String lastUsedApiKey;
@@ -55,7 +58,9 @@ public class GenAIService {
     // Track where we loaded from
     private Path cachedRoxyHome;
 
-    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, Sandbox sandbox, ContextRegistry contextRegistry, UsageService usageService, HistoryService historyService) {
+    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService,
+                        Sandbox sandbox, ContextRegistry contextRegistry, UsageService usageService,
+                        HistoryService historyService, BuildToolService buildToolService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
@@ -63,6 +68,7 @@ public class GenAIService {
         this.contextRegistry = contextRegistry;
         this.usageService = usageService;
         this.historyService = historyService;
+        this.buildToolService = buildToolService;
     }
 
     private synchronized Client getClient() {
@@ -159,8 +165,9 @@ public class GenAIService {
         String contextMenu = contextRegistry.getContextMenu();
         StringBuilder contextBuilder = new StringBuilder();
         contextBuilder.append("Project Root: ").append(projectRoot).append("n");
-        contextBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("n");
-        contextBuilder.append(contextMenu).append("n");
+        contextBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
+        contextBuilder.append(buildToolService.getProjectSummary()).append("\n\n");
+        contextBuilder.append(contextMenu).append("\n");
         if (attachedFiles != null && !attachedFiles.isEmpty()) {
             contextBuilder.append("n--- ATTACHED FILES ---n");
             for (File file : attachedFiles) {

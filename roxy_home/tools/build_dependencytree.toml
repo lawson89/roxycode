@@ -1,0 +1,9 @@
+description = "Shows the dependency tree of the project."
+type = "graaljs"
+source = "file:build_dependencytree.js"
+
+[[parameters]]
+name = "dummy"
+type = "string"
+description = "Unused parameter required by schema parser"
+required = false
