@@ -44,23 +44,12 @@
             <spacer weight="1"/>
         </column-panel>
 
-        <column-panel tabTitle="Memory Compaction" spacing="8" padding="16">
-            <label text="History Threshold (Start Compacting at):"/>
+        <column-panel tabTitle="Conversation Settings" spacing="8" padding="16">
+            <label text="History Window Size:"/>
             <row-panel spacing="8">
-                <text-field name="historyThresholdField" columns="10"/>
+                <text-field name="historyWindowSize" columns="10"/>
             </row-panel>
 
-            <spacer size="8"/>
-            <label text="Compaction Chunk Size (Messages to Summarize):"/>
-            <row-panel spacing="8">
-                <text-field name="compactionChunkSizeField" columns="10"/>
-            </row-panel>
-
-            <spacer size="8"/>
-            <label text="Max Summary Chunks (Context Segments):"/>
-            <row-panel spacing="8">
-                <text-field name="maxSummaryChunksField" columns="10"/>
-            </row-panel>
             <spacer weight="1"/>
         </column-panel>
     </tabbed-pane>

@@ -14,6 +14,7 @@ import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.core.tools.service.GitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
@@ -179,13 +180,7 @@ public class MainFrame extends JFrame implements Runnable {
     private JTextField maxTurnsField;
 
     @Outlet
-    private JTextField historyThresholdField;
-
-    @Outlet
-    private JTextField compactionChunkSizeField;
-
-    @Outlet
-    private JTextField maxSummaryChunksField;
+    private JTextField historyWindowSize;
 
     @Outlet
     private JTextField logLinesCountField;
@@ -292,7 +287,6 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add(UILoader.load(this, "SettingsView.xml"));
             mainContentStack.add(UILoader.load(this, "SystemPromptView.xml"));
             mainContentStack.add(UILoader.load(this, "MessageHistoryView.xml"));
-            mainContentStack.add(UILoader.load(this, "SummaryQueueView.xml"));
             mainContentStack.add(UILoader.load(this, "LogsView.xml"));
         }
         // 3. Initialize UI Components
@@ -451,7 +445,7 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void updateRoxyMode() {
-        if(roxyModeLabel != null) {
+        if (roxyModeLabel != null) {
             roxyModeLabel.setText(genAIService.getRoxyMode().toString());
         }
     }
@@ -516,8 +510,6 @@ public class MainFrame extends JFrame implements Runnable {
             refreshSystemPromptButton.addActionListener(e -> onRefreshSystemPrompt());
         if (refreshMessageHistoryButton != null)
             refreshMessageHistoryButton.addActionListener(e -> updateMessageHistoryView());
-        if (refreshSummaryQueueButton != null)
-            refreshSummaryQueueButton.addActionListener(e -> updateSummaryQueueView());
         if (refreshLogsButton != null)
             refreshLogsButton.addActionListener(e -> updateLogsView());
         if (saveSettingsButton != null)
@@ -541,7 +533,7 @@ public class MainFrame extends JFrame implements Runnable {
             viewSummaryQueue.setVisible(false);
         if (viewLogs != null)
             viewLogs.setVisible(false);
-        switch(viewName) {
+        switch (viewName) {
             case "CHAT":
                 if (viewChat != null)
                     viewChat.setVisible(true);
@@ -570,12 +562,6 @@ public class MainFrame extends JFrame implements Runnable {
                 if (viewMessageHistory != null) {
                     updateMessageHistoryView();
                     viewMessageHistory.setVisible(true);
-                }
-                break;
-            case "SUMMARY_QUEUE":
-                if (viewSummaryQueue != null) {
-                    updateSummaryQueueView();
-                    viewSummaryQueue.setVisible(true);
                 }
                 break;
             case "LOGS":
@@ -614,7 +600,7 @@ public class MainFrame extends JFrame implements Runnable {
             apiKeyField.setText(settingsService.getGeminiApiKey());
         if (maxTurnsField != null)
             maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
-                if (logLinesCountField != null)
+        if (logLinesCountField != null)
             logLinesCountField.setText(String.valueOf(settingsService.getLogLinesCount()));
         if (logAutoScrollCheckBox != null)
             logAutoScrollCheckBox.setSelected(settingsService.isLogAutoScroll());
@@ -628,19 +614,15 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (modelComboBox != null) {
             modelComboBox.removeAllItems();
-            for(GeminiModel model : geminiModelRegistry.getAllModels()) {
+            for (GeminiModel model : geminiModelRegistry.getAllModels()) {
                 modelComboBox.addItem(model.getApiName());
             }
             modelComboBox.setSelectedItem(settingsService.getGeminiModel());
             updateModelPricing();
             modelComboBox.addActionListener(e -> updateModelPricing());
         }
-        if (historyThresholdField != null)
-            historyThresholdField.setText(String.valueOf(settingsService.getHistoryThreshold()));
-        if (compactionChunkSizeField != null)
-            compactionChunkSizeField.setText(String.valueOf(settingsService.getCompactionChunkSize()));
-        if (maxSummaryChunksField != null)
-            maxSummaryChunksField.setText(String.valueOf(settingsService.getMaxSummaryChunks()));
+        if (historyWindowSize != null)
+            historyWindowSize.setText(String.valueOf(settingsService.getHistoryWindowSize()));
     }
 
     private void updateModelPricing() {
@@ -719,16 +701,13 @@ public class MainFrame extends JFrame implements Runnable {
         try {
             if (maxTurnsField != null)
                 settingsService.setMaxTurns(Integer.parseInt(maxTurnsField.getText().trim()));
-                        if (logLinesCountField != null)
+            if (logLinesCountField != null)
                 settingsService.setLogLinesCount(Integer.parseInt(logLinesCountField.getText().trim()));
             if (logAutoScrollCheckBox != null)
                 settingsService.setLogAutoScroll(logAutoScrollCheckBox.isSelected());
-            if (historyThresholdField != null)
-                settingsService.setHistoryThreshold(Integer.parseInt(historyThresholdField.getText().trim()));
-            if (compactionChunkSizeField != null)
-                settingsService.setCompactionChunkSize(Integer.parseInt(compactionChunkSizeField.getText().trim()));
-            if (maxSummaryChunksField != null)
-                settingsService.setMaxSummaryChunks(Integer.parseInt(maxSummaryChunksField.getText().trim()));
+            if(historyWindowSize != null){
+                settingsService.setHistoryWindowSize(Integer.parseInt(historyWindowSize.getText().trim()));
+            }
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "Please enter valid numbers.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
@@ -921,24 +900,6 @@ public class MainFrame extends JFrame implements Runnable {
         messageHistoryArea.setHtml(html.toString());
     }
 
-    private void updateSummaryQueueView() {
-        if (summaryQueueArea == null)
-            return;
-        List<String> queue = historyService.getSummaryQueue();
-        StringBuilder md = new StringBuilder();
-        md.append("# Summary Queue (").append(queue.size()).append(" segments)\n\n");
-        if (queue.isEmpty()) {
-            md.append("*The queue is empty. No history compaction has occurred yet.*");
-        } else {
-            int i = 1;
-            for (String summary : queue) {
-                md.append("## Segment ").append(i++).append("\n");
-                md.append(summary).append("\n\n");
-                md.append("---\n");
-            }
-        }
-        summaryQueueArea.setMarkdown(md.toString());
-    }
 
     private void updateLogsView() {
         if (logsArea == null)
