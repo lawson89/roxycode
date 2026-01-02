@@ -3,6 +3,7 @@ package org.roxycode.core;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,7 @@ public class SettingsService {
     private final Preferences preferences;
     private final ObjectMapper objectMapper;
 
-    public SettingsService(ObjectMapper objectMapper) {
+    public SettingsService(@Named("json") ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
         this.preferences = Preferences.userNodeForPackage(SettingsService.class);
     }

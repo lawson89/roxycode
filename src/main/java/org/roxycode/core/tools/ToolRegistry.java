@@ -2,6 +2,7 @@ package org.roxycode.core.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlFactory;
+import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,8 +22,8 @@ public class ToolRegistry {
     private final Map<String, ToolDefinition> tools = new HashMap<>();
     private final ObjectMapper tomlMapper;
 
-    public ToolRegistry() {
-        this.tomlMapper = new ObjectMapper(new TomlFactory());
+    public ToolRegistry(@Named("toml") ObjectMapper tomlMapper) {
+        this.tomlMapper = tomlMapper;
     }
 
     /**

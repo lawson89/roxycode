@@ -9,6 +9,8 @@ import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.*;
+import org.roxycode.core.config.GeminiModel;
+import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.core.tools.service.GitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +49,8 @@ public class MainFrame extends JFrame implements Runnable {
     private final Sandbox sandbox;
 
     private final ThemeService themeService;
+
+    private final GeminiModelRegistry geminiModelRegistry;
 
     private Path currentProjectRoot;
 
@@ -251,7 +255,9 @@ public class MainFrame extends JFrame implements Runnable {
     private final LogCaptureService logCaptureService;
 
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, LogCaptureService logCaptureService) {
+    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService,
+                     UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService,
+                     LogCaptureService logCaptureService, GeminiModelRegistry geminiModelRegistry) {
         this.gitService = gitService;
         this.genAIService = genAIService;
         this.historyService = historyService;
@@ -261,6 +267,7 @@ public class MainFrame extends JFrame implements Runnable {
         this.sandbox = sandbox;
         this.themeService = themeService;
         this.logCaptureService = logCaptureService;
+        this.geminiModelRegistry = geminiModelRegistry;
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     }
@@ -615,11 +622,9 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (modelComboBox != null) {
             modelComboBox.removeAllItems();
-            modelComboBox.addItem("gemini-3-pro-preview");
-            modelComboBox.addItem("gemini-3-flash-preview");
-            modelComboBox.addItem("gemini-2.5-flash");
-            modelComboBox.addItem("gemini-2.5-pro");
-            modelComboBox.addItem("gemini-2.0-flash");
+            for(GeminiModel model : geminiModelRegistry.getAllModels()) {
+                modelComboBox.addItem(model.getApiName());
+            }
             modelComboBox.setSelectedItem(settingsService.getGeminiModel());
         }
         if (historyThresholdField != null)

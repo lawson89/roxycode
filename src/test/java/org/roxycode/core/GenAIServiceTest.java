@@ -1,6 +1,7 @@
 package org.roxycode.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.toml.TomlFactory;
 import com.google.genai.types.*;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Replaces;
@@ -121,6 +122,11 @@ class GenAIServiceTest {
     @Replaces(ToolRegistry.class)
     @Requires(property = "spec.name", value = "GenAIServiceTest")
     static class StubToolRegistry extends ToolRegistry {
+
+        public StubToolRegistry() {
+            // Pass a dummy mapper to satisfy constructor requirements
+            super(new ObjectMapper(new TomlFactory()));
+        }
 
         public String lastLoadedPath;
 

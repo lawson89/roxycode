@@ -1,6 +1,7 @@
 package org.roxycode.core.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.graalvm.polyglot.proxy.ProxyObject;
@@ -45,7 +46,9 @@ public class ToolExecutionService {
 
     private final ObjectMapper objectMapper;
 
-    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, GrepService grepService, GitService gitService, TikaService tikaService, JavaService javaAnalysisService, XmlService xmlService, TomlService tomlService, BuildToolService buildToolService, SierraPreviewService sierraPreviewService, ObjectMapper objectMapper) {
+    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, GrepService grepService, GitService gitService, TikaService tikaService,
+                                JavaService javaAnalysisService, XmlService xmlService, TomlService tomlService, BuildToolService buildToolService,
+                                SierraPreviewService sierraPreviewService, @Named("toml") ObjectMapper objectMapper) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
         this.sandbox = sandbox;
