@@ -12,6 +12,7 @@ import jakarta.inject.Singleton;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
+import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;

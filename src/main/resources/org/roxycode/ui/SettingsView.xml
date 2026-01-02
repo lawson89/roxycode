@@ -15,6 +15,13 @@
             <row-panel spacing="8">
                 <combo-box name="modelComboBox" weight="1"/>
             </row-panel>
+            <row-panel spacing="8">
+                <label text="Input Price: " font="PLAIN 11"/>
+                <label name="modelInputPriceLabel" text="N/A" font="BOLD 11"/>
+                <spacer size="16"/>
+                <label text="Output Price: " font="PLAIN 11"/>
+                <label name="modelOutputPriceLabel" text="N/A" font="BOLD 11"/>
+            </row-panel>
 
             <spacer size="8"/>
             <label text="Max Turns (Chat History):"/>

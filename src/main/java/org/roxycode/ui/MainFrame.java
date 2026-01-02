@@ -202,6 +202,12 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JComboBox<String> modelComboBox;
 
+    @Outlet
+    private JLabel modelInputPriceLabel;
+
+    @Outlet
+    private JLabel modelOutputPriceLabel;
+
     // -- VIEW: SYSTEM PROMPT --
     @Outlet
     private JComponent viewSystemPrompt;
@@ -626,6 +632,8 @@ public class MainFrame extends JFrame implements Runnable {
                 modelComboBox.addItem(model.getApiName());
             }
             modelComboBox.setSelectedItem(settingsService.getGeminiModel());
+            updateModelPricing();
+            modelComboBox.addActionListener(e -> updateModelPricing());
         }
         if (historyThresholdField != null)
             historyThresholdField.setText(String.valueOf(settingsService.getHistoryThreshold()));
@@ -633,6 +641,20 @@ public class MainFrame extends JFrame implements Runnable {
             compactionChunkSizeField.setText(String.valueOf(settingsService.getCompactionChunkSize()));
         if (maxSummaryChunksField != null)
             maxSummaryChunksField.setText(String.valueOf(settingsService.getMaxSummaryChunks()));
+    }
+
+    private void updateModelPricing() {
+        String selectedModel = (String) modelComboBox.getSelectedItem();
+        if (selectedModel != null) {
+            geminiModelRegistry.getModelByName(selectedModel).ifPresent(model -> {
+                if (modelInputPriceLabel != null) {
+                    modelInputPriceLabel.setText(String.format("$%.3f / 1M tokens", model.getInputPrice()));
+                }
+                if (modelOutputPriceLabel != null) {
+                    modelOutputPriceLabel.setText(String.format("$%.3f / 1M tokens", model.getOutputPrice()));
+                }
+            });
+        }
     }
 
     private void onStopChat(ActionEvent e) {

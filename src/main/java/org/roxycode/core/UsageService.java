@@ -1,6 +1,9 @@
 package org.roxycode.core;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.config.GeminiModel;
+import org.roxycode.core.config.GeminiModelRegistry;
+
 import java.util.prefs.Preferences;
 
 @Singleton
@@ -10,9 +13,13 @@ public class UsageService {
     private static final String KEY_CANDIDATE_TOKENS = "usage_candidate_tokens";
 
     private final Preferences preferences;
+    private final SettingsService settingsService;
+    private final GeminiModelRegistry geminiModelRegistry;
 
-    public UsageService() {
+    public UsageService(SettingsService settingsService, GeminiModelRegistry geminiModelRegistry) {
         this.preferences = Preferences.userNodeForPackage(UsageService.class);
+        this.settingsService = settingsService;
+        this.geminiModelRegistry = geminiModelRegistry;
     }
 
     public synchronized void recordUsage(int promptTokens, int candidateTokens) {
@@ -49,12 +56,29 @@ public class UsageService {
         return getPromptTokens() + getCandidateTokens();
     }
 
+    public double getInputTokenPrice(){
+        String model = settingsService.getGeminiModel();
+        GeminiModel gm = geminiModelRegistry.getModelByName(model).orElse(null);
+        if(gm != null) {
+            return gm.getInputPrice();
+        }else{
+            return 0.0;
+        }
+    }
+
+    public double getOutputTokenPrice(){
+        String model = settingsService.getGeminiModel();
+        GeminiModel gm = geminiModelRegistry.getModelByName(model).orElse(null);
+        if(gm != null) {
+            return gm.getOutputPrice();
+        }else{
+            return 0.0;
+        }
+    }
+
     public double getEstimatedCost() {
-        // Prices for Gemini 1.5 Flash as a proxy:
-        // $0.075 per 1 million input tokens
-        // $0.30 per 1 million output tokens
-        double inputCost = (getPromptTokens() / 1_000_000.0) * 0.075;
-        double outputCost = (getCandidateTokens() / 1_000_000.0) * 0.30;
+        double inputCost = (getPromptTokens() / 1_000_000.0) * getInputTokenPrice();
+        double outputCost = (getCandidateTokens() / 1_000_000.0) * getOutputTokenPrice();
         return inputCost + outputCost;
     }
 

@@ -87,10 +87,6 @@ public class SettingsService {
         }
     }
 
-    public Path getCurrentProject() {
-        return Paths.get(".").toAbsolutePath().normalize();
-    }
-
     public int getMaxTurns() {
         return preferences.getInt(KEY_MAX_TURNS, MAX_TURNS);
     }
