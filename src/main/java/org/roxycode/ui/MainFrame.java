@@ -64,6 +64,9 @@ public class MainFrame extends JFrame implements Runnable {
     private JLabel gitBranchLabel;
 
     @Outlet
+    private JLabel roxyModeLabel;
+
+    @Outlet
     private JLabel currentModelLabel;
 
     @Outlet
@@ -310,6 +313,7 @@ public class MainFrame extends JFrame implements Runnable {
         // Startup Scan
         performRescan();
         updateProjectLabel();
+        updateRoxyMode();
         // Set initial view
         showView("CHAT");
         setSize(1200, 800);
@@ -430,6 +434,12 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (projectNameLabel != null) {
             projectNameLabel.setText(currentProjectRoot.getFileName().toString());
+        }
+    }
+
+    private void updateRoxyMode() {
+        if(roxyModeLabel != null) {
+            roxyModeLabel.setText(genAIService.getRoxyMode().toString());
         }
     }
 
@@ -791,6 +801,7 @@ public class MainFrame extends JFrame implements Runnable {
                     SwingUtilities.invokeLater(() -> {
                         chatArea.appendRoxyMarkdown(response);
                         updateChatStats();
+                        updateRoxyMode();
                     });
                 } catch (Exception ex) {
                     log.error("Chat error", ex);

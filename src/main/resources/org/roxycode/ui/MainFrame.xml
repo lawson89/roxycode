@@ -20,8 +20,12 @@
         <spacer size="16"/>
         <label text="Project: "/>
         <label text="[PROJECT_NAME]" name="currentProjectLabel"/>
+        <spacer size="16"/>
         <label text="Branch:"/>
         <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
+        <spacer size="16"/>
+        <label text="Mode:"/>
+        <label name="roxyModeLabel" text="" styleClass="monospaced"/>
         <spacer size="16"/>
     </row-panel>
 
