@@ -731,8 +731,10 @@ public class MainFrame extends JFrame implements Runnable {
         fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         fileChooser.setCurrentDirectory(currentProjectRoot.toFile());
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            //@todo clean this up - lotta duplication here
             currentProjectRoot = fileChooser.getSelectedFile().toPath().toAbsolutePath();
             sandbox.setRoot(currentProjectRoot.toString());
+            settingsService.setCurrentProject(currentProjectRoot.toString());
             roxyProjectService.ensureProjectStructure();
             genAIService.clearHistory();
             updateProjectLabel();

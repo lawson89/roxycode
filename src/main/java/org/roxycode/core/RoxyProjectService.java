@@ -14,6 +14,7 @@ import java.nio.file.Path;
 public class RoxyProjectService {
     private static final Logger LOG = LoggerFactory.getLogger(RoxyProjectService.class);
     private static final String ROXY_PROJECT_DIR = "roxy_project";
+    private static final String ROXY_PROJECT_CACHE = ".cache";
     private static final String README_FILE = "README.md";
 
     private final Sandbox sandbox;
@@ -28,7 +29,7 @@ public class RoxyProjectService {
     public void ensureProjectStructure() {
         LOG.info("Ensuring Roxy project structure...");
         try {
-            Path projectDir = sandbox.resolve(ROXY_PROJECT_DIR);
+            Path projectDir = getRoxyProjectDir();
             
             if (!Files.exists(projectDir)) {
                 LOG.info("Creating {} directory.", ROXY_PROJECT_DIR);
@@ -45,5 +46,18 @@ public class RoxyProjectService {
             LOG.error("Failed to ensure project structure", e);
             throw new RuntimeException("Failed to ensure Roxy project structure", e);
         }
+    }
+
+    public Path getRoxyProjectDir(){
+        Path projectDir = sandbox.resolve(ROXY_PROJECT_DIR);
+        return  projectDir;
+    }
+
+    public Path getRoxyProjectCacheDir() throws IOException {
+        Path cacheDir = getRoxyProjectDir().resolve(ROXY_PROJECT_CACHE);
+        if (!Files.exists(cacheDir)) {
+            Files.createDirectories(cacheDir);
+        }
+        return cacheDir;
     }
 }

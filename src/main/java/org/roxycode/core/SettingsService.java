@@ -39,6 +39,8 @@ public class SettingsService {
     private static final int DEFAULT_LOG_LINES_COUNT = 100;
     private static final boolean DEFAULT_LOG_AUTO_SCROLL = true;
 
+    private static final String KEY_CURRENT_PROJECT = "currentProject";
+
     private final Preferences preferences;
     private final ObjectMapper objectMapper;
 
@@ -58,6 +60,15 @@ public class SettingsService {
     public void setGeminiApiKey(String key) {
         if (key == null) preferences.remove(KEY_GEMINI_API_KEY);
         else preferences.put(KEY_GEMINI_API_KEY, key);
+    }
+
+    public String getCurrentProject() {
+        return preferences.get(KEY_CURRENT_PROJECT, null);
+    }
+
+    public void setCurrentProject(String project) {
+        if (project == null) preferences.remove(KEY_CURRENT_PROJECT);
+        else preferences.put(KEY_CURRENT_PROJECT, project);
     }
 
     public List<String> getRecentProjects() {

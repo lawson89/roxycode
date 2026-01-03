@@ -3,13 +3,19 @@ package org.roxycode.cache;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.jetbrains.annotations.NotNull;
+import org.roxycode.core.RoxyProjectService;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Singleton
 public class CodebasePackerService {
@@ -44,8 +50,18 @@ public class CodebasePackerService {
         EXTENSION_MAP.put("dockerfile", "text/x-dockerfile");
     }
 
+    private final RoxyProjectService roxyProjectService;
+
     @Inject
-    public CodebasePackerService() {
+    public CodebasePackerService(RoxyProjectService roxyProjectService) {
+        this.roxyProjectService = roxyProjectService;
+    }
+
+    public void buildProjectCache() throws IOException {
+        Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
+        String user = System.getProperty("user.name", "unknown");
+        Path outputPath = cacheDir.resolve("codebase_cache.toml");
+        packCodebaseToFile(cacheDir, Collections.emptyList(), user, outputPath);
     }
 
     /**
@@ -184,9 +200,15 @@ public class CodebasePackerService {
         }
 
         switch (filename) {
-            case "dockerfile" -> { return "text/x-dockerfile"; }
-            case "makefile" -> { return "text/x-makefile"; }
-            case "jenkinsfile" -> { return "text/x-groovy"; }
+            case "dockerfile" -> {
+                return "text/x-dockerfile";
+            }
+            case "makefile" -> {
+                return "text/x-makefile";
+            }
+            case "jenkinsfile" -> {
+                return "text/x-groovy";
+            }
         }
 
         try {
