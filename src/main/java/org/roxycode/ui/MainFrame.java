@@ -14,7 +14,6 @@ import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.core.tools.service.GitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
@@ -203,6 +202,15 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JLabel modelOutputPriceLabel;
 
+    @Outlet
+    private JCheckBox cacheEnabledCheckBox;
+
+    @Outlet
+    private JTextField cacheTTLField;
+
+    @Outlet
+    private JTextField cacheMinSizeField;
+
     // -- VIEW: SYSTEM PROMPT --
     @Outlet
     private JComponent viewSystemPrompt;
@@ -256,9 +264,7 @@ public class MainFrame extends JFrame implements Runnable {
     private final LogCaptureService logCaptureService;
 
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService,
-                     UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService,
-                     LogCaptureService logCaptureService, GeminiModelRegistry geminiModelRegistry) {
+    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, LogCaptureService logCaptureService, GeminiModelRegistry geminiModelRegistry) {
         this.gitService = gitService;
         this.genAIService = genAIService;
         this.historyService = historyService;
@@ -533,7 +539,7 @@ public class MainFrame extends JFrame implements Runnable {
             viewSummaryQueue.setVisible(false);
         if (viewLogs != null)
             viewLogs.setVisible(false);
-        switch (viewName) {
+        switch(viewName) {
             case "CHAT":
                 if (viewChat != null)
                     viewChat.setVisible(true);
@@ -596,33 +602,17 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void initSettings() {
-        if (apiKeyField != null)
-            apiKeyField.setText(settingsService.getGeminiApiKey());
-        if (maxTurnsField != null)
-            maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
-        if (logLinesCountField != null)
-            logLinesCountField.setText(String.valueOf(settingsService.getLogLinesCount()));
-        if (logAutoScrollCheckBox != null)
-            logAutoScrollCheckBox.setSelected(settingsService.isLogAutoScroll());
-        if (themeComboBox != null) {
-            themeComboBox.removeAllItems();
-            themeComboBox.addItem("Light");
-            themeComboBox.addItem("Dark");
-            themeComboBox.addItem("IntelliJ");
-            themeComboBox.addItem("Darcula");
-            themeComboBox.setSelectedItem(settingsService.getTheme());
-        }
-        if (modelComboBox != null) {
-            modelComboBox.removeAllItems();
-            for (GeminiModel model : geminiModelRegistry.getAllModels()) {
-                modelComboBox.addItem(model.getApiName());
-            }
-            modelComboBox.setSelectedItem(settingsService.getGeminiModel());
-            updateModelPricing();
-            modelComboBox.addActionListener(e -> updateModelPricing());
-        }
-        if (historyWindowSize != null)
-            historyWindowSize.setText(String.valueOf(settingsService.getHistoryWindowSize()));
+        apiKeyField.setText(settingsService.getGeminiApiKey());
+        maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
+        logLinesCountField.setText(String.valueOf(settingsService.getLogLinesCount()));
+        logAutoScrollCheckBox.setSelected(settingsService.isLogAutoScroll());
+        themeComboBox.setSelectedItem(settingsService.getTheme());
+        modelComboBox.setSelectedItem(settingsService.getGeminiModel());
+        historyWindowSize.setText(String.valueOf(settingsService.getHistoryWindowSize()));
+        cacheEnabledCheckBox.setSelected(settingsService.isCacheEnabled());
+        cacheTTLField.setText(String.valueOf(settingsService.getCacheTTL()));
+        cacheMinSizeField.setText(String.valueOf(settingsService.getCacheMinSize()));
+        updateModelPricing();
     }
 
     private void updateModelPricing() {
@@ -696,34 +686,18 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void onSaveSettings(ActionEvent e) {
-        if (apiKeyField != null)
-            settingsService.setGeminiApiKey(new String(apiKeyField.getPassword()).trim());
-        try {
-            if (maxTurnsField != null)
-                settingsService.setMaxTurns(Integer.parseInt(maxTurnsField.getText().trim()));
-            if (logLinesCountField != null)
-                settingsService.setLogLinesCount(Integer.parseInt(logLinesCountField.getText().trim()));
-            if (logAutoScrollCheckBox != null)
-                settingsService.setLogAutoScroll(logAutoScrollCheckBox.isSelected());
-            if(historyWindowSize != null){
-                settingsService.setHistoryWindowSize(Integer.parseInt(historyWindowSize.getText().trim()));
-            }
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Please enter valid numbers.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        if (themeComboBox != null) {
-            String theme = (String) themeComboBox.getSelectedItem();
-            settingsService.setTheme(theme);
-            themeService.applyTheme(theme, chatArea, systemPromptArea, messageHistoryArea, summaryQueueArea);
-        }
-        if (modelComboBox != null) {
-            String model = (String) modelComboBox.getSelectedItem();
-            settingsService.setGeminiModel(model);
-            if (currentModelLabel != null)
-                currentModelLabel.setText(model);
-        }
-        JOptionPane.showMessageDialog(this, "Settings saved.", "Settings", JOptionPane.INFORMATION_MESSAGE);
+        settingsService.setGeminiApiKey(new String(apiKeyField.getPassword()));
+        settingsService.setMaxTurns(Integer.parseInt(maxTurnsField.getText()));
+        settingsService.setLogLinesCount(Integer.parseInt(logLinesCountField.getText()));
+        settingsService.setLogAutoScroll(logAutoScrollCheckBox.isSelected());
+        settingsService.setTheme((String) themeComboBox.getSelectedItem());
+        settingsService.setGeminiModel((String) modelComboBox.getSelectedItem());
+        settingsService.setHistoryWindowSize(Integer.parseInt(historyWindowSize.getText()));
+        settingsService.setCacheEnabled(cacheEnabledCheckBox.isSelected());
+        settingsService.setCacheTTL(Integer.parseInt(cacheTTLField.getText()));
+        settingsService.setCacheMinSize(Integer.parseInt(cacheMinSizeField.getText()));
+        themeService.applyTheme(settingsService.getTheme());
+        JOptionPane.showMessageDialog(this, "Settings saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void onOpenFolder(ActionEvent e) {
@@ -901,7 +875,6 @@ public class MainFrame extends JFrame implements Runnable {
         html.append("</table>");
         messageHistoryArea.setHtml(html.toString());
     }
-
 
     private void updateLogsView() {
         if (logsArea == null)

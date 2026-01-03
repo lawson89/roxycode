@@ -25,6 +25,9 @@ public class SettingsService {
     private static final String KEY_MAX_TURNS = "maxTurns";
     private static final String KEY_THEME = "theme";
     private static final String KEY_GEMINI_MODEL = "geminiModel";
+    private static final String KEY_CACHE_ENABLED = "cacheEnabled";
+    private static final String KEY_CACHE_TTL = "cacheTTL";
+    private static final String KEY_CACHE_MIN_SIZE = "cacheMinSize";
 
     // Sliding Window Keys
     private static final String KEY_HISTORY_WINDOW_SIZE = "historyWindowSize"; // Renamed from historyThreshold
@@ -38,6 +41,9 @@ public class SettingsService {
     private static final int DEFAULT_HISTORY_WINDOW_SIZE = 30; // Number of messages to keep
     private static final int DEFAULT_LOG_LINES_COUNT = 100;
     private static final boolean DEFAULT_LOG_AUTO_SCROLL = true;
+    private static final boolean DEFAULT_CACHE_ENABLED = true;
+    private static final int DEFAULT_CACHE_TTL = 60;
+    private static final int DEFAULT_CACHE_MIN_SIZE = 1024;
 
     private static final String KEY_CURRENT_PROJECT = "currentProject";
 
@@ -141,5 +147,29 @@ public class SettingsService {
 
     public void setLogAutoScroll(boolean autoScroll) {
         preferences.putBoolean(KEY_LOG_AUTO_SCROLL, autoScroll);
+    }
+
+    public boolean isCacheEnabled() {
+        return preferences.getBoolean(KEY_CACHE_ENABLED, DEFAULT_CACHE_ENABLED);
+    }
+
+    public void setCacheEnabled(boolean enabled) {
+        preferences.putBoolean(KEY_CACHE_ENABLED, enabled);
+    }
+
+    public int getCacheTTL() {
+        return preferences.getInt(KEY_CACHE_TTL, DEFAULT_CACHE_TTL);
+    }
+
+    public void setCacheTTL(int ttl) {
+        preferences.putInt(KEY_CACHE_TTL, ttl);
+    }
+
+    public int getCacheMinSize() {
+        return preferences.getInt(KEY_CACHE_MIN_SIZE, DEFAULT_CACHE_MIN_SIZE);
+    }
+
+    public void setCacheMinSize(int minSize) {
+        preferences.putInt(KEY_CACHE_MIN_SIZE, minSize);
     }
 }

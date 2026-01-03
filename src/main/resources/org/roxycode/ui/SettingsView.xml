@@ -49,6 +49,27 @@
             <row-panel spacing="8">
                 <text-field name="historyWindowSize" columns="10"/>
             </row-panel>
+            <spacer weight="1"/>
+        </column-panel>
+
+        <column-panel tabTitle="Project Cache" spacing="16" padding="16">
+            <check-box name="cacheEnabledCheckBox" text="Enable Project Caching"/>
+            
+            <column-panel spacing="4">
+                <label text="TTL (Time To Live) in Minutes:"/>
+                <row-panel spacing="8">
+                    <text-field name="cacheTTLField" columns="10"/>
+                </row-panel>
+                <label text="Cache will expire after this many minutes of inactivity." font="ITALIC 11"/>
+            </column-panel>
+
+            <column-panel spacing="4">
+                <label text="Minimum Cache Size (Tokens):"/>
+                <row-panel spacing="8">
+                    <text-field name="cacheMinSizeField" columns="10"/>
+                </row-panel>
+                <label text="Only requests larger than this will be cached." font="ITALIC 11"/>
+            </column-panel>
 
             <spacer weight="1"/>
         </column-panel>
