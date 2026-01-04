@@ -1,6 +1,8 @@
 package org.roxycode.cache;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.jetbrains.annotations.NotNull;
 import org.roxycode.core.RoxyProjectService;
@@ -11,12 +13,15 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * CodebasePackerService is responsible for creating a snapshot of the project code in a format
+ * easy for the LLM to use
+ */
 @Singleton
 public class CodebasePackerService {
 
@@ -51,42 +56,49 @@ public class CodebasePackerService {
     }
 
     private final RoxyProjectService roxyProjectService;
+    private final ObjectMapper objectMapper;
 
     @Inject
-    public CodebasePackerService(RoxyProjectService roxyProjectService) {
+    public CodebasePackerService(RoxyProjectService roxyProjectService, @Named("toml") ObjectMapper objectMapper) {
         this.roxyProjectService = roxyProjectService;
+        this.objectMapper = objectMapper;
     }
 
     public void buildProjectCache() throws IOException {
         Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
-        String user = System.getProperty("user.name", "unknown");
         Path outputPath = cacheDir.resolve("codebase_cache.toml");
-        packCodebaseToFile(cacheDir, Collections.emptyList(), user, outputPath);
+        // User argument removed as it was only for metadata
+        packCodebaseToFile(cacheDir, Collections.emptyList(), outputPath);
+    }
+
+    public void writeProjectCacheMeta(CodebaseCacheMeta codebaseCacheMeta) throws IOException {
+        Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
+
+        String metaFileName = codebaseCacheMeta.cacheKey() + ".toml";
+        Path metaFilePath = cacheDir.resolve(metaFileName);
+
+        objectMapper.writeValue(metaFilePath.toFile(), codebaseCacheMeta);
     }
 
     /**
      * Streams the cache directly to a file using "Pretty TOML" format.
      */
-    public void packCodebaseToFile(Path rootPath, List<String> exclusions, String user, Path outputPath) throws IOException {
+    public void packCodebaseToFile(Path rootPath, List<String> exclusions, Path outputPath) throws IOException {
         try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
-            writeHeader(writer, rootPath, user);
+            // Header writing removed
             streamFilesToToml(rootPath, exclusions, writer);
         }
     }
 
     /**
      * Returns the cache as a String using "Pretty TOML" format.
-     * Useful for smaller payloads or direct API responses.
      */
-    public String packCodebaseToString(Path rootPath, List<String> exclusions, String user) throws IOException {
+    public String packCodebaseToString(Path rootPath, List<String> exclusions) throws IOException {
         StringWriter stringWriter = new StringWriter();
-
-        // We wrap StringWriter in BufferedWriter to reuse the shared logic
         try (BufferedWriter writer = new BufferedWriter(stringWriter)) {
-            writeHeader(writer, rootPath, user);
+            // Header writing removed
             streamFilesToToml(rootPath, exclusions, writer);
         }
-
         return stringWriter.toString();
     }
 
@@ -133,17 +145,15 @@ public class CodebasePackerService {
         });
     }
 
-    // --- TOML Formatting Logic ---
-
-    private void writeHeader(BufferedWriter w, Path root, String user) throws IOException {
-        w.write("projectRoot = " + quoteString(root.toAbsolutePath().toString()));
-        w.newLine();
-        w.write("user = " + quoteString(user));
-        w.newLine();
-        w.write("generatedAt = " + quoteString(Instant.now().toString()));
-        w.newLine();
-        w.newLine();
+    /**
+     * Utility to generate consistent cache keys.
+     * Kept public as it is used by other services (e.g. push service).
+     */
+    public String getCacheKey(Path root, String user, String geminiModel) {
+        return "roxycode_cache_" + user + "_" + root.getFileName() + "_" + geminiModel;
     }
+
+    // --- TOML Formatting Logic ---
 
     private void writeTomlEntry(BufferedWriter w, String path, long size, String mime, String content) throws IOException {
         w.write("[[files]]");

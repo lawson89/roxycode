@@ -72,6 +72,12 @@ public class SettingsService {
         return preferences.get(KEY_CURRENT_PROJECT, null);
     }
 
+    public Path getCurrentProjectPath() {
+        String project = getCurrentProject();
+        if (project == null) return null;
+        return Path.of(project);
+    }
+
     public void setCurrentProject(String project) {
         if (project == null) preferences.remove(KEY_CURRENT_PROJECT);
         else preferences.put(KEY_CURRENT_PROJECT, project);
@@ -132,6 +138,7 @@ public class SettingsService {
     public void setHistoryWindowSize(int size) {
         preferences.putInt(KEY_HISTORY_WINDOW_SIZE, size);
     }
+
 
     public int getLogLinesCount() {
         return preferences.getInt(KEY_LOG_LINES_COUNT, DEFAULT_LOG_LINES_COUNT);
