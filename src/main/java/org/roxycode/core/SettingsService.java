@@ -30,7 +30,7 @@ public class SettingsService {
     private static final String KEY_CACHE_MIN_SIZE = "cacheMinSize";
 
     // Sliding Window Keys
-    private static final String KEY_HISTORY_WINDOW_SIZE = "historyWindowSize"; // Renamed from historyThreshold
+    private static final String KEY_HISTORY_WINDOW_SIZE = "historyWindowSize";
     private static final String KEY_LOG_LINES_COUNT = "logLinesCount";
     private static final String KEY_LOG_AUTO_SCROLL = "logAutoScroll";
 
@@ -130,15 +130,12 @@ public class SettingsService {
     }
 
     public int getHistoryWindowSize() {
-        // Fallback to old key if new one isn't set, to preserve user settings during migration
-        int oldVal = preferences.getInt("historyThreshold", DEFAULT_HISTORY_WINDOW_SIZE);
-        return preferences.getInt(KEY_HISTORY_WINDOW_SIZE, oldVal);
+        return preferences.getInt(KEY_HISTORY_WINDOW_SIZE, DEFAULT_HISTORY_WINDOW_SIZE);
     }
 
     public void setHistoryWindowSize(int size) {
         preferences.putInt(KEY_HISTORY_WINDOW_SIZE, size);
     }
-
 
     public int getLogLinesCount() {
         return preferences.getInt(KEY_LOG_LINES_COUNT, DEFAULT_LOG_LINES_COUNT);

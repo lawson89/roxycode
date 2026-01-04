@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 @Singleton
 public class GeminiCacheService {
@@ -123,6 +124,30 @@ public class GeminiCacheService {
             LOG.error("Failed to push cache to Gemini: {}", e.getMessage(), e);
             throw new RuntimeException("Cache Push Failed", e);
         }
+    }
+
+    public Optional<CodebaseCacheMeta> getProjectCacheMeta() {
+        String currentModel = settingsService.getGeminiModel();
+        String user = SystemUtils.getSystemUser();
+        Path projectPath = settingsService.getCurrentProjectPath();
+
+        if (projectPath == null) {
+            return Optional.empty();
+        }
+
+        String cacheKey = codebasePackerService.getCacheKey(projectPath, user, currentModel);
+
+        try {
+            Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
+            Path metaFilePath = cacheDir.resolve(cacheKey + ".toml");
+
+            if (Files.exists(metaFilePath)) {
+                return Optional.of(objectMapper.readValue(metaFilePath.toFile(), CodebaseCacheMeta.class));
+            }
+        } catch (IOException e) {
+            LOG.error("Failed to read cache metadata for key {}: {}", cacheKey, e.getMessage());
+        }
+        return Optional.empty();
     }
 
     protected void writeProjectCacheMeta(CodebaseCacheMeta codebaseCacheMeta) throws IOException {
