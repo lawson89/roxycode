@@ -1,16 +1,19 @@
 package org.roxycode.cache;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.genai.Client;
 import com.google.genai.Pager;
 import com.google.genai.types.*;
 import jakarta.annotation.PostConstruct;
+import jakarta.inject.Named;
 import jakarta.inject.Singleton;
-import org.apache.commons.logging.Log;
+import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.SettingsService;
 import org.roxycode.core.utils.SystemUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -30,9 +33,16 @@ public class GeminiCacheService {
 
     private Client client;
 
-    public GeminiCacheService(SettingsService settingsService, CodebasePackerService codebasePackerService) {
+    private final ObjectMapper objectMapper;
+
+    private final RoxyProjectService roxyProjectService;
+
+    public GeminiCacheService(SettingsService settingsService, @Named("toml") ObjectMapper objectMapper,
+                              CodebasePackerService codebasePackerService, RoxyProjectService roxyProjectService) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
+        this.objectMapper = objectMapper;
+        this.roxyProjectService = roxyProjectService;
     }
 
     @PostConstruct
@@ -107,7 +117,7 @@ public class GeminiCacheService {
             LOG.info("Expires At: {}", response.expireTime());
 
             CodebaseCacheMeta codebaseCacheMeta = new CodebaseCacheMeta(project, user, LocalDateTime.now().toString(), cacheKey, geminiId);
-            codebasePackerService.writeProjectCacheMeta(codebaseCacheMeta);
+            writeProjectCacheMeta(codebaseCacheMeta);
 
         } catch (Exception e) {
             LOG.error("Failed to push cache to Gemini: {}", e.getMessage(), e);
@@ -115,6 +125,14 @@ public class GeminiCacheService {
         }
     }
 
+    protected void writeProjectCacheMeta(CodebaseCacheMeta codebaseCacheMeta) throws IOException {
+        Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
+
+        String metaFileName = codebaseCacheMeta.cacheKey() + ".toml";
+        Path metaFilePath = cacheDir.resolve(metaFileName);
+
+        objectMapper.writeValue(metaFilePath.toFile(), codebaseCacheMeta);
+    }
 
     /**
      * Lists all active context caches for the project.

@@ -1,8 +1,6 @@
 package org.roxycode.cache;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
-import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.jetbrains.annotations.NotNull;
 import org.roxycode.core.RoxyProjectService;
@@ -56,12 +54,11 @@ public class CodebasePackerService {
     }
 
     private final RoxyProjectService roxyProjectService;
-    private final ObjectMapper objectMapper;
+
 
     @Inject
-    public CodebasePackerService(RoxyProjectService roxyProjectService, @Named("toml") ObjectMapper objectMapper) {
+    public CodebasePackerService(RoxyProjectService roxyProjectService) {
         this.roxyProjectService = roxyProjectService;
-        this.objectMapper = objectMapper;
     }
 
     public void buildProjectCache() throws IOException {
@@ -69,15 +66,6 @@ public class CodebasePackerService {
         Path outputPath = cacheDir.resolve("codebase_cache.toml");
         // User argument removed as it was only for metadata
         packCodebaseToFile(cacheDir, Collections.emptyList(), outputPath);
-    }
-
-    public void writeProjectCacheMeta(CodebaseCacheMeta codebaseCacheMeta) throws IOException {
-        Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
-
-        String metaFileName = codebaseCacheMeta.cacheKey() + ".toml";
-        Path metaFilePath = cacheDir.resolve(metaFileName);
-
-        objectMapper.writeValue(metaFilePath.toFile(), codebaseCacheMeta);
     }
 
     /**
