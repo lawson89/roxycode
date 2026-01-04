@@ -8,6 +8,7 @@ import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.roxycode.cache.CodebasePackerService;
 import org.roxycode.core.*;
 import org.roxycode.core.config.GeminiModel;
 import org.roxycode.core.config.GeminiModelRegistry;
@@ -264,6 +265,33 @@ public class MainFrame extends JFrame implements Runnable {
     private final LogCaptureService logCaptureService;
 
     @Inject
+    private CodebasePackerService codebasePackerService;
+
+    // -- VIEW: CODEBASE CACHE --
+    @Outlet
+    private JComponent viewCodebaseCache;
+
+    @Outlet
+    private JToggleButton navCodebaseCacheButton;
+
+    @Outlet
+    private JLabel cachePathLabel;
+
+    @Outlet
+    private JLabel cacheLastModifiedLabel;
+
+    @Outlet
+    private JLabel cacheTokenCountLabel;
+
+    @Outlet
+    private JButton rebuildCacheButton;
+
+    @Outlet
+    private JScrollPane cacheContentScrollPane;
+
+    private final MarkdownPane cacheContentArea = new MarkdownPane();
+
+    @Inject
     public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, LogCaptureService logCaptureService, GeminiModelRegistry geminiModelRegistry) {
         this.gitService = gitService;
         this.genAIService = genAIService;
@@ -281,7 +309,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Override
     public void run() {
-        themeService.applyTheme(settingsService.getTheme(), chatArea, systemPromptArea, messageHistoryArea, summaryQueueArea);
+        themeService.applyTheme(settingsService.getTheme(), chatArea, systemPromptArea, messageHistoryArea, summaryQueueArea, cacheContentArea);
         // 1. Load the Main Shell (Menu, Header, Nav, Empty Stack)
         setContentPane(UILoader.load(this, "MainFrame.xml"));
         // 2. Load individual Views and add them to the stack
@@ -294,6 +322,7 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add(UILoader.load(this, "SystemPromptView.xml"));
             mainContentStack.add(UILoader.load(this, "MessageHistoryView.xml"));
             mainContentStack.add(UILoader.load(this, "LogsView.xml"));
+            mainContentStack.add(UILoader.load(this, "CodebaseCacheView.xml"));
         }
         // 3. Initialize UI Components
         initIcons();
@@ -314,6 +343,9 @@ public class MainFrame extends JFrame implements Runnable {
             logsArea.setEditable(false);
             logsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
             logsScrollPane.setViewportView(logsArea);
+        }
+        if (cacheContentScrollPane != null) {
+            cacheContentScrollPane.setViewportView(cacheContentArea);
         }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
@@ -390,6 +422,9 @@ public class MainFrame extends JFrame implements Runnable {
         if (navLogsButton != null) {
             navLogsButton.setIcon(FontIcon.of(MaterialDesignF.FILE_DOCUMENT_OUTLINE, 16));
         }
+        if (navCodebaseCacheButton != null) {
+            navCodebaseCacheButton.setIcon(FontIcon.of(MaterialDesignD.DATABASE_OUTLINE, 16));
+        }
         if (settingsMenuItem != null) {
             settingsMenuItem.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
         }
@@ -428,6 +463,9 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (refreshSummaryQueueButton != null) {
             refreshSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
+        }
+        if (rebuildCacheButton != null) {
+            rebuildCacheButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
         }
         if (refreshLogsButton != null) {
             refreshLogsButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
@@ -488,6 +526,8 @@ public class MainFrame extends JFrame implements Runnable {
             navSummaryQueueButton.addActionListener(e -> showView("SUMMARY_QUEUE"));
         if (navLogsButton != null)
             navLogsButton.addActionListener(e -> showView("LOGS"));
+        if (navCodebaseCacheButton != null)
+            navCodebaseCacheButton.addActionListener(e -> showView("CODEBASE_CACHE"));
         if (resetUsageButton != null)
             resetUsageButton.addActionListener(e -> {
                 usageService.reset();
@@ -520,6 +560,8 @@ public class MainFrame extends JFrame implements Runnable {
             refreshLogsButton.addActionListener(e -> updateLogsView());
         if (saveSettingsButton != null)
             saveSettingsButton.addActionListener(this::onSaveSettings);
+        if (rebuildCacheButton != null)
+            rebuildCacheButton.addActionListener(e -> onRebuildCache());
     }
 
     private void showView(String viewName) {
@@ -539,6 +581,8 @@ public class MainFrame extends JFrame implements Runnable {
             viewSummaryQueue.setVisible(false);
         if (viewLogs != null)
             viewLogs.setVisible(false);
+        if (viewCodebaseCache != null)
+            viewCodebaseCache.setVisible(false);
         switch(viewName) {
             case "CHAT":
                 if (viewChat != null)
@@ -574,6 +618,12 @@ public class MainFrame extends JFrame implements Runnable {
                 if (viewLogs != null) {
                     updateLogsView();
                     viewLogs.setVisible(true);
+                }
+                break;
+            case "CODEBASE_CACHE":
+                if (viewCodebaseCache != null) {
+                    updateCodebaseCacheView();
+                    viewCodebaseCache.setVisible(true);
                 }
                 break;
         }
@@ -881,8 +931,53 @@ public class MainFrame extends JFrame implements Runnable {
             return;
         List<String> logs = logCaptureService.getLogs(settingsService.getLogLinesCount());
         logsArea.setText(String.join("\n", logs));
+
         if (settingsService.isLogAutoScroll()) {
             logsArea.setCaretPosition(logsArea.getDocument().getLength());
         }
+    }
+
+    private void updateCodebaseCacheView() {
+        if (viewCodebaseCache == null)
+            return;
+
+        try {
+            Path cacheFile = codebasePackerService.getCacheFilePath();
+            if (java.nio.file.Files.exists(cacheFile)) {
+                cachePathLabel.setText(cacheFile.toString());
+                cacheLastModifiedLabel.setText(java.nio.file.Files.getLastModifiedTime(cacheFile).toString());
+                String content = java.nio.file.Files.readString(cacheFile);
+                cacheTokenCountLabel.setText(String.format("%,d tokens (estimated)", content.length() / 4));
+                cacheContentArea.setMarkdown("```\n" + content + "\n```");
+            } else {
+                cachePathLabel.setText("No cache found");
+                cacheLastModifiedLabel.setText("-");
+                cacheTokenCountLabel.setText("0");
+                cacheContentArea.setMarkdown("*No cache file exists for this project.*");
+            }
+        } catch (Exception e) {
+            log.error("Error reading cache file", e);
+            cacheContentArea.setMarkdown("Error reading cache file: " + e.getMessage());
+        }
+    }
+
+    private void onRebuildCache() {
+        rebuildCacheButton.setEnabled(false);
+        cacheContentArea.setMarkdown("*Rebuilding codebase cache...*");
+        new Thread(() -> {
+            try {
+                codebasePackerService.buildProjectCache();
+                SwingUtilities.invokeLater(() -> {
+                    updateCodebaseCacheView();
+                    rebuildCacheButton.setEnabled(true);
+                });
+            } catch (Exception e) {
+                log.error("Error rebuilding cache", e);
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this, "Error rebuilding cache: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    rebuildCacheButton.setEnabled(true);
+                });
+            }
+        }).start();
     }
 }

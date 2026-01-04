@@ -2,6 +2,7 @@ package org.roxycode.cache;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.roxycode.core.RoxyProjectService;
 import java.io.BufferedWriter;
@@ -54,17 +55,36 @@ public class CodebasePackerService {
     }
 
     private final RoxyProjectService roxyProjectService;
+    private final org.roxycode.core.Sandbox sandbox;
 
     @Inject
-    public CodebasePackerService(RoxyProjectService roxyProjectService) {
+    public CodebasePackerService(RoxyProjectService roxyProjectService, org.roxycode.core.Sandbox sandbox) {
         this.roxyProjectService = roxyProjectService;
+        this.sandbox = sandbox;
     }
 
+    public Path getCacheFilePath() throws IOException {
+        return roxyProjectService.getRoxyProjectCacheDir().resolve(CACHE_FILENAME);
+    }
+
+    public String getCacheLastModified() throws IOException {
+        Path path = getCacheFilePath();
+        if (Files.exists(path)) {
+            return Files.getLastModifiedTime(path).toString();
+        }
+        return "N/A";
+    }
+
+    public long getCacheEstimatedTokenCount() throws IOException {
+        return estimateTokenCount(getCacheFilePath());
+    }
+
+
     public void buildProjectCache() throws IOException {
+        Path rootPath = sandbox.getRoot();
         Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
         Path outputPath = cacheDir.resolve(CACHE_FILENAME);
-        // User argument removed as it was only for metadata
-        packCodebaseToFile(cacheDir, Collections.emptyList(), outputPath);
+        packCodebaseToFile(rootPath, Collections.emptyList(), outputPath);
     }
 
     /**
@@ -184,8 +204,22 @@ public class CodebasePackerService {
     private boolean shouldExclude(Path root, Path file, PathMatcher[] matchers) {
         Path relative = root.relativize(file);
         for (Path part : relative) {
-            if (part.toString().startsWith("."))
+            String partName = part.toString();
+            if (partName.startsWith("."))
                 return true;
+            // Explicitly exclude the 'roxy_project' folder
+            if (partName.equals("roxy_project")) {
+                return true;
+            }
+            if (partName.equals("target")) {
+                return true;
+            }
+            if (StringUtils.containsIgnoreCase(partName, "mvnw")) {
+                return true;
+            }
+            if (StringUtils.containsIgnoreCase(partName, "license")) {
+                return true;
+            }
         }
         for (PathMatcher matcher : matchers) {
             if (matcher.matches(relative))

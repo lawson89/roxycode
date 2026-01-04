@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<column-panel name="viewCodebaseCache" spacing="10">
+    <row-panel spacing="10">
+        <column-panel spacing="4" weight="1.0">
+            <row-panel spacing="4">
+                <label text="Path: " style="font-weight: bold"/>
+                <label name="cachePathLabel" text="N/A"/>
+            </row-panel>
+            <row-panel spacing="4">
+                <label text="Last Modified: " style="font-weight: bold"/>
+                <label name="cacheLastModifiedLabel" text="N/A"/>
+            </row-panel>
+            <row-panel spacing="4">
+                <label text="Estimated Tokens: " style="font-weight: bold"/>
+                <label name="cacheTokenCountLabel" text="0"/>
+            </row-panel>
+        </column-panel>
+
+        <button name="rebuildCacheButton" text="Rebuild Cache"/>
+    </row-panel>
+
+    <scroll-pane name="cacheContentScrollPane" weight="1.0"/>
+</column-panel>
