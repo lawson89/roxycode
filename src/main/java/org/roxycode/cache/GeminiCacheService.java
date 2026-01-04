@@ -75,7 +75,8 @@ public class GeminiCacheService {
         try {
             // 3. Read the TOML Content
             // Assuming the file is named using the cacheKey or a standard name in the cache dir
-            Path cacheFile = projectPath.resolve("codebase_cache.toml"); // Or leverage your specific naming logic
+            Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
+            Path cacheFile = cacheDir.resolve(CodebasePackerService.CACHE_FILENAME);
 
             if (!Files.exists(cacheFile)) {
                 LOG.error("Cache file not found at: {}", cacheFile);
