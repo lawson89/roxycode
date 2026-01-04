@@ -42,8 +42,8 @@ public class SettingsService {
     private static final int DEFAULT_LOG_LINES_COUNT = 100;
     private static final boolean DEFAULT_LOG_AUTO_SCROLL = true;
     private static final boolean DEFAULT_CACHE_ENABLED = true;
-    private static final int DEFAULT_CACHE_TTL = 60;
-    private static final int DEFAULT_CACHE_MIN_SIZE = 1024;
+    private static final int DEFAULT_CACHE_TTL = 30;
+    private static final int DEFAULT_CACHE_MIN_SIZE = 32768;
 
     private static final String KEY_CURRENT_PROJECT = "currentProject";
 
