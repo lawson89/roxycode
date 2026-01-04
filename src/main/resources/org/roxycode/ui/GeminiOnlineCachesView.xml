@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<column-panel name="viewGeminiOnlineCaches" spacing="10" padding="10">
+    <row-panel spacing="10">
+        <label text="Gemini Online Caches" styleClass="h2" weight="1.0"/>
+        <button name="refreshGeminiCachesButton" text="Refresh"/>
+        <button name="deleteAllGeminiCachesButton" text="Delete All"/>
+    </row-panel>
+
+    <scroll-pane weight="1.0">
+        <table name="geminiCachesTable" autoCreateRowSorter="true" fillsViewportHeight="true"/>
+    </scroll-pane>
+</column-panel>

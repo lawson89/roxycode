@@ -1,6 +1,7 @@
 package org.roxycode.ui;
 
 import com.formdev.flatlaf.FlatLaf;
+import com.google.genai.types.CachedContent;
 import com.google.genai.types.Content;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -9,6 +10,7 @@ import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.cache.CodebasePackerService;
+import org.roxycode.cache.GeminiCacheService;
 import org.roxycode.core.*;
 import org.roxycode.core.config.GeminiModel;
 import org.roxycode.core.config.GeminiModelRegistry;
@@ -16,6 +18,7 @@ import org.roxycode.core.tools.service.GitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import java.awt.*;
@@ -267,6 +270,9 @@ public class MainFrame extends JFrame implements Runnable {
     @Inject
     private CodebasePackerService codebasePackerService;
 
+    @Inject
+    private GeminiCacheService geminiCacheService;
+
     // -- VIEW: CODEBASE CACHE --
     @Outlet
     private JComponent viewCodebaseCache;
@@ -290,6 +296,24 @@ public class MainFrame extends JFrame implements Runnable {
     private JScrollPane cacheContentScrollPane;
 
     private final MarkdownPane cacheContentArea = new MarkdownPane();
+
+    // -- VIEW: GEMINI ONLINE CACHES --
+    @Outlet
+    private JComponent viewGeminiOnlineCaches;
+
+    @Outlet
+    private JTable geminiCachesTable;
+
+    @Outlet
+    private JButton refreshGeminiCachesButton;
+
+    @Outlet
+    private JButton deleteAllGeminiCachesButton;
+
+    @Outlet
+    private JToggleButton navGeminiCachesButton;
+
+    private DefaultTableModel geminiCachesModel;
 
     @Inject
     public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, LogCaptureService logCaptureService, GeminiModelRegistry geminiModelRegistry) {
@@ -323,6 +347,7 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add(UILoader.load(this, "MessageHistoryView.xml"));
             mainContentStack.add(UILoader.load(this, "LogsView.xml"));
             mainContentStack.add(UILoader.load(this, "CodebaseCacheView.xml"));
+            mainContentStack.add(UILoader.load(this, "GeminiOnlineCachesView.xml"));
         }
         // 3. Initialize UI Components
         initIcons();
@@ -346,6 +371,28 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (cacheContentScrollPane != null) {
             cacheContentScrollPane.setViewportView(cacheContentArea);
+        }
+        // Gemini Caches Table
+        if (geminiCachesTable != null) {
+            geminiCachesModel = new DefaultTableModel(new Object[] { "ID", "Model", "Created", "Expires", "Size (Tokens)" }, 0) {
+
+                @Override
+                public boolean isCellEditable(int row, int column) {
+                    return false;
+                }
+            };
+            geminiCachesTable.setModel(geminiCachesModel);
+            JPopupMenu popupMenu = new JPopupMenu();
+            JMenuItem deleteItem = new JMenuItem("Delete Cache");
+            deleteItem.addActionListener(e -> {
+                int row = geminiCachesTable.getSelectedRow();
+                if (row != -1) {
+                    String id = (String) geminiCachesTable.getValueAt(row, 0);
+                    onDeleteGeminiCache(id);
+                }
+            });
+            popupMenu.add(deleteItem);
+            geminiCachesTable.setComponentPopupMenu(popupMenu);
         }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
@@ -425,6 +472,9 @@ public class MainFrame extends JFrame implements Runnable {
         if (navCodebaseCacheButton != null) {
             navCodebaseCacheButton.setIcon(FontIcon.of(MaterialDesignD.DATABASE_OUTLINE, 16));
         }
+        if (navGeminiCachesButton != null) {
+            navGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignC.CLOUD_OUTLINE, 16));
+        }
         if (settingsMenuItem != null) {
             settingsMenuItem.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
         }
@@ -469,6 +519,12 @@ public class MainFrame extends JFrame implements Runnable {
         }
         if (refreshLogsButton != null) {
             refreshLogsButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
+        }
+        if (refreshGeminiCachesButton != null) {
+            refreshGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
+        }
+        if (deleteAllGeminiCachesButton != null) {
+            deleteAllGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignD.DELETE_OUTLINE, 16));
         }
     }
 
@@ -528,6 +584,8 @@ public class MainFrame extends JFrame implements Runnable {
             navLogsButton.addActionListener(e -> showView("LOGS"));
         if (navCodebaseCacheButton != null)
             navCodebaseCacheButton.addActionListener(e -> showView("CODEBASE_CACHE"));
+        if (navGeminiCachesButton != null)
+            navGeminiCachesButton.addActionListener(e -> showView("GEMINI_CACHES"));
         if (resetUsageButton != null)
             resetUsageButton.addActionListener(e -> {
                 usageService.reset();
@@ -562,6 +620,10 @@ public class MainFrame extends JFrame implements Runnable {
             saveSettingsButton.addActionListener(this::onSaveSettings);
         if (rebuildCacheButton != null)
             rebuildCacheButton.addActionListener(e -> onRebuildCache());
+        if (refreshGeminiCachesButton != null)
+            refreshGeminiCachesButton.addActionListener(e -> updateGeminiCachesView());
+        if (deleteAllGeminiCachesButton != null)
+            deleteAllGeminiCachesButton.addActionListener(e -> onDeleteAllGeminiCaches());
     }
 
     private void showView(String viewName) {
@@ -583,6 +645,8 @@ public class MainFrame extends JFrame implements Runnable {
             viewLogs.setVisible(false);
         if (viewCodebaseCache != null)
             viewCodebaseCache.setVisible(false);
+        if (viewGeminiOnlineCaches != null)
+            viewGeminiOnlineCaches.setVisible(false);
         switch(viewName) {
             case "CHAT":
                 if (viewChat != null)
@@ -624,6 +688,12 @@ public class MainFrame extends JFrame implements Runnable {
                 if (viewCodebaseCache != null) {
                     updateCodebaseCacheView();
                     viewCodebaseCache.setVisible(true);
+                }
+                break;
+            case "GEMINI_CACHES":
+                if (viewGeminiOnlineCaches != null) {
+                    updateGeminiCachesView();
+                    viewGeminiOnlineCaches.setVisible(true);
                 }
                 break;
         }
@@ -931,7 +1001,6 @@ public class MainFrame extends JFrame implements Runnable {
             return;
         List<String> logs = logCaptureService.getLogs(settingsService.getLogLinesCount());
         logsArea.setText(String.join("\n", logs));
-
         if (settingsService.isLogAutoScroll()) {
             logsArea.setCaretPosition(logsArea.getDocument().getLength());
         }
@@ -940,7 +1009,6 @@ public class MainFrame extends JFrame implements Runnable {
     private void updateCodebaseCacheView() {
         if (viewCodebaseCache == null)
             return;
-
         try {
             Path cacheFile = codebasePackerService.getCacheFilePath();
             if (java.nio.file.Files.exists(cacheFile)) {
@@ -979,5 +1047,65 @@ public class MainFrame extends JFrame implements Runnable {
                 });
             }
         }).start();
+    }
+
+    private void updateGeminiCachesView() {
+        if (geminiCachesModel == null)
+            return;
+        geminiCachesModel.setRowCount(0);
+        new Thread(() -> {
+            try {
+                List<com.google.genai.types.CachedContent> caches = geminiCacheService.listCaches();
+                SwingUtilities.invokeLater(() -> {
+                    for (com.google.genai.types.CachedContent cache : caches) {
+                        String id = cache.name().orElse("");
+                        String model = cache.model().orElse("");
+                        String created = cache.createTime().map(Object::toString).orElse("");
+                        String expires = cache.expireTime().map(Object::toString).orElse("");
+                        String size = cache.usageMetadata().flatMap(u -> u.totalTokenCount().map(String::valueOf)).orElse("0");
+                        geminiCachesModel.addRow(new Object[] { id, model, created, expires, size });
+                    }
+                });
+            } catch (Exception e) {
+                log.error("Error listing Gemini caches", e);
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this, "Error listing Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                });
+            }
+        }).start();
+    }
+
+    private void onDeleteAllGeminiCaches() {
+        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete ALL online Gemini caches?", "Confirm Delete All", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            new Thread(() -> {
+                try {
+                    geminiCacheService.deleteAllCaches();
+                    SwingUtilities.invokeLater(this::updateGeminiCachesView);
+                } catch (Exception e) {
+                    log.error("Error deleting Gemini caches", e);
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Error deleting Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            }).start();
+        }
+    }
+
+    private void onDeleteGeminiCache(String id) {
+        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete cache: " + id + "?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            new Thread(() -> {
+                try {
+                    geminiCacheService.deleteCache(id);
+                    SwingUtilities.invokeLater(this::updateGeminiCachesView);
+                } catch (Exception e) {
+                    log.error("Error deleting Gemini cache: " + id, e);
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Error deleting Gemini cache: " + id + ": " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            }).start();
+        }
     }
 }
