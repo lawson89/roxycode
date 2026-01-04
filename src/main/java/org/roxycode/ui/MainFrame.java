@@ -293,6 +293,15 @@ public class MainFrame extends JFrame implements Runnable {
     private JButton rebuildCacheButton;
 
     @Outlet
+    private JLabel onlineCacheIdLabel;
+
+    @Outlet
+    private JLabel onlineCacheTimestampLabel;
+
+    @Outlet
+    private JButton pushCacheButton;
+
+    @Outlet
     private JScrollPane cacheContentScrollPane;
 
     private final MarkdownPane cacheContentArea = new MarkdownPane();
@@ -396,6 +405,9 @@ public class MainFrame extends JFrame implements Runnable {
         }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
+        if (settingsService.getCurrentProject() == null) {
+            settingsService.setCurrentProject(currentProjectRoot.toString());
+        }
         sandbox.setRoot(currentProjectRoot.toString());
         roxyProjectService.ensureProjectStructure();
         initGitInfo();
@@ -517,6 +529,9 @@ public class MainFrame extends JFrame implements Runnable {
         if (rebuildCacheButton != null) {
             rebuildCacheButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
         }
+        if (pushCacheButton != null) {
+            pushCacheButton.setIcon(FontIcon.of(MaterialDesignC.CLOUD_UPLOAD_OUTLINE, 16));
+        }
         if (refreshLogsButton != null) {
             refreshLogsButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
         }
@@ -577,7 +592,7 @@ public class MainFrame extends JFrame implements Runnable {
         if (navSystemPromptButton != null)
             navSystemPromptButton.addActionListener(e -> showView("SYSTEM_PROMPT"));
         if (navMessageHistoryButton != null)
-            navMessageHistoryButton.addActionListener(e -> showView("MESSAGE_HISTORY"));
+            navMessageHistoryButton.addActionListener(e -> updateMessageHistoryView());
         if (navSummaryQueueButton != null)
             navSummaryQueueButton.addActionListener(e -> showView("SUMMARY_QUEUE"));
         if (navLogsButton != null)
@@ -620,6 +635,8 @@ public class MainFrame extends JFrame implements Runnable {
             saveSettingsButton.addActionListener(this::onSaveSettings);
         if (rebuildCacheButton != null)
             rebuildCacheButton.addActionListener(e -> onRebuildCache());
+        if (pushCacheButton != null)
+            pushCacheButton.addActionListener(e -> onPushCache());
         if (refreshGeminiCachesButton != null)
             refreshGeminiCachesButton.addActionListener(e -> updateGeminiCachesView());
         if (deleteAllGeminiCachesButton != null)
@@ -1011,7 +1028,8 @@ public class MainFrame extends JFrame implements Runnable {
             return;
         try {
             Path cacheFile = codebasePackerService.getCacheFilePath();
-            if (java.nio.file.Files.exists(cacheFile)) {
+            boolean exists = java.nio.file.Files.exists(cacheFile);
+            if (exists) {
                 cachePathLabel.setText(cacheFile.toString());
                 cacheLastModifiedLabel.setText(java.nio.file.Files.getLastModifiedTime(cacheFile).toString());
                 String content = java.nio.file.Files.readString(cacheFile);
@@ -1023,6 +1041,16 @@ public class MainFrame extends JFrame implements Runnable {
                 cacheTokenCountLabel.setText("0");
                 cacheContentArea.setMarkdown("*No cache file exists for this project.*");
             }
+            if (pushCacheButton != null) {
+                pushCacheButton.setEnabled(exists);
+            }
+            geminiCacheService.getProjectCacheMeta(currentProjectRoot).ifPresentOrElse(meta -> {
+                onlineCacheIdLabel.setText(meta.geminiCacheId());
+                onlineCacheTimestampLabel.setText(meta.generatedAt());
+            }, () -> {
+                onlineCacheIdLabel.setText("Not Pushed");
+                onlineCacheTimestampLabel.setText("-");
+            });
         } catch (Exception e) {
             log.error("Error reading cache file", e);
             cacheContentArea.setMarkdown("Error reading cache file: " + e.getMessage());
@@ -1031,6 +1059,9 @@ public class MainFrame extends JFrame implements Runnable {
 
     private void onRebuildCache() {
         rebuildCacheButton.setEnabled(false);
+        if (pushCacheButton != null) {
+            pushCacheButton.setEnabled(false);
+        }
         cacheContentArea.setMarkdown("*Rebuilding codebase cache...*");
         new Thread(() -> {
             try {
@@ -1042,8 +1073,32 @@ public class MainFrame extends JFrame implements Runnable {
             } catch (Exception e) {
                 log.error("Error rebuilding cache", e);
                 SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "Error rebuilding cache: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    updateCodebaseCacheView();
                     rebuildCacheButton.setEnabled(true);
+                    JOptionPane.showMessageDialog(this, "Error rebuilding cache: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                });
+            }
+        }).start();
+    }
+
+    private void onPushCache() {
+        pushCacheButton.setEnabled(false);
+        rebuildCacheButton.setEnabled(false);
+        cacheContentArea.setMarkdown("### Pushing to Gemini...\n\nUploading codebase snapshot to Gemini Context Caching service. This may take a few moments depending on the size.");
+        new Thread(() -> {
+            try {
+                geminiCacheService.pushCache(currentProjectRoot);
+                SwingUtilities.invokeLater(() -> {
+                    updateCodebaseCacheView();
+                    rebuildCacheButton.setEnabled(true);
+                    JOptionPane.showMessageDialog(this, "Cache pushed successfully to Gemini.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                });
+            } catch (Exception e) {
+                log.error("Error pushing cache", e);
+                SwingUtilities.invokeLater(() -> {
+                    updateCodebaseCacheView();
+                    rebuildCacheButton.setEnabled(true);
+                    JOptionPane.showMessageDialog(this, "Error pushing cache: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 });
             }
         }).start();

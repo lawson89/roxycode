@@ -19,5 +19,20 @@
         <button name="rebuildCacheButton" text="Rebuild Cache"/>
     </row-panel>
 
+    <row-panel spacing="10">
+        <column-panel spacing="4" weight="1.0">
+            <row-panel spacing="4">
+                <label text="Online Cache ID: " style="font-weight: bold"/>
+                <label name="onlineCacheIdLabel" text="Not Pushed"/>
+            </row-panel>
+            <row-panel spacing="4">
+                <label text="Last Pushed: " style="font-weight: bold"/>
+                <label name="onlineCacheTimestampLabel" text="-"/>
+            </row-panel>
+        </column-panel>
+
+        <button name="pushCacheButton" text="Push to Gemini"/>
+    </row-panel>
+
     <scroll-pane name="cacheContentScrollPane" weight="1.0"/>
 </column-panel>

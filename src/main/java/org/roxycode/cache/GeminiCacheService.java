@@ -1,10 +1,10 @@
 package org.roxycode.cache;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.genai.Client;
 import com.google.genai.Pager;
 import com.google.genai.types.*;
-import jakarta.annotation.PostConstruct;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
@@ -12,15 +12,19 @@ import org.roxycode.core.SettingsService;
 import org.roxycode.core.utils.SystemUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Singleton
@@ -32,118 +36,82 @@ public class GeminiCacheService {
 
     private final CodebasePackerService codebasePackerService;
 
-    private Client client;
+    private final ObjectMapper tomlMapper;
 
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper jsonMapper;
 
     private final RoxyProjectService roxyProjectService;
 
-    public GeminiCacheService(SettingsService settingsService, @Named("toml") ObjectMapper objectMapper,
-                              CodebasePackerService codebasePackerService, RoxyProjectService roxyProjectService) {
+    private final HttpClient httpClient;
+
+    private Client client;
+
+    private String lastApiKey;
+
+    public GeminiCacheService(SettingsService settingsService, @Named("toml") ObjectMapper tomlMapper, @Named("json") ObjectMapper jsonMapper, CodebasePackerService codebasePackerService, RoxyProjectService roxyProjectService) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
-        this.objectMapper = objectMapper;
+        this.tomlMapper = tomlMapper;
+        this.jsonMapper = jsonMapper;
         this.roxyProjectService = roxyProjectService;
+        this.httpClient = HttpClient.newBuilder().build();
     }
 
-    @PostConstruct
-    public void init() {
-        this.client = Client.builder()
-                .apiKey(settingsService.getGeminiApiKey())
-                .build();
-    }
-
-    public void pushCache() {
-        LOG.info("Pushing cache to Gemini...");
-
-        // 1. Gather Metadata
-        String currentModel = settingsService.getGeminiModel();
-        String project = settingsService.getCurrentProject();
-        String user = SystemUtils.getSystemUser();
-        Path projectPath = settingsService.getCurrentProjectPath();
-
-        // 2. Calculate Key & Cleanup
-        // ensuring the cacheKey is "clean" for the API (no spaces/weird chars)
-        String cacheKey = codebasePackerService.getCacheKey(projectPath, user, currentModel);
-
-        LOG.info("cacheKey: {} | project: {} | user: {} | currentModel: {}", cacheKey, project, user, currentModel);
-
-        // Delete existing cache with this name to avoid "Already Exists" errors
-        // (Assuming deleteCache handles "not found" gracefully)
-        deleteCache(cacheKey);
-
-        try {
-            // 3. Read the TOML Content
-            // Assuming the file is named using the cacheKey or a standard name in the cache dir
-            Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
-            Path cacheFile = cacheDir.resolve(CodebasePackerService.CACHE_FILENAME);
-
-            if (!Files.exists(cacheFile)) {
-                LOG.error("Cache file not found at: {}", cacheFile);
-                return;
-            }
-
-            String tomlData = Files.readString(cacheFile);
-
-            // 4. Create the Content Object (The Payload)
-            Content cacheContent = Content.builder()
-                    .role("user")
-                    .parts(List.of(Part.builder()
-                            .text(tomlData) // Loading the entire TOML string
-                            .build()))
-                    .build();
-
-            // 5. Create System Instructions (Optional but Recommended)
-            // It is cheaper to bake this "Identity" into the cache now.
-            Content systemInstruction = Content.builder()
-                    .parts(List.of(Part.builder()
-                            .text("You are RoxyCode. You answer in TOML. You have access to the full codebase context provided.")
-                            .build()))
-                    .build();
-
-            CreateCachedContentConfig config = CreateCachedContentConfig.builder()
-                    .displayName(cacheKey)
-                    .systemInstruction(systemInstruction)
-                    .contents(List.of(cacheContent))
-                    .ttl(Duration.ofMinutes(settingsService.getCacheTTL()))
-                    .build();
-
-            // 7. Execute Upload
-            LOG.info("Uploading {} bytes to Gemini...", tomlData.length());
-
-            CachedContent response = client.caches.create(currentModel, config);
-            String geminiId = response.name().orElse("missing");
-
-            LOG.info("✅ Cache Pushed Successfully!");
-            LOG.info("Resource Name: {}", response.name()); // e.g., cachedContents/12345...
-            LOG.info("Expires At: {}", response.expireTime());
-
-            CodebaseCacheMeta codebaseCacheMeta = new CodebaseCacheMeta(project, user, LocalDateTime.now().toString(), cacheKey, geminiId);
-            writeProjectCacheMeta(codebaseCacheMeta);
-
-        } catch (Exception e) {
-            LOG.error("Failed to push cache to Gemini: {}", e.getMessage(), e);
-            throw new RuntimeException("Cache Push Failed", e);
+    private synchronized Client getClient() {
+        String currentApiKey = settingsService.getGeminiApiKey();
+        if (client == null || !currentApiKey.equals(lastApiKey)) {
+            LOG.info("Initializing/Refreshing Gemini Client...");
+            this.client = Client.builder().apiKey(currentApiKey).build();
+            this.lastApiKey = currentApiKey;
         }
+        return client;
     }
 
-    public Optional<CodebaseCacheMeta> getProjectCacheMeta() {
+    public void pushCache(Path projectPath) throws Exception {
+        Path cacheFile = codebasePackerService.getCacheFilePath();
+        if (!Files.exists(cacheFile)) {
+            throw new IOException("Cache file not found: " + cacheFile);
+        }
+        String content = Files.readString(cacheFile);
+        String apiKey = settingsService.getGeminiApiKey();
+        String model = settingsService.getGeminiModel();
+        int ttlMinutes = settingsService.getCacheTTL();
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("Gemini API key is not configured.");
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", "models/" + model);
+        body.put("ttl", ttlMinutes * 60 + "s");
+        Map<String, Object> contentsMap = new HashMap<>();
+        contentsMap.put("role", "user");
+        Map<String, Object> partsMap = new HashMap<>();
+        partsMap.put("text", content);
+        contentsMap.put("parts", List.of(partsMap));
+        body.put("contents", List.of(contentsMap));
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create("https://generativelanguage.googleapis.com/v1beta/cachedContents")).header("Content-Type", "application/json").header("x-goog-api-key", apiKey).POST(HttpRequest.BodyPublishers.ofString(jsonMapper.writeValueAsString(body))).build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            LOG.error("Failed to push cache. Status: {}, Body: {}", response.statusCode(), response.body());
+            throw new IOException("Failed to push cache to Gemini: " + response.body());
+        }
+        JsonNode root = jsonMapper.readTree(response.body());
+        String geminiId = root.get("name").asText();
+        CodebaseCacheMeta meta = new CodebaseCacheMeta(projectPath.toString(), System.getProperty("user.name"), ZonedDateTime.now().toString(), codebasePackerService.getCacheKey(projectPath, SystemUtils.getSystemUser(), model), geminiId);
+        writeProjectCacheMeta(meta);
+    }
+
+    public Optional<CodebaseCacheMeta> getProjectCacheMeta(Path projectPath) {
         String currentModel = settingsService.getGeminiModel();
         String user = SystemUtils.getSystemUser();
-        Path projectPath = settingsService.getCurrentProjectPath();
-
         if (projectPath == null) {
             return Optional.empty();
         }
-
         String cacheKey = codebasePackerService.getCacheKey(projectPath, user, currentModel);
-
         try {
             Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
             Path metaFilePath = cacheDir.resolve(cacheKey + ".toml");
-
             if (Files.exists(metaFilePath)) {
-                return Optional.of(objectMapper.readValue(metaFilePath.toFile(), CodebaseCacheMeta.class));
+                return Optional.of(tomlMapper.readValue(metaFilePath.toFile(), CodebaseCacheMeta.class));
             }
         } catch (IOException e) {
             LOG.error("Failed to read cache metadata for key {}: {}", cacheKey, e.getMessage());
@@ -153,11 +121,9 @@ public class GeminiCacheService {
 
     protected void writeProjectCacheMeta(CodebaseCacheMeta codebaseCacheMeta) throws IOException {
         Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
-
         String metaFileName = codebaseCacheMeta.cacheKey() + ".toml";
         Path metaFilePath = cacheDir.resolve(metaFileName);
-
-        objectMapper.writeValue(metaFilePath.toFile(), codebaseCacheMeta);
+        tomlMapper.writeValue(metaFilePath.toFile(), codebaseCacheMeta);
     }
 
     /**
@@ -166,23 +132,12 @@ public class GeminiCacheService {
     public List<CachedContent> listCaches() {
         try {
             LOG.info("Scanning for active Gemini Context Caches...");
-
-            // 1. Get the Pager (handles pagination automatically)
-            Pager<CachedContent> pager = client.caches.list(
-                    ListCachedContentsConfig.builder().build()
-            );
-
-            // 2. Collect items into a standard List
+            Pager<CachedContent> pager = getClient().caches.list(ListCachedContentsConfig.builder().build());
             List<CachedContent> allCaches = new ArrayList<>();
             for (CachedContent cache : pager) {
                 allCaches.add(cache);
             }
-
-            if (allCaches.isEmpty()) {
-                return Collections.emptyList();
-            }
             return allCaches;
-
         } catch (Exception e) {
             LOG.error("Failed to list caches: {}", e.getMessage(), e);
             throw new RuntimeException("Gemini API Error", e);
@@ -191,13 +146,11 @@ public class GeminiCacheService {
 
     /**
      * Deletes a specific cache by its resource name.
-     *
-     * @param cacheName The full resource name (e.g., "cachedContents/12345...")
      */
     public void deleteCache(String cacheName) {
         try {
             LOG.info("Deleting cache: {}", cacheName);
-            client.caches.delete(cacheName, DeleteCachedContentConfig.builder().build());
+            getClient().caches.delete(cacheName, DeleteCachedContentConfig.builder().build());
             LOG.info("Successfully deleted: {}", cacheName);
         } catch (Exception e) {
             LOG.warn("Failed to delete cache {}: {}", cacheName, e.getMessage());
@@ -207,14 +160,10 @@ public class GeminiCacheService {
 
     /**
      * Deletes ALL active caches for the project.
-     * Use with caution.
-     *
-     * @return The count of deleted caches.
      */
     public int deleteAllCaches() {
         List<CachedContent> allCaches = listCaches();
         int count = 0;
-
         for (CachedContent cache : allCaches) {
             try {
                 String name = cache.name().orElseThrow(() -> new IllegalStateException("Cache has no name"));
@@ -222,7 +171,6 @@ public class GeminiCacheService {
                 count++;
             } catch (Exception e) {
                 LOG.warn("Could not delete cache {}: {}", cache.name(), e.getMessage());
-                // Continue deleting others even if one fails
             }
         }
         return count;
