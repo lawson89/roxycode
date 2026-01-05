@@ -2457,7 +2457,7 @@ public class HistoryService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/ToolRegistry.java"
-size = 3661
+size = 3910
 mimeType = "text/x-java-source"
 content = '''
 package org.roxycode.core.tools;
@@ -2474,7 +2474,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
@@ -2494,23 +2493,24 @@ public class ToolRegistry {
      * Scans the specified directory for .toml files and loads them.
      * Use "tools" as the default argument.
      */
-    public void loadTools(String directoryPath) {
-        Path root = Paths.get(directoryPath);
-        if (!Files.exists(root) || !Files.isDirectory(root)) {
-            LOG.warn("Tool directory not found: {}", root.toAbsolutePath());
+    public void loadTools(Path roxyHomeTools) {
+        LOG.info("Loading tools from directory: {}", roxyHomeTools.toAbsolutePath());
+        if (!Files.exists(roxyHomeTools) || !Files.isDirectory(roxyHomeTools)) {
+            LOG.warn("Tool directory not found: {}", roxyHomeTools.toAbsolutePath());
             return;
         }
 
-        try (Stream<Path> paths = Files.walk(root)) {
+        try (Stream<Path> paths = Files.walk(roxyHomeTools)) {
             paths.filter(Files::isRegularFile)
                     .filter(p -> p.toString().endsWith(".toml"))
                     .forEach(this::loadTool);
         } catch (IOException e) {
             LOG.error("Failed to scan tools directory", e);
         }
+        LOG.info("Loaded {} tools.", tools.size());
     }
 
-    private void loadTool(Path path) {
+    protected void loadTool(Path path) {
         try {
             ToolDefinition toolDefinition = tomlMapper.readValue(path.toFile(), ToolDefinition.class);
             toolDefinition.setDefinitionLocation(path.getParent());
@@ -2519,7 +2519,11 @@ public class ToolRegistry {
             String toolName = path.getFileName().toString().replace(".toml", "");
             tools.put(toolName, toolDefinition);
             LOG.info("Loaded tool: {}", toolName);
-            loadGeminiTool(toolName, toolDefinition);
+            try {
+                loadGeminiTool(toolName, toolDefinition);
+            }catch (Exception e) {
+                LOG.error("Failed to load gemini tool for: {}", toolName, e);
+            }
         } catch (IOException e) {
             LOG.error("Failed to parse tool: {}", path, e);
         }
@@ -2552,8 +2556,8 @@ public class ToolRegistry {
         return new ArrayList<>(tools.values());
     }
 
-    public List<Tool> getAllGeminiTools(){
-        return  new ArrayList<>(geminiTools.values());
+    public List<Tool> getAllGeminiTools() {
+        return new ArrayList<>(geminiTools.values());
     }
 }
 '''
@@ -4369,7 +4373,7 @@ public class LogCaptureService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/GenAIService.java"
-size = 15741
+size = 14350
 mimeType = "text/x-java-source"
 content = '''
 package org.roxycode.core;
@@ -4381,25 +4385,19 @@ import org.roxycode.core.context.ContextRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
-import org.apache.commons.lang3.StringUtils;
 import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Singleton
 public class GenAIService {
@@ -4427,9 +4425,6 @@ public class GenAIService {
     private Client client;
 
     private String lastUsedApiKey;
-
-    // Cache function declarations to avoid re-scanning every chat turn
-    private final List<FunctionDeclaration> cachedFunctions = new ArrayList<>();
 
     private Path cachedRoxyHome;
 
@@ -4463,30 +4458,12 @@ public class GenAIService {
         Path roxyHome = settingsService.getRoxyHome();
         this.cachedRoxyHome = roxyHome;
         LOG.info("🏠 Roxy Home detected at: {}", roxyHome);
+        LOG.info("Loading Contexts ...");
         contextRegistry.loadContexts(roxyHome.resolve("context"));
-        cachedFunctions.clear();
-        Path toolsPath = roxyHome.resolve("tools");
-        List<String> availableToolNames = new ArrayList<>();
-        if (Files.exists(toolsPath)) {
-            LOG.info("🔧 Loading tools from: {}", toolsPath.toAbsolutePath());
-            toolRegistry.loadTools(toolsPath.toString());
-            try (Stream<Path> stream = Files.list(toolsPath)) {
-                availableToolNames = stream.filter(p -> p.toString().endsWith(".toml")).map(p -> p.getFileName().toString().replace(".toml", "")).toList();
-            } catch (IOException e) {
-                LOG.error("Failed to list tool files", e);
-            }
-        }
-        for (String toolName : availableToolNames) {
-            toolRegistry.getTool(toolName).ifPresent(td -> {
-                Map<String, Schema> properties = new HashMap<>();
-                if (td.getParameters() != null) {
-                    td.getParameters().forEach(p -> properties.put(p.getName(), Schema.builder().type("STRING").description(p.getDescription()).build()));
-                }
-                Schema schema = Schema.builder().type("OBJECT").properties(properties).build();
-                cachedFunctions.add(FunctionDeclaration.builder().name(toolName).description(td.getDescription()).parameters(schema).build());
-            });
-        }
-        LOG.info("✅ Knowledge Refresh Complete. Loaded {} tools.", cachedFunctions.size());
+        LOG.info("Loading Tools ...");
+        toolRegistry.loadTools(roxyHome.resolve("tools"));
+
+        LOG.info("✅ Knowledge Refresh Complete. Loaded {} tools.", toolRegistry.getAllToolNames().size());
     }
 
     private final List<Content> history = new ArrayList<>();
@@ -4579,7 +4556,9 @@ public class GenAIService {
             Path projectPath = Paths.get(projectRoot);
             Optional<org.roxycode.cache.CodebaseCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta(projectPath);
             String systemContext = buildSystemContext(projectRoot, attachedFiles, cacheMeta);
+            LOG.info("systemContext: {}", systemContext);
             String taskMessage = "Task: " + prompt;
+            LOG.info("taskMessage: {}", taskMessage);
             // --- History Management (Index 0 is always System) ---
             if (history.isEmpty()) {
                 history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemContext + "\n" + taskMessage).build())).build());
@@ -4603,14 +4582,16 @@ public class GenAIService {
 
                 // --- FIX: Handle Tools vs Cache Conflict ---
                 if (cacheMeta.isPresent()) {
+                    LOG.info("Using cache!");
                     // API Rule: Cannot pass tools if cachedContent is used.
                     // (Tools must be baked into the cache creation)
                     configBuilder.cachedContent(cacheMeta.get().geminiCacheId());
                 } else {
+                    LOG.info("NOT using cache");
+                    List<Tool> tools = toolRegistry.getAllGeminiTools();
                     // Only pass tools dynamically if NOT using a cache
-                    if (!cachedFunctions.isEmpty()) {
-                        Tool toolConfig = Tool.builder().functionDeclarations(cachedFunctions).build();
-                        configBuilder.tools(List.of(toolConfig));
+                    if (!tools.isEmpty()) {
+                        configBuilder.tools(tools);
                     }
                 }
                 // -------------------------------------------
@@ -5880,13 +5861,12 @@ public class MarkdownPane extends JTextPane {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/MainFrame.java"
-size = 45206
+size = 45153
 mimeType = "text/x-java-source"
 content = '''
 package org.roxycode.ui;
 
 import com.formdev.flatlaf.FlatLaf;
-import com.google.genai.types.CachedContent;
 import com.google.genai.types.Content;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -5897,11 +5877,11 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.cache.CodebasePackerService;
 import org.roxycode.cache.GeminiCacheService;
 import org.roxycode.core.*;
-import org.roxycode.core.config.GeminiModel;
 import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.core.tools.service.GitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -6268,7 +6248,7 @@ public class MainFrame extends JFrame implements Runnable {
         }
         // Gemini Caches Table
         if (geminiCachesTable != null) {
-            geminiCachesModel = new DefaultTableModel(new Object[] { "ID", "Model", "Created", "Expires", "Size (Tokens)" }, 0) {
+            geminiCachesModel = new DefaultTableModel(new Object[]{"ID", "Model", "Created", "Expires", "Size (Tokens)"}, 0) {
 
                 @Override
                 public boolean isCellEditable(int row, int column) {
@@ -6477,7 +6457,7 @@ public class MainFrame extends JFrame implements Runnable {
         if (navSystemPromptButton != null)
             navSystemPromptButton.addActionListener(e -> showView("SYSTEM_PROMPT"));
         if (navMessageHistoryButton != null)
-            navMessageHistoryButton.addActionListener(e -> updateMessageHistoryView());
+            navMessageHistoryButton.addActionListener(e -> showView("MESSAGE_HISTORY"));
         if (navSummaryQueueButton != null)
             navSummaryQueueButton.addActionListener(e -> showView("SUMMARY_QUEUE"));
         if (navLogsButton != null)
@@ -6549,7 +6529,7 @@ public class MainFrame extends JFrame implements Runnable {
             viewCodebaseCache.setVisible(false);
         if (viewGeminiOnlineCaches != null)
             viewGeminiOnlineCaches.setVisible(false);
-        switch(viewName) {
+        switch (viewName) {
             case "CHAT":
                 if (viewChat != null)
                     viewChat.setVisible(true);
@@ -6578,6 +6558,11 @@ public class MainFrame extends JFrame implements Runnable {
                 if (viewMessageHistory != null) {
                     updateMessageHistoryView();
                     viewMessageHistory.setVisible(true);
+                }
+                break;
+            case "SUMMARY_QUEUE":
+                if (viewSummaryQueue != null) {
+                    viewSummaryQueue.setVisible(true);
                 }
                 break;
             case "LOGS":
@@ -7003,14 +6988,12 @@ public class MainFrame extends JFrame implements Runnable {
                         String created = cache.createTime().map(Object::toString).orElse("");
                         String expires = cache.expireTime().map(Object::toString).orElse("");
                         String size = cache.usageMetadata().flatMap(u -> u.totalTokenCount().map(String::valueOf)).orElse("0");
-                        geminiCachesModel.addRow(new Object[] { id, model, created, expires, size });
+                        geminiCachesModel.addRow(new Object[]{id, model, created, expires, size});
                     }
                 });
             } catch (Exception e) {
                 log.error("Error listing Gemini caches", e);
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "Error listing Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                });
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error listing Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
             }
         }).start();
     }
@@ -7024,9 +7007,7 @@ public class MainFrame extends JFrame implements Runnable {
                     SwingUtilities.invokeLater(this::updateGeminiCachesView);
                 } catch (Exception e) {
                     log.error("Error deleting Gemini caches", e);
-                    SwingUtilities.invokeLater(() -> {
-                        JOptionPane.showMessageDialog(this, "Error deleting Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                    });
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error deleting Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
                 }
             }).start();
         }
@@ -7040,10 +7021,8 @@ public class MainFrame extends JFrame implements Runnable {
                     geminiCacheService.deleteCache(id);
                     SwingUtilities.invokeLater(this::updateGeminiCachesView);
                 } catch (Exception e) {
-                    log.error("Error deleting Gemini cache: " + id, e);
-                    SwingUtilities.invokeLater(() -> {
-                        JOptionPane.showMessageDialog(this, "Error deleting Gemini cache: " + id + ": " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                    });
+                    log.error("Error deleting Gemini cache: {}", id, e);
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error deleting Gemini cache: " + id + ": " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
                 }
             }).start();
         }
@@ -8781,13 +8760,12 @@ class BuildToolServiceTest {
 
 [[files]]
 path = "src/test/java/org/roxycode/core/GenAIServiceTest.java"
-size = 6329
+size = 5061
 mimeType = "text/x-java-source"
 content = '''
 package org.roxycode.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.toml.TomlFactory;
 import com.google.genai.types.*;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Replaces;
@@ -8798,7 +8776,6 @@ import jakarta.inject.Singleton;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
-import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
@@ -8806,7 +8783,9 @@ import org.roxycode.core.tools.ToolRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
@@ -8848,13 +8827,9 @@ class GenAIServiceTest {
         // 3. Trigger the Knowledge Refresh
         // FIX: We call refreshKnowledge() explicitly because chat() no longer scans the disk
         genAIService.refreshKnowledge(tempRoot.toString());
-        // 4. Verify the Stub captured the correct interactions
-        StubToolRegistry stubRegistry = (StubToolRegistry) toolRegistry;
-        // Verify loadTools was called with the correct path (tempRoot/tools)
-        assertEquals(toolsDir.toString(), stubRegistry.lastLoadedPath, "Service did not load tools from the expected directory");
         // Verify it discovered the tools (refreshKnowledge calls getTool to build definitions)
-        assertTrue(stubRegistry.requestedTools.contains("tool_a"), "Service failed to discover tool_a");
-        assertTrue(stubRegistry.requestedTools.contains("tool_b"), "Service failed to discover tool_b");
+        assertTrue(toolRegistry.getAllToolNames().contains("tool_a"), "Service failed to discover tool_a");
+        assertTrue(toolRegistry.getAllToolNames().contains("tool_b"), "Service failed to discover tool_b");
     }
 
     @Test
@@ -8902,34 +8877,6 @@ class GenAIServiceTest {
         @Override
         public String getGeminiApiKey() {
             return "dummy-key";
-        }
-    }
-
-    @Singleton
-    @Replaces(ToolRegistry.class)
-    @Requires(property = "spec.name", value = "GenAIServiceTest")
-    static class StubToolRegistry extends ToolRegistry {
-
-        public StubToolRegistry() {
-            // Pass a dummy mapper to satisfy constructor requirements
-            super(new ObjectMapper(new TomlFactory()));
-        }
-
-        public String lastLoadedPath;
-
-        public List<String> requestedTools = new ArrayList<>();
-
-        @Override
-        public void loadTools(String directoryPath) {
-            this.lastLoadedPath = directoryPath;
-        }
-
-        @Override
-        public Optional<ToolDefinition> getTool(String name) {
-            this.requestedTools.add(name);
-            ToolDefinition tool = new ToolDefinition();
-            tool.setDescription("Stub tool: " + name);
-            return Optional.of(tool);
         }
     }
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE column-panel SYSTEM "sierra.dtd">
 
-<column-panel name="viewLogs" visible="false" padding="16" spacing="8" weight="1">
+<column-panel name="viewLogs" padding="16" spacing="8" weight="1">
     <label text="System Logs" font="h1"/>
     <label text="Recent system output and error logs." foreground="#888888"/>
     

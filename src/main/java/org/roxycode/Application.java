@@ -10,10 +10,11 @@ public class Application {
         System.setProperty("polyglot.engine.WarnInterpreterOnly", "false");
         System.setProperty("awt.useSystemAAFontSettings", "on");
         System.setProperty("swing.aatext", "true");
+        // Set up FlatLaf before any UI components are created
+        com.formdev.flatlaf.FlatLightLaf.setup();
         // 1. Initialize Micronaut Context
-        // We use try-with-resources to ensure context closes if app exits
-        var context = Micronaut.run(Application.class, args);
-        MainFrame mainFrame = context.getBean(MainFrame.class);
-        SwingUtilities.invokeLater(mainFrame);
+        var context = io.micronaut.runtime.Micronaut.run(Application.class, args);
+        org.roxycode.ui.MainFrame mainFrame = context.getBean(org.roxycode.ui.MainFrame.class);
+        javax.swing.SwingUtilities.invokeLater(mainFrame);
     }
 }

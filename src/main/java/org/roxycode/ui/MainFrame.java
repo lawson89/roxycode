@@ -1,35 +1,24 @@
 package org.roxycode.ui;
 
-import com.formdev.flatlaf.FlatLaf;
-import com.google.genai.types.Content;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.cache.CodebasePackerService;
-import org.roxycode.cache.GeminiCacheService;
-import org.roxycode.core.*;
-import org.roxycode.core.config.GeminiModelRegistry;
+import org.roxycode.core.GenAIService;
+import org.roxycode.core.RoxyProjectService;
+import org.roxycode.core.Sandbox;
+import org.roxycode.core.SettingsService;
 import org.roxycode.core.tools.service.GitService;
+import org.roxycode.ui.views.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.io.File;
-import java.io.InterruptedIOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 
 @Singleton
 public class MainFrame extends JFrame implements Runnable {
@@ -41,11 +30,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     private final GenAIService genAIService;
 
-    private final HistoryService historyService;
-
     private final SettingsService settingsService;
-
-    private final UsageService usageService;
 
     private final RoxyProjectService roxyProjectService;
 
@@ -53,20 +38,40 @@ public class MainFrame extends JFrame implements Runnable {
 
     private final ThemeService themeService;
 
-    private final GeminiModelRegistry geminiModelRegistry;
+    // -- VIEWS --
+    @Inject
+    private ChatView chatView;
+
+    @Inject
+    private FilesView filesView;
+
+    @Inject
+    private UsageView usageView;
+
+    @Inject
+    private SettingsView settingsView;
+
+    @Inject
+    private SystemPromptView systemPromptView;
+
+    @Inject
+    private MessageHistoryView messageHistoryView;
+
+    @Inject
+    private LogsView logsView;
+
+    @Inject
+    private CodebaseCacheView codebaseCacheView;
+
+    @Inject
+    private GeminiOnlineCachesView geminiOnlineCachesView;
 
     private Path currentProjectRoot;
 
-    private final List<File> attachedFiles = new ArrayList<>();
-
-    private final MarkdownPane chatArea = new MarkdownPane();
-
     // --- OUTLETS ---
-    // Container for Views (New Outlet)
     @Outlet
     private JComponent mainContentStack;
 
-    // Header & Shell Outlets
     @Outlet
     private JLabel gitBranchLabel;
 
@@ -98,6 +103,24 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JToggleButton navSettingsButton;
 
+    @Outlet
+    private JToggleButton navSystemPromptButton;
+
+    @Outlet
+    private JToggleButton navMessageHistoryButton;
+
+    @Outlet
+    private JToggleButton navSummaryQueueButton;
+
+    @Outlet
+    private JToggleButton navLogsButton;
+
+    @Outlet
+    private JToggleButton navCodebaseCacheButton;
+
+    @Outlet
+    private JToggleButton navGeminiCachesButton;
+
     // Menu Outlets
     @Outlet
     private JMenuItem settingsMenuItem;
@@ -111,297 +134,37 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JMenuItem openFolderMenuItem;
 
-    @Outlet
-    private JToggleButton navSystemPromptButton;
-
-    @Outlet
-    private JToggleButton navMessageHistoryButton;
-
-    @Outlet
-    private JToggleButton navSummaryQueueButton;
-
-    // -- VIEW: CHAT --
-    @Outlet
-    private JComponent viewChat;
-
-    @Outlet
-    private JTextArea inputField;
-
-    @Outlet
-    private JButton sendButton;
-
-    @Outlet
-    private JButton stopButton;
-
-    @Outlet
-    private JScrollPane chatScrollPane;
-
-    @Outlet
-    private JButton attachButton;
-
-    @Outlet
-    private JPanel attachmentsContainer;
-
-    @Outlet
-    private JButton clearAttachmentsButton;
-
-    @Outlet
-    private JLabel msgCountLabel;
-
-    @Outlet
-    private JLabel inTokenLabel;
-
-    @Outlet
-    private JLabel outTokenLabel;
-
-    // -- VIEW: FILES --
-    @Outlet
-    private JComponent viewFiles;
-
-    @Outlet
-    private JTree fileTree;
-
-    // -- VIEW: USAGE --
-    @Outlet
-    private JComponent viewUsage;
-
-    @Outlet
-    private JLabel usageHtmlLabel;
-
-    @Outlet
-    private JButton resetUsageButton;
-
-    // -- VIEW: SETTINGS --
-    @Outlet
-    private JComponent viewSettings;
-
-    @Outlet
-    private JPasswordField apiKeyField;
-
-    @Outlet
-    private JTextField maxTurnsField;
-
-    @Outlet
-    private JTextField historyWindowSize;
-
-    @Outlet
-    private JTextField logLinesCountField;
-
-    @Outlet
-    private JCheckBox logAutoScrollCheckBox;
-
-    @Outlet
-    private JButton saveSettingsButton;
-
-    @Outlet
-    private JComboBox<String> themeComboBox;
-
-    @Outlet
-    private JComboBox<String> modelComboBox;
-
-    @Outlet
-    private JLabel modelInputPriceLabel;
-
-    @Outlet
-    private JLabel modelOutputPriceLabel;
-
-    @Outlet
-    private JCheckBox cacheEnabledCheckBox;
-
-    @Outlet
-    private JTextField cacheTTLField;
-
-    @Outlet
-    private JTextField cacheMinSizeField;
-
-    // -- VIEW: SYSTEM PROMPT --
-    @Outlet
-    private JComponent viewSystemPrompt;
-
-    private final MarkdownPane systemPromptArea = new MarkdownPane();
-
-    @Outlet
-    private JScrollPane systemPromptScrollPane;
-
-    @Outlet
-    private JButton refreshSystemPromptButton;
-
-    @Outlet
-    private JComponent viewMessageHistory;
-
-    private final MarkdownPane messageHistoryArea = new MarkdownPane();
-
-    @Outlet
-    private JScrollPane messageHistoryScrollPane;
-
-    @Outlet
-    private JButton refreshMessageHistoryButton;
-
-    // -- VIEW: SUMMARY QUEUE --
-    @Outlet
-    private JComponent viewSummaryQueue;
-
-    @Outlet
-    private JButton refreshSummaryQueueButton;
-
-    @Outlet
-    private JScrollPane summaryQueueScrollPane;
-
-    private final MarkdownPane summaryQueueArea = new MarkdownPane();
-
-    // -- VIEW: LOGS --
-    @Outlet
-    private JComponent viewLogs;
-
-    @Outlet
-    private JScrollPane logsScrollPane;
-
-    @Outlet
-    private JButton refreshLogsButton;
-
-    @Outlet
-    private JToggleButton navLogsButton;
-
-    private final JTextArea logsArea = new JTextArea();
-
-    private final LogCaptureService logCaptureService;
-
     @Inject
-    private CodebasePackerService codebasePackerService;
-
-    @Inject
-    private GeminiCacheService geminiCacheService;
-
-    // -- VIEW: CODEBASE CACHE --
-    @Outlet
-    private JComponent viewCodebaseCache;
-
-    @Outlet
-    private JToggleButton navCodebaseCacheButton;
-
-    @Outlet
-    private JLabel cachePathLabel;
-
-    @Outlet
-    private JLabel cacheLastModifiedLabel;
-
-    @Outlet
-    private JLabel cacheTokenCountLabel;
-
-    @Outlet
-    private JButton rebuildCacheButton;
-
-    @Outlet
-    private JLabel onlineCacheIdLabel;
-
-    @Outlet
-    private JLabel onlineCacheTimestampLabel;
-
-    @Outlet
-    private JButton pushCacheButton;
-
-    @Outlet
-    private JScrollPane cacheContentScrollPane;
-
-    private final MarkdownPane cacheContentArea = new MarkdownPane();
-
-    // -- VIEW: GEMINI ONLINE CACHES --
-    @Outlet
-    private JComponent viewGeminiOnlineCaches;
-
-    @Outlet
-    private JTable geminiCachesTable;
-
-    @Outlet
-    private JButton refreshGeminiCachesButton;
-
-    @Outlet
-    private JButton deleteAllGeminiCachesButton;
-
-    @Outlet
-    private JToggleButton navGeminiCachesButton;
-
-    private DefaultTableModel geminiCachesModel;
-
-    @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, HistoryService historyService, SettingsService settingsService, UsageService usageService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, LogCaptureService logCaptureService, GeminiModelRegistry geminiModelRegistry) {
+    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService) {
         this.gitService = gitService;
         this.genAIService = genAIService;
-        this.historyService = historyService;
         this.settingsService = settingsService;
-        this.usageService = usageService;
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.themeService = themeService;
-        this.logCaptureService = logCaptureService;
-        this.geminiModelRegistry = geminiModelRegistry;
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     }
 
     @Override
     public void run() {
-        themeService.applyTheme(settingsService.getTheme(), chatArea, systemPromptArea, messageHistoryArea, summaryQueueArea, cacheContentArea);
+        themeService.applyTheme(settingsService.getTheme(), this, getAllMarkdownPanes());
         // 1. Load the Main Shell (Menu, Header, Nav, Empty Stack)
         setContentPane(UILoader.load(this, "MainFrame.xml"));
         // 2. Load individual Views and add them to the stack
-        // Passing 'this' ensures the @Outlet fields in MainFrame are populated
         if (mainContentStack != null) {
-            mainContentStack.add(UILoader.load(this, "ChatView.xml"));
-            mainContentStack.add(UILoader.load(this, "FilesView.xml"));
-            mainContentStack.add(UILoader.load(this, "UsageView.xml"));
-            mainContentStack.add(UILoader.load(this, "SettingsView.xml"));
-            mainContentStack.add(UILoader.load(this, "SystemPromptView.xml"));
-            mainContentStack.add(UILoader.load(this, "MessageHistoryView.xml"));
-            mainContentStack.add(UILoader.load(this, "LogsView.xml"));
-            mainContentStack.add(UILoader.load(this, "CodebaseCacheView.xml"));
-            mainContentStack.add(UILoader.load(this, "GeminiOnlineCachesView.xml"));
+            mainContentStack.add(chatView);
+            mainContentStack.add(filesView);
+            mainContentStack.add(usageView);
+            mainContentStack.add(settingsView);
+            mainContentStack.add(systemPromptView);
+            mainContentStack.add(messageHistoryView);
+            mainContentStack.add(logsView);
+            mainContentStack.add(codebaseCacheView);
+            mainContentStack.add(geminiOnlineCachesView);
         }
         // 3. Initialize UI Components
         initIcons();
-        // Manual Viewport injection
-        if (chatScrollPane != null) {
-            chatScrollPane.setViewportView(chatArea);
-        }
-        if (systemPromptScrollPane != null) {
-            systemPromptScrollPane.setViewportView(systemPromptArea);
-        }
-        if (messageHistoryScrollPane != null) {
-            messageHistoryScrollPane.setViewportView(messageHistoryArea);
-        }
-        if (summaryQueueScrollPane != null) {
-            summaryQueueScrollPane.setViewportView(summaryQueueArea);
-        }
-        if (logsScrollPane != null) {
-            logsArea.setEditable(false);
-            logsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-            logsScrollPane.setViewportView(logsArea);
-        }
-        if (cacheContentScrollPane != null) {
-            cacheContentScrollPane.setViewportView(cacheContentArea);
-        }
-        // Gemini Caches Table
-        if (geminiCachesTable != null) {
-            geminiCachesModel = new DefaultTableModel(new Object[]{"ID", "Model", "Created", "Expires", "Size (Tokens)"}, 0) {
-
-                @Override
-                public boolean isCellEditable(int row, int column) {
-                    return false;
-                }
-            };
-            geminiCachesTable.setModel(geminiCachesModel);
-            JPopupMenu popupMenu = new JPopupMenu();
-            JMenuItem deleteItem = new JMenuItem("Delete Cache");
-            deleteItem.addActionListener(e -> {
-                int row = geminiCachesTable.getSelectedRow();
-                if (row != -1) {
-                    String id = (String) geminiCachesTable.getValueAt(row, 0);
-                    onDeleteGeminiCache(id);
-                }
-            });
-            popupMenu.add(deleteItem);
-            geminiCachesTable.setComponentPopupMenu(popupMenu);
-        }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
         if (settingsService.getCurrentProject() == null) {
@@ -411,10 +174,6 @@ public class MainFrame extends JFrame implements Runnable {
         roxyProjectService.ensureProjectStructure();
         initGitInfo();
         initListeners();
-        initSettings();
-        populateFileTree();
-        // Startup Scan
-        performRescan();
         updateProjectLabel();
         updateRoxyMode();
         // Set initial view
@@ -435,111 +194,44 @@ public class MainFrame extends JFrame implements Runnable {
                 icon.setIcon(new ImageIcon(newImg));
             }
         } else {
-            FontIcon alarmIcon = FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 64);
             if (icon != null)
-                icon.setIcon(alarmIcon);
+                icon.setIcon(FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 64));
         }
         if (currentModelLabel != null) {
             currentModelLabel.setIcon(FontIcon.of(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 16));
             currentModelLabel.setIconTextGap(6);
             currentModelLabel.setText(settingsService.getGeminiModel());
         }
-        if (msgCountLabel != null) {
-            msgCountLabel.setIcon(FontIcon.of(MaterialDesignM.MESSAGE_TEXT_OUTLINE, 14));
-            msgCountLabel.setIconTextGap(4);
-        }
-        if (inTokenLabel != null) {
-            inTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_UP_BOLD_OUTLINE, 14));
-            inTokenLabel.setIconTextGap(4);
-        }
-        if (outTokenLabel != null) {
-            outTokenLabel.setIcon(FontIcon.of(MaterialDesignA.ARROW_DOWN_BOLD_OUTLINE, 14));
-            outTokenLabel.setIconTextGap(4);
-        }
-        if (navChatButton != null) {
+        // Set Icons for Nav Buttons
+        if (navChatButton != null)
             navChatButton.setIcon(FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 16));
-        }
-        if (navFilesButton != null) {
+        if (navFilesButton != null)
             navFilesButton.setIcon(FontIcon.of(MaterialDesignF.FILE_TREE_OUTLINE, 16));
-        }
-        if (navUsageButton != null) {
+        if (navUsageButton != null)
             navUsageButton.setIcon(FontIcon.of(MaterialDesignC.CHART_LINE, 16));
-        }
-        if (navSettingsButton != null) {
+        if (navSettingsButton != null)
             navSettingsButton.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
-        }
-        if (navSystemPromptButton != null) {
+        if (navSystemPromptButton != null)
             navSystemPromptButton.setIcon(FontIcon.of(MaterialDesignR.ROBOT_OUTLINE, 16));
-        }
-        if (navMessageHistoryButton != null) {
+        if (navMessageHistoryButton != null)
             navMessageHistoryButton.setIcon(FontIcon.of(MaterialDesignM.MESSAGE_TEXT_CLOCK_OUTLINE, 16));
-        }
-        if (navSummaryQueueButton != null) {
+        if (navSummaryQueueButton != null)
             navSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignA.ARCHIVE_OUTLINE, 16));
-        }
-        if (navLogsButton != null) {
+        if (navLogsButton != null)
             navLogsButton.setIcon(FontIcon.of(MaterialDesignF.FILE_DOCUMENT_OUTLINE, 16));
-        }
-        if (navCodebaseCacheButton != null) {
+        if (navCodebaseCacheButton != null)
             navCodebaseCacheButton.setIcon(FontIcon.of(MaterialDesignD.DATABASE_OUTLINE, 16));
-        }
-        if (navGeminiCachesButton != null) {
+        if (navGeminiCachesButton != null)
             navGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignC.CLOUD_OUTLINE, 16));
-        }
-        if (settingsMenuItem != null) {
+        // Menu Icons
+        if (settingsMenuItem != null)
             settingsMenuItem.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
-        }
-        if (exitMenuItem != null) {
+        if (exitMenuItem != null)
             exitMenuItem.setIcon(FontIcon.of(MaterialDesignL.LOGOUT, 16));
-        }
-        if (aboutMenuItem != null) {
+        if (aboutMenuItem != null)
             aboutMenuItem.setIcon(FontIcon.of(MaterialDesignI.INFORMATION_OUTLINE, 16));
-        }
-        if (openFolderMenuItem != null) {
+        if (openFolderMenuItem != null)
             openFolderMenuItem.setIcon(FontIcon.of(MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
-        }
-        if (stopButton != null) {
-            stopButton.setIcon(FontIcon.of(MaterialDesignP.PAUSE_CIRCLE_OUTLINE, 16));
-        }
-        if (attachButton != null) {
-            attachButton.setIcon(FontIcon.of(MaterialDesignA.ATTACHMENT, 16));
-        }
-        if (clearAttachmentsButton != null) {
-            clearAttachmentsButton.setIcon(FontIcon.of(MaterialDesignC.CLOSE_CIRCLE_OUTLINE, 16));
-        }
-        if (sendButton != null) {
-            sendButton.setIcon(FontIcon.of(MaterialDesignS.SEND_OUTLINE, 16));
-        }
-        if (resetUsageButton != null) {
-            resetUsageButton.setIcon(FontIcon.of(MaterialDesignR.RELOAD, 16));
-        }
-        if (saveSettingsButton != null) {
-            saveSettingsButton.setIcon(FontIcon.of(MaterialDesignC.CONTENT_SAVE_OUTLINE, 16));
-        }
-        if (refreshSystemPromptButton != null) {
-            refreshSystemPromptButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
-        }
-        if (refreshMessageHistoryButton != null) {
-            refreshMessageHistoryButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
-        }
-        if (refreshSummaryQueueButton != null) {
-            refreshSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
-        }
-        if (rebuildCacheButton != null) {
-            rebuildCacheButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
-        }
-        if (pushCacheButton != null) {
-            pushCacheButton.setIcon(FontIcon.of(MaterialDesignC.CLOUD_UPLOAD_OUTLINE, 16));
-        }
-        if (refreshLogsButton != null) {
-            refreshLogsButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
-        }
-        if (refreshGeminiCachesButton != null) {
-            refreshGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignR.REFRESH, 16));
-        }
-        if (deleteAllGeminiCachesButton != null) {
-            deleteAllGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignD.DELETE_OUTLINE, 16));
-        }
     }
 
     private void updateProjectLabel() {
@@ -558,7 +250,7 @@ public class MainFrame extends JFrame implements Runnable {
         }
     }
 
-    private void updateRoxyMode() {
+    public void updateRoxyMode() {
         if (roxyModeLabel != null) {
             roxyModeLabel.setText(genAIService.getRoxyMode().toString());
         }
@@ -572,14 +264,6 @@ public class MainFrame extends JFrame implements Runnable {
                 confirmExit();
             }
         });
-        if (sendButton != null)
-            sendButton.addActionListener(this::onSend);
-        if (stopButton != null)
-            stopButton.addActionListener(this::onStopChat);
-        if (attachButton != null)
-            attachButton.addActionListener(this::onAttach);
-        if (clearAttachmentsButton != null)
-            clearAttachmentsButton.addActionListener(this::onClearAttachments);
         if (navChatButton != null)
             navChatButton.addActionListener(e -> showView("CHAT"));
         if (navFilesButton != null)
@@ -600,245 +284,64 @@ public class MainFrame extends JFrame implements Runnable {
             navCodebaseCacheButton.addActionListener(e -> showView("CODEBASE_CACHE"));
         if (navGeminiCachesButton != null)
             navGeminiCachesButton.addActionListener(e -> showView("GEMINI_CACHES"));
-        if (resetUsageButton != null)
-            resetUsageButton.addActionListener(e -> {
-                usageService.reset();
-                updateUsageView();
-            });
-        if (inputField != null) {
-            inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
-            inputField.getActionMap().put("send-message", new AbstractAction() {
-
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    onSend(e);
-                }
-            });
-            inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
-        }
         if (settingsMenuItem != null)
-            settingsMenuItem.addActionListener(this::onSettings);
+            settingsMenuItem.addActionListener(e -> showView("SETTINGS"));
         if (exitMenuItem != null)
             exitMenuItem.addActionListener(e -> confirmExit());
         if (aboutMenuItem != null)
             aboutMenuItem.addActionListener(this::onAbout);
         if (openFolderMenuItem != null)
             openFolderMenuItem.addActionListener(this::onOpenFolder);
-        if (refreshSystemPromptButton != null)
-            refreshSystemPromptButton.addActionListener(e -> onRefreshSystemPrompt());
-        if (refreshMessageHistoryButton != null)
-            refreshMessageHistoryButton.addActionListener(e -> updateMessageHistoryView());
-        if (refreshLogsButton != null)
-            refreshLogsButton.addActionListener(e -> updateLogsView());
-        if (saveSettingsButton != null)
-            saveSettingsButton.addActionListener(this::onSaveSettings);
-        if (rebuildCacheButton != null)
-            rebuildCacheButton.addActionListener(e -> onRebuildCache());
-        if (pushCacheButton != null)
-            pushCacheButton.addActionListener(e -> onPushCache());
-        if (refreshGeminiCachesButton != null)
-            refreshGeminiCachesButton.addActionListener(e -> updateGeminiCachesView());
-        if (deleteAllGeminiCachesButton != null)
-            deleteAllGeminiCachesButton.addActionListener(e -> onDeleteAllGeminiCaches());
     }
 
     private void showView(String viewName) {
-        if (viewChat != null)
-            viewChat.setVisible(false);
-        if (viewFiles != null)
-            viewFiles.setVisible(false);
-        if (viewUsage != null)
-            viewUsage.setVisible(false);
-        if (viewSettings != null)
-            viewSettings.setVisible(false);
-        if (viewSystemPrompt != null)
-            viewSystemPrompt.setVisible(false);
-        if (viewMessageHistory != null)
-            viewMessageHistory.setVisible(false);
-        if (viewSummaryQueue != null)
-            viewSummaryQueue.setVisible(false);
-        if (viewLogs != null)
-            viewLogs.setVisible(false);
-        if (viewCodebaseCache != null)
-            viewCodebaseCache.setVisible(false);
-        if (viewGeminiOnlineCaches != null)
-            viewGeminiOnlineCaches.setVisible(false);
-        switch (viewName) {
+        chatView.setVisible(false);
+        filesView.setVisible(false);
+        usageView.setVisible(false);
+        settingsView.setVisible(false);
+        systemPromptView.setVisible(false);
+        messageHistoryView.setVisible(false);
+        logsView.setVisible(false);
+        codebaseCacheView.setVisible(false);
+        geminiOnlineCachesView.setVisible(false);
+        switch(viewName) {
             case "CHAT":
-                if (viewChat != null)
-                    viewChat.setVisible(true);
+                chatView.setVisible(true);
                 break;
             case "FILES":
-                if (viewFiles != null)
-                    viewFiles.setVisible(true);
+                filesView.refresh();
+                filesView.setVisible(true);
                 break;
             case "USAGE":
-                if (viewUsage != null) {
-                    updateUsageView();
-                    viewUsage.setVisible(true);
-                }
+                usageView.refresh();
+                usageView.revalidate();
+                usageView.repaint();
+                usageView.setVisible(true);
                 break;
             case "SETTINGS":
-                if (viewSettings != null)
-                    viewSettings.setVisible(true);
+                settingsView.setVisible(true);
                 break;
             case "SYSTEM_PROMPT":
-                if (viewSystemPrompt != null) {
-                    onRefreshSystemPrompt();
-                    viewSystemPrompt.setVisible(true);
-                }
+                systemPromptView.refresh();
+                systemPromptView.setVisible(true);
                 break;
             case "MESSAGE_HISTORY":
-                if (viewMessageHistory != null) {
-                    updateMessageHistoryView();
-                    viewMessageHistory.setVisible(true);
-                }
-                break;
-            case "SUMMARY_QUEUE":
-                if (viewSummaryQueue != null) {
-                    viewSummaryQueue.setVisible(true);
-                }
+                messageHistoryView.refresh();
+                messageHistoryView.setVisible(true);
                 break;
             case "LOGS":
-                if (viewLogs != null) {
-                    updateLogsView();
-                    viewLogs.setVisible(true);
-                }
+                logsView.refresh();
+                logsView.setVisible(true);
                 break;
             case "CODEBASE_CACHE":
-                if (viewCodebaseCache != null) {
-                    updateCodebaseCacheView();
-                    viewCodebaseCache.setVisible(true);
-                }
+                codebaseCacheView.refresh();
+                codebaseCacheView.setVisible(true);
                 break;
             case "GEMINI_CACHES":
-                if (viewGeminiOnlineCaches != null) {
-                    updateGeminiCachesView();
-                    viewGeminiOnlineCaches.setVisible(true);
-                }
+                geminiOnlineCachesView.refresh();
+                geminiOnlineCachesView.setVisible(true);
                 break;
         }
-    }
-
-    private void updateUsageView() {
-        if (usageHtmlLabel == null)
-            return;
-        String html = "<html><table border='0' cellspacing='0' cellpadding='8'>" + "<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>" + usageService.getApiCalls() + "</td></tr>" + "<tr><td><b><font color='#888888'>TOTAL TOKENS</font></b></td><td>" + String.format("%,d", usageService.getTotalTokens()) + "</td></tr>" + "<tr><td><b><font color='#888888'>PROMPT TOKENS</font></b></td><td>" + String.format("%,d", usageService.getPromptTokens()) + "</td></tr>" + "<tr><td><b><font color='#888888'>CANDIDATE TOKENS</font></b></td><td>" + String.format("%,d", usageService.getCandidateTokens()) + "</td></tr>" + "<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>" + String.format("$%.4f", usageService.getEstimatedCost()) + "</td></tr>" + "</table></html>";
-        usageHtmlLabel.setText(html);
-    }
-
-    private void updateChatStats() {
-        int msgCount = genAIService.getHistory().size();
-        int in = genAIService.getInTokens();
-        int out = genAIService.getOutTokens();
-        if (msgCountLabel != null) {
-            msgCountLabel.setText(String.format("%d Messages", msgCount));
-        }
-        if (inTokenLabel != null) {
-            inTokenLabel.setText(String.format("%d In", in));
-        }
-        if (outTokenLabel != null) {
-            outTokenLabel.setText(String.format("%d Out", out));
-        }
-    }
-
-    private void initSettings() {
-        apiKeyField.setText(settingsService.getGeminiApiKey());
-        maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
-        logLinesCountField.setText(String.valueOf(settingsService.getLogLinesCount()));
-        logAutoScrollCheckBox.setSelected(settingsService.isLogAutoScroll());
-        themeComboBox.setSelectedItem(settingsService.getTheme());
-        modelComboBox.setSelectedItem(settingsService.getGeminiModel());
-        historyWindowSize.setText(String.valueOf(settingsService.getHistoryWindowSize()));
-        cacheEnabledCheckBox.setSelected(settingsService.isCacheEnabled());
-        cacheTTLField.setText(String.valueOf(settingsService.getCacheTTL()));
-        cacheMinSizeField.setText(String.valueOf(settingsService.getCacheMinSize()));
-        updateModelPricing();
-    }
-
-    private void updateModelPricing() {
-        String selectedModel = (String) modelComboBox.getSelectedItem();
-        if (selectedModel != null) {
-            geminiModelRegistry.getModelByName(selectedModel).ifPresent(model -> {
-                if (modelInputPriceLabel != null) {
-                    modelInputPriceLabel.setText(String.format("$%.3f / 1M tokens", model.getInputPrice()));
-                }
-                if (modelOutputPriceLabel != null) {
-                    modelOutputPriceLabel.setText(String.format("$%.3f / 1M tokens", model.getOutputPrice()));
-                }
-            });
-        }
-    }
-
-    private void onStopChat(ActionEvent e) {
-        genAIService.stopChat();
-        stopButton.setEnabled(false);
-    }
-
-    private void onAttach(ActionEvent e) {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setMultiSelectionEnabled(true);
-        fileChooser.setCurrentDirectory(currentProjectRoot.toFile());
-        int result = fileChooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            for (File f : fileChooser.getSelectedFiles()) {
-                if (!attachedFiles.contains(f))
-                    attachedFiles.add(f);
-            }
-            updateAttachmentsLabel();
-        }
-    }
-
-    private void onClearAttachments(ActionEvent e) {
-        attachedFiles.clear();
-        updateAttachmentsLabel();
-    }
-
-    private MaterialDesignF getIconForFile(File file) {
-        String name = file.getName().toLowerCase();
-        if (name.endsWith(".java") || name.endsWith(".py") || name.endsWith(".js") || name.endsWith(".html") || name.endsWith(".css") || name.endsWith(".xml") || name.endsWith(".json")) {
-            return MaterialDesignF.FILE_CODE_OUTLINE;
-        } else if (name.endsWith(".pdf")) {
-            return MaterialDesignF.FILE_PDF_BOX;
-        } else if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif")) {
-            return MaterialDesignF.FILE_IMAGE_OUTLINE;
-        } else if (name.endsWith(".txt") || name.endsWith(".md")) {
-            return MaterialDesignF.FILE_DOCUMENT_OUTLINE;
-        }
-        return MaterialDesignF.FILE_OUTLINE;
-    }
-
-    private void updateAttachmentsLabel() {
-        if (attachmentsContainer == null)
-            return;
-        attachmentsContainer.removeAll();
-        if (attachedFiles.isEmpty()) {
-            attachmentsContainer.add(new JLabel("None"));
-        } else {
-            for (File file : attachedFiles) {
-                JLabel label = new JLabel(file.getName());
-                label.setIcon(FontIcon.of(getIconForFile(file), 16));
-                label.setIconTextGap(4);
-                attachmentsContainer.add(label);
-            }
-        }
-        attachmentsContainer.revalidate();
-        attachmentsContainer.repaint();
-    }
-
-    private void onSaveSettings(ActionEvent e) {
-        settingsService.setGeminiApiKey(new String(apiKeyField.getPassword()));
-        settingsService.setMaxTurns(Integer.parseInt(maxTurnsField.getText()));
-        settingsService.setLogLinesCount(Integer.parseInt(logLinesCountField.getText()));
-        settingsService.setLogAutoScroll(logAutoScrollCheckBox.isSelected());
-        settingsService.setTheme((String) themeComboBox.getSelectedItem());
-        settingsService.setGeminiModel((String) modelComboBox.getSelectedItem());
-        settingsService.setHistoryWindowSize(Integer.parseInt(historyWindowSize.getText()));
-        settingsService.setCacheEnabled(cacheEnabledCheckBox.isSelected());
-        settingsService.setCacheTTL(Integer.parseInt(cacheTTLField.getText()));
-        settingsService.setCacheMinSize(Integer.parseInt(cacheMinSizeField.getText()));
-        themeService.applyTheme(settingsService.getTheme());
-        JOptionPane.showMessageDialog(this, "Settings saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void onOpenFolder(ActionEvent e) {
@@ -846,7 +349,6 @@ public class MainFrame extends JFrame implements Runnable {
         fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         fileChooser.setCurrentDirectory(currentProjectRoot.toFile());
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            //@todo clean this up - lotta duplication here
             currentProjectRoot = fileChooser.getSelectedFile().toPath().toAbsolutePath();
             sandbox.setRoot(currentProjectRoot.toString());
             settingsService.setCurrentProject(currentProjectRoot.toString());
@@ -854,10 +356,8 @@ public class MainFrame extends JFrame implements Runnable {
             genAIService.clearHistory();
             updateProjectLabel();
             initGitInfo();
-            populateFileTree();
             performRescan();
-            if (chatArea != null)
-                chatArea.appendMarkdown("*System: Switched project to " + currentProjectRoot.toString() + "*");
+            chatView.appendSystemMessage("Switched project to " + currentProjectRoot.toString());
         }
     }
 
@@ -865,108 +365,14 @@ public class MainFrame extends JFrame implements Runnable {
         log.info("Triggering Knowledge Rescan for {}", currentProjectRoot);
         new Thread(() -> {
             genAIService.refreshKnowledge(currentProjectRoot.toString());
-            SwingUtilities.invokeLater(() -> {
-                if (chatArea != null)
-                    chatArea.appendMarkdown("*System: Knowledge base reloaded.*");
-            });
+            SwingUtilities.invokeLater(() -> chatView.appendSystemMessage("Knowledge base reloaded."));
         }).start();
-    }
-
-    private boolean isTimeout(Throwable t) {
-        while (t != null) {
-            if (t instanceof InterruptedIOException)
-                return true;
-            if (t.getMessage() != null && t.getMessage().toLowerCase().contains("timeout"))
-                return true;
-            t = t.getCause();
-        }
-        return false;
-    }
-
-    private void setInputEnabled(boolean enabled) {
-        if (sendButton != null)
-            sendButton.setEnabled(enabled);
-        if (stopButton != null)
-            stopButton.setEnabled(!enabled);
-        if (inputField != null) {
-            inputField.setEnabled(enabled);
-            if (enabled)
-                inputField.requestFocusInWindow();
-        }
-        if (attachButton != null)
-            attachButton.setEnabled(enabled);
-        if (clearAttachmentsButton != null)
-            clearAttachmentsButton.setEnabled(enabled);
-    }
-
-    private void onSend(ActionEvent e) {
-        String prompt = inputField.getText().trim();
-        if (prompt.isEmpty())
-            return;
-        inputField.setText("");
-        List<File> currentAttachments = new ArrayList<>(attachedFiles);
-        attachedFiles.clear();
-        updateAttachmentsLabel();
-        if (chatArea != null) {
-            chatArea.appendMarkdown("**User:** " + prompt);
-            if (!currentAttachments.isEmpty())
-                chatArea.appendMarkdown(" *(Attached: " + currentAttachments.size() + " files)*");
-            setInputEnabled(false);
-            new Thread(() -> {
-                try {
-                    String response = genAIService.chat(prompt, currentProjectRoot.toString(), currentAttachments, (status) -> SwingUtilities.invokeLater(() -> {
-                        if (status.startsWith("Thinking"))
-                            chatArea.appendStatus(status);
-                        else
-                            chatArea.appendToolLog(status);
-                        updateChatStats();
-                    }));
-                    SwingUtilities.invokeLater(() -> {
-                        chatArea.appendRoxyMarkdown(response);
-                        updateChatStats();
-                        updateRoxyMode();
-                    });
-                } catch (Exception ex) {
-                    log.error("Chat error", ex);
-                    SwingUtilities.invokeLater(() -> {
-                        if (isTimeout(ex))
-                            chatArea.appendMarkdown("⏱️ **Request Timeout**");
-                        else
-                            chatArea.appendMarkdown("❌ **Error:** " + ex.getMessage());
-                    });
-                } finally {
-                    SwingUtilities.invokeLater(() -> {
-                        setInputEnabled(true);
-                        updateChatStats();
-                    });
-                }
-            }).start();
-        }
-    }
-
-    private void onSettings(ActionEvent e) {
-        showView("SETTINGS");
-    }
-
-    private void onAbout(ActionEvent e) {
-        JOptionPane.showMessageDialog(this, "RoxyCode AInVersion 1.0", "About", JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    private void onRefreshSystemPrompt() {
-        if (systemPromptArea != null) {
-            systemPromptArea.setMarkdown("*Generating system prompt...*");
-            new Thread(() -> {
-                String prompt = genAIService.buildSystemContext(currentProjectRoot.toString(), new ArrayList<>(attachedFiles));
-                SwingUtilities.invokeLater(() -> systemPromptArea.setMarkdown(prompt));
-            }).start();
-        }
     }
 
     private void confirmExit() {
         log.info("Prompting for exit confirmation");
         JOptionPane optionPane = new JOptionPane("Are you sure you want to exit RoxyCode?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
         JDialog dialog = optionPane.createDialog(this, "Confirm Exit");
-        // Force center on screen to avoid positioning bugs relative to MainFrame
         dialog.setLocationRelativeTo(null);
         dialog.setVisible(true);
         Object selectedValue = optionPane.getValue();
@@ -975,190 +381,19 @@ public class MainFrame extends JFrame implements Runnable {
         }
     }
 
-    private void populateFileTree() {
-        File rootDir = currentProjectRoot.toFile();
-        DefaultMutableTreeNode root = new DefaultMutableTreeNode(rootDir.getName().equals(".") ? "Project" : rootDir.getName());
-        buildTreeNodes(root, rootDir);
-        fileTree.setModel(new DefaultTreeModel(root));
+    private void onAbout(ActionEvent e) {
+        JOptionPane.showMessageDialog(this, "RoxyCode AI Version 1.0", "About", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    private void buildTreeNodes(DefaultMutableTreeNode node, File file) {
-        File[] files = file.listFiles();
-        if (files == null)
-            return;
-        Arrays.sort(files, (f1, f2) -> {
-            if (f1.isDirectory() && !f2.isDirectory())
-                return -1;
-            if (!f1.isDirectory() && f2.isDirectory())
-                return 1;
-            return f1.getName().compareToIgnoreCase(f2.getName());
-        });
-        for (File child : files) {
-            if (child.isHidden() || child.getName().startsWith("."))
-                continue;
-            DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(child.getName());
-            node.add(childNode);
-            if (child.isDirectory())
-                buildTreeNodes(childNode, child);
+    public void updateShellStatus() {
+        if (currentModelLabel != null) {
+            currentModelLabel.setText(settingsService.getGeminiModel());
         }
+        updateRoxyMode();
+        initGitInfo();
     }
 
-    private void updateMessageHistoryView() {
-        if (messageHistoryArea == null)
-            return;
-        List<Content> history = new ArrayList<>(genAIService.getHistory());
-        Collections.reverse(history);
-        StringBuilder html = new StringBuilder();
-        html.append("<table width='100%' border='0' cellspacing='0' cellpadding='10'>");
-        for (Content content : history) {
-            html.append(historyService.renderContentToHtmlRow(content, FlatLaf.isLafDark(), messageHistoryArea::markdownToHtml));
-        }
-        html.append("</table>");
-        messageHistoryArea.setHtml(html.toString());
-    }
-
-    private void updateLogsView() {
-        if (logsArea == null)
-            return;
-        List<String> logs = logCaptureService.getLogs(settingsService.getLogLinesCount());
-        logsArea.setText(String.join("\n", logs));
-        if (settingsService.isLogAutoScroll()) {
-            logsArea.setCaretPosition(logsArea.getDocument().getLength());
-        }
-    }
-
-    private void updateCodebaseCacheView() {
-        if (viewCodebaseCache == null)
-            return;
-        try {
-            Path cacheFile = codebasePackerService.getCacheFilePath();
-            boolean exists = java.nio.file.Files.exists(cacheFile);
-            if (exists) {
-                cachePathLabel.setText(cacheFile.toString());
-                cacheLastModifiedLabel.setText(java.nio.file.Files.getLastModifiedTime(cacheFile).toString());
-                String content = java.nio.file.Files.readString(cacheFile);
-                cacheTokenCountLabel.setText(String.format("%,d tokens (estimated)", content.length() / 4));
-                cacheContentArea.setMarkdown("```\n" + content + "\n```");
-            } else {
-                cachePathLabel.setText("No cache found");
-                cacheLastModifiedLabel.setText("-");
-                cacheTokenCountLabel.setText("0");
-                cacheContentArea.setMarkdown("*No cache file exists for this project.*");
-            }
-            if (pushCacheButton != null) {
-                pushCacheButton.setEnabled(exists);
-            }
-            geminiCacheService.getProjectCacheMeta(currentProjectRoot).ifPresentOrElse(meta -> {
-                onlineCacheIdLabel.setText(meta.geminiCacheId());
-                onlineCacheTimestampLabel.setText(meta.generatedAt());
-            }, () -> {
-                onlineCacheIdLabel.setText("Not Pushed");
-                onlineCacheTimestampLabel.setText("-");
-            });
-        } catch (Exception e) {
-            log.error("Error reading cache file", e);
-            cacheContentArea.setMarkdown("Error reading cache file: " + e.getMessage());
-        }
-    }
-
-    private void onRebuildCache() {
-        rebuildCacheButton.setEnabled(false);
-        if (pushCacheButton != null) {
-            pushCacheButton.setEnabled(false);
-        }
-        cacheContentArea.setMarkdown("*Rebuilding codebase cache...*");
-        new Thread(() -> {
-            try {
-                codebasePackerService.buildProjectCache();
-                SwingUtilities.invokeLater(() -> {
-                    updateCodebaseCacheView();
-                    rebuildCacheButton.setEnabled(true);
-                });
-            } catch (Exception e) {
-                log.error("Error rebuilding cache", e);
-                SwingUtilities.invokeLater(() -> {
-                    updateCodebaseCacheView();
-                    rebuildCacheButton.setEnabled(true);
-                    JOptionPane.showMessageDialog(this, "Error rebuilding cache: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                });
-            }
-        }).start();
-    }
-
-    private void onPushCache() {
-        pushCacheButton.setEnabled(false);
-        rebuildCacheButton.setEnabled(false);
-        cacheContentArea.setMarkdown("### Pushing to Gemini...\n\nUploading codebase snapshot to Gemini Context Caching service. This may take a few moments depending on the size.");
-        new Thread(() -> {
-            try {
-                geminiCacheService.pushCache(currentProjectRoot);
-                SwingUtilities.invokeLater(() -> {
-                    updateCodebaseCacheView();
-                    rebuildCacheButton.setEnabled(true);
-                    JOptionPane.showMessageDialog(this, "Cache pushed successfully to Gemini.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                });
-            } catch (Exception e) {
-                log.error("Error pushing cache", e);
-                SwingUtilities.invokeLater(() -> {
-                    updateCodebaseCacheView();
-                    rebuildCacheButton.setEnabled(true);
-                    JOptionPane.showMessageDialog(this, "Error pushing cache: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                });
-            }
-        }).start();
-    }
-
-    private void updateGeminiCachesView() {
-        if (geminiCachesModel == null)
-            return;
-        geminiCachesModel.setRowCount(0);
-        new Thread(() -> {
-            try {
-                List<com.google.genai.types.CachedContent> caches = geminiCacheService.listCaches();
-                SwingUtilities.invokeLater(() -> {
-                    for (com.google.genai.types.CachedContent cache : caches) {
-                        String id = cache.name().orElse("");
-                        String model = cache.model().orElse("");
-                        String created = cache.createTime().map(Object::toString).orElse("");
-                        String expires = cache.expireTime().map(Object::toString).orElse("");
-                        String size = cache.usageMetadata().flatMap(u -> u.totalTokenCount().map(String::valueOf)).orElse("0");
-                        geminiCachesModel.addRow(new Object[]{id, model, created, expires, size});
-                    }
-                });
-            } catch (Exception e) {
-                log.error("Error listing Gemini caches", e);
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error listing Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
-            }
-        }).start();
-    }
-
-    private void onDeleteAllGeminiCaches() {
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete ALL online Gemini caches?", "Confirm Delete All", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
-            new Thread(() -> {
-                try {
-                    geminiCacheService.deleteAllCaches();
-                    SwingUtilities.invokeLater(this::updateGeminiCachesView);
-                } catch (Exception e) {
-                    log.error("Error deleting Gemini caches", e);
-                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error deleting Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
-                }
-            }).start();
-        }
-    }
-
-    private void onDeleteGeminiCache(String id) {
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete cache: " + id + "?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
-            new Thread(() -> {
-                try {
-                    geminiCacheService.deleteCache(id);
-                    SwingUtilities.invokeLater(this::updateGeminiCachesView);
-                } catch (Exception e) {
-                    log.error("Error deleting Gemini cache: {}", id, e);
-                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error deleting Gemini cache: " + id + ": " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
-                }
-            }).start();
-        }
+    public MarkdownPane[] getAllMarkdownPanes() {
+        return new MarkdownPane[] { chatView.getChatArea(), systemPromptView.getSystemPromptArea(), messageHistoryView.getMessageHistoryArea(), codebaseCacheView.getCacheContentArea() };
     }
 }

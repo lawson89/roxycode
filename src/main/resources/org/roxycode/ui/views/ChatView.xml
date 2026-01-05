@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE column-panel SYSTEM "sierra.dtd">
 
-<column-panel name="viewChat" visible="true" weight="1">
+<column-panel name="viewChat" weight="1">
     <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
     </scroll-pane>
     <row-panel spacing="8" padding="4" opaque="true">

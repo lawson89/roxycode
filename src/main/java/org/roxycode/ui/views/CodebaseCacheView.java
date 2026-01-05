@@ -1,0 +1,156 @@
+package org.roxycode.ui.views;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
+import org.httprpc.sierra.Outlet;
+import org.httprpc.sierra.UILoader;
+import org.roxycode.cache.CodebasePackerService;
+import org.roxycode.cache.GeminiCacheService;
+import org.roxycode.core.SettingsService;
+import org.roxycode.ui.MarkdownPane;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.swing.*;
+import java.awt.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+@Singleton
+public class CodebaseCacheView extends JPanel {
+
+    private static final Logger log = LoggerFactory.getLogger(CodebaseCacheView.class);
+
+    private final SettingsService settingsService;
+    private final CodebasePackerService codebasePackerService;
+    private final GeminiCacheService geminiCacheService;
+    private final MarkdownPane cacheContentArea = new MarkdownPane();
+    private final org.roxycode.ui.ThemeService themeService;
+
+    @Outlet
+    private JLabel cachePathLabel;
+
+    @Outlet
+    private JLabel cacheLastModifiedLabel;
+
+    @Outlet
+    private JLabel cacheTokenCountLabel;
+
+    @Outlet
+    private JButton rebuildCacheButton;
+
+    @Outlet
+    private JLabel onlineCacheIdLabel;
+
+    @Outlet
+    private JLabel onlineCacheTimestampLabel;
+
+    @Outlet
+    private JButton pushCacheButton;
+
+    @Outlet
+    private JScrollPane cacheContentScrollPane;
+
+    @Inject
+    public CodebaseCacheView(SettingsService settingsService, CodebasePackerService codebasePackerService, GeminiCacheService geminiCacheService, org.roxycode.ui.ThemeService themeService) {
+        this.settingsService = settingsService;
+        this.codebasePackerService = codebasePackerService;
+        this.geminiCacheService = geminiCacheService;
+        this.themeService = themeService;
+        setLayout(new BorderLayout());
+    }
+
+    @PostConstruct
+    public void init() {
+        add(UILoader.load(this, "CodebaseCacheView.xml"));
+        if (cacheContentScrollPane != null) {
+            cacheContentScrollPane.setViewportView(cacheContentArea);
+        }
+        themeService.registerPane(cacheContentArea);
+        initListeners();
+    }
+
+    private void initListeners() {
+        if (rebuildCacheButton != null) rebuildCacheButton.addActionListener(e -> onRebuildCache());
+        if (pushCacheButton != null) pushCacheButton.addActionListener(e -> onPushCache());
+    }
+
+    public void refresh() {
+        try {
+            Path cacheFile = codebasePackerService.getCacheFilePath();
+            boolean exists = Files.exists(cacheFile);
+            if (exists) {
+                cachePathLabel.setText(cacheFile.toString());
+                cacheLastModifiedLabel.setText(Files.getLastModifiedTime(cacheFile).toString());
+                String content = Files.readString(cacheFile);
+                cacheTokenCountLabel.setText(String.format("%,d tokens (estimated)", content.length() / 4));
+                cacheContentArea.setMarkdown("```\n" + content + "\n```");
+            } else {
+                cachePathLabel.setText("No cache found");
+                cacheLastModifiedLabel.setText("-");
+                cacheTokenCountLabel.setText("0");
+                cacheContentArea.setMarkdown("*No cache file exists for this project.*");
+            }
+            if (pushCacheButton != null) pushCacheButton.setEnabled(exists);
+            
+            Path projectRoot = settingsService.getCurrentProjectPath();
+            geminiCacheService.getProjectCacheMeta(projectRoot).ifPresentOrElse(meta -> {
+                onlineCacheIdLabel.setText(meta.geminiCacheId());
+                onlineCacheTimestampLabel.setText(meta.generatedAt());
+            }, () -> {
+                onlineCacheIdLabel.setText("Not Pushed");
+                onlineCacheTimestampLabel.setText("-");
+            });
+        } catch (Exception e) {
+            log.error("Error refreshing cache view", e);
+        }
+    }
+
+    private void onRebuildCache() {
+        rebuildCacheButton.setEnabled(false);
+        cacheContentArea.setMarkdown("*Rebuilding codebase cache...*");
+        new Thread(() -> {
+            try {
+                codebasePackerService.buildProjectCache();
+                SwingUtilities.invokeLater(() -> {
+                    refresh();
+                    rebuildCacheButton.setEnabled(true);
+                });
+            } catch (Exception e) {
+                log.error("Error rebuilding cache", e);
+                SwingUtilities.invokeLater(() -> {
+                    refresh();
+                    rebuildCacheButton.setEnabled(true);
+                    JOptionPane.showMessageDialog(this, "Error rebuilding cache: " + e.getMessage());
+                });
+            }
+        }).start();
+    }
+
+    private void onPushCache() {
+        pushCacheButton.setEnabled(false);
+        new Thread(() -> {
+            try {
+                Path projectRoot = settingsService.getCurrentProjectPath();
+                geminiCacheService.pushCache(projectRoot);
+                SwingUtilities.invokeLater(() -> {
+                    refresh();
+                    pushCacheButton.setEnabled(true);
+                    JOptionPane.showMessageDialog(this, "Cache pushed successfully.");
+                });
+            } catch (Exception e) {
+                log.error("Error pushing cache", e);
+                SwingUtilities.invokeLater(() -> {
+                    refresh();
+                    pushCacheButton.setEnabled(true);
+                    JOptionPane.showMessageDialog(this, "Error pushing cache: " + e.getMessage());
+                });
+            }
+        }).start();
+    }
+
+    public MarkdownPane getCacheContentArea() {
+        return cacheContentArea;
+    }
+}
