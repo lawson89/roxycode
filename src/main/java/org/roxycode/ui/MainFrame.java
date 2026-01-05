@@ -1,7 +1,6 @@
 package org.roxycode.ui;
 
 import com.formdev.flatlaf.FlatLaf;
-import com.google.genai.types.CachedContent;
 import com.google.genai.types.Content;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -12,11 +11,11 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.cache.CodebasePackerService;
 import org.roxycode.cache.GeminiCacheService;
 import org.roxycode.core.*;
-import org.roxycode.core.config.GeminiModel;
 import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.core.tools.service.GitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -383,7 +382,7 @@ public class MainFrame extends JFrame implements Runnable {
         }
         // Gemini Caches Table
         if (geminiCachesTable != null) {
-            geminiCachesModel = new DefaultTableModel(new Object[] { "ID", "Model", "Created", "Expires", "Size (Tokens)" }, 0) {
+            geminiCachesModel = new DefaultTableModel(new Object[]{"ID", "Model", "Created", "Expires", "Size (Tokens)"}, 0) {
 
                 @Override
                 public boolean isCellEditable(int row, int column) {
@@ -664,7 +663,7 @@ public class MainFrame extends JFrame implements Runnable {
             viewCodebaseCache.setVisible(false);
         if (viewGeminiOnlineCaches != null)
             viewGeminiOnlineCaches.setVisible(false);
-        switch(viewName) {
+        switch (viewName) {
             case "CHAT":
                 if (viewChat != null)
                     viewChat.setVisible(true);
@@ -1123,14 +1122,12 @@ public class MainFrame extends JFrame implements Runnable {
                         String created = cache.createTime().map(Object::toString).orElse("");
                         String expires = cache.expireTime().map(Object::toString).orElse("");
                         String size = cache.usageMetadata().flatMap(u -> u.totalTokenCount().map(String::valueOf)).orElse("0");
-                        geminiCachesModel.addRow(new Object[] { id, model, created, expires, size });
+                        geminiCachesModel.addRow(new Object[]{id, model, created, expires, size});
                     }
                 });
             } catch (Exception e) {
                 log.error("Error listing Gemini caches", e);
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "Error listing Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                });
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error listing Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
             }
         }).start();
     }
@@ -1144,9 +1141,7 @@ public class MainFrame extends JFrame implements Runnable {
                     SwingUtilities.invokeLater(this::updateGeminiCachesView);
                 } catch (Exception e) {
                     log.error("Error deleting Gemini caches", e);
-                    SwingUtilities.invokeLater(() -> {
-                        JOptionPane.showMessageDialog(this, "Error deleting Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                    });
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error deleting Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
                 }
             }).start();
         }
@@ -1160,10 +1155,8 @@ public class MainFrame extends JFrame implements Runnable {
                     geminiCacheService.deleteCache(id);
                     SwingUtilities.invokeLater(this::updateGeminiCachesView);
                 } catch (Exception e) {
-                    log.error("Error deleting Gemini cache: " + id, e);
-                    SwingUtilities.invokeLater(() -> {
-                        JOptionPane.showMessageDialog(this, "Error deleting Gemini cache: " + id + ": " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                    });
+                    log.error("Error deleting Gemini cache: {}", id, e);
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error deleting Gemini cache: " + id + ": " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
                 }
             }).start();
         }
