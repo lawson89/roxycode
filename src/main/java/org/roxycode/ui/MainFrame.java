@@ -592,7 +592,7 @@ public class MainFrame extends JFrame implements Runnable {
         if (navSystemPromptButton != null)
             navSystemPromptButton.addActionListener(e -> showView("SYSTEM_PROMPT"));
         if (navMessageHistoryButton != null)
-            navMessageHistoryButton.addActionListener(e -> updateMessageHistoryView());
+            navMessageHistoryButton.addActionListener(e -> showView("MESSAGE_HISTORY"));
         if (navSummaryQueueButton != null)
             navSummaryQueueButton.addActionListener(e -> showView("SUMMARY_QUEUE"));
         if (navLogsButton != null)
@@ -693,6 +693,11 @@ public class MainFrame extends JFrame implements Runnable {
                 if (viewMessageHistory != null) {
                     updateMessageHistoryView();
                     viewMessageHistory.setVisible(true);
+                }
+                break;
+            case "SUMMARY_QUEUE":
+                if (viewSummaryQueue != null) {
+                    viewSummaryQueue.setVisible(true);
                 }
                 break;
             case "LOGS":

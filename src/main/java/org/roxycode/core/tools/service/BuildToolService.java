@@ -87,7 +87,7 @@ public class BuildToolService {
         return resolveExecutable(tool, System.getProperty("os.name").toLowerCase().contains("win"));
     }
 
-    String getOperatingSystem() {
+    public String getOperatingSystem() {
         return System.getProperty("os.name").toLowerCase();
     }
 

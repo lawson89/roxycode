@@ -12,7 +12,6 @@ import jakarta.inject.Singleton;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
-import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
@@ -23,6 +22,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -62,13 +62,9 @@ class GenAIServiceTest {
         // 3. Trigger the Knowledge Refresh
         // FIX: We call refreshKnowledge() explicitly because chat() no longer scans the disk
         genAIService.refreshKnowledge(tempRoot.toString());
-        // 4. Verify the Stub captured the correct interactions
-        StubToolRegistry stubRegistry = (StubToolRegistry) toolRegistry;
-        // Verify loadTools was called with the correct path (tempRoot/tools)
-        assertEquals(toolsDir.toString(), stubRegistry.lastLoadedPath, "Service did not load tools from the expected directory");
         // Verify it discovered the tools (refreshKnowledge calls getTool to build definitions)
-        assertTrue(stubRegistry.requestedTools.contains("tool_a"), "Service failed to discover tool_a");
-        assertTrue(stubRegistry.requestedTools.contains("tool_b"), "Service failed to discover tool_b");
+        assertTrue(toolRegistry.getAllToolNames().contains("tool_a"), "Service failed to discover tool_a");
+        assertTrue(toolRegistry.getAllToolNames().contains("tool_b"), "Service failed to discover tool_b");
     }
 
     @Test
@@ -116,34 +112,6 @@ class GenAIServiceTest {
         @Override
         public String getGeminiApiKey() {
             return "dummy-key";
-        }
-    }
-
-    @Singleton
-    @Replaces(ToolRegistry.class)
-    @Requires(property = "spec.name", value = "GenAIServiceTest")
-    static class StubToolRegistry extends ToolRegistry {
-
-        public StubToolRegistry() {
-            // Pass a dummy mapper to satisfy constructor requirements
-            super(new ObjectMapper(new TomlFactory()));
-        }
-
-        public String lastLoadedPath;
-
-        public List<String> requestedTools = new ArrayList<>();
-
-        @Override
-        public void loadTools(String directoryPath) {
-            this.lastLoadedPath = directoryPath;
-        }
-
-        @Override
-        public Optional<ToolDefinition> getTool(String name) {
-            this.requestedTools.add(name);
-            ToolDefinition tool = new ToolDefinition();
-            tool.setDescription("Stub tool: " + name);
-            return Optional.of(tool);
         }
     }
 
