@@ -406,6 +406,7 @@ roxycode/
 │   │   │   ├── transition_to_flyingsaucer_xhtml_panel.md
 │   │   │   ├── view_system_prompt_screen.md
 │   │   │   └── xml_service_v1.md
+│   │   ├── fix_dialog_centering.md
 │   │   ├── modularize_mainframe_ui.md
 │   │   └── refactor_mainframe_views.md
 │   └── README.md
@@ -621,6 +622,42 @@ public class ComponentScreenshot {
         return image;
     }
 }
+'''
+
+[[files]]
+path = "src/main/java/org/roxycode/core/utils/UIUtils.java"
+size = 877
+mimeType = "text/x-java"
+content = '''
+package org.roxycode.core.utils;
+
+import javax.swing.*;
+import java.awt.*;
+
+public class UIUtils {
+
+    private static Point initialScreenCenter;
+
+    public static void setInitialScreenCenter(Point center) {
+        initialScreenCenter = center;
+    }
+
+    public static void centerDialog(JDialog dialog, Component parent) {
+        dialog.pack();
+        if (parent != null && parent.isShowing()) {
+            dialog.setLocationRelativeTo(parent);
+        } else {
+            dialog.setLocationRelativeTo(null);
+        }
+
+        // Fallback if it ends up at (0,0) or off-screen, and we have a cached center
+        if (dialog.getX() == 0 && dialog.getY() == 0 && initialScreenCenter != null) {
+            dialog.setLocation(initialScreenCenter.x - dialog.getWidth() / 2, 
+                               initialScreenCenter.y - dialog.getHeight() / 2);
+        }
+    }
+}
+
 '''
 
 [[files]]
@@ -4237,7 +4274,7 @@ public class Application {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/views/SettingsView.java"
-size = 5260
+size = 5426
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui.views;
@@ -4248,6 +4285,7 @@ import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.ui.ThemeService;
 import javax.swing.*;
@@ -4379,7 +4417,10 @@ public class SettingsView extends JPanel {
         // Find top-level window to update the UI tree
         Window window = SwingUtilities.getWindowAncestor(this);
         themeService.applyTheme(settingsService.getTheme(), window);
-        JOptionPane.showMessageDialog(this, "Settings saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane pane = new JOptionPane("Settings saved successfully.", JOptionPane.INFORMATION_MESSAGE);
+        JDialog dialog = pane.createDialog(this, "Success");
+        UIUtils.centerDialog(dialog, this);
+        dialog.setVisible(true);
     }
 }
 
@@ -4977,7 +5018,7 @@ public class UsageView extends JPanel {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/views/CodebaseCacheView.java"
-size = 6354
+size = 7037
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui.views;
@@ -4991,10 +5032,10 @@ import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.cache.CodebasePackerService;
 import org.roxycode.cache.GeminiCacheService;
+import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
@@ -5010,9 +5051,13 @@ public class CodebaseCacheView extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(CodebaseCacheView.class);
 
     private final SettingsService settingsService;
+
     private final CodebasePackerService codebasePackerService;
+
     private final GeminiCacheService geminiCacheService;
+
     private final JTextPane cacheContentArea = new JTextPane();
+
     private final org.roxycode.ui.ThemeService themeService;
 
     @Outlet
@@ -5059,15 +5104,16 @@ public class CodebaseCacheView extends JPanel {
     }
 
     private void initListeners() {
-        if (rebuildCacheButton != null) rebuildCacheButton.addActionListener(e -> onRebuildCache());
-        if (pushCacheButton != null) pushCacheButton.addActionListener(e -> onPushCache());
+        if (rebuildCacheButton != null)
+            rebuildCacheButton.addActionListener(e -> onRebuildCache());
+        if (pushCacheButton != null)
+            pushCacheButton.addActionListener(e -> onPushCache());
     }
 
     public String readFirstBytesSimple(File file, int size) throws IOException {
         try (InputStream is = FileUtils.openInputStream(file)) {
             // 1. Read the bytes
             byte[] bytes = IOUtils.toByteArray(is, size);
-
             // 2. Convert to String using UTF-8
             return new String(bytes, StandardCharsets.UTF_8);
         }
@@ -5093,8 +5139,8 @@ public class CodebaseCacheView extends JPanel {
                 cacheTokenCountLabel.setText("0");
                 cacheContentArea.setText("*No cache file exists for this project.*");
             }
-            if (pushCacheButton != null) pushCacheButton.setEnabled(exists);
-
+            if (pushCacheButton != null)
+                pushCacheButton.setEnabled(exists);
             Path projectRoot = settingsService.getCurrentProjectPath();
             geminiCacheService.getProjectCacheMeta(projectRoot).ifPresentOrElse(meta -> {
                 onlineCacheIdLabel.setText(meta.geminiCacheId());
@@ -5123,7 +5169,10 @@ public class CodebaseCacheView extends JPanel {
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     rebuildCacheButton.setEnabled(true);
-                    JOptionPane.showMessageDialog(this, "Error rebuilding cache: " + e.getMessage());
+                    JOptionPane pane = new JOptionPane("Error rebuilding cache: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
+                    JDialog dialog = pane.createDialog(this, "Error");
+                    UIUtils.centerDialog(dialog, this);
+                    dialog.setVisible(true);
                 });
             }
         }).start();
@@ -5138,14 +5187,20 @@ public class CodebaseCacheView extends JPanel {
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     pushCacheButton.setEnabled(true);
-                    JOptionPane.showMessageDialog(this, "Cache pushed successfully.");
+                    JOptionPane pane = new JOptionPane("Cache pushed successfully.", JOptionPane.INFORMATION_MESSAGE);
+                    JDialog dialog = pane.createDialog(this, "Success");
+                    UIUtils.centerDialog(dialog, this);
+                    dialog.setVisible(true);
                 });
             } catch (Exception e) {
                 log.error("Error pushing cache", e);
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     pushCacheButton.setEnabled(true);
-                    JOptionPane.showMessageDialog(this, "Error pushing cache: " + e.getMessage());
+                    JOptionPane pane = new JOptionPane("Error pushing cache: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
+                    JDialog dialog = pane.createDialog(this, "Error");
+                    UIUtils.centerDialog(dialog, this);
+                    dialog.setVisible(true);
                 });
             }
         }).start();
@@ -5232,7 +5287,7 @@ public class LogsView extends JPanel {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/views/GeminiOnlineCachesView.java"
-size = 5384
+size = 6607
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui.views;
@@ -5244,9 +5299,9 @@ import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.cache.GeminiCacheService;
+import org.roxycode.core.utils.UIUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -5258,6 +5313,7 @@ public class GeminiOnlineCachesView extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(GeminiOnlineCachesView.class);
 
     private final GeminiCacheService geminiCacheService;
+
     private DefaultTableModel geminiCachesModel;
 
     @Outlet
@@ -5281,9 +5337,9 @@ public class GeminiOnlineCachesView extends JPanel {
     @PostConstruct
     public void init() {
         add(UILoader.load(this, "GeminiOnlineCachesView.xml"));
-
         if (geminiCachesTable != null) {
-            geminiCachesModel = new DefaultTableModel(new Object[]{"ID", "Model", "Created", "Expires", "Size (Tokens)"}, 0) {
+            geminiCachesModel = new DefaultTableModel(new Object[] { "ID", "Model", "Created", "Expires", "Size (Tokens)" }, 0) {
+
                 @Override
                 public boolean isCellEditable(int row, int column) {
                     return false;
@@ -5302,7 +5358,6 @@ public class GeminiOnlineCachesView extends JPanel {
             popupMenu.add(deleteItem);
             geminiCachesTable.setComponentPopupMenu(popupMenu);
         }
-
         initListeners();
         refresh();
     }
@@ -5330,41 +5385,64 @@ public class GeminiOnlineCachesView extends JPanel {
                         String created = cache.createTime().map(Object::toString).orElse("");
                         String expires = cache.expireTime().map(Object::toString).orElse("");
                         String size = cache.usageMetadata().flatMap(u -> u.totalTokenCount().map(String::valueOf)).orElse("0");
-                        geminiCachesModel.addRow(new Object[]{id, model, created, expires, size});
+                        geminiCachesModel.addRow(new Object[] { id, model, created, expires, size });
                     }
                 });
             } catch (Exception e) {
                 log.error("Error listing Gemini caches", e);
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error listing Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane errPane = new JOptionPane("Error listing Gemini caches: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
+                    JDialog errDialog = errPane.createDialog(this, "Error");
+                    UIUtils.centerDialog(errDialog, this);
+                    errDialog.setVisible(true);
+                });
             }
         }).start();
     }
 
     private void onDeleteAllGeminiCaches() {
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete ALL online Gemini caches?", "Confirm Delete All", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
+        JOptionPane pane = new JOptionPane("Are you sure you want to delete ALL online Gemini caches?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
+        JDialog dialog = pane.createDialog(this, "Confirm Delete All");
+        UIUtils.centerDialog(dialog, this);
+        dialog.setVisible(true);
+        Object selectedValue = pane.getValue();
+        if (selectedValue instanceof Integer && (Integer) selectedValue == JOptionPane.YES_OPTION) {
             new Thread(() -> {
                 try {
                     geminiCacheService.deleteAllCaches();
                     SwingUtilities.invokeLater(this::refresh);
                 } catch (Exception e) {
                     log.error("Error deleting Gemini caches", e);
-                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error deleting Gemini caches: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane errPane = new JOptionPane("Error deleting Gemini caches: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
+                        JDialog errDialog = errPane.createDialog(this, "Error");
+                        UIUtils.centerDialog(errDialog, this);
+                        errDialog.setVisible(true);
+                    });
                 }
             }).start();
         }
     }
 
     private void onDeleteGeminiCache(String id) {
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete cache: " + id + "?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
+        JOptionPane pane = new JOptionPane("Are you sure you want to delete cache: " + id + "?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
+        JDialog dialog = pane.createDialog(this, "Confirm Delete");
+        UIUtils.centerDialog(dialog, this);
+        dialog.setVisible(true);
+        Object selectedValue = pane.getValue();
+        if (selectedValue instanceof Integer && (Integer) selectedValue == JOptionPane.YES_OPTION) {
             new Thread(() -> {
                 try {
                     geminiCacheService.deleteCache(id);
                     SwingUtilities.invokeLater(this::refresh);
                 } catch (Exception e) {
                     log.error("Error deleting Gemini cache: {}", id, e);
-                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error deleting Gemini cache: " + id + ": " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane errPane = new JOptionPane("Error deleting Gemini cache: " + id + ": " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
+                        JDialog errDialog = errPane.createDialog(this, "Error");
+                        UIUtils.centerDialog(errDialog, this);
+                        errDialog.setVisible(true);
+                    });
                 }
             }).start();
         }
@@ -5574,7 +5652,7 @@ public class MarkdownPane extends JTextPane {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/MainFrame.java"
-size = 14352
+size = 14872
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui;
@@ -5589,6 +5667,7 @@ import org.roxycode.core.GenAIService;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.tools.service.GitService;
 import org.roxycode.ui.views.*;
 import org.slf4j.Logger;
@@ -5647,6 +5726,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     private Path currentProjectRoot;
 
+    // Moved to UIUtils
     // --- OUTLETS ---
     @Outlet
     private JComponent mainContentStack;
@@ -5760,6 +5840,12 @@ public class MainFrame extends JFrame implements Runnable {
         setSize(1200, 800);
         setLocationRelativeTo(null);
         setVisible(true);
+        // Capture initial center for fallback as suggested by user
+        GraphicsConfiguration gc = getGraphicsConfiguration();
+        if (gc != null) {
+            Rectangle bounds = gc.getBounds();
+            UIUtils.setInitialScreenCenter(new Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
+        }
     }
 
     private void initIcons() {
@@ -5948,11 +6034,13 @@ public class MainFrame extends JFrame implements Runnable {
         }).start();
     }
 
+
+
     private void confirmExit() {
         log.info("Prompting for exit confirmation");
         JOptionPane optionPane = new JOptionPane("Are you sure you want to exit RoxyCode?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
         JDialog dialog = optionPane.createDialog(this, "Confirm Exit");
-        dialog.setLocationRelativeTo(null);
+        UIUtils.centerDialog(dialog, this);
         dialog.setVisible(true);
         Object selectedValue = optionPane.getValue();
         if (selectedValue instanceof Integer && (Integer) selectedValue == JOptionPane.YES_OPTION) {
@@ -5961,7 +6049,10 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void onAbout(ActionEvent e) {
-        JOptionPane.showMessageDialog(this, "RoxyCode AI Version 1.0", "About", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane pane = new JOptionPane("RoxyCode AI Version 1.0", JOptionPane.INFORMATION_MESSAGE);
+        JDialog dialog = pane.createDialog(this, "About");
+        UIUtils.centerDialog(dialog, this);
+        dialog.setVisible(true);
     }
 
     public void updateShellStatus() {

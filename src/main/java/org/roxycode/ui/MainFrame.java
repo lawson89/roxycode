@@ -10,6 +10,7 @@ import org.roxycode.core.GenAIService;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.tools.service.GitService;
 import org.roxycode.ui.views.*;
 import org.slf4j.Logger;
@@ -68,6 +69,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     private Path currentProjectRoot;
 
+    // Moved to UIUtils
     // --- OUTLETS ---
     @Outlet
     private JComponent mainContentStack;
@@ -181,6 +183,12 @@ public class MainFrame extends JFrame implements Runnable {
         setSize(1200, 800);
         setLocationRelativeTo(null);
         setVisible(true);
+        // Capture initial center for fallback as suggested by user
+        GraphicsConfiguration gc = getGraphicsConfiguration();
+        if (gc != null) {
+            Rectangle bounds = gc.getBounds();
+            UIUtils.setInitialScreenCenter(new Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
+        }
     }
 
     private void initIcons() {
@@ -369,11 +377,13 @@ public class MainFrame extends JFrame implements Runnable {
         }).start();
     }
 
+
+
     private void confirmExit() {
         log.info("Prompting for exit confirmation");
         JOptionPane optionPane = new JOptionPane("Are you sure you want to exit RoxyCode?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
         JDialog dialog = optionPane.createDialog(this, "Confirm Exit");
-        dialog.setLocationRelativeTo(null);
+        UIUtils.centerDialog(dialog, this);
         dialog.setVisible(true);
         Object selectedValue = optionPane.getValue();
         if (selectedValue instanceof Integer && (Integer) selectedValue == JOptionPane.YES_OPTION) {
@@ -382,7 +392,10 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void onAbout(ActionEvent e) {
-        JOptionPane.showMessageDialog(this, "RoxyCode AI Version 1.0", "About", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane pane = new JOptionPane("RoxyCode AI Version 1.0", JOptionPane.INFORMATION_MESSAGE);
+        JDialog dialog = pane.createDialog(this, "About");
+        UIUtils.centerDialog(dialog, this);
+        dialog.setVisible(true);
     }
 
     public void updateShellStatus() {

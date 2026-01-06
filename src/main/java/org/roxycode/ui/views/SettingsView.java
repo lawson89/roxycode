@@ -6,6 +6,7 @@ import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.ui.ThemeService;
 import javax.swing.*;
@@ -137,6 +138,9 @@ public class SettingsView extends JPanel {
         // Find top-level window to update the UI tree
         Window window = SwingUtilities.getWindowAncestor(this);
         themeService.applyTheme(settingsService.getTheme(), window);
-        JOptionPane.showMessageDialog(this, "Settings saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane pane = new JOptionPane("Settings saved successfully.", JOptionPane.INFORMATION_MESSAGE);
+        JDialog dialog = pane.createDialog(this, "Success");
+        UIUtils.centerDialog(dialog, this);
+        dialog.setVisible(true);
     }
 }

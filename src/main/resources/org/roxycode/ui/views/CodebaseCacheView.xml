@@ -3,15 +3,15 @@
     <row-panel spacing="10">
         <column-panel spacing="4" weight="1.0">
             <row-panel spacing="4">
-                <label text="Path: " style="font-weight: bold"/>
+                <label text="Path: " style="font: bold"/>
                 <label name="cachePathLabel" text="N/A"/>
             </row-panel>
             <row-panel spacing="4">
-                <label text="Last Modified: " style="font-weight: bold"/>
+                <label text="Last Modified: " style="font: bold"/>
                 <label name="cacheLastModifiedLabel" text="N/A"/>
             </row-panel>
             <row-panel spacing="4">
-                <label text="Estimated Tokens: " style="font-weight: bold"/>
+                <label text="Estimated Tokens: " style="font: bold"/>
                 <label name="cacheTokenCountLabel" text="0"/>
             </row-panel>
         </column-panel>
@@ -22,11 +22,11 @@
     <row-panel spacing="10">
         <column-panel spacing="4" weight="1.0">
             <row-panel spacing="4">
-                <label text="Online Cache ID: " style="font-weight: bold"/>
+                <label text="Online Cache ID: " style="font: bold"/>
                 <label name="onlineCacheIdLabel" text="Not Pushed"/>
             </row-panel>
             <row-panel spacing="4">
-                <label text="Last Pushed: " style="font-weight: bold"/>
+                <label text="Last Pushed: " style="font: bold"/>
                 <label name="onlineCacheTimestampLabel" text="-"/>
             </row-panel>
         </column-panel>
