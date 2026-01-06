@@ -88,8 +88,9 @@ public class CodebaseCacheView extends JPanel {
             pushCacheButton.addActionListener(e -> onPushCache());
     }
 
-    public String readFirstBytesSimple(File file, int size) throws IOException {
+    public String readFirstBytesSimple(File file, long size) throws IOException {
         try (InputStream is = FileUtils.openInputStream(file)) {
+            size = Math.min(size, Files.size(file.toPath()));
             byte[] bytes = IOUtils.toByteArray(is, size);
             return new String(bytes, StandardCharsets.UTF_8);
         }

@@ -1,5 +1,6 @@
 package org.roxycode.cache;
 
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
@@ -33,14 +34,16 @@ public class CodebasePackerService {
     private final Sandbox sandbox;
     private final FileListingService fileListingService;
     private final BuildToolService buildToolService;
+    private final JavaContextService javaContextService;
 
     @Inject
     public CodebasePackerService(RoxyProjectService roxyProjectService, Sandbox sandbox,
-                                 FileListingService fileListingService, BuildToolService buildToolService) {
+                                 FileListingService fileListingService, BuildToolService buildToolService, JavaContextService javaContextService) {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.fileListingService = fileListingService;
         this.buildToolService = buildToolService;
+        this.javaContextService = javaContextService;
     }
 
     public Path getCacheFilePath() throws IOException {
@@ -106,32 +109,40 @@ public class CodebasePackerService {
      */
     protected void streamFilesToToml(Path rootPath, BufferedWriter writer) throws IOException {
         String header = buildToolService.getProjectSummary();
-        header += "\n\nThis is a codebase snapshot in TOML format including source files for analysis.";
-        writeTomlHeader(writer, header);
+        header += "\n\nThis is a codebase snapshot in TOML format including Java signatures for analysis.";
+        writeTomlHeader(writer, "header", header);
+        // Java source files via JavaContextService
+        writer.write("[java]");
+        writer.newLine();
+        writer.write("content = '''");
+        javaContextService.generateSkeleton(rootPath, writer);
+        writer.newLine();
+        writer.write("'''");
+        writer.newLine();
         //@todo externalize this
-        List<String> sourceExtensions = List.of(
-                "java", "kt", "groovy"
-        );
-        List<Path> sourceFiles = fileListingService.findFiles(rootPath.resolve("src").resolve("main"), sourceExtensions);
-        for (Path sourceFile : sourceFiles) {
-            long size = Files.size(sourceFile);
-            String content;
-            // @todo externalize this
-            if (size > 30 * 1024) {
-                content = "IMPORTANT! File exceeds size limit, please use tools to read if needed";
-                LOG.info("skipping file {} due to size {}", sourceFile, size);
-            } else {
-                try {
-                    content = Files.readString(sourceFile, StandardCharsets.UTF_8);
-                }catch (Exception e) {
-                    LOG.warn("unable to read file {}", sourceFile, e);
-                    content = "IMPORTANT! Unable to read file due to: " + e;
-                }
-            }
-            String mimeType = Files.probeContentType(sourceFile);
-            String path = rootPath.relativize(sourceFile).toString();
-            writeTomlEntry(writer, path, size, mimeType, content);
-        }
+//        List<String> sourceExtensions = List.of(
+//                "java", "kt", "groovy"
+//        );
+//        List<Path> sourceFiles = fileListingService.findFiles(rootPath.resolve("src").resolve("main"), sourceExtensions);
+//        for (Path sourceFile : sourceFiles) {
+//            long size = Files.size(sourceFile);
+//            String content;
+//            // @todo externalize this
+//            if (size > 30 * 1024) {
+//                content = "IMPORTANT! File exceeds size limit, please use tools to read if needed";
+//                LOG.info("skipping file {} due to size {}", sourceFile, size);
+//            } else {
+//                try {
+//                    content = Files.readString(sourceFile, StandardCharsets.UTF_8);
+//                }catch (Exception e) {
+//                    LOG.warn("unable to read file {}", sourceFile, e);
+//                    content = "IMPORTANT! Unable to read file due to: " + e;
+//                }
+//            }
+//            String mimeType = Files.probeContentType(sourceFile);
+//            String path = rootPath.relativize(sourceFile).toString();
+//            writeTomlEntry(writer, path, size, mimeType, content);
+//        }
     }
 
     /**
@@ -142,8 +153,8 @@ public class CodebasePackerService {
         return "roxycode_cache_" + user + "_" + root.getFileName() + "_" + geminiModel;
     }
 
-    protected void writeTomlHeader(BufferedWriter w, String content) throws IOException {
-        w.write("[header]");
+    protected void writeTomlHeader(BufferedWriter w, String title, String content) throws IOException {
+        w.write("[" + title + "]");
         w.newLine();
         w.write("content = '''");
         w.newLine();
