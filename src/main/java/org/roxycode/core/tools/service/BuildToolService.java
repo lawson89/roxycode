@@ -3,6 +3,9 @@ package org.roxycode.core.tools.service;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.LLMDoc;
+import org.roxycode.core.tools.ScriptService;
+import org.roxycode.core.tools.ScriptServiceRegistry;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -13,11 +16,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+@ScriptService("buildToolService")
 @Singleton
 public class BuildToolService {
 
     private final Sandbox sandbox;
     private final FileSystemService fileSystemService;
+    private final ScriptServiceRegistry scriptServiceRegistry;
 
 
     public enum BuildTool {
@@ -25,11 +30,13 @@ public class BuildToolService {
     }
 
     @Inject
-    public BuildToolService(Sandbox sandbox, FileSystemService fileSystemService) {
+    public BuildToolService(Sandbox sandbox, FileSystemService fileSystemService, ScriptServiceRegistry scriptServiceRegistry) {
         this.sandbox = sandbox;
         this.fileSystemService = fileSystemService;
+        this.scriptServiceRegistry = scriptServiceRegistry;
     }
 
+    @LLMDoc("Detects the current build tool")
     public BuildTool detect() {
         Path projectRoot = sandbox.getRoot();
         if (Files.exists(projectRoot.resolve("pom.xml"))) {
@@ -43,6 +50,7 @@ public class BuildToolService {
         return BuildTool.UNKNOWN;
     }
 
+    @LLMDoc("Compiles the current project")
     public String compile() {
         BuildTool tool = detect();
         if (tool == BuildTool.UNKNOWN) {
@@ -186,11 +194,14 @@ public class BuildToolService {
 
     //@todo add cache as this can be really slow
     public String getProjectSummary() {
-        String report = "### Project Info\n";
+        String report = "### Project Summary\n";
+        report += "### Agent Instructions\n";
+        report += getAgentsContents();
+        report += "### Build Info\n";
         report += "- Build Tool: " + detect() + "\n";
         report += "- OS: " + getOperatingSystem() + "\n";
         report += "\n";
-        report += "### Build file\n";
+        report += "### Build File\n";
         report += getBuildFileContents();
         report += "\n";
         report += "### Project Files\n";
@@ -327,5 +338,22 @@ public class BuildToolService {
         }
 
         return "❌ No README file found.";
+    }
+
+    public String getAgentsContents() {
+        String content = "";
+        Path projectRoot = sandbox.getRoot();
+
+        Path agentsPath = projectRoot.resolve("AGENTS.md");
+        if (Files.exists(agentsPath)) {
+            try {
+                content += Files.readString(agentsPath);
+            } catch (IOException e) {
+                content+= "Unable to find AGENTS.md";
+            }
+        }
+
+        content += scriptServiceRegistry.getApiDocs();
+        return content;
     }
 }

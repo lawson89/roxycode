@@ -1,6 +1,7 @@
 package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 import org.w3c.dom.*;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@ScriptService("xmlService")
 @Singleton
 public class XmlService {
 

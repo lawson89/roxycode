@@ -121,7 +121,7 @@ class GenAIServiceTest {
     static class StubToolExecutionService extends ToolExecutionService {
 
         public StubToolExecutionService() {
-            super(null, null, null, null, null, null, null, null, null, null, null);
+            super(null);
         }
 
         @Override

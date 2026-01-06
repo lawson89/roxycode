@@ -1,16 +1,13 @@
 package org.roxycode.core.tools;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.graalvm.polyglot.proxy.ProxyObject;
-import org.roxycode.core.tools.service.*;
-import org.roxycode.core.Sandbox;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.proxy.ProxyObject;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,44 +21,12 @@ public class ToolExecutionService {
 
     private final ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
 
-    private final Sandbox sandbox;
+    private final ScriptServiceRegistry scriptServiceRegistry;
 
-    private final FileSystemService fs;
-
-    private final GrepService grepService;
-
-    private final GitService gitService;
-
-    private final TikaService tikaService;
-
-    private final JavaService javaAnalysisService;
-
-    private final XmlService xmlService;
-
-    private final TomlService tomlService;
-
-    private final BuildToolService buildToolService;
-
-    private final SierraPreviewService sierraPreviewService;
-
-    private final ObjectMapper objectMapper;
-
-    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, GrepService grepService, GitService gitService, TikaService tikaService,
-                                JavaService javaAnalysisService, XmlService xmlService, TomlService tomlService, BuildToolService buildToolService,
-                                SierraPreviewService sierraPreviewService, @Named("toml") ObjectMapper objectMapper) {
+    public ToolExecutionService(ScriptServiceRegistry scriptServiceRegistry) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
-        this.sandbox = sandbox;
-        this.fs = fs;
-        this.grepService = grepService;
-        this.gitService = gitService;
-        this.tikaService = tikaService;
-        this.javaAnalysisService = javaAnalysisService;
-        this.xmlService = xmlService;
-        this.tomlService = tomlService;
-        this.buildToolService = buildToolService;
-        this.sierraPreviewService = sierraPreviewService;
-        this.objectMapper = objectMapper;
+        this.scriptServiceRegistry = scriptServiceRegistry;
     }
 
     public Future<String> execute(ToolDefinition tool, Map<String, Object> args) {
@@ -75,22 +40,33 @@ public class ToolExecutionService {
     }
 
     private String executeJavaScript(String script, Map<String, Object> args) {
-        try (Context context = Context.newBuilder("js").allowHostAccess(HostAccess.ALL).allowHostClassLookup(className -> false).option("engine.WarnInterpreterOnly", "false").build()) {
+        HostAccess secureAccess = HostAccess.newBuilder(HostAccess.NONE)
+                // Explicitly allow nothing. No "System", no "File".
+                .build();
+
+        try (Context context = Context.newBuilder("js")
+                .allowHostAccess(secureAccess)
+                .allowHostClassLookup(className -> false)
+                // Block Network
+                .allowNativeAccess(false)
+                // Block spawning external processes (e.g. exec)
+                .allowCreateProcess(false)
+                // Enable IO, but ONLY via our custom FileSystem
+                .allowIO(true)
+                .option("engine.WarnInterpreterOnly", "false")
+
+                .build()) {
             // Set a timeout of 60 seconds
             ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> context.close(true), 60, TimeUnit.SECONDS);
             try {
-                // 1. Bind your services
-                context.getBindings("js").putMember("sandbox", this.sandbox);
-                context.getBindings("js").putMember("fs", this.fs);
-                context.getBindings("js").putMember("grep", this.grepService);
-                context.getBindings("js").putMember("git", this.gitService);
-                context.getBindings("js").putMember("tika", this.tikaService);
-                context.getBindings("js").putMember("java", this.javaAnalysisService);
-                context.getBindings("js").putMember("xml", this.xmlService);
-                context.getBindings("js").putMember("toml", this.tomlService);
-                context.getBindings("js").putMember("buildTool", this.buildToolService);
-                context.getBindings("js").putMember("sierra", this.sierraPreviewService);
-                context.getBindings("js").putMember("json", this.objectMapper);
+                // --- AUTO-BINDING ---
+                Map<String, Object> services = scriptServiceRegistry.getServices();
+
+                for (Map.Entry<String, Object> entry : services.entrySet()) {
+                    context.getBindings("js").putMember(entry.getKey(), entry.getValue());
+                }
+                // --------------------
+
                 // 2. Wrap the Java Map in ProxyObject
                 context.getBindings("js").putMember("args", ProxyObject.fromMap(args));
                 // 3. Execute

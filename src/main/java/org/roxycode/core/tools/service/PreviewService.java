@@ -3,6 +3,7 @@ package org.roxycode.core.tools.service;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.ScriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,6 +14,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+@ScriptService("previewService")
 @Singleton
 public class PreviewService {
     private static final Logger LOG = LoggerFactory.getLogger(PreviewService.class);

@@ -1,9 +1,0 @@
-description = "Detects the build tool used in the project (Maven, Gradle, Ant, or Unknown)."
-type = "graaljs"
-source = "file:detect_build_tool.js"
-
-[[parameters]]
-name = "dummy"
-type = "string"
-description = "Unused parameter"
-required = false

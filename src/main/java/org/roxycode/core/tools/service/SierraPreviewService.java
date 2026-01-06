@@ -1,6 +1,7 @@
 package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 import org.roxycode.core.utils.ComponentScreenshot;
 
 import javax.imageio.ImageIO;
@@ -9,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 
+@ScriptService("sierraPreviewService")
 @Singleton
 public class SierraPreviewService {
 

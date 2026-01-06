@@ -11,6 +11,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+@ScriptService("javaService")
 @Singleton
 public class JavaService {
 

@@ -4,6 +4,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.ScriptServiceRegistry;
 import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,7 +105,9 @@ public class CodebasePackerService {
      * Shared logic to walk the file tree and write entries to any BufferedWriter.
      */
     protected void streamFilesToToml(Path rootPath, BufferedWriter writer) throws IOException {
-        writeTomlHeader(writer, buildToolService.getProjectSummary());
+        String header = buildToolService.getProjectSummary();
+        header += "\n\nThis is a codebase snapshot in TOML format including source files for analysis.";
+        writeTomlHeader(writer, header);
         //@todo externalize this
         List<String> sourceExtensions = List.of(
                 "java", "kt", "groovy"

@@ -7,6 +7,7 @@ import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
 import org.apache.tika.sax.BodyContentHandler;
+import org.roxycode.core.tools.ScriptService;
 import org.xml.sax.SAXException;
 
 import java.io.IOException;
@@ -16,6 +17,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
+@ScriptService("tikaService")
 @Singleton
 public class TikaService {
 

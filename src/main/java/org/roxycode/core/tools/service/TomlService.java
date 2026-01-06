@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 
 import java.nio.file.Path;
 import java.util.*;
 
+@ScriptService("tomlService")
 @Singleton
 public class TomlService {
 
@@ -86,7 +88,6 @@ public class TomlService {
 
     private void summarizeRecursive(JsonNode node, String parentPath, int depth, List<ElementSummary> elements) {
         if (node.isObject()) {
-            int index = 1;
             for (Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext(); ) {
                 Map.Entry<String, JsonNode> field = it.next();
                 String name = field.getKey();
@@ -94,7 +95,6 @@ public class TomlService {
                 String currentPath = parentPath + "/" + name;
                 elements.add(new ElementSummary(name, currentPath, depth));
                 summarizeRecursive(child, currentPath, depth + 1, elements);
-                index++;
             }
         } else if (node.isArray()) {
             int index = 1;

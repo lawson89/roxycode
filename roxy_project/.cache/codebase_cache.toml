@@ -1,10 +1,148 @@
 [header]
 content = '''
-### Project Info
+### Project Summary
+### Agent Instructions
+# Important notes for LLMs working with this project
+
+## js environment
+- You have at your disposal the ability to run javascript scripts in a secure sandboxed environment.
+- The tool to use to run a script is called run_js
+- The run_js tool accepts a single argument called script which is the javascript code to execute.
+- The javascript environment has access to various services via global objects, the details will be provided in the system message or cached context.
+
+// Service: gitService
+const gitService = {
+  getCurrentBranch(projectRoot: any): string,
+
+  getStatus(projectRoot: any): string,
+
+  log(projectRoot: any, path: string, limit: number): string,
+
+  diff(projectRoot: any, cached: boolean, path: string): string,
+
+};
+
+// Service: tikaService
+const tikaService = {
+  readDocument(path: any): string,
+
+  extractText(inputStream: any): string,
+
+  extractAll(inputStream: any): any,
+
+};
+
+// Service: buildToolService
+const buildToolService = {
+  getAgentsContents(): string,
+
+  getBuildFileContents(): string,
+
+  getProjectStructure(): string,
+
+  getReadmeContents(): string,
+
+  runTests(): string,
+
+  getDependencyTree(): string,
+
+  getEffectiveConfig(): string,
+
+  getDependencyHealth(): string,
+
+  getProjectSummary(): string,
+
+  getOperatingSystem(): string,
+
+  /** Detects the current build tool */
+  detect(): any,
+
+  /** Compiles the current project */
+  compile(): string,
+
+};
+
+// Service: previewService
+const previewService = {
+  launchAndScreenshot(): string,
+
+};
+
+// Service: xmlService
+const xmlService = {
+  analyzeFile(path: any): any,
+
+  getElementSource(path: any, xpathExpr: string): any,
+
+  replaceElement(path: any, xpathExpr: string, newXml: string): void,
+
+  updateAttribute(path: any, xpathExpr: string, attrName: string, attrValue: string): void,
+
+};
+
+// Service: grepService
+const grepService = {
+  grep(patternStr: string, pathStr: string, filePattern: string): string,
+
+};
+
+// Service: javaService
+const javaService = {
+  getMethodSource(path: any, className: string, methodName: string): any,
+
+  replaceMethod(path: any, className: string, methodName: string, newMethodSource: string): void,
+
+  getFieldSource(path: any, className: string, fieldName: string): any,
+
+  replaceField(path: any, className: string, fieldName: string, newFieldSource: string): void,
+
+  analyzeFile(path: any): any,
+
+  init(): void,
+
+};
+
+// Service: tomlService
+const tomlService = {
+  analyzeFile(path: any): any,
+
+  write(path: any, content: any): void,
+
+  read(path: any): any,
+
+};
+
+// Service: sierraPreviewService
+const sierraPreviewService = {
+  previewSierra(path: string): string,
+
+  close(): void,
+
+};
+
+// Service: fileSystemService
+const fileSystemService = {
+  replaceInFile(path: string, search: string, replace: string): string,
+
+  readFiles(paths: Array<any>): string,
+
+  writeFile(path: string, content: string): void,
+
+  readFile(path: string): string,
+
+  delete(path: string): void,
+
+  listFiles(path: string, pattern: string, recursive: boolean): string,
+
+  tree(path: string): string,
+
+};
+
+### Build Info
 - Build Tool: MAVEN
 - OS: linux
 
-### Build file
+### Build File
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -354,6 +492,7 @@ roxycode/
 │   │   │   ├── add_project_cache_settings.md
 │   │   │   ├── add_readme_locator_to_build_tool_service.md
 │   │   │   ├── add_system_logs_view.md
+│   │   │   ├── align_mode_label.md
 │   │   │   ├── codebase_cache_view.md
 │   │   │   ├── convert_find_files_to_graaljs.md
 │   │   │   ├── convert_fs_tools_to_service.md
@@ -386,7 +525,9 @@ roxycode/
 │   │   │   ├── llm_js_execution_tool.md
 │   │   │   ├── message_history.md
 │   │   │   ├── modularize_mainframe_ui.md
+│   │   │   ├── move_branch_label_under_project_label.md
 │   │   │   ├── move_build_logic_to_service.md
+│   │   │   ├── notifications.md
 │   │   │   ├── push_codebase_cache_to_gemini.md
 │   │   │   ├── read_gemini_cache_metadata.md
 │   │   │   ├── refactor_mainframe_views.md
@@ -394,6 +535,7 @@ roxycode/
 │   │   │   ├── refactor_message_history_to_html.md
 │   │   │   ├── refactor_settings_and_chat_view.md
 │   │   │   ├── refactor_theme_service.md
+│   │   │   ├── remove_exit_confirmation.md
 │   │   │   ├── remove_logs_auto_refresh.md
 │   │   │   ├── remove_rescan_button.md
 │   │   │   ├── render_system_prompt_as_markdown.md
@@ -409,7 +551,7 @@ roxycode/
 │   │   │   ├── transition_to_flyingsaucer_xhtml_panel.md
 │   │   │   ├── view_system_prompt_screen.md
 │   │   │   └── xml_service_v1.md
-│   │   └── notifications.md
+│   │   └── remove_menu_bar.md
 │   └── README.md
 ├── src/
 │   ├── main/
@@ -441,6 +583,7 @@ roxycode/
 ├── target/
 ├── .env
 ├── .gitignore
+├── AGENTS.md
 ├── LICENSE
 ├── README.md
 ├── mvnw
@@ -506,6 +649,8 @@ This project was started as a way to explore LLM-based development within a Java
 
 
 
+
+This is a codebase snapshot in TOML format including source files for analysis.
 '''
 [[files]]
 path = "src/main/java/org/roxycode/core/RoxyMode.java"
@@ -1209,6 +1354,155 @@ public class ToolRegistry {
 '''
 
 [[files]]
+path = "src/main/java/org/roxycode/core/tools/ScriptServiceRegistry.java"
+size = 2299
+mimeType = "text/x-java"
+content = '''
+package org.roxycode.core.tools;
+
+import io.micronaut.context.ApplicationContext;
+import io.micronaut.inject.BeanDefinition;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
+import org.roxycode.core.GenAIService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.PostConstruct; // or jakarta.annotation.PostConstruct
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Collection;
+
+@Singleton
+public class ScriptServiceRegistry {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ScriptServiceRegistry.class);
+
+    private final Map<String, Object> serviceMap = new HashMap<>();
+    private String cachedApiDocs = "";
+
+    @Inject
+    ApplicationContext applicationContext;
+
+    @PostConstruct
+    void init() {
+        try {
+            // 1. Find all bean definitions with our annotation
+            Collection<BeanDefinition<Object>> definitions =
+                    applicationContext.getBeanDefinitions(Object.class);
+
+            for (BeanDefinition<Object> definition : definitions) {
+                if (definition.hasAnnotation(ScriptService.class)) {
+                    // 2. Extract the name (e.g. "fs")
+                    String jsName = definition.stringValue(ScriptService.class).orElse(null);
+
+                    if (jsName != null) {
+                        // 3. Get the actual instance from Micronaut
+                        Object instance = applicationContext.getBean(definition);
+                        LOG.info("Registered script service: {} -> {}", jsName, instance.getClass().getName());
+                        serviceMap.put(jsName, instance);
+                    }
+                }
+            }
+        } catch (Exception e) {
+           LOG.warn("Failed to register script service", e);
+        }
+
+        try {
+            // 4. Generate the API docs once (using the generator from previous steps)
+            this.cachedApiDocs = LLMDocGenerator.generateApiDocs(serviceMap);
+        }catch (Exception e) {
+            LOG.warn("Failed to generate api docs", e);
+        }
+    }
+
+    public Map<String, Object> getServices() {
+        return Collections.unmodifiableMap(serviceMap);
+    }
+
+    public String getApiDocs() {
+        return cachedApiDocs;
+    }
+}
+
+'''
+
+[[files]]
+path = "src/main/java/org/roxycode/core/tools/LLMDocGenerator.java"
+size = 2525
+mimeType = "text/x-java"
+content = '''
+package org.roxycode.core.tools;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.util.Map;
+
+public class LLMDocGenerator {
+
+    public static String generateApiDocs(Map<String, Object> services) {
+        StringBuilder sb = new StringBuilder();
+
+        for (Map.Entry<String, Object> entry : services.entrySet()) {
+            String serviceName = entry.getKey();
+            Object serviceObj = entry.getValue();
+            Class<?> clazz = serviceObj.getClass();
+
+            sb.append("// Service: ").append(serviceName).append("\n");
+            sb.append("const ").append(serviceName).append(" = {\n");
+
+            for (Method method : clazz.getMethods()) {
+                // Skip standard Object methods
+                if (method.getDeclaringClass().equals(Object.class)) continue;
+
+                // 1. Add Method Description
+                if (method.isAnnotationPresent(LLMDoc.class)) {
+                    sb.append("  /** ").append(method.getAnnotation(LLMDoc.class).value()).append(" */\n");
+                }
+
+                sb.append("  ").append(method.getName()).append("(");
+
+                // 2. Add Parameters with Descriptions
+                Parameter[] params = method.getParameters();
+                for (int i = 0; i < params.length; i++) {
+                    Parameter p = params[i];
+
+                    // Add param description inline if available
+                    if (p.isAnnotationPresent(LLMDoc.class)) {
+                        sb.append("/* ").append(p.getAnnotation(LLMDoc.class).value()).append(" */ ");
+                    }
+
+                    String type = mapJavaTypeToJs(p.getType().getSimpleName());
+                    sb.append(p.getName()).append(": ").append(type);
+
+                    if (i < params.length - 1) sb.append(", ");
+                }
+
+                String returnType = mapJavaTypeToJs(method.getReturnType().getSimpleName());
+                sb.append("): ").append(returnType).append(",\n\n");
+            }
+            sb.append("};\n\n");
+        }
+        return sb.toString();
+    }
+
+    private static String mapJavaTypeToJs(String javaType) {
+        return switch (javaType) {
+            case "String" -> "string";
+            case "int", "Integer", "long", "double" -> "number";
+            case "boolean", "Boolean" -> "boolean";
+            case "void" -> "void";
+            case "Map" -> "object";
+            case "List", "ArrayList" -> "Array<any>";
+            default -> "any";
+        };
+    }
+}
+
+'''
+
+[[files]]
 path = "src/main/java/org/roxycode/core/tools/ToolParameter.java"
 size = 790
 mimeType = "text/x-java"
@@ -1278,23 +1572,149 @@ public class ToolDefinition {
 '''
 
 [[files]]
-path = "src/main/java/org/roxycode/core/tools/ToolExecutionService.java"
-size = 5219
+path = "src/main/java/org/roxycode/core/tools/RestrictedFileSystem.java"
+size = 2504
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.inject.Named;
+import org.graalvm.polyglot.io.FileSystem;
+
+import java.io.IOException;
+import java.net.URI;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.*;
+import java.nio.file.attribute.FileAttribute;
+import java.util.Map;
+import java.util.Set;
+
+public class RestrictedFileSystem implements FileSystem {
+    private final Path root;
+    private final FileSystem delegate = FileSystem.newDefaultFileSystem();
+
+    public RestrictedFileSystem(Path root) {
+        this.root = root;
+    }
+
+    private Path resolve(Path path) {
+        // Resolve the requested path against the sandbox root
+        Path resolved = root.resolve(path).normalize();
+        if (!resolved.startsWith(root)) {
+            throw new SecurityException("Access denied: " + path + " is outside the sandbox.");
+        }
+        return resolved;
+    }
+
+    @Override
+    public Path parsePath(URI uri) {
+        return delegate.parsePath(uri);
+    }
+
+    @Override
+    public Path parsePath(String path) {
+        return delegate.parsePath(path);
+    }
+
+    @Override
+    public void checkAccess(Path path, Set<? extends AccessMode> modes, LinkOption... linkOptions) throws IOException {
+        delegate.checkAccess(resolve(path), modes, linkOptions);
+    }
+
+    @Override
+    public void createDirectory(Path dir, FileAttribute<?>... attrs) throws IOException {
+        delegate.createDirectory(resolve(dir), attrs);
+    }
+
+    @Override
+    public void delete(Path path) throws IOException {
+        delegate.delete(resolve(path));
+    }
+
+    @Override
+    public SeekableByteChannel newByteChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
+        return delegate.newByteChannel(resolve(path), options, attrs);
+    }
+
+    @Override
+    public DirectoryStream<Path> newDirectoryStream(Path dir, DirectoryStream.Filter<? super Path> filter) throws IOException {
+        return delegate.newDirectoryStream(resolve(dir), filter);
+    }
+
+    @Override
+    public Path toAbsolutePath(Path path) {
+        return resolve(path); // Force resolution to root
+    }
+
+    @Override
+    public Path toRealPath(Path path, LinkOption... linkOptions) throws IOException {
+        return resolve(path).toRealPath(linkOptions);
+    }
+
+    @Override
+    public Map<String, Object> readAttributes(Path path, String attributes, LinkOption... options) throws IOException {
+        return delegate.readAttributes(resolve(path), attributes, options);
+    }
+}
+
+'''
+
+[[files]]
+path = "src/main/java/org/roxycode/core/tools/LLMDoc.java"
+size = 353
+mimeType = "text/x-java"
+content = '''
+package org.roxycode.core.tools;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
+public @interface LLMDoc {
+    String value();
+}
+
+'''
+
+[[files]]
+path = "src/main/java/org/roxycode/core/tools/ScriptService.java"
+size = 511
+mimeType = "text/x-java"
+content = '''
+package org.roxycode.core.tools;
+
+import jakarta.inject.Singleton;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE) // Target classes, not fields
+@Singleton // Automatically make annotated classes Singletons
+public @interface ScriptService {
+    /** The variable name to use in the JS context (e.g. "fs", "git") */
+    String value();
+}
+'''
+
+[[files]]
+path = "src/main/java/org/roxycode/core/tools/ToolExecutionService.java"
+size = 3836
+mimeType = "text/x-java"
+content = '''
+package org.roxycode.core.tools;
+
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.graalvm.polyglot.proxy.ProxyObject;
-import org.roxycode.core.tools.service.*;
-import org.roxycode.core.Sandbox;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.proxy.ProxyObject;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -1308,44 +1728,12 @@ public class ToolExecutionService {
 
     private final ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
 
-    private final Sandbox sandbox;
+    private final ScriptServiceRegistry scriptServiceRegistry;
 
-    private final FileSystemService fs;
-
-    private final GrepService grepService;
-
-    private final GitService gitService;
-
-    private final TikaService tikaService;
-
-    private final JavaService javaAnalysisService;
-
-    private final XmlService xmlService;
-
-    private final TomlService tomlService;
-
-    private final BuildToolService buildToolService;
-
-    private final SierraPreviewService sierraPreviewService;
-
-    private final ObjectMapper objectMapper;
-
-    public ToolExecutionService(Sandbox sandbox, FileSystemService fs, GrepService grepService, GitService gitService, TikaService tikaService,
-                                JavaService javaAnalysisService, XmlService xmlService, TomlService tomlService, BuildToolService buildToolService,
-                                SierraPreviewService sierraPreviewService, @Named("toml") ObjectMapper objectMapper) {
+    public ToolExecutionService(ScriptServiceRegistry scriptServiceRegistry) {
         // CachedThreadPool for Platform Threads as per requirements
         this.executorService = Executors.newCachedThreadPool();
-        this.sandbox = sandbox;
-        this.fs = fs;
-        this.grepService = grepService;
-        this.gitService = gitService;
-        this.tikaService = tikaService;
-        this.javaAnalysisService = javaAnalysisService;
-        this.xmlService = xmlService;
-        this.tomlService = tomlService;
-        this.buildToolService = buildToolService;
-        this.sierraPreviewService = sierraPreviewService;
-        this.objectMapper = objectMapper;
+        this.scriptServiceRegistry = scriptServiceRegistry;
     }
 
     public Future<String> execute(ToolDefinition tool, Map<String, Object> args) {
@@ -1359,22 +1747,33 @@ public class ToolExecutionService {
     }
 
     private String executeJavaScript(String script, Map<String, Object> args) {
-        try (Context context = Context.newBuilder("js").allowHostAccess(HostAccess.ALL).allowHostClassLookup(className -> false).option("engine.WarnInterpreterOnly", "false").build()) {
+        HostAccess secureAccess = HostAccess.newBuilder(HostAccess.NONE)
+                // Explicitly allow nothing. No "System", no "File".
+                .build();
+
+        try (Context context = Context.newBuilder("js")
+                .allowHostAccess(secureAccess)
+                .allowHostClassLookup(className -> false)
+                // Block Network
+                .allowNativeAccess(false)
+                // Block spawning external processes (e.g. exec)
+                .allowCreateProcess(false)
+                // Enable IO, but ONLY via our custom FileSystem
+                .allowIO(true)
+                .option("engine.WarnInterpreterOnly", "false")
+
+                .build()) {
             // Set a timeout of 60 seconds
             ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> context.close(true), 60, TimeUnit.SECONDS);
             try {
-                // 1. Bind your services
-                context.getBindings("js").putMember("sandbox", this.sandbox);
-                context.getBindings("js").putMember("fs", this.fs);
-                context.getBindings("js").putMember("grep", this.grepService);
-                context.getBindings("js").putMember("git", this.gitService);
-                context.getBindings("js").putMember("tika", this.tikaService);
-                context.getBindings("js").putMember("java", this.javaAnalysisService);
-                context.getBindings("js").putMember("xml", this.xmlService);
-                context.getBindings("js").putMember("toml", this.tomlService);
-                context.getBindings("js").putMember("buildTool", this.buildToolService);
-                context.getBindings("js").putMember("sierra", this.sierraPreviewService);
-                context.getBindings("js").putMember("json", this.objectMapper);
+                // --- AUTO-BINDING ---
+                Map<String, Object> services = scriptServiceRegistry.getServices();
+
+                for (Map.Entry<String, Object> entry : services.entrySet()) {
+                    context.getBindings("js").putMember(entry.getKey(), entry.getValue());
+                }
+                // --------------------
+
                 // 2. Wrap the Java Map in ProxyObject
                 context.getBindings("js").putMember("args", ProxyObject.fromMap(args));
                 // 3. Execute
@@ -1407,7 +1806,7 @@ public class ToolExecutionService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/PreviewService.java"
-size = 2360
+size = 2439
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
@@ -1415,6 +1814,7 @@ package org.roxycode.core.tools.service;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.ScriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1425,6 +1825,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+@ScriptService("previewService")
 @Singleton
 public class PreviewService {
     private static final Logger LOG = LoggerFactory.getLogger(PreviewService.class);
@@ -1487,12 +1888,13 @@ public class PreviewService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/SierraPreviewService.java"
-size = 1155
+size = 1240
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 import org.roxycode.core.utils.ComponentScreenshot;
 
 import javax.imageio.ImageIO;
@@ -1501,6 +1903,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 
+@ScriptService("sierraPreviewService")
 @Singleton
 public class SierraPreviewService {
 
@@ -1539,12 +1942,13 @@ public class SierraPreviewService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/GitService.java"
-size = 2360
+size = 2435
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeroturnaround.exec.ProcessExecutor;
@@ -1557,6 +1961,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+@ScriptService("gitService")
 @Singleton
 public class GitService {
     private static final Logger LOG = LoggerFactory.getLogger(GitService.class);
@@ -1618,12 +2023,13 @@ public class GitService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/XmlService.java"
-size = 5791
+size = 5866
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 import org.w3c.dom.*;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -1642,6 +2048,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@ScriptService("xmlService")
 @Singleton
 public class XmlService {
 
@@ -1760,7 +2167,7 @@ public class XmlService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/TikaService.java"
-size = 2013
+size = 2089
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
@@ -1772,6 +2179,7 @@ import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
 import org.apache.tika.sax.BodyContentHandler;
+import org.roxycode.core.tools.ScriptService;
 import org.xml.sax.SAXException;
 
 import java.io.IOException;
@@ -1781,6 +2189,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
+@ScriptService("tikaService")
 @Singleton
 public class TikaService {
 
@@ -1828,7 +2237,7 @@ public class TikaService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/TomlService.java"
-size = 3725
+size = 3749
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
@@ -1837,10 +2246,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 
 import java.nio.file.Path;
 import java.util.*;
 
+@ScriptService("tomlService")
 @Singleton
 public class TomlService {
 
@@ -1919,7 +2330,6 @@ public class TomlService {
 
     private void summarizeRecursive(JsonNode node, String parentPath, int depth, List<ElementSummary> elements) {
         if (node.isObject()) {
-            int index = 1;
             for (Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext(); ) {
                 Map.Entry<String, JsonNode> field = it.next();
                 String name = field.getKey();
@@ -1927,7 +2337,6 @@ public class TomlService {
                 String currentPath = parentPath + "/" + name;
                 elements.add(new ElementSummary(name, currentPath, depth));
                 summarizeRecursive(child, currentPath, depth + 1, elements);
-                index++;
             }
         } else if (node.isArray()) {
             int index = 1;
@@ -1954,7 +2363,7 @@ public class TomlService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/JavaService.java"
-size = 6654
+size = 6730
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
@@ -1970,6 +2379,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.ScriptService;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -1978,6 +2388,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+@ScriptService("javaService")
 @Singleton
 public class JavaService {
 
@@ -2119,7 +2530,7 @@ public class JavaService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/GrepService.java"
-size = 4169
+size = 4245
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
@@ -2128,6 +2539,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.jetbrains.annotations.NotNull;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.ScriptService;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -2138,6 +2550,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@ScriptService("grepService")
 @Singleton
 public class GrepService {
 
@@ -2323,7 +2736,7 @@ public class SierraPreviewFrame extends JFrame {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/FileSystemService.java"
-size = 5575
+size = 5657
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
@@ -2334,6 +2747,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.ScriptService;
 
 import java.io.File;
 import java.io.IOException;
@@ -2345,6 +2759,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@ScriptService("fileSystemService")
 @Singleton
 public class FileSystemService {
 
@@ -2477,7 +2892,7 @@ public class FileSystemService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/service/BuildToolService.java"
-size = 11504
+size = 12556
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools.service;
@@ -2485,6 +2900,9 @@ package org.roxycode.core.tools.service;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.LLMDoc;
+import org.roxycode.core.tools.ScriptService;
+import org.roxycode.core.tools.ScriptServiceRegistry;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -2495,11 +2913,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+@ScriptService("buildToolService")
 @Singleton
 public class BuildToolService {
 
     private final Sandbox sandbox;
     private final FileSystemService fileSystemService;
+    private final ScriptServiceRegistry scriptServiceRegistry;
 
 
     public enum BuildTool {
@@ -2507,11 +2927,13 @@ public class BuildToolService {
     }
 
     @Inject
-    public BuildToolService(Sandbox sandbox, FileSystemService fileSystemService) {
+    public BuildToolService(Sandbox sandbox, FileSystemService fileSystemService, ScriptServiceRegistry scriptServiceRegistry) {
         this.sandbox = sandbox;
         this.fileSystemService = fileSystemService;
+        this.scriptServiceRegistry = scriptServiceRegistry;
     }
 
+    @LLMDoc("Detects the current build tool")
     public BuildTool detect() {
         Path projectRoot = sandbox.getRoot();
         if (Files.exists(projectRoot.resolve("pom.xml"))) {
@@ -2525,6 +2947,7 @@ public class BuildToolService {
         return BuildTool.UNKNOWN;
     }
 
+    @LLMDoc("Compiles the current project")
     public String compile() {
         BuildTool tool = detect();
         if (tool == BuildTool.UNKNOWN) {
@@ -2668,11 +3091,14 @@ public class BuildToolService {
 
     //@todo add cache as this can be really slow
     public String getProjectSummary() {
-        String report = "### Project Info\n";
+        String report = "### Project Summary\n";
+        report += "### Agent Instructions\n";
+        report += getAgentsContents();
+        report += "### Build Info\n";
         report += "- Build Tool: " + detect() + "\n";
         report += "- OS: " + getOperatingSystem() + "\n";
         report += "\n";
-        report += "### Build file\n";
+        report += "### Build File\n";
         report += getBuildFileContents();
         report += "\n";
         report += "### Project Files\n";
@@ -2809,6 +3235,23 @@ public class BuildToolService {
         }
 
         return "❌ No README file found.";
+    }
+
+    public String getAgentsContents() {
+        String content = "";
+        Path projectRoot = sandbox.getRoot();
+
+        Path agentsPath = projectRoot.resolve("AGENTS.md");
+        if (Files.exists(agentsPath)) {
+            try {
+                content += Files.readString(agentsPath);
+            } catch (IOException e) {
+                content+= "Unable to find AGENTS.md";
+            }
+        }
+
+        content += scriptServiceRegistry.getApiDocs();
+        return content;
     }
 }
 
@@ -4030,7 +4473,7 @@ public class FileListingService {
 
 [[files]]
 path = "src/main/java/org/roxycode/cache/CodebasePackerService.java"
-size = 6405
+size = 6596
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.cache;
@@ -4039,6 +4482,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.ScriptServiceRegistry;
 import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -4139,7 +4583,9 @@ public class CodebasePackerService {
      * Shared logic to walk the file tree and write entries to any BufferedWriter.
      */
     protected void streamFilesToToml(Path rootPath, BufferedWriter writer) throws IOException {
-        writeTomlHeader(writer, buildToolService.getProjectSummary());
+        String header = buildToolService.getProjectSummary();
+        header += "\n\nThis is a codebase snapshot in TOML format including source files for analysis.";
+        writeTomlHeader(writer, header);
         //@todo externalize this
         List<String> sourceExtensions = List.of(
                 "java", "kt", "groovy"
@@ -5509,7 +5955,7 @@ public class GeminiOnlineCachesView extends JPanel {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/MarkdownPane.java"
-size = 9438
+size = 9566
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui;
@@ -5528,7 +5974,6 @@ import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.html.HTMLDocument;
@@ -5553,8 +5998,8 @@ public class MarkdownPane extends JTextPane {
 
     public MarkdownPane() {
         final DataHolder // for full GFM table compatibility add the following table extension options:
-                // for full GFM table compatibility add the following table extension options:
-                OPTIONS = new MutableDataSet().set(Parser.REFERENCES_KEEP, KeepType.LAST).set(HtmlRenderer.INDENT_SIZE, 2).set(HtmlRenderer.PERCENT_ENCODE_URLS, true).set(TablesExtension.COLUMN_SPANS, false).set(TablesExtension.APPEND_MISSING_COLUMNS, true).set(TablesExtension.DISCARD_EXTRA_COLUMNS, true).set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true).set(Parser.EXTENSIONS, List.of(TablesExtension.create())).toImmutable();
+        // for full GFM table compatibility add the following table extension options:
+        OPTIONS = new MutableDataSet().set(Parser.REFERENCES_KEEP, KeepType.LAST).set(HtmlRenderer.INDENT_SIZE, 2).set(HtmlRenderer.PERCENT_ENCODE_URLS, true).set(TablesExtension.COLUMN_SPANS, false).set(TablesExtension.APPEND_MISSING_COLUMNS, true).set(TablesExtension.DISCARD_EXTRA_COLUMNS, true).set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true).set(Parser.EXTENSIONS, List.of(TablesExtension.create())).toImmutable();
         this.parser = Parser.builder(OPTIONS).build();
         this.renderer = HtmlRenderer.builder(OPTIONS).build();
         this.setEditable(false);
@@ -5648,7 +6093,8 @@ public class MarkdownPane extends JTextPane {
         if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
             html = html.substring(3, html.length() - 5);
         }
-        String combinedHtml = "<div style='color: gray; font-style: italic; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
+        String bgColor = FlatLaf.isLafDark() ? "#2b2d30" : "#f8f9fa";
+        String combinedHtml = "<div style='background-color: " + bgColor + "; padding: 4px 8px; border-radius: 4px; color: gray; font-style: italic; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
@@ -5674,7 +6120,7 @@ public class MarkdownPane extends JTextPane {
         }
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     private String generateIconTag(Ikon iconCode, int size, Color color, String namePrefix) {
         try {
             FontIcon icon = FontIcon.of(iconCode, size, color);
@@ -5708,7 +6154,7 @@ public class MarkdownPane extends JTextPane {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/MainFrame.java"
-size = 17843
+size = 15932
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui;
@@ -5810,10 +6256,13 @@ public class MainFrame extends JFrame implements Runnable {
     // Notification Bar Outlets
     @Outlet
     private JPanel notificationBar;
+
     @Outlet
     private JLabel notificationIcon;
+
     @Outlet
     private JLabel notificationLabel;
+
     @Outlet
     private JButton closeNotificationButton;
 
@@ -5848,18 +6297,8 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JToggleButton navGeminiCachesButton;
 
-    // Menu Outlets
     @Outlet
-    private JMenuItem settingsMenuItem;
-
-    @Outlet
-    private JMenuItem exitMenuItem;
-
-    @Outlet
-    private JMenuItem aboutMenuItem;
-
-    @Outlet
-    private JMenuItem openFolderMenuItem;
+    private JButton openFolderButton;
 
     @Inject
     public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, NotificationService notificationService) {
@@ -5871,7 +6310,7 @@ public class MainFrame extends JFrame implements Runnable {
         this.themeService = themeService;
         this.notificationService = notificationService;
         setTitle("RoxyCode");
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }
 
     @Override
@@ -5893,7 +6332,6 @@ public class MainFrame extends JFrame implements Runnable {
         }
         // 3. Initialize UI Components
         initIcons();
-
         // Initialize Notification Bar
         if (notificationBar != null) {
             notificationBar.setVisible(false);
@@ -5903,7 +6341,6 @@ public class MainFrame extends JFrame implements Runnable {
             }
             notificationService.setListener(this::showNotification);
         }
-
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
         if (settingsService.getCurrentProject() == null) {
@@ -5927,54 +6364,47 @@ public class MainFrame extends JFrame implements Runnable {
             Rectangle bounds = gc.getBounds();
             UIUtils.setInitialScreenCenter(new Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
         }
-
     }
 
     private void showNotification(NotificationService.NotificationRequest request) {
         SwingUtilities.invokeLater(() -> {
-            if (notificationBar == null || notificationLabel == null || notificationIcon == null) return;
-
+            if (notificationBar == null || notificationLabel == null || notificationIcon == null)
+                return;
             notificationLabel.setText(request.message());
-
             Color bgColor;
             Color fgColor;
             Ikon iconCode;
-
             boolean isDark = FlatLaf.isLafDark();
-
-            switch (request.type()) {
+            switch(request.type()) {
                 case SUCCESS:
-                    bgColor = isDark ? new Color(0, 100, 0, 100) : new Color(200, 255, 200);
-                    fgColor = isDark ? Color.GREEN : new Color(0, 100, 0);
+                    bgColor = isDark ? new Color(30, 50, 30) : new Color(230, 250, 230);
+                    fgColor = isDark ? new Color(100, 255, 100) : new Color(0, 120, 0);
                     iconCode = MaterialDesignI.INFORMATION_OUTLINE;
                     break;
                 case ERROR:
-                    bgColor = isDark ? new Color(100, 0, 0, 100) : new Color(255, 200, 200);
-                    fgColor = isDark ? Color.RED : new Color(100, 0, 0);
+                    bgColor = isDark ? new Color(60, 30, 30) : new Color(255, 230, 230);
+                    fgColor = isDark ? new Color(255, 100, 100) : new Color(150, 0, 0);
                     iconCode = MaterialDesignA.ALERT_CIRCLE_OUTLINE;
                     break;
                 case WARNING:
-                    bgColor = isDark ? new Color(100, 100, 0, 100) : new Color(255, 255, 200);
-                    fgColor = isDark ? Color.YELLOW : new Color(100, 100, 0);
+                    bgColor = isDark ? new Color(50, 50, 30) : new Color(255, 250, 230);
+                    fgColor = isDark ? new Color(255, 200, 0) : new Color(150, 100, 0);
                     iconCode = MaterialDesignA.ALERT_OUTLINE;
                     break;
                 case INFO:
                 default:
-                    bgColor = isDark ? new Color(0, 102, 204, 100) : new Color(225, 240, 255);
-                    fgColor = isDark ? Color.CYAN : Color.BLUE;
+                    bgColor = isDark ? new Color(30, 40, 60) : new Color(235, 245, 255);
+                    fgColor = isDark ? new Color(100, 200, 255) : new Color(0, 80, 200);
                     iconCode = MaterialDesignI.INFORMATION_OUTLINE;
                     break;
             }
-
             notificationBar.setBackground(bgColor);
             notificationLabel.setForeground(fgColor);
             notificationIcon.setIcon(FontIcon.of(iconCode, 18, fgColor));
             notificationBar.setVisible(true);
-
             if (notificationTimer != null && notificationTimer.isRunning()) {
                 notificationTimer.stop();
             }
-
             notificationTimer = new Timer(5000, e -> notificationBar.setVisible(false));
             notificationTimer.setRepeats(false);
             notificationTimer.start();
@@ -6021,15 +6451,8 @@ public class MainFrame extends JFrame implements Runnable {
             navCodebaseCacheButton.setIcon(FontIcon.of(MaterialDesignD.DATABASE_OUTLINE, 16));
         if (navGeminiCachesButton != null)
             navGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignC.CLOUD_OUTLINE, 16));
-        // Menu Icons
-        if (settingsMenuItem != null)
-            settingsMenuItem.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
-        if (exitMenuItem != null)
-            exitMenuItem.setIcon(FontIcon.of(MaterialDesignL.LOGOUT, 16));
-        if (aboutMenuItem != null)
-            aboutMenuItem.setIcon(FontIcon.of(MaterialDesignI.INFORMATION_OUTLINE, 16));
-        if (openFolderMenuItem != null)
-            openFolderMenuItem.setIcon(FontIcon.of(MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
+        if (openFolderButton != null)
+            openFolderButton.setIcon(FontIcon.of(MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
     }
 
     private void updateProjectLabel() {
@@ -6055,13 +6478,6 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void initListeners() {
-        addWindowListener(new java.awt.event.WindowAdapter() {
-
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent e) {
-                confirmExit();
-            }
-        });
         if (navChatButton != null)
             navChatButton.addActionListener(e -> showView("CHAT"));
         if (navFilesButton != null)
@@ -6082,14 +6498,8 @@ public class MainFrame extends JFrame implements Runnable {
             navCodebaseCacheButton.addActionListener(e -> showView("CODEBASE_CACHE"));
         if (navGeminiCachesButton != null)
             navGeminiCachesButton.addActionListener(e -> showView("GEMINI_CACHES"));
-        if (settingsMenuItem != null)
-            settingsMenuItem.addActionListener(e -> showView("SETTINGS"));
-        if (exitMenuItem != null)
-            exitMenuItem.addActionListener(e -> confirmExit());
-        if (aboutMenuItem != null)
-            aboutMenuItem.addActionListener(this::onAbout);
-        if (openFolderMenuItem != null)
-            openFolderMenuItem.addActionListener(this::onOpenFolder);
+        if (openFolderButton != null)
+            openFolderButton.addActionListener(this::onOpenFolder);
     }
 
     private void showView(String viewName) {
@@ -6163,27 +6573,6 @@ public class MainFrame extends JFrame implements Runnable {
             genAIService.refreshKnowledge(currentProjectRoot.toString());
             SwingUtilities.invokeLater(() -> chatView.appendSystemMessage("Knowledge base reloaded."));
         }).start();
-    }
-
-
-
-    private void confirmExit() {
-        log.info("Prompting for exit confirmation");
-        JOptionPane optionPane = new JOptionPane("Are you sure you want to exit RoxyCode?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
-        JDialog dialog = optionPane.createDialog(this, "Confirm Exit");
-        UIUtils.centerDialog(dialog, this);
-        dialog.setVisible(true);
-        Object selectedValue = optionPane.getValue();
-        if (selectedValue instanceof Integer && (Integer) selectedValue == JOptionPane.YES_OPTION) {
-            System.exit(0);
-        }
-    }
-
-    private void onAbout(ActionEvent e) {
-        JOptionPane pane = new JOptionPane("RoxyCode AI Version 1.0", JOptionPane.INFORMATION_MESSAGE);
-        JDialog dialog = pane.createDialog(this, "About");
-        UIUtils.centerDialog(dialog, this);
-        dialog.setVisible(true);
     }
 
     public void updateShellStatus() {
