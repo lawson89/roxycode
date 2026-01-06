@@ -1,1 +1,0 @@
-fs.listFiles(args.path || ".", args.pattern, true);

@@ -1,1 +1,0 @@
-buildTool.getDependencyTree();

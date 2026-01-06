@@ -1,9 +1,0 @@
-description = "Lists the contents of a directory in a tree-like format. Use this to understand the project structure."
-type = "graaljs"
-source = "file:fs_tree.js"
-
-[[parameters]]
-name = "path"
-type = "string"
-description = "The relative path to list. Defaults to the project root if omitted."
-required = false

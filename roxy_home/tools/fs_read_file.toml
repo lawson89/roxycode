@@ -1,9 +1,0 @@
-description = "Reads the content of a file from the project."
-type = "graaljs"
-source = "file:fs_read_file.js"
-
-[[parameters]]
-name = "path"
-type = "string"
-description = "The relative path to the file."
-required = false

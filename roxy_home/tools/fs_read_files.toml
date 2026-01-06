@@ -1,9 +1,0 @@
-description = "Reads the content of multiple files from the project. !IMPORTANT: Agent should prefer this tool over making multiple calls to fs_read_file."
-type = "graaljs"
-source = "file:fs_read_files.js"
-
-[[parameters]]
-name = "paths"
-type = "array"
-description = "A list of relative paths to the files to read."
-required = false

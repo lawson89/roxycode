@@ -1,9 +1,0 @@
-description = "Analyzes a Java file and returns a summary of its structure (classes, methods, imports)."
-type = "graaljs"
-source = "file:java_analyze_file.js"
-
-[[parameters]]
-name = "path"
-type = "string"
-description = "The path to the Java file to analyze."
-required = true

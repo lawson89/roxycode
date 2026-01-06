@@ -24,16 +24,24 @@ const gitService = {
 
 // Service: tikaService
 const tikaService = {
-  readDocument(path: any): string,
+  extractAll(inputStream: any): any,
 
   extractText(inputStream: any): string,
 
-  extractAll(inputStream: any): any,
+  readDocument(path: any): string,
+
+};
+
+// Service: previewService
+const previewService = {
+  launchAndScreenshot(): string,
 
 };
 
 // Service: buildToolService
 const buildToolService = {
+  getOperatingSystem(): string,
+
   getAgentsContents(): string,
 
   getBuildFileContents(): string,
@@ -52,19 +60,11 @@ const buildToolService = {
 
   getProjectSummary(): string,
 
-  getOperatingSystem(): string,
-
   /** Detects the current build tool */
   detect(): any,
 
   /** Compiles the current project */
   compile(): string,
-
-};
-
-// Service: previewService
-const previewService = {
-  launchAndScreenshot(): string,
 
 };
 
@@ -86,8 +86,20 @@ const grepService = {
 
 };
 
+// Service: tomlService
+const tomlService = {
+  analyzeFile(path: any): any,
+
+  write(path: any, content: any): void,
+
+  read(path: any): any,
+
+};
+
 // Service: javaService
 const javaService = {
+  analyzeFile(path: any): any,
+
   getMethodSource(path: any, className: string, methodName: string): any,
 
   replaceMethod(path: any, className: string, methodName: string, newMethodSource: string): void,
@@ -96,19 +108,7 @@ const javaService = {
 
   replaceField(path: any, className: string, fieldName: string, newFieldSource: string): void,
 
-  analyzeFile(path: any): any,
-
   init(): void,
-
-};
-
-// Service: tomlService
-const tomlService = {
-  analyzeFile(path: any): any,
-
-  write(path: any, content: any): void,
-
-  read(path: any): any,
 
 };
 
@@ -426,62 +426,8 @@ roxycode/
 │   │   ├── sierra.dtd
 │   │   └── sierradsl.toml
 │   └── tools/
-│       ├── build_compile.js
-│       ├── build_compile.toml
-│       ├── build_dependencytree.js
-│       ├── build_dependencytree.toml
-│       ├── build_run_tests.js
-│       ├── build_run_tests.toml
-│       ├── delete_file.js
-│       ├── delete_file.toml
-│       ├── detect_build_tool.js
-│       ├── detect_build_tool.toml
-│       ├── fs_find_files.js
-│       ├── fs_find_files.toml
-│       ├── fs_read_file.js
-│       ├── fs_read_file.toml
-│       ├── fs_read_files.js
-│       ├── fs_read_files.toml
-│       ├── fs_replace_in_file.js
-│       ├── fs_replace_in_file.toml
-│       ├── fs_tree.js
-│       ├── fs_tree.toml
-│       ├── fs_write.js
-│       ├── fs_write.toml
-│       ├── git_diff.js
-│       ├── git_diff.toml
-│       ├── git_log.js
-│       ├── git_log.toml
-│       ├── git_status.js
-│       ├── git_status.toml
-│       ├── grep.js
-│       ├── grep.toml
-│       ├── java_analyze_file.js
-│       ├── java_analyze_file.toml
-│       ├── java_get_field_source.js
-│       ├── java_get_field_source.toml
-│       ├── java_get_method_source.js
-│       ├── java_get_method_source.toml
-│       ├── java_replace_field.js
-│       ├── java_replace_field.toml
-│       ├── java_replace_method.js
-│       ├── java_replace_method.toml
 │       ├── run_js.js
-│       ├── run_js.toml
-│       ├── sierra_preview.js
-│       ├── sierra_preview.toml
-│       ├── tika_read_document.js
-│       ├── tika_read_document.toml
-│       ├── toml_analyze_file.js
-│       ├── toml_analyze_file.toml
-│       ├── xml_analyze_file.js
-│       ├── xml_analyze_file.toml
-│       ├── xml_get_element_source.js
-│       ├── xml_get_element_source.toml
-│       ├── xml_replace_element.js
-│       ├── xml_replace_element.toml
-│       ├── xml_update_attribute.js
-│       └── xml_update_attribute.toml
+│       └── run_js.toml
 ├── roxy_project/
 │   ├── .cache/
 │   ├── plans/

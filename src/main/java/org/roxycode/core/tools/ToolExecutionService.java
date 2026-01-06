@@ -40,7 +40,7 @@ public class ToolExecutionService {
     }
 
     private String executeJavaScript(String script, Map<String, Object> args) {
-        HostAccess secureAccess = HostAccess.newBuilder(HostAccess.NONE)
+        HostAccess secureAccess = HostAccess.newBuilder(HostAccess.ALL)
                 // Explicitly allow nothing. No "System", no "File".
                 .build();
 

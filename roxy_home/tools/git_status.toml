@@ -1,9 +1,0 @@
-description = "Shows the status of the git repository."
-type = "graaljs"
-source = "file:git_status.js"
-
-[[parameters]]
-name = "dummy"
-type = "string"
-description = "Unused"
-required = false

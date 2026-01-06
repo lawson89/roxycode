@@ -1,9 +1,0 @@
-description = "Deletes a file or directory (recursively)."
-type = "graaljs"
-source = "file:delete_file.js"
-
-[[parameters]]
-name = "path"
-type = "string"
-description = "The path to delete."
-required = true

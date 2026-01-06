@@ -1,9 +1,0 @@
-description = "Analyzes a TOML file and returns a summary of its structure (elements and XPaths)."
-type = "graaljs"
-source = "file:toml_analyze_file.js"
-
-[[parameters]]
-name = "path"
-type = "string"
-description = "The path to the TOML file to analyze."
-required = true

@@ -1,9 +1,0 @@
-description = "Extracts text from a document (PDF, DOCX, etc.) using Apache Tika."
-type = "graaljs"
-source = "file:tika_read_document.js"
-
-[[parameters]]
-name = "path"
-type = "string"
-description = "The relative path to the document file."
-required = false
