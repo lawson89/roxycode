@@ -2,19 +2,18 @@ package org.roxycode.cache;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
 import org.roxycode.core.RoxyProjectService;
+import org.roxycode.core.Sandbox;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Collections;
-import java.util.HashMap;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 /**
  * CodebasePackerService is responsible for creating a snapshot of the project code in a format
@@ -23,44 +22,20 @@ import java.util.Map;
 @Singleton
 public class CodebasePackerService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(CodebasePackerService.class);
+
     public static final String CACHE_FILENAME = "codebase_cache.toml";
 
-    // Helper map for fast MIME detection
-    private static final Map<String, String> EXTENSION_MAP = new HashMap<>();
-
-    static {
-        // Java Ecosystem
-        EXTENSION_MAP.put("java", "text/x-java-source");
-        EXTENSION_MAP.put("kt", "text/x-kotlin");
-        EXTENSION_MAP.put("kts", "text/x-kotlin");
-        EXTENSION_MAP.put("groovy", "text/x-groovy");
-        EXTENSION_MAP.put("gradle", "text/x-gradle");
-        EXTENSION_MAP.put("properties", "text/x-java-properties");
-        // Web / Config
-        EXTENSION_MAP.put("xml", "text/xml");
-        EXTENSION_MAP.put("json", "application/json");
-        EXTENSION_MAP.put("yaml", "text/yaml");
-        EXTENSION_MAP.put("yml", "text/yaml");
-        EXTENSION_MAP.put("toml", "text/toml");
-        EXTENSION_MAP.put("sql", "text/x-sql");
-        EXTENSION_MAP.put("html", "text/html");
-        EXTENSION_MAP.put("css", "text/css");
-        EXTENSION_MAP.put("js", "text/javascript");
-        EXTENSION_MAP.put("ts", "text/typescript");
-        EXTENSION_MAP.put("sh", "text/x-shellscript");
-        EXTENSION_MAP.put("md", "text/markdown");
-        EXTENSION_MAP.put("txt", "text/plain");
-        EXTENSION_MAP.put("gitignore", "text/plain");
-        EXTENSION_MAP.put("dockerfile", "text/x-dockerfile");
-    }
 
     private final RoxyProjectService roxyProjectService;
-    private final org.roxycode.core.Sandbox sandbox;
+    private final Sandbox sandbox;
+    private final FileListingService fileListingService;
 
     @Inject
-    public CodebasePackerService(RoxyProjectService roxyProjectService, org.roxycode.core.Sandbox sandbox) {
+    public CodebasePackerService(RoxyProjectService roxyProjectService, Sandbox sandbox, FileListingService fileListingService) {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
+        this.fileListingService = fileListingService;
     }
 
     public Path getCacheFilePath() throws IOException {
@@ -84,7 +59,7 @@ public class CodebasePackerService {
         Path rootPath = sandbox.getRoot();
         Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
         Path outputPath = cacheDir.resolve(CACHE_FILENAME);
-        packCodebaseToFile(rootPath, Collections.emptyList(), outputPath);
+        packCodebaseToFile(rootPath, outputPath);
     }
 
     /**
@@ -102,21 +77,21 @@ public class CodebasePackerService {
     /**
      * Streams the cache directly to a file using "Pretty TOML" format.
      */
-    public void packCodebaseToFile(Path rootPath, List<String> exclusions, Path outputPath) throws IOException {
+    public void packCodebaseToFile(Path rootPath, Path outputPath) throws IOException {
         try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
             // Header writing removed
-            streamFilesToToml(rootPath, exclusions, writer);
+            streamFilesToToml(rootPath, writer);
         }
     }
 
     /**
      * Returns the cache as a String using "Pretty TOML" format.
      */
-    public String packCodebaseToString(Path rootPath, List<String> exclusions) throws IOException {
+    public String packCodebaseToString(Path rootPath) throws IOException {
         StringWriter stringWriter = new StringWriter();
         try (BufferedWriter writer = new BufferedWriter(stringWriter)) {
             // Header writing removed
-            streamFilesToToml(rootPath, exclusions, writer);
+            streamFilesToToml(rootPath, writer);
         }
         return stringWriter.toString();
     }
@@ -124,41 +99,32 @@ public class CodebasePackerService {
     /**
      * Shared logic to walk the file tree and write entries to any BufferedWriter.
      */
-    private void streamFilesToToml(Path rootPath, List<String> exclusions, BufferedWriter writer) throws IOException {
-        PathMatcher[] matchers;
-        if (exclusions == null || exclusions.isEmpty()) {
-            matchers = new PathMatcher[0];
-        } else {
-            matchers = exclusions.stream().map(pattern -> FileSystems.getDefault().getPathMatcher("glob:" + pattern)).toArray(PathMatcher[]::new);
+    protected void streamFilesToToml(Path rootPath, BufferedWriter writer) throws IOException {
+        //@todo externalize this
+        List<String> sourceExtensions = List.of(
+                "java", "kt", "groovy", "xml", "yaml", "yml", "json", "properties",
+                "md", "txt", "html", "css", "js", "ts"
+        );
+        List<Path> sourceFiles = fileListingService.findFiles(rootPath.resolve("src").resolve("main"), sourceExtensions);
+        for (Path sourceFile : sourceFiles) {
+            long size = Files.size(sourceFile);
+            String content;
+            // @todo externalize this - set 50kb limit on source files
+            if (size > 50 * 1024) {
+                content = "IMPORTANT! File exceeds size limit, please use tools to read if needed";
+                LOG.info("skipping file {} due to size {}", sourceFile, size);
+            } else {
+                try {
+                    content = Files.readString(sourceFile, StandardCharsets.UTF_8);
+                }catch (Exception e) {
+                    LOG.warn("unable to read file {}", sourceFile, e);
+                    content = "IMPORTANT! Unable to read file due to: " + e;
+                }
+            }
+            String mimeType = Files.probeContentType(sourceFile);
+            String path = rootPath.relativize(sourceFile).toString();
+            writeTomlEntry(writer, path, size, mimeType, content);
         }
-        Files.walkFileTree(rootPath, new SimpleFileVisitor<>() {
-
-            @Override
-            @NotNull
-            public FileVisitResult preVisitDirectory(@NotNull Path dir, @NotNull BasicFileAttributes attrs) {
-                if (shouldExclude(rootPath, dir, matchers)) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            @NotNull
-            public FileVisitResult visitFile(@NotNull Path file, @NotNull BasicFileAttributes attrs) throws IOException {
-                if (shouldExclude(rootPath, file, matchers)) {
-                    return FileVisitResult.CONTINUE;
-                }
-                String mimeType = detectMimeType(file);
-                if (mimeType == null) {
-                    // Skip binaries
-                    return FileVisitResult.CONTINUE;
-                }
-                String content = Files.readString(file, StandardCharsets.UTF_8);
-                // Reused formatting logic
-                writeTomlEntry(writer, rootPath.relativize(file).toString(), attrs.size(), mimeType, content);
-                return FileVisitResult.CONTINUE;
-            }
-        });
     }
 
     /**
@@ -170,7 +136,7 @@ public class CodebasePackerService {
     }
 
     // --- TOML Formatting Logic ---
-    private void writeTomlEntry(BufferedWriter w, String path, long size, String mime, String content) throws IOException {
+    protected void writeTomlEntry(BufferedWriter w, String path, long size, String mime, String content) throws IOException {
         w.write("[[files]]");
         w.newLine();
         w.write("path = " + quoteString(path));
@@ -181,10 +147,8 @@ public class CodebasePackerService {
         w.newLine();
         w.write("content = '''");
         w.newLine();
-        w.write(escapeMultiLineString(content));
-        if (!content.endsWith("\n")) {
-            w.newLine();
-        }
+        w.write(content);
+        w.newLine();
         w.write("'''");
         w.newLine();
         w.newLine();
@@ -200,64 +164,4 @@ public class CodebasePackerService {
         return content.replace("'''", "''\\'");
     }
 
-    // --- Logic Helpers ---
-    private boolean shouldExclude(Path root, Path file, PathMatcher[] matchers) {
-        Path relative = root.relativize(file);
-        for (Path part : relative) {
-            String partName = part.toString();
-            if (partName.startsWith("."))
-                return true;
-            // Explicitly exclude the 'roxy_project' folder
-            if (partName.equals("roxy_project")) {
-                return true;
-            }
-            if (partName.equals("target")) {
-                return true;
-            }
-            if (StringUtils.containsIgnoreCase(partName, "mvnw")) {
-                return true;
-            }
-            if (StringUtils.containsIgnoreCase(partName, "license")) {
-                return true;
-            }
-        }
-        for (PathMatcher matcher : matchers) {
-            if (matcher.matches(relative))
-                return true;
-        }
-        return false;
-    }
-
-    private String detectMimeType(Path file) {
-        String filename = file.getFileName().toString().toLowerCase();
-        int dotIndex = filename.lastIndexOf('.');
-        if (dotIndex != -1) {
-            String ext = filename.substring(dotIndex + 1);
-            if (EXTENSION_MAP.containsKey(ext)) {
-                return EXTENSION_MAP.get(ext);
-            }
-        }
-        switch(filename) {
-            case "dockerfile" ->
-                {
-                    return "text/x-dockerfile";
-                }
-            case "makefile" ->
-                {
-                    return "text/x-makefile";
-                }
-            case "jenkinsfile" ->
-                {
-                    return "text/x-groovy";
-                }
-        }
-        try {
-            if (BinaryCheck.isBinaryFile(file.toFile())) {
-                return null;
-            }
-        } catch (IOException e) {
-            return null;
-        }
-        return "text/plain";
-    }
 }
