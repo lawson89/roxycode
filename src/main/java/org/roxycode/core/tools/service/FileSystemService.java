@@ -108,6 +108,7 @@ public class FileSystemService {
                 sb.append("\n");
                 if (Files.isDirectory(p)) {
                     String name = p.getFileName().toString();
+                    // @todo externalize this
                     if (!name.startsWith(".") && !name.equals("target") && !name.equals("build")) {
                         traverse(p, prefix + (isLast ? "    " : "│   "), depth + 1, sb);
                     }

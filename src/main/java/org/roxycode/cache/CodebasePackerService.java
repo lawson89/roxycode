@@ -4,6 +4,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,12 +31,15 @@ public class CodebasePackerService {
     private final RoxyProjectService roxyProjectService;
     private final Sandbox sandbox;
     private final FileListingService fileListingService;
+    private final BuildToolService buildToolService;
 
     @Inject
-    public CodebasePackerService(RoxyProjectService roxyProjectService, Sandbox sandbox, FileListingService fileListingService) {
+    public CodebasePackerService(RoxyProjectService roxyProjectService, Sandbox sandbox,
+                                 FileListingService fileListingService, BuildToolService buildToolService) {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.fileListingService = fileListingService;
+        this.buildToolService = buildToolService;
     }
 
     public Path getCacheFilePath() throws IOException {
@@ -100,17 +104,17 @@ public class CodebasePackerService {
      * Shared logic to walk the file tree and write entries to any BufferedWriter.
      */
     protected void streamFilesToToml(Path rootPath, BufferedWriter writer) throws IOException {
+        writeTomlHeader(writer, buildToolService.getProjectSummary());
         //@todo externalize this
         List<String> sourceExtensions = List.of(
-                "java", "kt", "groovy", "xml", "yaml", "yml", "json", "properties",
-                "md", "txt", "html", "css", "js", "ts"
+                "java", "kt", "groovy"
         );
         List<Path> sourceFiles = fileListingService.findFiles(rootPath.resolve("src").resolve("main"), sourceExtensions);
         for (Path sourceFile : sourceFiles) {
             long size = Files.size(sourceFile);
             String content;
-            // @todo externalize this - set 50kb limit on source files
-            if (size > 50 * 1024) {
+            // @todo externalize this
+            if (size > 30 * 1024) {
                 content = "IMPORTANT! File exceeds size limit, please use tools to read if needed";
                 LOG.info("skipping file {} due to size {}", sourceFile, size);
             } else {
@@ -135,6 +139,17 @@ public class CodebasePackerService {
         return "roxycode_cache_" + user + "_" + root.getFileName() + "_" + geminiModel;
     }
 
+    protected void writeTomlHeader(BufferedWriter w, String content) throws IOException {
+        w.write("[header]");
+        w.newLine();
+        w.write("content = '''");
+        w.newLine();
+        w.write(escapeMultiLineString(content));
+        w.newLine();
+        w.write("'''");
+        w.newLine();
+    }
+
     // --- TOML Formatting Logic ---
     protected void writeTomlEntry(BufferedWriter w, String path, long size, String mime, String content) throws IOException {
         w.write("[[files]]");
@@ -147,7 +162,7 @@ public class CodebasePackerService {
         w.newLine();
         w.write("content = '''");
         w.newLine();
-        w.write(content);
+        w.write(escapeMultiLineString(content));
         w.newLine();
         w.write("'''");
         w.newLine();

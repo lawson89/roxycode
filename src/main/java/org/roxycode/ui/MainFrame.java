@@ -148,7 +148,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Override
     public void run() {
-        themeService.applyTheme(settingsService.getTheme(), this, getAllMarkdownPanes());
+        themeService.applyTheme(settingsService.getTheme(), this, getAllPanes());
         // 1. Load the Main Shell (Menu, Header, Nav, Empty Stack)
         setContentPane(UILoader.load(this, "MainFrame.xml"));
         // 2. Load individual Views and add them to the stack
@@ -393,7 +393,7 @@ public class MainFrame extends JFrame implements Runnable {
         initGitInfo();
     }
 
-    public MarkdownPane[] getAllMarkdownPanes() {
-        return new MarkdownPane[] { chatView.getChatArea(), systemPromptView.getSystemPromptArea(), messageHistoryView.getMessageHistoryArea(), codebaseCacheView.getCacheContentArea() };
+    public JTextPane[] getAllPanes() {
+        return new JTextPane[] { chatView.getChatArea(), systemPromptView.getSystemPromptArea(), messageHistoryView.getMessageHistoryArea(), codebaseCacheView.getCacheContentArea() };
     }
 }

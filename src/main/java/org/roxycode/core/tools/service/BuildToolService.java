@@ -194,7 +194,7 @@ public class BuildToolService {
         report += getBuildFileContents();
         report += "\n";
         report += "### Project Files\n";
-        report += "```" + fileSystemService.tree(sandbox.getRoot().toAbsolutePath().toString()) + "```\n";
+        report += fileSystemService.tree(sandbox.getRoot().toAbsolutePath().toString());
         report += "### Project Structure\n";
         report += getProjectStructure();
         report += "\n";

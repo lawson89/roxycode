@@ -10,7 +10,6 @@ import org.httprpc.sierra.UILoader;
 import org.roxycode.cache.CodebasePackerService;
 import org.roxycode.cache.GeminiCacheService;
 import org.roxycode.core.SettingsService;
-import org.roxycode.ui.MarkdownPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +30,7 @@ public class CodebaseCacheView extends JPanel {
     private final SettingsService settingsService;
     private final CodebasePackerService codebasePackerService;
     private final GeminiCacheService geminiCacheService;
-    private final MarkdownPane cacheContentArea = new MarkdownPane();
+    private final JTextPane cacheContentArea = new JTextPane();
     private final org.roxycode.ui.ThemeService themeService;
 
     @Outlet
@@ -105,12 +104,12 @@ public class CodebaseCacheView extends JPanel {
                     content = readFirstBytesSimple(cacheFile.toFile(), 50000);
                 }
                 cacheTokenCountLabel.setText(String.format("%,d tokens (estimated)", size / 4));
-                cacheContentArea.setMarkdown("```\n" + content + "\n```");
+                cacheContentArea.setText(content);
             } else {
                 cachePathLabel.setText("No cache found");
                 cacheLastModifiedLabel.setText("-");
                 cacheTokenCountLabel.setText("0");
-                cacheContentArea.setMarkdown("*No cache file exists for this project.*");
+                cacheContentArea.setText("*No cache file exists for this project.*");
             }
             if (pushCacheButton != null) pushCacheButton.setEnabled(exists);
 
@@ -129,7 +128,7 @@ public class CodebaseCacheView extends JPanel {
 
     private void onRebuildCache() {
         rebuildCacheButton.setEnabled(false);
-        cacheContentArea.setMarkdown("*Rebuilding codebase cache...*");
+        cacheContentArea.setText("*Rebuilding codebase cache...*");
         new Thread(() -> {
             try {
                 codebasePackerService.buildProjectCache();
@@ -170,7 +169,7 @@ public class CodebaseCacheView extends JPanel {
         }).start();
     }
 
-    public MarkdownPane getCacheContentArea() {
+    public JTextPane getCacheContentArea() {
         return cacheContentArea;
     }
 }

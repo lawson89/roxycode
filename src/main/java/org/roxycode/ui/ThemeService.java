@@ -8,7 +8,8 @@ import com.formdev.flatlaf.FlatLightLaf;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import javax.swing.UIManager;
+
+import javax.swing.*;
 import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -19,13 +20,13 @@ public class ThemeService {
     private static final Logger log = LoggerFactory.getLogger(ThemeService.class);
 
     // Use a weak set to avoid memory leaks
-    private final Set<MarkdownPane> registeredPanes = Collections.newSetFromMap(new WeakHashMap<>());
+    private final Set<JTextPane> registeredPanes = Collections.newSetFromMap(new WeakHashMap<>());
 
-    public void registerPane(MarkdownPane pane) {
+    public void registerPane(JTextPane pane) {
         registeredPanes.add(pane);
     }
 
-    public void applyTheme(String themeName, java.awt.Component root, MarkdownPane... panes) {
+    public void applyTheme(String themeName, java.awt.Component root, JTextPane... panes) {
         try {
             switch(themeName) {
                 case "Dark":
@@ -48,9 +49,11 @@ public class ThemeService {
                 FlatLaf.updateUI();
             }
             if (panes != null) {
-                for (MarkdownPane pane : panes) {
+                for (JTextPane pane : panes) {
                     if (pane != null) {
-                        pane.updateStyle();
+                        if(pane instanceof MarkdownPane) {
+                            ((MarkdownPane) pane).updateStyle();
+                        }
                     }
                 }
             }
@@ -59,8 +62,4 @@ public class ThemeService {
         }
     }
 
-    @Deprecated
-    public void applyTheme(String themeName, MarkdownPane... panes) {
-        applyTheme(themeName);
-    }
 }
