@@ -14,7 +14,7 @@
         </menu>
     </menu-bar>
 
-    <row-panel spacing="8" padding="8" opaque="true" alignToBaseline="false">
+    <row-panel spacing="4" padding="4" opaque="true" alignToBaseline="false">
         <label text="" name="icon"/>
         <label text="RoxyCode" styleClass="h3"/>
         <spacer size="16"/>
@@ -34,22 +34,39 @@
         <column-panel padding="12" spacing="8" opaque="true">
             <label text="MENU" font="bold-12"/>
 
-            <toggle-button name="navChatButton" text="Chat" borderPainted="false" horizontalAlignment="left" group="navGroup" selected="true"/>
-            <toggle-button name="navFilesButton" text="Project Files" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
-            <toggle-button name="navUsageButton" text="Usage" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
-            <toggle-button name="navSettingsButton" text="Settings" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
-            <toggle-button name="navSystemPromptButton" text="System Prompt" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
-            <toggle-button name="navMessageHistoryButton" text="Message History" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
-            <toggle-button name="navLogsButton" text="System Logs" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
-            <toggle-button name="navCodebaseCacheButton" text="Codebase Cache" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
-            <toggle-button name="navGeminiCachesButton" text="Gemini Caches" borderPainted="false" horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navChatButton" text="Chat" borderPainted="false" horizontalAlignment="left"
+                           group="navGroup" selected="true"/>
+            <toggle-button name="navFilesButton" text="Project Files" borderPainted="false" horizontalAlignment="left"
+                           group="navGroup"/>
+            <toggle-button name="navUsageButton" text="Usage" borderPainted="false" horizontalAlignment="left"
+                           group="navGroup"/>
+            <toggle-button name="navSettingsButton" text="Settings" borderPainted="false" horizontalAlignment="left"
+                           group="navGroup"/>
+            <toggle-button name="navSystemPromptButton" text="System Prompt" borderPainted="false"
+                           horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navMessageHistoryButton" text="Message History" borderPainted="false"
+                           horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navLogsButton" text="System Logs" borderPainted="false" horizontalAlignment="left"
+                           group="navGroup"/>
+            <toggle-button name="navCodebaseCacheButton" text="Codebase Cache" borderPainted="false"
+                           horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navGeminiCachesButton" text="Gemini Caches" borderPainted="false"
+                           horizontalAlignment="left" group="navGroup"/>
 
             <spacer weight="1"/>
         </column-panel>
 
-        <stack-panel weight="1" name="mainContentStack">
+        <column-panel weight="1">
+            <row-panel name="notificationBar" spacing="10" padding="10" opaque="true">
+                <label name="notificationIcon"/>
+                <label name="notificationLabel" weight="1"/>
+                <button name="closeNotificationButton" borderPainted="false"/>
+            </row-panel>
 
-        </stack-panel>
+            <stack-panel weight="1" name="mainContentStack">
+
+            </stack-panel>
+        </column-panel>
 
     </row-panel>
 </column-panel>

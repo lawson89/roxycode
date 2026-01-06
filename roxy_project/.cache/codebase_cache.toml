@@ -366,6 +366,7 @@ roxycode/
 │   │   │   ├── expose_dependency_tree_tool.md
 │   │   │   ├── expose_memory_compaction_settings.md
 │   │   │   ├── fix_compaction_stuck.md
+│   │   │   ├── fix_dialog_centering.md
 │   │   │   ├── fix_dialog_position.md
 │   │   │   ├── fix_empty_message.md
 │   │   │   ├── fix_exit_dialog_centering.md
@@ -384,9 +385,11 @@ roxycode/
 │   │   │   ├── java_analysis_service_v1.md
 │   │   │   ├── llm_js_execution_tool.md
 │   │   │   ├── message_history.md
+│   │   │   ├── modularize_mainframe_ui.md
 │   │   │   ├── move_build_logic_to_service.md
 │   │   │   ├── push_codebase_cache_to_gemini.md
 │   │   │   ├── read_gemini_cache_metadata.md
+│   │   │   ├── refactor_mainframe_views.md
 │   │   │   ├── refactor_markdown_pane.md
 │   │   │   ├── refactor_message_history_to_html.md
 │   │   │   ├── refactor_settings_and_chat_view.md
@@ -406,9 +409,7 @@ roxycode/
 │   │   │   ├── transition_to_flyingsaucer_xhtml_panel.md
 │   │   │   ├── view_system_prompt_screen.md
 │   │   │   └── xml_service_v1.md
-│   │   ├── fix_dialog_centering.md
-│   │   ├── modularize_mainframe_ui.md
-│   │   └── refactor_mainframe_views.md
+│   │   └── notifications.md
 │   └── README.md
 ├── src/
 │   ├── main/
@@ -626,35 +627,48 @@ public class ComponentScreenshot {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/utils/UIUtils.java"
-size = 877
+size = 1383
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.utils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
 
 public class UIUtils {
 
+    private static final Logger LOG = LoggerFactory.getLogger(UIUtils.class);
+
+
     private static Point initialScreenCenter;
 
     public static void setInitialScreenCenter(Point center) {
+        LOG.info("Saving initial screen center to: {}", center);
         initialScreenCenter = center;
     }
 
     public static void centerDialog(JDialog dialog, Component parent) {
+        dialog.setModal(true);
         dialog.pack();
         if (parent != null && parent.isShowing()) {
+            LOG.info("Centering dialog relative to parent: {}", parent);
             dialog.setLocationRelativeTo(parent);
         } else {
+            LOG.info("Centering dialog relative to screen");
             dialog.setLocationRelativeTo(null);
         }
 
         // Fallback if it ends up at (0,0) or off-screen, and we have a cached center
         if (dialog.getX() == 0 && dialog.getY() == 0 && initialScreenCenter != null) {
-            dialog.setLocation(initialScreenCenter.x - dialog.getWidth() / 2, 
-                               initialScreenCenter.y - dialog.getHeight() / 2);
+            LOG.info("Setting initial screen center to: {}", initialScreenCenter);
+            dialog.setLocation(initialScreenCenter.x - dialog.getWidth() / 2,
+                    initialScreenCenter.y - dialog.getHeight() / 2);
         }
+
+        LOG.info("Dialog location to: {}", dialog.getLocation());
     }
 }
 
@@ -726,6 +740,40 @@ public class RoxyProjectService {
             Files.createDirectories(cacheDir);
         }
         return cacheDir;
+    }
+}
+
+'''
+
+[[files]]
+path = "src/main/java/org/roxycode/core/NotificationService.java"
+size = 699
+mimeType = "text/x-java"
+content = '''
+package org.roxycode.core;
+
+import jakarta.inject.Singleton;
+import java.util.function.Consumer;
+
+@Singleton
+public class NotificationService {
+
+    public record NotificationRequest(String message, NotificationType type) {}
+
+    private Consumer<NotificationRequest> listener;
+
+    public void setListener(Consumer<NotificationRequest> listener) {
+        this.listener = listener;
+    }
+
+    public void showNotification(String message) {
+        showNotification(message, NotificationType.INFO);
+    }
+
+    public void showNotification(String message, NotificationType type) {
+        if (listener != null) {
+            listener.accept(new NotificationRequest(message, type));
+        }
     }
 }
 
@@ -3344,6 +3392,22 @@ public class Sandbox {
 '''
 
 [[files]]
+path = "src/main/java/org/roxycode/core/NotificationType.java"
+size = 107
+mimeType = "text/x-java"
+content = '''
+package org.roxycode.core;
+
+public enum NotificationType {
+    INFO,
+    SUCCESS,
+    ERROR,
+    WARNING
+}
+
+'''
+
+[[files]]
 path = "src/main/java/org/roxycode/core/SettingsService.java"
 size = 6017
 mimeType = "text/x-java"
@@ -3643,7 +3707,7 @@ public class ContextRegistry {
 
 [[files]]
 path = "src/main/java/org/roxycode/cache/GeminiCacheService.java"
-size = 8105
+size = 8127
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.cache;
@@ -3742,7 +3806,7 @@ public class GeminiCacheService {
 
             Content systemInstruction = Content.builder()
                     .parts(List.of(Part.builder()
-                            .text("You are RoxyCode. You answer in TOML. You have access to the full codebase context provided.")
+                            .text("You are RoxyCode. You have tools to assist in local coding. You have access to the full codebase context provided.")
                             .build()))
                     .build();
 
@@ -4274,7 +4338,7 @@ public class Application {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/views/SettingsView.java"
-size = 5426
+size = 5489
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui.views;
@@ -4284,8 +4348,9 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
+import org.roxycode.core.NotificationService;
+import org.roxycode.core.NotificationType;
 import org.roxycode.core.SettingsService;
-import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.ui.ThemeService;
 import javax.swing.*;
@@ -4300,6 +4365,8 @@ public class SettingsView extends JPanel {
     private final GeminiModelRegistry geminiModelRegistry;
 
     private final ThemeService themeService;
+
+    private final NotificationService notificationService;
 
     @Outlet
     private JComponent viewSettings;
@@ -4344,10 +4411,11 @@ public class SettingsView extends JPanel {
     private JTextField cacheMinSizeField;
 
     @Inject
-    public SettingsView(SettingsService settingsService, GeminiModelRegistry geminiModelRegistry, ThemeService themeService) {
+    public SettingsView(SettingsService settingsService, GeminiModelRegistry geminiModelRegistry, ThemeService themeService, NotificationService notificationService) {
         this.settingsService = settingsService;
         this.geminiModelRegistry = geminiModelRegistry;
         this.themeService = themeService;
+        this.notificationService = notificationService;
         setLayout(new BorderLayout());
     }
 
@@ -4417,10 +4485,7 @@ public class SettingsView extends JPanel {
         // Find top-level window to update the UI tree
         Window window = SwingUtilities.getWindowAncestor(this);
         themeService.applyTheme(settingsService.getTheme(), window);
-        JOptionPane pane = new JOptionPane("Settings saved successfully.", JOptionPane.INFORMATION_MESSAGE);
-        JDialog dialog = pane.createDialog(this, "Success");
-        UIUtils.centerDialog(dialog, this);
-        dialog.setVisible(true);
+        notificationService.showNotification("Settings saved successfully.", NotificationType.SUCCESS);
     }
 }
 
@@ -5018,7 +5083,7 @@ public class UsageView extends JPanel {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/views/CodebaseCacheView.java"
-size = 7037
+size = 6770
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui.views;
@@ -5032,10 +5097,12 @@ import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.cache.CodebasePackerService;
 import org.roxycode.cache.GeminiCacheService;
-import org.roxycode.core.utils.UIUtils;
+import org.roxycode.core.NotificationService;
+import org.roxycode.core.NotificationType;
 import org.roxycode.core.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
@@ -5051,14 +5118,11 @@ public class CodebaseCacheView extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(CodebaseCacheView.class);
 
     private final SettingsService settingsService;
-
     private final CodebasePackerService codebasePackerService;
-
     private final GeminiCacheService geminiCacheService;
-
     private final JTextPane cacheContentArea = new JTextPane();
-
     private final org.roxycode.ui.ThemeService themeService;
+    private final NotificationService notificationService;
 
     @Outlet
     private JLabel cachePathLabel;
@@ -5085,17 +5149,19 @@ public class CodebaseCacheView extends JPanel {
     private JScrollPane cacheContentScrollPane;
 
     @Inject
-    public CodebaseCacheView(SettingsService settingsService, CodebasePackerService codebasePackerService, GeminiCacheService geminiCacheService, org.roxycode.ui.ThemeService themeService) {
+    public CodebaseCacheView(SettingsService settingsService, CodebasePackerService codebasePackerService, GeminiCacheService geminiCacheService, org.roxycode.ui.ThemeService themeService, NotificationService notificationService) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
         this.geminiCacheService = geminiCacheService;
         this.themeService = themeService;
+        this.notificationService = notificationService;
         setLayout(new BorderLayout());
     }
 
     @PostConstruct
     public void init() {
-        add(UILoader.load(this, "CodebaseCacheView.xml"));
+        add(UILoader.load(this, "CodebaseCacheView.xml"), BorderLayout.CENTER);
+
         if (cacheContentScrollPane != null) {
             cacheContentScrollPane.setViewportView(cacheContentArea);
         }
@@ -5112,9 +5178,7 @@ public class CodebaseCacheView extends JPanel {
 
     public String readFirstBytesSimple(File file, int size) throws IOException {
         try (InputStream is = FileUtils.openInputStream(file)) {
-            // 1. Read the bytes
             byte[] bytes = IOUtils.toByteArray(is, size);
-            // 2. Convert to String using UTF-8
             return new String(bytes, StandardCharsets.UTF_8);
         }
     }
@@ -5163,16 +5227,14 @@ public class CodebaseCacheView extends JPanel {
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     rebuildCacheButton.setEnabled(true);
+                    notificationService.showNotification("Cache rebuilt successfully.", NotificationType.SUCCESS);
                 });
             } catch (Exception e) {
                 log.error("Error rebuilding cache", e);
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     rebuildCacheButton.setEnabled(true);
-                    JOptionPane pane = new JOptionPane("Error rebuilding cache: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
-                    JDialog dialog = pane.createDialog(this, "Error");
-                    UIUtils.centerDialog(dialog, this);
-                    dialog.setVisible(true);
+                    notificationService.showNotification("Error rebuilding cache: " + e.getMessage(), NotificationType.ERROR);
                 });
             }
         }).start();
@@ -5187,20 +5249,14 @@ public class CodebaseCacheView extends JPanel {
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     pushCacheButton.setEnabled(true);
-                    JOptionPane pane = new JOptionPane("Cache pushed successfully.", JOptionPane.INFORMATION_MESSAGE);
-                    JDialog dialog = pane.createDialog(this, "Success");
-                    UIUtils.centerDialog(dialog, this);
-                    dialog.setVisible(true);
+                    notificationService.showNotification("Cache pushed successfully.", NotificationType.SUCCESS);
                 });
             } catch (Exception e) {
                 log.error("Error pushing cache", e);
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     pushCacheButton.setEnabled(true);
-                    JOptionPane pane = new JOptionPane("Error pushing cache: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
-                    JDialog dialog = pane.createDialog(this, "Error");
-                    UIUtils.centerDialog(dialog, this);
-                    dialog.setVisible(true);
+                    notificationService.showNotification("Error pushing cache: " + e.getMessage(), NotificationType.ERROR);
                 });
             }
         }).start();
@@ -5652,21 +5708,20 @@ public class MarkdownPane extends JTextPane {
 
 [[files]]
 path = "src/main/java/org/roxycode/ui/MainFrame.java"
-size = 14872
+size = 17843
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.ui;
 
+import com.formdev.flatlaf.FlatLaf;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
+import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.core.GenAIService;
-import org.roxycode.core.RoxyProjectService;
-import org.roxycode.core.Sandbox;
-import org.roxycode.core.SettingsService;
+import org.roxycode.core.*;
 import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.tools.service.GitService;
 import org.roxycode.ui.views.*;
@@ -5695,6 +5750,8 @@ public class MainFrame extends JFrame implements Runnable {
     private final Sandbox sandbox;
 
     private final ThemeService themeService;
+
+    private final NotificationService notificationService;
 
     // -- VIEWS --
     @Inject
@@ -5726,7 +5783,8 @@ public class MainFrame extends JFrame implements Runnable {
 
     private Path currentProjectRoot;
 
-    // Moved to UIUtils
+    private Timer notificationTimer;
+
     // --- OUTLETS ---
     @Outlet
     private JComponent mainContentStack;
@@ -5748,6 +5806,16 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Outlet
     private JLabel icon;
+
+    // Notification Bar Outlets
+    @Outlet
+    private JPanel notificationBar;
+    @Outlet
+    private JLabel notificationIcon;
+    @Outlet
+    private JLabel notificationLabel;
+    @Outlet
+    private JButton closeNotificationButton;
 
     // Navigation Outlets
     @Outlet
@@ -5794,13 +5862,14 @@ public class MainFrame extends JFrame implements Runnable {
     private JMenuItem openFolderMenuItem;
 
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService) {
+    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, NotificationService notificationService) {
         this.gitService = gitService;
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.themeService = themeService;
+        this.notificationService = notificationService;
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     }
@@ -5824,6 +5893,17 @@ public class MainFrame extends JFrame implements Runnable {
         }
         // 3. Initialize UI Components
         initIcons();
+
+        // Initialize Notification Bar
+        if (notificationBar != null) {
+            notificationBar.setVisible(false);
+            if (closeNotificationButton != null) {
+                closeNotificationButton.setIcon(FontIcon.of(MaterialDesignC.CLOSE, 16));
+                closeNotificationButton.addActionListener(e -> notificationBar.setVisible(false));
+            }
+            notificationService.setListener(this::showNotification);
+        }
+
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
         if (settingsService.getCurrentProject() == null) {
@@ -5835,6 +5915,7 @@ public class MainFrame extends JFrame implements Runnable {
         initListeners();
         updateProjectLabel();
         updateRoxyMode();
+        performRescan();
         // Set initial view
         showView("CHAT");
         setSize(1200, 800);
@@ -5846,6 +5927,58 @@ public class MainFrame extends JFrame implements Runnable {
             Rectangle bounds = gc.getBounds();
             UIUtils.setInitialScreenCenter(new Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
         }
+
+    }
+
+    private void showNotification(NotificationService.NotificationRequest request) {
+        SwingUtilities.invokeLater(() -> {
+            if (notificationBar == null || notificationLabel == null || notificationIcon == null) return;
+
+            notificationLabel.setText(request.message());
+
+            Color bgColor;
+            Color fgColor;
+            Ikon iconCode;
+
+            boolean isDark = FlatLaf.isLafDark();
+
+            switch (request.type()) {
+                case SUCCESS:
+                    bgColor = isDark ? new Color(0, 100, 0, 100) : new Color(200, 255, 200);
+                    fgColor = isDark ? Color.GREEN : new Color(0, 100, 0);
+                    iconCode = MaterialDesignI.INFORMATION_OUTLINE;
+                    break;
+                case ERROR:
+                    bgColor = isDark ? new Color(100, 0, 0, 100) : new Color(255, 200, 200);
+                    fgColor = isDark ? Color.RED : new Color(100, 0, 0);
+                    iconCode = MaterialDesignA.ALERT_CIRCLE_OUTLINE;
+                    break;
+                case WARNING:
+                    bgColor = isDark ? new Color(100, 100, 0, 100) : new Color(255, 255, 200);
+                    fgColor = isDark ? Color.YELLOW : new Color(100, 100, 0);
+                    iconCode = MaterialDesignA.ALERT_OUTLINE;
+                    break;
+                case INFO:
+                default:
+                    bgColor = isDark ? new Color(0, 102, 204, 100) : new Color(225, 240, 255);
+                    fgColor = isDark ? Color.CYAN : Color.BLUE;
+                    iconCode = MaterialDesignI.INFORMATION_OUTLINE;
+                    break;
+            }
+
+            notificationBar.setBackground(bgColor);
+            notificationLabel.setForeground(fgColor);
+            notificationIcon.setIcon(FontIcon.of(iconCode, 18, fgColor));
+            notificationBar.setVisible(true);
+
+            if (notificationTimer != null && notificationTimer.isRunning()) {
+                notificationTimer.stop();
+            }
+
+            notificationTimer = new Timer(5000, e -> notificationBar.setVisible(false));
+            notificationTimer.setRepeats(false);
+            notificationTimer.start();
+        });
     }
 
     private void initIcons() {
@@ -5979,8 +6112,6 @@ public class MainFrame extends JFrame implements Runnable {
                 break;
             case "USAGE":
                 usageView.refresh();
-                usageView.revalidate();
-                usageView.repaint();
                 usageView.setVisible(true);
                 break;
             case "SETTINGS":

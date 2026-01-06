@@ -5,8 +5,9 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
+import org.roxycode.core.NotificationService;
+import org.roxycode.core.NotificationType;
 import org.roxycode.core.SettingsService;
-import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.config.GeminiModelRegistry;
 import org.roxycode.ui.ThemeService;
 import javax.swing.*;
@@ -21,6 +22,8 @@ public class SettingsView extends JPanel {
     private final GeminiModelRegistry geminiModelRegistry;
 
     private final ThemeService themeService;
+
+    private final NotificationService notificationService;
 
     @Outlet
     private JComponent viewSettings;
@@ -65,10 +68,11 @@ public class SettingsView extends JPanel {
     private JTextField cacheMinSizeField;
 
     @Inject
-    public SettingsView(SettingsService settingsService, GeminiModelRegistry geminiModelRegistry, ThemeService themeService) {
+    public SettingsView(SettingsService settingsService, GeminiModelRegistry geminiModelRegistry, ThemeService themeService, NotificationService notificationService) {
         this.settingsService = settingsService;
         this.geminiModelRegistry = geminiModelRegistry;
         this.themeService = themeService;
+        this.notificationService = notificationService;
         setLayout(new BorderLayout());
     }
 
@@ -138,9 +142,6 @@ public class SettingsView extends JPanel {
         // Find top-level window to update the UI tree
         Window window = SwingUtilities.getWindowAncestor(this);
         themeService.applyTheme(settingsService.getTheme(), window);
-        JOptionPane pane = new JOptionPane("Settings saved successfully.", JOptionPane.INFORMATION_MESSAGE);
-        JDialog dialog = pane.createDialog(this, "Success");
-        UIUtils.centerDialog(dialog, this);
-        dialog.setVisible(true);
+        notificationService.showNotification("Settings saved successfully.", NotificationType.SUCCESS);
     }
 }

@@ -94,7 +94,7 @@ public class GeminiCacheService {
 
             Content systemInstruction = Content.builder()
                     .parts(List.of(Part.builder()
-                            .text("You are RoxyCode. You answer in TOML. You have access to the full codebase context provided.")
+                            .text("You are RoxyCode. You have tools to assist in local coding. You have access to the full codebase context provided.")
                             .build()))
                     .build();
 

@@ -1,15 +1,14 @@
 package org.roxycode.ui;
 
+import com.formdev.flatlaf.FlatLaf;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
+import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.core.GenAIService;
-import org.roxycode.core.RoxyProjectService;
-import org.roxycode.core.Sandbox;
-import org.roxycode.core.SettingsService;
+import org.roxycode.core.*;
 import org.roxycode.core.utils.UIUtils;
 import org.roxycode.core.tools.service.GitService;
 import org.roxycode.ui.views.*;
@@ -38,6 +37,8 @@ public class MainFrame extends JFrame implements Runnable {
     private final Sandbox sandbox;
 
     private final ThemeService themeService;
+
+    private final NotificationService notificationService;
 
     // -- VIEWS --
     @Inject
@@ -69,7 +70,8 @@ public class MainFrame extends JFrame implements Runnable {
 
     private Path currentProjectRoot;
 
-    // Moved to UIUtils
+    private Timer notificationTimer;
+
     // --- OUTLETS ---
     @Outlet
     private JComponent mainContentStack;
@@ -91,6 +93,19 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Outlet
     private JLabel icon;
+
+    // Notification Bar Outlets
+    @Outlet
+    private JPanel notificationBar;
+
+    @Outlet
+    private JLabel notificationIcon;
+
+    @Outlet
+    private JLabel notificationLabel;
+
+    @Outlet
+    private JButton closeNotificationButton;
 
     // Navigation Outlets
     @Outlet
@@ -137,15 +152,16 @@ public class MainFrame extends JFrame implements Runnable {
     private JMenuItem openFolderMenuItem;
 
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService) {
+    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, NotificationService notificationService) {
         this.gitService = gitService;
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.themeService = themeService;
+        this.notificationService = notificationService;
         setTitle("RoxyCode");
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }
 
     @Override
@@ -167,6 +183,15 @@ public class MainFrame extends JFrame implements Runnable {
         }
         // 3. Initialize UI Components
         initIcons();
+        // Initialize Notification Bar
+        if (notificationBar != null) {
+            notificationBar.setVisible(false);
+            if (closeNotificationButton != null) {
+                closeNotificationButton.setIcon(FontIcon.of(MaterialDesignC.CLOSE, 16));
+                closeNotificationButton.addActionListener(e -> notificationBar.setVisible(false));
+            }
+            notificationService.setListener(this::showNotification);
+        }
         // Initialize logic
         currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
         if (settingsService.getCurrentProject() == null) {
@@ -178,6 +203,7 @@ public class MainFrame extends JFrame implements Runnable {
         initListeners();
         updateProjectLabel();
         updateRoxyMode();
+        performRescan();
         // Set initial view
         showView("CHAT");
         setSize(1200, 800);
@@ -189,6 +215,51 @@ public class MainFrame extends JFrame implements Runnable {
             Rectangle bounds = gc.getBounds();
             UIUtils.setInitialScreenCenter(new Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
         }
+    }
+
+    private void showNotification(NotificationService.NotificationRequest request) {
+        SwingUtilities.invokeLater(() -> {
+            if (notificationBar == null || notificationLabel == null || notificationIcon == null)
+                return;
+            notificationLabel.setText(request.message());
+            Color bgColor;
+            Color fgColor;
+            Ikon iconCode;
+            boolean isDark = FlatLaf.isLafDark();
+            switch(request.type()) {
+                case SUCCESS:
+                    bgColor = isDark ? new Color(30, 50, 30) : new Color(230, 250, 230);
+                    fgColor = isDark ? new Color(100, 255, 100) : new Color(0, 120, 0);
+                    iconCode = MaterialDesignI.INFORMATION_OUTLINE;
+                    break;
+                case ERROR:
+                    bgColor = isDark ? new Color(60, 30, 30) : new Color(255, 230, 230);
+                    fgColor = isDark ? new Color(255, 100, 100) : new Color(150, 0, 0);
+                    iconCode = MaterialDesignA.ALERT_CIRCLE_OUTLINE;
+                    break;
+                case WARNING:
+                    bgColor = isDark ? new Color(50, 50, 30) : new Color(255, 250, 230);
+                    fgColor = isDark ? new Color(255, 200, 0) : new Color(150, 100, 0);
+                    iconCode = MaterialDesignA.ALERT_OUTLINE;
+                    break;
+                case INFO:
+                default:
+                    bgColor = isDark ? new Color(30, 40, 60) : new Color(235, 245, 255);
+                    fgColor = isDark ? new Color(100, 200, 255) : new Color(0, 80, 200);
+                    iconCode = MaterialDesignI.INFORMATION_OUTLINE;
+                    break;
+            }
+            notificationBar.setBackground(bgColor);
+            notificationLabel.setForeground(fgColor);
+            notificationIcon.setIcon(FontIcon.of(iconCode, 18, fgColor));
+            notificationBar.setVisible(true);
+            if (notificationTimer != null && notificationTimer.isRunning()) {
+                notificationTimer.stop();
+            }
+            notificationTimer = new Timer(5000, e -> notificationBar.setVisible(false));
+            notificationTimer.setRepeats(false);
+            notificationTimer.start();
+        });
     }
 
     private void initIcons() {
@@ -265,13 +336,6 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     private void initListeners() {
-        addWindowListener(new java.awt.event.WindowAdapter() {
-
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent e) {
-                confirmExit();
-            }
-        });
         if (navChatButton != null)
             navChatButton.addActionListener(e -> showView("CHAT"));
         if (navFilesButton != null)
@@ -295,7 +359,7 @@ public class MainFrame extends JFrame implements Runnable {
         if (settingsMenuItem != null)
             settingsMenuItem.addActionListener(e -> showView("SETTINGS"));
         if (exitMenuItem != null)
-            exitMenuItem.addActionListener(e -> confirmExit());
+            exitMenuItem.addActionListener(e -> System.exit(0));
         if (aboutMenuItem != null)
             aboutMenuItem.addActionListener(this::onAbout);
         if (openFolderMenuItem != null)
@@ -322,8 +386,6 @@ public class MainFrame extends JFrame implements Runnable {
                 break;
             case "USAGE":
                 usageView.refresh();
-                usageView.revalidate();
-                usageView.repaint();
                 usageView.setVisible(true);
                 break;
             case "SETTINGS":
@@ -375,20 +437,6 @@ public class MainFrame extends JFrame implements Runnable {
             genAIService.refreshKnowledge(currentProjectRoot.toString());
             SwingUtilities.invokeLater(() -> chatView.appendSystemMessage("Knowledge base reloaded."));
         }).start();
-    }
-
-
-
-    private void confirmExit() {
-        log.info("Prompting for exit confirmation");
-        JOptionPane optionPane = new JOptionPane("Are you sure you want to exit RoxyCode?", JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION);
-        JDialog dialog = optionPane.createDialog(this, "Confirm Exit");
-        UIUtils.centerDialog(dialog, this);
-        dialog.setVisible(true);
-        Object selectedValue = optionPane.getValue();
-        if (selectedValue instanceof Integer && (Integer) selectedValue == JOptionPane.YES_OPTION) {
-            System.exit(0);
-        }
     }
 
     private void onAbout(ActionEvent e) {

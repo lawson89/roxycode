@@ -19,6 +19,7 @@ public class UIUtils {
     }
 
     public static void centerDialog(JDialog dialog, Component parent) {
+        dialog.setModal(true);
         dialog.pack();
         if (parent != null && parent.isShowing()) {
             LOG.info("Centering dialog relative to parent: {}", parent);

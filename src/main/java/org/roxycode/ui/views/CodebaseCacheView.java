@@ -9,10 +9,12 @@ import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.cache.CodebasePackerService;
 import org.roxycode.cache.GeminiCacheService;
-import org.roxycode.core.utils.UIUtils;
+import org.roxycode.core.NotificationService;
+import org.roxycode.core.NotificationType;
 import org.roxycode.core.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
@@ -28,14 +30,11 @@ public class CodebaseCacheView extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(CodebaseCacheView.class);
 
     private final SettingsService settingsService;
-
     private final CodebasePackerService codebasePackerService;
-
     private final GeminiCacheService geminiCacheService;
-
     private final JTextPane cacheContentArea = new JTextPane();
-
     private final org.roxycode.ui.ThemeService themeService;
+    private final NotificationService notificationService;
 
     @Outlet
     private JLabel cachePathLabel;
@@ -62,17 +61,19 @@ public class CodebaseCacheView extends JPanel {
     private JScrollPane cacheContentScrollPane;
 
     @Inject
-    public CodebaseCacheView(SettingsService settingsService, CodebasePackerService codebasePackerService, GeminiCacheService geminiCacheService, org.roxycode.ui.ThemeService themeService) {
+    public CodebaseCacheView(SettingsService settingsService, CodebasePackerService codebasePackerService, GeminiCacheService geminiCacheService, org.roxycode.ui.ThemeService themeService, NotificationService notificationService) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
         this.geminiCacheService = geminiCacheService;
         this.themeService = themeService;
+        this.notificationService = notificationService;
         setLayout(new BorderLayout());
     }
 
     @PostConstruct
     public void init() {
-        add(UILoader.load(this, "CodebaseCacheView.xml"));
+        add(UILoader.load(this, "CodebaseCacheView.xml"), BorderLayout.CENTER);
+
         if (cacheContentScrollPane != null) {
             cacheContentScrollPane.setViewportView(cacheContentArea);
         }
@@ -89,9 +90,7 @@ public class CodebaseCacheView extends JPanel {
 
     public String readFirstBytesSimple(File file, int size) throws IOException {
         try (InputStream is = FileUtils.openInputStream(file)) {
-            // 1. Read the bytes
             byte[] bytes = IOUtils.toByteArray(is, size);
-            // 2. Convert to String using UTF-8
             return new String(bytes, StandardCharsets.UTF_8);
         }
     }
@@ -140,16 +139,14 @@ public class CodebaseCacheView extends JPanel {
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     rebuildCacheButton.setEnabled(true);
+                    notificationService.showNotification("Cache rebuilt successfully.", NotificationType.SUCCESS);
                 });
             } catch (Exception e) {
                 log.error("Error rebuilding cache", e);
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     rebuildCacheButton.setEnabled(true);
-                    JOptionPane pane = new JOptionPane("Error rebuilding cache: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
-                    JDialog dialog = pane.createDialog(this, "Error");
-                    UIUtils.centerDialog(dialog, this);
-                    dialog.setVisible(true);
+                    notificationService.showNotification("Error rebuilding cache: " + e.getMessage(), NotificationType.ERROR);
                 });
             }
         }).start();
@@ -164,20 +161,14 @@ public class CodebaseCacheView extends JPanel {
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     pushCacheButton.setEnabled(true);
-                    JOptionPane pane = new JOptionPane("Cache pushed successfully.", JOptionPane.INFORMATION_MESSAGE);
-                    JDialog dialog = pane.createDialog(this, "Success");
-                    UIUtils.centerDialog(dialog, this);
-                    dialog.setVisible(true);
+                    notificationService.showNotification("Cache pushed successfully.", NotificationType.SUCCESS);
                 });
             } catch (Exception e) {
                 log.error("Error pushing cache", e);
                 SwingUtilities.invokeLater(() -> {
                     refresh();
                     pushCacheButton.setEnabled(true);
-                    JOptionPane pane = new JOptionPane("Error pushing cache: " + e.getMessage(), JOptionPane.ERROR_MESSAGE);
-                    JDialog dialog = pane.createDialog(this, "Error");
-                    UIUtils.centerDialog(dialog, this);
-                    dialog.setVisible(true);
+                    notificationService.showNotification("Error pushing cache: " + e.getMessage(), NotificationType.ERROR);
                 });
             }
         }).start();

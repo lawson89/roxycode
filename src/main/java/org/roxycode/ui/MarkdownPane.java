@@ -14,7 +14,6 @@ import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.html.HTMLDocument;
@@ -39,8 +38,8 @@ public class MarkdownPane extends JTextPane {
 
     public MarkdownPane() {
         final DataHolder // for full GFM table compatibility add the following table extension options:
-                // for full GFM table compatibility add the following table extension options:
-                OPTIONS = new MutableDataSet().set(Parser.REFERENCES_KEEP, KeepType.LAST).set(HtmlRenderer.INDENT_SIZE, 2).set(HtmlRenderer.PERCENT_ENCODE_URLS, true).set(TablesExtension.COLUMN_SPANS, false).set(TablesExtension.APPEND_MISSING_COLUMNS, true).set(TablesExtension.DISCARD_EXTRA_COLUMNS, true).set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true).set(Parser.EXTENSIONS, List.of(TablesExtension.create())).toImmutable();
+        // for full GFM table compatibility add the following table extension options:
+        OPTIONS = new MutableDataSet().set(Parser.REFERENCES_KEEP, KeepType.LAST).set(HtmlRenderer.INDENT_SIZE, 2).set(HtmlRenderer.PERCENT_ENCODE_URLS, true).set(TablesExtension.COLUMN_SPANS, false).set(TablesExtension.APPEND_MISSING_COLUMNS, true).set(TablesExtension.DISCARD_EXTRA_COLUMNS, true).set(TablesExtension.HEADER_SEPARATOR_COLUMN_MATCH, true).set(Parser.EXTENSIONS, List.of(TablesExtension.create())).toImmutable();
         this.parser = Parser.builder(OPTIONS).build();
         this.renderer = HtmlRenderer.builder(OPTIONS).build();
         this.setEditable(false);
@@ -134,7 +133,8 @@ public class MarkdownPane extends JTextPane {
         if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
             html = html.substring(3, html.length() - 5);
         }
-        String combinedHtml = "<div style='color: gray; font-style: italic; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
+        String bgColor = FlatLaf.isLafDark() ? "#2b2d30" : "#f8f9fa";
+        String combinedHtml = "<div style='background-color: " + bgColor + "; padding: 4px 8px; border-radius: 4px; color: gray; font-style: italic; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
@@ -160,7 +160,7 @@ public class MarkdownPane extends JTextPane {
         }
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     private String generateIconTag(Ikon iconCode, int size, Color color, String namePrefix) {
         try {
             FontIcon icon = FontIcon.of(iconCode, size, color);
