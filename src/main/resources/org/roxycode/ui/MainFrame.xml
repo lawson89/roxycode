@@ -3,36 +3,34 @@
 
 <column-panel opaque="true">
 
-    <menu-bar>
-        <menu text="File">
-            <menu-item name="openFolderMenuItem" text="Open Folder..."/>
-            <menu-item name="settingsMenuItem" text="Settings"/>
-            <menu-item name="exitMenuItem" text="Exit"/>
-        </menu>
-        <menu text="About">
-            <menu-item name="aboutMenuItem" text="About RoxyCode"/>
-        </menu>
-    </menu-bar>
-
-    <row-panel spacing="4" padding="4" opaque="true" alignToBaseline="false">
+    <row-panel spacing="4" padding="4" opaque="true" alignToBaseline="false" border="silver">
         <label text="" name="icon"/>
         <label text="RoxyCode" styleClass="h3"/>
         <spacer size="16"/>
-        <label text="Project: "/>
-        <label text="[PROJECT_NAME]" name="currentProjectLabel"/>
+        <column-panel>
+            <row-panel spacing="4" padding="4" >
+                <label text="Project: "/>
+                <label text="[PROJECT_NAME]" name="currentProjectLabel"/>
+            </row-panel>
+            <row-panel spacing="4" padding="4" >
+                <label text="Branch:"/>
+                <label name="gitBranchLabel" text="unknown"/>
+            </row-panel>
+            <row-panel spacing="4" padding="4" >
+                <button name="openFolderButton" borderPainted="false" text="Change" alignmentX="0" alignmentY="0"/>
+            </row-panel>
+        </column-panel>
         <spacer size="16"/>
-        <label text="Branch:"/>
-        <label name="gitBranchLabel" text="unknown" styleClass="monospaced"/>
         <spacer size="16"/>
         <label text="Mode:"/>
-        <label name="roxyModeLabel" text="" styleClass="monospaced"/>
+        <label name="roxyModeLabel" text=""/>
         <spacer size="16"/>
     </row-panel>
 
     <row-panel weight="1" alignToBaseline="false">
 
         <column-panel padding="12" spacing="8" opaque="true">
-            <label text="MENU" font="bold-12"/>
+            <label text="MENU" style="font: bold"/>
 
             <toggle-button name="navChatButton" text="Chat" borderPainted="false" horizontalAlignment="left"
                            group="navGroup" selected="true"/>

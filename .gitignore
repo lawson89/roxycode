@@ -26,5 +26,6 @@ replay_pid*
 .idea/
 target/
 .cache/
+roxy_project/
 
 .env

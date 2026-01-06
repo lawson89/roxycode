@@ -138,18 +138,8 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JToggleButton navGeminiCachesButton;
 
-    // Menu Outlets
     @Outlet
-    private JMenuItem settingsMenuItem;
-
-    @Outlet
-    private JMenuItem exitMenuItem;
-
-    @Outlet
-    private JMenuItem aboutMenuItem;
-
-    @Outlet
-    private JMenuItem openFolderMenuItem;
+    private JButton openFolderButton;
 
     @Inject
     public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, NotificationService notificationService) {
@@ -302,15 +292,8 @@ public class MainFrame extends JFrame implements Runnable {
             navCodebaseCacheButton.setIcon(FontIcon.of(MaterialDesignD.DATABASE_OUTLINE, 16));
         if (navGeminiCachesButton != null)
             navGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignC.CLOUD_OUTLINE, 16));
-        // Menu Icons
-        if (settingsMenuItem != null)
-            settingsMenuItem.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
-        if (exitMenuItem != null)
-            exitMenuItem.setIcon(FontIcon.of(MaterialDesignL.LOGOUT, 16));
-        if (aboutMenuItem != null)
-            aboutMenuItem.setIcon(FontIcon.of(MaterialDesignI.INFORMATION_OUTLINE, 16));
-        if (openFolderMenuItem != null)
-            openFolderMenuItem.setIcon(FontIcon.of(MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
+        if (openFolderButton != null)
+            openFolderButton.setIcon(FontIcon.of(MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
     }
 
     private void updateProjectLabel() {
@@ -356,14 +339,8 @@ public class MainFrame extends JFrame implements Runnable {
             navCodebaseCacheButton.addActionListener(e -> showView("CODEBASE_CACHE"));
         if (navGeminiCachesButton != null)
             navGeminiCachesButton.addActionListener(e -> showView("GEMINI_CACHES"));
-        if (settingsMenuItem != null)
-            settingsMenuItem.addActionListener(e -> showView("SETTINGS"));
-        if (exitMenuItem != null)
-            exitMenuItem.addActionListener(e -> System.exit(0));
-        if (aboutMenuItem != null)
-            aboutMenuItem.addActionListener(this::onAbout);
-        if (openFolderMenuItem != null)
-            openFolderMenuItem.addActionListener(this::onOpenFolder);
+        if (openFolderButton != null)
+            openFolderButton.addActionListener(this::onOpenFolder);
     }
 
     private void showView(String viewName) {
@@ -437,13 +414,6 @@ public class MainFrame extends JFrame implements Runnable {
             genAIService.refreshKnowledge(currentProjectRoot.toString());
             SwingUtilities.invokeLater(() -> chatView.appendSystemMessage("Knowledge base reloaded."));
         }).start();
-    }
-
-    private void onAbout(ActionEvent e) {
-        JOptionPane pane = new JOptionPane("RoxyCode AI Version 1.0", JOptionPane.INFORMATION_MESSAGE);
-        JDialog dialog = pane.createDialog(this, "About");
-        UIUtils.centerDialog(dialog, this);
-        dialog.setVisible(true);
     }
 
     public void updateShellStatus() {
