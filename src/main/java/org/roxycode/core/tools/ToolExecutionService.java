@@ -7,6 +7,9 @@ import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyObject;
+import org.roxycode.cache.CodebasePackerService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,6 +19,8 @@ import java.util.concurrent.*;
 
 @Singleton
 public class ToolExecutionService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ToolExecutionService.class);
 
     private final ExecutorService executorService;
 
@@ -40,8 +45,11 @@ public class ToolExecutionService {
     }
 
     private String executeJavaScript(String script, Map<String, Object> args) {
+
+        LOG.info("Executing script: {}", script);
+        LOG.info("Args: {}", args);
+        // @todo we need to lock this down more
         HostAccess secureAccess = HostAccess.newBuilder(HostAccess.ALL)
-                // Explicitly allow nothing. No "System", no "File".
                 .build();
 
         try (Context context = Context.newBuilder("js")
@@ -54,7 +62,6 @@ public class ToolExecutionService {
                 // Enable IO, but ONLY via our custom FileSystem
                 .allowIO(true)
                 .option("engine.WarnInterpreterOnly", "false")
-
                 .build()) {
             // Set a timeout of 60 seconds
             ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> context.close(true), 60, TimeUnit.SECONDS);

@@ -40,8 +40,6 @@ const previewService = {
 
 // Service: buildToolService
 const buildToolService = {
-  getOperatingSystem(): string,
-
   getAgentsContents(): string,
 
   getBuildFileContents(): string,
@@ -58,6 +56,8 @@ const buildToolService = {
 
   getDependencyHealth(): string,
 
+  getOperatingSystem(): string,
+
   getProjectSummary(): string,
 
   /** Detects the current build tool */
@@ -70,13 +70,13 @@ const buildToolService = {
 
 // Service: xmlService
 const xmlService = {
-  analyzeFile(path: any): any,
-
   getElementSource(path: any, xpathExpr: string): any,
 
   replaceElement(path: any, xpathExpr: string, newXml: string): void,
 
   updateAttribute(path: any, xpathExpr: string, attrName: string, attrValue: string): void,
+
+  analyzeFile(path: any): any,
 
 };
 
@@ -98,8 +98,6 @@ const tomlService = {
 
 // Service: javaService
 const javaService = {
-  analyzeFile(path: any): any,
-
   getMethodSource(path: any, className: string, methodName: string): any,
 
   replaceMethod(path: any, className: string, methodName: string, newMethodSource: string): void,
@@ -107,6 +105,8 @@ const javaService = {
   getFieldSource(path: any, className: string, fieldName: string): any,
 
   replaceField(path: any, className: string, fieldName: string, newFieldSource: string): void,
+
+  analyzeFile(path: any): any,
 
   init(): void,
 
@@ -497,6 +497,7 @@ roxycode/
 │   │   │   ├── transition_to_flyingsaucer_xhtml_panel.md
 │   │   │   ├── view_system_prompt_screen.md
 │   │   │   └── xml_service_v1.md
+│   │   ├── add_copy_context_menu_to_chat.md
 │   │   └── remove_menu_bar.md
 │   └── README.md
 ├── src/
@@ -1648,7 +1649,7 @@ public @interface ScriptService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/tools/ToolExecutionService.java"
-size = 3836
+size = 4098
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core.tools;
@@ -1660,6 +1661,9 @@ import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyObject;
+import org.roxycode.cache.CodebasePackerService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -1669,6 +1673,8 @@ import java.util.concurrent.*;
 
 @Singleton
 public class ToolExecutionService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ToolExecutionService.class);
 
     private final ExecutorService executorService;
 
@@ -1693,8 +1699,11 @@ public class ToolExecutionService {
     }
 
     private String executeJavaScript(String script, Map<String, Object> args) {
-        HostAccess secureAccess = HostAccess.newBuilder(HostAccess.NONE)
-                // Explicitly allow nothing. No "System", no "File".
+
+        LOG.info("Executing script: {}", script);
+        LOG.info("Args: {}", args);
+        // @todo we need to lock this down more
+        HostAccess secureAccess = HostAccess.newBuilder(HostAccess.ALL)
                 .build();
 
         try (Context context = Context.newBuilder("js")
@@ -1707,7 +1716,6 @@ public class ToolExecutionService {
                 // Enable IO, but ONLY via our custom FileSystem
                 .allowIO(true)
                 .option("engine.WarnInterpreterOnly", "false")
-
                 .build()) {
             // Set a timeout of 60 seconds
             ScheduledFuture<?> timeoutTask = timeoutExecutor.schedule(() -> context.close(true), 60, TimeUnit.SECONDS);
@@ -3423,7 +3431,7 @@ public class LogCaptureService {
 
 [[files]]
 path = "src/main/java/org/roxycode/core/GenAIService.java"
-size = 14350
+size = 14523
 mimeType = "text/x-java"
 content = '''
 package org.roxycode.core;
@@ -3431,6 +3439,7 @@ package org.roxycode.core;
 import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Singleton;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.core.context.ContextRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
@@ -3682,8 +3691,10 @@ public class GenAIService {
                                 fixedArgs.put("path", resolvedPath.toString());
                             }
                         }
-                        if (onStatusUpdate != null)
-                            onStatusUpdate.accept("Executing Tool: " + fnName);
+                        if (onStatusUpdate != null) {
+                            String args = StringUtils.truncate(fixedArgs + "", 200);
+                            onStatusUpdate.accept("Executing Tool: " + fnName + " | " + args);
+                        }
                         LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
                         String toolOutput;
                         try {

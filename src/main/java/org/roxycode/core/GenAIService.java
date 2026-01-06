@@ -3,6 +3,7 @@ package org.roxycode.core;
 import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Singleton;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.core.context.ContextRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
@@ -254,8 +255,10 @@ public class GenAIService {
                                 fixedArgs.put("path", resolvedPath.toString());
                             }
                         }
-                        if (onStatusUpdate != null)
-                            onStatusUpdate.accept("Executing Tool: " + fnName);
+                        if (onStatusUpdate != null) {
+                            String args = StringUtils.truncate(fixedArgs + "", 200);
+                            onStatusUpdate.accept("Executing Tool: " + fnName + " | " + args);
+                        }
                         LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
                         String toolOutput;
                         try {
