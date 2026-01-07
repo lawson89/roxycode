@@ -106,7 +106,8 @@ public class RoxyProjectService {
     public void changeProjectRoot(Path newRoot) {
         LOG.info("Changing project root to: {}", newRoot);
         if (!isValidFolder(newRoot)) {
-            throw new IllegalStateException("Invalid project root: " + newRoot);
+            LOG.warn("Invalid project root: {}", newRoot);
+            return;
         }
         sandbox.setRoot(newRoot);
         ensureProjectStructure();

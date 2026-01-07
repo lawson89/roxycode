@@ -177,10 +177,6 @@ public class MainFrame extends JFrame implements Runnable {
             }
             notificationService.setListener(this::showNotification);
         }
-        // Initialize logic
-        if (settingsService.getCurrentProject() != null) {
-            roxyProjectService.changeProjectRoot(Path.of(settingsService.getCurrentProject()));
-        }
         initListeners();
         genAIService.addBusyListener(busy -> SwingUtilities.invokeLater(() -> {
             if (activityIndicator != null) {
