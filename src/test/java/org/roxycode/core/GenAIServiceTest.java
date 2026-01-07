@@ -8,6 +8,7 @@ import io.micronaut.context.annotation.Requires;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.graalvm.nativebridge.In;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
@@ -35,6 +36,9 @@ class GenAIServiceTest {
     GenAIService genAIService;
 
     @Inject
+    RoxyProjectService roxyProjectService;
+
+    @Inject
     ToolRegistry // This is StubToolRegistry
             toolRegistry;
 
@@ -56,12 +60,11 @@ class GenAIServiceTest {
         Files.createDirectories(contextDir);
         // Configure the stub settings to point to our temp root as ROXY_HOME
         ((StubSettingsService) settingsService).setRoxyHome(tempRoot);
+
         // 2. Create dummy tool files
         Files.createFile(toolsDir.resolve("tool_a.toml"));
         Files.createFile(toolsDir.resolve("tool_b.toml"));
-        // 3. Trigger the Knowledge Refresh
-        // FIX: We call refreshKnowledge() explicitly because chat() no longer scans the disk
-        genAIService.refreshKnowledge(tempRoot.toString());
+        roxyProjectService.changeProjectRoot(tempRoot);
         // Verify it discovered the tools (refreshKnowledge calls getTool to build definitions)
         assertTrue(toolRegistry.getAllToolNames().contains("tool_a"), "Service failed to discover tool_a");
         assertTrue(toolRegistry.getAllToolNames().contains("tool_b"), "Service failed to discover tool_b");

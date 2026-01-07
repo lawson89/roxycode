@@ -2,12 +2,17 @@ package org.roxycode.core;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.apache.commons.io.FileUtils;
+import org.roxycode.core.tools.ToolRegistry;
 import org.roxycode.core.tools.service.FileSystemService;
 import org.roxycode.core.tools.service.GitService;
+import org.roxycode.core.utils.SystemUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.PostConstruct;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -21,30 +26,49 @@ public class RoxyProjectService {
     private static final Logger LOG = LoggerFactory.getLogger(RoxyProjectService.class);
     public static final String ROXY_WORKING_DIR = "roxy";
     public static final String ROXY_CACHE = ".cache";
+    public static final String ROXY_HOME = "roxy_home";
     private static final String README_FILE = "README.md";
 
     private final Sandbox sandbox;
     private final SettingsService settingsService;
     private final FileSystemService fileSystemService;
     private final GitService gitService;
+    private final ToolRegistry toolRegistry;
 
     private String currentBranch = "";
     private RoxyMode currentMode = RoxyMode.DISCOVER;
+    private Path roxyHome;
 
     @Inject
     public RoxyProjectService(Sandbox sandbox, FileSystemService fileSystemService,
-                              SettingsService settingsService, GitService gitService) {
+                              SettingsService settingsService, GitService gitService, ToolRegistry toolRegistry) {
         this.sandbox = sandbox;
         this.fileSystemService = fileSystemService;
         this.settingsService = settingsService;
         this.gitService = gitService;
+        this.toolRegistry = toolRegistry;
+    }
+
+    @PostConstruct
+    void init() {
+        // we should be launched beside the roxy_home directory
+        String launchedFrom = SystemUtils.getUserDir();
+        LOG.info("RoxyProjectService launched from {}", launchedFrom);
+        this.roxyHome = Path.of(launchedFrom).resolve(ROXY_HOME);
+        LOG.info("RoxyProjectService roxy home {}", roxyHome);
+        if (!this.roxyHome.toFile().exists()) {
+            throw new IllegalStateException("The roxy home directory does not exist: " + this.roxyHome);
+        }
+        Path toolsHome = this.roxyHome.resolve("tools");
+        LOG.info("RoxyProjectService loading tools from {}", toolsHome);
+        toolRegistry.loadTools(toolsHome);
     }
 
     public void ensureProjectStructure() {
         LOG.info("Ensuring Roxy project structure...");
         try {
             Path projectDir = getRoxyWorkingDir();
-            
+
             if (!Files.exists(projectDir)) {
                 LOG.info("Creating {} directory.", ROXY_WORKING_DIR);
                 Files.createDirectories(projectDir);
@@ -62,7 +86,7 @@ public class RoxyProjectService {
         }
     }
 
-    public Path getRoxyWorkingDir(){
+    public Path getRoxyWorkingDir() {
         return sandbox.resolve(ROXY_WORKING_DIR);
     }
 
@@ -96,5 +120,17 @@ public class RoxyProjectService {
 
     public void setCurrentMode(RoxyMode currentMode) {
         this.currentMode = currentMode;
+    }
+
+    public Path getRoxyHome() {
+        return roxyHome;
+    }
+
+    public String getStaticSystemPrompt() {
+        try {
+            return FileUtils.readFileToString(roxyHome.resolve("AGENTS.md").toFile(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return "You are RoxyCode, an AI coding assistant.";
+        }
     }
 }

@@ -33,30 +33,27 @@ public class GenAIService {
 
     private final ToolExecutionService executionService;
 
-    private final Sandbox sandbox;
-
     private final UsageService usageService;
 
     private final HistoryService historyService;
 
     private final org.roxycode.cache.GeminiCacheService geminiCacheService;
+    private final RoxyProjectService roxyProjectService;
 
     private Client client;
 
     private String lastUsedApiKey;
 
-    private Path cachedRoxyHome;
-
-    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, Sandbox sandbox,
+    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService,
                         UsageService usageService, HistoryService historyService,
-                        GeminiCacheService geminiCacheService) {
+                        GeminiCacheService geminiCacheService, RoxyProjectService roxyProjectService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
-        this.sandbox = sandbox;
         this.usageService = usageService;
         this.historyService = historyService;
         this.geminiCacheService = geminiCacheService;
+        this.roxyProjectService = roxyProjectService;
     }
 
     private synchronized Client getClient() {
@@ -72,32 +69,11 @@ public class GenAIService {
         return client;
     }
 
-    public void refreshKnowledge(String projectRoot) {
-        LOG.info("🔄 Refreshing Knowledge Base. Root: {}", projectRoot);
-        Path roxyHome = settingsService.getRoxyHome();
-        this.cachedRoxyHome = roxyHome;
-        LOG.info("🏠 Roxy Home detected at: {}", roxyHome);
-        LOG.info("Loading Tools ...");
-        toolRegistry.loadTools(roxyHome.resolve("tools"));
-
-        LOG.info("✅ Knowledge Refresh Complete. Loaded {} tools.", toolRegistry.getAllToolNames().size());
-    }
-
     private final List<Content> history = new ArrayList<>();
 
     private int inTokens = 0;
 
     private int outTokens = 0;
-
-    private RoxyMode roxyMode = RoxyMode.DISCOVER;
-
-    public RoxyMode getRoxyMode() {
-        return roxyMode;
-    }
-
-    public void setRoxyMode(RoxyMode roxyMode) {
-        this.roxyMode = roxyMode;
-    }
 
     public int getInTokens() {
         return inTokens;
@@ -148,8 +124,8 @@ public class GenAIService {
 
     public String buildSystemContext(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
         StringBuilder contextBuilder = new StringBuilder();
-        contextBuilder.append("Project Root: ").append(projectRoot).append("\n");
-        contextBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
+        String staticPrompt = roxyProjectService.getStaticSystemPrompt();
+        contextBuilder.append(staticPrompt).append(projectRoot).append("\n");
         if (cacheMeta.isPresent()) {
             contextBuilder.append("### Project Info (CACHED)\n");
             contextBuilder.append("[System: Codebase is currently cached in Gemini. You should have access to the file contents.]\n\n");
@@ -179,7 +155,6 @@ public class GenAIService {
         notifyBusy(true);
         try {
             this.stopRequested = false;
-            sandbox.setRoot(projectRoot);
             Path projectPath = Paths.get(projectRoot);
             Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta(projectPath);
             String systemContext = buildSystemContext(projectRoot, attachedFiles, cacheMeta);

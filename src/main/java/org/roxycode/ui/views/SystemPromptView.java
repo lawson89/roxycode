@@ -5,23 +5,18 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
-import org.roxycode.core.GenAIService;
-import org.roxycode.core.SettingsService;
+import org.roxycode.core.RoxyProjectService;
 import org.roxycode.ui.MarkdownPane;
+import org.roxycode.ui.ThemeService;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
 
 @Singleton
 public class SystemPromptView extends JPanel {
 
-    private final GenAIService genAIService;
-    private final SettingsService settingsService;
+    private final RoxyProjectService roxyProjectService;
     private final MarkdownPane systemPromptArea = new MarkdownPane();
-
-    @Outlet
-    private JComponent viewSystemPrompt;
 
     @Outlet
     private JScrollPane systemPromptScrollPane;
@@ -29,12 +24,11 @@ public class SystemPromptView extends JPanel {
     @Outlet
     private JButton refreshSystemPromptButton;
 
-    private final org.roxycode.ui.ThemeService themeService;
+    private final ThemeService themeService;
 
     @Inject
-    public SystemPromptView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService) {
-        this.genAIService = genAIService;
-        this.settingsService = settingsService;
+    public SystemPromptView(RoxyProjectService roxyProjectService, ThemeService themeService) {
+        this.roxyProjectService = roxyProjectService;
         this.themeService = themeService;
         setLayout(new BorderLayout());
     }
@@ -60,8 +54,7 @@ public class SystemPromptView extends JPanel {
         if (systemPromptArea != null) {
             systemPromptArea.setMarkdown("*Generating system prompt...*");
             new Thread(() -> {
-                String projectRoot = settingsService.getCurrentProject();
-                String prompt = genAIService.buildSystemContext(projectRoot, new ArrayList<>());
+                String prompt = roxyProjectService.getStaticSystemPrompt();
                 SwingUtilities.invokeLater(() -> systemPromptArea.setMarkdown(prompt));
             }).start();
         }

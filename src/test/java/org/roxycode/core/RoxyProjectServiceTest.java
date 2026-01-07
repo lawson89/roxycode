@@ -25,7 +25,7 @@ class RoxyProjectServiceTest {
         sandbox = new Sandbox();
         sandbox.setRoot(tempDir.toString());
         fileSystemService = new FileSystemService(sandbox);
-        roxyProjectService = new RoxyProjectService(sandbox, fileSystemService, null, null);
+        roxyProjectService = new RoxyProjectService(sandbox, fileSystemService, null, null, null);
     }
 
     @Test
