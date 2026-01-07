@@ -10,7 +10,7 @@
         <label name="currentProjectLabel" text="[PROJECT_NAME]" styleClass="h4"/>
         <spacer size="4"/>
         <label name="gitBranchLabel" text="unknown" foreground="#888888"/>
-        <button name="openFolderButton" text="Change Project" borderPainted="false" focusPainted="false" contentAreaFilled="false" style="border: 1,0,0,0,Component.borderColor"/>
+        <button name="openFolderButton" text="Change Project" borderPainted="false" focusPainted="false" contentAreaFilled="false"/>
         <spacer weight="1"/>
         <label name="roxyModeLabel" text="" style="font: bold"/>
         <activity-indicator name="activityIndicator" indicatorSize="12" visible="false"/>

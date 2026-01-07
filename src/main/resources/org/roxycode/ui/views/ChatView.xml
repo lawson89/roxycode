@@ -11,7 +11,7 @@
         </scroll-pane>
         <button name="clearAttachmentsButton" text="Clear"/>
     </row-panel>
-    <row-panel spacing="8" padding="12" opaque="true" style="border: 1,0,0,0,Component.borderColor">
+    <row-panel spacing="8" padding="12" opaque="true">
         <button name="attachButton" text="Attach"/>
         <column-panel weight="1" name="inputContainer"/>
         <column-panel spacing="4">
