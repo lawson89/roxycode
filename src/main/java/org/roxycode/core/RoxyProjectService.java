@@ -104,11 +104,21 @@ public class RoxyProjectService {
 
     public void changeProjectRoot(Path newRoot) {
         LOG.info("Changing project root to: {}", newRoot);
+        if(!isValidFolder(newRoot)){
+            throw new IllegalStateException("Invalid project root: " + newRoot);
+        }
         sandbox.setRoot(newRoot);
         ensureProjectStructure();
         settingsService.setCurrentProject(getProjectRoot().toString());
         currentBranch = gitService.getCurrentBranch(getProjectRoot().toString());
     }
+
+    public boolean isValidFolder(Path path) {
+        return Files.isDirectory(path) // Checks if it exists AND is a standard file (not a directory)
+               && Files.isReadable(path)    // Checks if the JVM has read permissions
+               && Files.isWritable(path);   // Checks if the JVM has write permissions
+    }
+
 
     public String getCurrentBranch() {
         return currentBranch;

@@ -3,6 +3,7 @@ package org.roxycode.ui;
 import com.formdev.flatlaf.FlatLaf;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.apache.commons.lang3.StringUtils;
 import org.httprpc.sierra.ActivityIndicator;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
@@ -23,7 +24,7 @@ import java.nio.file.Path;
 @Singleton
 public class MainFrame extends JFrame implements Runnable {
 
-    private static final Logger log = LoggerFactory.getLogger(MainFrame.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MainFrame.class);
 
     // Dependencies
     private final GenAIService genAIService;
@@ -149,6 +150,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Override
     public void run() {
+        LOG.info("Starting RoxyCode");
         themeService.applyTheme(settingsService.getTheme(), this, getAllPanes());
         // 1. Load the Main Shell (Menu, Header, Nav, Empty Stack)
         setContentPane(UILoader.load(this, "MainFrame.xml"));
@@ -197,11 +199,12 @@ public class MainFrame extends JFrame implements Runnable {
         setSize(1200, 800);
         setLocationRelativeTo(null);
         setVisible(true);
-        // Capture initial center for fallback as suggested by user
-        GraphicsConfiguration gc = getGraphicsConfiguration();
-        if (gc != null) {
-            Rectangle bounds = gc.getBounds();
-            UIUtils.setInitialScreenCenter(new Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
+        // check for a current project
+        String currentProject = settingsService.getCurrentProject();
+        LOG.info("Current project: {}", currentProject);
+        if(StringUtils.isNotBlank(currentProject)){
+            LOG.info("Updating IO and project service with new current project");
+            onProjectChange(Path.of(currentProject));
         }
     }
 
@@ -410,23 +413,27 @@ public class MainFrame extends JFrame implements Runnable {
         }
     }
 
-    private void onOpenFolder(ActionEvent e) {
+    protected void onOpenFolder(ActionEvent e) {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         fileChooser.setCurrentDirectory(roxyProjectService.getProjectRoot().toFile());
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            roxyProjectService.changeProjectRoot(fileChooser.getSelectedFile().toPath());
-            genAIService.clearHistory();
-            if (gitBranchLabel != null) {
-                String branch = roxyProjectService.getCurrentBranch();
-                gitBranchLabel.setText(branch != null ? branch : "No Git Repo");
-            }
-            if(currentProjectLabel != null) {
-                currentProjectLabel.setText(roxyProjectService.getProjectRoot().toString());
-            }
-            updateRoxyMode();
-            chatView.appendSystemMessage("Switched project to " + roxyProjectService.getProjectRoot().toString());
+          onProjectChange(fileChooser.getSelectedFile().toPath());
         }
+    }
+
+    protected void onProjectChange(Path projectRoot){
+        roxyProjectService.changeProjectRoot(projectRoot);
+        genAIService.clearHistory();
+        if (gitBranchLabel != null) {
+            String branch = roxyProjectService.getCurrentBranch();
+            gitBranchLabel.setText(branch != null ? branch : "No Git Repo");
+        }
+        if(currentProjectLabel != null) {
+            currentProjectLabel.setText(roxyProjectService.getProjectRoot().toString());
+        }
+        updateRoxyMode();
+        chatView.appendSystemMessage("Switched project to " + roxyProjectService.getProjectRoot().toString());
     }
 
     public JTextPane[] getAllPanes() {
