@@ -7,7 +7,6 @@ import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyObject;
-import org.roxycode.cache.CodebasePackerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

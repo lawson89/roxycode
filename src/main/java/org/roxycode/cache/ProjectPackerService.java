@@ -15,19 +15,17 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 /**
- * CodebasePackerService is responsible for creating a snapshot of the project code in a format
+ * ProjectPackerService is responsible for creating a snapshot of the project code in a format
  * easy for the LLM to use
  */
 @Singleton
-public class CodebasePackerService {
+public class ProjectPackerService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CodebasePackerService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ProjectPackerService.class);
 
     public static final String CACHE_FILENAME = "codebase_cache.toml";
-
 
     private final RoxyProjectService roxyProjectService;
     private final Sandbox sandbox;
@@ -36,8 +34,8 @@ public class CodebasePackerService {
     private final JavaAnalysisService javaContextService;
 
     @Inject
-    public CodebasePackerService(RoxyProjectService roxyProjectService, Sandbox sandbox,
-                                 FileListingService fileListingService, BuildToolService buildToolService, JavaAnalysisService javaContextService) {
+    public ProjectPackerService(RoxyProjectService roxyProjectService, Sandbox sandbox,
+                                FileListingService fileListingService, BuildToolService buildToolService, JavaAnalysisService javaContextService) {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.fileListingService = fileListingService;

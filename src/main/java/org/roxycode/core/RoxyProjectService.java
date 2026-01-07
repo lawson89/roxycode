@@ -10,11 +10,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/**
+ * RoxyProjectService manages the structure and paths of the Roxy project within the sandbox.
+ * It serves as the central source of truth for a project being worked on by RoxyCode.
+ * It holds the current path and mode of operation.
+ */
 @Singleton
 public class RoxyProjectService {
     private static final Logger LOG = LoggerFactory.getLogger(RoxyProjectService.class);
-    private static final String ROXY_PROJECT_DIR = "roxy_project";
-    private static final String ROXY_PROJECT_CACHE = ".cache";
+    public static final String ROXY_PROJECT_DIR = "roxy";
+    public static final String ROXY_PROJECT_CACHE = ".cache";
     private static final String README_FILE = "README.md";
 
     private final Sandbox sandbox;

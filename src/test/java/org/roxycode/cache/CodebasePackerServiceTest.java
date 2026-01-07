@@ -20,7 +20,7 @@ class CodebasePackerServiceTest {
 
     @Test
     void testEstimateTokenCount(@TempDir Path tempDir) throws IOException {
-        CodebasePackerService service = new CodebasePackerService(mock(RoxyProjectService.class), mock(Sandbox.class), new FileListingService(), mock(BuildToolService.class), mock(JavaAnalysisService.class));
+        ProjectPackerService service = new ProjectPackerService(mock(RoxyProjectService.class), mock(Sandbox.class), new FileListingService(), mock(BuildToolService.class), mock(JavaAnalysisService.class));
 
         Path testFile = tempDir.resolve("test.txt");
         Files.writeString(testFile, "12345678"); // 8 bytes
@@ -48,7 +48,7 @@ class CodebasePackerServiceTest {
         BuildToolService buildToolService = mock(BuildToolService.class);
         when(buildToolService.getProjectSummary()).thenReturn("Summary");
 
-        CodebasePackerService service = new CodebasePackerService(
+        ProjectPackerService service = new ProjectPackerService(
                 roxyProjectService,
                 sandbox,
                 new FileListingService(),

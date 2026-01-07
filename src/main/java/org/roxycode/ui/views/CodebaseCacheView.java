@@ -7,7 +7,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
-import org.roxycode.cache.CodebasePackerService;
+import org.roxycode.cache.ProjectPackerService;
 import org.roxycode.cache.GeminiCacheService;
 import org.roxycode.core.NotificationService;
 import org.roxycode.core.NotificationType;
@@ -30,7 +30,7 @@ public class CodebaseCacheView extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(CodebaseCacheView.class);
 
     private final SettingsService settingsService;
-    private final CodebasePackerService codebasePackerService;
+    private final ProjectPackerService codebasePackerService;
     private final GeminiCacheService geminiCacheService;
     private final JTextPane cacheContentArea = new JTextPane();
     private final org.roxycode.ui.ThemeService themeService;
@@ -64,7 +64,7 @@ public class CodebaseCacheView extends JPanel {
     private JScrollPane cacheContentScrollPane;
 
     @Inject
-    public CodebaseCacheView(SettingsService settingsService, CodebasePackerService codebasePackerService, GeminiCacheService geminiCacheService, org.roxycode.ui.ThemeService themeService, NotificationService notificationService) {
+    public CodebaseCacheView(SettingsService settingsService, ProjectPackerService codebasePackerService, GeminiCacheService geminiCacheService, org.roxycode.ui.ThemeService themeService, NotificationService notificationService) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
         this.geminiCacheService = geminiCacheService;

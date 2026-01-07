@@ -30,7 +30,7 @@ class RoxyProjectServiceTest {
 
     @Test
     void testEnsureProjectStructure_CreatesDirAndReadme() throws IOException {
-        Path projectDir = tempDir.resolve("roxy_project");
+        Path projectDir = tempDir.resolve(RoxyProjectService.ROXY_PROJECT_DIR);
         Path readmePath = projectDir.resolve("README.md");
 
         // Initial state: does not exist

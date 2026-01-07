@@ -29,7 +29,7 @@ public class GeminiCacheService {
 
     private final SettingsService settingsService;
 
-    private final CodebasePackerService codebasePackerService;
+    private final ProjectPackerService codebasePackerService;
 
     private final ObjectMapper tomlMapper;
 
@@ -42,7 +42,7 @@ public class GeminiCacheService {
     private final ToolRegistry toolRegistry;
 
     public GeminiCacheService(SettingsService settingsService, @Named("toml") ObjectMapper tomlMapper,
-                              CodebasePackerService codebasePackerService, RoxyProjectService roxyProjectService,
+                              ProjectPackerService codebasePackerService, RoxyProjectService roxyProjectService,
                               ToolRegistry toolRegistry) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
@@ -123,7 +123,7 @@ public class GeminiCacheService {
             long skeletonTokenCount = codebasePackerService.estimateTokenCount(skeletonFile);
             String skeletonGeneratedAt = Files.exists(skeletonFile) ? Files.getLastModifiedTime(skeletonFile).toString() : "N/A";
 
-            CodebaseCacheMeta meta = new CodebaseCacheMeta(
+            ProjectCacheMeta meta = new ProjectCacheMeta(
                     projectPath.toString(),
                     user,
                     ZonedDateTime.now().toString(),
@@ -143,7 +143,7 @@ public class GeminiCacheService {
         }
     }
 
-    public Optional<CodebaseCacheMeta> getProjectCacheMeta(Path projectPath) {
+    public Optional<ProjectCacheMeta> getProjectCacheMeta(Path projectPath) {
         String currentModel = settingsService.getGeminiModel();
         String user = SystemUtils.getSystemUser();
         if (projectPath == null) {
@@ -154,7 +154,7 @@ public class GeminiCacheService {
             Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
             Path metaFilePath = cacheDir.resolve(cacheKey + ".toml");
             if (Files.exists(metaFilePath)) {
-                return Optional.of(tomlMapper.readValue(metaFilePath.toFile(), CodebaseCacheMeta.class));
+                return Optional.of(tomlMapper.readValue(metaFilePath.toFile(), ProjectCacheMeta.class));
             }
         } catch (IOException e) {
             LOG.error("Failed to read cache metadata for key {}: {}", cacheKey, e.getMessage());
@@ -162,7 +162,7 @@ public class GeminiCacheService {
         return Optional.empty();
     }
 
-    protected void writeProjectCacheMeta(CodebaseCacheMeta codebaseCacheMeta) throws IOException {
+    protected void writeProjectCacheMeta(ProjectCacheMeta codebaseCacheMeta) throws IOException {
         Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
         String metaFileName = codebaseCacheMeta.cacheKey() + ".toml";
         Path metaFilePath = cacheDir.resolve(metaFileName);

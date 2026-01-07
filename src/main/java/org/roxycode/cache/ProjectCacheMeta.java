@@ -1,6 +1,6 @@
 package org.roxycode.cache;
 
-public record CodebaseCacheMeta(
+public record ProjectCacheMeta(
         String projectRoot,
         String user,
         String generatedAt,

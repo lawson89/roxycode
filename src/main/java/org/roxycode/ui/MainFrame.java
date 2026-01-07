@@ -15,6 +15,7 @@ import org.roxycode.core.tools.service.GitService;
 import org.roxycode.ui.views.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -232,7 +233,7 @@ public class MainFrame extends JFrame implements Runnable {
             Color fgColor;
             Ikon iconCode;
             boolean isDark = FlatLaf.isLafDark();
-            switch(request.type()) {
+            switch (request.type()) {
                 case SUCCESS:
                     bgColor = isDark ? new Color(30, 50, 30) : new Color(230, 250, 230);
                     fgColor = isDark ? new Color(100, 255, 100) : new Color(0, 120, 0);
@@ -268,7 +269,7 @@ public class MainFrame extends JFrame implements Runnable {
         });
     }
 
-        private void initIcons() {
+    private void initIcons() {
         java.net.URL iconUrl = getClass().getResource("roxy_logo_transparent.png");
         if (iconUrl != null) {
             ImageIcon roxyIcon = new ImageIcon(iconUrl);
@@ -347,21 +348,17 @@ public class MainFrame extends JFrame implements Runnable {
             boolean isDark = com.formdev.flatlaf.FlatLaf.isLafDark();
 
             switch (mode) {
-                case DISCOVERY:
+                case DISCOVER:
                     iconCode = MaterialDesignM.MAGNIFY;
                     fgColor = isDark ? new Color(100, 200, 255) : new Color(0, 80, 200);
                     break;
-                case PLANNING:
+                case PLAN:
                     iconCode = MaterialDesignP.PENCIL_OUTLINE;
                     fgColor = isDark ? new Color(255, 200, 0) : new Color(150, 100, 0);
                     break;
-                case IMPLEMENTING:
+                case IMPLEMENT:
                     iconCode = MaterialDesignW.WRENCH_OUTLINE;
                     fgColor = isDark ? new Color(100, 255, 100) : new Color(0, 120, 0);
-                    break;
-                case FEEDBACK:
-                    iconCode = MaterialDesignM.MESSAGE_TEXT_OUTLINE;
-                    fgColor = isDark ? new Color(200, 100, 255) : new Color(120, 0, 150);
                     break;
                 default:
                     iconCode = MaterialDesignH.HELP_CIRCLE_OUTLINE;
@@ -411,7 +408,7 @@ public class MainFrame extends JFrame implements Runnable {
         logsView.setVisible(false);
         codebaseCacheView.setVisible(false);
         geminiOnlineCachesView.setVisible(false);
-        switch(viewName) {
+        switch (viewName) {
             case "CHAT":
                 chatView.setVisible(true);
                 break;
@@ -474,15 +471,7 @@ public class MainFrame extends JFrame implements Runnable {
         }).start();
     }
 
-    public void updateShellStatus() {
-        if (currentModelLabel != null) {
-            currentModelLabel.setText(settingsService.getGeminiModel());
-        }
-        updateRoxyMode();
-        initGitInfo();
-    }
-
     public JTextPane[] getAllPanes() {
-        return new JTextPane[] { chatView.getChatArea(), systemPromptView.getSystemPromptArea(), messageHistoryView.getMessageHistoryArea(), codebaseCacheView.getCacheContentArea() };
+        return new JTextPane[]{chatView.getChatArea(), systemPromptView.getSystemPromptArea(), messageHistoryView.getMessageHistoryArea(), codebaseCacheView.getCacheContentArea()};
     }
 }

@@ -4,11 +4,12 @@ import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.cache.GeminiCacheService;
+import org.roxycode.cache.ProjectCacheMeta;
 import org.roxycode.core.context.ContextRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
-import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +42,6 @@ public class GenAIService {
 
     private final HistoryService historyService;
 
-    private final BuildToolService buildToolService;
-
     private final org.roxycode.cache.GeminiCacheService geminiCacheService;
 
     private Client client;
@@ -51,7 +50,9 @@ public class GenAIService {
 
     private Path cachedRoxyHome;
 
-    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, Sandbox sandbox, ContextRegistry contextRegistry, UsageService usageService, HistoryService historyService, BuildToolService buildToolService, org.roxycode.cache.GeminiCacheService geminiCacheService) {
+    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, Sandbox sandbox, ContextRegistry contextRegistry,
+                        UsageService usageService, HistoryService historyService,
+                        GeminiCacheService geminiCacheService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
@@ -59,7 +60,6 @@ public class GenAIService {
         this.contextRegistry = contextRegistry;
         this.usageService = usageService;
         this.historyService = historyService;
-        this.buildToolService = buildToolService;
         this.geminiCacheService = geminiCacheService;
     }
 
@@ -95,7 +95,7 @@ public class GenAIService {
 
     private int outTokens = 0;
 
-    private RoxyMode roxyMode = RoxyMode.DISCOVERY;
+    private RoxyMode roxyMode = RoxyMode.DISCOVER;
 
     public RoxyMode getRoxyMode() {
         return roxyMode;
@@ -127,7 +127,7 @@ public class GenAIService {
 
     private volatile boolean stopRequested = false;
 
-    
+
     public void addBusyListener(Consumer<Boolean> listener) {
         busyListeners.add(listener);
     }
@@ -148,22 +148,20 @@ public class GenAIService {
 
     public String buildSystemContext(String projectRoot, List<File> attachedFiles) {
         Path projectPath = Paths.get(projectRoot);
-        java.util.Optional<org.roxycode.cache.CodebaseCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta(projectPath);
+        java.util.Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta(projectPath);
         return buildSystemContext(projectRoot, attachedFiles, cacheMeta);
     }
 
-    public String buildSystemContext(String projectRoot, List<File> attachedFiles, java.util.Optional<org.roxycode.cache.CodebaseCacheMeta> cacheMeta) {
+    public String buildSystemContext(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
         String contextMenu = contextRegistry.getContextMenu();
         StringBuilder contextBuilder = new StringBuilder();
         contextBuilder.append("Project Root: ").append(projectRoot).append("\n");
         contextBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
         if (cacheMeta.isPresent()) {
             contextBuilder.append("### Project Info (CACHED)\n");
-            contextBuilder.append("- Build Tool: ").append(buildToolService.detect()).append("\n");
-            contextBuilder.append("- OS: ").append(buildToolService.getOperatingSystem()).append("\n");
             contextBuilder.append("[System: Codebase is currently cached in Gemini. You should have access to the file contents.]\n\n");
         } else {
-            contextBuilder.append(buildToolService.getProjectSummary()).append("\n\n");
+            contextBuilder.append("Codebase is not cached, please use provided tools").append("\n\n");
         }
         contextBuilder.append(contextMenu).append("\n");
         if (attachedFiles != null && !attachedFiles.isEmpty()) {
@@ -191,7 +189,7 @@ public class GenAIService {
             this.stopRequested = false;
             sandbox.setRoot(projectRoot);
             Path projectPath = Paths.get(projectRoot);
-            Optional<org.roxycode.cache.CodebaseCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta(projectPath);
+            Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta(projectPath);
             String systemContext = buildSystemContext(projectRoot, attachedFiles, cacheMeta);
             LOG.info("systemContext: {}", systemContext);
             String taskMessage = "Task: " + prompt;

@@ -14,7 +14,7 @@ class GeminiCacheServiceTest {
 
     @Test
     void testWriteAndGetProjectCacheMeta() throws IOException {
-        CodebaseCacheMeta meta = new CodebaseCacheMeta(
+        ProjectCacheMeta meta = new ProjectCacheMeta(
             "test-project", 
             "test-user", 
             "2023-10-27T10:00:00Z", 
