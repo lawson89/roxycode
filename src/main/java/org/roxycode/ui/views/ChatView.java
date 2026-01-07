@@ -4,13 +4,20 @@ import com.google.genai.types.Content;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.fife.ui.autocomplete.AutoCompletion;
+import org.fife.ui.autocomplete.BasicCompletion;
+import org.fife.ui.autocomplete.DefaultCompletionProvider;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.SlashCommandService;
 import org.roxycode.ui.MarkdownPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -25,18 +32,19 @@ public class ChatView extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(ChatView.class);
 
     private final GenAIService genAIService;
-
     private final SettingsService settingsService;
+    private final SlashCommandService slashCommandService;
+    private final org.roxycode.ui.ThemeService themeService;
 
     private final MarkdownPane chatArea = new MarkdownPane();
-
+    private final RSyntaxTextArea inputField = new RSyntaxTextArea(3, 20);
     private final List<File> attachedFiles = new ArrayList<>();
 
     @Outlet
     private JComponent viewChat;
 
     @Outlet
-    private JTextArea inputField;
+    private JPanel inputContainer;
 
     @Outlet
     private JButton sendButton;
@@ -68,13 +76,12 @@ public class ChatView extends JPanel {
     @Outlet
     private JLabel currentModelLabel;
 
-    private final org.roxycode.ui.ThemeService themeService;
-
     @Inject
-    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService) {
+    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.themeService = themeService;
+        this.slashCommandService = slashCommandService;
         setLayout(new BorderLayout());
     }
 
@@ -84,9 +91,45 @@ public class ChatView extends JPanel {
         if (chatScrollPane != null) {
             chatScrollPane.setViewportView(chatArea);
         }
+        
+        setupInputField();
+        
         themeService.registerPane(chatArea);
         initIcons();
         initListeners();
+    }
+
+    private void setupInputField() {
+        inputField.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_NONE);
+        inputField.setLineWrap(true);
+        inputField.setWrapStyleWord(true);
+        inputField.setAnimateBracketMatching(false);
+        inputField.setHighlightCurrentLine(false);
+        
+        // Hide the gutter
+        JScrollPane sp = new JScrollPane(inputField);
+        sp.setBorder(BorderFactory.createEmptyBorder());
+        inputContainer.add(sp);
+        
+        initAutocomplete();
+    }
+
+    private void initAutocomplete() {
+        DefaultCompletionProvider provider = new DefaultCompletionProvider() {
+            @Override
+            protected boolean isValidChar(char ch) {
+                return Character.isLetterOrDigit(ch) || ch == '/';
+            }
+        };
+
+        for (var info : slashCommandService.getAvailableCommands()) {
+            provider.addCompletion(new BasicCompletion(provider, info.command(), info.description()));
+        }
+
+        AutoCompletion ac = new AutoCompletion(provider);
+        ac.setAutoActivationEnabled(true);
+        ac.setAutoActivationDelay(100);
+        ac.install(inputField);
     }
 
     private void initIcons() {
@@ -133,25 +176,27 @@ public class ChatView extends JPanel {
                 attachedFiles.clear();
                 updateAttachmentsLabel();
             });
-        if (inputField != null) {
-            inputField.setLineWrap(true);
-            inputField.setWrapStyleWord(true);
-            inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
-            inputField.getActionMap().put("send-message", new AbstractAction() {
-
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    onSend(e);
-                }
-            });
-            inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
-        }
+            
+        inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
+        inputField.getActionMap().put("send-message", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                onSend(e);
+            }
+        });
+        inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
     }
 
     private void onSend(ActionEvent e) {
         String prompt = inputField.getText().trim();
         if (prompt.isEmpty())
             return;
+        
+        if (slashCommandService.isCommand(prompt)) {
+            handleSlashCommand(prompt);
+            return;
+        }
+
         inputField.setText("");
         List<File> currentAttachments = new ArrayList<>(attachedFiles);
         attachedFiles.clear();
@@ -189,6 +234,23 @@ public class ChatView extends JPanel {
                 });
             }
         }).start();
+    }
+
+    private void handleSlashCommand(String prompt) {
+        inputField.setText("");
+        SlashCommandService.CommandResult result = slashCommandService.execute(prompt);
+        chatArea.appendMarkdown("> " + prompt);
+        if (result.success()) {
+            chatArea.appendMarkdown("\n" + result.message());
+        } else {
+            chatArea.appendMarkdown("\n❌ " + result.message());
+        }
+        
+        if (result.action() == SlashCommandService.CommandAction.CLEAR) {
+            chatArea.setMarkdown("");
+        }
+        
+        updateChatStats();
     }
 
     private void setInputEnabled(boolean enabled) {

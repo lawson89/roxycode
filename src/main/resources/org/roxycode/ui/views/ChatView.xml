@@ -13,9 +13,7 @@
     </row-panel>
     <row-panel spacing="8" padding="12" opaque="true" style="border: 1,0,0,0,Component.borderColor">
         <button name="attachButton" text="Attach"/>
-        <scroll-pane weight="1">
-            <text-area name="inputField" rows="3"/>
-        </scroll-pane>
+        <column-panel weight="1" name="inputContainer"/>
         <column-panel spacing="4">
             <button name="sendButton" text="Send"/>
             <button name="stopButton" text="Stop" enabled="false"/>
