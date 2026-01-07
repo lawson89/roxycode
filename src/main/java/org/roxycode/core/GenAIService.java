@@ -6,7 +6,6 @@ import jakarta.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.cache.GeminiCacheService;
 import org.roxycode.cache.ProjectCacheMeta;
-import org.roxycode.core.context.ContextRegistry;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
@@ -36,8 +35,6 @@ public class GenAIService {
 
     private final Sandbox sandbox;
 
-    private final ContextRegistry contextRegistry;
-
     private final UsageService usageService;
 
     private final HistoryService historyService;
@@ -50,14 +47,13 @@ public class GenAIService {
 
     private Path cachedRoxyHome;
 
-    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, Sandbox sandbox, ContextRegistry contextRegistry,
+    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, Sandbox sandbox,
                         UsageService usageService, HistoryService historyService,
                         GeminiCacheService geminiCacheService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
         this.sandbox = sandbox;
-        this.contextRegistry = contextRegistry;
         this.usageService = usageService;
         this.historyService = historyService;
         this.geminiCacheService = geminiCacheService;
@@ -81,8 +77,6 @@ public class GenAIService {
         Path roxyHome = settingsService.getRoxyHome();
         this.cachedRoxyHome = roxyHome;
         LOG.info("🏠 Roxy Home detected at: {}", roxyHome);
-        LOG.info("Loading Contexts ...");
-        contextRegistry.loadContexts(roxyHome.resolve("context"));
         LOG.info("Loading Tools ...");
         toolRegistry.loadTools(roxyHome.resolve("tools"));
 
@@ -153,7 +147,6 @@ public class GenAIService {
     }
 
     public String buildSystemContext(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
-        String contextMenu = contextRegistry.getContextMenu();
         StringBuilder contextBuilder = new StringBuilder();
         contextBuilder.append("Project Root: ").append(projectRoot).append("\n");
         contextBuilder.append("Roxy Home: ").append(cachedRoxyHome != null ? cachedRoxyHome : "Not loaded").append("\n");
@@ -163,7 +156,6 @@ public class GenAIService {
         } else {
             contextBuilder.append("Codebase is not cached, please use provided tools").append("\n\n");
         }
-        contextBuilder.append(contextMenu).append("\n");
         if (attachedFiles != null && !attachedFiles.isEmpty()) {
             contextBuilder.append("\n--- ATTACHED FILES ---\n");
             for (File file : attachedFiles) {

@@ -3,7 +3,10 @@ package org.roxycode.core.analysis;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.*;
+import com.github.javaparser.ast.body.BodyDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.comments.Comment;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.SourceRoot;
@@ -25,15 +28,30 @@ public class JavaAnalysisService {
     private static final Logger LOG = LoggerFactory.getLogger(JavaAnalysisService.class);
 
     /**
+     * Generates a skeleton of the Java source files in the given directory
+     * and writes it to the specified output file.
+     *
+     * @param sourcePath The root folder of the source code
+     * @param outputPath The path to the file where the skeleton will be written
+     * @throws IOException If an I/O error occurs
+     */
+    public void generateSkeletonToFile(Path sourcePath, Path outputPath) throws IOException {
+        Files.createDirectories(outputPath.getParent());
+        try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
+            generateSkeleton(sourcePath, writer);
+        }
+    }
+
+    /**
      * Scans the given directory for .java files and streams a "skeleton"
      * (signatures + javadocs, no private members) to the provided writer.
      * <p>
      * Note: This method does NOT close the writer.
      *
      * @param sourcePath The root folder of the source code (e.g. src/main/java)
-     * @param writer The open writer to stream the summary to
+     * @param writer     The open writer to stream the summary to
      */
-    public void generateSkeleton(Path sourcePath, BufferedWriter writer) {
+    protected void generateSkeleton(Path sourcePath, BufferedWriter writer) {
         // Configure Parser
         ParserConfiguration config = new ParserConfiguration();
         config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
@@ -127,18 +145,4 @@ public class JavaAnalysisService {
         }
     }
 
-    /**
-     * Generates a skeleton of the Java source files in the given directory
-     * and writes it to the specified output file.
-     *
-     * @param sourcePath The root folder of the source code
-     * @param outputPath The path to the file where the skeleton will be written
-     * @throws IOException If an I/O error occurs
-     */
-    public void generateSkeletonToFile(Path sourcePath, Path outputPath) throws IOException {
-        Files.createDirectories(outputPath.getParent());
-        try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-            generateSkeleton(sourcePath, writer);
-        }
-    }
 }
