@@ -5,6 +5,7 @@ import jakarta.inject.Singleton;
 import org.apache.commons.io.FileUtils;
 import org.roxycode.core.tools.ToolRegistry;
 import org.roxycode.core.tools.service.FileSystemService;
+import org.roxycode.core.tools.service.GitRunner;
 import org.roxycode.core.tools.service.GitService;
 import org.roxycode.core.utils.SystemUtils;
 import org.slf4j.Logger;
@@ -104,13 +105,13 @@ public class RoxyProjectService {
 
     public void changeProjectRoot(Path newRoot) {
         LOG.info("Changing project root to: {}", newRoot);
-        if(!isValidFolder(newRoot)){
+        if (!isValidFolder(newRoot)) {
             throw new IllegalStateException("Invalid project root: " + newRoot);
         }
         sandbox.setRoot(newRoot);
         ensureProjectStructure();
         settingsService.setCurrentProject(getProjectRoot().toString());
-        currentBranch = gitService.getCurrentBranch(getProjectRoot().toString());
+        currentBranch = GitRunner.runGitCommand(sandbox.getRoot(), "branch", "--show-current");
     }
 
     public boolean isValidFolder(Path path) {

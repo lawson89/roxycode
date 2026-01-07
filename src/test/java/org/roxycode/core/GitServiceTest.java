@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 @MicronautTest
 class GitServiceTest {
 
@@ -36,7 +37,8 @@ class GitServiceTest {
         runCommand(tempDir.toFile(), "git", "commit", "-m", "Initial");
 
         // 1. Verify Branch (using Path object)
-        String branch = gitService.getCurrentBranch(tempDir);
+        sandbox.setRoot(tempDir);
+        String branch = gitService.getCurrentBranch();
         assertNotNull(branch);
         assertFalse(branch.isEmpty());
 
@@ -44,7 +46,7 @@ class GitServiceTest {
         File newFile = tempDir.resolve("new.txt").toFile();
         newFile.createNewFile();
 
-        String status = gitService.getStatus(tempDir);
+        String status = gitService.getStatus();
         assertTrue(status.contains("?? new.txt") || status.contains("new.txt"));
     }
 
@@ -61,17 +63,18 @@ class GitServiceTest {
         runCommand(tempDir.toFile(), "git", "commit", "-m", "Initial");
 
         // Verify Branch (using String path ".")
-        String branch = gitService.getCurrentBranch(".");
+        String branch = gitService.getCurrentBranch();
         assertNotNull(branch);
         assertFalse(branch.isEmpty());
 
         // Verify Status (using String path ".")
-        String status = gitService.getStatus(".");
+        String status = gitService.getStatus();
         assertNotNull(status);
     }
 
     @Test
     void testGitLog(@TempDir Path tempDir) throws Exception {
+        sandbox.setRoot(tempDir);
         // Setup a real temp git repo
         runCommand(tempDir.toFile(), "git", "init");
         runCommand(tempDir.toFile(), "git", "config", "user.email", "test@test.com");
@@ -88,12 +91,12 @@ class GitServiceTest {
         runCommand(tempDir.toFile(), "git", "commit", "-m", "Second Commit");
 
         // Verify log
-        String log = gitService.log(tempDir, null, 10);
+        String log = gitService.log( null, 10);
         assertTrue(log.contains("Initial Commit"));
         assertTrue(log.contains("Second Commit"));
 
         // Verify log for specific file
-        String fileLog = gitService.log(tempDir, "test.txt", 10);
+        String fileLog = gitService.log( "test.txt", 10);
         assertTrue(fileLog.contains("Second Commit"));
     }
 
