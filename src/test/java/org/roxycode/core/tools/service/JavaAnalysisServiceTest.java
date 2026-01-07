@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -151,5 +152,54 @@ class JavaAnalysisServiceTest {
         String updatedContent = Files.readString(path);
         assertTrue(updatedContent.contains("private String field1 = \"NewValue\";"));
         assertFalse(updatedContent.contains("OldValue"));
+    }
+
+    @Test
+    void testGetClassDependencies() throws IOException {
+        Path path = tempDir.resolve("DependencyTest.java");
+        Files.writeString(path, """
+            package test;
+            import java.util.List;
+            import java.util.ArrayList;
+            
+            public class DependencyTest extends BaseClass implements MyInterface {
+                private OtherClass field;
+                
+                public void method(ParamClass p) {
+                    LocalClass l = new LocalClass();
+                }
+            }
+            """);
+
+        List<String> dependencies = javaAnalysisService.getClassDependencies(path, "DependencyTest");
+
+        assertNotNull(dependencies);
+        assertTrue(dependencies.contains("BaseClass"));
+        assertTrue(dependencies.contains("MyInterface"));
+        assertTrue(dependencies.contains("OtherClass"));
+        assertTrue(dependencies.contains("ParamClass"));
+        assertTrue(dependencies.contains("LocalClass"));
+        // Check that Java library types are excluded if handled by isJavaLibraryType
+        assertFalse(dependencies.contains("String"));
+        assertFalse(dependencies.contains("List"));
+        assertFalse(dependencies.contains("ArrayList"));
+    }
+
+    @Test
+    void testAnalyzeFileIncludesDependencies() throws IOException {
+        Path path = tempDir.resolve("SummaryTest.java");
+        Files.writeString(path, """
+            package test;
+            public class SummaryTest {
+                private Dependency dep;
+            }
+            """);
+
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path);
+
+        assertNotNull(summary);
+        assertEquals(1, summary.classes().size());
+        JavaService.ClassSummary classSummary = summary.classes().get(0);
+        assertTrue(classSummary.dependencies().contains("Dependency"));
     }
 }

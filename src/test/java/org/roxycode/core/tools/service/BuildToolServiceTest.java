@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.ScriptServiceRegistry;
+import jakarta.inject.Provider;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,7 +29,7 @@ class BuildToolServiceTest {
         sandbox = new Sandbox();
         sandbox.setRoot(tempDir.toString());
         FileSystemService fileSystemService = new FileSystemService(sandbox);
-        buildToolService = new BuildToolService(sandbox, fileSystemService, mock(ScriptServiceRegistry.class));
+        buildToolService = new BuildToolService(sandbox, fileSystemService, () -> mock(ScriptServiceRegistry.class));
     }
 
     @Test

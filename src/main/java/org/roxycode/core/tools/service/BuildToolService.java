@@ -2,6 +2,7 @@ package org.roxycode.core.tools.service;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import jakarta.inject.Provider;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.LLMDoc;
@@ -23,7 +24,7 @@ public class BuildToolService {
 
     private final Sandbox sandbox;
     private final FileSystemService fileSystemService;
-    private final ScriptServiceRegistry scriptServiceRegistry;
+    private final Provider<ScriptServiceRegistry> scriptServiceRegistry;
 
 
     public enum BuildTool {
@@ -31,7 +32,7 @@ public class BuildToolService {
     }
 
     @Inject
-    public BuildToolService(Sandbox sandbox, FileSystemService fileSystemService, ScriptServiceRegistry scriptServiceRegistry) {
+    public BuildToolService(Sandbox sandbox, FileSystemService fileSystemService, Provider<ScriptServiceRegistry> scriptServiceRegistry) {
         this.sandbox = sandbox;
         this.fileSystemService = fileSystemService;
         this.scriptServiceRegistry = scriptServiceRegistry;
@@ -142,7 +143,7 @@ public class BuildToolService {
                 }
             }
             int exitCode = process.waitFor();
-            String outputStr = StringUtils.abbreviate(output.toString(), 1000); // Limit output to 10,000 characters
+            String outputStr = StringUtils.abbreviate(output.toString(), 50000); // Limit output to 50,000 characters
             if (exitCode == 0) {
                 return "✅ " + context + " SUCCESSFUL\n" + outputStr;
             } else {
@@ -365,7 +366,7 @@ public class BuildToolService {
             }
         }
 
-        content += scriptServiceRegistry.getApiDocs();
+        content += scriptServiceRegistry.get().getApiDocs();
         return content;
     }
 }

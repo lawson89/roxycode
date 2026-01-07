@@ -9,6 +9,7 @@ import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
 import org.roxycode.core.tools.LLMDoc;
@@ -62,7 +63,9 @@ public class JavaService {
                 ))
                 .collect(Collectors.toList());
 
-        return new ClassSummary(n.getNameAsString(), methods, fields, n.isInterface());
+        List<String> dependencies = extractDependencies(n);
+
+        return new ClassSummary(n.getNameAsString(), methods, fields, n.isInterface(), dependencies);
     }
 
     private MethodSummary summarizeMethod(MethodDeclaration m) {
@@ -72,6 +75,36 @@ public class JavaService {
                 m.getBegin().map(p -> p.line).orElse(-1),
                 m.getEnd().map(p -> p.line).orElse(-1)
         );
+    }
+
+    @LLMDoc("Returns the list of classes that the specified class depends on (extends, implements, fields, method parameters, local variables)")
+    public List<String> getClassDependencies(Path path, String className) throws IOException {
+        CompilationUnit cu = StaticJavaParser.parse(path);
+        Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
+                .filter(c -> c.getNameAsString().equals(className))
+                .findFirst();
+
+        if (classDecl.isPresent()) {
+            return extractDependencies(classDecl.get());
+        } else {
+            throw new RuntimeException("Class " + className + " not found in file " + path);
+        }
+    }
+
+    private List<String> extractDependencies(ClassOrInterfaceDeclaration n) {
+        return n.findAll(ClassOrInterfaceType.class).stream()
+                .map(ClassOrInterfaceType::getNameAsString)
+                .filter(name -> !name.equals(n.getNameAsString()))
+                .filter(name -> !isJavaLibraryType(name))
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+    }
+
+    private boolean isJavaLibraryType(String name) {
+        return List.of("String", "Integer", "Long", "Double", "Float", "Boolean", "Byte", "Character", "Short",
+                "Object", "List", "Set", "Map", "Optional", "ArrayList", "HashMap", "HashSet", "Collection", "Stream",
+                "Path", "Files", "IOException", "Exception", "RuntimeException").contains(name);
     }
 
     @LLMDoc("Returns the source code of a specific method in a class")
@@ -99,7 +132,7 @@ public class JavaService {
             List<MethodDeclaration> methods = classDecl.get().getMethodsByName(methodName);
             if (!methods.isEmpty()) {
                 MethodDeclaration newMethod = StaticJavaParser.parseMethodDeclaration(newMethodSource);
-                methods.getFirst().replace(newMethod);
+                methods.get(0).replace(newMethod);
                 Files.writeString(path, cu.toString());
             } else {
                 throw new RuntimeException("Method " + methodName + " not found in class " + className);
@@ -155,7 +188,7 @@ public class JavaService {
     public record JavaFileSummary(List<ClassSummary> classes, List<String> imports) {
     }
 
-    public record ClassSummary(String name, List<MethodSummary> methods, List<FieldSummary> fields, boolean isInterface) {
+    public record ClassSummary(String name, List<MethodSummary> methods, List<FieldSummary> fields, boolean isInterface, List<String> dependencies) {
     }
 
     public record MethodSummary(String name, String signature, int beginLine, int endLine) {
