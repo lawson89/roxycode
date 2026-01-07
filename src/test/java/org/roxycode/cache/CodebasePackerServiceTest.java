@@ -12,7 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class CodebasePackerServiceTest {
 
@@ -27,5 +29,43 @@ class CodebasePackerServiceTest {
 
         assertEquals(0, service.estimateTokenCount(null));
         assertEquals(0, service.estimateTokenCount(tempDir.resolve("non-existent")));
+    }
+
+    @Test
+    void testPackCodebaseIncludesJavaSkeleton(@TempDir Path tempDir) throws IOException {
+        Path root = tempDir.resolve("root");
+        Files.createDirectories(root.resolve("src/main/java"));
+        Files.writeString(root.resolve("src/main/java/Test.java"), "public class Test { public void hello() {} }");
+
+        RoxyProjectService roxyProjectService = mock(RoxyProjectService.class);
+        Path cacheDir = tempDir.resolve("cache");
+        Files.createDirectories(cacheDir);
+        when(roxyProjectService.getRoxyProjectCacheDir()).thenReturn(cacheDir);
+
+        Sandbox sandbox = mock(Sandbox.class);
+        when(sandbox.getRoot()).thenReturn(root);
+
+        BuildToolService buildToolService = mock(BuildToolService.class);
+        when(buildToolService.getProjectSummary()).thenReturn("Summary");
+
+        CodebasePackerService service = new CodebasePackerService(
+                roxyProjectService,
+                sandbox,
+                new FileListingService(),
+                buildToolService,
+                new JavaAnalysisService()
+        );
+
+        String result = service.packCodebaseToString(root);
+
+        assertTrue(result.contains("[java]"));
+        assertTrue(result.contains("class Test"));
+        assertTrue(result.contains("void hello()"));
+        
+        // Also verify the file was created in cache dir
+        Path skeletonFile = cacheDir.resolve("code_skeleton.txt");
+        assertTrue(Files.exists(skeletonFile));
+        String skeletonContent = Files.readString(skeletonFile);
+        assertTrue(skeletonContent.contains("class Test"));
     }
 }

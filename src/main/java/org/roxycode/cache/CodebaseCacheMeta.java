@@ -5,6 +5,8 @@ public record CodebaseCacheMeta(
         String user,
         String generatedAt,
         String cacheKey,
-        String geminiCacheId
+        String geminiCacheId,
+        long skeletonTokenCount,
+        String skeletonGeneratedAt
 ) {
 }

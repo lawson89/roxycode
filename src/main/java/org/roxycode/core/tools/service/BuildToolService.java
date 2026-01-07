@@ -88,7 +88,7 @@ public class BuildToolService {
     List<String> getTestCommand(BuildTool tool) {
         List<String> command = new ArrayList<>();
         command.add(resolveExecutable(tool));
-        command.add("test -q");
+        command.add("test");
         return command;
     }
 

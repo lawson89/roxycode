@@ -15,6 +15,7 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * CodebasePackerService is responsible for creating a snapshot of the project code in a format
@@ -110,16 +111,22 @@ public class CodebasePackerService {
         header += "\n\nThis is a codebase snapshot in TOML format including Java signatures for analysis.";
         writeTomlHeader(writer, "header", header);
         // Java source files via JavaAnalysisService
+        Path skeletonFile = roxyProjectService.getRoxyProjectCacheDir().resolve("code_skeleton.txt");
+        javaContextService.generateSkeletonToFile(rootPath, skeletonFile);
+        
+        String skeletonContent = Files.readString(skeletonFile, StandardCharsets.UTF_8);
+
         writer.write("[java]");
         writer.newLine();
         writer.write("content = '''");
-        javaContextService.generateSkeleton(rootPath, writer);
+        writer.newLine();
+        writer.write(escapeMultiLineString(skeletonContent));
         writer.newLine();
         writer.write("'''");
         writer.newLine();
         //@todo externalize this
 //        List<String> sourceExtensions = List.of(
-//                "java", "kt", "groovy"
+//                "xml", "toml", "md", "txt", "gradle", "properties", "groovy", "kt"
 //        );
 //        List<Path> sourceFiles = fileListingService.findFiles(rootPath.resolve("src").resolve("main"), sourceExtensions);
 //        for (Path sourceFile : sourceFiles) {
@@ -181,13 +188,13 @@ public class CodebasePackerService {
         w.newLine();
     }
 
-    private String quoteString(String s) {
+        private String quoteString(String s) {
         if (s == null)
             return "\"\"";
         return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
-    private String escapeMultiLineString(String content) {
+        private String escapeMultiLineString(String content) {
         return content.replace("'''", "''\\'");
     }
 

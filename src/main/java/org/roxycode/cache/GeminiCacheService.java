@@ -118,7 +118,20 @@ public class GeminiCacheService {
             // Generate Metadata File so GenAIService knows the ID
             String geminiId = response.name().orElse("Unknown");
 
-            CodebaseCacheMeta meta = new CodebaseCacheMeta(projectPath.toString(), user, ZonedDateTime.now().toString(), codebasePackerService.getCacheKey(projectPath, user, currentModel), geminiId);
+            
+            Path skeletonFile = roxyProjectService.getRoxyProjectCacheDir().resolve("code_skeleton.txt");
+            long skeletonTokenCount = codebasePackerService.estimateTokenCount(skeletonFile);
+            String skeletonGeneratedAt = Files.exists(skeletonFile) ? Files.getLastModifiedTime(skeletonFile).toString() : "N/A";
+
+            CodebaseCacheMeta meta = new CodebaseCacheMeta(
+                    projectPath.toString(),
+                    user,
+                    ZonedDateTime.now().toString(),
+                    codebasePackerService.getCacheKey(projectPath, user, currentModel),
+                    geminiId,
+                    skeletonTokenCount,
+                    skeletonGeneratedAt
+            );
             writeProjectCacheMeta(meta);
 
             LOG.info("geminiId: {}", geminiId);

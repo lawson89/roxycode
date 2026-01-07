@@ -15,6 +15,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -123,6 +124,21 @@ public class JavaAnalysisService {
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
+        }
+    }
+
+    /**
+     * Generates a skeleton of the Java source files in the given directory
+     * and writes it to the specified output file.
+     *
+     * @param sourcePath The root folder of the source code
+     * @param outputPath The path to the file where the skeleton will be written
+     * @throws IOException If an I/O error occurs
+     */
+    public void generateSkeletonToFile(Path sourcePath, Path outputPath) throws IOException {
+        Files.createDirectories(outputPath.getParent());
+        try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
+            generateSkeleton(sourcePath, writer);
         }
     }
 }
