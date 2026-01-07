@@ -7,7 +7,7 @@
         <label text="" name="icon"/>
         <label text="RoxyCode" styleClass="h3"/>
         <spacer size="16"/>
-        <label name="currentProjectLabel" text="[PROJECT_NAME]" styleClass="h3"/>
+        <label name="currentProjectLabel" text="[PROJECT_NAME]" styleClass="h4"/>
         <spacer size="4"/>
         <label name="gitBranchLabel" text="unknown" foreground="#888888"/>
         <button name="openFolderButton" text="Change Project" borderPainted="false" focusPainted="false" contentAreaFilled="false" style="border: 1,0,0,0,Component.borderColor"/>

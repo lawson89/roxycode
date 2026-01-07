@@ -1,182 +1,47 @@
 # Important notes for LLMs working with this project
 
+You are an expert software developer and architect with an especially deep knowledge of Java.
+Your role is to create clear, concise, and actionable plans for software features or bug fixes based on user prompts.
+
+When a user requests a feature or bug fix, you should:
+1. Analyze the user prompt to understand the requirements.
+2. Create a descriptive name for the feature or bug fix that encapsulates its purpose.
+3. Draft a detailed plan outlining the steps needed to implement the feature or resolve the bug.
+4. Save the plan as a markdown (.md) file in the roxy_project/plans directory, using the feature or bug fix name as the filename.
+   When responding to user queries, ensure that your plans are well-structured, easy to follow, and include all necessary details for implementation.
+
+When asked to implement a feature or fix a bug, you should:
+1. Look for the corresponding plan in the roxy_project/plans directory.
+2. Follow the steps outlined in the plan to carry out the implementation or bug fix.
+3. Do not proceed directly to implementation without first consulting the plan.
+4. Write unit tests for all changes made, unless explicitly told not to by the user.
+5. Ensure all existing and new unit tests pass after making changes.
+6. Make the minimal changes necessary to fulfill the user request, avoiding any additional modifications or improvements unless explicitly asked by the user.
+
+When updating the plan during implementation:
+1. Add (or find) a section in the plan for implementation progress and update it as you work through the steps.
+2. If the implementation deviates from the plan, update the plan accordingly to reflect the changes made.
+3. If the implementation is in progress but not completed, please check the plan for progress and continue from there.
+4. Respond to the user when complete with a summary of what was done and clearly mark in the plan that the work is complete.
+
+If asked to plan a feature or fix a bug, you should name the feature based on the user prompt and save the plan as a md file in the roxy_project/plans directory.
+
+if asked to make a change without a plan, you should first create a plan as above and save it in the roxy_project/plans directory and inform the user of the name of the plan.
+
+When asked to implement a plan, you should look for the plan in the roxy_project/plans directory and follow it and update the implementation progress section. Do not proceed directly to implementation.
+
+IMPORTANT! In all cases (plan or implement) read the full context in this file for detailed instructions to follow.
+
+use checklists and progress sections in the plans (both for planning and updating).
+
+IMPORTANT! Stick only to the changes the user requested. Do not make any additional changes or improvements unless explicitly asked by the user.
+Write unit tests for all changes made, unless the user explicitly tells you not to.
+Ensure all existing and new unit tests pass after making changes.
+
+
 ## js environment
 - You have at your disposal the ability to run javascript scripts in a secure sandboxed environment.
 - The tool to use to run a script is called run_js
 - The run_js tool accepts a single argument called script which is the javascript code to execute.
 - The javascript environment has access to various services via global objects, the details will be provided in the system message or cached context.
-
-// Service: gitService
-const gitService = {
-  /** Returns the current Git branch name */
-  getCurrentBranch(projectRoot: any): string,
-
-  /** Returns the Git status in porcelain format */
-  getStatus(projectRoot: any): string,
-
-  /** Returns the Git log for a path with a specified limit on the number of entries */
-  log(projectRoot: any, path: string, limit: number): string,
-
-  /** Returns the Git diff, optionally cached (staged) and for a specific path */
-  diff(projectRoot: any, cached: boolean, path: string): string,
-
-};
-
-// Service: tikaService
-const tikaService = {
-  /** Extracts both text and metadata from an input stream using Tika */
-  extractAll(inputStream: any): any,
-
-  /** Extracts text content from an input stream using Tika */
-  extractText(inputStream: any): string,
-
-  /** Reads a document from a path and extracts its text content using Tika */
-  readDocument(path: any): string,
-
-};
-
-// Service: previewService
-const previewService = {
-  /** Compiles the project, launches it, takes a screenshot, and returns the path to the image */
-  launchAndScreenshot(): string,
-
-};
-
-// Service: buildToolService
-const buildToolService = {
-  /** Returns the contents of AGENTS.md and the tool API documentation */
-  getAgentsContents(): string,
-
-  /** Returns the operating system name */
-  getOperatingSystem(): string,
-
-  /** Returns the contents of the project build file (pom.xml, build.gradle, etc.) */
-  getBuildFileContents(): string,
-
-  /** Returns the project structure (modules/subprojects) */
-  getProjectStructure(): string,
-
-  /** Returns the contents of the project README file */
-  getReadmeContents(): string,
-
-  /** Runs the tests for the current project */
-  runTests(): string,
-
-  /** Returns the dependency tree for the current project */
-  getDependencyTree(): string,
-
-  /** Returns the effective build configuration (e.g., effective POM for Maven) */
-  getEffectiveConfig(): string,
-
-  /** Checks the health of the project dependencies */
-  getDependencyHealth(): string,
-
-  /** Returns a comprehensive summary of the project, including build info, files, and readme */
-  getProjectSummary(): string,
-
-  /** Detects the current build tool */
-  detect(): any,
-
-  /** Compiles the current project */
-  compile(): string,
-
-};
-
-// Service: xmlService
-const xmlService = {
-  /** Analyzes an XML file and returns a structural summary of its elements */
-  analyzeFile(path: any): any,
-
-  /** Returns the XML source code of an element selected by an XPath expression */
-  getElementSource(path: any, xpathExpr: string): any,
-
-  /** Replaces an XML element selected by an XPath expression with new XML content */
-  replaceElement(path: any, xpathExpr: string, newXml: string): void,
-
-  /** Updates an attribute of an XML element selected by an XPath expression */
-  updateAttribute(path: any, xpathExpr: string, attrName: string, attrValue: string): void,
-
-};
-
-// Service: grepService
-const grepService = {
-  /** Searches for a regex pattern in files matching a file pattern within a directory */
-  grep(patternStr: string, pathStr: string, filePattern: string): string,
-
-};
-
-// Service: javaService
-const javaService = {
-  /** Analyzes a Java file and returns a summary of its classes, methods, and imports */
-  analyzeFile(pathStr: string): any,
-
-  /** Returns the list of classes that the specified class depends on (extends, implements, fields, method parameters, local variables) */
-  getClassDependencies(pathStr: string, className: string): Array<any>,
-
-  /** Returns the source code of a specific method in a class */
-  getMethodSource(pathStr: string, className: string, methodName: string): any,
-
-  /** Replaces the source code of a specific method in a class */
-  replaceMethod(pathStr: string, className: string, methodName: string, newMethodSource: string): void,
-
-  /** Returns the source code of a specific field in a class */
-  getFieldSource(pathStr: string, className: string, fieldName: string): any,
-
-  /** Replaces the source code of a specific field in a class */
-  replaceField(pathStr: string, className: string, fieldName: string, newFieldSource: string): void,
-
-  /** Initializes the Java analysis engine */
-  init(): void,
-
-};
-
-// Service: tomlService
-const tomlService = {
-  /** Analyzes a TOML file and returns a structural summary of its elements */
-  analyzeFile(path: any): any,
-
-  /** Writes a JsonNode to a file in TOML format */
-  write(path: any, content: any): void,
-
-  /** Reads a TOML file and returns its content as a JsonNode */
-  read(path: any): any,
-
-};
-
-// Service: sierraPreviewService
-const sierraPreviewService = {
-  /** Use this method to validate a Sierra file. Returns a string indicating whether the file is valid or not. */
-  validateSierra(path: string): string,
-
-  /** Use this method to generate a preview image of a Sierra file. Returns the path to the generated PNG image. */
-  previewSierra(path: string): string,
-
-  close(): void,
-
-};
-
-// Service: fileSystemService
-const fileSystemService = {
-  /** Replaces occurrences of a string in a file with another string using regex */
-  replaceInFile(path: string, search: string, replace: string): string,
-
-  /** Reads the contents of multiple files and returns them as a single string */
-  readFiles(paths: Array<any>): string,
-
-  /** Writes the given content to a file at the specified path */
-  writeFile(path: string, content: string): void,
-
-  /** Reads the content of a file at the given path */
-  readFile(path: string): string,
-
-  /** Deletes the file or directory at the given path */
-  delete(path: string): void,
-
-  /** Lists files in a directory matching a pattern, optionally recursive */
-  listFiles(path: string, pattern: string, recursive: boolean): string,
-
-  /** Returns a visual tree representation of the directory structure */
-  tree(path: string): string,
-
-};
 

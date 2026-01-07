@@ -11,7 +11,6 @@ import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.*;
 import org.roxycode.core.utils.UIUtils;
-import org.roxycode.core.tools.service.GitService;
 import org.roxycode.ui.views.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +18,6 @@ import org.slf4j.LoggerFactory;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.nio.file.FileSystems;
 import java.nio.file.Path;
 
 @Singleton
@@ -28,15 +26,11 @@ public class MainFrame extends JFrame implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(MainFrame.class);
 
     // Dependencies
-    private final GitService gitService;
-
     private final GenAIService genAIService;
 
     private final SettingsService settingsService;
 
     private final RoxyProjectService roxyProjectService;
-
-    private final Sandbox sandbox;
 
     private final ThemeService themeService;
 
@@ -70,8 +64,6 @@ public class MainFrame extends JFrame implements Runnable {
     @Inject
     private GeminiOnlineCachesView geminiOnlineCachesView;
 
-    private Path currentProjectRoot;
-
     private Timer notificationTimer;
 
     // --- OUTLETS ---
@@ -89,9 +81,6 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Outlet
     private JLabel currentModelLabel;
-
-    @Outlet
-    private JLabel projectNameLabel;
 
     @Outlet
     private JLabel currentProjectLabel;
@@ -147,12 +136,11 @@ public class MainFrame extends JFrame implements Runnable {
     private JButton openFolderButton;
 
     @Inject
-    public MainFrame(GitService gitService, GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, Sandbox sandbox, ThemeService themeService, NotificationService notificationService) {
-        this.gitService = gitService;
+    public MainFrame(GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService,
+                     ThemeService themeService, NotificationService notificationService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.roxyProjectService = roxyProjectService;
-        this.sandbox = sandbox;
         this.themeService = themeService;
         this.notificationService = notificationService;
         setTitle("RoxyCode");
@@ -188,13 +176,9 @@ public class MainFrame extends JFrame implements Runnable {
             notificationService.setListener(this::showNotification);
         }
         // Initialize logic
-        currentProjectRoot = FileSystems.getDefault().getPath("").toAbsolutePath();
-        if (settingsService.getCurrentProject() == null) {
-            settingsService.setCurrentProject(currentProjectRoot.toString());
+        if (settingsService.getCurrentProject() != null) {
+            roxyProjectService.changeProjectRoot(Path.of(settingsService.getCurrentProject()));
         }
-        sandbox.setRoot(currentProjectRoot.toString());
-        roxyProjectService.ensureProjectStructure();
-        initGitInfo();
         initListeners();
         genAIService.addBusyListener(busy -> SwingUtilities.invokeLater(() -> {
             if (activityIndicator != null) {
@@ -208,9 +192,6 @@ public class MainFrame extends JFrame implements Runnable {
             }
         }));
 
-        updateProjectLabel();
-        updateRoxyMode();
-        performRescan();
         // Set initial view
         showView("CHAT");
         setSize(1200, 800);
@@ -321,26 +302,9 @@ public class MainFrame extends JFrame implements Runnable {
             openFolderButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
     }
 
-    private void updateProjectLabel() {
-        if (currentProjectLabel != null) {
-            currentProjectLabel.setText(currentProjectRoot.getFileName().toString());
-            currentProjectLabel.setToolTipText(currentProjectRoot.toString());
-        }
-    }
-
-    private void initGitInfo() {
-        if (gitBranchLabel != null) {
-            String branch = gitService.getCurrentBranch(currentProjectRoot);
-            gitBranchLabel.setText(branch != null ? branch : "No Git Repo");
-        }
-        if (projectNameLabel != null) {
-            projectNameLabel.setText(currentProjectRoot.getFileName().toString());
-        }
-    }
-
     public void updateRoxyMode() {
         if (roxyModeLabel != null) {
-            RoxyMode mode = genAIService.getRoxyMode();
+            RoxyMode mode = roxyProjectService.getCurrentMode();
             roxyModeLabel.setText(mode.toString());
 
             Ikon iconCode;
@@ -449,26 +413,20 @@ public class MainFrame extends JFrame implements Runnable {
     private void onOpenFolder(ActionEvent e) {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        fileChooser.setCurrentDirectory(currentProjectRoot.toFile());
+        fileChooser.setCurrentDirectory(roxyProjectService.getProjectRoot().toFile());
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            currentProjectRoot = fileChooser.getSelectedFile().toPath().toAbsolutePath();
-            sandbox.setRoot(currentProjectRoot.toString());
-            settingsService.setCurrentProject(currentProjectRoot.toString());
-            roxyProjectService.ensureProjectStructure();
+            roxyProjectService.changeProjectRoot(fileChooser.getSelectedFile().toPath());
             genAIService.clearHistory();
-            updateProjectLabel();
-            initGitInfo();
-            performRescan();
-            chatView.appendSystemMessage("Switched project to " + currentProjectRoot.toString());
+            if (gitBranchLabel != null) {
+                String branch = roxyProjectService.getCurrentBranch();
+                gitBranchLabel.setText(branch != null ? branch : "No Git Repo");
+            }
+            if(currentProjectLabel != null) {
+                currentProjectLabel.setText(roxyProjectService.getProjectRoot().toString());
+            }
+            updateRoxyMode();
+            chatView.appendSystemMessage("Switched project to " + roxyProjectService.getProjectRoot().toString());
         }
-    }
-
-    private void performRescan() {
-        log.info("Triggering Knowledge Rescan for {}", currentProjectRoot);
-        new Thread(() -> {
-            genAIService.refreshKnowledge(currentProjectRoot.toString());
-            SwingUtilities.invokeLater(() -> chatView.appendSystemMessage("Knowledge base reloaded."));
-        }).start();
     }
 
     public JTextPane[] getAllPanes() {

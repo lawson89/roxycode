@@ -119,7 +119,7 @@ public class GeminiCacheService {
             String geminiId = response.name().orElse("Unknown");
 
             
-            Path skeletonFile = roxyProjectService.getRoxyProjectCacheDir().resolve("code_skeleton.txt");
+            Path skeletonFile = roxyProjectService.getRoxyCacheDir().resolve("code_skeleton.txt");
             long skeletonTokenCount = codebasePackerService.estimateTokenCount(skeletonFile);
             String skeletonGeneratedAt = Files.exists(skeletonFile) ? Files.getLastModifiedTime(skeletonFile).toString() : "N/A";
 
@@ -151,7 +151,7 @@ public class GeminiCacheService {
         }
         String cacheKey = codebasePackerService.getCacheKey(projectPath, user, currentModel);
         try {
-            Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
+            Path cacheDir = roxyProjectService.getRoxyCacheDir();
             Path metaFilePath = cacheDir.resolve(cacheKey + ".toml");
             if (Files.exists(metaFilePath)) {
                 return Optional.of(tomlMapper.readValue(metaFilePath.toFile(), ProjectCacheMeta.class));
@@ -163,7 +163,7 @@ public class GeminiCacheService {
     }
 
     protected void writeProjectCacheMeta(ProjectCacheMeta codebaseCacheMeta) throws IOException {
-        Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
+        Path cacheDir = roxyProjectService.getRoxyCacheDir();
         String metaFileName = codebaseCacheMeta.cacheKey() + ".toml";
         Path metaFilePath = cacheDir.resolve(metaFileName);
         tomlMapper.writeValue(metaFilePath.toFile(), codebaseCacheMeta);

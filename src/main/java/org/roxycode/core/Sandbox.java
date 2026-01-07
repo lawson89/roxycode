@@ -16,6 +16,10 @@ public class Sandbox {
         this.sandboxRoot = Paths.get(rootPath).toAbsolutePath().normalize();
     }
 
+    public void setRoot(Path rootPath) {
+        this.sandboxRoot = rootPath.toAbsolutePath().normalize();
+    }
+
     public Path getRoot() {
         return sandboxRoot;
     }

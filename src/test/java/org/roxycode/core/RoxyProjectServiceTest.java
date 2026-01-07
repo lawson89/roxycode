@@ -25,12 +25,12 @@ class RoxyProjectServiceTest {
         sandbox = new Sandbox();
         sandbox.setRoot(tempDir.toString());
         fileSystemService = new FileSystemService(sandbox);
-        roxyProjectService = new RoxyProjectService(sandbox, fileSystemService);
+        roxyProjectService = new RoxyProjectService(sandbox, fileSystemService, null, null);
     }
 
     @Test
     void testEnsureProjectStructure_CreatesDirAndReadme() throws IOException {
-        Path projectDir = tempDir.resolve(RoxyProjectService.ROXY_PROJECT_DIR);
+        Path projectDir = tempDir.resolve(RoxyProjectService.ROXY_WORKING_DIR);
         Path readmePath = projectDir.resolve("README.md");
 
         // Initial state: does not exist

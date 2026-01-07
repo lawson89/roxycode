@@ -44,7 +44,7 @@ public class ProjectPackerService {
     }
 
     public Path getCacheFilePath() throws IOException {
-        return roxyProjectService.getRoxyProjectCacheDir().resolve(CACHE_FILENAME);
+        return roxyProjectService.getRoxyCacheDir().resolve(CACHE_FILENAME);
     }
 
     public String getCacheLastModified() throws IOException {
@@ -62,7 +62,7 @@ public class ProjectPackerService {
 
     public void buildProjectCache() throws IOException {
         Path rootPath = sandbox.getRoot();
-        Path cacheDir = roxyProjectService.getRoxyProjectCacheDir();
+        Path cacheDir = roxyProjectService.getRoxyCacheDir();
         Path outputPath = cacheDir.resolve(CACHE_FILENAME);
         packCodebaseToFile(rootPath, outputPath);
     }
@@ -109,7 +109,7 @@ public class ProjectPackerService {
         header += "\n\nThis is a codebase snapshot in TOML format including Java signatures for analysis.";
         writeTomlHeader(writer, "header", header);
         // Java source files via JavaAnalysisService
-        Path skeletonFile = roxyProjectService.getRoxyProjectCacheDir().resolve("code_skeleton.txt");
+        Path skeletonFile = roxyProjectService.getRoxyCacheDir().resolve("code_skeleton.txt");
         javaContextService.generateSkeletonToFile(rootPath, skeletonFile);
         
         String skeletonContent = Files.readString(skeletonFile, StandardCharsets.UTF_8);

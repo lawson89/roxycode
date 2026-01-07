@@ -40,7 +40,7 @@ class CodebasePackerServiceTest {
         RoxyProjectService roxyProjectService = mock(RoxyProjectService.class);
         Path cacheDir = tempDir.resolve("cache");
         Files.createDirectories(cacheDir);
-        when(roxyProjectService.getRoxyProjectCacheDir()).thenReturn(cacheDir);
+        when(roxyProjectService.getRoxyCacheDir()).thenReturn(cacheDir);
 
         Sandbox sandbox = mock(Sandbox.class);
         when(sandbox.getRoot()).thenReturn(root);
