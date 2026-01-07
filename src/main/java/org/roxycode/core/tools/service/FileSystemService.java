@@ -6,6 +6,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 
 import java.io.File;
@@ -29,11 +30,13 @@ public class FileSystemService {
         this.sandbox = sandbox;
     }
 
+    @LLMDoc("Reads the content of a file at the given path")
     public String readFile(String path) throws IOException {
         Path p = sandbox.resolve(path);
         return FileUtils.readFileToString(p.toFile(), StandardCharsets.UTF_8);
     }
 
+    @LLMDoc("Writes the given content to a file at the specified path")
     public void writeFile(String path, String content) throws IOException {
         Path p = sandbox.resolve(path);
         Path parent = p.getParent();
@@ -43,6 +46,7 @@ public class FileSystemService {
         FileUtils.writeStringToFile(p.toFile(), content, StandardCharsets.UTF_8);
     }
 
+    @LLMDoc("Deletes the file or directory at the given path")
     public void delete(String path) throws IOException {
         Path p = sandbox.resolve(path);
         // Safety checks
@@ -59,6 +63,7 @@ public class FileSystemService {
         }
     }
 
+    @LLMDoc("Lists files in a directory matching a pattern, optionally recursive")
     public String listFiles(String path, String pattern, boolean recursive) {
         Path p = sandbox.resolve(path);
         File dir = p.toFile();
@@ -70,6 +75,7 @@ public class FileSystemService {
         return files.stream().map(f -> projectRoot.relativize(f.toPath()).toString()).sorted().collect(Collectors.joining("\n"));
     }
 
+    @LLMDoc("Returns a visual tree representation of the directory structure")
     public String tree(String path) {
         Path rootDir = sandbox.resolve(path);
         if (!Files.exists(rootDir)) {
@@ -121,6 +127,7 @@ public class FileSystemService {
         }
     }
 
+    @LLMDoc("Replaces occurrences of a string in a file with another string using regex")
     public String replaceInFile(String path, String search, String replace) throws IOException {
         Path p = sandbox.resolve(path);
         String content = FileUtils.readFileToString(p.toFile(), StandardCharsets.UTF_8);
@@ -132,6 +139,7 @@ public class FileSystemService {
         return "Successfully updated " + path;
     }
 
+    @LLMDoc("Reads the contents of multiple files and returns them as a single string")
     public String readFiles(List<String> paths) {
         StringBuilder output = new StringBuilder();
         for (String pathStr : paths) {

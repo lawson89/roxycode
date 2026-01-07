@@ -11,6 +11,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 
 import java.io.IOException;
@@ -24,12 +25,14 @@ import java.util.stream.Collectors;
 @Singleton
 public class JavaService {
 
+    @LLMDoc("Initializes the Java analysis engine")
     @PostConstruct
     public void init() {
         StaticJavaParser.getParserConfiguration()
                 .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
     }
 
+    @LLMDoc("Analyzes a Java file and returns a summary of its classes, methods, and imports")
     public JavaFileSummary analyzeFile(Path path) throws IOException {
         CompilationUnit cu = StaticJavaParser.parse(path);
 
@@ -71,6 +74,7 @@ public class JavaService {
         );
     }
 
+    @LLMDoc("Returns the source code of a specific method in a class")
     public Optional<String> getMethodSource(Path path, String className, String methodName) {
         try {
             CompilationUnit cu = StaticJavaParser.parse(path);
@@ -84,6 +88,7 @@ public class JavaService {
         }
     }
 
+    @LLMDoc("Replaces the source code of a specific method in a class")
     public void replaceMethod(Path path, String className, String methodName, String newMethodSource) throws IOException {
         CompilationUnit cu = StaticJavaParser.parse(path);
         Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
@@ -104,6 +109,7 @@ public class JavaService {
         }
     }
 
+    @LLMDoc("Returns the source code of a specific field in a class")
     public Optional<String> getFieldSource(Path path, String className, String fieldName) {
         try {
             CompilationUnit cu = StaticJavaParser.parse(path);
@@ -118,6 +124,7 @@ public class JavaService {
         }
     }
 
+    @LLMDoc("Replaces the source code of a specific field in a class")
     public void replaceField(Path path, String className, String fieldName, String newFieldSource) throws IOException {
         CompilationUnit cu = StaticJavaParser.parse(path);
         Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()

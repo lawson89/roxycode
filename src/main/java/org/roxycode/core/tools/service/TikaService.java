@@ -1,6 +1,7 @@
 package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.LLMDoc;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.AutoDetectParser;
@@ -21,10 +22,12 @@ import java.util.Map;
 @Singleton
 public class TikaService {
 
+    @LLMDoc("Extracts text content from an input stream using Tika")
     public String extractText(InputStream inputStream) throws IOException {
         return extractAll(inputStream).text();
     }
 
+    @LLMDoc("Reads a document from a path and extracts its text content using Tika")
     public String readDocument(Path path) throws IOException {
         if (!Files.exists(path)) {
             throw new IOException("File not found: " + path);
@@ -37,6 +40,7 @@ public class TikaService {
         }
     }
 
+    @LLMDoc("Extracts both text and metadata from an input stream using Tika")
     public ExtractionResult extractAll(InputStream inputStream) throws IOException {
         Parser parser = new AutoDetectParser();
         // BodyContentHandler(-1) disables the write limit, allowing large documents

@@ -1,6 +1,7 @@
 package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 import org.w3c.dom.*;
 
@@ -30,6 +31,7 @@ public class XmlService {
     public record ElementSummary(String name, String xpath, int depth) {
     }
 
+    @LLMDoc("Analyzes an XML file and returns a structural summary of its elements")
     public XmlFileSummary analyzeFile(Path path) throws Exception {
         Document doc = loadDocument(path);
         Element root = doc.getDocumentElement();
@@ -61,6 +63,7 @@ public class XmlService {
         }
     }
 
+    @LLMDoc("Returns the XML source code of an element selected by an XPath expression")
     public Optional<String> getElementSource(Path path, String xpathExpr) throws Exception {
         Document doc = loadDocument(path);
         XPath xpath = XPathFactory.newInstance().newXPath();
@@ -71,6 +74,7 @@ public class XmlService {
         return Optional.of(nodeToString(node));
     }
 
+    @LLMDoc("Replaces an XML element selected by an XPath expression with new XML content")
     public void replaceElement(Path path, String xpathExpr, String newXml) throws Exception {
         Document doc = loadDocument(path);
         XPath xpath = XPathFactory.newInstance().newXPath();
@@ -90,6 +94,7 @@ public class XmlService {
         saveDocument(doc, path);
     }
 
+    @LLMDoc("Updates an attribute of an XML element selected by an XPath expression")
     public void updateAttribute(Path path, String xpathExpr, String attrName, String attrValue) throws Exception {
         Document doc = loadDocument(path);
         XPath xpath = XPathFactory.newInstance().newXPath();

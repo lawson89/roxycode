@@ -4,6 +4,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.jetbrains.annotations.NotNull;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 
 import java.io.BufferedReader;
@@ -26,6 +27,7 @@ public class GrepService {
         this.sandbox = sandbox;
     }
 
+    @LLMDoc("Searches for a regex pattern in files matching a file pattern within a directory")
     public String grep(String patternStr, String pathStr, String filePattern) {
         if (pathStr == null || pathStr.isEmpty()) {
             pathStr = ".";

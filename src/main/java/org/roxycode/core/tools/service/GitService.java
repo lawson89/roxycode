@@ -1,6 +1,7 @@
 package org.roxycode.core.tools.service;
 
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,14 +21,17 @@ public class GitService {
     private static final Logger LOG = LoggerFactory.getLogger(GitService.class);
     private static final int TIMEOUT_SECONDS = 10; // Increased timeout for diffs
 
+    @LLMDoc("Returns the current Git branch name")
     public String getCurrentBranch(Path projectRoot) {
         return runGitCommand(projectRoot, "branch", "--show-current");
     }
 
+    @LLMDoc("Returns the Git status in porcelain format")
     public String getStatus(Path projectRoot) {
         return runGitCommand(projectRoot, "status", "--porcelain");
     }
 
+    @LLMDoc("Returns the Git diff, optionally cached (staged) and for a specific path")
     public String diff(Path projectRoot, boolean cached, String path) {
         List<String> args = new ArrayList<>();
         args.add("diff");
@@ -40,6 +44,7 @@ public class GitService {
         return runGitCommand(projectRoot, args.toArray(new String[0]));
     }
 
+    @LLMDoc("Returns the Git log for a path with a specified limit on the number of entries")
     public String log(Path projectRoot, String path, int limit) {
         List<String> args = new ArrayList<>();
         args.add("log");

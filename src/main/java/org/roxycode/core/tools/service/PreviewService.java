@@ -3,6 +3,7 @@ package org.roxycode.core.tools.service;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,7 @@ public class PreviewService {
         this.buildToolService = buildToolService;
     }
 
+    @LLMDoc("Compiles the project, launches it, takes a screenshot, and returns the path to the image")
     public String launchAndScreenshot() throws Exception {
         LOG.info("Launching Preview Service to take screenshot.");
         // 1. Compile

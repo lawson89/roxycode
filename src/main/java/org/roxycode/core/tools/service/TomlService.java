@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import jakarta.inject.Singleton;
+import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 
 import java.nio.file.Path;
@@ -78,6 +79,7 @@ public class TomlService {
     }
 
 
+    @LLMDoc("Analyzes a TOML file and returns a structural summary of its elements")
     public TomlFileSummary analyzeFile(Path path) throws Exception {
         ObjectMapper mapper = new TomlMapper();
         JsonNode root = mapper.readTree(path.toFile());
@@ -106,11 +108,13 @@ public class TomlService {
         }
     }
 
+    @LLMDoc("Reads a TOML file and returns its content as a JsonNode")
     public JsonNode read(Path path) throws Exception {
         ObjectMapper mapper = new TomlMapper();
         return mapper.readTree(path.toFile());
     }
 
+    @LLMDoc("Writes a JsonNode to a file in TOML format")
     public void write(Path path, JsonNode content) throws Exception {
         ObjectMapper mapper = new TomlMapper();
         mapper.writeValue(path.toFile(), content);

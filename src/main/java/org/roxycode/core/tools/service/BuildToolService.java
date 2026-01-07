@@ -60,6 +60,7 @@ public class BuildToolService {
         return executeCommand(getCompileCommand(tool), "Compilation");
     }
 
+    @LLMDoc("Runs the tests for the current project")
     public String runTests() {
         BuildTool tool = detect();
         if (tool == BuildTool.UNKNOWN) {
@@ -96,6 +97,7 @@ public class BuildToolService {
         return resolveExecutable(tool, System.getProperty("os.name").toLowerCase().contains("win"));
     }
 
+    @LLMDoc("Returns the operating system name")
     public String getOperatingSystem() {
         return System.getProperty("os.name").toLowerCase();
     }
@@ -151,6 +153,7 @@ public class BuildToolService {
         }
     }
 
+    @LLMDoc("Returns the dependency tree for the current project")
     public String getDependencyTree() {
         BuildTool tool = detect();
         if (tool == BuildTool.UNKNOWN) {
@@ -182,6 +185,7 @@ public class BuildToolService {
         return command;
     }
 
+    @LLMDoc("Returns the project structure (modules/subprojects)")
     public String getProjectStructure() {
         BuildTool tool = detect();
         if (tool == BuildTool.UNKNOWN) {
@@ -195,6 +199,7 @@ public class BuildToolService {
     }
 
     //@todo add cache as this can be really slow
+    @LLMDoc("Returns a comprehensive summary of the project, including build info, files, and readme")
     public String getProjectSummary() {
         String report = "### Project Summary\n";
         report += "### Agent Instructions\n";
@@ -238,6 +243,7 @@ public class BuildToolService {
         return command;
     }
 
+    @LLMDoc("Returns the effective build configuration (e.g., effective POM for Maven)")
     public String getEffectiveConfig() {
         BuildTool tool = detect();
         if (tool == BuildTool.UNKNOWN) {
@@ -269,6 +275,7 @@ public class BuildToolService {
         return command;
     }
 
+    @LLMDoc("Checks the health of the project dependencies")
     public String getDependencyHealth() {
         BuildTool tool = detect();
         if (tool == BuildTool.UNKNOWN) {
@@ -297,6 +304,7 @@ public class BuildToolService {
         return command;
     }
 
+    @LLMDoc("Returns the contents of the project build file (pom.xml, build.gradle, etc.)")
     public String getBuildFileContents() {
         Path projectRoot = sandbox.getRoot();
         Path buildFile = null;
@@ -322,6 +330,7 @@ public class BuildToolService {
         }
     }
 
+    @LLMDoc("Returns the contents of the project README file")
     public String getReadmeContents() {
         Path projectRoot = sandbox.getRoot();
         List<String> potentialFilenames = Arrays.asList(
@@ -342,6 +351,7 @@ public class BuildToolService {
         return "❌ No README file found.";
     }
 
+    @LLMDoc("Returns the contents of AGENTS.md and the tool API documentation")
     public String getAgentsContents() {
         String content = "";
         Path projectRoot = sandbox.getRoot();
