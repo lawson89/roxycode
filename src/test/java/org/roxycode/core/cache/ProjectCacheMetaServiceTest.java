@@ -8,6 +8,7 @@ import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.utils.SystemUtils;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -52,4 +53,79 @@ class ProjectCacheMetaServiceTest {
         assertNotNull(cacheKey);
         assertTrue(cacheKey.contains(user));
     }
+
+    @Test
+    void testDeleteMetadataByCacheKey() throws IOException {
+        Path projectRoot = roxyProjectService.getProjectRoot();
+        String user = SystemUtils.getSystemUser();
+        String model = "gemini-1.5-flash";
+        String cacheKey = projectCacheMetaService.getCacheKey(projectRoot, user, model);
+
+        ProjectCacheMeta meta = new ProjectCacheMeta(
+            projectRoot.toString(),
+            user,
+            "2023-10-27T10:00:00Z",
+            cacheKey,
+            "cachedContents/test-id-key",
+            100L,
+            "2023-10-27T10:00:00Z"
+        );
+
+        projectCacheMetaService.writeProjectCacheMeta(meta);
+        Path metaFile = roxyProjectService.getRoxyCacheDir().resolve(cacheKey + ".toml");
+        assertTrue(Files.exists(metaFile), "Metadata file should exist after write");
+
+        projectCacheMetaService.deleteProjectCacheMetaByCacheKey(cacheKey);
+        assertFalse(Files.exists(metaFile), "Metadata file should be deleted");
+    }
+
+    @Test
+    void testDeleteMetadataByGeminiId() throws IOException {
+        Path projectRoot = roxyProjectService.getProjectRoot();
+        String user = SystemUtils.getSystemUser();
+        String model = "gemini-1.5-flash-id";
+        String cacheKey = projectCacheMetaService.getCacheKey(projectRoot, user, model);
+        String geminiId = "cachedContents/test-id-search";
+
+        ProjectCacheMeta meta = new ProjectCacheMeta(
+            projectRoot.toString(),
+            user,
+            "2023-10-27T10:00:00Z",
+            cacheKey,
+            geminiId,
+            100L,
+            "2023-10-27T10:00:00Z"
+        );
+
+        projectCacheMetaService.writeProjectCacheMeta(meta);
+        Path metaFile = roxyProjectService.getRoxyCacheDir().resolve(cacheKey + ".toml");
+        assertTrue(Files.exists(metaFile), "Metadata file should exist after write");
+
+        projectCacheMetaService.deleteProjectCacheMetaByGeminiId(geminiId);
+        assertFalse(Files.exists(metaFile), "Metadata file should be deleted by Gemini ID");
+    }
+
+    @Test
+    void testDeleteAllMetadata() throws IOException {
+        Path projectRoot = roxyProjectService.getProjectRoot();
+        String user = SystemUtils.getSystemUser();
+        
+        ProjectCacheMeta meta1 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "key1", "id1", 0, "...");
+        ProjectCacheMeta meta2 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "key2", "id2", 0, "...");
+
+        projectCacheMetaService.writeProjectCacheMeta(meta1);
+        projectCacheMetaService.writeProjectCacheMeta(meta2);
+
+        Path metaFile1 = roxyProjectService.getRoxyCacheDir().resolve("key1.toml");
+        Path metaFile2 = roxyProjectService.getRoxyCacheDir().resolve("key2.toml");
+
+        assertTrue(Files.exists(metaFile1));
+        assertTrue(Files.exists(metaFile2));
+
+        projectCacheMetaService.deleteAllMetadata();
+
+        assertFalse(Files.exists(metaFile1));
+        assertFalse(Files.exists(metaFile2));
+    }
+
 }

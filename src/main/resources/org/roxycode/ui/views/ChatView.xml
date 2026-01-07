@@ -19,8 +19,13 @@
             <button name="stopButton" text="Stop" enabled="false"/>
         </column-panel>
     </row-panel>
-     <row-panel spacing="12" padding="2,12,4,12" opaque="true">
+    <row-panel spacing="12" padding="2,12,4,12" opaque="true">
         <spacer weight="1"/>
+
+        <label name="cacheStatusLabel" text="Cache: Unknown" style="font: -2; foreground: #888888"/>
+        <label name="cacheIdLabel" text="" style="font: -2; foreground: #888888"/>
+        <spacer weight="1"/>
+
         <label name="currentModelLabel" text="[MODEL]" style="font: -2; foreground: #888888"/>
         <label name="msgCountLabel" text="0 Messages" style="font: -2; foreground: #888888"/>
         <label name="inTokenLabel" text="0 In" style="font: -2; foreground: #888888"/>

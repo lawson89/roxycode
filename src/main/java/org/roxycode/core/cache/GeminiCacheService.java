@@ -172,6 +172,10 @@ public class GeminiCacheService {
             LOG.info("Successfully deleted: {}", cacheName);
         } catch (Exception e) {
             LOG.warn("Failed to delete cache {}: {}", cacheName, e.getMessage());
+        } finally {
+            // Remove local metadata
+            projectCacheMetaService.deleteProjectCacheMetaByCacheKey(cacheName);
+            projectCacheMetaService.deleteProjectCacheMetaByGeminiId(cacheName);
         }
     }
 
@@ -190,6 +194,7 @@ public class GeminiCacheService {
                 LOG.warn("Could not delete cache {}: {}", cache.name(), e.getMessage());
             }
         }
+        projectCacheMetaService.deleteAllMetadata();
         return count;
     }
 

@@ -11,6 +11,9 @@ import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.*;
+import org.roxycode.core.cache.ProjectCacheMetaService;
+import org.roxycode.core.beans.ProjectCacheMeta;
+import java.util.Optional;
 import org.roxycode.core.utils.UIUtils;
 import org.roxycode.ui.views.*;
 import org.slf4j.Logger;
@@ -36,6 +39,8 @@ public class MainFrame extends JFrame implements Runnable {
     private final ThemeService themeService;
 
     private final NotificationService notificationService;
+
+    private final ProjectCacheMetaService projectCacheMetaService;
 
     // -- VIEWS --
     @Inject
@@ -136,14 +141,21 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton openFolderButton;
 
+    @Outlet
+    private JLabel cacheStatusLabel;
+
+    @Outlet
+    private JLabel cacheIdLabel;
+
     @Inject
     public MainFrame(GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService,
-                     ThemeService themeService, NotificationService notificationService) {
+                     ThemeService themeService, NotificationService notificationService, ProjectCacheMetaService projectCacheMetaService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.roxyProjectService = roxyProjectService;
         this.themeService = themeService;
         this.notificationService = notificationService;
+        this.projectCacheMetaService = projectCacheMetaService;
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }
@@ -182,6 +194,7 @@ public class MainFrame extends JFrame implements Runnable {
             if (activityIndicator != null) {
                 if (busy) {
                     activityIndicator.setVisible(true);
+        new Timer(5000, e -> updateCacheStatus()).start();
                     activityIndicator.start();
                 } else {
                     activityIndicator.stop();
@@ -429,10 +442,36 @@ public class MainFrame extends JFrame implements Runnable {
             currentProjectLabel.setText(roxyProjectService.getProjectRoot().toString());
         }
         updateRoxyMode();
+        updateCacheStatus();
+        updateCacheStatus();
         chatView.appendSystemMessage("Switched project to " + roxyProjectService.getProjectRoot().toString());
     }
 
     public JTextPane[] getAllPanes() {
         return new JTextPane[]{chatView.getChatArea(), systemPromptView.getSystemPromptArea(), messageHistoryView.getMessageHistoryArea(), codebaseCacheView.getCacheContentArea()};
     }
+
+    public void updateCacheStatus() {
+        SwingUtilities.invokeLater(() -> {
+            boolean enabled = settingsService.isCacheEnabled();
+            if (cacheStatusLabel != null) {
+                cacheStatusLabel.setText("Cache: " + (enabled ? "Enabled" : "Disabled"));
+                cacheStatusLabel.setForeground(enabled ? new Color(100, 255, 100) : new Color(255, 100, 100));
+            }
+
+            if (cacheIdLabel != null) {
+                if (enabled) {
+                    Optional<ProjectCacheMeta> meta = projectCacheMetaService.getProjectCacheMeta();
+                    if (meta.isPresent()) {
+                        cacheIdLabel.setText("ID: " + meta.get().geminiCacheId());
+                    } else {
+                        cacheIdLabel.setText("ID: None");
+                    }
+                } else {
+                    cacheIdLabel.setText("");
+                }
+            }
+        });
+    }
+
 }
