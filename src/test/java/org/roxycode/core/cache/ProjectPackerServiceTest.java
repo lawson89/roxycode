@@ -1,4 +1,4 @@
-package org.roxycode.cache;
+package org.roxycode.core.cache;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import org.junit.jupiter.api.Test;
@@ -48,6 +48,7 @@ class ProjectPackerServiceTest {
 
         BuildToolService buildToolService = mock(BuildToolService.class);
         when(buildToolService.getProjectSummary()).thenReturn("Summary");
+        when(roxyProjectService.getStaticSystemPrompt()).thenReturn("System Prompt");
 
         ProjectPackerService service = new ProjectPackerService(
                 roxyProjectService,

@@ -1,4 +1,4 @@
-package org.roxycode.cache;
+package org.roxycode.core.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
@@ -65,7 +65,6 @@ public class ProjectPackerService {
         return estimateTokenCount(getCacheFilePath());
     }
 
-
     public void buildProjectCache() throws IOException {
         Path rootPath = sandbox.getRoot();
         Path cacheDir = roxyProjectService.getRoxyCacheDir();
@@ -78,9 +77,7 @@ public class ProjectPackerService {
      * Rough estimate: 4 characters per token.
      */
     public long estimateTokenCount(Path cacheFile) throws IOException {
-        if (cacheFile == null || !Files.exists(cacheFile)) {
-            return 0;
-        }
+        if (cacheFile == null || !Files.exists(cacheFile)) return 0;
         long bytes = Files.size(cacheFile);
         return bytes / 4;
     }
@@ -90,7 +87,6 @@ public class ProjectPackerService {
      */
     public void packCodebaseToFile(Path rootPath, Path outputPath) throws IOException {
         try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
-            // Header writing removed
             streamFilesToToml(rootPath, writer);
         }
     }
@@ -99,44 +95,43 @@ public class ProjectPackerService {
      * Returns the cache as a String using "Pretty TOML" format.
      */
     public String packCodebaseToString(Path rootPath) throws IOException {
-        StringWriter stringWriter = new StringWriter();
-        try (BufferedWriter writer = new BufferedWriter(stringWriter)) {
-            // Header writing removed
+        StringWriter sw = new StringWriter();
+        try (BufferedWriter writer = new BufferedWriter(sw)) {
             streamFilesToToml(rootPath, writer);
         }
-        return stringWriter.toString();
+        return sw.toString();
     }
 
     /**
      * Shared logic to walk the file tree and write entries to any BufferedWriter.
      */
     protected void streamFilesToToml(Path rootPath, BufferedWriter writer) throws IOException {
-        List<NamedContent> contents = new ArrayList<>();
-        NamedContent systemPrompt = new NamedContent("system_prompt", roxyProjectService.getStaticSystemPrompt());
-        writer.write(convertContentToToml(systemPrompt));
-        String javaSkeleton = javaContextService.generateSkeletonToString(rootPath);
-        NamedContent javaSkeletonContent = new NamedContent("java_skeleton", javaSkeleton);
-        writer.write(convertContentToToml(javaSkeletonContent));
+        writer.write("[[content]]\n");
+        writer.write("name = \"java_skeleton\"\n");
+        writer.write("content = '''\n");
+        writer.write(javaContextService.generateSkeletonToString(rootPath));
+        writer.write("\n'''\n\n");
+
+        writer.write("[[content]]\n");
+        writer.write("name = \"system_prompt\"\n");
+        writer.write("content = '''\n");
+        writer.write(roxyProjectService.getStaticSystemPrompt());
+        writer.write("\n'''\n\n");
+
+        writer.write(rootPath.toAbsolutePath().toString());
+        writer.write("\n");
+
+        writer.write("### Project Info (CACHED)\n");
+        writer.write("[System: Codebase is currently cached in Gemini. You should have access to the file contents.]\n\n");
+        writer.write("[System: Conversation history trimmed. Resuming context.]");
     }
 
     public String convertContentToToml(NamedContent content) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("[[content]]\n");
-        sb.append("name = \"").append(content.getName()).append("\"\n");
-
-        // Use triple-quotes for code content so it's readable for the LLM
-        sb.append("content = '''\n");
-        sb.append(content.getContent());
-        sb.append("\n'''\n\n");
-        return sb.toString();
+        try {
+            return objectMapper.writeValueAsString(content);
+        } catch (IOException e) {
+            LOG.error("Failed to convert content to TOML: {}", e.getMessage());
+            return "";
+        }
     }
-
-    /**
-     * Utility to generate consistent cache keys.
-     * Kept public as it is used by other services (e.g. push service).
-     */
-    public String getCacheKey(Path root, String user, String geminiModel) {
-        return "roxycode_cache_" + user + "_" + root.getFileName() + "_" + geminiModel;
-    }
-
 }

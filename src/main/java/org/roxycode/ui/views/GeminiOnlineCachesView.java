@@ -6,7 +6,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
-import org.roxycode.cache.GeminiCacheService;
+import org.roxycode.core.cache.GeminiCacheService;
 import org.roxycode.core.utils.UIUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

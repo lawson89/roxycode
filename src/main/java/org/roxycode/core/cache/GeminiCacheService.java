@@ -1,4 +1,4 @@
-package org.roxycode.cache;
+package org.roxycode.core.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.genai.Client;
@@ -42,14 +42,17 @@ public class GeminiCacheService {
 
     private final ToolRegistry toolRegistry;
 
+    private final ProjectCacheMetaService projectCacheMetaService;
+
     public GeminiCacheService(SettingsService settingsService, @Named("toml") ObjectMapper tomlMapper,
                               ProjectPackerService codebasePackerService, RoxyProjectService roxyProjectService,
-                              ToolRegistry toolRegistry) {
+                              ToolRegistry toolRegistry, ProjectCacheMetaService projectCacheMetaService) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
         this.tomlMapper = tomlMapper;
         this.roxyProjectService = roxyProjectService;
         this.toolRegistry = toolRegistry;
+        this.projectCacheMetaService = projectCacheMetaService;
     }
 
     private synchronized Client getClient() {
@@ -68,7 +71,7 @@ public class GeminiCacheService {
         String currentModel = settingsService.getGeminiModel();
         String project = settingsService.getCurrentProject();
         String user = SystemUtils.getSystemUser();
-        String cacheKey = codebasePackerService.getCacheKey(projectPath, user, currentModel);
+        String cacheKey = projectCacheMetaService.getCacheKey(projectPath, user, currentModel);
 
         LOG.info("cacheKey: {} | project: {} | user: {} | currentModel: {}", cacheKey, project, user, currentModel);
 
@@ -111,7 +114,7 @@ public class GeminiCacheService {
 
             LOG.info("Uploading {} bytes to Gemini...", tomlData.length());
 
-            CachedContent response = client.caches.create(currentModel, config);
+            CachedContent response = getClient().caches.create(currentModel, config);
 
             LOG.info("✅ Cache Pushed Successfully!");
             // Generate Metadata File so GenAIService knows the ID
@@ -125,12 +128,12 @@ public class GeminiCacheService {
                     projectPath.toString(),
                     user,
                     ZonedDateTime.now().toString(),
-                    codebasePackerService.getCacheKey(projectPath, user, currentModel),
+                    cacheKey,
                     geminiId,
                     skeletonTokenCount,
                     skeletonGeneratedAt
             );
-            writeProjectCacheMeta(meta);
+            projectCacheMetaService.writeProjectCacheMeta(meta);
 
             LOG.info("geminiId: {}", geminiId);
             LOG.info("Expires At: {}", response.expireTime());
@@ -139,36 +142,6 @@ public class GeminiCacheService {
             LOG.error("Failed to push cache to Gemini: {}", e.getMessage(), e);
             throw new RuntimeException("Cache Push Failed", e);
         }
-    }
-
-        public Optional<ProjectCacheMeta> getProjectCacheMeta() {
-        return getProjectCacheMeta(roxyProjectService.getProjectRoot());
-    }
-
-    public Optional<ProjectCacheMeta> getProjectCacheMeta(Path projectPath) {
-        String currentModel = settingsService.getGeminiModel();
-        String user = SystemUtils.getSystemUser();
-        if (projectPath == null) {
-            return Optional.empty();
-        }
-        String cacheKey = codebasePackerService.getCacheKey(projectPath, user, currentModel);
-        try {
-            Path cacheDir = roxyProjectService.getRoxyCacheDir();
-            Path metaFilePath = cacheDir.resolve(cacheKey + ".toml");
-            if (Files.exists(metaFilePath)) {
-                return Optional.of(tomlMapper.readValue(metaFilePath.toFile(), ProjectCacheMeta.class));
-            }
-        } catch (IOException e) {
-            LOG.error("Failed to read cache metadata for key {}: {}", cacheKey, e.getMessage());
-        }
-        return Optional.empty();
-    }
-
-    protected void writeProjectCacheMeta(ProjectCacheMeta codebaseCacheMeta) throws IOException {
-        Path cacheDir = roxyProjectService.getRoxyCacheDir();
-        String metaFileName = codebaseCacheMeta.cacheKey() + ".toml";
-        Path metaFilePath = cacheDir.resolve(metaFileName);
-        tomlMapper.writeValue(metaFilePath.toFile(), codebaseCacheMeta);
     }
 
     /**
@@ -199,7 +172,6 @@ public class GeminiCacheService {
             LOG.info("Successfully deleted: {}", cacheName);
         } catch (Exception e) {
             LOG.warn("Failed to delete cache {}: {}", cacheName, e.getMessage());
-            throw new RuntimeException("Unable to delete cache", e);
         }
     }
 
@@ -220,6 +192,7 @@ public class GeminiCacheService {
         }
         return count;
     }
+
     /**
      * Refreshes the cache lifetime by extending it by the configured TTL.
      * @param cacheName The resource name of the cache (e.g. "cachedContents/...")
@@ -238,5 +211,4 @@ public class GeminiCacheService {
             throw new RuntimeException("Unable to refresh cache", e);
         }
     }
-
 }

@@ -7,8 +7,9 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
-import org.roxycode.cache.ProjectPackerService;
-import org.roxycode.cache.GeminiCacheService;
+import org.roxycode.core.cache.ProjectPackerService;
+import org.roxycode.core.cache.GeminiCacheService;
+import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.core.NotificationService;
 import org.roxycode.core.NotificationType;
 import org.roxycode.core.SettingsService;
@@ -33,6 +34,7 @@ public class CodebaseCacheView extends JPanel {
     private final SettingsService settingsService;
     private final ProjectPackerService codebasePackerService;
     private final GeminiCacheService geminiCacheService;
+    private final ProjectCacheMetaService projectCacheMetaService;
     private final JTextPane cacheContentArea = new JTextPane();
     private final org.roxycode.ui.ThemeService themeService;
     private final NotificationService notificationService;
@@ -65,10 +67,11 @@ public class CodebaseCacheView extends JPanel {
     private JScrollPane cacheContentScrollPane;
 
     @Inject
-    public CodebaseCacheView(SettingsService settingsService, ProjectPackerService codebasePackerService, GeminiCacheService geminiCacheService, org.roxycode.ui.ThemeService themeService, NotificationService notificationService) {
+    public CodebaseCacheView(SettingsService settingsService, ProjectPackerService codebasePackerService, GeminiCacheService geminiCacheService, ProjectCacheMetaService projectCacheMetaService, org.roxycode.ui.ThemeService themeService, NotificationService notificationService) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
         this.geminiCacheService = geminiCacheService;
+        this.projectCacheMetaService = projectCacheMetaService;
         this.themeService = themeService;
         this.notificationService = notificationService;
         setLayout(new BorderLayout());
@@ -123,7 +126,7 @@ public class CodebaseCacheView extends JPanel {
             if (pushCacheButton != null)
                 pushCacheButton.setEnabled(exists);
             Path projectRoot = settingsService.getCurrentProjectPath();
-            geminiCacheService.getProjectCacheMeta().ifPresentOrElse(meta -> {
+            projectCacheMetaService.getProjectCacheMeta().ifPresentOrElse(meta -> {
                 onlineCacheIdLabel.setText(meta.geminiCacheId());
                 onlineCacheTimestampLabel.setText(meta.generatedAt());
                 if (skeletonTokenCountLabel != null) skeletonTokenCountLabel.setText(String.format("%,d", meta.skeletonTokenCount()));

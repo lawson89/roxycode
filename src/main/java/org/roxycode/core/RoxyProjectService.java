@@ -7,7 +7,6 @@ import org.roxycode.core.tools.ScriptServiceRegistry;
 import org.roxycode.core.tools.ToolRegistry;
 import org.roxycode.core.tools.service.FileSystemService;
 import org.roxycode.core.tools.service.GitRunner;
-import org.roxycode.core.tools.service.GitService;
 import org.roxycode.core.utils.SystemUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +33,6 @@ public class RoxyProjectService {
     private final Sandbox sandbox;
     private final SettingsService settingsService;
     private final FileSystemService fileSystemService;
-    private final GitService gitService;
     private final ToolRegistry toolRegistry;
     private final ScriptServiceRegistry scriptServiceRegistry;
 
@@ -44,12 +42,11 @@ public class RoxyProjectService {
 
     @Inject
     public RoxyProjectService(Sandbox sandbox, FileSystemService fileSystemService,
-                              SettingsService settingsService, GitService gitService,
+                              SettingsService settingsService,
                               ToolRegistry toolRegistry, ScriptServiceRegistry scriptServiceRegistry) {
         this.sandbox = sandbox;
         this.fileSystemService = fileSystemService;
         this.settingsService = settingsService;
-        this.gitService = gitService;
         this.toolRegistry = toolRegistry;
         this.scriptServiceRegistry = scriptServiceRegistry;
     }

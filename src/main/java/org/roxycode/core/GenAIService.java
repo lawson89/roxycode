@@ -4,7 +4,8 @@ import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
-import org.roxycode.cache.GeminiCacheService;
+import org.roxycode.core.cache.GeminiCacheService;
+import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
@@ -37,7 +38,8 @@ public class GenAIService {
 
     private final HistoryService historyService;
 
-    private final org.roxycode.cache.GeminiCacheService geminiCacheService;
+    private final GeminiCacheService geminiCacheService;
+    private final ProjectCacheMetaService projectCacheMetaService;
     private final RoxyProjectService roxyProjectService;
 
     private Client client;
@@ -46,7 +48,8 @@ public class GenAIService {
 
     public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService,
                         UsageService usageService, HistoryService historyService,
-                        GeminiCacheService geminiCacheService, RoxyProjectService roxyProjectService) {
+                        GeminiCacheService geminiCacheService, RoxyProjectService roxyProjectService,
+                        ProjectCacheMetaService projectCacheMetaService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
@@ -54,6 +57,7 @@ public class GenAIService {
         this.historyService = historyService;
         this.geminiCacheService = geminiCacheService;
         this.roxyProjectService = roxyProjectService;
+        this.projectCacheMetaService = projectCacheMetaService;
     }
 
     private synchronized Client getClient() {
@@ -118,7 +122,7 @@ public class GenAIService {
 
     public String buildSystemContext(String projectRoot, List<File> attachedFiles) {
         Path projectPath = Paths.get(projectRoot);
-        java.util.Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta();
+        java.util.Optional<ProjectCacheMeta> cacheMeta = projectCacheMetaService.getProjectCacheMeta();
         return buildSystemContext(projectRoot, attachedFiles, cacheMeta);
     }
 
@@ -156,7 +160,7 @@ public class GenAIService {
         try {
             this.stopRequested = false;
             Path projectPath = Paths.get(projectRoot);
-            Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta();
+            Optional<ProjectCacheMeta> cacheMeta = projectCacheMetaService.getProjectCacheMeta();
             String systemContext = buildSystemContext(projectRoot, attachedFiles, cacheMeta);
             LOG.info("systemContext: {}", systemContext);
             String taskMessage = "Task: " + prompt;

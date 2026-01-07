@@ -1,4 +1,4 @@
-package org.roxycode.cache;
+package org.roxycode.core.cache;
 
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
