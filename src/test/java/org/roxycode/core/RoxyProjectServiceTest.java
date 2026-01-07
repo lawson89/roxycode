@@ -16,16 +16,14 @@ class RoxyProjectServiceTest {
     @TempDir
     Path tempDir;
 
-    private Sandbox sandbox;
-    private FileSystemService fileSystemService;
     private RoxyProjectService roxyProjectService;
 
     @BeforeEach
     void setUp() {
-        sandbox = new Sandbox();
+        Sandbox sandbox = new Sandbox();
         sandbox.setRoot(tempDir.toString());
-        fileSystemService = new FileSystemService(sandbox);
-        roxyProjectService = new RoxyProjectService(sandbox, fileSystemService, null, null, null);
+        FileSystemService fileSystemService = new FileSystemService(sandbox);
+        roxyProjectService = new RoxyProjectService(sandbox, fileSystemService, null, null, null, null);
     }
 
     @Test
@@ -33,14 +31,11 @@ class RoxyProjectServiceTest {
         Path projectDir = tempDir.resolve(RoxyProjectService.ROXY_WORKING_DIR);
         Path readmePath = projectDir.resolve("README.md");
 
-        // Initial state: does not exist
         assertFalse(Files.exists(projectDir));
         assertFalse(Files.exists(readmePath));
 
-        // Act
         roxyProjectService.ensureProjectStructure();
 
-        // Assert
         assertTrue(Files.exists(projectDir), "Directory should be created");
         assertTrue(Files.exists(readmePath), "README.md should be created");
         
@@ -56,10 +51,8 @@ class RoxyProjectServiceTest {
         String originalContent = "Original Content";
         Files.writeString(readmePath, originalContent);
 
-        // Act
         roxyProjectService.ensureProjectStructure();
 
-        // Assert
         assertTrue(Files.exists(projectDir));
         assertEquals(originalContent, Files.readString(readmePath), "Content should not be overwritten");
     }

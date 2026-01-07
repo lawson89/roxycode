@@ -105,7 +105,7 @@ public class ProjectPackerService {
      * Shared logic to walk the file tree and write entries to any BufferedWriter.
      */
     protected void streamFilesToToml(Path rootPath, BufferedWriter writer) throws IOException {
-        String header = buildToolService.getProjectSummary();
+        String header = roxyProjectService.getStaticSystemPrompt();
         header += "\n\nThis is a codebase snapshot in TOML format including Java signatures for analysis.";
         writeTomlHeader(writer, "header", header);
         // Java source files via JavaAnalysisService

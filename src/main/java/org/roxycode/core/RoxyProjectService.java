@@ -3,6 +3,7 @@ package org.roxycode.core;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.apache.commons.io.FileUtils;
+import org.roxycode.core.tools.ScriptServiceRegistry;
 import org.roxycode.core.tools.ToolRegistry;
 import org.roxycode.core.tools.service.FileSystemService;
 import org.roxycode.core.tools.service.GitRunner;
@@ -35,6 +36,7 @@ public class RoxyProjectService {
     private final FileSystemService fileSystemService;
     private final GitService gitService;
     private final ToolRegistry toolRegistry;
+    private final ScriptServiceRegistry scriptServiceRegistry;
 
     private String currentBranch = "";
     private RoxyMode currentMode = RoxyMode.DISCOVER;
@@ -42,12 +44,14 @@ public class RoxyProjectService {
 
     @Inject
     public RoxyProjectService(Sandbox sandbox, FileSystemService fileSystemService,
-                              SettingsService settingsService, GitService gitService, ToolRegistry toolRegistry) {
+                              SettingsService settingsService, GitService gitService,
+                              ToolRegistry toolRegistry, ScriptServiceRegistry scriptServiceRegistry) {
         this.sandbox = sandbox;
         this.fileSystemService = fileSystemService;
         this.settingsService = settingsService;
         this.gitService = gitService;
         this.toolRegistry = toolRegistry;
+        this.scriptServiceRegistry = scriptServiceRegistry;
     }
 
     @PostConstruct
@@ -140,7 +144,9 @@ public class RoxyProjectService {
 
     public String getStaticSystemPrompt() {
         try {
-            return FileUtils.readFileToString(roxyHome.resolve("AGENTS.md").toFile(), StandardCharsets.UTF_8);
+            String agentsMd = FileUtils.readFileToString(roxyHome.resolve("AGENTS.md").toFile(), StandardCharsets.UTF_8);
+            String toolApiDocs = scriptServiceRegistry.getApiDocs();
+            return agentsMd + "\n\n" + toolApiDocs;
         } catch (IOException e) {
             return "You are RoxyCode, an AI coding assistant.";
         }
