@@ -3,6 +3,8 @@ package org.roxycode.core.tools.service;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.roxycode.core.Sandbox;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -19,8 +21,16 @@ class JavaAnalysisServiceTest {
     @Inject
     JavaService javaAnalysisService;
 
+    @Inject
+    Sandbox sandbox;
+
     @TempDir
     Path tempDir;
+
+    @BeforeEach
+    void setUp() {
+        sandbox.setRoot(tempDir.toString());
+    }
 
     @Test
     void testAnalyzeFile() throws IOException {
@@ -33,7 +43,7 @@ class JavaAnalysisServiceTest {
             }
             """);
 
-        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path);
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path.toString());
 
         assertNotNull(summary);
         assertEquals(1, summary.classes().size());
@@ -55,7 +65,7 @@ class JavaAnalysisServiceTest {
             }
             """);
 
-        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path);
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path.toString());
 
         assertNotNull(summary);
         assertEquals(1, summary.classes().size());
@@ -88,7 +98,7 @@ class JavaAnalysisServiceTest {
             }
             """);
 
-        Optional<String> source = javaAnalysisService.getMethodSource(path, "TestClass", "method1");
+        Optional<String> source = javaAnalysisService.getMethodSource(path.toString(), "TestClass", "method1");
 
         assertTrue(source.isPresent());
         assertTrue(source.get().contains("System.out.println(\"Hello\");"));
@@ -112,7 +122,7 @@ class JavaAnalysisServiceTest {
             }
             """;
 
-        javaAnalysisService.replaceMethod(path, "TestClass", "method1", newMethod);
+        javaAnalysisService.replaceMethod(path.toString(), "TestClass", "method1", newMethod);
 
         String updatedContent = Files.readString(path);
         assertTrue(updatedContent.contains("System.out.println(\"New\");"));
@@ -129,7 +139,7 @@ class JavaAnalysisServiceTest {
             }
             """);
 
-        Optional<String> source = javaAnalysisService.getFieldSource(path, "TestClassWithFields", "field1");
+        Optional<String> source = javaAnalysisService.getFieldSource(path.toString(), "TestClassWithFields", "field1");
 
         assertTrue(source.isPresent());
         assertTrue(source.get().contains("private String field1 = \"Original\";"));
@@ -147,7 +157,7 @@ class JavaAnalysisServiceTest {
 
         String newField = "private String field1 = \"NewValue\";";
 
-        javaAnalysisService.replaceField(path, "TestClassWithFields", "field1", newField);
+        javaAnalysisService.replaceField(path.toString(), "TestClassWithFields", "field1", newField);
 
         String updatedContent = Files.readString(path);
         assertTrue(updatedContent.contains("private String field1 = \"NewValue\";"));
@@ -171,7 +181,7 @@ class JavaAnalysisServiceTest {
             }
             """);
 
-        List<String> dependencies = javaAnalysisService.getClassDependencies(path, "DependencyTest");
+        List<String> dependencies = javaAnalysisService.getClassDependencies(path.toString(), "DependencyTest");
 
         assertNotNull(dependencies);
         assertTrue(dependencies.contains("BaseClass"));
@@ -195,7 +205,7 @@ class JavaAnalysisServiceTest {
             }
             """);
 
-        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path);
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path.toString());
 
         assertNotNull(summary);
         assertEquals(1, summary.classes().size());

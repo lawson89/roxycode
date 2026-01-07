@@ -14,6 +14,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
 import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
+import org.roxycode.core.Sandbox;
+import jakarta.inject.Inject;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -26,6 +28,9 @@ import java.util.stream.Collectors;
 @Singleton
 public class JavaService {
 
+    @Inject
+    Sandbox sandbox;
+
     @LLMDoc("Initializes the Java analysis engine")
     @PostConstruct
     public void init() {
@@ -34,7 +39,8 @@ public class JavaService {
     }
 
     @LLMDoc("Analyzes a Java file and returns a summary of its classes, methods, and imports")
-    public JavaFileSummary analyzeFile(Path path) throws IOException {
+    public JavaFileSummary analyzeFile(String pathStr) throws IOException {
+        Path path = sandbox.resolve(pathStr);
         CompilationUnit cu = StaticJavaParser.parse(path);
 
         List<String> imports = cu.getImports().stream()
@@ -78,7 +84,8 @@ public class JavaService {
     }
 
     @LLMDoc("Returns the list of classes that the specified class depends on (extends, implements, fields, method parameters, local variables)")
-    public List<String> getClassDependencies(Path path, String className) throws IOException {
+    public List<String> getClassDependencies(String pathStr, String className) throws IOException {
+        Path path = sandbox.resolve(pathStr);
         CompilationUnit cu = StaticJavaParser.parse(path);
         Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
                 .filter(c -> c.getNameAsString().equals(className))
@@ -108,7 +115,8 @@ public class JavaService {
     }
 
     @LLMDoc("Returns the source code of a specific method in a class")
-    public Optional<String> getMethodSource(Path path, String className, String methodName) {
+    public Optional<String> getMethodSource(String pathStr, String className, String methodName) {
+        Path path = sandbox.resolve(pathStr);
         try {
             CompilationUnit cu = StaticJavaParser.parse(path);
             return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
@@ -122,7 +130,8 @@ public class JavaService {
     }
 
     @LLMDoc("Replaces the source code of a specific method in a class")
-    public void replaceMethod(Path path, String className, String methodName, String newMethodSource) throws IOException {
+    public void replaceMethod(String pathStr, String className, String methodName, String newMethodSource) throws IOException {
+        Path path = sandbox.resolve(pathStr);
         CompilationUnit cu = StaticJavaParser.parse(path);
         Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
                 .filter(c -> c.getNameAsString().equals(className))
@@ -143,7 +152,8 @@ public class JavaService {
     }
 
     @LLMDoc("Returns the source code of a specific field in a class")
-    public Optional<String> getFieldSource(Path path, String className, String fieldName) {
+    public Optional<String> getFieldSource(String pathStr, String className, String fieldName) {
+        Path path = sandbox.resolve(pathStr);
         try {
             CompilationUnit cu = StaticJavaParser.parse(path);
             return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
@@ -158,7 +168,8 @@ public class JavaService {
     }
 
     @LLMDoc("Replaces the source code of a specific field in a class")
-    public void replaceField(Path path, String className, String fieldName, String newFieldSource) throws IOException {
+    public void replaceField(String pathStr, String className, String fieldName, String newFieldSource) throws IOException {
+        Path path = sandbox.resolve(pathStr);
         CompilationUnit cu = StaticJavaParser.parse(path);
         Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
                 .filter(c -> c.getNameAsString().equals(className))
