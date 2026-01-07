@@ -141,11 +141,7 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton openFolderButton;
 
-    @Outlet
-    private JLabel cacheStatusLabel;
 
-    @Outlet
-    private JLabel cacheIdLabel;
 
     @Inject
     public MainFrame(GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService,
@@ -194,7 +190,7 @@ public class MainFrame extends JFrame implements Runnable {
             if (activityIndicator != null) {
                 if (busy) {
                     activityIndicator.setVisible(true);
-        new Timer(5000, e -> updateCacheStatus()).start();
+        new Timer(5000, e -> chatView.updateCacheStatus()).start();
                     activityIndicator.start();
                 } else {
                     activityIndicator.stop();
@@ -442,8 +438,7 @@ public class MainFrame extends JFrame implements Runnable {
             currentProjectLabel.setText(roxyProjectService.getProjectRoot().toString());
         }
         updateRoxyMode();
-        updateCacheStatus();
-        updateCacheStatus();
+        chatView.updateCacheStatus();
         chatView.appendSystemMessage("Switched project to " + roxyProjectService.getProjectRoot().toString());
     }
 
@@ -452,26 +447,7 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     public void updateCacheStatus() {
-        SwingUtilities.invokeLater(() -> {
-            boolean enabled = settingsService.isCacheEnabled();
-            if (cacheStatusLabel != null) {
-                cacheStatusLabel.setText("Cache: " + (enabled ? "Enabled" : "Disabled"));
-                cacheStatusLabel.setForeground(enabled ? new Color(100, 255, 100) : new Color(255, 100, 100));
-            }
-
-            if (cacheIdLabel != null) {
-                if (enabled) {
-                    Optional<ProjectCacheMeta> meta = projectCacheMetaService.getProjectCacheMeta();
-                    if (meta.isPresent()) {
-                        cacheIdLabel.setText("ID: " + meta.get().geminiCacheId());
-                    } else {
-                        cacheIdLabel.setText("ID: None");
-                    }
-                } else {
-                    cacheIdLabel.setText("");
-                }
-            }
-        });
+        chatView.updateCacheStatus();
     }
 
 }

@@ -14,6 +14,9 @@ import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.SettingsService;
 import org.roxycode.core.SlashCommandService;
+import org.roxycode.core.cache.ProjectCacheMetaService;
+import org.roxycode.core.beans.ProjectCacheMeta;
+import java.util.Optional;
 import org.roxycode.ui.MarkdownPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +38,7 @@ public class ChatView extends JPanel {
     private final SettingsService settingsService;
     private final SlashCommandService slashCommandService;
     private final org.roxycode.ui.ThemeService themeService;
+    private final ProjectCacheMetaService projectCacheMetaService;
 
     private final MarkdownPane chatArea = new MarkdownPane();
     private final RSyntaxTextArea inputField = new RSyntaxTextArea(3, 20);
@@ -76,8 +80,15 @@ public class ChatView extends JPanel {
     @Outlet
     private JLabel currentModelLabel;
 
+    @Outlet
+    private JLabel cacheStatusLabel;
+
+    @Outlet
+    private JLabel cacheIdLabel;
+
     @Inject
-    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService) {
+    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService) {
+        this.projectCacheMetaService = projectCacheMetaService;
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.themeService = themeService;
@@ -96,6 +107,7 @@ public class ChatView extends JPanel {
         
         themeService.registerPane(chatArea);
         initIcons();
+        updateCacheStatus();
         initListeners();
     }
 
@@ -133,6 +145,7 @@ public class ChatView extends JPanel {
     }
 
     private void initIcons() {
+        updateCacheStatus();
         if (currentModelLabel != null) {
             currentModelLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_HAPPY_OUTLINE, 12));
             currentModelLabel.setIconTextGap(6);
@@ -326,6 +339,30 @@ public class ChatView extends JPanel {
         if (currentModelLabel != null) {
             currentModelLabel.setText(settingsService.getGeminiModel());
         }
+    }
+
+    
+    public void updateCacheStatus() {
+        SwingUtilities.invokeLater(() -> {
+            boolean enabled = settingsService.isCacheEnabled();
+            if (cacheStatusLabel != null) {
+                cacheStatusLabel.setText("Cache: " + (enabled ? "Enabled" : "Disabled"));
+                cacheStatusLabel.setForeground(enabled ? new Color(100, 255, 100) : new Color(255, 100, 100));
+            }
+
+            if (cacheIdLabel != null) {
+                if (enabled) {
+                    Optional<ProjectCacheMeta> meta = projectCacheMetaService.getProjectCacheMeta();
+                    if (meta.isPresent()) {
+                        cacheIdLabel.setText("ID: " + meta.get().geminiCacheId());
+                    } else {
+                        cacheIdLabel.setText("ID: None");
+                    }
+                } else {
+                    cacheIdLabel.setText("");
+                }
+            }
+        });
     }
 
     public void appendSystemMessage(String msg) {
