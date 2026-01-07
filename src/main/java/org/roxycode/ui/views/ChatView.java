@@ -156,7 +156,7 @@ public class ChatView extends JPanel {
         List<File> currentAttachments = new ArrayList<>(attachedFiles);
         attachedFiles.clear();
         updateAttachmentsLabel();
-        chatArea.appendMarkdown("**User:** " + prompt);
+        chatArea.appendUserMarkdown(prompt);
         if (!currentAttachments.isEmpty())
             chatArea.appendMarkdown(" *(Attached: " + currentAttachments.size() + " files)*");
         setInputEnabled(false);

@@ -9,6 +9,8 @@ import com.vladsch.flexmark.util.data.DataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
 import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignM;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -110,11 +112,7 @@ public class MarkdownPane extends JTextPane {
         if (!imgTag.isEmpty()) {
             imgTag += "&nbsp;";
         }
-        String html = renderer.render(parser.parse(markdown));
-        // Remove surrounding <p> tags if present to align nicely with image
-        if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
-            html = html.substring(3, html.length() - 5);
-        }
+        String html = stripParagraph(renderer.render(parser.parse(markdown)));
         String combinedHtml = "<div style='background-color: " + (FlatLaf.isLafDark() ? "#2b2d30" : "#f2f2f2") + "; padding: 4px; border-radius: 4px; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();
@@ -133,10 +131,7 @@ public class MarkdownPane extends JTextPane {
         if (!imgTag.isEmpty()) {
             imgTag += "&nbsp;";
         }
-        String html = renderer.render(parser.parse(markdown));
-        if (html.startsWith("<p>") && html.endsWith("</p>\n")) {
-            html = html.substring(3, html.length() - 5);
-        }
+        String html = stripParagraph(renderer.render(parser.parse(markdown)));
         String bgColor = FlatLaf.isLafDark() ? "#2b2d30" : "#f8f9fa";
         String combinedHtml = "<div style='background-color: " + bgColor + "; padding: 4px 8px; border-radius: 4px; color: gray; font-style: italic; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
         try {
@@ -151,9 +146,9 @@ public class MarkdownPane extends JTextPane {
 
     public void appendRoxyMarkdown(String markdown) {
         log.info("Rendering Roxy markdown: {}", markdown);
-        String imgTag = generateIconTag(MaterialDesignC.CAT, 24, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "roxy");
-        String html = renderer.render(parser.parse(markdown));
-        String combinedHtml = "<div>" + imgTag + "</div>" + html;
+        String imgTag = generateIconTag(MaterialDesignP.PAW_OUTLINE, 18, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "roxy");
+        String html = stripParagraph(renderer.render(parser.parse(markdown)));
+        String combinedHtml = "<div style='padding: 4px 8px; border-radius: 4px;'>" + imgTag + "&nbsp;<span>" + html + "</span></div>";
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();
             HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
@@ -193,6 +188,40 @@ public class MarkdownPane extends JTextPane {
         return renderer.render(parser.parse(markdown));
     }
 
+    public void appendUserMarkdown(String markdown) {
+        log.info("Rendering User markdown: {}");
+        String imgTag = generateIconTag(MaterialDesignM.MESSAGE_QUESTION_OUTLINE, 18, FlatLaf.isLafDark() ? new Color(0x4080FF) : new Color(0x0055BB), "user");
+        String html = stripParagraph(renderer.render(parser.parse(markdown)));
+        String combinedHtml = "<div style='padding: 4px 8px; border-radius: 4px;'>" + imgTag + "&nbsp;<span>" + html + "</span></div>";
+        try {
+            HTMLDocument doc = (HTMLDocument) getDocument();
+            HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
+            kit.insertHTML(doc, doc.getLength(), combinedHtml + "<div style='height: 1px; background-color: " + (FlatLaf.isLafDark() ? "#444444" : "#D0D0D0") + "; font-size: 1px; border: none; margin: 10px 0;'></div>", 0, 0, null);
+            this.setCaretPosition(doc.getLength());
+        } catch (BadLocationException | IOException e) {
+            log.error("Failed to append User markdown", e);
+        }
+    }
+
+    public String getIconTag(String role) {
+        if ("user".equalsIgnoreCase(role)) {
+            return generateIconTag(MaterialDesignM.MESSAGE_QUESTION_OUTLINE, 18, FlatLaf.isLafDark() ? new Color(0x4080FF) : new Color(0x0055BB), "user");
+        } else if ("model".equalsIgnoreCase(role)) {
+            return generateIconTag(MaterialDesignP.PAW_OUTLINE, 18, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "roxy");
+        }
+        return null;
+    }
+
+    private String stripParagraph(String html) {
+        if (html == null)
+            return "";
+        String result = html.trim();
+        if (result.startsWith("<p>") && result.endsWith("</p>")) {
+            return result.substring(3, result.length() - 4).trim();
+        }
+        return result;
+    }
+
     private void initContextMenu() {
         JPopupMenu popupMenu = new JPopupMenu();
         JMenuItem copyItem = new JMenuItem("Copy");
@@ -200,44 +229,44 @@ public class MarkdownPane extends JTextPane {
         copyItem.setIcon(FontIcon.of(MaterialDesignC.CONTENT_COPY, 16));
         copyItem.addActionListener(e -> copy());
         popupMenu.add(copyItem);
-
         popupMenu.addPopupMenuListener(new PopupMenuListener() {
+
             @Override
             public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
                 copyItem.setEnabled(getSelectedText() != null && !getSelectedText().isEmpty());
             }
 
             @Override
-            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {}
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+            }
 
             @Override
-            public void popupMenuCanceled(PopupMenuEvent e) {}
+            public void popupMenuCanceled(PopupMenuEvent e) {
+            }
         });
-
         setComponentPopupMenu(popupMenu);
     }
-
 
     private void setupContextMenu() {
         JPopupMenu popupMenu = new JPopupMenu();
         JMenuItem copyItem = new JMenuItem("Copy");
         copyItem.addActionListener(e -> copy());
         popupMenu.add(copyItem);
-
         popupMenu.addPopupMenuListener(new PopupMenuListener() {
+
             @Override
             public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
                 copyItem.setEnabled(getSelectedText() != null && !getSelectedText().isEmpty());
             }
 
             @Override
-            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {}
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+            }
 
             @Override
-            public void popupMenuCanceled(PopupMenuEvent e) {}
+            public void popupMenuCanceled(PopupMenuEvent e) {
+            }
         });
-
         setComponentPopupMenu(popupMenu);
     }
-
 }

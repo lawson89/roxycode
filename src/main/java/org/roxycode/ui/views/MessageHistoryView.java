@@ -68,7 +68,7 @@ public class MessageHistoryView extends JPanel {
         StringBuilder html = new StringBuilder();
         html.append("<table width='100%' border='0' cellspacing='0' cellpadding='10'>");
         for (Content content : history) {
-            html.append(historyService.renderContentToHtmlRow(content, FlatLaf.isLafDark(), messageHistoryArea::markdownToHtml));
+            html.append(historyService.renderContentToHtmlRow(content, FlatLaf.isLafDark(), messageHistoryArea::markdownToHtml, messageHistoryArea::getIconTag));
         }
         html.append("</table>");
         messageHistoryArea.setHtml(html.toString());
