@@ -1,5 +1,6 @@
 package org.roxycode.cache;
 
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.core.RoxyProjectService;
@@ -16,11 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class CodebasePackerServiceTest {
+class ProjectPackerServiceTest {
 
     @Test
     void testEstimateTokenCount(@TempDir Path tempDir) throws IOException {
-        ProjectPackerService service = new ProjectPackerService(mock(RoxyProjectService.class), mock(Sandbox.class), new FileListingService(), mock(BuildToolService.class), mock(JavaAnalysisService.class));
+        ProjectPackerService service = new ProjectPackerService(mock(RoxyProjectService.class), mock(Sandbox.class), mock(BuildToolService.class), mock(JavaAnalysisService.class), null);
 
         Path testFile = tempDir.resolve("test.txt");
         Files.writeString(testFile, "12345678"); // 8 bytes
@@ -51,21 +52,16 @@ class CodebasePackerServiceTest {
         ProjectPackerService service = new ProjectPackerService(
                 roxyProjectService,
                 sandbox,
-                new FileListingService(),
                 buildToolService,
-                new JavaAnalysisService()
+                new JavaAnalysisService(),
+                new TomlMapper()
         );
 
         String result = service.packCodebaseToString(root);
+//        System.out.println(result);
 
-        assertTrue(result.contains("[java]"));
+        assertTrue(result.contains("java_skeleton"));
         assertTrue(result.contains("class Test"));
         assertTrue(result.contains("void hello()"));
-        
-        // Also verify the file was created in cache dir
-        Path skeletonFile = cacheDir.resolve("code_skeleton.txt");
-        assertTrue(Files.exists(skeletonFile));
-        String skeletonContent = Files.readString(skeletonFile);
-        assertTrue(skeletonContent.contains("class Test"));
     }
 }

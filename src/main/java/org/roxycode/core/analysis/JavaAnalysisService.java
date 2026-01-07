@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
+import java.io.StringWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
@@ -40,6 +41,24 @@ public class JavaAnalysisService {
         try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
             generateSkeleton(sourcePath, writer);
         }
+    }
+
+    /**
+     * Generates a skeleton of the Java source files in the given directory
+     * and returns it as a string.
+     *
+     * @param sourcePath The root folder of the source code
+     * @return The generated skeleton string
+     */
+    public String generateSkeletonToString(Path sourcePath) {
+        StringWriter stringWriter = new StringWriter();
+        try (BufferedWriter writer = new BufferedWriter(stringWriter)) {
+            generateSkeleton(sourcePath, writer);
+        } catch (IOException e) {
+            // Should not happen with StringWriter, but we must handle it
+            throw new UncheckedIOException(e);
+        }
+        return stringWriter.toString();
     }
 
     /**

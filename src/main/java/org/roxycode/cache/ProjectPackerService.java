@@ -1,10 +1,14 @@
 package org.roxycode.cache;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.analysis.JavaAnalysisService;
+import org.roxycode.core.beans.ContentBundle;
+import org.roxycode.core.beans.NamedContent;
 import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +19,8 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * ProjectPackerService is responsible for creating a snapshot of the project code in a format
@@ -29,18 +35,18 @@ public class ProjectPackerService {
 
     private final RoxyProjectService roxyProjectService;
     private final Sandbox sandbox;
-    private final FileListingService fileListingService;
     private final BuildToolService buildToolService;
     private final JavaAnalysisService javaContextService;
+    private final ObjectMapper objectMapper;
 
     @Inject
     public ProjectPackerService(RoxyProjectService roxyProjectService, Sandbox sandbox,
-                                FileListingService fileListingService, BuildToolService buildToolService, JavaAnalysisService javaContextService) {
+                                BuildToolService buildToolService, JavaAnalysisService javaContextService, @Named("toml") ObjectMapper objectMapper) {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
-        this.fileListingService = fileListingService;
         this.buildToolService = buildToolService;
         this.javaContextService = javaContextService;
+        this.objectMapper = objectMapper;
     }
 
     public Path getCacheFilePath() throws IOException {
@@ -105,47 +111,24 @@ public class ProjectPackerService {
      * Shared logic to walk the file tree and write entries to any BufferedWriter.
      */
     protected void streamFilesToToml(Path rootPath, BufferedWriter writer) throws IOException {
-        String header = roxyProjectService.getStaticSystemPrompt();
-        header += "\n\nThis is a codebase snapshot in TOML format including Java signatures for analysis.";
-        writeTomlHeader(writer, "header", header);
-        // Java source files via JavaAnalysisService
-        Path skeletonFile = roxyProjectService.getRoxyCacheDir().resolve("code_skeleton.txt");
-        javaContextService.generateSkeletonToFile(rootPath, skeletonFile);
-        
-        String skeletonContent = Files.readString(skeletonFile, StandardCharsets.UTF_8);
+        List<NamedContent> contents = new ArrayList<>();
+        NamedContent systemPrompt = new NamedContent("system_prompt", roxyProjectService.getStaticSystemPrompt());
+        writer.write(convertContentToToml(systemPrompt));
+        String javaSkeleton = javaContextService.generateSkeletonToString(rootPath);
+        NamedContent javaSkeletonContent = new NamedContent("java_skeleton", javaSkeleton);
+        writer.write(convertContentToToml(javaSkeletonContent));
+    }
 
-        writer.write("[java]");
-        writer.newLine();
-        writer.write("content = '''");
-        writer.newLine();
-        writer.write(escapeMultiLineString(skeletonContent));
-        writer.newLine();
-        writer.write("'''");
-        writer.newLine();
-        //@todo externalize this
-//        List<String> sourceExtensions = List.of(
-//                "xml", "toml", "md", "txt", "gradle", "properties", "groovy", "kt"
-//        );
-//        List<Path> sourceFiles = fileListingService.findFiles(rootPath.resolve("src").resolve("main"), sourceExtensions);
-//        for (Path sourceFile : sourceFiles) {
-//            long size = Files.size(sourceFile);
-//            String content;
-//            // @todo externalize this
-//            if (size > 30 * 1024) {
-//                content = "IMPORTANT! File exceeds size limit, please use tools to read if needed";
-//                LOG.info("skipping file {} due to size {}", sourceFile, size);
-//            } else {
-//                try {
-//                    content = Files.readString(sourceFile, StandardCharsets.UTF_8);
-//                }catch (Exception e) {
-//                    LOG.warn("unable to read file {}", sourceFile, e);
-//                    content = "IMPORTANT! Unable to read file due to: " + e;
-//                }
-//            }
-//            String mimeType = Files.probeContentType(sourceFile);
-//            String path = rootPath.relativize(sourceFile).toString();
-//            writeTomlEntry(writer, path, size, mimeType, content);
-//        }
+    public String convertContentToToml(NamedContent content) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[[content]]\n");
+        sb.append("name = \"").append(content.getName()).append("\"\n");
+
+        // Use triple-quotes for code content so it's readable for the LLM
+        sb.append("content = '''\n");
+        sb.append(content.getContent());
+        sb.append("\n'''\n\n");
+        return sb.toString();
     }
 
     /**
@@ -154,46 +137,6 @@ public class ProjectPackerService {
      */
     public String getCacheKey(Path root, String user, String geminiModel) {
         return "roxycode_cache_" + user + "_" + root.getFileName() + "_" + geminiModel;
-    }
-
-    protected void writeTomlHeader(BufferedWriter w, String title, String content) throws IOException {
-        w.write("[" + title + "]");
-        w.newLine();
-        w.write("content = '''");
-        w.newLine();
-        w.write(escapeMultiLineString(content));
-        w.newLine();
-        w.write("'''");
-        w.newLine();
-    }
-
-    // --- TOML Formatting Logic ---
-    protected void writeTomlEntry(BufferedWriter w, String path, long size, String mime, String content) throws IOException {
-        w.write("[[files]]");
-        w.newLine();
-        w.write("path = " + quoteString(path));
-        w.newLine();
-        w.write("size = " + size);
-        w.newLine();
-        w.write("mimeType = " + quoteString(mime));
-        w.newLine();
-        w.write("content = '''");
-        w.newLine();
-        w.write(escapeMultiLineString(content));
-        w.newLine();
-        w.write("'''");
-        w.newLine();
-        w.newLine();
-    }
-
-        private String quoteString(String s) {
-        if (s == null)
-            return "\"\"";
-        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-    }
-
-        private String escapeMultiLineString(String content) {
-        return content.replace("'''", "''\\'");
     }
 
 }

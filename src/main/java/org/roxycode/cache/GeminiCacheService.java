@@ -114,11 +114,9 @@ public class GeminiCacheService {
             CachedContent response = client.caches.create(currentModel, config);
 
             LOG.info("✅ Cache Pushed Successfully!");
-
             // Generate Metadata File so GenAIService knows the ID
             String geminiId = response.name().orElse("Unknown");
 
-            
             Path skeletonFile = roxyProjectService.getRoxyCacheDir().resolve("code_skeleton.txt");
             long skeletonTokenCount = codebasePackerService.estimateTokenCount(skeletonFile);
             String skeletonGeneratedAt = Files.exists(skeletonFile) ? Files.getLastModifiedTime(skeletonFile).toString() : "N/A";
@@ -218,4 +216,23 @@ public class GeminiCacheService {
         }
         return count;
     }
+    /**
+     * Refreshes the cache lifetime by extending it by the configured TTL.
+     * @param cacheName The resource name of the cache (e.g. "cachedContents/...")
+     */
+    public void refreshCache(String cacheName) {
+        try {
+            LOG.info("Refreshing cache: {}", cacheName);
+            int ttlMinutes = settingsService.getCacheTTL();
+            UpdateCachedContentConfig config = UpdateCachedContentConfig.builder()
+                    .ttl(Duration.ofMinutes(ttlMinutes))
+                    .build();
+            getClient().caches.update(cacheName, config);
+            LOG.info("Successfully refreshed cache: {} (New TTL: {} minutes)", cacheName, ttlMinutes);
+        } catch (Exception e) {
+            LOG.error("Failed to refresh cache {}: {}", cacheName, e.getMessage(), e);
+            throw new RuntimeException("Unable to refresh cache", e);
+        }
+    }
+
 }

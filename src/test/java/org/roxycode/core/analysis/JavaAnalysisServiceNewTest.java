@@ -30,4 +30,19 @@ class JavaAnalysisServiceNewTest {
         assertTrue(content.contains("class Hello"));
         assertTrue(content.contains("sayHi()"));
     }
+    @Test
+    void testGenerateSkeletonToString(@TempDir Path tempDir) throws IOException {
+        JavaAnalysisService service = new JavaAnalysisService();
+        Path sourceDir = tempDir.resolve("src");
+        Files.createDirectories(sourceDir);
+        
+        Path javaFile = sourceDir.resolve("Hello.java");
+        Files.writeString(javaFile, "public class Hello { public void sayHi() {} }");
+        
+        String content = service.generateSkeletonToString(sourceDir);
+        
+        assertNotNull(content);
+        assertTrue(content.contains("class Hello"));
+        assertTrue(content.contains("sayHi()"));
+    }
 }
