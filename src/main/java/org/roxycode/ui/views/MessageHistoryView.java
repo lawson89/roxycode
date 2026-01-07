@@ -10,7 +10,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
-import org.roxycode.core.HistoryService;
+import org.roxycode.ui.ThemeService;
 
 import javax.swing.*;
 import javax.swing.text.*;
@@ -24,11 +24,7 @@ import java.util.Map;
 public class MessageHistoryView extends JPanel {
 
     private final GenAIService genAIService;
-    private final HistoryService historyService;
     private final JTextPane messageHistoryArea = new JTextPane();
-
-    @Outlet
-    private JComponent viewMessageHistory;
 
     @Outlet
     private JScrollPane messageHistoryScrollPane;
@@ -36,12 +32,11 @@ public class MessageHistoryView extends JPanel {
     @Outlet
     private JButton refreshMessageHistoryButton;
 
-    private final org.roxycode.ui.ThemeService themeService;
+    private final ThemeService themeService;
 
     @Inject
-    public MessageHistoryView(GenAIService genAIService, HistoryService historyService, org.roxycode.ui.ThemeService themeService) {
+    public MessageHistoryView(GenAIService genAIService, ThemeService themeService) {
         this.genAIService = genAIService;
-        this.historyService = historyService;
         this.themeService = themeService;
         setLayout(new BorderLayout());
     }
@@ -83,7 +78,7 @@ public class MessageHistoryView extends JPanel {
         Style italicStyle = getOrAddStyle(doc, "italic", defaultStyle);
         StyleConstants.setItalic(italicStyle, true);
         StyleConstants.setForeground(italicStyle, isDark ? Color.LIGHT_GRAY : Color.DARK_GRAY);
-        
+
         Style separatorStyle = getOrAddStyle(doc, "separator", defaultStyle);
         StyleConstants.setForeground(separatorStyle, isDark ? new Color(0x444444) : Color.LIGHT_GRAY);
     }
@@ -105,11 +100,11 @@ public class MessageHistoryView extends JPanel {
     public void refresh() {
         if (messageHistoryArea == null)
             return;
-        
+
         updateStyles();
-        
+
         List<Content> history = new ArrayList<>(genAIService.getHistory());
-        
+
         StyledDocument doc = messageHistoryArea.getStyledDocument();
         try {
             doc.remove(0, doc.getLength());
@@ -131,7 +126,7 @@ public class MessageHistoryView extends JPanel {
         else if ("model".equalsIgnoreCase(role)) roleStyle = doc.getStyle("model");
 
         doc.insertString(doc.getLength(), role.toUpperCase() + ": ", roleStyle);
-        
+
         List<Part> parts = content.parts().orElse(Collections.emptyList());
         for (Part part : parts) {
             if (part.text().isPresent()) {
