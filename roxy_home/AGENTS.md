@@ -7,11 +7,11 @@ When a user requests a feature or bug fix, you should:
 1. Analyze the user prompt to understand the requirements.
 2. Create a descriptive name for the feature or bug fix that encapsulates its purpose.
 3. Draft a detailed plan outlining the steps needed to implement the feature or resolve the bug.
-4. Save the plan as a markdown (.md) file in the roxy_project/plans directory, using the feature or bug fix name as the filename.
+4. Save the plan as a markdown (.md) file in the roxy/plans directory, using the feature or bug fix name as the filename.
    When responding to user queries, ensure that your plans are well-structured, easy to follow, and include all necessary details for implementation.
 
 When asked to implement a feature or fix a bug, you should:
-1. Look for the corresponding plan in the roxy_project/plans directory.
+1. Look for the corresponding plan in the roxy/plans directory.
 2. Follow the steps outlined in the plan to carry out the implementation or bug fix.
 3. Do not proceed directly to implementation without first consulting the plan.
 4. Write unit tests for all changes made, unless explicitly told not to by the user.
@@ -24,11 +24,11 @@ When updating the plan during implementation:
 3. If the implementation is in progress but not completed, please check the plan for progress and continue from there.
 4. Respond to the user when complete with a summary of what was done and clearly mark in the plan that the work is complete.
 
-If asked to plan a feature or fix a bug, you should name the feature based on the user prompt and save the plan as a md file in the roxy_project/plans directory.
+If asked to plan a feature or fix a bug, you should name the feature based on the user prompt and save the plan as a md file in the roxy/plans directory.
 
-if asked to make a change without a plan, you should first create a plan as above and save it in the roxy_project/plans directory and inform the user of the name of the plan.
+if asked to make a change without a plan, you should first create a plan as above and save it in the roxy/plans directory and inform the user of the name of the plan.
 
-When asked to implement a plan, you should look for the plan in the roxy_project/plans directory and follow it and update the implementation progress section. Do not proceed directly to implementation.
+When asked to implement a plan, you should look for the plan in the roxy/plans directory and follow it and update the implementation progress section. Do not proceed directly to implementation.
 
 IMPORTANT! In all cases (plan or implement) read the full context in this file for detailed instructions to follow.
 
