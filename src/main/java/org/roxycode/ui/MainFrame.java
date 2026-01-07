@@ -3,6 +3,7 @@ package org.roxycode.ui;
 import com.formdev.flatlaf.FlatLaf;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.httprpc.sierra.ActivityIndicator;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.kordamp.ikonli.Ikon;
@@ -81,6 +82,9 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Outlet
     private JLabel roxyModeLabel;
+
+    @Outlet
+    private ActivityIndicator activityIndicator;
 
     @Outlet
     private JLabel currentModelLabel;
@@ -191,6 +195,18 @@ public class MainFrame extends JFrame implements Runnable {
         roxyProjectService.ensureProjectStructure();
         initGitInfo();
         initListeners();
+        genAIService.addBusyListener(busy -> SwingUtilities.invokeLater(() -> {
+            if (activityIndicator != null) {
+                if (busy) {
+                    activityIndicator.setVisible(true);
+                    activityIndicator.start();
+                } else {
+                    activityIndicator.stop();
+                    activityIndicator.setVisible(false);
+                }
+            }
+        }));
+
         updateProjectLabel();
         updateRoxyMode();
         performRescan();

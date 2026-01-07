@@ -122,8 +122,21 @@ public class GenAIService {
     }
 
     private final AtomicBoolean isChatting = new AtomicBoolean(false);
+    private final List<Consumer<Boolean>> busyListeners = new ArrayList<>();
+
 
     private volatile boolean stopRequested = false;
+
+    
+    public void addBusyListener(Consumer<Boolean> listener) {
+        busyListeners.add(listener);
+    }
+
+    private void notifyBusy(boolean busy) {
+        for (Consumer<Boolean> listener : busyListeners) {
+            listener.accept(busy);
+        }
+    }
 
     public void stopChat() {
         this.stopRequested = true;
@@ -173,6 +186,7 @@ public class GenAIService {
         if (!isChatting.compareAndSet(false, true)) {
             return "A chat is already in progress.";
         }
+        notifyBusy(true);
         try {
             this.stopRequested = false;
             sandbox.setRoot(projectRoot);
@@ -298,6 +312,7 @@ public class GenAIService {
             return "Max turns reached.";
         } finally {
             isChatting.set(false);
+            notifyBusy(false);
         }
     }
 }

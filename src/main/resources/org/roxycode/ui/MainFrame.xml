@@ -13,6 +13,7 @@
         <button name="openFolderButton" text="Change Project" borderPainted="false" focusPainted="false" contentAreaFilled="false" style="border: 1,0,0,0,Component.borderColor"/>
         <spacer weight="1"/>
         <label name="roxyModeLabel" text="" style="font: bold"/>
+        <activity-indicator name="activityIndicator" indicatorSize="12" visible="false"/>
         <spacer size="16"/>
     </row-panel>
 
