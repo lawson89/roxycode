@@ -5,7 +5,7 @@ import com.google.genai.types.*;
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.cache.GeminiCacheService;
-import org.roxycode.cache.ProjectCacheMeta;
+import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
@@ -118,7 +118,7 @@ public class GenAIService {
 
     public String buildSystemContext(String projectRoot, List<File> attachedFiles) {
         Path projectPath = Paths.get(projectRoot);
-        java.util.Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta(projectPath);
+        java.util.Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta();
         return buildSystemContext(projectRoot, attachedFiles, cacheMeta);
     }
 
@@ -156,7 +156,7 @@ public class GenAIService {
         try {
             this.stopRequested = false;
             Path projectPath = Paths.get(projectRoot);
-            Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta(projectPath);
+            Optional<ProjectCacheMeta> cacheMeta = geminiCacheService.getProjectCacheMeta();
             String systemContext = buildSystemContext(projectRoot, attachedFiles, cacheMeta);
             LOG.info("systemContext: {}", systemContext);
             String taskMessage = "Task: " + prompt;

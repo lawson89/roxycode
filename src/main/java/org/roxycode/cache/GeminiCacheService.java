@@ -8,6 +8,7 @@ import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.tools.ToolRegistry;
 import org.roxycode.core.utils.SystemUtils;
 import org.slf4j.Logger;
@@ -78,7 +79,7 @@ public class GeminiCacheService {
         }
 
         try {
-            Path cacheFile = projectPath.resolve("roxy_project").resolve(".cache").resolve("codebase_cache.toml");
+            Path cacheFile = projectPath.resolve(RoxyProjectService.ROXY_WORKING_DIR).resolve(".cache").resolve("codebase_cache.toml");
 
             if (!Files.exists(cacheFile)) {
                 LOG.error("Cache file not found at: {}", cacheFile);
@@ -98,7 +99,6 @@ public class GeminiCacheService {
                             .build()))
                     .build();
 
-            // FIX: Retrieve tools
             List<Tool> geminiTools = toolRegistry.getAllGeminiTools();
 
             CreateCachedContentConfig config = CreateCachedContentConfig.builder()
@@ -139,6 +139,10 @@ public class GeminiCacheService {
             LOG.error("Failed to push cache to Gemini: {}", e.getMessage(), e);
             throw new RuntimeException("Cache Push Failed", e);
         }
+    }
+
+        public Optional<ProjectCacheMeta> getProjectCacheMeta() {
+        return getProjectCacheMeta(roxyProjectService.getProjectRoot());
     }
 
     public Optional<ProjectCacheMeta> getProjectCacheMeta(Path projectPath) {

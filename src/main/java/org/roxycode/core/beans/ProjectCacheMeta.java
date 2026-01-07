@@ -1,4 +1,4 @@
-package org.roxycode.cache;
+package org.roxycode.core.beans;
 
 public record ProjectCacheMeta(
         String projectRoot,

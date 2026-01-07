@@ -12,6 +12,7 @@ import org.roxycode.cache.GeminiCacheService;
 import org.roxycode.core.NotificationService;
 import org.roxycode.core.NotificationType;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.beans.ProjectCacheMeta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -122,7 +123,7 @@ public class CodebaseCacheView extends JPanel {
             if (pushCacheButton != null)
                 pushCacheButton.setEnabled(exists);
             Path projectRoot = settingsService.getCurrentProjectPath();
-            geminiCacheService.getProjectCacheMeta(projectRoot).ifPresentOrElse(meta -> {
+            geminiCacheService.getProjectCacheMeta().ifPresentOrElse(meta -> {
                 onlineCacheIdLabel.setText(meta.geminiCacheId());
                 onlineCacheTimestampLabel.setText(meta.generatedAt());
                 if (skeletonTokenCountLabel != null) skeletonTokenCountLabel.setText(String.format("%,d", meta.skeletonTokenCount()));
