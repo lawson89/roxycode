@@ -5,7 +5,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.service.BuildToolService;
-import org.roxycode.core.tools.service.FileSystemService;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,12 +18,12 @@ class CodebasePackerServiceTest {
     @Test
     void testEstimateTokenCount(@TempDir Path tempDir) throws IOException {
         CodebasePackerService service = new CodebasePackerService(mock(RoxyProjectService.class), mock(Sandbox.class), new FileListingService(), mock(BuildToolService.class), mock(JavaContextService.class));
-        
+
         Path testFile = tempDir.resolve("test.txt");
         Files.writeString(testFile, "12345678"); // 8 bytes
-        
+
         assertEquals(2, service.estimateTokenCount(testFile));
-        
+
         assertEquals(0, service.estimateTokenCount(null));
         assertEquals(0, service.estimateTokenCount(tempDir.resolve("non-existent")));
     }

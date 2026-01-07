@@ -6,6 +6,8 @@ import jakarta.inject.Singleton;
 import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.UsageService;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.swing.FontIcon;
 
 import javax.swing.*;
 import java.awt.*;
@@ -22,6 +24,9 @@ public class UsageView extends JPanel {
     private JLabel usageHtmlLabel;
 
     @Outlet
+    private JLabel usageIcon;
+
+    @Outlet
     private JButton resetUsageButton;
 
     @Inject
@@ -33,6 +38,9 @@ public class UsageView extends JPanel {
     @PostConstruct
     public void init() {
         add(UILoader.load(this, "UsageView.xml"));
+        if (usageIcon != null) {
+            usageIcon.setIcon(FontIcon.of(MaterialDesignC.CHART_LINE, 32));
+        }
         initListeners();
         refresh();
     }
@@ -49,13 +57,13 @@ public class UsageView extends JPanel {
     public void refresh() {
         if (usageHtmlLabel == null)
             return;
-        String html = "<html><table border='0' cellspacing='0' cellpadding='8'>" +
-                "<tr><td><b><font color='#888888'>API CALLS</font></b></td><td>" + usageService.getApiCalls() + "</td></tr>" +
-                "<tr><td><b><font color='#888888'>TOTAL TOKENS</font></b></td><td>" + String.format("%,d", usageService.getTotalTokens()) + "</td></tr>" +
-                "<tr><td><b><font color='#888888'>PROMPT TOKENS</font></b></td><td>" + String.format("%,d", usageService.getPromptTokens()) + "</td></tr>" +
-                "<tr><td><b><font color='#888888'>CANDIDATE TOKENS</font></b></td><td>" + String.format("%,d", usageService.getCandidateTokens()) + "</td></tr>" +
-                "<tr><td><b><font color='#888888'>ESTIMATED COST</font></b></td><td>" + String.format("$%.4f", usageService.getEstimatedCost()) + "</td></tr>" +
-                "</table></html>";
+        String html = "<html><div style='padding: 10px;'><table border='0' cellspacing='0' cellpadding='8'>" +
+                "<tr><td><font color='#888888'><b>API CALLS</b></font></td><td><font size='4'>" + usageService.getApiCalls() + "</font></td></tr>" +
+                "<tr><td><font color='#888888'><b>TOTAL TOKENS</b></font></td><td><font size='4'>" + String.format("%,d", usageService.getTotalTokens()) + "</font></td></tr>" +
+                "<tr><td><font color='#888888'><b>PROMPT TOKENS</b></font></td><td><font size='4'>" + String.format("%,d", usageService.getPromptTokens()) + "</font></td></tr>" +
+                "<tr><td><font color='#888888'><b>CANDIDATE TOKENS</b></font></td><td><font size='4'>" + String.format("%,d", usageService.getCandidateTokens()) + "</font></td></tr>" +
+                "<tr><td><font color='#888888'><b>ESTIMATED COST</b></font></td><td><font size='4' color='#4CAF50'><b>" + String.format("$%.4f", usageService.getEstimatedCost()) + "</b></font></td></tr>" +
+                "</table></div></html>";
         usageHtmlLabel.setText(html);
     }
 }

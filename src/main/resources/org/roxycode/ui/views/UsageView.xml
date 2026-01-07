@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE column-panel SYSTEM "sierra.dtd">
 
-<column-panel name="viewUsage" padding="32" spacing="20">
-    <label text="API Usage Statistics" font="h1"/>
+<column-panel name="viewUsage" padding="20" spacing="16">
+    <label text="Usage Statistics" styleClass="h2"/>
+    <separator/>
 
     <label name="usageHtmlLabel" text=""/>
 

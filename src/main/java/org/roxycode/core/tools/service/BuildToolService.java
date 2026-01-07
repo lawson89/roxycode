@@ -2,6 +2,7 @@ package org.roxycode.core.tools.service;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
@@ -87,7 +88,7 @@ public class BuildToolService {
     List<String> getTestCommand(BuildTool tool) {
         List<String> command = new ArrayList<>();
         command.add(resolveExecutable(tool));
-        command.add("test");
+        command.add("test -q");
         return command;
     }
 
@@ -139,10 +140,11 @@ public class BuildToolService {
                 }
             }
             int exitCode = process.waitFor();
+            String outputStr = StringUtils.abbreviate(output.toString(), 1000); // Limit output to 10,000 characters
             if (exitCode == 0) {
-                return "✅ " + context + " SUCCESSFUL\n" + output;
+                return "✅ " + context + " SUCCESSFUL\n" + outputStr;
             } else {
-                return "❌ " + context + " FAILED (Exit Code: " + exitCode + ")\n" + output;
+                return "❌ " + context + " FAILED (Exit Code: " + exitCode + ")\n" + outputStr;
             }
         } catch (IOException | InterruptedException e) {
             return "❌ ERROR executing " + context + ": " + String.join(" ", command) + "\n" + e.getMessage();

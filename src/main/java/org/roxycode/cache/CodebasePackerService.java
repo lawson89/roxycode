@@ -1,11 +1,9 @@
 package org.roxycode.cache;
 
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
-import org.roxycode.core.tools.ScriptServiceRegistry;
 import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +14,6 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 /**
  * CodebasePackerService is responsible for creating a snapshot of the project code in a format

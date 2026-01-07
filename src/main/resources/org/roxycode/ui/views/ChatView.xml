@@ -11,19 +11,21 @@
         </scroll-pane>
         <button name="clearAttachmentsButton" text="Clear"/>
     </row-panel>
-    <row-panel spacing="4" padding="8" opaque="true">
+    <row-panel spacing="8" padding="12" opaque="true" style="border: 1,0,0,0,Component.borderColor">
         <button name="attachButton" text="Attach"/>
         <scroll-pane weight="1">
             <text-area name="inputField" rows="3"/>
         </scroll-pane>
-        <button name="sendButton" text="Send"/>
-        <button name="stopButton" text="Stop" enabled="false"/>
+        <column-panel spacing="4">
+            <button name="sendButton" text="Send"/>
+            <button name="stopButton" text="Stop" enabled="false"/>
+        </column-panel>
     </row-panel>
-     <row-panel spacing="16" padding="4,12,4,12" opaque="true">
+     <row-panel spacing="12" padding="2,12,4,12" opaque="true">
         <spacer weight="1"/>
-         <label name="currentModelLabel" size="200,15" text="[MODEL]" styleClass="monospaced"  horizontalAlignment="leading"/>
-        <label name="msgCountLabel" size="120,15" text="0 Messages" foreground="#888888"  horizontalAlignment="trailing"/>
-        <label name="inTokenLabel" size="100,15" text="0 In" foreground="#888888"  horizontalAlignment="trailing"/>
-        <label name="outTokenLabel" size="100, 15" text="0 Out" foreground="#888888" horizontalAlignment="trailing"/>
+        <label name="currentModelLabel" text="[MODEL]" style="font: -2; foreground: #888888"/>
+        <label name="msgCountLabel" text="0 Messages" style="font: -2; foreground: #888888"/>
+        <label name="inTokenLabel" text="0 In" style="font: -2; foreground: #888888"/>
+        <label name="outTokenLabel" text="0 Out" style="font: -2; foreground: #888888"/>
     </row-panel>
 </column-panel>

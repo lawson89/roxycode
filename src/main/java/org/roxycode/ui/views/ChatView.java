@@ -90,20 +90,20 @@ public class ChatView extends JPanel {
 
     private void initIcons() {
         if (currentModelLabel != null) {
-            currentModelLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_HAPPY_OUTLINE, 16));
+            currentModelLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_HAPPY_OUTLINE, 12));
             currentModelLabel.setIconTextGap(6);
             currentModelLabel.setText(settingsService.getGeminiModel());
         }
         if (msgCountLabel != null) {
-            msgCountLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignM.MESSAGE_TEXT_OUTLINE, 14));
+            msgCountLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignM.MESSAGE_TEXT_OUTLINE, 12));
             msgCountLabel.setIconTextGap(4);
         }
         if (inTokenLabel != null) {
-            inTokenLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignA.ARROW_UP_BOLD_OUTLINE, 14));
+            inTokenLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignA.ARROW_UP_BOLD_OUTLINE, 12));
             inTokenLabel.setIconTextGap(4);
         }
         if (outTokenLabel != null) {
-            outTokenLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignA.ARROW_DOWN_BOLD_OUTLINE, 14));
+            outTokenLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignA.ARROW_DOWN_BOLD_OUTLINE, 12));
             outTokenLabel.setIconTextGap(4);
         }
         if (stopButton != null) {

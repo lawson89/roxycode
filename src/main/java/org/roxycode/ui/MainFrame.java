@@ -252,7 +252,7 @@ public class MainFrame extends JFrame implements Runnable {
         });
     }
 
-    private void initIcons() {
+        private void initIcons() {
         java.net.URL iconUrl = getClass().getResource("roxy_logo_transparent.png");
         if (iconUrl != null) {
             ImageIcon roxyIcon = new ImageIcon(iconUrl);
@@ -264,41 +264,50 @@ public class MainFrame extends JFrame implements Runnable {
             }
         } else {
             if (icon != null)
-                icon.setIcon(FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 64));
+                icon.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CHAT_OUTLINE, 64));
         }
         if (currentModelLabel != null) {
-            currentModelLabel.setIcon(FontIcon.of(MaterialDesignR.ROBOT_HAPPY_OUTLINE, 16));
+            currentModelLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_HAPPY_OUTLINE, 16));
             currentModelLabel.setIconTextGap(6);
             currentModelLabel.setText(settingsService.getGeminiModel());
         }
+
+        if (currentProjectLabel != null) {
+            currentProjectLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FOLDER_OUTLINE, 16));
+            currentProjectLabel.setIconTextGap(8);
+        }
+        if (gitBranchLabel != null) {
+            gitBranchLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignG.GIT, 16));
+            gitBranchLabel.setIconTextGap(8);
+        }
+
         // Set Icons for Nav Buttons
         if (navChatButton != null)
-            navChatButton.setIcon(FontIcon.of(MaterialDesignC.CHAT_OUTLINE, 16));
+            navChatButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CHAT_OUTLINE, 18));
         if (navFilesButton != null)
-            navFilesButton.setIcon(FontIcon.of(MaterialDesignF.FILE_TREE_OUTLINE, 16));
+            navFilesButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FILE_TREE_OUTLINE, 18));
         if (navUsageButton != null)
-            navUsageButton.setIcon(FontIcon.of(MaterialDesignC.CHART_LINE, 16));
+            navUsageButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CHART_LINE, 18));
         if (navSettingsButton != null)
-            navSettingsButton.setIcon(FontIcon.of(MaterialDesignC.COG_OUTLINE, 16));
+            navSettingsButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.COG_OUTLINE, 18));
         if (navSystemPromptButton != null)
-            navSystemPromptButton.setIcon(FontIcon.of(MaterialDesignR.ROBOT_OUTLINE, 16));
+            navSystemPromptButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_OUTLINE, 18));
         if (navMessageHistoryButton != null)
-            navMessageHistoryButton.setIcon(FontIcon.of(MaterialDesignM.MESSAGE_TEXT_CLOCK_OUTLINE, 16));
-        if (navSummaryQueueButton != null)
-            navSummaryQueueButton.setIcon(FontIcon.of(MaterialDesignA.ARCHIVE_OUTLINE, 16));
+            navMessageHistoryButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignM.MESSAGE_TEXT_CLOCK_OUTLINE, 18));
         if (navLogsButton != null)
-            navLogsButton.setIcon(FontIcon.of(MaterialDesignF.FILE_DOCUMENT_OUTLINE, 16));
+            navLogsButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FILE_DOCUMENT_OUTLINE, 18));
         if (navCodebaseCacheButton != null)
-            navCodebaseCacheButton.setIcon(FontIcon.of(MaterialDesignD.DATABASE_OUTLINE, 16));
+            navCodebaseCacheButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignD.DATABASE_OUTLINE, 18));
         if (navGeminiCachesButton != null)
-            navGeminiCachesButton.setIcon(FontIcon.of(MaterialDesignC.CLOUD_OUTLINE, 16));
+            navGeminiCachesButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CLOUD_OUTLINE, 18));
         if (openFolderButton != null)
-            openFolderButton.setIcon(FontIcon.of(MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
+            openFolderButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
     }
 
     private void updateProjectLabel() {
         if (currentProjectLabel != null) {
-            currentProjectLabel.setText(currentProjectRoot.toString());
+            currentProjectLabel.setText(currentProjectRoot.getFileName().toString());
+            currentProjectLabel.setToolTipText(currentProjectRoot.toString());
         }
     }
 
