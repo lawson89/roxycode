@@ -19,6 +19,9 @@ class GitServiceTest {
     @Inject
     GitService gitService;
 
+    @Inject
+    Sandbox sandbox;
+
     @Test
     void testGitCommands(@TempDir Path tempDir) throws Exception {
         // Setup a real temp git repo
@@ -27,25 +30,44 @@ class GitServiceTest {
         runCommand(tempDir.toFile(), "git", "config", "user.name", "Test User");
 
         // Test Branch (should be master or main depending on git config, or empty if no commits)
-        // We need a commit to have a branch usually
         File testFile = tempDir.resolve("test.txt").toFile();
         testFile.createNewFile();
         runCommand(tempDir.toFile(), "git", "add", ".");
         runCommand(tempDir.toFile(), "git", "commit", "-m", "Initial");
 
-        // 1. Verify Branch
+        // 1. Verify Branch (using Path object)
         String branch = gitService.getCurrentBranch(tempDir);
         assertNotNull(branch);
         assertFalse(branch.isEmpty());
-        // Note: Could be 'master' or 'main' depending on system config
 
-        // 2. Verify Status
-        // Create a change
+        // 2. Verify Status (using Path object)
         File newFile = tempDir.resolve("new.txt").toFile();
         newFile.createNewFile();
 
         String status = gitService.getStatus(tempDir);
         assertTrue(status.contains("?? new.txt") || status.contains("new.txt"));
+    }
+
+    @Test
+    void testStringPathArgument(@TempDir Path tempDir) throws Exception {
+        sandbox.setRoot(tempDir.toString());
+        runCommand(tempDir.toFile(), "git", "init");
+        runCommand(tempDir.toFile(), "git", "config", "user.email", "test@test.com");
+        runCommand(tempDir.toFile(), "git", "config", "user.name", "Test User");
+
+        File testFile = tempDir.resolve("test.txt").toFile();
+        testFile.createNewFile();
+        runCommand(tempDir.toFile(), "git", "add", ".");
+        runCommand(tempDir.toFile(), "git", "commit", "-m", "Initial");
+
+        // Verify Branch (using String path ".")
+        String branch = gitService.getCurrentBranch(".");
+        assertNotNull(branch);
+        assertFalse(branch.isEmpty());
+
+        // Verify Status (using String path ".")
+        String status = gitService.getStatus(".");
+        assertNotNull(status);
     }
 
     @Test

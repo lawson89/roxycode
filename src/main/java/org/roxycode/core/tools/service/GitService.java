@@ -1,6 +1,8 @@
 package org.roxycode.core.tools.service;
 
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 import org.slf4j.Logger;
@@ -21,18 +23,39 @@ public class GitService {
     private static final Logger LOG = LoggerFactory.getLogger(GitService.class);
     private static final int TIMEOUT_SECONDS = 10; // Increased timeout for diffs
 
+    private final Sandbox sandbox;
+
+    @Inject
+    public GitService(Sandbox sandbox) {
+        this.sandbox = sandbox;
+    }
+
+    private Path resolveRoot(Object projectRoot) {
+        if (projectRoot instanceof Path path) {
+            return path;
+        }
+        if (projectRoot instanceof String pathStr) {
+            return sandbox.resolve(pathStr);
+        }
+        if (projectRoot != null) {
+            // GraalJS might pass it as something else that toString() can handle
+            return sandbox.resolve(projectRoot.toString());
+        }
+        return sandbox.getRoot();
+    }
+
     @LLMDoc("Returns the current Git branch name")
-    public String getCurrentBranch(Path projectRoot) {
-        return runGitCommand(projectRoot, "branch", "--show-current");
+    public String getCurrentBranch(Object projectRoot) {
+        return runGitCommand(resolveRoot(projectRoot), "branch", "--show-current");
     }
 
     @LLMDoc("Returns the Git status in porcelain format")
-    public String getStatus(Path projectRoot) {
-        return runGitCommand(projectRoot, "status", "--porcelain");
+    public String getStatus(Object projectRoot) {
+        return runGitCommand(resolveRoot(projectRoot), "status", "--porcelain");
     }
 
     @LLMDoc("Returns the Git diff, optionally cached (staged) and for a specific path")
-    public String diff(Path projectRoot, boolean cached, String path) {
+    public String diff(Object projectRoot, boolean cached, String path) {
         List<String> args = new ArrayList<>();
         args.add("diff");
         if (cached) {
@@ -41,11 +64,11 @@ public class GitService {
         if (path != null && !path.isEmpty()) {
             args.add(path);
         }
-        return runGitCommand(projectRoot, args.toArray(new String[0]));
+        return runGitCommand(resolveRoot(projectRoot), args.toArray(new String[0]));
     }
 
     @LLMDoc("Returns the Git log for a path with a specified limit on the number of entries")
-    public String log(Path projectRoot, String path, int limit) {
+    public String log(Object projectRoot, String path, int limit) {
         List<String> args = new ArrayList<>();
         args.add("log");
         args.add("-n");
@@ -53,7 +76,7 @@ public class GitService {
         if (path != null && !path.isEmpty()) {
             args.add(path);
         }
-        return runGitCommand(projectRoot, args.toArray(new String[0]));
+        return runGitCommand(resolveRoot(projectRoot), args.toArray(new String[0]));
     }
 
     private String runGitCommand(Path projectRoot, String... args) {
