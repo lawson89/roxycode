@@ -11,7 +11,6 @@ import org.roxycode.core.SettingsService;
 import org.roxycode.ui.MarkdownPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -26,8 +25,11 @@ public class ChatView extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(ChatView.class);
 
     private final GenAIService genAIService;
+
     private final SettingsService settingsService;
+
     private final MarkdownPane chatArea = new MarkdownPane();
+
     private final List<File> attachedFiles = new ArrayList<>();
 
     @Outlet
@@ -87,7 +89,6 @@ public class ChatView extends JPanel {
         initListeners();
     }
 
-
     private void initIcons() {
         if (currentModelLabel != null) {
             currentModelLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_HAPPY_OUTLINE, 12));
@@ -121,27 +122,36 @@ public class ChatView extends JPanel {
     }
 
     private void initListeners() {
-        if (sendButton != null) sendButton.addActionListener(this::onSend);
-        if (stopButton != null) stopButton.addActionListener(e -> genAIService.stopChat());
-        if (attachButton != null) attachButton.addActionListener(this::onAttach);
-        if (clearAttachmentsButton != null) clearAttachmentsButton.addActionListener(e -> {
-            attachedFiles.clear();
-            updateAttachmentsLabel();
-        });
+        if (sendButton != null)
+            sendButton.addActionListener(this::onSend);
+        if (stopButton != null)
+            stopButton.addActionListener(e -> genAIService.stopChat());
+        if (attachButton != null)
+            attachButton.addActionListener(this::onAttach);
+        if (clearAttachmentsButton != null)
+            clearAttachmentsButton.addActionListener(e -> {
+                attachedFiles.clear();
+                updateAttachmentsLabel();
+            });
         if (inputField != null) {
+            inputField.setLineWrap(true);
+            inputField.setWrapStyleWord(true);
             inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
             inputField.getActionMap().put("send-message", new AbstractAction() {
+
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     onSend(e);
                 }
             });
+            inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("shift ENTER"), "insert-break");
         }
     }
 
     private void onSend(ActionEvent e) {
         String prompt = inputField.getText().trim();
-        if (prompt.isEmpty()) return;
+        if (prompt.isEmpty())
+            return;
         inputField.setText("");
         List<File> currentAttachments = new ArrayList<>(attachedFiles);
         attachedFiles.clear();
@@ -149,7 +159,6 @@ public class ChatView extends JPanel {
         chatArea.appendMarkdown("**User:** " + prompt);
         if (!currentAttachments.isEmpty())
             chatArea.appendMarkdown(" *(Attached: " + currentAttachments.size() + " files)*");
-        
         setInputEnabled(false);
         new Thread(() -> {
             try {
@@ -183,20 +192,27 @@ public class ChatView extends JPanel {
     }
 
     private void setInputEnabled(boolean enabled) {
-        if (sendButton != null) sendButton.setEnabled(enabled);
-        if (stopButton != null) stopButton.setEnabled(!enabled);
+        if (sendButton != null)
+            sendButton.setEnabled(enabled);
+        if (stopButton != null)
+            stopButton.setEnabled(!enabled);
         if (inputField != null) {
             inputField.setEnabled(enabled);
-            if (enabled) inputField.requestFocusInWindow();
+            if (enabled)
+                inputField.requestFocusInWindow();
         }
-        if (attachButton != null) attachButton.setEnabled(enabled);
-        if (clearAttachmentsButton != null) clearAttachmentsButton.setEnabled(enabled);
+        if (attachButton != null)
+            attachButton.setEnabled(enabled);
+        if (clearAttachmentsButton != null)
+            clearAttachmentsButton.setEnabled(enabled);
     }
 
     private boolean isTimeout(Throwable t) {
         while (t != null) {
-            if (t instanceof InterruptedIOException) return true;
-            if (t.getMessage() != null && t.getMessage().toLowerCase().contains("timeout")) return true;
+            if (t instanceof InterruptedIOException)
+                return true;
+            if (t.getMessage() != null && t.getMessage().toLowerCase().contains("timeout"))
+                return true;
             t = t.getCause();
         }
         return false;
@@ -208,14 +224,16 @@ public class ChatView extends JPanel {
         fileChooser.setCurrentDirectory(new File(settingsService.getCurrentProject()));
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             for (File f : fileChooser.getSelectedFiles()) {
-                if (!attachedFiles.contains(f)) attachedFiles.add(f);
+                if (!attachedFiles.contains(f))
+                    attachedFiles.add(f);
             }
             updateAttachmentsLabel();
         }
     }
 
     private void updateAttachmentsLabel() {
-        if (attachmentsContainer == null) return;
+        if (attachmentsContainer == null)
+            return;
         attachmentsContainer.removeAll();
         if (attachedFiles.isEmpty()) {
             attachmentsContainer.add(new JLabel("None"));
