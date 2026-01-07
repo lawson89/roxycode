@@ -323,7 +323,40 @@ public class MainFrame extends JFrame implements Runnable {
 
     public void updateRoxyMode() {
         if (roxyModeLabel != null) {
-            roxyModeLabel.setText(genAIService.getRoxyMode().toString());
+            RoxyMode mode = genAIService.getRoxyMode();
+            roxyModeLabel.setText(mode.toString());
+
+            Ikon iconCode;
+            Color fgColor;
+            boolean isDark = com.formdev.flatlaf.FlatLaf.isLafDark();
+
+            switch (mode) {
+                case DISCOVERY:
+                    iconCode = MaterialDesignM.MAGNIFY;
+                    fgColor = isDark ? new Color(100, 200, 255) : new Color(0, 80, 200);
+                    break;
+                case PLANNING:
+                    iconCode = MaterialDesignP.PENCIL_OUTLINE;
+                    fgColor = isDark ? new Color(255, 200, 0) : new Color(150, 100, 0);
+                    break;
+                case IMPLEMENTING:
+                    iconCode = MaterialDesignW.WRENCH_OUTLINE;
+                    fgColor = isDark ? new Color(100, 255, 100) : new Color(0, 120, 0);
+                    break;
+                case FEEDBACK:
+                    iconCode = MaterialDesignM.MESSAGE_TEXT_OUTLINE;
+                    fgColor = isDark ? new Color(200, 100, 255) : new Color(120, 0, 150);
+                    break;
+                default:
+                    iconCode = MaterialDesignH.HELP_CIRCLE_OUTLINE;
+                    fgColor = roxyModeLabel.getForeground();
+                    break;
+            }
+
+            roxyModeLabel.setIcon(FontIcon.of(iconCode, 16, fgColor));
+            roxyModeLabel.setForeground(fgColor);
+            roxyModeLabel.setIconTextGap(6);
+            roxyModeLabel.setFont(roxyModeLabel.getFont().deriveFont(Font.BOLD));
         }
     }
 

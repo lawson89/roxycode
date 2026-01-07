@@ -3,29 +3,22 @@
 
 <column-panel opaque="true">
 
-    <row-panel spacing="8" padding="8" opaque="true" alignToBaseline="false" style="border: 0,0,1,0,Component.borderColor">
+    <row-panel spacing="8" padding="8" opaque="true" alignToBaseline="false" >
         <label text="" name="icon"/>
         <label text="RoxyCode" styleClass="h3"/>
         <spacer size="16"/>
-        <column-panel spacing="2">
-            <row-panel spacing="4">
-                <label name="currentProjectLabel" text="[PROJECT_NAME]" styleClass="h4"/>
-                <button name="openFolderButton" borderPainted="false" text="Change" focusPainted="false" contentAreaFilled="false" style="margin: 0,0,0,0; padding: 0,0,0,0"/>
-            </row-panel>
-            <row-panel spacing="4">
-                <label name="gitBranchLabel" text="unknown" foreground="#888888"/>
-            </row-panel>
-        </column-panel>
-        <spacer size="16"/>
-        <spacer size="16"/>
-        <label text="Mode:"/>
-        <label name="roxyModeLabel" text=""/>
+        <label name="currentProjectLabel" text="[PROJECT_NAME]" styleClass="h3"/>
+        <spacer size="4"/>
+        <label name="gitBranchLabel" text="unknown" foreground="#888888"/>
+        <button name="openFolderButton" text="Change Project" borderPainted="false" focusPainted="false" contentAreaFilled="false" style="border: 1,0,0,0,Component.borderColor"/>
+        <spacer weight="1"/>
+        <label name="roxyModeLabel" text="" style="font: bold"/>
         <spacer size="16"/>
     </row-panel>
 
     <row-panel weight="1" alignToBaseline="false">
 
-        <column-panel padding="16" spacing="10" opaque="true" style="border: 0,0,0,1,Component.borderColor">
+        <column-panel padding="16" spacing="10" opaque="true">
             <label text="MENU" style="font: bold"/>
 
             <toggle-button name="navChatButton" text="Chat" borderPainted="false" horizontalAlignment="left"

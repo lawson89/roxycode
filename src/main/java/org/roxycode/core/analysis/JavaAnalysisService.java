@@ -1,4 +1,4 @@
-package org.roxycode.cache;
+package org.roxycode.core.analysis;
 
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
@@ -19,9 +19,9 @@ import java.nio.file.Path;
 import java.util.List;
 
 @Singleton
-public class JavaContextService {
+public class JavaAnalysisService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(JavaContextService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JavaAnalysisService.class);
 
     /**
      * Scans the given directory for .java files and streams a "skeleton"

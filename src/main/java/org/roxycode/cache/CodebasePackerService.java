@@ -4,6 +4,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
+import org.roxycode.core.analysis.JavaAnalysisService;
 import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,11 +32,11 @@ public class CodebasePackerService {
     private final Sandbox sandbox;
     private final FileListingService fileListingService;
     private final BuildToolService buildToolService;
-    private final JavaContextService javaContextService;
+    private final JavaAnalysisService javaContextService;
 
     @Inject
     public CodebasePackerService(RoxyProjectService roxyProjectService, Sandbox sandbox,
-                                 FileListingService fileListingService, BuildToolService buildToolService, JavaContextService javaContextService) {
+                                 FileListingService fileListingService, BuildToolService buildToolService, JavaAnalysisService javaContextService) {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.fileListingService = fileListingService;
@@ -108,7 +109,7 @@ public class CodebasePackerService {
         String header = buildToolService.getProjectSummary();
         header += "\n\nThis is a codebase snapshot in TOML format including Java signatures for analysis.";
         writeTomlHeader(writer, "header", header);
-        // Java source files via JavaContextService
+        // Java source files via JavaAnalysisService
         writer.write("[java]");
         writer.newLine();
         writer.write("content = '''");
