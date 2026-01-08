@@ -1,6 +1,5 @@
 package org.roxycode.ui.views;
 
-import com.google.genai.types.Content;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -14,34 +13,53 @@ import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.SettingsService;
 import org.roxycode.core.SlashCommandService;
-import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.core.beans.ProjectCacheMeta;
-import java.util.Optional;
+import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.ui.MarkdownPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.io.InterruptedIOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.StringTokenizer;
 
 @Singleton
 public class ChatView extends JPanel {
 
     private static final Logger log = LoggerFactory.getLogger(ChatView.class);
+    private static final DataFlavor URI_LIST_FLAVOR = createUriListFlavor();
+
+    private static DataFlavor createUriListFlavor() {
+        try {
+            return new DataFlavor("text/uri-list;class=java.lang.String");
+        } catch (ClassNotFoundException e) {
+            return null;
+        }
+    }
 
     private final GenAIService genAIService;
+
     private final SettingsService settingsService;
+
     private final SlashCommandService slashCommandService;
+
     private final org.roxycode.ui.ThemeService themeService;
+
     private final ProjectCacheMetaService projectCacheMetaService;
 
     private final MarkdownPane chatArea = new MarkdownPane();
+
     private final RSyntaxTextArea inputField = new RSyntaxTextArea(3, 20);
+
     private final List<File> attachedFiles = new ArrayList<>();
 
     @Outlet
@@ -89,7 +107,6 @@ public class ChatView extends JPanel {
     @Outlet
     private JLabel cacheExpiryLabel;
 
-
     @Inject
     public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService) {
         this.projectCacheMetaService = projectCacheMetaService;
@@ -106,10 +123,9 @@ public class ChatView extends JPanel {
         if (chatScrollPane != null) {
             chatScrollPane.setViewportView(chatArea);
         }
-        
         setupInputField();
-        
         themeService.registerPane(chatArea);
+        setupDragAndDrop();
         initIcons();
         updateCacheStatus();
         initListeners();
@@ -121,17 +137,16 @@ public class ChatView extends JPanel {
         inputField.setWrapStyleWord(true);
         inputField.setAnimateBracketMatching(false);
         inputField.setHighlightCurrentLine(false);
-        
         // Hide the gutter
         JScrollPane sp = new JScrollPane(inputField);
         sp.setBorder(BorderFactory.createEmptyBorder());
         inputContainer.add(sp);
-        
         initAutocomplete();
     }
 
     private void initAutocomplete() {
         DefaultCompletionProvider provider = new DefaultCompletionProvider() {
+
             @Override
             protected boolean isValidChar(char ch) {
                 return Character.isLetterOrDigit(ch) || ch == '/';
@@ -143,18 +158,16 @@ public class ChatView extends JPanel {
                 return text != null && text.startsWith("/");
             }
         };
-
         for (var info : slashCommandService.getAvailableCommands()) {
             provider.addCompletion(new BasicCompletion(provider, info.command(), info.description()));
         }
-
         AutoCompletion ac = new AutoCompletion(provider);
         ac.setAutoActivationEnabled(true);
         ac.setAutoActivationDelay(100);
         ac.install(inputField);
-
         // Explicitly trigger autocomplete when '/' is typed at the start of the input
         inputField.addKeyListener(new java.awt.event.KeyAdapter() {
+
             @Override
             public void keyTyped(java.awt.event.KeyEvent e) {
                 if (e.getKeyChar() == '/') {
@@ -213,9 +226,9 @@ public class ChatView extends JPanel {
                 attachedFiles.clear();
                 updateAttachmentsLabel();
             });
-            
         inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
         inputField.getActionMap().put("send-message", new AbstractAction() {
+
             @Override
             public void actionPerformed(ActionEvent e) {
                 onSend(e);
@@ -228,12 +241,10 @@ public class ChatView extends JPanel {
         String prompt = inputField.getText().trim();
         if (prompt.isEmpty())
             return;
-        
         if (slashCommandService.isCommand(prompt)) {
             handleSlashCommand(prompt);
             return;
         }
-
         inputField.setText("");
         List<File> currentAttachments = new ArrayList<>(attachedFiles);
         attachedFiles.clear();
@@ -282,11 +293,9 @@ public class ChatView extends JPanel {
         } else {
             chatArea.appendMarkdown("\n❌ " + result.message());
         }
-        
         if (result.action() == SlashCommandService.CommandAction.CLEAR) {
             chatArea.setMarkdown("");
         }
-        
         updateChatStats();
     }
 
@@ -365,7 +374,6 @@ public class ChatView extends JPanel {
         }
     }
 
-    
     public void updateCacheStatus() {
         SwingUtilities.invokeLater(() -> {
             boolean enabled = settingsService.isCacheEnabled();
@@ -373,7 +381,6 @@ public class ChatView extends JPanel {
                 cacheStatusLabel.setText("Cache: " + (enabled ? "Enabled" : "Disabled"));
                 cacheStatusLabel.setForeground(enabled ? new Color(100, 255, 100) : new Color(255, 100, 100));
             }
-
             if (cacheIdLabel != null) {
                 if (enabled) {
                     Optional<ProjectCacheMeta> meta = projectCacheMetaService.getProjectCacheMeta();
@@ -389,11 +396,13 @@ public class ChatView extends JPanel {
                         }
                     } else {
                         cacheIdLabel.setText("ID: None");
-                        if (cacheExpiryLabel != null) cacheExpiryLabel.setText("");
+                        if (cacheExpiryLabel != null)
+                            cacheExpiryLabel.setText("");
                     }
                 } else {
                     cacheIdLabel.setText("");
-                    if (cacheExpiryLabel != null) cacheExpiryLabel.setText("");
+                    if (cacheExpiryLabel != null)
+                        cacheExpiryLabel.setText("");
                 }
             }
         });
@@ -403,10 +412,112 @@ public class ChatView extends JPanel {
         chatArea.appendMarkdown("*System: " + msg + "*");
     }
 
-    
-
     public MarkdownPane getChatArea() {
         return chatArea;
     }
 
+    private void setupDragAndDrop() {
+        if (viewChat != null) {
+            viewChat.setTransferHandler(new FileTransferHandler(viewChat.getTransferHandler()));
+        }
+        if (chatScrollPane != null) {
+            chatScrollPane.setTransferHandler(new FileTransferHandler(chatScrollPane.getTransferHandler()));
+        }
+        if (chatArea != null) {
+            chatArea.setTransferHandler(new FileTransferHandler(chatArea.getTransferHandler()));
+        }
+        if (inputField != null) {
+            inputField.setTransferHandler(new FileTransferHandler(inputField.getTransferHandler()));
+        }
+    }
+
+    List<File> getAttachedFiles() {
+        return java.util.Collections.unmodifiableList(attachedFiles);
+    }
+
+    class FileTransferHandler extends TransferHandler {
+        private final TransferHandler delegate;
+
+        public FileTransferHandler(TransferHandler delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public boolean canImport(TransferSupport support) {
+            boolean supported = support.isDataFlavorSupported(DataFlavor.javaFileListFlavor) ||
+                                (URI_LIST_FLAVOR != null && support.isDataFlavorSupported(URI_LIST_FLAVOR));
+
+            if (supported) {
+                support.setDropAction(COPY);
+                return true;
+            }
+
+            return (delegate != null && delegate.canImport(support));
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+            Transferable transferable = support.getTransferable();
+            boolean handled = false;
+            log.info(transferable.toString());
+            try {
+                if (support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                    log.info("Importing javaFileListFlavor");
+                    @SuppressWarnings("unchecked")
+                    List<File> files = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
+                    for (File file : files) {
+                        if (!attachedFiles.contains(file)) {
+                            attachedFiles.add(file);
+                        }
+                    }
+                    handled = true;
+                } else if (URI_LIST_FLAVOR != null && support.isDataFlavorSupported(URI_LIST_FLAVOR)) {
+                    log.info("Importing URI_LIST_FLAVOR");
+                    String uriList = (String) transferable.getTransferData(URI_LIST_FLAVOR);
+                    StringTokenizer st = new StringTokenizer(uriList, "\r\n");
+                    while (st.hasMoreTokens()) {
+                        String uriStr = st.nextToken().trim();
+                        if (uriStr.startsWith("#") || uriStr.isEmpty()) continue;
+
+                        File file = null;
+                        try {
+                            URI uri = new URI(uriStr);
+                            file = new File(uri);
+                        } catch (Exception e) {
+                            // Fallback for malformed URIs or plain paths
+                            try {
+                                String path = uriStr;
+                                if (path.startsWith("file://")) {
+                                    path = path.substring(7);
+                                } else if (path.startsWith("file:")) {
+                                    path = path.substring(5);
+                                }
+                                file = new File(path);
+                            } catch (Exception ex) {
+                                log.warn("Failed to parse URI fallback: {}", uriStr);
+                            }
+                        }
+
+                        if (file != null && file.exists()) {
+                            if (!attachedFiles.contains(file)) {
+                                attachedFiles.add(file);
+                            }
+                        }
+                    }
+                    handled = true;
+                }
+
+                if (handled) {
+                    updateAttachmentsLabel();
+                    return true;
+                }else{
+                    log.info("No supported data flavor found for import");
+                }
+            } catch (Exception e) {
+                log.error("Failed to import dropped files", e);
+            }
+
+            return delegate != null && delegate.importData(support);
+        }
+    }
 }
