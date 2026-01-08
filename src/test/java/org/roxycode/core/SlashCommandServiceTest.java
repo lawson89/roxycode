@@ -98,10 +98,10 @@ class SlashCommandServiceTest {
     }
 
     @Test
-    void testExecuteDiscover() {
-        SlashCommandService.CommandResult result = slashCommandService.execute("/discover");
+    void testExecuteAsk() {
+        SlashCommandService.CommandResult result = slashCommandService.execute("/ask");
         assertTrue(result.success());
-        verify(roxyProjectService).setCurrentMode(RoxyMode.DISCOVER);
+        verify(roxyProjectService).setCurrentMode(RoxyMode.ASK);
         assertEquals(SlashCommandService.CommandAction.UPDATE_STATS, result.action());
     }
 
@@ -114,10 +114,10 @@ class SlashCommandServiceTest {
     }
 
     @Test
-    void testExecuteImplement() {
-        SlashCommandService.CommandResult result = slashCommandService.execute("/implement");
+    void testExecuteCode() {
+        SlashCommandService.CommandResult result = slashCommandService.execute("/code");
         assertTrue(result.success());
-        verify(roxyProjectService).setCurrentMode(RoxyMode.IMPLEMENT);
+        verify(roxyProjectService).setCurrentMode(RoxyMode.CODE);
         assertEquals(SlashCommandService.CommandAction.UPDATE_STATS, result.action());
     }
 }

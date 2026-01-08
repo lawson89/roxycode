@@ -18,7 +18,7 @@ public class UISchedulerService {
     @Inject
     private MainFrame mainFrame;
 
-    @Scheduled(fixedDelay = "5s")
+    @Scheduled(fixedDelay = "2s")
     void updateUI() {
 //        LOG.debug("Scheduled UI update");
         if (chatView != null) {

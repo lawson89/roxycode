@@ -7,7 +7,7 @@ public enum RoxyMode {
     /**
      * RoxyCode can answer questions about the current project.
      */
-    DISCOVER,
+    ASK,
 
     /**
      * RoxyCode can ask clarifying questions to develop a plan for a feature
@@ -21,5 +21,5 @@ public enum RoxyMode {
      * RoxyCode uses all tools at her disposal to develop the feature.
      * Code changes can only be made in this mode.
      */
-    IMPLEMENT
+    CODE
 }

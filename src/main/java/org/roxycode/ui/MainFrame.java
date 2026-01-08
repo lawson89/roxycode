@@ -319,7 +319,7 @@ public class MainFrame extends JFrame implements Runnable {
             boolean isDark = com.formdev.flatlaf.FlatLaf.isLafDark();
 
             switch (mode) {
-                case DISCOVER:
+                case ASK:
                     iconCode = MaterialDesignM.MAGNIFY;
                     fgColor = isDark ? new Color(100, 200, 255) : new Color(0, 80, 200);
                     break;
@@ -327,7 +327,7 @@ public class MainFrame extends JFrame implements Runnable {
                     iconCode = MaterialDesignP.PENCIL_OUTLINE;
                     fgColor = isDark ? new Color(255, 200, 0) : new Color(150, 100, 0);
                     break;
-                case IMPLEMENT:
+                case CODE:
                     iconCode = MaterialDesignW.WRENCH_OUTLINE;
                     fgColor = isDark ? new Color(100, 255, 100) : new Color(0, 120, 0);
                     break;

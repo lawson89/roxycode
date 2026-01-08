@@ -42,15 +42,15 @@ public class SlashCommandService {
                 return new CommandResult(true, "Session reset. History cleared.", CommandAction.NONE);
             case "/help":
                 return new CommandResult(true, getHelpText(), CommandAction.NONE);
-                        case "/discover":
-                roxyProjectService.setCurrentMode(RoxyMode.DISCOVER);
-                return new CommandResult(true, "Switched to DISCOVER mode.", CommandAction.UPDATE_STATS);
+                        case "/ask":
+                roxyProjectService.setCurrentMode(RoxyMode.ASK);
+                return new CommandResult(true, "Switched to ASK mode.", CommandAction.UPDATE_STATS);
             case "/plan":
                 roxyProjectService.setCurrentMode(RoxyMode.PLAN);
                 return new CommandResult(true, "Switched to PLAN mode.", CommandAction.UPDATE_STATS);
-            case "/implement":
-                roxyProjectService.setCurrentMode(RoxyMode.IMPLEMENT);
-                return new CommandResult(true, "Switched to IMPLEMENT mode.", CommandAction.UPDATE_STATS);
+            case "/code":
+                roxyProjectService.setCurrentMode(RoxyMode.CODE);
+                return new CommandResult(true, "Switched to CODE mode.", CommandAction.UPDATE_STATS);
             case "/model":
                 return handleModelCommand(args);
             default:
@@ -64,9 +64,9 @@ public class SlashCommandService {
                "*   `/clear`: Clear the chat screen.\\n" +
                "*   `/reset`: Reset the conversation history.\\n" +
                "*   `/model <name>`: Switch to a different Gemini model.\n" +
-               "*   `/discover`: Switch to DISCOVER mode.\n" +
+               "*   `/ask`: Switch to ASK mode.\n" +
                "*   `/plan`: Switch to PLAN mode.\n" +
-               "*   `/implement`: Switch to IMPLEMENT mode.";
+               "*   `/code`: Switch to CODE mode.";
     }
 
     private CommandResult handleModelCommand(String args) {
@@ -98,9 +98,9 @@ public class SlashCommandService {
             new CommandInfo("/clear", "Clear the chat screen"),
             new CommandInfo("/reset", "Reset the conversation history"),
             new CommandInfo("/model", "Switch Gemini model"),
-            new CommandInfo("/discover", "Switch to DISCOVER mode"),
+            new CommandInfo("/ask", "Switch to ASK mode"),
             new CommandInfo("/plan", "Switch to PLAN mode"),
-            new CommandInfo("/implement", "Switch to IMPLEMENT mode")
+            new CommandInfo("/code", "Switch to CODE mode")
         );
     }
 

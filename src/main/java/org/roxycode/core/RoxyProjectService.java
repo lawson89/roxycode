@@ -37,7 +37,7 @@ public class RoxyProjectService {
     private final ScriptServiceRegistry scriptServiceRegistry;
 
     private String currentBranch = "";
-    private RoxyMode currentMode = RoxyMode.DISCOVER;
+    private RoxyMode currentMode = RoxyMode.ASK;
     private Path roxyHome;
 
     @Inject
