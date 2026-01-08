@@ -56,4 +56,12 @@ class RoxyProjectServiceTest {
         assertTrue(Files.exists(projectDir));
         assertEquals(originalContent, Files.readString(readmePath), "Content should not be overwritten");
     }
+
+    @Test
+    void testGetStaticSystemPrompt_IncludesMode() {
+        roxyProjectService.setCurrentMode(RoxyMode.CODE);
+        String prompt = roxyProjectService.getStaticSystemPrompt();
+        assertTrue(prompt.contains("Current Mode: CODE"), "Prompt should contain the current mode");
+        assertTrue(prompt.contains("Please act in accordance with this mode"), "Prompt should contain reminder");
+    }
 }

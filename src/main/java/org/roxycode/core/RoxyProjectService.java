@@ -140,12 +140,13 @@ public class RoxyProjectService {
     }
 
     public String getStaticSystemPrompt() {
+        String modeMessage = "\n\n# Current Mode: " + currentMode + "\nPlease act in accordance with this mode.";
         try {
             String agentsMd = FileUtils.readFileToString(roxyHome.resolve("AGENTS.md").toFile(), StandardCharsets.UTF_8);
             String toolApiDocs = scriptServiceRegistry.getApiDocs();
-            return agentsMd + "\n\n" + toolApiDocs;
-        } catch (IOException e) {
-            return "You are RoxyCode, an AI coding assistant.";
+            return agentsMd + modeMessage + "\n\n" + toolApiDocs;
+        } catch (Exception e) {
+            return "You are RoxyCode, an AI coding assistant. " + modeMessage;
         }
     }
 }
