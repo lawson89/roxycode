@@ -89,7 +89,6 @@ public class ChatView extends JPanel {
     @Outlet
     private JLabel cacheExpiryLabel;
 
-    private Timer cacheStatusTimer;
 
     @Inject
     public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService) {
@@ -114,7 +113,6 @@ public class ChatView extends JPanel {
         initIcons();
         updateCacheStatus();
         initListeners();
-        initCacheStatusTimer();
     }
 
     private void setupInputField() {
@@ -386,10 +384,6 @@ public class ChatView extends JPanel {
     }
 
     
-    private void initCacheStatusTimer() {
-        cacheStatusTimer = new Timer(5000, e -> updateCacheStatus());
-        cacheStatusTimer.start();
-    }
 
     public MarkdownPane getChatArea() {
         return chatArea;

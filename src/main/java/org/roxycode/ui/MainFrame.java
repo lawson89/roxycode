@@ -190,7 +190,6 @@ public class MainFrame extends JFrame implements Runnable {
             if (activityIndicator != null) {
                 if (busy) {
                     activityIndicator.setVisible(true);
-        new Timer(5000, e -> chatView.updateCacheStatus()).start();
                     activityIndicator.start();
                 } else {
                     activityIndicator.stop();
