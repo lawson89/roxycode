@@ -17,6 +17,7 @@ class SlashCommandServiceTest {
     private GenAIService genAIService;
     private SettingsService settingsService;
     private GeminiModelRegistry modelRegistry;
+    private RoxyProjectService roxyProjectService;
     private SlashCommandService slashCommandService;
 
     @BeforeEach
@@ -24,7 +25,8 @@ class SlashCommandServiceTest {
         genAIService = mock(GenAIService.class);
         settingsService = mock(SettingsService.class);
         modelRegistry = mock(GeminiModelRegistry.class);
-        slashCommandService = new SlashCommandService(genAIService, settingsService, modelRegistry);
+        roxyProjectService = mock(RoxyProjectService.class);
+        slashCommandService = new SlashCommandService(genAIService, settingsService, modelRegistry, roxyProjectService);
     }
 
     @Test
@@ -93,5 +95,29 @@ class SlashCommandServiceTest {
         SlashCommandService.CommandResult result = slashCommandService.execute("/unknown");
         assertFalse(result.success());
         assertTrue(result.message().contains("Unknown command"));
+    }
+
+    @Test
+    void testExecuteDiscover() {
+        SlashCommandService.CommandResult result = slashCommandService.execute("/discover");
+        assertTrue(result.success());
+        verify(roxyProjectService).setCurrentMode(RoxyMode.DISCOVER);
+        assertEquals(SlashCommandService.CommandAction.UPDATE_STATS, result.action());
+    }
+
+    @Test
+    void testExecutePlan() {
+        SlashCommandService.CommandResult result = slashCommandService.execute("/plan");
+        assertTrue(result.success());
+        verify(roxyProjectService).setCurrentMode(RoxyMode.PLAN);
+        assertEquals(SlashCommandService.CommandAction.UPDATE_STATS, result.action());
+    }
+
+    @Test
+    void testExecuteImplement() {
+        SlashCommandService.CommandResult result = slashCommandService.execute("/implement");
+        assertTrue(result.success());
+        verify(roxyProjectService).setCurrentMode(RoxyMode.IMPLEMENT);
+        assertEquals(SlashCommandService.CommandAction.UPDATE_STATS, result.action());
     }
 }

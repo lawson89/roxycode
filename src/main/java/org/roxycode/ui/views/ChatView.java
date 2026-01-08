@@ -136,6 +136,12 @@ public class ChatView extends JPanel {
             protected boolean isValidChar(char ch) {
                 return Character.isLetterOrDigit(ch) || ch == '/';
             }
+
+            @Override
+            public boolean isAutoActivateOkay(javax.swing.text.JTextComponent tc) {
+                String text = getAlreadyEnteredText(tc);
+                return text != null && text.startsWith("/");
+            }
         };
 
         for (var info : slashCommandService.getAvailableCommands()) {
@@ -146,6 +152,20 @@ public class ChatView extends JPanel {
         ac.setAutoActivationEnabled(true);
         ac.setAutoActivationDelay(100);
         ac.install(inputField);
+
+        // Explicitly trigger autocomplete when '/' is typed at the start of the input
+        inputField.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyTyped(java.awt.event.KeyEvent e) {
+                if (e.getKeyChar() == '/') {
+                    SwingUtilities.invokeLater(() -> {
+                        if (inputField.getCaretPosition() == 1 && inputField.getText().startsWith("/")) {
+                            ac.doCompletion();
+                        }
+                    });
+                }
+            }
+        });
     }
 
     private void initIcons() {

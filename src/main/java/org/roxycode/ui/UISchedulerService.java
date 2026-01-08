@@ -15,11 +15,17 @@ public class UISchedulerService {
     @Inject
     private ChatView chatView;
 
+    @Inject
+    private MainFrame mainFrame;
+
     @Scheduled(fixedDelay = "5s")
     void updateUI() {
 //        LOG.debug("Scheduled UI update");
         if (chatView != null) {
             chatView.updateCacheStatus();
+        }
+        if (mainFrame != null) {
+            mainFrame.updateRoxyMode();
         }
     }
 }
