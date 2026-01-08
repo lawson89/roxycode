@@ -69,19 +69,32 @@ public class GeminiCacheService {
         return client;
     }
 
-    public void pushCache(Path projectPath) {
+    public synchronized void pushCache(Path projectPath) {
         LOG.info("Pushing cache to Gemini...");
         String currentModel = settingsService.getGeminiModel();
         String project = settingsService.getCurrentProject();
         String user = SystemUtils.getSystemUser();
         String cacheKey = projectCacheMetaService.getCacheKey(projectPath, user, currentModel);
         LOG.info("cacheKey: {} | project: {} | user: {} | currentModel: {}", cacheKey, project, user, currentModel);
-        // Delete existing cache if it exists
-        projectCacheMetaService.getProjectCacheMeta(projectPath).ifPresent(meta -> {
-            LOG.info("Found existing cache for project. Deleting it first...");
-            deleteCache(meta.geminiCacheId());
-            projectCacheMetaService.deleteProjectCacheMetaByGeminiId(meta.geminiCacheId());
-        });
+        // Delete any existing caches on Gemini with the same displayName (cacheKey)
+        // This ensures uniqueness even if local metadata is lost.
+        try {
+            List<CachedContent> allCaches = listCaches();
+            for (CachedContent cache : allCaches) {
+                String displayName = cache.displayName().orElse("");
+                if (cacheKey.equals(displayName)) {
+                    String geminiId = cache.name().orElse(null);
+                    if (geminiId != null) {
+                        LOG.info("Found existing cache on Gemini with displayName {}. Deleting it (ID: {})...", cacheKey, geminiId);
+                        deleteCache(geminiId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to check for existing caches on Gemini: {}", e.getMessage());
+        }
+        // Also ensure local metadata is cleaned up for this key
+        projectCacheMetaService.deleteProjectCacheMetaByCacheKey(cacheKey);
         try {
             Path cacheFile = projectPath.resolve(RoxyProjectService.ROXY_WORKING_DIR).resolve(".cache").resolve("codebase_cache.toml");
             if (!Files.exists(cacheFile)) {
@@ -126,9 +139,6 @@ public class GeminiCacheService {
         }
     }
 
-    /**
-     * Deletes a specific cache by its resource name.
-     */
     public void deleteCache(String cacheName) {
         try {
             LOG.info("Deleting cache: {}", cacheName);
@@ -137,8 +147,7 @@ public class GeminiCacheService {
         } catch (Exception e) {
             LOG.warn("Failed to delete cache {}: {}", cacheName, e.getMessage());
         } finally {
-            // Remove local metadata
-            projectCacheMetaService.deleteProjectCacheMetaByCacheKey(cacheName);
+            // Remove local metadata by scanning for the geminiId
             projectCacheMetaService.deleteProjectCacheMetaByGeminiId(cacheName);
         }
     }
