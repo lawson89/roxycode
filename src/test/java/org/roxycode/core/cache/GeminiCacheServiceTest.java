@@ -21,7 +21,6 @@ class GeminiCacheServiceTest {
             "2023-10-27T10:00:00Z", 
             "test-cache-key", 
             "cachedContents/test-id",
-            100L,
             "2023-10-27T10:00:00Z"
         );
         // We can't easily mock the roxy_project directory without more effort,

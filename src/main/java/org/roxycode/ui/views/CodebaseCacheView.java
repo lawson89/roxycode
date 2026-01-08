@@ -58,9 +58,6 @@ public class CodebaseCacheView extends JPanel {
     private JLabel onlineCacheTimestampLabel;
 
     @Outlet
-    private JLabel skeletonTokenCountLabel;
-
-    @Outlet
     private JButton pushCacheButton;
 
     @Outlet
@@ -129,11 +126,11 @@ public class CodebaseCacheView extends JPanel {
             projectCacheMetaService.getProjectCacheMeta().ifPresentOrElse(meta -> {
                 onlineCacheIdLabel.setText(meta.geminiCacheId());
                 onlineCacheTimestampLabel.setText(meta.generatedAt());
-                if (skeletonTokenCountLabel != null) skeletonTokenCountLabel.setText(String.format("%,d", meta.skeletonTokenCount()));
+                
             }, () -> {
                 onlineCacheIdLabel.setText("Not Pushed");
                 onlineCacheTimestampLabel.setText("-");
-                if (skeletonTokenCountLabel != null) skeletonTokenCountLabel.setText("0");
+                
             });
         } catch (Exception e) {
             log.error("Error refreshing cache view", e);

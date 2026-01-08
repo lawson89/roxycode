@@ -6,7 +6,6 @@ public record ProjectCacheMeta(
         String generatedAt,
         String cacheKey,
         String geminiCacheId,
-        long skeletonTokenCount,
         String skeletonGeneratedAt
 ) {
 }

@@ -29,10 +29,6 @@
                 <label text="Last Pushed: " style="font: bold"/>
                 <label name="onlineCacheTimestampLabel" text="-"/>
             </row-panel>
-            <row-panel spacing="4">
-                <label text="Skeleton Tokens: " style="font: bold"/>
-                <label name="skeletonTokenCountLabel" text="0"/>
-            </row-panel>
         </column-panel>
 
         <button name="pushCacheButton" text="Push to Gemini"/>

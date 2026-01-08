@@ -30,15 +30,7 @@ class ProjectCacheMetaServiceTest {
         String model = "gemini-1.5-flash";
         String cacheKey = projectCacheMetaService.getCacheKey(projectRoot, user, model);
 
-        ProjectCacheMeta meta = new ProjectCacheMeta(
-            projectRoot.toString(),
-            user,
-            "2023-10-27T10:00:00Z",
-            cacheKey,
-            "cachedContents/test-id",
-            100L,
-            "2023-10-27T10:00:00Z"
-        );
+        ProjectCacheMeta meta = new ProjectCacheMeta(projectRoot.toString(), user, "2023-10-27T10:00:00Z", cacheKey, "cachedContents/test-id", "2023-10-27T10:00:00Z");
 
         projectCacheMetaService.writeProjectCacheMeta(meta);
 
@@ -61,15 +53,7 @@ class ProjectCacheMetaServiceTest {
         String model = "gemini-1.5-flash";
         String cacheKey = projectCacheMetaService.getCacheKey(projectRoot, user, model);
 
-        ProjectCacheMeta meta = new ProjectCacheMeta(
-            projectRoot.toString(),
-            user,
-            "2023-10-27T10:00:00Z",
-            cacheKey,
-            "cachedContents/test-id-key",
-            100L,
-            "2023-10-27T10:00:00Z"
-        );
+        ProjectCacheMeta meta = new ProjectCacheMeta(projectRoot.toString(), user, "2023-10-27T10:00:00Z", cacheKey, "cachedContents/test-id-key", "2023-10-27T10:00:00Z");
 
         projectCacheMetaService.writeProjectCacheMeta(meta);
         Path metaFile = roxyProjectService.getRoxyCacheDir().resolve(cacheKey + ".toml");
@@ -93,7 +77,6 @@ class ProjectCacheMetaServiceTest {
             "2023-10-27T10:00:00Z",
             cacheKey,
             geminiId,
-            100L,
             "2023-10-27T10:00:00Z"
         );
 
@@ -110,8 +93,8 @@ class ProjectCacheMetaServiceTest {
         Path projectRoot = roxyProjectService.getProjectRoot();
         String user = SystemUtils.getSystemUser();
         
-        ProjectCacheMeta meta1 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "key1", "id1", 0, "...");
-        ProjectCacheMeta meta2 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "key2", "id2", 0, "...");
+        ProjectCacheMeta meta1 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "key1", "id1", "...");
+        ProjectCacheMeta meta2 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "key2", "id2", "...");
 
         projectCacheMetaService.writeProjectCacheMeta(meta1);
         projectCacheMetaService.writeProjectCacheMeta(meta2);

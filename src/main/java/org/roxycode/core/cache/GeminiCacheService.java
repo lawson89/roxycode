@@ -121,7 +121,6 @@ public class GeminiCacheService {
             String geminiId = response.name().orElse("Unknown");
 
             Path skeletonFile = roxyProjectService.getRoxyCacheDir().resolve("code_skeleton.txt");
-            long skeletonTokenCount = codebasePackerService.estimateTokenCount(skeletonFile);
             String skeletonGeneratedAt = Files.exists(skeletonFile) ? Files.getLastModifiedTime(skeletonFile).toString() : "N/A";
 
             ProjectCacheMeta meta = new ProjectCacheMeta(
@@ -130,7 +129,6 @@ public class GeminiCacheService {
                     ZonedDateTime.now().toString(),
                     cacheKey,
                     geminiId,
-                    skeletonTokenCount,
                     skeletonGeneratedAt
             );
             projectCacheMetaService.writeProjectCacheMeta(meta);
