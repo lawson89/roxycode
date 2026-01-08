@@ -47,7 +47,7 @@ public class MainFrame extends JFrame implements Runnable {
     private ChatView chatView;
 
     @Inject
-    private FilesView filesView;
+    private ChangesView changesView;
 
     @Inject
     private UsageView usageView;
@@ -112,7 +112,7 @@ public class MainFrame extends JFrame implements Runnable {
     private JToggleButton navChatButton;
 
     @Outlet
-    private JToggleButton navFilesButton;
+    private JToggleButton navChangesButton;
 
     @Outlet
     private JToggleButton navUsageButton;
@@ -165,7 +165,7 @@ public class MainFrame extends JFrame implements Runnable {
         // 2. Load individual Views and add them to the stack
         if (mainContentStack != null) {
             mainContentStack.add(chatView);
-            mainContentStack.add(filesView);
+            mainContentStack.add(changesView);
             mainContentStack.add(usageView);
             mainContentStack.add(settingsView);
             mainContentStack.add(systemPromptView);
@@ -289,8 +289,8 @@ public class MainFrame extends JFrame implements Runnable {
         // Set Icons for Nav Buttons
         if (navChatButton != null)
             navChatButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CHAT_OUTLINE, 18));
-        if (navFilesButton != null)
-            navFilesButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FILE_TREE_OUTLINE, 18));
+        if (navChangesButton != null)
+            navChangesButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignG.GIT, 18));
         if (navUsageButton != null)
             navUsageButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CHART_LINE, 18));
         if (navSettingsButton != null)
@@ -347,8 +347,8 @@ public class MainFrame extends JFrame implements Runnable {
     private void initListeners() {
         if (navChatButton != null)
             navChatButton.addActionListener(e -> showView("CHAT"));
-        if (navFilesButton != null)
-            navFilesButton.addActionListener(e -> showView("FILES"));
+        if (navChangesButton != null)
+            navChangesButton.addActionListener(e -> showView("CHANGES"));
         if (navUsageButton != null)
             navUsageButton.addActionListener(e -> showView("USAGE"));
         if (navSettingsButton != null)
@@ -371,7 +371,7 @@ public class MainFrame extends JFrame implements Runnable {
 
     private void showView(String viewName) {
         chatView.setVisible(false);
-        filesView.setVisible(false);
+        changesView.setVisible(false);
         usageView.setVisible(false);
         settingsView.setVisible(false);
         systemPromptView.setVisible(false);
@@ -383,9 +383,9 @@ public class MainFrame extends JFrame implements Runnable {
             case "CHAT":
                 chatView.setVisible(true);
                 break;
-            case "FILES":
-                filesView.refresh();
-                filesView.setVisible(true);
+            case "CHANGES":
+                changesView.refresh();
+                changesView.setVisible(true);
                 break;
             case "USAGE":
                 usageView.refresh();

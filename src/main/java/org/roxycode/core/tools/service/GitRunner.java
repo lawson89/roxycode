@@ -2,6 +2,7 @@ package org.roxycode.core.tools.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.commons.lang3.StringUtils;
 import org.zeroturnaround.exec.ProcessExecutor;
 
 import java.io.IOException;
@@ -24,14 +25,14 @@ public class GitRunner {
             command.add("git");
             command.addAll(Arrays.asList(args));
 
-            return new ProcessExecutor()
+            String output = new ProcessExecutor()
                     .command(command)
                     .directory(projectRoot.toFile())
                     .readOutput(true)
                     .timeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .execute()
-                    .outputUTF8()
-                    .trim();
+                    .outputUTF8();
+            return StringUtils.stripEnd(output, null);
         } catch (IOException | InterruptedException | TimeoutException e) {
             LOG.warn("Git command failed: {} in {}", args, projectRoot, e);
             return "Error: " + e.getMessage();

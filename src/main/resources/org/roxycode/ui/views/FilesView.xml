@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE column-panel SYSTEM "sierra.dtd">
-
-<column-panel name="viewFiles" weight="1">
-    <label text="Project Files" styleClass="h2" padding="10"/>
-    <scroll-pane weight="1">
-        <tree name="fileTree"/>
-    </scroll-pane>
-</column-panel>

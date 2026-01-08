@@ -21,7 +21,7 @@ public class GitService {
 
     @LLMDoc("Returns the current Git branch name")
     public String getCurrentBranch() {
-        return GitRunner.runGitCommand(sandbox.getRoot(), "branch", "--show-current");
+        return GitRunner.runGitCommand(sandbox.getRoot(), "branch", "--show-current").trim();
     }
 
     @LLMDoc("Returns the Git status in porcelain format")
@@ -51,6 +51,6 @@ public class GitService {
         if (path != null && !path.isEmpty()) {
             args.add(path);
         }
-        return GitRunner.runGitCommand(sandbox.getRoot(), args.toArray(new String[0]));
+        return GitRunner.runGitCommand(sandbox.getRoot(), args.toArray(new String[0])).trim();
     }
 }

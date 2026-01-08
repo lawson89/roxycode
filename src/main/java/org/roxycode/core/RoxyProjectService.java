@@ -113,7 +113,7 @@ public class RoxyProjectService {
         sandbox.setRoot(newRoot);
         ensureProjectStructure();
         settingsService.setCurrentProject(getProjectRoot().toString());
-        currentBranch = GitRunner.runGitCommand(sandbox.getRoot(), "branch", "--show-current");
+        currentBranch = GitRunner.runGitCommand(sandbox.getRoot(), "branch", "--show-current").trim();
     }
 
     public boolean isValidFolder(Path path) {

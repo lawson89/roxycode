@@ -24,7 +24,7 @@
 
             <toggle-button name="navChatButton" text="Chat" borderPainted="false" horizontalAlignment="left"
                            group="navGroup" selected="true"/>
-            <toggle-button name="navFilesButton" text="Project Files" borderPainted="false" horizontalAlignment="left"
+            <toggle-button name="navChangesButton" text="Project Changes" borderPainted="false" horizontalAlignment="left"
                            group="navGroup"/>
             <toggle-button name="navUsageButton" text="Usage" borderPainted="false" horizontalAlignment="left"
                            group="navGroup"/>

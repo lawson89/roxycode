@@ -17,7 +17,7 @@ public class UISchedulerService {
 
     @Scheduled(fixedDelay = "5s")
     void updateUI() {
-        LOG.debug("Scheduled UI update");
+//        LOG.debug("Scheduled UI update");
         if (chatView != null) {
             chatView.updateCacheStatus();
         }

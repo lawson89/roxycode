@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE column-panel SYSTEM "sierra.dtd">
+
+<column-panel name="viewChanges" weight="1">
+    <label text="Project Changes" styleClass="h2" padding="10"/>
+    <scroll-pane name="changesScrollPane" weight="1"/>
+</column-panel>
