@@ -2,8 +2,11 @@ package org.roxycode.core.cache;
 
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.core.RoxyProjectService;
+import org.roxycode.core.Sandbox;
 import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.utils.SystemUtils;
 
@@ -23,6 +26,18 @@ class ProjectCacheMetaServiceTest {
 
     @Inject
     RoxyProjectService roxyProjectService;
+
+    @Inject
+    Sandbox sandbox;
+
+    @TempDir
+    Path tempDir;
+
+    @BeforeEach
+    void setUp() {
+        sandbox.setRoot(tempDir);
+        roxyProjectService.ensureProjectStructure();
+    }
 
     @Test
     void testWriteAndGetProjectCacheMeta() throws IOException {
