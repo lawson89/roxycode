@@ -13,12 +13,22 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * Utility class for executing Git commands.
+ */
 public class GitRunner {
 
     private static final Logger LOG = LoggerFactory.getLogger(GitRunner.class);
 
     private static final int TIMEOUT_SECONDS = 30;
 
+    /**
+     * Executes a Git command with the specified arguments in the given project root directory.
+     *
+     * @param projectRoot The directory where the Git command should be executed.
+     * @param args        The arguments for the Git command.
+     * @return The output of the Git command as a string, or an error message if the command fails.
+     */
     public static String runGitCommand(Path projectRoot, String... args) {
         try {
             List<String> command = new ArrayList<>();

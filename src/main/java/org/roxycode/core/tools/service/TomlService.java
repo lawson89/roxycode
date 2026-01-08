@@ -10,10 +10,16 @@ import org.roxycode.core.tools.ScriptService;
 import java.nio.file.Path;
 import java.util.*;
 
+/**
+ * Service for reading, writing, and analyzing TOML files.
+ */
 @ScriptService("tomlService")
 @Singleton
 public class TomlService {
 
+    /**
+     * Structural summary of a TOML file.
+     */
     public static class TomlFileSummary {
         private final List<ElementSummary> elements;
 
@@ -39,6 +45,9 @@ public class TomlService {
         }
     }
 
+    /**
+     * Summary of an element within a TOML file.
+     */
     public static class ElementSummary {
         private final String name;
         private final String xpath;
@@ -78,7 +87,13 @@ public class TomlService {
         }
     }
 
-
+    /**
+     * Analyzes a TOML file and returns a structural summary of its elements.
+     *
+     * @param path The path to the TOML file.
+     * @return A TomlFileSummary of the file's contents.
+     * @throws Exception If an error occurs during reading or parsing.
+     */
     @LLMDoc("Analyzes a TOML file and returns a structural summary of its elements")
     public TomlFileSummary analyzeFile(Path path) throws Exception {
         ObjectMapper mapper = new TomlMapper();
@@ -108,12 +123,26 @@ public class TomlService {
         }
     }
 
+    /**
+     * Reads a TOML file and returns its content as a JsonNode.
+     *
+     * @param path The path to the TOML file.
+     * @return The parsed contents as a JsonNode.
+     * @throws Exception If an error occurs during reading or parsing.
+     */
     @LLMDoc("Reads a TOML file and returns its content as a JsonNode")
     public JsonNode read(Path path) throws Exception {
         ObjectMapper mapper = new TomlMapper();
         return mapper.readTree(path.toFile());
     }
 
+    /**
+     * Writes a JsonNode to a file in TOML format.
+     *
+     * @param path    The path to the output TOML file.
+     * @param content The JsonNode content to write.
+     * @throws Exception If an error occurs during writing.
+     */
     @LLMDoc("Writes a JsonNode to a file in TOML format")
     public void write(Path path, JsonNode content) throws Exception {
         ObjectMapper mapper = new TomlMapper();

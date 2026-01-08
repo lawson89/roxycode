@@ -24,9 +24,9 @@ import java.nio.file.Path;
 import java.util.List;
 
 @Singleton
-public class JavaAnalysisService {
+public class JavaSourceAnalysisService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(JavaAnalysisService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JavaSourceAnalysisService.class);
 
     /**
      * Generates a skeleton of the Java source files in the given directory

@@ -15,6 +15,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Service for capturing screenshots of the application.
+ */
 @ScriptService("previewService")
 @Singleton
 public class PreviewService {
@@ -29,6 +32,12 @@ public class PreviewService {
         this.buildToolService = buildToolService;
     }
 
+    /**
+     * Compiles the project, launches the application, takes a full-screen screenshot, and terminates the application.
+     *
+     * @return The absolute path to the generated screenshot (PNG).
+     * @throws Exception If compilation fails, or an error occurs during launch or capture.
+     */
     @LLMDoc("Compiles the project, launches it, takes a screenshot, and returns the path to the image")
     public String launchAndScreenshot() throws Exception {
         LOG.info("Launching Preview Service to take screenshot.");

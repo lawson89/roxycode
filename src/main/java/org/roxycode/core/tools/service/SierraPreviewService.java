@@ -11,12 +11,21 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 
+/**
+ * Service for validating and previewing Sierra UI definition files.
+ */
 @ScriptService("sierraPreviewService")
 @Singleton
 public class SierraPreviewService {
 
     private SierraPreviewFrame frame;
 
+    /**
+     * Validates a Sierra file by attempting to render it.
+     *
+     * @param path The path to the Sierra file.
+     * @return A message indicating whether the file is valid or contains errors.
+     */
     @LLMDoc("Use this method to validate a Sierra file. Returns a string indicating whether the file is valid or not.")
     public String validateSierra(String path) {
         if (frame == null) {
@@ -33,6 +42,12 @@ public class SierraPreviewService {
         }
     }
 
+    /**
+     * Generates a preview image of a Sierra file.
+     *
+     * @param path The path to the Sierra file.
+     * @return The absolute path to the generated PNG image, or an error message.
+     */
     @LLMDoc("Use this method to generate a preview image of a Sierra file. Returns the path to the generated PNG image.")
     public String previewSierra(String path) {
         if (frame == null) {
@@ -55,6 +70,9 @@ public class SierraPreviewService {
         }
     }
 
+    /**
+     * Closes the preview frame and releases resources.
+     */
     public void close() {
         if (frame != null) {
             frame.close();

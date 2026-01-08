@@ -16,6 +16,10 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Service for searching within files using regular expressions.
+ * Provides a similar functionality to the Unix 'grep' command.
+ */
 @ScriptService("grepService")
 @Singleton
 public class GrepService {
@@ -27,7 +31,15 @@ public class GrepService {
         this.sandbox = sandbox;
     }
 
-    @LLMDoc("Searches for a regex pattern in files matching a file pattern within a directory")
+    /**
+     * Searches for a regex pattern in files within a directory.
+     *
+     * @param patternStr  The regular expression to search for.
+     * @param pathStr     The directory to search in (defaults to current directory if null or empty).
+     * @param filePattern A glob pattern for filtering files (e.g., "*.java"). Defaults to "*" if null or empty.
+     * @return A string containing matching lines with their file path and line number.
+     */
+@LLMDoc("Searches for a regex pattern in files matching a file pattern within a directory")
     public String grep(String patternStr, String pathStr, String filePattern) {
         if (pathStr == null || pathStr.isEmpty()) {
             pathStr = ".";

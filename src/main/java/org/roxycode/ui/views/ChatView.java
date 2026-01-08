@@ -340,6 +340,7 @@ public class ChatView extends JPanel {
     }
 
     private void updateAttachmentsLabel() {
+        log.info("Updating attachments label with {} files", attachedFiles.size());
         if (attachmentsContainer == null)
             return;
         attachmentsContainer.removeAll();
@@ -356,7 +357,7 @@ public class ChatView extends JPanel {
         attachmentsContainer.repaint();
     }
 
-    private void updateChatStats() {
+    public void updateChatStats() {
         int msgCount = genAIService.getHistory().size();
         int in = genAIService.getInTokens();
         int out = genAIService.getOutTokens();
@@ -417,16 +418,12 @@ public class ChatView extends JPanel {
     }
 
     private void setupDragAndDrop() {
-        if (viewChat != null) {
-            viewChat.setTransferHandler(new FileTransferHandler(viewChat.getTransferHandler()));
-        }
-        if (chatScrollPane != null) {
-            chatScrollPane.setTransferHandler(new FileTransferHandler(chatScrollPane.getTransferHandler()));
-        }
         if (chatArea != null) {
+            chatArea.setDragEnabled(true);
             chatArea.setTransferHandler(new FileTransferHandler(chatArea.getTransferHandler()));
         }
         if (inputField != null) {
+            inputField.setDragEnabled(true);
             inputField.setTransferHandler(new FileTransferHandler(inputField.getTransferHandler()));
         }
     }

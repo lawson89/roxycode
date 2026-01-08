@@ -24,6 +24,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * Service for analyzing and manipulating Java source code using JavaParser.
+ */
 @ScriptService("javaService")
 @Singleton
 public class JavaService {
@@ -31,6 +34,9 @@ public class JavaService {
     @Inject
     Sandbox sandbox;
 
+    /**
+     * Initializes the Java analysis engine, setting the language level to Java 21.
+     */
     @LLMDoc("Initializes the Java analysis engine")
     @PostConstruct
     public void init() {
@@ -38,6 +44,13 @@ public class JavaService {
                 .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
     }
 
+    /**
+     * Analyzes a Java file and returns a summary of its structure.
+     *
+     * @param pathStr The path to the Java file.
+     * @return A summary of the file's classes, methods, and imports.
+     * @throws IOException If an I/O error occurs.
+     */
     @LLMDoc("Analyzes a Java file and returns a summary of its classes, methods, and imports")
     public JavaFileSummary analyzeFile(String pathStr) throws IOException {
         Path path = sandbox.resolve(pathStr);
@@ -83,6 +96,14 @@ public class JavaService {
         );
     }
 
+    /**
+     * Retrieves the dependencies of a specific class within a Java file.
+     *
+     * @param pathStr   The path to the Java file.
+     * @param className The name of the class.
+     * @return A list of class names that the specified class depends on.
+     * @throws IOException If an I/O error occurs.
+     */
     @LLMDoc("Returns the list of classes that the specified class depends on (extends, implements, fields, method parameters, local variables)")
     public List<String> getClassDependencies(String pathStr, String className) throws IOException {
         Path path = sandbox.resolve(pathStr);
@@ -114,6 +135,14 @@ public class JavaService {
                 "Path", "Files", "IOException", "Exception", "RuntimeException").contains(name);
     }
 
+    /**
+     * Retrieves the source code of a specific method in a class.
+     *
+     * @param pathStr    The path to the Java file.
+     * @param className  The name of the class.
+     * @param methodName The name of the method.
+     * @return An Optional containing the method's source code, or empty if not found.
+     */
     @LLMDoc("Returns the source code of a specific method in a class")
     public Optional<String> getMethodSource(String pathStr, String className, String methodName) {
         Path path = sandbox.resolve(pathStr);
@@ -129,6 +158,15 @@ public class JavaService {
         }
     }
 
+    /**
+     * Replaces the source code of a specific method in a class.
+     *
+     * @param pathStr         The path to the Java file.
+     * @param className       The name of the class.
+     * @param methodName      The name of the method.
+     * @param newMethodSource The new source code for the method.
+     * @throws IOException If an I/O error occurs.
+     */
     @LLMDoc("Replaces the source code of a specific method in a class")
     public void replaceMethod(String pathStr, String className, String methodName, String newMethodSource) throws IOException {
         Path path = sandbox.resolve(pathStr);
@@ -151,6 +189,14 @@ public class JavaService {
         }
     }
 
+    /**
+     * Retrieves the source code of a specific field in a class.
+     *
+     * @param pathStr   The path to the Java file.
+     * @param className The name of the class.
+     * @param fieldName The name of the field.
+     * @return An Optional containing the field's source code, or empty if not found.
+     */
     @LLMDoc("Returns the source code of a specific field in a class")
     public Optional<String> getFieldSource(String pathStr, String className, String fieldName) {
         Path path = sandbox.resolve(pathStr);
@@ -167,6 +213,15 @@ public class JavaService {
         }
     }
 
+    /**
+     * Replaces the source code of a specific field in a class.
+     *
+     * @param pathStr        The path to the Java file.
+     * @param className      The name of the class.
+     * @param fieldName      The name of the field.
+     * @param newFieldSource The new source code for the field.
+     * @throws IOException If an I/O error occurs.
+     */
     @LLMDoc("Replaces the source code of a specific field in a class")
     public void replaceField(String pathStr, String className, String fieldName, String newFieldSource) throws IOException {
         Path path = sandbox.resolve(pathStr);

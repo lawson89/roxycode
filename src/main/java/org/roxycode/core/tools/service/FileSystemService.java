@@ -19,6 +19,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Service for high-level file system operations within the sandbox.
+ * Includes basic I/O, directory listing, and structural views.
+ */
 @ScriptService("fileSystemService")
 @Singleton
 public class FileSystemService {
@@ -30,12 +34,26 @@ public class FileSystemService {
         this.sandbox = sandbox;
     }
 
+    /**
+     * Reads the entire content of a file as a UTF-8 string.
+     *
+     * @param path The path to the file.
+     * @return The file content.
+     * @throws IOException If an I/O error occurs.
+     */
     @LLMDoc("Reads the content of a file at the given path")
     public String readFile(String path) throws IOException {
         Path p = sandbox.resolve(path);
         return FileUtils.readFileToString(p.toFile(), StandardCharsets.UTF_8);
     }
 
+    /**
+     * Writes a string to a file at the specified path, creating parent directories if necessary.
+     *
+     * @param path    The path to the file.
+     * @param content The content to write.
+     * @throws IOException If an I/O error occurs.
+     */
     @LLMDoc("Writes the given content to a file at the specified path")
     public void writeFile(String path, String content) throws IOException {
         Path p = sandbox.resolve(path);
@@ -46,6 +64,12 @@ public class FileSystemService {
         FileUtils.writeStringToFile(p.toFile(), content, StandardCharsets.UTF_8);
     }
 
+    /**
+     * Deletes a file or directory at the specified path. Directories are deleted recursively.
+     *
+     * @param path The path to the file or directory.
+     * @throws IOException If the path is protected or an I/O error occurs.
+     */
     @LLMDoc("Deletes the file or directory at the given path")
     public void delete(String path) throws IOException {
         Path p = sandbox.resolve(path);
@@ -63,6 +87,14 @@ public class FileSystemService {
         }
     }
 
+    /**
+     * Lists files in a directory that match a wildcard pattern.
+     *
+     * @param path      The path to the directory.
+     * @param pattern   The wildcard pattern (e.g., "*.java").
+     * @param recursive Whether to search subdirectories.
+     * @return A newline-separated list of relative file paths.
+     */
     @LLMDoc("Lists files in a directory matching a pattern, optionally recursive")
     public String listFiles(String path, String pattern, boolean recursive) {
         Path p = sandbox.resolve(path);
@@ -75,6 +107,12 @@ public class FileSystemService {
         return files.stream().map(f -> projectRoot.relativize(f.toPath()).toString()).sorted().collect(Collectors.joining("\n"));
     }
 
+    /**
+     * Generates a visual tree representation of a directory structure.
+     *
+     * @param path The path to the root directory.
+     * @return A string representing the directory tree.
+     */
     @LLMDoc("Returns a visual tree representation of the directory structure")
     public String tree(String path) {
         Path rootDir = sandbox.resolve(path);
@@ -127,6 +165,15 @@ public class FileSystemService {
         }
     }
 
+    /**
+     * Performs a regex search and replace on the content of a file.
+     *
+     * @param path    The path to the file.
+     * @param search  The regex pattern to search for.
+     * @param replace The replacement string.
+     * @return A status message indicating whether any changes were made.
+     * @throws IOException If an I/O error occurs.
+     */
     @LLMDoc("Replaces occurrences of a string in a file with another string using regex")
     public String replaceInFile(String path, String search, String replace) throws IOException {
         Path p = sandbox.resolve(path);
@@ -139,6 +186,12 @@ public class FileSystemService {
         return "Successfully updated " + path;
     }
 
+    /**
+     * Reads the content of multiple files and concatenates them into a single string with headers.
+     *
+     * @param paths The list of file paths to read.
+     * @return A string containing the content of all successfully read files.
+     */
     @LLMDoc("Reads the contents of multiple files and returns them as a single string")
     public String readFiles(List<String> paths) {
         StringBuilder output = new StringBuilder();

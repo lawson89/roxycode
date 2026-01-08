@@ -21,16 +21,39 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Service for analyzing and manipulating XML files using DOM and XPath.
+ */
 @ScriptService("xmlService")
 @Singleton
 public class XmlService {
 
+    /**
+     * Structural summary of an XML file.
+     *
+     * @param rootElement The name of the root element.
+     * @param elements    A list of summaries for all elements in the file.
+     */
     public record XmlFileSummary(String rootElement, List<ElementSummary> elements) {
     }
 
+    /**
+     * Summary of an element within an XML file.
+     *
+     * @param name  The tag name of the element.
+     * @param xpath The XPath expression to locate the element.
+     * @param depth The nesting depth of the element.
+     */
     public record ElementSummary(String name, String xpath, int depth) {
     }
 
+    /**
+     * Analyzes an XML file and returns a structural summary of its elements.
+     *
+     * @param path The path to the XML file.
+     * @return An XmlFileSummary of the file's contents.
+     * @throws Exception If an error occurs during reading or parsing.
+     */
     @LLMDoc("Analyzes an XML file and returns a structural summary of its elements")
     public XmlFileSummary analyzeFile(Path path) throws Exception {
         Document doc = loadDocument(path);
@@ -63,6 +86,14 @@ public class XmlService {
         }
     }
 
+    /**
+     * Retrieves the XML source code of an element selected by an XPath expression.
+     *
+     * @param path      The path to the XML file.
+     * @param xpathExpr The XPath expression to locate the element.
+     * @return An Optional containing the element's XML source, or empty if not found.
+     * @throws Exception If an error occurs during processing.
+     */
     @LLMDoc("Returns the XML source code of an element selected by an XPath expression")
     public Optional<String> getElementSource(Path path, String xpathExpr) throws Exception {
         Document doc = loadDocument(path);
@@ -74,6 +105,14 @@ public class XmlService {
         return Optional.of(nodeToString(node));
     }
 
+    /**
+     * Replaces an XML element selected by an XPath expression with new XML content.
+     *
+     * @param path      The path to the XML file.
+     * @param xpathExpr The XPath expression to locate the element to replace.
+     * @param newXml    The new XML content for the element.
+     * @throws Exception If an error occurs during processing or if the element is not found.
+     */
     @LLMDoc("Replaces an XML element selected by an XPath expression with new XML content")
     public void replaceElement(Path path, String xpathExpr, String newXml) throws Exception {
         Document doc = loadDocument(path);
@@ -94,6 +133,15 @@ public class XmlService {
         saveDocument(doc, path);
     }
 
+    /**
+     * Updates an attribute of an XML element selected by an XPath expression.
+     *
+     * @param path      The path to the XML file.
+     * @param xpathExpr The XPath expression to locate the element.
+     * @param attrName  The name of the attribute to update.
+     * @param attrValue The new value for the attribute.
+     * @throws Exception If an error occurs during processing or if the element is not found.
+     */
     @LLMDoc("Updates an attribute of an XML element selected by an XPath expression")
     public void updateAttribute(Path path, String xpathExpr, String attrName, String attrValue) throws Exception {
         Document doc = loadDocument(path);

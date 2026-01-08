@@ -6,8 +6,8 @@ import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
-import org.roxycode.core.analysis.JavaAnalysisService;
-import org.roxycode.core.beans.ContentBundle;
+import org.roxycode.core.analysis.JavaSourceAnalysisService;
+import org.roxycode.core.analysis.JavaSourceGraphService;
 import org.roxycode.core.beans.NamedContent;
 import org.roxycode.core.tools.service.BuildToolService;
 import org.slf4j.Logger;
@@ -19,8 +19,6 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * ProjectPackerService is responsible for creating a snapshot of the project code in a format
@@ -36,16 +34,20 @@ public class ProjectPackerService {
     private final RoxyProjectService roxyProjectService;
     private final Sandbox sandbox;
     private final BuildToolService buildToolService;
-    private final JavaAnalysisService javaContextService;
+    private final JavaSourceAnalysisService javaSourceAnalysisService;
+    private final JavaSourceGraphService javaSourceGraphService;
     private final ObjectMapper objectMapper;
 
     @Inject
     public ProjectPackerService(RoxyProjectService roxyProjectService, Sandbox sandbox,
-                                BuildToolService buildToolService, JavaAnalysisService javaContextService, @Named("toml") ObjectMapper objectMapper) {
+                                BuildToolService buildToolService, JavaSourceAnalysisService javaSourceAnalysisService,
+                                JavaSourceGraphService javaSourceGraphService,
+                                @Named("toml") ObjectMapper objectMapper) {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.buildToolService = buildToolService;
-        this.javaContextService = javaContextService;
+        this.javaSourceAnalysisService = javaSourceAnalysisService;
+        this.javaSourceGraphService = javaSourceGraphService;
         this.objectMapper = objectMapper;
     }
 
@@ -109,7 +111,13 @@ public class ProjectPackerService {
         writer.write("[[content]]\n");
         writer.write("name = \"java_skeleton\"\n");
         writer.write("content = '''\n");
-        writer.write(javaContextService.generateSkeletonToString(rootPath));
+        writer.write(javaSourceAnalysisService.generateSkeletonToString(rootPath));
+        writer.write("\n'''\n\n");
+
+        writer.write("[[content]]\n");
+        writer.write("name = \"java_graph\"\n");
+        writer.write("content = '''\n");
+        writer.write(javaSourceGraphService.generateMermaidGraph(rootPath));
         writer.write("\n'''\n\n");
 
         writer.write("[[content]]\n");

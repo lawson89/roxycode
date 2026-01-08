@@ -30,7 +30,6 @@ public class UISchedulerService {
             }
             if (mainFrame != null) {
                 mainFrame.updateRoxyMode();
-                mainFrame.updateModelName();
             }
         });
     }

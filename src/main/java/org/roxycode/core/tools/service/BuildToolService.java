@@ -18,6 +18,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Service for interacting with build tools (Maven, Gradle, Ant).
+ * Provides methods for compilation, testing, and project information.
+ */
 @ScriptService("buildToolService")
 @Singleton
 public class BuildToolService {
@@ -26,7 +30,9 @@ public class BuildToolService {
     private final FileSystemService fileSystemService;
     private final Provider<ScriptServiceRegistry> scriptServiceRegistry;
 
-
+    /**
+     * Supported build tools.
+     */
     public enum BuildTool {
         MAVEN, GRADLE, ANT, UNKNOWN
     }
@@ -38,6 +44,11 @@ public class BuildToolService {
         this.scriptServiceRegistry = scriptServiceRegistry;
     }
 
+    /**
+     * Detects the current build tool by checking for common build files in the project root.
+     *
+     * @return The detected build tool.
+     */
     @LLMDoc("Detects the current build tool")
     public BuildTool detect() {
         Path projectRoot = sandbox.getRoot();
@@ -52,6 +63,11 @@ public class BuildToolService {
         return BuildTool.UNKNOWN;
     }
 
+    /**
+     * Compiles the current project using the detected build tool.
+     *
+     * @return The output of the compilation process.
+     */
     @LLMDoc("Compiles the current project")
     public String compile() {
         BuildTool tool = detect();
@@ -61,6 +77,11 @@ public class BuildToolService {
         return executeCommand(getCompileCommand(tool), "Compilation");
     }
 
+    /**
+     * Runs all tests for the current project using the detected build tool.
+     *
+     * @return The output of the test execution process.
+     */
     @LLMDoc("Runs the tests for the current project")
     public String runTests() {
         BuildTool tool = detect();
@@ -70,6 +91,12 @@ public class BuildToolService {
         return executeCommand(getTestCommand(tool), "Tests");
     }
 
+    /**
+     * Runs a single test for the current project.
+     *
+     * @param testName The name of the test to run (e.g., 'ClassName' or 'ClassName#methodName').
+     * @return The output of the test execution process.
+     */
     @LLMDoc("Runs a single test for the current project. Example: runTest('ClassName') or runTest('ClassName#methodName')")
     public String runTest(String testName) {
         BuildTool tool = detect();
@@ -130,6 +157,11 @@ public class BuildToolService {
         return resolveExecutable(tool, System.getProperty("os.name").toLowerCase().contains("win"));
     }
 
+    /**
+     * Returns the name of the operating system.
+     *
+     * @return The operating system name in lowercase.
+     */
     @LLMDoc("Returns the operating system name")
     public String getOperatingSystem() {
         return System.getProperty("os.name").toLowerCase();
@@ -186,6 +218,11 @@ public class BuildToolService {
         }
     }
 
+    /**
+     * Returns the dependency tree for the current project.
+     *
+     * @return The dependency tree output.
+     */
     @LLMDoc("Returns the dependency tree for the current project")
     public String getDependencyTree() {
         BuildTool tool = detect();
@@ -218,6 +255,11 @@ public class BuildToolService {
         return command;
     }
 
+    /**
+     * Returns the project structure (modules/subprojects) for the current project.
+     *
+     * @return The project structure output.
+     */
     @LLMDoc("Returns the project structure (modules/subprojects)")
     public String getProjectStructure() {
         BuildTool tool = detect();
@@ -232,6 +274,11 @@ public class BuildToolService {
     }
 
     //@todo add cache as this can be really slow
+    /**
+     * Returns a comprehensive summary of the project, including build info, files, and readme.
+     *
+     * @return The project summary.
+     */
     @LLMDoc("Returns a comprehensive summary of the project, including build info, files, and readme")
     public String getProjectSummary() {
         String report = "### Project Summary\n";
@@ -276,6 +323,11 @@ public class BuildToolService {
         return command;
     }
 
+    /**
+     * Returns the effective build configuration (e.g., effective POM for Maven).
+     *
+     * @return The effective configuration output.
+     */
     @LLMDoc("Returns the effective build configuration (e.g., effective POM for Maven)")
     public String getEffectiveConfig() {
         BuildTool tool = detect();
@@ -308,6 +360,11 @@ public class BuildToolService {
         return command;
     }
 
+    /**
+     * Checks the health of the project dependencies (e.g., unused or undeclared dependencies).
+     *
+     * @return The dependency health report.
+     */
     @LLMDoc("Checks the health of the project dependencies")
     public String getDependencyHealth() {
         BuildTool tool = detect();
@@ -337,6 +394,11 @@ public class BuildToolService {
         return command;
     }
 
+    /**
+     * Returns the contents of the project build file (pom.xml, build.gradle, etc.).
+     *
+     * @return The build file contents.
+     */
     @LLMDoc("Returns the contents of the project build file (pom.xml, build.gradle, etc.)")
     public String getBuildFileContents() {
         Path projectRoot = sandbox.getRoot();
@@ -363,6 +425,11 @@ public class BuildToolService {
         }
     }
 
+    /**
+     * Returns the contents of the project README file.
+     *
+     * @return The README file contents.
+     */
     @LLMDoc("Returns the contents of the project README file")
     public String getReadmeContents() {
         Path projectRoot = sandbox.getRoot();
@@ -384,6 +451,11 @@ public class BuildToolService {
         return "❌ No README file found.";
     }
 
+    /**
+     * Returns the contents of AGENTS.md and the tool API documentation.
+     *
+     * @return The agent instructions and API documentation.
+     */
     @LLMDoc("Returns the contents of AGENTS.md and the tool API documentation")
     public String getAgentsContents() {
         String content = "";

@@ -5,7 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.Sandbox;
-import org.roxycode.core.analysis.JavaAnalysisService;
+import org.roxycode.core.analysis.JavaSourceAnalysisService;
+import org.roxycode.core.analysis.JavaSourceGraphService;
 import org.roxycode.core.tools.service.BuildToolService;
 
 import java.io.IOException;
@@ -21,7 +22,7 @@ class ProjectPackerServiceTest {
 
     @Test
     void testEstimateTokenCount(@TempDir Path tempDir) throws IOException {
-        ProjectPackerService service = new ProjectPackerService(mock(RoxyProjectService.class), mock(Sandbox.class), mock(BuildToolService.class), mock(JavaAnalysisService.class), null);
+        ProjectPackerService service = new ProjectPackerService(mock(RoxyProjectService.class), mock(Sandbox.class), mock(BuildToolService.class), mock(JavaSourceAnalysisService.class), null, null);
 
         Path testFile = tempDir.resolve("test.txt");
         Files.writeString(testFile, "12345678"); // 8 bytes
@@ -54,12 +55,12 @@ class ProjectPackerServiceTest {
                 roxyProjectService,
                 sandbox,
                 buildToolService,
-                new JavaAnalysisService(),
+                new JavaSourceAnalysisService(),
+                new JavaSourceGraphService(),
                 new TomlMapper()
         );
 
         String result = service.packCodebaseToString(root);
-//        System.out.println(result);
 
         assertTrue(result.contains("java_skeleton"));
         assertTrue(result.contains("class Test"));

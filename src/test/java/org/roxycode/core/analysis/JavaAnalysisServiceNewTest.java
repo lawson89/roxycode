@@ -14,7 +14,7 @@ class JavaAnalysisServiceNewTest {
 
     @Test
     void testGenerateSkeletonToFile(@TempDir Path tempDir) throws IOException {
-        JavaAnalysisService service = new JavaAnalysisService();
+        JavaSourceAnalysisService service = new JavaSourceAnalysisService();
         Path sourceDir = tempDir.resolve("src");
         Files.createDirectories(sourceDir);
         
@@ -32,7 +32,7 @@ class JavaAnalysisServiceNewTest {
     }
     @Test
     void testGenerateSkeletonToString(@TempDir Path tempDir) throws IOException {
-        JavaAnalysisService service = new JavaAnalysisService();
+        JavaSourceAnalysisService service = new JavaSourceAnalysisService();
         Path sourceDir = tempDir.resolve("src");
         Files.createDirectories(sourceDir);
         

@@ -18,15 +18,32 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Service for extracting text and metadata from various file formats using Apache Tika.
+ */
 @ScriptService("tikaService")
 @Singleton
 public class TikaService {
 
+    /**
+     * Extracts text content from an input stream.
+     *
+     * @param inputStream The input stream of the document.
+     * @return The extracted text content.
+     * @throws IOException If an I/O error occurs or parsing fails.
+     */
     @LLMDoc("Extracts text content from an input stream using Tika")
     public String extractText(InputStream inputStream) throws IOException {
         return extractAll(inputStream).text();
     }
 
+    /**
+     * Reads a document from a path and extracts its text content.
+     *
+     * @param path The path to the document file.
+     * @return The extracted text content.
+     * @throws IOException If the file is not found, is a directory, or parsing fails.
+     */
     @LLMDoc("Reads a document from a path and extracts its text content using Tika")
     public String readDocument(Path path) throws IOException {
         if (!Files.exists(path)) {
@@ -40,11 +57,18 @@ public class TikaService {
         }
     }
 
+    /**
+     * Extracts both text and metadata from an input stream.
+     *
+     * @param inputStream The input stream of the document.
+     * @return An ExtractionResult containing the text and a map of metadata.
+     * @throws IOException If an I/O error occurs or parsing fails.
+     */
     @LLMDoc("Extracts both text and metadata from an input stream using Tika")
     public ExtractionResult extractAll(InputStream inputStream) throws IOException {
         Parser parser = new AutoDetectParser();
         // BodyContentHandler(-1) disables the write limit, allowing large documents
-        BodyContentHandler handler = new BodyContentHandler(-1); 
+        BodyContentHandler handler = new BodyContentHandler(-1);
         Metadata metadata = new Metadata();
         ParseContext context = new ParseContext();
 
@@ -62,5 +86,11 @@ public class TikaService {
         return new ExtractionResult(handler.toString(), metaMap);
     }
 
+    /**
+     * Result of a Tika extraction operation.
+     *
+     * @param text     The extracted text content.
+     * @param metadata A map of extracted metadata keys and values.
+     */
     public record ExtractionResult(String text, Map<String, String> metadata) {}
 }
