@@ -6,6 +6,7 @@ import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,7 +59,8 @@ public class GitService {
             args.add("--cached");
         }
         if (path != null && !path.isEmpty()) {
-            args.add(path);
+            Path resolved = sandbox.resolve(path);
+            args.add(sandbox.getRoot().relativize(resolved).toString());
         }
         return GitRunner.runGitCommand(sandbox.getRoot(), args.toArray(new String[0]));
     }
@@ -77,7 +79,8 @@ public class GitService {
         args.add("-n");
         args.add(String.valueOf(limit));
         if (path != null && !path.isEmpty()) {
-            args.add(path);
+            Path resolved = sandbox.resolve(path);
+            args.add(sandbox.getRoot().relativize(resolved).toString());
         }
         return GitRunner.runGitCommand(sandbox.getRoot(), args.toArray(new String[0])).trim();
     }

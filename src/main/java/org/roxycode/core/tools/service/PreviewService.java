@@ -12,8 +12,11 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Service for capturing screenshots of the application.
@@ -70,11 +73,13 @@ public class PreviewService {
             Rectangle captureSize = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
             BufferedImage image = robot.createScreenCapture(captureSize);
 
-            // Save to temp file
-            File outputFile = File.createTempFile("roxy_preview_", ".png");
-            ImageIO.write(image, "png", outputFile);
+            // Save to file inside sandbox
+            Path previewDir = sandbox.getRoot().resolve("roxy/previews");
+            Files.createDirectories(previewDir);
+            Path outputFile = previewDir.resolve("roxy_preview_" + UUID.randomUUID() + ".png");
+            ImageIO.write(image, "png", outputFile.toFile());
 
-            return outputFile.getAbsolutePath();
+            return outputFile.toAbsolutePath().toString();
         } finally {
             // 5. Cleanup
             if (appProcess.isAlive()) {

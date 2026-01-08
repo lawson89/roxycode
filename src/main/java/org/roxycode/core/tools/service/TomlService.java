@@ -3,7 +3,9 @@ package org.roxycode.core.tools.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 
@@ -16,6 +18,13 @@ import java.util.*;
 @ScriptService("tomlService")
 @Singleton
 public class TomlService {
+
+    private final Sandbox sandbox;
+
+    @Inject
+    public TomlService(Sandbox sandbox) {
+        this.sandbox = sandbox;
+    }
 
     /**
      * Structural summary of a TOML file.
@@ -90,12 +99,13 @@ public class TomlService {
     /**
      * Analyzes a TOML file and returns a structural summary of its elements.
      *
-     * @param path The path to the TOML file.
+     * @param pathStr The path to the TOML file.
      * @return A TomlFileSummary of the file's contents.
      * @throws Exception If an error occurs during reading or parsing.
      */
     @LLMDoc("Analyzes a TOML file and returns a structural summary of its elements")
-    public TomlFileSummary analyzeFile(Path path) throws Exception {
+    public TomlFileSummary analyzeFile(String pathStr) throws Exception {
+        Path path = sandbox.resolve(pathStr);
         ObjectMapper mapper = new TomlMapper();
         JsonNode root = mapper.readTree(path.toFile());
         List<ElementSummary> elements = new ArrayList<>();
@@ -126,12 +136,13 @@ public class TomlService {
     /**
      * Reads a TOML file and returns its content as a JsonNode.
      *
-     * @param path The path to the TOML file.
+     * @param pathStr The path to the TOML file.
      * @return The parsed contents as a JsonNode.
      * @throws Exception If an error occurs during reading or parsing.
      */
     @LLMDoc("Reads a TOML file and returns its content as a JsonNode")
-    public JsonNode read(Path path) throws Exception {
+    public JsonNode read(String pathStr) throws Exception {
+        Path path = sandbox.resolve(pathStr);
         ObjectMapper mapper = new TomlMapper();
         return mapper.readTree(path.toFile());
     }
@@ -139,12 +150,13 @@ public class TomlService {
     /**
      * Writes a JsonNode to a file in TOML format.
      *
-     * @param path    The path to the output TOML file.
+     * @param pathStr    The path to the output TOML file.
      * @param content The JsonNode content to write.
      * @throws Exception If an error occurs during writing.
      */
     @LLMDoc("Writes a JsonNode to a file in TOML format")
-    public void write(Path path, JsonNode content) throws Exception {
+    public void write(String pathStr, JsonNode content) throws Exception {
+        Path path = sandbox.resolve(pathStr);
         ObjectMapper mapper = new TomlMapper();
         mapper.writeValue(path.toFile(), content);
     }

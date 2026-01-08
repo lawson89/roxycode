@@ -1,6 +1,8 @@
 package org.roxycode.core.tools.service;
 
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 import org.w3c.dom.*;
@@ -28,6 +30,13 @@ import java.util.Optional;
 @Singleton
 public class XmlService {
 
+    private final Sandbox sandbox;
+
+    @Inject
+    public XmlService(Sandbox sandbox) {
+        this.sandbox = sandbox;
+    }
+
     /**
      * Structural summary of an XML file.
      *
@@ -50,12 +59,13 @@ public class XmlService {
     /**
      * Analyzes an XML file and returns a structural summary of its elements.
      *
-     * @param path The path to the XML file.
+     * @param pathStr The path to the XML file.
      * @return An XmlFileSummary of the file's contents.
      * @throws Exception If an error occurs during reading or parsing.
      */
     @LLMDoc("Analyzes an XML file and returns a structural summary of its elements")
-    public XmlFileSummary analyzeFile(Path path) throws Exception {
+    public XmlFileSummary analyzeFile(String pathStr) throws Exception {
+        Path path = sandbox.resolve(pathStr);
         Document doc = loadDocument(path);
         Element root = doc.getDocumentElement();
         List<ElementSummary> elements = new ArrayList<>();
@@ -89,13 +99,14 @@ public class XmlService {
     /**
      * Retrieves the XML source code of an element selected by an XPath expression.
      *
-     * @param path      The path to the XML file.
+     * @param pathStr   The path to the XML file.
      * @param xpathExpr The XPath expression to locate the element.
      * @return An Optional containing the element's XML source, or empty if not found.
      * @throws Exception If an error occurs during processing.
      */
     @LLMDoc("Returns the XML source code of an element selected by an XPath expression")
-    public Optional<String> getElementSource(Path path, String xpathExpr) throws Exception {
+    public Optional<String> getElementSource(String pathStr, String xpathExpr) throws Exception {
+        Path path = sandbox.resolve(pathStr);
         Document doc = loadDocument(path);
         XPath xpath = XPathFactory.newInstance().newXPath();
         Node node = (Node) xpath.evaluate(xpathExpr, doc, XPathConstants.NODE);
@@ -108,13 +119,14 @@ public class XmlService {
     /**
      * Replaces an XML element selected by an XPath expression with new XML content.
      *
-     * @param path      The path to the XML file.
+     * @param pathStr   The path to the XML file.
      * @param xpathExpr The XPath expression to locate the element to replace.
      * @param newXml    The new XML content for the element.
      * @throws Exception If an error occurs during processing or if the element is not found.
      */
     @LLMDoc("Replaces an XML element selected by an XPath expression with new XML content")
-    public void replaceElement(Path path, String xpathExpr, String newXml) throws Exception {
+    public void replaceElement(String pathStr, String xpathExpr, String newXml) throws Exception {
+        Path path = sandbox.resolve(pathStr);
         Document doc = loadDocument(path);
         XPath xpath = XPathFactory.newInstance().newXPath();
         Node node = (Node) xpath.evaluate(xpathExpr, doc, XPathConstants.NODE);
@@ -136,14 +148,15 @@ public class XmlService {
     /**
      * Updates an attribute of an XML element selected by an XPath expression.
      *
-     * @param path      The path to the XML file.
+     * @param pathStr   The path to the XML file.
      * @param xpathExpr The XPath expression to locate the element.
      * @param attrName  The name of the attribute to update.
      * @param attrValue The new value for the attribute.
      * @throws Exception If an error occurs during processing or if the element is not found.
      */
     @LLMDoc("Updates an attribute of an XML element selected by an XPath expression")
-    public void updateAttribute(Path path, String xpathExpr, String attrName, String attrValue) throws Exception {
+    public void updateAttribute(String pathStr, String xpathExpr, String attrName, String attrValue) throws Exception {
+        Path path = sandbox.resolve(pathStr);
         Document doc = loadDocument(path);
         XPath xpath = XPathFactory.newInstance().newXPath();
         Node node = (Node) xpath.evaluate(xpathExpr, doc, XPathConstants.NODE);

@@ -1,6 +1,8 @@
 package org.roxycode.core.tools.service;
 
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.LLMDoc;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
@@ -25,6 +27,13 @@ import java.util.Map;
 @Singleton
 public class TikaService {
 
+    private final Sandbox sandbox;
+
+    @Inject
+    public TikaService(Sandbox sandbox) {
+        this.sandbox = sandbox;
+    }
+
     /**
      * Extracts text content from an input stream.
      *
@@ -40,17 +49,18 @@ public class TikaService {
     /**
      * Reads a document from a path and extracts its text content.
      *
-     * @param path The path to the document file.
+     * @param pathStr The path to the document file.
      * @return The extracted text content.
      * @throws IOException If the file is not found, is a directory, or parsing fails.
      */
     @LLMDoc("Reads a document from a path and extracts its text content using Tika")
-    public String readDocument(Path path) throws IOException {
+    public String readDocument(String pathStr) throws IOException {
+        Path path = sandbox.resolve(pathStr);
         if (!Files.exists(path)) {
-            throw new IOException("File not found: " + path);
+            throw new IOException("File not found: " + pathStr);
         }
         if (Files.isDirectory(path)) {
-            throw new IOException("Path is a directory: " + path);
+            throw new IOException("Path is a directory: " + pathStr);
         }
         try (InputStream is = Files.newInputStream(path)) {
             return extractText(is);

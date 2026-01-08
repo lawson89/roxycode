@@ -2,8 +2,10 @@ package org.roxycode.core.tools.service;
 
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.core.Sandbox;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,15 +19,24 @@ class XmlServiceTest {
     @Inject
     XmlService xmlService;
 
+    @Inject
+    Sandbox sandbox;
+
     @TempDir
     Path tempDir;
 
+    @BeforeEach
+    void setUp() {
+        sandbox.setRoot(tempDir);
+    }
+
     @Test
     void testAnalyzeFile() throws Exception {
-        Path xmlFile = tempDir.resolve("test.xml");
+        String filename = "test.xml";
+        Path xmlFile = tempDir.resolve(filename);
         Files.writeString(xmlFile, "<root><child1>text</child1><child2><subchild/></child2></root>");
 
-        XmlService.XmlFileSummary summary = xmlService.analyzeFile(xmlFile);
+        XmlService.XmlFileSummary summary = xmlService.analyzeFile(filename);
 
         assertEquals("root", summary.rootElement());
         assertEquals(4, summary.elements().size());
@@ -37,10 +48,11 @@ class XmlServiceTest {
 
     @Test
     void testGetElementSource() throws Exception {
-        Path xmlFile = tempDir.resolve("test.xml");
+        String filename = "test.xml";
+        Path xmlFile = tempDir.resolve(filename);
         Files.writeString(xmlFile, "<root><child1>text</child1></root>");
 
-        Optional<String> source = xmlService.getElementSource(xmlFile, "/root/child1");
+        Optional<String> source = xmlService.getElementSource(filename, "/root/child1");
 
         assertTrue(source.isPresent());
         assertEquals("<child1>text</child1>", source.get());
@@ -48,10 +60,11 @@ class XmlServiceTest {
 
     @Test
     void testReplaceElement() throws Exception {
-        Path xmlFile = tempDir.resolve("test.xml");
+        String filename = "test.xml";
+        Path xmlFile = tempDir.resolve(filename);
         Files.writeString(xmlFile, "<root><child1>text</child1></root>");
 
-        xmlService.replaceElement(xmlFile, "/root/child1", "<newchild>newtext</newchild>");
+        xmlService.replaceElement(filename, "/root/child1", "<newchild>newtext</newchild>");
 
         String content = Files.readString(xmlFile);
         assertTrue(content.contains("<newchild>newtext</newchild>"));
@@ -60,12 +73,13 @@ class XmlServiceTest {
 
     @Test
     void testUpdateAttribute() throws Exception {
-        Path xmlFile = tempDir.resolve("test.xml");
-        Files.writeString(xmlFile, "<root><child1 id=\"1\">text</child1></root>");
+        String filename = "test.xml";
+        Path xmlFile = tempDir.resolve(filename);
+        Files.writeString(xmlFile, "<root><child1 id="1">text</child1></root>");
 
-        xmlService.updateAttribute(xmlFile, "/root/child1", "id", "2");
+        xmlService.updateAttribute(filename, "/root/child1", "id", "2");
 
         String content = Files.readString(xmlFile);
-        assertTrue(content.contains("id=\"2\""));
+        assertTrue(content.contains("id="2""));
     }
 }
