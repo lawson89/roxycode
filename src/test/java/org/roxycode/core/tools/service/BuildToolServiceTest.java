@@ -234,4 +234,25 @@ class BuildToolServiceTest {
         String result = buildToolService.getReadmeContents();
         assertTrue(result.contains("No README file found"));
     }
+
+    @Test
+    void testGetSingleTestCommandMaven() {
+        List<String> command = buildToolService.getSingleTestCommand(BuildToolService.BuildTool.MAVEN, "MyTest");
+        assertTrue(command.contains("test"));
+        assertTrue(command.contains("-Dtest=MyTest"));
+    }
+
+    @Test
+    void testGetSingleTestCommandGradle() {
+        List<String> command = buildToolService.getSingleTestCommand(BuildToolService.BuildTool.GRADLE, "MyTest");
+        assertTrue(command.contains("test"));
+        assertTrue(command.contains("--tests"));
+        assertTrue(command.contains("MyTest"));
+    }
+
+    @Test
+    void testRunTestUnknown() {
+        String result = buildToolService.runTest("MyTest");
+        assertTrue(result.contains("Could not detect build tool"));
+    }
 }

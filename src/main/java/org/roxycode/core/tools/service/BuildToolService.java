@@ -70,6 +70,38 @@ public class BuildToolService {
         return executeCommand(getTestCommand(tool), "Tests");
     }
 
+    @LLMDoc("Runs a single test for the current project. Example: runTest('ClassName') or runTest('ClassName#methodName')")
+    public String runTest(String testName) {
+        BuildTool tool = detect();
+        if (tool == BuildTool.UNKNOWN) {
+            return "❌ Could not detect build tool (no pom.xml, build.gradle, or build.xml found).";
+        }
+        List<String> command = getSingleTestCommand(tool, testName);
+        if (command.isEmpty()) {
+            return "❌ Single test execution is not supported for " + tool;
+        }
+        return executeCommand(command, "Test " + testName);
+    }
+
+    List<String> getSingleTestCommand(BuildTool tool, String testName) {
+        List<String> command = new ArrayList<>();
+        String executable = resolveExecutable(tool);
+        if (executable.isEmpty()) return command;
+
+        command.add(executable);
+        switch (tool) {
+            case MAVEN:
+                command.addAll(Arrays.asList("test", "-Dtest=" + testName));
+                break;
+            case GRADLE:
+                command.addAll(Arrays.asList("test", "--tests", testName));
+                break;
+            default:
+                return new ArrayList<>();
+        }
+        return command;
+    }
+
     List<String> getCompileCommand(BuildTool tool) {
         List<String> command = new ArrayList<>();
         command.add(resolveExecutable(tool));
