@@ -41,6 +41,7 @@ public class GenAIService {
     private final GeminiCacheService geminiCacheService;
     private final ProjectCacheMetaService projectCacheMetaService;
     private final RoxyProjectService roxyProjectService;
+    private final GeminiClientFactory geminiClientFactory;
 
     private Client client;
 
@@ -49,7 +50,7 @@ public class GenAIService {
     public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService,
                         UsageService usageService, HistoryService historyService,
                         GeminiCacheService geminiCacheService, RoxyProjectService roxyProjectService,
-                        ProjectCacheMetaService projectCacheMetaService) {
+                        ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
@@ -58,6 +59,7 @@ public class GenAIService {
         this.geminiCacheService = geminiCacheService;
         this.roxyProjectService = roxyProjectService;
         this.projectCacheMetaService = projectCacheMetaService;
+        this.geminiClientFactory = geminiClientFactory;
     }
 
     private synchronized Client getClient() {
@@ -67,7 +69,7 @@ public class GenAIService {
         }
         if (client == null || !key.equals(lastUsedApiKey)) {
             LOG.info("Initializing/Refreshing Gemini Client...");
-            client = Client.builder().apiKey(key).httpOptions(HttpOptions.builder().retryOptions(HttpRetryOptions.builder().attempts(5).httpStatusCodes(429, 503).build()).timeout(60_000).build()).build();
+            client = geminiClientFactory.createClientWithRetry(key);
             lastUsedApiKey = key;
         }
         return client;

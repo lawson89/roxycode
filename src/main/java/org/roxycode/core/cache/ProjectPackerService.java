@@ -118,12 +118,14 @@ public class ProjectPackerService {
         writer.write(roxyProjectService.getStaticSystemPrompt());
         writer.write("\n'''\n\n");
 
-        writer.write(rootPath.toAbsolutePath().toString());
-        writer.write("\n");
-
+        writer.write("[[content]]\n");
+        writer.write("name = \"metadata\"\n");
+        writer.write("content = '''\n");
+        writer.write("Project Root: " + rootPath.toAbsolutePath() + "\n");
         writer.write("### Project Info (CACHED)\n");
         writer.write("[System: Codebase is currently cached in Gemini. You should have access to the file contents.]\n\n");
-        writer.write("[System: Conversation history trimmed. Resuming context.]");
+        writer.write("[System: Conversation history trimmed. Resuming context.]\n");
+        writer.write("'''\n");
     }
 
     public String convertContentToToml(NamedContent content) {

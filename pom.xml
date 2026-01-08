@@ -52,6 +52,7 @@
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-runtime</artifactId>
         </dependency>
+        
         <dependency>
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>

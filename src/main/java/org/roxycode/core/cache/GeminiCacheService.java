@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.genai.Client;
 import com.google.genai.Pager;
 import com.google.genai.types.*;
+import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
+import org.roxycode.core.GeminiClientFactory;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.SettingsService;
 import org.roxycode.core.beans.ProjectCacheMeta;
@@ -13,7 +15,6 @@ import org.roxycode.core.tools.ToolRegistry;
 import org.roxycode.core.utils.SystemUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,22 +46,24 @@ public class GeminiCacheService {
 
     private final ProjectCacheMetaService projectCacheMetaService;
 
-    public GeminiCacheService(SettingsService settingsService, @Named("toml") ObjectMapper tomlMapper,
-                              ProjectPackerService codebasePackerService, RoxyProjectService roxyProjectService,
-                              ToolRegistry toolRegistry, ProjectCacheMetaService projectCacheMetaService) {
+    private final GeminiClientFactory geminiClientFactory;
+
+    @Inject
+    public GeminiCacheService(SettingsService settingsService, @Named("toml") ObjectMapper tomlMapper, ProjectPackerService codebasePackerService, RoxyProjectService roxyProjectService, ToolRegistry toolRegistry, ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory) {
         this.settingsService = settingsService;
         this.codebasePackerService = codebasePackerService;
         this.tomlMapper = tomlMapper;
         this.roxyProjectService = roxyProjectService;
         this.toolRegistry = toolRegistry;
         this.projectCacheMetaService = projectCacheMetaService;
+        this.geminiClientFactory = geminiClientFactory;
     }
 
     private synchronized Client getClient() {
         String currentApiKey = settingsService.getGeminiApiKey();
         if (client == null || !currentApiKey.equals(lastApiKey)) {
             LOG.info("Initializing/Refreshing Gemini Client...");
-            this.client = Client.builder().apiKey(currentApiKey).build();
+            this.client = geminiClientFactory.createClient(currentApiKey);
             this.lastApiKey = currentApiKey;
         }
         return client;
@@ -68,72 +71,37 @@ public class GeminiCacheService {
 
     public void pushCache(Path projectPath) {
         LOG.info("Pushing cache to Gemini...");
-
         String currentModel = settingsService.getGeminiModel();
         String project = settingsService.getCurrentProject();
         String user = SystemUtils.getSystemUser();
         String cacheKey = projectCacheMetaService.getCacheKey(projectPath, user, currentModel);
-
         LOG.info("cacheKey: {} | project: {} | user: {} | currentModel: {}", cacheKey, project, user, currentModel);
-
-        try {
-            deleteCache(cacheKey);
-        } catch (RuntimeException e) {
-            LOG.warn("Failed to delete cache key: {}", cacheKey);
-        }
-
+        // Delete existing cache if it exists
+        projectCacheMetaService.getProjectCacheMeta(projectPath).ifPresent(meta -> {
+            LOG.info("Found existing cache for project. Deleting it first...");
+            deleteCache(meta.geminiCacheId());
+            projectCacheMetaService.deleteProjectCacheMetaByGeminiId(meta.geminiCacheId());
+        });
         try {
             Path cacheFile = projectPath.resolve(RoxyProjectService.ROXY_WORKING_DIR).resolve(".cache").resolve("codebase_cache.toml");
-
             if (!Files.exists(cacheFile)) {
                 LOG.error("Cache file not found at: {}", cacheFile);
                 throw new IllegalStateException("Cache file not found at: " + cacheFile);
             }
-
             String tomlData = Files.readString(cacheFile);
-
-            Content cacheContent = Content.builder()
-                    .role("user")
-                    .parts(List.of(Part.builder().text(tomlData).build()))
-                    .build();
-
-            Content systemInstruction = Content.builder()
-                    .parts(List.of(Part.builder()
-                            .text("You are RoxyCode. You have tools to assist in local coding. You have access to the full codebase context provided.")
-                            .build()))
-                    .build();
-
+            Content cacheContent = Content.builder().role("user").parts(List.of(Part.builder().text(tomlData).build())).build();
+            Content systemInstruction = Content.builder().parts(List.of(Part.builder().text("You are RoxyCode. You have tools to assist in local coding. You have access to the full codebase context provided.").build())).build();
             List<Tool> geminiTools = toolRegistry.getAllGeminiTools();
-
-            CreateCachedContentConfig config = CreateCachedContentConfig.builder()
-                    .displayName(cacheKey)
-                    .systemInstruction(systemInstruction)
-                    .contents(List.of(cacheContent))
-                    .tools(geminiTools)
-                    .ttl(Duration.ofMinutes(settingsService.getCacheTTL()))
-                    .build();
-
+            CreateCachedContentConfig config = CreateCachedContentConfig.builder().displayName(cacheKey).systemInstruction(systemInstruction).contents(List.of(cacheContent)).tools(geminiTools).ttl(Duration.ofMinutes(settingsService.getCacheTTL())).build();
             LOG.info("Uploading {} bytes to Gemini...", tomlData.length());
-
             CachedContent response = getClient().caches.create(currentModel, config);
-
             LOG.info("✅ Cache Pushed Successfully!");
             // Generate Metadata File so GenAIService knows the ID
             String geminiId = response.name().orElse("Unknown");
-
-            ProjectCacheMeta meta = new ProjectCacheMeta(
-                    projectPath.toString(),
-                    user,
-                    ZonedDateTime.now().toString(),
-                    response.expireTime().map(Instant::toString).orElse(""),
-                    cacheKey,
-                    geminiId
-            );
+            ProjectCacheMeta meta = new ProjectCacheMeta(projectPath.toString(), user, ZonedDateTime.now().toString(), response.expireTime().map(Instant::toString).orElse(""), cacheKey, geminiId);
             projectCacheMetaService.writeProjectCacheMeta(meta);
-
             LOG.info("geminiId: {}", geminiId);
             LOG.info("Expires At: {}", response.expireTime());
-
         } catch (Exception e) {
             LOG.error("Failed to push cache to Gemini: {}", e.getMessage(), e);
             throw new RuntimeException("Cache Push Failed", e);
@@ -202,27 +170,16 @@ public class GeminiCacheService {
         try {
             LOG.info("Refreshing cache: {}", cacheName);
             int ttlMinutes = settingsService.getCacheTTL();
-            UpdateCachedContentConfig config = UpdateCachedContentConfig.builder()
-                    .ttl(Duration.ofMinutes(ttlMinutes))
-                    .build();
+            UpdateCachedContentConfig config = UpdateCachedContentConfig.builder().ttl(Duration.ofMinutes(ttlMinutes)).build();
             CachedContent updated = getClient().caches.update(cacheName, config);
-
             projectCacheMetaService.findByGeminiId(cacheName).ifPresent(meta -> {
-                ProjectCacheMeta updatedMeta = new ProjectCacheMeta(
-                        meta.projectRoot(),
-                        meta.user(),
-                        meta.generatedAt(),
-                        updated.expireTime().map(Instant::toString).orElse(""),
-                        meta.cacheKey(),
-                        meta.geminiCacheId()
-                );
+                ProjectCacheMeta updatedMeta = new ProjectCacheMeta(meta.projectRoot(), meta.user(), meta.generatedAt(), updated.expireTime().map(Instant::toString).orElse(""), meta.cacheKey(), meta.geminiCacheId());
                 try {
                     projectCacheMetaService.writeProjectCacheMeta(updatedMeta);
                 } catch (IOException e) {
                     LOG.error("Failed to update metadata after refresh for {}: {}", cacheName, e.getMessage());
                 }
             });
-
             LOG.info("Successfully refreshed cache: {} (New TTL: {} minutes)", cacheName, ttlMinutes);
         } catch (Exception e) {
             LOG.error("Failed to refresh cache {}: {}", cacheName, e.getMessage(), e);
