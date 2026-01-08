@@ -12,9 +12,6 @@ import org.kordamp.ikonli.materialdesign2.*;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.core.*;
 import org.roxycode.core.cache.ProjectCacheMetaService;
-import org.roxycode.core.beans.ProjectCacheMeta;
-import java.util.Optional;
-import org.roxycode.core.utils.UIUtils;
 import org.roxycode.ui.views.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,7 +139,6 @@ public class MainFrame extends JFrame implements Runnable {
     private JButton openFolderButton;
 
 
-
     @Inject
     public MainFrame(GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService,
                      ThemeService themeService, NotificationService notificationService, ProjectCacheMetaService projectCacheMetaService) {
@@ -206,7 +202,7 @@ public class MainFrame extends JFrame implements Runnable {
         // check for a current project
         String currentProject = settingsService.getCurrentProject();
         LOG.info("Current project: {}", currentProject);
-        if(StringUtils.isNotBlank(currentProject)){
+        if (StringUtils.isNotBlank(currentProject)) {
             LOG.info("Updating IO and project service with new current project");
             onProjectChange(Path.of(currentProject));
         }
@@ -320,15 +316,15 @@ public class MainFrame extends JFrame implements Runnable {
 
             switch (mode) {
                 case ASK:
-                    iconCode = MaterialDesignM.MAGNIFY;
+                    iconCode = MaterialDesignA.ACCOUNT_QUESTION_OUTLINE;
                     fgColor = isDark ? new Color(100, 200, 255) : new Color(0, 80, 200);
                     break;
                 case PLAN:
-                    iconCode = MaterialDesignP.PENCIL_OUTLINE;
+                    iconCode = MaterialDesignC.CARD_TEXT_OUTLINE;
                     fgColor = isDark ? new Color(255, 200, 0) : new Color(150, 100, 0);
                     break;
                 case CODE:
-                    iconCode = MaterialDesignW.WRENCH_OUTLINE;
+                    iconCode = MaterialDesignK.KEYBOARD_OUTLINE;
                     fgColor = isDark ? new Color(100, 255, 100) : new Color(0, 120, 0);
                     break;
                 default:
@@ -422,18 +418,18 @@ public class MainFrame extends JFrame implements Runnable {
         fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         fileChooser.setCurrentDirectory(roxyProjectService.getProjectRoot().toFile());
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-          onProjectChange(fileChooser.getSelectedFile().toPath());
+            onProjectChange(fileChooser.getSelectedFile().toPath());
         }
     }
 
-    protected void onProjectChange(Path projectRoot){
+    protected void onProjectChange(Path projectRoot) {
         roxyProjectService.changeProjectRoot(projectRoot);
         genAIService.clearHistory();
         if (gitBranchLabel != null) {
             String branch = roxyProjectService.getCurrentBranch();
             gitBranchLabel.setText(branch != null ? branch : "No Git Repo");
         }
-        if(currentProjectLabel != null) {
+        if (currentProjectLabel != null) {
             currentProjectLabel.setText(roxyProjectService.getProjectRoot().toString());
         }
         updateRoxyMode();

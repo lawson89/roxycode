@@ -127,4 +127,22 @@ public class CacheManagementJobTest {
     GeminiClientFactory geminiClientFactory() {
         return mock(GeminiClientFactory.class);
     }
+
+    @Test
+    void testManageCache_WhenNotExpiringSoon() throws IOException {
+        Path mockPath = Path.of("/mock/project");
+        when(settingsService.isCacheEnabled()).thenReturn(true);
+        when(settingsService.getGeminiApiKey()).thenReturn("mock-api-key");
+        when(roxyProjectService.getProjectRoot()).thenReturn(mockPath);
+
+        org.roxycode.core.beans.ProjectCacheMeta meta = mock(org.roxycode.core.beans.ProjectCacheMeta.class);
+        when(meta.geminiCacheId()).thenReturn("cache-123");
+        when(projectCacheMetaService.getProjectCacheMeta()).thenReturn(Optional.of(meta));
+        when(projectCacheMetaService.getSecondsUntilExpiration(meta)).thenReturn(600L); // More than 300
+
+        cacheManagementJob.manageCache();
+
+        verify(geminiCacheService, never()).refreshCache(anyString());
+    }
+
 }
