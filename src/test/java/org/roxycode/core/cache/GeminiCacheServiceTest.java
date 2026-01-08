@@ -19,9 +19,9 @@ class GeminiCacheServiceTest {
             "test-project", 
             "test-user", 
             "2023-10-27T10:00:00Z", 
+            "2023-10-27T11:00:00Z", 
             "test-cache-key", 
-            "cachedContents/test-id",
-            "2023-10-27T10:00:00Z"
+            "cachedContents/test-id"
         );
         // We can't easily mock the roxy_project directory without more effort,
         // so we'll just test if the service can handle metadata if we can provide a controlled environment.

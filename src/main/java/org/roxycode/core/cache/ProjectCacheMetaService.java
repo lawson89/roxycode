@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZonedDateTime;
 import java.util.Optional;
 
 @Singleton
@@ -122,6 +123,42 @@ public class ProjectCacheMetaService {
             }
         } catch (IOException e) {
             LOG.error("Failed to list cache directory for cleanup: {}", e.getMessage());
+        }
+    }
+
+
+    public Optional<ProjectCacheMeta> findByGeminiId(String geminiId) {
+        try {
+            Path cacheDir = roxyProjectService.getRoxyCacheDir();
+            if (!Files.exists(cacheDir)) return Optional.empty();
+            try (var stream = Files.list(cacheDir)) {
+                return stream.filter(p -> p.toString().endsWith(".toml"))
+                        .map(p -> {
+                            try {
+                                return tomlMapper.readValue(p.toFile(), ProjectCacheMeta.class);
+                            } catch (IOException e) {
+                                return null;
+                            }
+                        })
+                        .filter(meta -> meta != null && geminiId.equals(meta.geminiCacheId()))
+                        .findFirst();
+            }
+        } catch (IOException e) {
+            LOG.error("Failed to scan cache directory for geminiId {}: {}", geminiId, e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    public long getSecondsUntilExpiration(ProjectCacheMeta meta) {
+        if (meta.expiresAt() == null || meta.expiresAt().isBlank()) {
+            return 0;
+        }
+        try {
+            ZonedDateTime expiresAt = ZonedDateTime.parse(meta.expiresAt());
+            return Math.max(0, java.time.Duration.between(ZonedDateTime.now(), expiresAt).toSeconds());
+        } catch (Exception e) {
+            LOG.warn("Failed to parse expiration time {}: {}", meta.expiresAt(), e.getMessage());
+            return 0;
         }
     }
 

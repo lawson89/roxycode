@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -120,16 +121,13 @@ public class GeminiCacheService {
             // Generate Metadata File so GenAIService knows the ID
             String geminiId = response.name().orElse("Unknown");
 
-            Path skeletonFile = roxyProjectService.getRoxyCacheDir().resolve("code_skeleton.txt");
-            String skeletonGeneratedAt = Files.exists(skeletonFile) ? Files.getLastModifiedTime(skeletonFile).toString() : "N/A";
-
             ProjectCacheMeta meta = new ProjectCacheMeta(
                     projectPath.toString(),
                     user,
                     ZonedDateTime.now().toString(),
+                    response.expireTime().map(Instant::toString).orElse(""),
                     cacheKey,
-                    geminiId,
-                    skeletonGeneratedAt
+                    geminiId
             );
             projectCacheMetaService.writeProjectCacheMeta(meta);
 
@@ -207,7 +205,24 @@ public class GeminiCacheService {
             UpdateCachedContentConfig config = UpdateCachedContentConfig.builder()
                     .ttl(Duration.ofMinutes(ttlMinutes))
                     .build();
-            getClient().caches.update(cacheName, config);
+            CachedContent updated = getClient().caches.update(cacheName, config);
+
+            projectCacheMetaService.findByGeminiId(cacheName).ifPresent(meta -> {
+                ProjectCacheMeta updatedMeta = new ProjectCacheMeta(
+                        meta.projectRoot(),
+                        meta.user(),
+                        meta.generatedAt(),
+                        updated.expireTime().map(Instant::toString).orElse(""),
+                        meta.cacheKey(),
+                        meta.geminiCacheId()
+                );
+                try {
+                    projectCacheMetaService.writeProjectCacheMeta(updatedMeta);
+                } catch (IOException e) {
+                    LOG.error("Failed to update metadata after refresh for {}: {}", cacheName, e.getMessage());
+                }
+            });
+
             LOG.info("Successfully refreshed cache: {} (New TTL: {} minutes)", cacheName, ttlMinutes);
         } catch (Exception e) {
             LOG.error("Failed to refresh cache {}: {}", cacheName, e.getMessage(), e);

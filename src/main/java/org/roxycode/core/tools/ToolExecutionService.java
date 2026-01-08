@@ -10,7 +10,9 @@ import org.graalvm.polyglot.proxy.ProxyObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -51,6 +53,8 @@ public class ToolExecutionService {
         HostAccess secureAccess = HostAccess.newBuilder(HostAccess.ALL)
                 .build();
 
+        ByteArrayOutputStream logStream = new ByteArrayOutputStream();
+
         try (Context context = Context.newBuilder("js")
                 .allowHostAccess(secureAccess)
                 .allowHostClassLookup(className -> false)
@@ -60,6 +64,8 @@ public class ToolExecutionService {
                 .allowCreateProcess(false)
                 // Enable IO, but ONLY via our custom FileSystem
                 .allowIO(true)
+                .out(logStream)
+                .err(logStream)
                 .option("engine.WarnInterpreterOnly", "false")
                 .build()) {
             // Set a timeout of 60 seconds
@@ -77,13 +83,25 @@ public class ToolExecutionService {
                 context.getBindings("js").putMember("args", ProxyObject.fromMap(args));
                 // 3. Execute
                 Value result = context.eval(Source.create("js", script));
-                return result != null ? result.toString() : "";
+
+                String logs = logStream.toString(StandardCharsets.UTF_8);
+                String resultStr = result != null ? result.toString() : "";
+
+                if (!logs.isEmpty()) {
+                    return "--- LOGS ---\n" + logs + "\n--- RESULT ---\n" + resultStr;
+                }
+                return resultStr;
             } finally {
                 timeoutTask.cancel(false);
             }
         } catch (Exception e) {
+            String logs = logStream.toString(StandardCharsets.UTF_8);
             String stackTrace = ExceptionUtils.getStackTrace(e);
-            return "Error executing JavaScript: " + e.getMessage() + "\n" + stackTrace;
+            String errorMsg = "Error executing JavaScript: " + e.getMessage() + "\n" + stackTrace;
+            if (!logs.isEmpty()) {
+                return "--- LOGS ---\n" + logs + "\n--- ERROR ---\n" + errorMsg;
+            }
+            return errorMsg;
         }
     }
 

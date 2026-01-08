@@ -10,6 +10,7 @@ import org.roxycode.core.utils.SystemUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZonedDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,7 +31,7 @@ class ProjectCacheMetaServiceTest {
         String model = "gemini-1.5-flash";
         String cacheKey = projectCacheMetaService.getCacheKey(projectRoot, user, model);
 
-        ProjectCacheMeta meta = new ProjectCacheMeta(projectRoot.toString(), user, "2023-10-27T10:00:00Z", cacheKey, "cachedContents/test-id", "2023-10-27T10:00:00Z");
+        ProjectCacheMeta meta = new ProjectCacheMeta(projectRoot.toString(), user, "2023-10-27T10:00:00Z", "2023-10-27T11:00:00Z", cacheKey, "cachedContents/test-id");
 
         projectCacheMetaService.writeProjectCacheMeta(meta);
 
@@ -53,7 +54,7 @@ class ProjectCacheMetaServiceTest {
         String model = "gemini-1.5-flash";
         String cacheKey = projectCacheMetaService.getCacheKey(projectRoot, user, model);
 
-        ProjectCacheMeta meta = new ProjectCacheMeta(projectRoot.toString(), user, "2023-10-27T10:00:00Z", cacheKey, "cachedContents/test-id-key", "2023-10-27T10:00:00Z");
+        ProjectCacheMeta meta = new ProjectCacheMeta(projectRoot.toString(), user, "2023-10-27T10:00:00Z", "2023-10-27T11:00:00Z", cacheKey, "cachedContents/test-id-key");
 
         projectCacheMetaService.writeProjectCacheMeta(meta);
         Path metaFile = roxyProjectService.getRoxyCacheDir().resolve(cacheKey + ".toml");
@@ -75,9 +76,9 @@ class ProjectCacheMetaServiceTest {
             projectRoot.toString(),
             user,
             "2023-10-27T10:00:00Z",
+            "2023-10-27T11:00:00Z",
             cacheKey,
-            geminiId,
-            "2023-10-27T10:00:00Z"
+            geminiId
         );
 
         projectCacheMetaService.writeProjectCacheMeta(meta);
@@ -93,8 +94,8 @@ class ProjectCacheMetaServiceTest {
         Path projectRoot = roxyProjectService.getProjectRoot();
         String user = SystemUtils.getSystemUser();
         
-        ProjectCacheMeta meta1 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "key1", "id1", "...");
-        ProjectCacheMeta meta2 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "key2", "id2", "...");
+        ProjectCacheMeta meta1 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "...", "key1", "id1");
+        ProjectCacheMeta meta2 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "...", "key2", "id2");
 
         projectCacheMetaService.writeProjectCacheMeta(meta1);
         projectCacheMetaService.writeProjectCacheMeta(meta2);
@@ -109,6 +110,23 @@ class ProjectCacheMetaServiceTest {
 
         assertFalse(Files.exists(metaFile1));
         assertFalse(Files.exists(metaFile2));
+    }
+
+
+    @Test
+    void testGetSecondsUntilExpiration() {
+        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime future = now.plusMinutes(10);
+        ProjectCacheMeta meta = new ProjectCacheMeta("root", "user", now.toString(), future.toString(), "key", "id");
+        
+        long seconds = projectCacheMetaService.getSecondsUntilExpiration(meta);
+        
+        // Should be around 600 seconds
+        assertTrue(seconds > 590 && seconds <= 600, "Seconds until expiration should be around 600, got: " + seconds);
+        
+        ZonedDateTime past = now.minusMinutes(10);
+        ProjectCacheMeta expiredMeta = new ProjectCacheMeta("root", "user", now.toString(), past.toString(), "key", "id");
+        assertEquals(0, projectCacheMetaService.getSecondsUntilExpiration(expiredMeta));
     }
 
 }

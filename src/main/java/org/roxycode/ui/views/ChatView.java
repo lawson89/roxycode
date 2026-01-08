@@ -86,6 +86,11 @@ public class ChatView extends JPanel {
     @Outlet
     private JLabel cacheIdLabel;
 
+    @Outlet
+    private JLabel cacheExpiryLabel;
+
+    private Timer cacheStatusTimer;
+
     @Inject
     public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService) {
         this.projectCacheMetaService = projectCacheMetaService;
@@ -109,6 +114,7 @@ public class ChatView extends JPanel {
         initIcons();
         updateCacheStatus();
         initListeners();
+        initCacheStatusTimer();
     }
 
     private void setupInputField() {
@@ -354,12 +360,22 @@ public class ChatView extends JPanel {
                 if (enabled) {
                     Optional<ProjectCacheMeta> meta = projectCacheMetaService.getProjectCacheMeta();
                     if (meta.isPresent()) {
-                        cacheIdLabel.setText("ID: " + meta.get().geminiCacheId());
+                        String fullId = meta.get().geminiCacheId();
+                        String displayId = (fullId != null && fullId.length() > 5) ? "..." + fullId.substring(fullId.length() - 5) : (fullId != null ? fullId : "None");
+                        cacheIdLabel.setText("ID: " + displayId);
+                        if (cacheExpiryLabel != null) {
+                            long seconds = projectCacheMetaService.getSecondsUntilExpiration(meta.get());
+                            long minutes = seconds / 60;
+                            long remainingSeconds = seconds % 60;
+                            cacheExpiryLabel.setText(String.format("(Expires in %d:%02d)", minutes, remainingSeconds));
+                        }
                     } else {
                         cacheIdLabel.setText("ID: None");
+                        if (cacheExpiryLabel != null) cacheExpiryLabel.setText("");
                     }
                 } else {
                     cacheIdLabel.setText("");
+                    if (cacheExpiryLabel != null) cacheExpiryLabel.setText("");
                 }
             }
         });
@@ -369,7 +385,14 @@ public class ChatView extends JPanel {
         chatArea.appendMarkdown("*System: " + msg + "*");
     }
 
+    
+    private void initCacheStatusTimer() {
+        cacheStatusTimer = new Timer(5000, e -> updateCacheStatus());
+        cacheStatusTimer.start();
+    }
+
     public MarkdownPane getChatArea() {
         return chatArea;
     }
+
 }
