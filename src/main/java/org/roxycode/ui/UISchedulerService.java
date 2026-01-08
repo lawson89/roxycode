@@ -7,7 +7,10 @@ import org.roxycode.ui.views.ChatView;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.swing.*;
+
 @Singleton
+@io.micronaut.context.annotation.Requires(notEnv = "test")
 public class UISchedulerService {
 
     private static final Logger LOG = LoggerFactory.getLogger(UISchedulerService.class);
@@ -20,12 +23,15 @@ public class UISchedulerService {
 
     @Scheduled(fixedDelay = "2s")
     void updateUI() {
-//        LOG.debug("Scheduled UI update");
-        if (chatView != null) {
-            chatView.updateCacheStatus();
-        }
-        if (mainFrame != null) {
-            mainFrame.updateRoxyMode();
-        }
+        SwingUtilities.invokeLater(() -> {
+            if (chatView != null) {
+                chatView.updateCacheStatus();
+                chatView.updateChatStats();
+            }
+            if (mainFrame != null) {
+                mainFrame.updateRoxyMode();
+                mainFrame.updateModelName();
+            }
+        });
     }
 }
