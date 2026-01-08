@@ -148,4 +148,69 @@ class FileSystemServiceTest {
         assertTrue(output.contains("--- File: missing.txt ---"));
         assertTrue(output.contains("Error reading file"));
     }
+    @Test
+    void testExists() throws IOException {
+        String filename = "exists.txt";
+        assertFalse(fileSystemService.exists(filename));
+        fileSystemService.writeFile(filename, "content");
+        assertTrue(fileSystemService.exists(filename));
+    }
+
+    @Test
+    void testIsDirectoryAndIsFile() throws IOException {
+        String filename = "file.txt";
+        String dirname = "dir";
+        fileSystemService.writeFile(filename, "content");
+        Files.createDirectory(tempDir.resolve(dirname));
+
+        assertTrue(fileSystemService.isFile(filename));
+        assertFalse(fileSystemService.isDirectory(filename));
+        
+        assertTrue(fileSystemService.isDirectory(dirname));
+        assertFalse(fileSystemService.isFile(dirname));
+    }
+
+    @Test
+    void testMove() throws IOException {
+        String src = "src.txt";
+        String dest = "dest.txt";
+        fileSystemService.writeFile(src, "move me");
+        
+        fileSystemService.move(src, dest);
+        
+        assertFalse(fileSystemService.exists(src));
+        assertTrue(fileSystemService.exists(dest));
+        assertEquals("move me", fileSystemService.readFile(dest));
+    }
+
+    @Test
+    void testCopy() throws IOException {
+        String src = "src.txt";
+        String dest = "dest.txt";
+        fileSystemService.writeFile(src, "copy me");
+        
+        fileSystemService.copy(src, dest);
+        
+        assertTrue(fileSystemService.exists(src));
+        assertTrue(fileSystemService.exists(dest));
+        assertEquals("copy me", fileSystemService.readFile(dest));
+        
+        // Test directory copy
+        String srcDir = "srcDir";
+        String destDir = "destDir";
+        Files.createDirectory(tempDir.resolve(srcDir));
+        fileSystemService.writeFile(srcDir + "/file.txt", "nested");
+        
+        fileSystemService.copy(srcDir, destDir);
+        assertTrue(fileSystemService.exists(destDir + "/file.txt"));
+    }
+
+    @Test
+    void testGetSize() throws IOException {
+        String filename = "size.txt";
+        String content = "1234567890";
+        fileSystemService.writeFile(filename, content);
+        
+        assertEquals(content.length(), fileSystemService.getSize(filename));
+    }
 }

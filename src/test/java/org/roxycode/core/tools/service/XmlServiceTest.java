@@ -75,11 +75,11 @@ class XmlServiceTest {
     void testUpdateAttribute() throws Exception {
         String filename = "test.xml";
         Path xmlFile = tempDir.resolve(filename);
-        Files.writeString(xmlFile, "<root><child1 id="1">text</child1></root>");
+        Files.writeString(xmlFile, "<root><child1 id=\"1\">text</child1></root>");
 
         xmlService.updateAttribute(filename, "/root/child1", "id", "2");
 
         String content = Files.readString(xmlFile);
-        assertTrue(content.contains("id="2""));
+        assertTrue(content.contains("id=\"2\""));
     }
 }

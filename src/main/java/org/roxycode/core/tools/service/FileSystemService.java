@@ -206,4 +206,80 @@ public class FileSystemService {
         }
         return output.toString();
     }
+    /**
+     * Checks if a file or directory exists at the specified path.
+     *
+     * @param path The path to check.
+     * @return true if the path exists, false otherwise.
+     */
+    @LLMDoc("Checks if a file or directory exists at the specified path")
+    public boolean exists(String path) {
+        return Files.exists(sandbox.resolve(path));
+    }
+
+    /**
+     * Checks if the specified path is a directory.
+     *
+     * @param path The path to check.
+     * @return true if it is a directory, false otherwise.
+     */
+    @LLMDoc("Checks if the specified path is a directory")
+    public boolean isDirectory(String path) {
+        return Files.isDirectory(sandbox.resolve(path));
+    }
+
+    /**
+     * Checks if the specified path is a regular file.
+     *
+     * @param path The path to check.
+     * @return true if it is a file, false otherwise.
+     */
+    @LLMDoc("Checks if the specified path is a regular file")
+    public boolean isFile(String path) {
+        return Files.isRegularFile(sandbox.resolve(path));
+    }
+
+    /**
+     * Moves or renames a file or directory from source to target.
+     *
+     * @param source The source path.
+     * @param target The target path.
+     * @throws IOException If an I/O error occurs.
+     */
+    @LLMDoc("Moves or renames a file or directory")
+    public void move(String source, String target) throws IOException {
+        Path src = sandbox.resolve(source);
+        Path dest = sandbox.resolve(target);
+        Files.move(src, dest);
+    }
+
+    /**
+     * Copies a file or directory from source to target.
+     *
+     * @param source The source path.
+     * @param target The target path.
+     * @throws IOException If an I/O error occurs.
+     */
+    @LLMDoc("Copies a file or directory")
+    public void copy(String source, String target) throws IOException {
+        Path src = sandbox.resolve(source);
+        Path dest = sandbox.resolve(target);
+        if (Files.isDirectory(src)) {
+            FileUtils.copyDirectory(src.toFile(), dest.toFile());
+        } else {
+            FileUtils.copyFile(src.toFile(), dest.toFile());
+        }
+    }
+
+    /**
+     * Returns the size of a file in bytes.
+     *
+     * @param path The path to the file.
+     * @return The file size in bytes.
+     * @throws IOException If the file does not exist or an I/O error occurs.
+     */
+    @LLMDoc("Returns the size of a file in bytes")
+    public long getSize(String path) throws IOException {
+        return Files.size(sandbox.resolve(path));
+    }
 }
