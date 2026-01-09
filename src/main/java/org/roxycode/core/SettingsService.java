@@ -31,14 +31,14 @@ public class SettingsService {
     private static final String KEY_MAX_TURNS_PER_MINUTE = "maxTurnsPerMinute";
 
     // Sliding Window Keys
-    
+    private static final String KEY_HISTORY_WINDOW_SIZE = "historyWindowSize";
     private static final String KEY_LOG_LINES_COUNT = "logLinesCount";
 
     // Defaults
     private static final int DEFAULT_MAX_TURNS = 15;
     private static final String DEFAULT_THEME = "Light";
     private static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
-    
+    private static final int DEFAULT_HISTORY_WINDOW_SIZE = 30; // Number of messages to keep
     private static final int DEFAULT_LOG_LINES_COUNT = 100;
     private static final boolean DEFAULT_CACHE_ENABLED = true;
     private static final int DEFAULT_CACHE_TTL = 30;
@@ -129,7 +129,15 @@ public class SettingsService {
         preferences.put(KEY_GEMINI_MODEL, model);
     }
 
-public int getLogLinesCount() {
+    public int getHistoryWindowSize() {
+        return preferences.getInt(KEY_HISTORY_WINDOW_SIZE, DEFAULT_HISTORY_WINDOW_SIZE);
+    }
+
+    public void setHistoryWindowSize(int size) {
+        preferences.putInt(KEY_HISTORY_WINDOW_SIZE, size);
+    }
+
+    public int getLogLinesCount() {
         return preferences.getInt(KEY_LOG_LINES_COUNT, DEFAULT_LOG_LINES_COUNT);
     }
 

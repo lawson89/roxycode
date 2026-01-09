@@ -53,6 +53,9 @@ public class ChatView extends JPanel {
     private JComponent viewChat;
 
     @Outlet
+    private JSplitPane splitPane;
+
+    @Outlet
     private JPanel inputContainer;
 
     @Outlet

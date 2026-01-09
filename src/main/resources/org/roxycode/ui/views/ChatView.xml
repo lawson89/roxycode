@@ -2,23 +2,29 @@
 <!DOCTYPE column-panel SYSTEM "sierra.dtd">
 
 <column-panel name="viewChat" weight="1">
-    <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
-    </scroll-pane>
-    <row-panel spacing="8" padding="4" opaque="true">
-        <label text="Attachments:"/>
-        <scroll-pane weight="1" verticalScrollBarPolicy="never">
-            <row-panel name="attachmentsContainer" spacing="8"/>
+    <split-pane name="splitPane" weight="1" resizeWeight="0.7" orientation="vertical">
+        <scroll-pane weight="1" horizontalScrollBarPolicy="never" name="chatScrollPane">
         </scroll-pane>
-        <button name="clearAttachmentsButton" text="Clear"/>
-    </row-panel>
-    <row-panel spacing="8" padding="12" opaque="true">
-        <button name="attachButton" text="Attach"/>
-        <column-panel weight="1" name="inputContainer"/>
-        <column-panel spacing="4">
-            <button name="sendButton" text="Send"/>
-            <button name="stopButton" text="Stop" enabled="false"/>
+        
+        <column-panel weight="1">
+            <row-panel spacing="8" padding="4" opaque="true">
+                <label text="Attachments:"/>
+                <scroll-pane weight="1" verticalScrollBarPolicy="never">
+                    <row-panel name="attachmentsContainer" spacing="8"/>
+                </scroll-pane>
+                <button name="clearAttachmentsButton" text="Clear"/>
+            </row-panel>
+            <row-panel spacing="8" padding="12" opaque="true" weight="1">
+                <button name="attachButton" text="Attach"/>
+                <column-panel weight="1" name="inputContainer"/>
+                <column-panel spacing="4">
+                    <button name="sendButton" text="Send"/>
+                    <button name="stopButton" text="Stop" enabled="false"/>
+                </column-panel>
+            </row-panel>
         </column-panel>
-    </row-panel>
+    </split-pane>
+
     <row-panel spacing="12" padding="2,12,4,12" opaque="true">
         <label name="cacheStatusLabel" text="Cache: Unknown" style="font: -2; foreground: #888888"/>
         <label name="cacheIdLabel" text="" style="font: -2; foreground: #888888"/>
