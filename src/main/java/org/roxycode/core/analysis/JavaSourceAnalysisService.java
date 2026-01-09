@@ -86,6 +86,13 @@ public class JavaSourceAnalysisService {
             for (ParseResult<CompilationUnit> result : results) {
                 if (result.isSuccessful() && result.getResult().isPresent()) {
                     CompilationUnit cu = result.getResult().get();
+                    cu.getStorage().ifPresent(storage -> {
+                        try {
+                            writer.write("// File: " + sourcePath.relativize(storage.getPath()) + "\n");
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
                     try {
                         // Visit the AST and write to the provided writer
                         cu.accept(visitor, writer);

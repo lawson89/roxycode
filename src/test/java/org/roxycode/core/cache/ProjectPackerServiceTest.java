@@ -8,6 +8,7 @@ import org.roxycode.core.Sandbox;
 import org.roxycode.core.analysis.JavaSourceAnalysisService;
 import org.roxycode.core.analysis.JavaSourceGraphService;
 import org.roxycode.core.tools.service.BuildToolService;
+import org.roxycode.core.tools.service.FileSystemService;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,7 +23,7 @@ class ProjectPackerServiceTest {
 
     @Test
     void testEstimateTokenCount(@TempDir Path tempDir) throws IOException {
-        ProjectPackerService service = new ProjectPackerService(mock(RoxyProjectService.class), mock(Sandbox.class), mock(BuildToolService.class), mock(JavaSourceAnalysisService.class), null, null);
+        ProjectPackerService service = new ProjectPackerService(mock(RoxyProjectService.class), mock(Sandbox.class), mock(BuildToolService.class), mock(JavaSourceAnalysisService.class), null, null, null);
 
         Path testFile = tempDir.resolve("test.txt");
         Files.writeString(testFile, "12345678"); // 8 bytes
@@ -46,6 +47,7 @@ class ProjectPackerServiceTest {
 
         Sandbox sandbox = mock(Sandbox.class);
         when(sandbox.getRoot()).thenReturn(root);
+        when(sandbox.resolve(".")).thenReturn(root);
 
         BuildToolService buildToolService = mock(BuildToolService.class);
         when(buildToolService.getProjectSummary()).thenReturn("Summary");
@@ -57,6 +59,7 @@ class ProjectPackerServiceTest {
                 buildToolService,
                 new JavaSourceAnalysisService(),
                 new JavaSourceGraphService(),
+                new FileSystemService(sandbox),
                 new TomlMapper()
         );
 
@@ -65,5 +68,6 @@ class ProjectPackerServiceTest {
         assertTrue(result.contains("java_skeleton"));
         assertTrue(result.contains("class Test"));
         assertTrue(result.contains("void hello()"));
+        assertTrue(result.contains("project_tree"));
     }
 }

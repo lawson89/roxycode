@@ -10,6 +10,7 @@ import org.roxycode.core.analysis.JavaSourceAnalysisService;
 import org.roxycode.core.analysis.JavaSourceGraphService;
 import org.roxycode.core.beans.NamedContent;
 import org.roxycode.core.tools.service.BuildToolService;
+import org.roxycode.core.tools.service.FileSystemService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,18 +37,21 @@ public class ProjectPackerService {
     private final BuildToolService buildToolService;
     private final JavaSourceAnalysisService javaSourceAnalysisService;
     private final JavaSourceGraphService javaSourceGraphService;
+    private final FileSystemService fileSystemService;
     private final ObjectMapper objectMapper;
 
     @Inject
     public ProjectPackerService(RoxyProjectService roxyProjectService, Sandbox sandbox,
                                 BuildToolService buildToolService, JavaSourceAnalysisService javaSourceAnalysisService,
                                 JavaSourceGraphService javaSourceGraphService,
+                                FileSystemService fileSystemService,
                                 @Named("toml") ObjectMapper objectMapper) {
         this.roxyProjectService = roxyProjectService;
         this.sandbox = sandbox;
         this.buildToolService = buildToolService;
         this.javaSourceAnalysisService = javaSourceAnalysisService;
         this.javaSourceGraphService = javaSourceGraphService;
+        this.fileSystemService = fileSystemService;
         this.objectMapper = objectMapper;
     }
 
@@ -118,6 +122,11 @@ public class ProjectPackerService {
         writer.write("name = \"java_graph\"\n");
         writer.write("content = '''\n");
         writer.write(javaSourceGraphService.generateMermaidGraph(rootPath));
+        writer.write("\n'''\n\n");
+        writer.write("[[content]]\n");
+        writer.write("name = \"project_tree\"\n");
+        writer.write("content = '''\n");
+        writer.write(fileSystemService.tree("."));
         writer.write("\n'''\n\n");
 
 
