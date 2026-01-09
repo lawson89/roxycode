@@ -4,9 +4,8 @@ import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
-import org.roxycode.core.cache.GeminiCacheService;
-import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.core.beans.ProjectCacheMeta;
+import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
@@ -38,7 +37,6 @@ public class GenAIService {
 
     private final HistoryService historyService;
 
-    private final GeminiCacheService geminiCacheService;
     private final ProjectCacheMetaService projectCacheMetaService;
     private final RoxyProjectService roxyProjectService;
     private final GeminiClientFactory geminiClientFactory;
@@ -49,14 +47,13 @@ public class GenAIService {
 
     public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService,
                         UsageService usageService, HistoryService historyService,
-                        GeminiCacheService geminiCacheService, RoxyProjectService roxyProjectService,
+                        RoxyProjectService roxyProjectService,
                         ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
         this.usageService = usageService;
         this.historyService = historyService;
-        this.geminiCacheService = geminiCacheService;
         this.roxyProjectService = roxyProjectService;
         this.projectCacheMetaService = projectCacheMetaService;
         this.geminiClientFactory = geminiClientFactory;
@@ -122,12 +119,6 @@ public class GenAIService {
         return getClient().models.generateContent(model, history, config);
     }
 
-    public String buildSystemContext(String projectRoot, List<File> attachedFiles) {
-        Path projectPath = Paths.get(projectRoot);
-        java.util.Optional<ProjectCacheMeta> cacheMeta = projectCacheMetaService.getProjectCacheMeta();
-        return buildSystemContext(projectRoot, attachedFiles, cacheMeta);
-    }
-
     public String buildSystemContext(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
         StringBuilder contextBuilder = new StringBuilder();
         String staticPrompt = roxyProjectService.getStaticSystemPrompt();
@@ -161,20 +152,12 @@ public class GenAIService {
         notifyBusy(true);
         try {
             this.stopRequested = false;
-            Path projectPath = Paths.get(projectRoot);
             Optional<ProjectCacheMeta> cacheMeta = projectCacheMetaService.getProjectCacheMeta();
             String systemContext = buildSystemContext(projectRoot, attachedFiles, cacheMeta);
             LOG.info("systemContext: {}", systemContext);
-            String taskMessage = "Task: " + prompt;
-            LOG.info("taskMessage: {}", taskMessage);
-            // --- History Management (Index 0 is always System) ---
-            if (history.isEmpty()) {
-                history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemContext + "\n" + taskMessage).build())).build());
-            } else {
-                // Update System Prompt (Index 0) with latest known state
-                history.set(0, Content.builder().role("user").parts(List.of(Part.builder().text(systemContext).build())).build());
-                history.add(Content.builder().role("user").parts(List.of(Part.builder().text(taskMessage).build())).build());
-            }
+
+            initializeHistory(prompt, systemContext);
+
             int turns = 0;
             int maxTurns = settingsService.getMaxTurns();
             while (turns++ < maxTurns) {
@@ -186,87 +169,29 @@ public class GenAIService {
 
                 historyService.applySlidingWindow(history);
 
-                GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
+                GenerateContentConfig config = prepareConfig(cacheMeta);
 
-                // --- FIX: Handle Tools vs Cache Conflict ---
-                if (cacheMeta.isPresent()) {
-                    LOG.info("Using cache!");
-                    // API Rule: Cannot pass tools if cachedContent is used.
-                    // (Tools must be baked into the cache creation)
-                    configBuilder.cachedContent(cacheMeta.get().geminiCacheId());
-                } else {
-                    LOG.info("NOT using cache");
-                    List<Tool> tools = toolRegistry.getAllGeminiTools();
-                    // Only pass tools dynamically if NOT using a cache
-                    if (!tools.isEmpty()) {
-                        configBuilder.tools(tools);
-                    }
+                GenerateContentResponse response = doGenerateContent(settingsService.getGeminiModel(), history, config);
+                Candidate firstCandidate;
+                try {
+                    firstCandidate = processResponse(response);
+                } catch (IllegalStateException e) {
+                    return e.getMessage();
                 }
-                // -------------------------------------------
 
-                GenerateContentResponse response = doGenerateContent(settingsService.getGeminiModel(), history, configBuilder.build());
-                if (response.usageMetadata().isPresent()) {
-                    GenerateContentResponseUsageMetadata usage = response.usageMetadata().get();
-                    inTokens = usage.promptTokenCount().orElse(0);
-                    outTokens = usage.candidatesTokenCount().orElse(0);
-                    usageService.recordUsage(inTokens, outTokens);
-                }
-                Optional<List<Candidate>> candidatesOpt = response.candidates();
-                if (candidatesOpt.isEmpty() || candidatesOpt.get().isEmpty()) {
-                    return "Error: No response candidates.";
-                }
-                Candidate firstCandidate = candidatesOpt.get().getFirst();
                 Content modelMessage = firstCandidate.content().orElse(Content.builder().build());
                 history.add(modelMessage);
+
                 // Check for Tool Calls
-                List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
-                List<Part> functionResponseParts = new ArrayList<>();
                 List<Content> subsequentUserMessages = new ArrayList<>();
-                boolean hasFunctionCall = false;
-                for (Part part : parts) {
-                    if (stopRequested)
-                        return "Chat stopped by user.";
-                    Optional<FunctionCall> callOpt = part.functionCall();
-                    if (callOpt.isPresent()) {
-                        hasFunctionCall = true;
-                        FunctionCall call = callOpt.get();
-                        String fnName = call.name().orElse("unknown");
-                        Map<String, Object> fixedArgs = new HashMap<>(call.args().orElse(Collections.emptyMap()));
-                        // Resolve relative paths in arguments
-                        if (fixedArgs.containsKey("path")) {
-                            String originalPath = (String) fixedArgs.get("path");
-                            if (!Paths.get(originalPath).isAbsolute()) {
-                                Path resolvedPath = Paths.get(projectRoot, originalPath);
-                                fixedArgs.put("path", resolvedPath.toString());
-                            }
-                        }
-                        if (onStatusUpdate != null) {
-                            String args = StringUtils.truncate(fixedArgs + "", 200);
-                            onStatusUpdate.accept("Executing Tool: " + fnName + " | " + args);
-                        }
-                        LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
-                        String toolOutput;
-                        try {
-                            ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow(() -> new IllegalStateException("Tool not found: " + fnName));
-                            toolOutput = executionService.execute(toolDef, fixedArgs).get();
-                        } catch (Exception e) {
-                            toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
-                        }
-                        // Image Handling
-                        if (toolOutput.endsWith(".png") && Files.exists(Paths.get(toolOutput))) {
-                            try {
-                                byte[] imageBytes = Files.readAllBytes(Paths.get(toolOutput));
-                                Blob imageBlob = Blob.builder().mimeType("image/png").data(imageBytes).build();
-                                subsequentUserMessages.add(Content.builder().role("user").parts(List.of(Part.builder().inlineData(imageBlob).build(), Part.builder().text("Screenshot captured.").build())).build());
-                                toolOutput = "Screenshot captured.";
-                            } catch (Exception e) {
-                                LOG.error("Image load fail", e);
-                            }
-                        }
-                        functionResponseParts.add(Part.builder().functionResponse(FunctionResponse.builder().name(fnName).response(Map.of("result", toolOutput)).build()).build());
-                    }
-                }
+                List<Part> functionResponseParts = new ArrayList<>();
+
+                boolean hasFunctionCall = executeToolCalls(modelMessage, projectRoot, onStatusUpdate, subsequentUserMessages, functionResponseParts);
+
                 if (hasFunctionCall) {
+                    if (stopRequested) {
+                        return "Chat stopped by user.";
+                    }
                     if (!functionResponseParts.isEmpty()) {
                         history.add(Content.builder().role("function").parts(functionResponseParts).build());
                     }
@@ -274,6 +199,8 @@ public class GenAIService {
                     // Loop back for model to process tool output
                     continue;
                 }
+
+                List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
                 String finalResponse = parts.stream().map(p -> p.text().orElse("")).collect(Collectors.joining(""));
                 if (finalResponse.isBlank()) {
                     return "[Model returned an empty response. Finish reason: " + firstCandidate.finishReason().orElse(null) + "]";
@@ -285,5 +212,118 @@ public class GenAIService {
             isChatting.set(false);
             notifyBusy(false);
         }
+    }
+
+    private void initializeHistory(String prompt, String systemContext) {
+        String taskMessage = "Task: " + prompt;
+        LOG.info("taskMessage: {}", taskMessage);
+        // --- History Management (Index 0 is always System) ---
+        if (history.isEmpty()) {
+            history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemContext + "\n" + taskMessage).build())).build());
+        } else {
+            // Update System Prompt (Index 0) with latest known state
+            history.set(0, Content.builder().role("user").parts(List.of(Part.builder().text(systemContext).build())).build());
+            history.add(Content.builder().role("user").parts(List.of(Part.builder().text(taskMessage).build())).build());
+        }
+    }
+
+    private GenerateContentConfig prepareConfig(Optional<ProjectCacheMeta> cacheMeta) {
+        GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
+
+        if (cacheMeta.isPresent()) {
+            LOG.info("Using cache!");
+            // API Rule: Cannot pass tools if cachedContent is used.
+            // (Tools must be baked into the cache creation)
+            configBuilder.cachedContent(cacheMeta.get().geminiCacheId());
+        } else {
+            LOG.info("NOT using cache");
+            List<Tool> tools = toolRegistry.getAllGeminiTools();
+            // Only pass tools dynamically if NOT using a cache
+            if (!tools.isEmpty()) {
+                configBuilder.tools(tools);
+            }
+        }
+        return configBuilder.build();
+    }
+
+    private Candidate processResponse(GenerateContentResponse response) {
+        handleUsageUpdate(response);
+
+        Optional<List<Candidate>> candidatesOpt = response.candidates();
+        if (candidatesOpt.isEmpty() || candidatesOpt.get().isEmpty()) {
+            throw new IllegalStateException("Error: No response candidates.");
+        }
+        return candidatesOpt.get().getFirst();
+    }
+
+    private boolean executeToolCalls(Content modelMessage, String projectRoot, Consumer<String> onStatusUpdate,
+                                     List<Content> subsequentUserMessages, List<Part> functionResponseParts) {
+        List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
+        boolean hasFunctionCall = false;
+
+        // handle 0-N function calls
+        for (Part part : parts) {
+            if (stopRequested) {
+                LOG.info("Stopped by user.");
+                return false;
+            }
+            Optional<FunctionCall> callOpt = part.functionCall();
+            if (callOpt.isPresent()) {
+                hasFunctionCall = true;
+                FunctionCall call = callOpt.get();
+                String fnName = call.name().orElse("unknown");
+                Map<String, Object> fixedArgs = new HashMap<>(call.args().orElse(Collections.emptyMap()));
+                Part responsePart = handleFunctionCall(projectRoot, fnName, fixedArgs, onStatusUpdate, subsequentUserMessages);
+                functionResponseParts.add(responsePart);
+            }
+        }
+        return hasFunctionCall;
+    }
+
+    protected void handleUsageUpdate(GenerateContentResponse response) {
+        if (response.usageMetadata().isPresent()) {
+            GenerateContentResponseUsageMetadata usage = response.usageMetadata().get();
+            inTokens = usage.promptTokenCount().orElse(0);
+            outTokens = usage.candidatesTokenCount().orElse(0);
+            usageService.recordUsage(inTokens, outTokens);
+        }
+    }
+
+    protected Part handleFunctionCall(String projectRoot, String fnName, Map<String, Object> fixedArgs, Consumer<String> onStatusUpdate, List<Content> subsequentUserMessages) {
+        // Resolve relative paths in arguments
+        if (fixedArgs.containsKey("path")) {
+            String originalPath = (String) fixedArgs.get("path");
+            if (!Paths.get(originalPath).isAbsolute()) {
+                Path resolvedPath = Paths.get(projectRoot, originalPath);
+                fixedArgs.put("path", resolvedPath.toString());
+            }
+        }
+        if (onStatusUpdate != null) {
+            String args = StringUtils.truncate(fixedArgs + "", 200);
+            onStatusUpdate.accept("Executing Tool: " + fnName + " | " + args);
+        }
+        LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
+        String toolOutput;
+        try {
+            ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow(() -> new IllegalStateException("Tool not found: " + fnName));
+            toolOutput = executionService.execute(toolDef, fixedArgs).get();
+            LOG.info("Tool results: {} {}", fnName, toolOutput);
+        } catch (Exception e) {
+            toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
+        }
+        // Image Handling
+        //@todo sandbox this
+        Path path = Paths.get(toolOutput);
+        if (toolOutput.endsWith(".png") && Files.exists(path)) {
+            try {
+                byte[] imageBytes = Files.readAllBytes(path);
+                Blob imageBlob = Blob.builder().mimeType("image/png").data(imageBytes).build();
+                subsequentUserMessages.add(Content.builder().role("user").parts(List.of(Part.builder().inlineData(imageBlob).build(), Part.builder().text("Screenshot captured.").build())).build());
+                toolOutput = "Screenshot captured.";
+            } catch (Exception e) {
+                LOG.error("Image load fail", e);
+            }
+        }
+        return Part.builder().functionResponse(FunctionResponse.builder().name(fnName).response(Map.of("result", toolOutput)).build()).build();
     }
 }
