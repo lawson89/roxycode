@@ -14,10 +14,12 @@
         <spacer weight="1"/>
         
         <column-panel spacing="2">
-            <label name="roxyModeLabel" text="" style="font: bold"/>
+            <row-panel spacing="4">
+                <activity-indicator name="activityIndicator" indicatorSize="16" visible="false"/>
+                <label name="roxyModeLabel" text="" style="font: bold"/>
+            </row-panel>
             <label name="currentPlanLabel" text="" style="font-size: 10px"/>
         </column-panel>
-        <activity-indicator name="activityIndicator" indicatorSize="20" visible="false"/>
         <spacer size="16"/>
     </row-panel>
 

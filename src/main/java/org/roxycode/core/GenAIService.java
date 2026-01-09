@@ -3,6 +3,7 @@ package org.roxycode.core;
 import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Singleton;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.cache.ProjectCacheMetaService;
@@ -299,8 +300,10 @@ public class GenAIService {
             }
         }
         if (onStatusUpdate != null) {
-            String args = StringUtils.truncate(fixedArgs + "", 200);
-            onStatusUpdate.accept("Executing Tool: " + fnName + " | " + args);
+            String script = MapUtils.getString(fixedArgs, "script", "missing");
+            script = StringUtils.truncate(script, 200);
+            // since we have moved to a script based model we just display the script
+            onStatusUpdate.accept(script);
         }
         LOG.info("AI calling tool: {} with args {}", fnName, fixedArgs);
         String toolOutput;

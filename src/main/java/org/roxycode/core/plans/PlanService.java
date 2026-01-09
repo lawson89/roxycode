@@ -1,6 +1,5 @@
 package org.roxycode.core.plans;
 
-import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.tools.LLMDoc;
@@ -23,25 +22,25 @@ public class PlanService {
     private static final Logger LOG = LoggerFactory.getLogger(PlanService.class);
     private static final String PLANS_DIR = "plans";
 
-    private final Provider<RoxyProjectService> projectServiceProvider;
+    private final RoxyProjectService roxyProjectService;
 
-    public PlanService(Provider<RoxyProjectService> projectServiceProvider) {
-        this.projectServiceProvider = projectServiceProvider;
+    public PlanService(RoxyProjectService roxyProjectService) {
+        this.roxyProjectService = roxyProjectService;
     }
 
 
     @LLMDoc("Returns the name of the plan currently being worked on")
     public String getCurrentPlan() {
-        return projectServiceProvider.get().getCurrentPlan();
+        return roxyProjectService.getCurrentPlan();
     }
 
     @LLMDoc("Sets the name of the plan currently being worked on")
     public void setCurrentPlan(String currentPlan) {
-        projectServiceProvider.get().setCurrentPlan(currentPlan);
+        roxyProjectService.setCurrentPlan(currentPlan);
     }
 
     private void ensureDirectories() {
-        Path rootPlans = projectServiceProvider.get().getRoxyWorkingDir().resolve(PLANS_DIR);
+        Path rootPlans = roxyProjectService.getRoxyWorkingDir().resolve(PLANS_DIR);
         try {
             if (!Files.exists(rootPlans)) {
                 Files.createDirectories(rootPlans);
@@ -97,13 +96,27 @@ public class PlanService {
         savePlan(plan);
     }
 
-    @LLMDoc("Moves a plan to a new status (AVAILABLE, WORKING, COMPLETE)")
-    public void movePlan(String name, PlanStatus newStatus) throws IOException {
+    protected void movePlan(String name, PlanStatus newStatus) throws IOException {
         Plan plan = loadPlan(name);
         Path oldPath = getPlanPath(plan);
         plan.setStatus(newStatus);
         Path newPath = getPlanPath(plan);
         Files.move(oldPath, newPath, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    @LLMDoc("Moves a plan to in_progress")
+    public void movePlanToInProgress(String name) throws IOException {
+        movePlan(name, PlanStatus.IN_PROGRESS);
+    }
+
+    @LLMDoc("Moves a plan to complete")
+    public void movePlanToComplete(String name) throws IOException {
+        movePlan(name, PlanStatus.COMPLETE);
+    }
+
+    @LLMDoc("Moves a plan to available")
+    public void movePlanToAvailable(String name) throws IOException {
+        movePlan(name, PlanStatus.AVAILABLE);
     }
 
     @LLMDoc("Deletes a plan by name")
@@ -112,9 +125,23 @@ public class PlanService {
         Files.deleteIfExists(getPlanPath(plan));
     }
 
-    @LLMDoc("Lists plans with the specified status")
-    public List<String> listPlans(PlanStatus status) throws IOException {
-        Path statusDir = projectServiceProvider.get().getRoxyWorkingDir().resolve(PLANS_DIR).resolve(status.getDirName());
+    @LLMDoc("Lists available plans")
+    public List<String> listAvailablePlans() throws IOException {
+        return listPlans(PlanStatus.AVAILABLE);
+    }
+
+    @LLMDoc("Lists in_progress plans")
+    public List<String> listInProgressPlans() throws IOException {
+        return listPlans(PlanStatus.IN_PROGRESS);
+    }
+
+    @LLMDoc("Lists complete plans")
+    public List<String> listCompletePlans() throws IOException {
+        return listPlans(PlanStatus.COMPLETE);
+    }
+
+    protected List<String> listPlans(PlanStatus planStatus) throws IOException {
+        Path statusDir = roxyProjectService.getRoxyWorkingDir().resolve(PLANS_DIR).resolve(planStatus.getDirName());
         try (Stream<Path> stream = Files.list(statusDir)) {
             ensureDirectories();
             return stream.filter(Files::isRegularFile)
@@ -125,7 +152,7 @@ public class PlanService {
 
     public Plan loadPlan(String name) throws IOException {
         for (PlanStatus status : PlanStatus.values()) {
-            Path path = projectServiceProvider.get().getRoxyWorkingDir().resolve(PLANS_DIR).resolve(status.getDirName()).resolve(name + ".md");
+            Path path = roxyProjectService.getRoxyWorkingDir().resolve(PLANS_DIR).resolve(status.getDirName()).resolve(name + ".md");
             if (Files.exists(path)) {
                 Plan plan = parseMarkdown(Files.readString(path));
                 plan.setName(name);
@@ -143,7 +170,7 @@ public class PlanService {
     }
 
     private Path getPlanPath(Plan plan) {
-        return projectServiceProvider.get().getRoxyWorkingDir().resolve(PLANS_DIR).resolve(plan.getStatus().getDirName()).resolve(plan.getName() + ".md");
+        return roxyProjectService.getRoxyWorkingDir().resolve(PLANS_DIR).resolve(plan.getStatus().getDirName()).resolve(plan.getName() + ".md");
     }
 
     private String generateMarkdown(Plan plan) {

@@ -7,7 +7,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.core.RoxyProjectService;
-import org.roxycode.core.tools.service.FileSystemService;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -27,13 +26,10 @@ public class PlanServiceTest {
     @Inject
     RoxyProjectService projectService;
 
-    @Inject
-    FileSystemService fileSystemService;
-
     private Path originalRoot;
 
     @BeforeEach
-    void setUp() throws IOException {
+    void setUp() {
         originalRoot = projectService.getProjectRoot();
         projectService.changeProjectRoot(tempDir);
     }
@@ -84,11 +80,11 @@ public class PlanServiceTest {
         String name = "move_test";
         planService.createPlan(name, "Goal", List.of(), List.of());
 
-        planService.movePlan(name, PlanStatus.WORKING);
+        planService.movePlan(name, PlanStatus.IN_PROGRESS);
         Plan loaded = planService.loadPlan(name);
-        assertEquals(PlanStatus.WORKING, loaded.getStatus());
+        assertEquals(PlanStatus.IN_PROGRESS, loaded.getStatus());
 
-        List<String> workingPlans = planService.listPlans(PlanStatus.WORKING);
+        List<String> workingPlans = planService.listPlans(PlanStatus.IN_PROGRESS);
         assertTrue(workingPlans.contains(name));
 
         List<String> availablePlans = planService.listPlans(PlanStatus.AVAILABLE);

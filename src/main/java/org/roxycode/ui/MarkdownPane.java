@@ -16,6 +16,7 @@ import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignW;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.roxycode.ui.syntaxhighlight.JsToHtmlConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.swing.*;
@@ -113,7 +114,8 @@ public class MarkdownPane extends JTextPane {
         if (!imgTag.isEmpty()) {
             imgTag += "&nbsp;";
         }
-        String html = stripParagraph(renderer.render(parser.parse(markdown)));
+//        String html = stripParagraph(renderer.render(parser.parse(markdown)));
+        String html = JsToHtmlConverter.convertToHtml(markdown, com.formdev.flatlaf.FlatLaf.isLafDark());
         String combinedHtml = "<div style='background-color: " + (FlatLaf.isLafDark() ? "#2b2d30" : "#f2f2f2") + "; padding: 4px; border-radius: 4px; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();

@@ -2,7 +2,7 @@ package org.roxycode.core.plans;
 
 public enum PlanStatus {
     AVAILABLE("available"),
-    WORKING("working"),
+    IN_PROGRESS("in_progress"),
     COMPLETE("complete");
 
     private final String dirName;
