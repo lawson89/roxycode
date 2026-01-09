@@ -161,7 +161,10 @@ public class GenAIService {
 
             int turns = 0;
             int maxTurns = settingsService.getMaxTurns();
+            int maxTurnsPerMinute = settingsService.getMaxTurnsPerMinute();
+            long minTurnDurationMillis = 60000L / Math.max(1, maxTurnsPerMinute);
             while (turns++ < maxTurns) {
+                long turnStart = System.currentTimeMillis();
                 if (stopRequested)
                     return "Chat stopped by user.";
                 if (onStatusUpdate != null) {
@@ -198,11 +201,17 @@ public class GenAIService {
                     }
                     history.addAll(subsequentUserMessages);
                     // Loop back for model to process tool output
+                    Optional<String> error = waitForRateLimit(turnStart, minTurnDurationMillis);
+                    if (error.isPresent()) return error.get();
                     continue;
                 }
 
                 List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
                 String finalResponse = parts.stream().map(p -> p.text().orElse("")).collect(Collectors.joining(""));
+                
+                // Rate Limit Delay
+                Optional<String> error = waitForRateLimit(turnStart, minTurnDurationMillis);
+                if (error.isPresent()) return error.get();
                 if (finalResponse.isBlank()) {
                     return "[Model returned an empty response. Finish reason: " + firstCandidate.finishReason().orElse(null) + "]";
                 }
@@ -215,6 +224,19 @@ public class GenAIService {
         }
     }
 
+
+    private Optional<String> waitForRateLimit(long turnStart, long minTurnDurationMillis) {
+        long elapsed = System.currentTimeMillis() - turnStart;
+        if (elapsed < minTurnDurationMillis) {
+            try {
+                Thread.sleep(minTurnDurationMillis - elapsed);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return Optional.of("Chat interrupted.");
+            }
+        }
+        return Optional.empty();
+    }
     private void initializeHistory(String prompt, String systemContext) {
         String taskMessage = "Task: " + prompt;
         LOG.info("taskMessage: {}", taskMessage);
