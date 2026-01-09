@@ -2,6 +2,7 @@ package org.roxycode.ui.syntaxhighlight;
 
 import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenMaker;
+import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.fife.ui.rsyntaxtextarea.modes.JavaScriptTokenMaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,7 +83,7 @@ public class JsToHtmlConverter {
         if (isDark) {
             return switch (type) {
                 case Token.RESERVED_WORD -> "color: #cc7832; font-weight: bold;"; // Orange/Brown
-                case Token.LITERAL_STRING_DOUBLE_QUOTE, Token.LITERAL_CHAR -> "color: #6a8759;"; // Green
+                case Token.LITERAL_STRING_DOUBLE_QUOTE, Token.LITERAL_CHAR, Token.LITERAL_BACKQUOTE -> "color: #6a8759;"; // Green
                 case Token.COMMENT_EOL, Token.COMMENT_MULTILINE, Token.COMMENT_DOCUMENTATION -> "color: #808080; font-style: italic;"; // Grey
                 case Token.FUNCTION -> "color: #ffc66d; font-weight: bold;"; // Yellow
                 case Token.LITERAL_NUMBER_DECIMAL_INT, Token.LITERAL_NUMBER_FLOAT -> "color: #6897bb;"; // Blue
@@ -93,7 +94,7 @@ public class JsToHtmlConverter {
         } else {
             return switch (type) {
                 case Token.RESERVED_WORD -> "color: #000080; font-weight: bold;"; // Dark Blue
-                case Token.LITERAL_STRING_DOUBLE_QUOTE, Token.LITERAL_CHAR -> "color: #008000;"; // Green
+                case Token.LITERAL_STRING_DOUBLE_QUOTE, Token.LITERAL_CHAR, Token.LITERAL_BACKQUOTE -> "color: #008000;"; // Green
                 case Token.COMMENT_EOL, Token.COMMENT_MULTILINE, Token.COMMENT_DOCUMENTATION -> "color: #808080; font-style: italic;"; // Grey
                 case Token.FUNCTION -> "color: #000000; font-weight: bold;"; // Black Bold
                 case Token.LITERAL_NUMBER_DECIMAL_INT, Token.LITERAL_NUMBER_FLOAT -> "color: #0000FF;"; // Blue

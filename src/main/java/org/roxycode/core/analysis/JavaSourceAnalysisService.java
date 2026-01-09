@@ -22,6 +22,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Singleton
 public class JavaSourceAnalysisService {
@@ -73,7 +74,7 @@ public class JavaSourceAnalysisService {
     protected void generateSkeleton(Path sourcePath, BufferedWriter writer) {
         // Configure Parser
         ParserConfiguration config = new ParserConfiguration();
-        config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
+        config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
 
         SourceRoot sourceRoot = new SourceRoot(sourcePath, config);
 
@@ -132,7 +133,7 @@ public class JavaSourceAnalysisService {
             if (n.isPrivate()) return;
 
             write(w, getJavadoc(n));
-            write(w, "  " + n + "\n");
+            write(w, "  " + n.getVariable(0).getTypeAsString() + " " + n.getVariable(0).getNameAsString() + ";\n");
         }
 
         @Override
@@ -151,7 +152,13 @@ public class JavaSourceAnalysisService {
         private String getJavadoc(BodyDeclaration<?> n) {
             return n.getComment()
                     .filter(Comment::isJavadocComment)
-                    .map(comment -> "  " + comment + "\n")
+                    .map(comment -> {
+                        String javadoc = comment.toString();
+                        return javadoc.lines()
+                                .map(line -> line.trim())
+                                .map(line -> "  " + line)
+                                .collect(Collectors.joining("\n")) + "\n";
+                    })
                     .orElse("");
         }
 

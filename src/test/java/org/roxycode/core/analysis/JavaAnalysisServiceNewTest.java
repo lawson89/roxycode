@@ -1,4 +1,3 @@
-
 package org.roxycode.core.analysis;
 
 import org.junit.jupiter.api.Test;
@@ -30,6 +29,7 @@ class JavaAnalysisServiceNewTest {
         assertTrue(content.contains("class Hello"));
         assertTrue(content.contains("sayHi()"));
     }
+
     @Test
     void testGenerateSkeletonToString(@TempDir Path tempDir) throws IOException {
         JavaSourceAnalysisService service = new JavaSourceAnalysisService();
@@ -44,5 +44,36 @@ class JavaAnalysisServiceNewTest {
         assertNotNull(content);
         assertTrue(content.contains("class Hello"));
         assertTrue(content.contains("sayHi()"));
+    }
+
+    @Test
+    void testJavadocInSkeleton(@TempDir Path tempDir) throws IOException {
+        JavaSourceAnalysisService service = new JavaSourceAnalysisService();
+        Path sourceDir = tempDir.resolve("src");
+        Files.createDirectories(sourceDir);
+
+        Path javaFile = sourceDir.resolve("Test.java");
+        Files.writeString(javaFile, "package test;\n" +
+            "/**\n" +
+            " * Class doc.\n" +
+            " * Line 2.\n" +
+            " */\n" +
+            "public class Test {\n" +
+            "    /** Field doc. */\n" +
+            "    public String name;\n" +
+            "\n" +
+            "    /**\n" +
+            "     * Method doc.\n" +
+            "     */\n" +
+            "    public void run() {}\n" +
+            "}");
+
+        String content = service.generateSkeletonToString(sourceDir);
+
+        assertTrue(content.contains("/**"));
+        assertTrue(content.contains("* Class doc."));
+        assertTrue(content.contains("* Line 2."));
+        assertTrue(content.contains("*/"));
+        assertTrue(content.contains("String name;"));
     }
 }

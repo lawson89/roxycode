@@ -73,24 +73,32 @@ public class JavaService {
                 .collect(Collectors.toList());
 
         List<FieldSummary> fields = n.getFields().stream()
-                .flatMap(f -> f.getVariables().stream())
-                .map(v -> new FieldSummary(
+                .flatMap(f -> f.getVariables().stream().map(v -> new FieldSummary(
                         v.getNameAsString(),
                         v.getTypeAsString(),
+                        f.getComment().map(Node::toString).orElse(""),
                         v.getBegin().map(p -> p.line).orElse(-1),
                         v.getEnd().map(p -> p.line).orElse(-1)
-                ))
+                )))
                 .collect(Collectors.toList());
 
         List<String> dependencies = extractDependencies(n);
 
-        return new ClassSummary(n.getNameAsString(), methods, fields, n.isInterface(), dependencies);
+        return new ClassSummary(
+                n.getNameAsString(),
+                n.getComment().map(Node::toString).orElse(""),
+                methods,
+                fields,
+                n.isInterface(),
+                dependencies
+        );
     }
 
     private MethodSummary summarizeMethod(MethodDeclaration m) {
         return new MethodSummary(
                 m.getNameAsString(),
                 m.getDeclarationAsString(),
+                m.getComment().map(Node::toString).orElse(""),
                 m.getBegin().map(p -> p.line).orElse(-1),
                 m.getEnd().map(p -> p.line).orElse(-1)
         );
@@ -251,15 +259,83 @@ public class JavaService {
         }
     }
 
+    /**
+     * Retrieves the javadoc of a specific method in a class.
+     *
+     * @param pathStr    The path to the Java file.
+     * @param className  The name of the class.
+     * @param methodName The name of the method.
+     * @return An Optional containing the method's javadoc, or empty if not found.
+     */
+    @LLMDoc("Returns the javadoc of a specific method in a class")
+    public Optional<String> getMethodJavadoc(String pathStr, String className, String methodName) {
+        Path path = sandbox.resolve(pathStr);
+        try {
+            CompilationUnit cu = StaticJavaParser.parse(path);
+            return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
+                    .filter(c -> c.getNameAsString().equals(className))
+                    .flatMap(c -> c.getMethodsByName(methodName).stream())
+                    .findFirst()
+                    .flatMap(m -> m.getComment().map(Node::toString));
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Retrieves the javadoc of a specific class.
+     *
+     * @param pathStr   The path to the Java file.
+     * @param className The name of the class.
+     * @return An Optional containing the class's javadoc, or empty if not found.
+     */
+    @LLMDoc("Returns the javadoc of a specific class")
+    public Optional<String> getClassJavadoc(String pathStr, String className) {
+        Path path = sandbox.resolve(pathStr);
+        try {
+            CompilationUnit cu = StaticJavaParser.parse(path);
+            return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
+                    .filter(c -> c.getNameAsString().equals(className))
+                    .findFirst()
+                    .flatMap(c -> c.getComment().map(Node::toString));
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Retrieves the javadoc of a specific field in a class.
+     *
+     * @param pathStr   The path to the Java file.
+     * @param className The name of the class.
+     * @param fieldName The name of the field.
+     * @return An Optional containing the field's javadoc, or empty if not found.
+     */
+    @LLMDoc("Returns the javadoc of a specific field in a class")
+    public Optional<String> getFieldJavadoc(String pathStr, String className, String fieldName) {
+        Path path = sandbox.resolve(pathStr);
+        try {
+            CompilationUnit cu = StaticJavaParser.parse(path);
+            return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
+                    .filter(c -> c.getNameAsString().equals(className))
+                    .flatMap(c -> c.getFields().stream())
+                    .filter(f -> f.getVariables().stream().anyMatch(v -> v.getNameAsString().equals(fieldName)))
+                    .findFirst()
+                    .flatMap(f -> f.getComment().map(Node::toString));
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
     public record JavaFileSummary(List<ClassSummary> classes, List<String> imports) {
     }
 
-    public record ClassSummary(String name, List<MethodSummary> methods, List<FieldSummary> fields, boolean isInterface, List<String> dependencies) {
+    public record ClassSummary(String name, String javadoc, List<MethodSummary> methods, List<FieldSummary> fields, boolean isInterface, List<String> dependencies) {
     }
 
-    public record MethodSummary(String name, String signature, int beginLine, int endLine) {
+    public record MethodSummary(String name, String signature, String javadoc, int beginLine, int endLine) {
     }
 
-    public record FieldSummary(String name, String type, int beginLine, int endLine) {
+    public record FieldSummary(String name, String type, String javadoc, int beginLine, int endLine) {
     }
 }

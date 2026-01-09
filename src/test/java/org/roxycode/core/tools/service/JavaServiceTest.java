@@ -16,7 +16,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 @MicronautTest
-class JavaAnalysisServiceTest {
+class JavaServiceTest {
 
     @Inject
     JavaService javaAnalysisService;
@@ -211,5 +211,45 @@ class JavaAnalysisServiceTest {
         assertEquals(1, summary.classes().size());
         JavaService.ClassSummary classSummary = summary.classes().get(0);
         assertTrue(classSummary.dependencies().contains("Dependency"));
+    }
+    @Test
+    void testJavadocExtraction() throws IOException {
+        Path path = tempDir.resolve("JavadocTest.java");
+        Files.writeString(path, """
+            package test;
+            /**
+             * Class Javadoc
+             */
+            public class JavadocTest {
+                /**
+                 * Field Javadoc
+                 */
+                private String field;
+                
+                /**
+                 * Method Javadoc
+                 */
+                public void method() {}
+            }
+            """);
+
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path.toString());
+        JavaService.ClassSummary classSummary = summary.classes().get(0);
+        
+        assertTrue(classSummary.javadoc().contains("Class Javadoc"));
+        assertTrue(classSummary.fields().get(0).javadoc().contains("Field Javadoc"));
+        assertTrue(classSummary.methods().get(0).javadoc().contains("Method Javadoc"));
+
+        Optional<String> classJd = javaAnalysisService.getClassJavadoc(path.toString(), "JavadocTest");
+        assertTrue(classJd.isPresent());
+        assertTrue(classJd.get().contains("Class Javadoc"));
+
+        Optional<String> methodJd = javaAnalysisService.getMethodJavadoc(path.toString(), "JavadocTest", "method");
+        assertTrue(methodJd.isPresent());
+        assertTrue(methodJd.get().contains("Method Javadoc"));
+
+        Optional<String> fieldJd = javaAnalysisService.getFieldJavadoc(path.toString(), "JavadocTest", "field");
+        assertTrue(fieldJd.isPresent());
+        assertTrue(fieldJd.get().contains("Field Javadoc"));
     }
 }
