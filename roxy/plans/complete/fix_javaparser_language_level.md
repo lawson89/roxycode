@@ -1,19 +1,19 @@
 # Goal
-Fix JavaParser parse errors related to Text Block Literals by ensuring Java 21 language level is configured for all Java analysis services.
+Centralize JavaParser configuration to ensure Java 21 features (like text blocks) are supported consistently across all services.
 
 # Proposed Changes
-- src/main/java/org/roxycode/core/analysis/JavaSourceGraphService.java: Add @PostConstruct init method to set StaticJavaParser configuration to JAVA_21.
-- src/main/java/org/roxycode/core/tools/service/StructuralSearchService.java: Update init method to also set language level to JAVA_21.
+- Create a centralized JavaParserProvider service to manage parser configuration.
+- Refactor JavaService, RefactoringService, and StructuralSearchService to use the provider instead of StaticJavaParser where possible.
+- Ensure all services consistently use JAVA_21 language level.
+- Remove redundant and potentially conflicting @PostConstruct init methods in multiple services.
 
 # Implementation Steps
-- [ ] Modify JavaSourceGraphService.java to include an init() method annotated with @PostConstruct that configures StaticJavaParser to use Java 21.
-- [ ] Update StructuralSearchService.java to include setting the language level to Java 21 in its init() method.
-- [ ] Audit codebase for any other direct uses of StaticJavaParser and ensure they are covered by the global configuration.
+- [ ] Create JavaParserProvider.java with pre-configured JavaParser and ParserConfiguration beans.
+- [ ] Update JavaService to use JavaParserProvider.
+- [ ] Update RefactoringService to use JavaParserProvider.
+- [ ] Update StructuralSearchService to use JavaParserProvider.
+- [ ] Update JavaSourceAnalysisService to use the centralized configuration.
+- [ ] Update JavaSourceGraphService to use JavaParserProvider.
+- [ ] Add a unit test in JavaServiceTest that specifically parses a file with text blocks to verify the fix.
 
 # Implementation Progress
-- [x] Identified all services using JavaParser: JavaService, StructuralSearchService, RefactoringService, JavaSourceAnalysisService, JavaSourceGraphService.
-- [x] Updated RefactoringService with init() method to set language level to JAVA_21.
-- [x] Ensured StructuralSearchService uses JAVA_21 and fixed minor import issues.
-- [x] Verified JavaSourceAnalysisService, JavaSourceGraphService, and JavaService already use JAVA_21.
-- [x] Verified compilation and ran relevant unit tests.
-- [x] All tests passed.

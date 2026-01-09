@@ -17,6 +17,7 @@ import java.util.*;
  */
 @ScriptService("tomlService")
 @Singleton
+@LLMDoc("Service for reading, writing, and analyzing TOML files.")
 public class TomlService {
 
     private final Sandbox sandbox;

@@ -18,6 +18,7 @@ import java.util.stream.Stream;
 
 @ScriptService("planService")
 @Singleton
+@LLMDoc("Service for managing development plans (available, in progress, complete).")
 public class PlanService {
     private static final Logger LOG = LoggerFactory.getLogger(PlanService.class);
     private static final String PLANS_DIR = "plans";

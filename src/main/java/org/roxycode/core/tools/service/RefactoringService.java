@@ -35,6 +35,7 @@ import java.util.stream.Stream;
  */
 @ScriptService("refactoringService")
 @Singleton
+@LLMDoc("Service for performing advanced refactorings on Java source code.")
 public class RefactoringService {
 
     private static final Logger logger = LoggerFactory.getLogger(RefactoringService.class);

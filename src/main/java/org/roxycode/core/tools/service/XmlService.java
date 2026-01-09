@@ -28,6 +28,7 @@ import java.util.Optional;
  */
 @ScriptService("xmlService")
 @Singleton
+@LLMDoc("Service for analyzing and manipulating XML files using DOM and XPath.")
 public class XmlService {
 
     private final Sandbox sandbox;

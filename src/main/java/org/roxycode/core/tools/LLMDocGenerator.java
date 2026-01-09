@@ -14,6 +14,10 @@ public class LLMDocGenerator {
             Object serviceObj = entry.getValue();
             Class<?> clazz = serviceObj.getClass();
 
+            // 0. Add Class Description
+            if (clazz.isAnnotationPresent(LLMDoc.class)) {
+                sb.append("/** ").append(clazz.getAnnotation(LLMDoc.class).value()).append(" */\n");
+            }
             sb.append("// Service: ").append(serviceName).append("\n");
             sb.append("const ").append(serviceName).append(" = {\n");
 

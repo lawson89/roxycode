@@ -25,6 +25,7 @@ import java.util.stream.Stream;
  */
 @ScriptService("fileSystemService")
 @Singleton
+@LLMDoc("Service for high-level file system operations within the sandbox. Includes basic I/O, directory listing, and structural views.")
 public class FileSystemService {
 
     private final Sandbox sandbox;

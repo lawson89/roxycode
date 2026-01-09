@@ -25,6 +25,7 @@ import java.util.Map;
  */
 @ScriptService("tikaService")
 @Singleton
+@LLMDoc("Service for extracting text and metadata from various file formats using Apache Tika.")
 public class TikaService {
 
     private final Sandbox sandbox;

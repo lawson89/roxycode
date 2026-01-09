@@ -23,6 +23,7 @@ import java.util.UUID;
  */
 @ScriptService("previewService")
 @Singleton
+@LLMDoc("Service for capturing screenshots of the application.")
 public class PreviewService {
     private static final Logger LOG = LoggerFactory.getLogger(PreviewService.class);
 

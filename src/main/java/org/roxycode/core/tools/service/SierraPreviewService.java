@@ -19,6 +19,7 @@ import java.util.UUID;
  */
 @ScriptService("sierraPreviewService")
 @Singleton
+@LLMDoc("Service for validating and previewing Sierra UI definition files.")
 public class SierraPreviewService {
 
     private final Sandbox sandbox;

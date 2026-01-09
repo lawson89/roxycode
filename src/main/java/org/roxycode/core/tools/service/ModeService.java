@@ -13,6 +13,7 @@ import org.roxycode.core.tools.ScriptService;
  */
 @ScriptService("modeService")
 @Singleton
+@LLMDoc("Service for determining and changing the current operational mode of RoxyCode. RoxyCode operates in two primary modes: PLAN (for architecture and planning) and CODE (for implementation and testing).")
 public class ModeService {
 
     private final RoxyProjectService projectService;

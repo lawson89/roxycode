@@ -24,6 +24,7 @@ import java.util.List;
  */
 @ScriptService("buildToolService")
 @Singleton
+@LLMDoc("Service for interacting with build tools (Maven, Gradle, Ant). Provides methods for compilation, testing, and project information.")
 public class BuildToolService {
 
     private final Sandbox sandbox;

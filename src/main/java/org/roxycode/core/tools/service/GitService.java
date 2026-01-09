@@ -16,6 +16,7 @@ import java.util.List;
  */
 @ScriptService("gitService")
 @Singleton
+@LLMDoc("Service for interacting with Git version control. Provides methods for checking status, branches, diffs, and logs.")
 public class GitService {
     private final Sandbox sandbox;
 

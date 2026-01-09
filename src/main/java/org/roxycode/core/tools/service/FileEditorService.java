@@ -21,9 +21,11 @@ import java.util.stream.IntStream;
 /**
  * Service for editing files within the sandbox.
  * Provides fine-grained control over line manipulation and content replacement.
+ * All line numbers are 1-based and inclusive.
  */
 @ScriptService("fileEditorService")
 @Singleton
+@LLMDoc("Service for editing files within the sandbox. Provides fine-grained control over line manipulation and content replacement.")
 public class FileEditorService {
 
     private final Sandbox sandbox;
@@ -38,24 +40,39 @@ public class FileEditorService {
         backups.put(path, new ArrayList<>(currentLines));
     }
 
+    private int[] resolveRange(List<String> lines, int startLine, int endLine) {
+        int start = Math.max(1, startLine) - 1;
+        int end = Math.min(lines.size(), endLine);
+        
+        if (start > lines.size()) {
+            start = lines.size();
+        }
+        if (end < start) {
+            end = start;
+        }
+        
+        return new int[]{start, end};
+    }
+
     /**
      * Retrieves a range of lines from a file.
      *
-     * @param path      The path to the file.
+     * @param path      The path to the file relative to the sandbox root.
      * @param startLine The starting line number (1-based, inclusive).
      * @param endLine   The ending line number (1-based, inclusive).
-     * @return The requested lines joined by newlines.
-     * @throws IOException If an I/O error occurs.
+     * @return The requested lines joined by newlines. Returns an empty string if the file is empty or the range is invalid.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
-    @LLMDoc("Returns lines from startLine to endLine (1-based index, inclusive)")
+    @LLMDoc("Returns lines from startLine to endLine (1-based index, inclusive).")
     public String getLines(String path, int startLine, int endLine) throws IOException {
         Path p = sandbox.resolve(path);
         List<String> lines = Files.readAllLines(p, StandardCharsets.UTF_8);
         
-        int start = Math.max(1, startLine) - 1;
-        int end = Math.min(lines.size(), endLine);
+        int[] range = resolveRange(lines, startLine, endLine);
+        int start = range[0];
+        int end = range[1];
         
-        if (start >= end || start >= lines.size()) {
+        if (start >= end) {
             return "";
         }
         
@@ -65,21 +82,22 @@ public class FileEditorService {
     /**
      * Retrieves a range of lines from a file, prefixed with their 1-based line numbers.
      *
-     * @param path      The path to the file.
+     * @param path      The path to the file relative to the sandbox root.
      * @param startLine The starting line number (1-based, inclusive).
      * @param endLine   The ending line number (1-based, inclusive).
-     * @return The requested lines with line numbers joined by newlines.
-     * @throws IOException If an I/O error occurs.
+     * @return The requested lines with line numbers joined by newlines. Returns an empty string if the file is empty or the range is invalid.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
-    @LLMDoc("Returns lines with 1-based line numbers from startLine to endLine (inclusive)")
+    @LLMDoc("Returns lines with 1-based line numbers from startLine to endLine (1-based index, inclusive).")
     public String getLinesWithNumbers(String path, int startLine, int endLine) throws IOException {
         Path p = sandbox.resolve(path);
         List<String> lines = Files.readAllLines(p, StandardCharsets.UTF_8);
         
-        int start = Math.max(1, startLine) - 1;
-        int end = Math.min(lines.size(), endLine);
+        int[] range = resolveRange(lines, startLine, endLine);
+        int start = range[0];
+        int end = range[1];
         
-        if (start >= end || start >= lines.size()) {
+        if (start >= end) {
             return "";
         }
         
@@ -91,11 +109,11 @@ public class FileEditorService {
     /**
      * Finds the first line in a file that matches a regular expression, starting from a given line.
      *
-     * @param path      The path to the file.
+     * @param path      The path to the file relative to the sandbox root.
      * @param regex     The regular expression to search for.
      * @param startLine The line number to start the search from (1-based).
-     * @return The 1-based line number of the first match, or -1 if no match is found.
-     * @throws IOException If an I/O error occurs.
+     * @return The 1-based line number of the first match, or -1 if no match is found or the starting line is out of bounds.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
     @LLMDoc("Finds the first line matching the regex after startLine (1-based index). Returns -1 if not found.")
     public int findLine(String path, String regex, int startLine) throws IOException {
@@ -115,22 +133,23 @@ public class FileEditorService {
     /**
      * Moves a range of lines to a target position in the file.
      *
-     * @param path       The path to the file.
+     * @param path       The path to the file relative to the sandbox root.
      * @param startLine  The starting line number of the range to move (1-based, inclusive).
      * @param endLine    The ending line number of the range to move (1-based, inclusive).
      * @param targetLine The line number where the moved lines should be inserted (1-based).
-     * @throws IOException If an I/O error occurs.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
-    @LLMDoc("Moves lines from startLine to endLine to targetLine (1-based index)")
+    @LLMDoc("Moves lines from startLine to endLine to targetLine (1-based index).")
     public void moveLines(String path, int startLine, int endLine, int targetLine) throws IOException {
         Path p = sandbox.resolve(path);
         List<String> lines = new ArrayList<>(Files.readAllLines(p, StandardCharsets.UTF_8));
         saveBackup(path, lines);
         
-        int start = Math.max(1, startLine) - 1;
-        int end = Math.min(lines.size(), endLine);
+        int[] range = resolveRange(lines, startLine, endLine);
+        int start = range[0];
+        int end = range[1];
         
-        if (start >= end || start >= lines.size()) {
+        if (start >= end) {
             return;
         }
         
@@ -149,21 +168,22 @@ public class FileEditorService {
     /**
      * Deletes a range of lines from a file.
      *
-     * @param path      The path to the file.
+     * @param path      The path to the file relative to the sandbox root.
      * @param startLine The starting line number (1-based, inclusive).
      * @param endLine   The ending line number (1-based, inclusive).
-     * @throws IOException If an I/O error occurs.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
-    @LLMDoc("Deletes lines from startLine to endLine (1-based index, inclusive)")
+    @LLMDoc("Deletes lines from startLine to endLine (1-based index, inclusive).")
     public void deleteLines(String path, int startLine, int endLine) throws IOException {
         Path p = sandbox.resolve(path);
         List<String> lines = new ArrayList<>(Files.readAllLines(p, StandardCharsets.UTF_8));
         saveBackup(path, lines);
         
-        int start = Math.max(1, startLine) - 1;
-        int end = Math.min(lines.size(), endLine);
+        int[] range = resolveRange(lines, startLine, endLine);
+        int start = range[0];
+        int end = range[1];
         
-        if (start >= end || start >= lines.size()) {
+        if (start >= end) {
             return;
         }
         
@@ -174,30 +194,21 @@ public class FileEditorService {
     /**
      * Replaces a range of lines in a file with new content.
      *
-     * @param path      The path to the file.
+     * @param path      The path to the file relative to the sandbox root.
      * @param startLine The starting line number (1-based, inclusive).
      * @param endLine   The ending line number (1-based, inclusive).
      * @param newLines  The list of new lines to insert.
-     * @throws IOException If an I/O error occurs.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
-    @LLMDoc("Replaces lines from startLine to endLine with newLines (1-based index, inclusive)")
+    @LLMDoc("Replaces lines from startLine to endLine with newLines (1-based index, inclusive). To insert without deleting, set endLine to startLine - 1.")
     public void replaceLines(String path, int startLine, int endLine, List<String> newLines) throws IOException {
         Path p = sandbox.resolve(path);
         List<String> lines = new ArrayList<>(Files.readAllLines(p, StandardCharsets.UTF_8));
         saveBackup(path, lines);
         
-        int start = Math.max(1, startLine) - 1;
-        int end = Math.min(lines.size(), endLine);
-        
-        if (start > lines.size()) {
-            start = lines.size();
-        }
-        if (end < start) {
-            end = start;
-        }
-        if (end > lines.size()) {
-            end = lines.size();
-        }
+        int[] range = resolveRange(lines, startLine, endLine);
+        int start = range[0];
+        int end = range[1];
 
         lines.subList(start, end).clear();
         lines.addAll(start, newLines);
@@ -207,12 +218,12 @@ public class FileEditorService {
     /**
      * Inserts a list of lines at a specified target line number.
      *
-     * @param path       The path to the file.
+     * @param path       The path to the file relative to the sandbox root.
      * @param targetLine The line number where the lines should be inserted (1-based).
      * @param lines      The list of lines to insert.
-     * @throws IOException If an I/O error occurs.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
-    @LLMDoc("Inserts lines at targetLine (1-based index)")
+    @LLMDoc("Inserts lines at targetLine (1-based index).")
     public void insertLines(String path, int targetLine, List<String> lines) throws IOException {
         replaceLines(path, targetLine, targetLine - 1, lines);
     }
@@ -220,22 +231,23 @@ public class FileEditorService {
     /**
      * Adjusts the indentation of a range of lines.
      *
-     * @param path      The path to the file.
+     * @param path      The path to the file relative to the sandbox root.
      * @param startLine The starting line number (1-based, inclusive).
      * @param endLine   The ending line number (1-based, inclusive).
      * @param spaces    The number of spaces to add (positive) or remove (negative).
-     * @throws IOException If an I/O error occurs.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
-    @LLMDoc("Adjusts indentation for a range of lines. Positive for adding spaces, negative for removing.")
+    @LLMDoc("Adjusts indentation for a range of lines (1-based index, inclusive). Positive for adding spaces, negative for removing.")
     public void indentLines(String path, int startLine, int endLine, int spaces) throws IOException {
         Path p = sandbox.resolve(path);
         List<String> lines = new ArrayList<>(Files.readAllLines(p, StandardCharsets.UTF_8));
         saveBackup(path, lines);
 
-        int start = Math.max(1, startLine) - 1;
-        int end = Math.min(lines.size(), endLine);
+        int[] range = resolveRange(lines, startLine, endLine);
+        int start = range[0];
+        int end = range[1];
 
-        if (start >= end || start >= lines.size()) {
+        if (start >= end) {
             return;
         }
 
@@ -258,23 +270,24 @@ public class FileEditorService {
     /**
      * Replaces occurrences of a regex pattern with a replacement string within a range of lines.
      *
-     * @param path        The path to the file.
+     * @param path        The path to the file relative to the sandbox root.
      * @param pattern     The regex pattern to search for.
      * @param replacement The replacement string.
      * @param startLine   The starting line number (1-based, inclusive).
      * @param endLine     The ending line number (1-based, inclusive).
-     * @throws IOException If an I/O error occurs.
+     * @throws IOException If an I/O error occurs or the file does not exist.
      */
-    @LLMDoc("Replaces occurrences of a regex pattern with replacement within a line range")
+    @LLMDoc("Replaces occurrences of a regex pattern with replacement within a line range (1-based index, inclusive).")
     public void replaceInLines(String path, String pattern, String replacement, int startLine, int endLine) throws IOException {
         Path p = sandbox.resolve(path);
         List<String> lines = new ArrayList<>(Files.readAllLines(p, StandardCharsets.UTF_8));
         saveBackup(path, lines);
 
-        int start = Math.max(1, startLine) - 1;
-        int end = Math.min(lines.size(), endLine);
+        int[] range = resolveRange(lines, startLine, endLine);
+        int start = range[0];
+        int end = range[1];
 
-        if (start >= end || start >= lines.size()) {
+        if (start >= end) {
             return;
         }
 
@@ -287,10 +300,10 @@ public class FileEditorService {
     /**
      * Reverts the last change made to a specified file, if a backup exists.
      *
-     * @param path The path to the file.
+     * @param path The path to the file relative to the sandbox root.
      * @throws IOException If an I/O error occurs.
      */
-    @LLMDoc("Reverts the last change made to the specified file")
+    @LLMDoc("Reverts the last change made to the specified file.")
     public void undo(String path) throws IOException {
         List<String> backup = backups.get(path);
         if (backup != null) {

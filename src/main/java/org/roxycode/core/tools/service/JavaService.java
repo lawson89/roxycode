@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
  */
 @ScriptService("javaService")
 @Singleton
+@LLMDoc("Service for analyzing and manipulating Java source code using JavaParser.")
 public class JavaService {
 
     @Inject

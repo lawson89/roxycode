@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
  */
 @ScriptService("structuralSearchService")
 @Singleton
+@LLMDoc("Service for performing structural and semantic searches on Java source code.")
 public class StructuralSearchService {
 
     @Inject

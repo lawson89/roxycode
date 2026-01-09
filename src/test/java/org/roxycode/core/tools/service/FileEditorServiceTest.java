@@ -10,7 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.regex.PatternSyntaxException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -40,6 +42,29 @@ class FileEditorServiceTest {
     }
 
     @Test
+    void testGetLines_OutOfBounds() throws IOException {
+        Path p = tempDir.resolve("test.txt");
+        List<String> lines = Arrays.asList("line1", "line2");
+        Files.write(p, lines, StandardCharsets.UTF_8);
+
+        assertEquals("line1\nline2", fileEditorService.getLines("test.txt", -5, 10));
+        assertEquals("", fileEditorService.getLines("test.txt", 5, 10));
+    }
+
+    @Test
+    void testGetLines_EmptyFile() throws IOException {
+        Path p = tempDir.resolve("empty.txt");
+        Files.createFile(p);
+
+        assertEquals("", fileEditorService.getLines("empty.txt", 1, 1));
+    }
+
+    @Test
+    void testGetLines_NonExistentFile() {
+        assertThrows(IOException.class, () -> fileEditorService.getLines("missing.txt", 1, 1));
+    }
+
+    @Test
     void testGetLinesWithNumbers() throws IOException {
         Path p = tempDir.resolve("test.txt");
         List<String> lines = Arrays.asList("line1", "line2", "line3");
@@ -61,6 +86,14 @@ class FileEditorServiceTest {
     }
 
     @Test
+    void testFindLine_InvalidRegex() throws IOException {
+        Path p = tempDir.resolve("test.txt");
+        Files.write(p, Collections.singletonList("some content"));
+
+        assertThrows(PatternSyntaxException.class, () -> fileEditorService.findLine("test.txt", "[", 1));
+    }
+
+    @Test
     void testMoveLines() throws IOException {
         Path p = tempDir.resolve("test.txt");
         List<String> lines = Arrays.asList("line1", "line2", "line3", "line4", "line5");
@@ -69,6 +102,18 @@ class FileEditorServiceTest {
         fileEditorService.moveLines("test.txt", 2, 3, 4);
         List<String> updatedLines = Files.readAllLines(p, StandardCharsets.UTF_8);
         assertEquals(Arrays.asList("line1", "line4", "line5", "line2", "line3"), updatedLines);
+    }
+
+    @Test
+    void testMoveLines_OutOfBounds() throws IOException {
+        Path p = tempDir.resolve("test.txt");
+        List<String> lines = Arrays.asList("line1", "line2", "line3");
+        Files.write(p, lines, StandardCharsets.UTF_8);
+
+        // Move beyond end
+        fileEditorService.moveLines("test.txt", 1, 1, 10);
+        List<String> updatedLines = Files.readAllLines(p, StandardCharsets.UTF_8);
+        assertEquals(Arrays.asList("line2", "line3", "line1"), updatedLines);
     }
 
     @Test
@@ -91,6 +136,17 @@ class FileEditorServiceTest {
         fileEditorService.replaceLines("test.txt", 2, 4, Arrays.asList("new2", "new3"));
         List<String> updatedLines = Files.readAllLines(p, StandardCharsets.UTF_8);
         assertEquals(Arrays.asList("line1", "new2", "new3", "line5"), updatedLines);
+    }
+
+    @Test
+    void testReplaceLines_Append() throws IOException {
+        Path p = tempDir.resolve("test.txt");
+        List<String> lines = Arrays.asList("line1", "line2");
+        Files.write(p, lines, StandardCharsets.UTF_8);
+
+        fileEditorService.replaceLines("test.txt", 3, 3, Collections.singletonList("line3"));
+        List<String> updatedLines = Files.readAllLines(p, StandardCharsets.UTF_8);
+        assertEquals(Arrays.asList("line1", "line2", "line3"), updatedLines);
     }
 
     @Test
@@ -128,6 +184,14 @@ class FileEditorServiceTest {
         fileEditorService.replaceInLines("test.txt", "apple", "orange", 1, 2);
         List<String> updatedLines = Files.readAllLines(p, StandardCharsets.UTF_8);
         assertEquals(Arrays.asList("orange", "banana", "apple pie"), updatedLines);
+    }
+
+    @Test
+    void testReplaceInLines_InvalidRegex() throws IOException {
+        Path p = tempDir.resolve("test.txt");
+        Files.write(p, Collections.singletonList("content"));
+
+        assertThrows(PatternSyntaxException.class, () -> fileEditorService.replaceInLines("test.txt", "[", "replacement", 1, 1));
     }
 
     @Test
