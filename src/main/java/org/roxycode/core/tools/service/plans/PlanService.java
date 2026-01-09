@@ -151,6 +151,7 @@ public class PlanService {
         }
     }
 
+
     public Plan loadPlan(String name) throws IOException {
         for (PlanStatus status : PlanStatus.values()) {
             Path path = roxyProjectService.getRoxyWorkingDir().resolve(PLANS_DIR).resolve(status.getDirName()).resolve(name + ".md");

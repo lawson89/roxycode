@@ -1,4 +1,12 @@
-description = "Executes arbitrary JavaScript code. Available globals: fs, grep, git, tika, java, xml, toml, buildTool, preview, json, sandbox."
+description = """ Executes arbitrary JavaScript code in a sandbox.
+This tool uses GraalJS to run the provided JavaScript code and returns the output and any console.log messages.
+Please see the system message for details on the available globals
+"""
+
+[[tool]]
+"""
+
+[[tool]]
 type = "graaljs"
 source = "file:run_js.js"
 

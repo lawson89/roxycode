@@ -59,6 +59,6 @@ public class ScriptServiceRegistry {
 
     public String getApiDocs() {
         ensureInitialized();
-        return cachedApiDocs;
+        return "/** IMPORTANT! The following globals are exposed to the javascript sandbox */\n\n"  + cachedApiDocs;
     }
 }
