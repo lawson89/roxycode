@@ -1,14 +1,15 @@
 package org.roxycode.ui.views;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.inject.Inject;
+import org.httprpc.sierra.Outlet;
 import jakarta.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.annotation.PostConstruct;
+import org.roxycode.core.utils.UIUtils;
 import org.fife.ui.autocomplete.AutoCompletion;
 import org.fife.ui.autocomplete.BasicCompletion;
 import org.fife.ui.autocomplete.DefaultCompletionProvider;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.httprpc.sierra.Outlet;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.SettingsService;
@@ -18,33 +19,19 @@ import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.ui.MarkdownPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import java.awt.*;
-import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.io.InterruptedIOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.StringTokenizer;
 
 @Singleton
 public class ChatView extends JPanel {
 
     private static final Logger log = LoggerFactory.getLogger(ChatView.class);
-    private static final DataFlavor URI_LIST_FLAVOR = createUriListFlavor();
-
-    private static DataFlavor createUriListFlavor() {
-        try {
-            return new DataFlavor("text/uri-list;class=java.lang.String");
-        } catch (ClassNotFoundException e) {
-            return null;
-        }
-    }
 
     private final GenAIService genAIService;
 
@@ -125,7 +112,6 @@ public class ChatView extends JPanel {
         }
         setupInputField();
         themeService.registerPane(chatArea);
-        setupDragAndDrop();
         initIcons();
         updateCacheStatus();
         initListeners();
@@ -142,6 +128,7 @@ public class ChatView extends JPanel {
         sp.setBorder(BorderFactory.createEmptyBorder());
         inputContainer.add(sp);
         initAutocomplete();
+        UIUtils.addContextMenu(inputField);
     }
 
     private void initAutocomplete() {
@@ -417,104 +404,7 @@ public class ChatView extends JPanel {
         return chatArea;
     }
 
-    private void setupDragAndDrop() {
-        if (chatArea != null) {
-            chatArea.setDragEnabled(true);
-            chatArea.setTransferHandler(new FileTransferHandler(chatArea.getTransferHandler()));
-        }
-        if (inputField != null) {
-            inputField.setDragEnabled(true);
-            inputField.setTransferHandler(new FileTransferHandler(inputField.getTransferHandler()));
-        }
-    }
-
     List<File> getAttachedFiles() {
         return java.util.Collections.unmodifiableList(attachedFiles);
-    }
-
-    class FileTransferHandler extends TransferHandler {
-        private final TransferHandler delegate;
-
-        public FileTransferHandler(TransferHandler delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public boolean canImport(TransferSupport support) {
-            boolean supported = support.isDataFlavorSupported(DataFlavor.javaFileListFlavor) ||
-                                (URI_LIST_FLAVOR != null && support.isDataFlavorSupported(URI_LIST_FLAVOR));
-
-            if (supported) {
-                support.setDropAction(COPY);
-                return true;
-            }
-
-            return (delegate != null && delegate.canImport(support));
-        }
-
-        @Override
-        public boolean importData(TransferSupport support) {
-            Transferable transferable = support.getTransferable();
-            boolean handled = false;
-            log.info(transferable.toString());
-            try {
-                if (support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-                    log.info("Importing javaFileListFlavor");
-                    @SuppressWarnings("unchecked")
-                    List<File> files = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
-                    for (File file : files) {
-                        if (!attachedFiles.contains(file)) {
-                            attachedFiles.add(file);
-                        }
-                    }
-                    handled = true;
-                } else if (URI_LIST_FLAVOR != null && support.isDataFlavorSupported(URI_LIST_FLAVOR)) {
-                    log.info("Importing URI_LIST_FLAVOR");
-                    String uriList = (String) transferable.getTransferData(URI_LIST_FLAVOR);
-                    StringTokenizer st = new StringTokenizer(uriList, "\r\n");
-                    while (st.hasMoreTokens()) {
-                        String uriStr = st.nextToken().trim();
-                        if (uriStr.startsWith("#") || uriStr.isEmpty()) continue;
-
-                        File file = null;
-                        try {
-                            URI uri = new URI(uriStr);
-                            file = new File(uri);
-                        } catch (Exception e) {
-                            // Fallback for malformed URIs or plain paths
-                            try {
-                                String path = uriStr;
-                                if (path.startsWith("file://")) {
-                                    path = path.substring(7);
-                                } else if (path.startsWith("file:")) {
-                                    path = path.substring(5);
-                                }
-                                file = new File(path);
-                            } catch (Exception ex) {
-                                log.warn("Failed to parse URI fallback: {}", uriStr);
-                            }
-                        }
-
-                        if (file != null && file.exists()) {
-                            if (!attachedFiles.contains(file)) {
-                                attachedFiles.add(file);
-                            }
-                        }
-                    }
-                    handled = true;
-                }
-
-                if (handled) {
-                    updateAttachmentsLabel();
-                    return true;
-                }else{
-                    log.info("No supported data flavor found for import");
-                }
-            } catch (Exception e) {
-                log.error("Failed to import dropped files", e);
-            }
-
-            return delegate != null && delegate.importData(support);
-        }
     }
 }

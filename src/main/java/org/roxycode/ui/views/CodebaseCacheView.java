@@ -1,5 +1,7 @@
 package org.roxycode.ui.views;
 
+import org.roxycode.core.utils.UIUtils;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -82,6 +84,7 @@ public class CodebaseCacheView extends JPanel {
             cacheContentScrollPane.setViewportView(cacheContentArea);
         }
         themeService.registerPane(cacheContentArea);
+        UIUtils.addContextMenu(cacheContentArea);
         initListeners();
     }
 

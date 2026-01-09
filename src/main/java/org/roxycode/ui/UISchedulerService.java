@@ -4,8 +4,6 @@ import io.micronaut.scheduling.annotation.Scheduled;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.ui.views.ChatView;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 
@@ -13,15 +11,13 @@ import javax.swing.*;
 @io.micronaut.context.annotation.Requires(notEnv = "test")
 public class UISchedulerService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(UISchedulerService.class);
-
     @Inject
     private ChatView chatView;
 
     @Inject
     private MainFrame mainFrame;
 
-    @Scheduled(fixedDelay = "2s")
+    @Scheduled(fixedDelay = "2s", initialDelay = "1s")
     void updateUI() {
         SwingUtilities.invokeLater(() -> {
             if (chatView != null) {

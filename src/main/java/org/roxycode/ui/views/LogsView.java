@@ -1,5 +1,7 @@
 package org.roxycode.ui.views;
 
+import org.roxycode.core.utils.UIUtils;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -47,6 +49,7 @@ public class LogsView extends JPanel {
             logsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
             logsScrollPane.setViewportView(logsArea);
             themeService.registerPane(logsArea);
+            UIUtils.addContextMenu(logsArea);
         }
         initListeners();
     }

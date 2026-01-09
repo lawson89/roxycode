@@ -1,5 +1,7 @@
 package org.roxycode.ui.views;
 
+import org.roxycode.core.utils.UIUtils;
+
 import com.formdev.flatlaf.FlatLaf;
 import com.google.genai.types.Content;
 import com.google.genai.types.Part;
@@ -51,6 +53,7 @@ public class MessageHistoryView extends JPanel {
             messageHistoryScrollPane.setViewportView(messageHistoryArea);
         }
         themeService.registerPane(messageHistoryArea);
+        UIUtils.addContextMenu(messageHistoryArea);
         initListeners();
     }
 

@@ -1,5 +1,7 @@
 package org.roxycode.ui;
 
+import org.roxycode.core.utils.UIUtils;
+
 import com.formdev.flatlaf.FlatLaf;
 import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
@@ -55,8 +57,7 @@ public class MarkdownPane extends JTextPane {
         this.setDocument(kit.createDefaultDocument());
         updateStyle();
         this.setText("<html><body></body></html>");
-        setupContextMenu();
-        initContextMenu();
+        UIUtils.addContextMenu(this);
     }
 
     public void updateStyle() {
@@ -212,7 +213,7 @@ public class MarkdownPane extends JTextPane {
         return null;
     }
 
-    private String stripParagraph(String html) {
+        private String stripParagraph(String html) {
         if (html == null)
             return "";
         String result = html.trim();
@@ -220,53 +221,5 @@ public class MarkdownPane extends JTextPane {
             return result.substring(3, result.length() - 4).trim();
         }
         return result;
-    }
-
-    private void initContextMenu() {
-        JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem copyItem = new JMenuItem("Copy");
-        copyItem.setIcon(FontIcon.of(MaterialDesignC.CONTENT_COPY, 16));
-        copyItem.setIcon(FontIcon.of(MaterialDesignC.CONTENT_COPY, 16));
-        copyItem.addActionListener(e -> copy());
-        popupMenu.add(copyItem);
-        popupMenu.addPopupMenuListener(new PopupMenuListener() {
-
-            @Override
-            public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-                copyItem.setEnabled(getSelectedText() != null && !getSelectedText().isEmpty());
-            }
-
-            @Override
-            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
-            }
-
-            @Override
-            public void popupMenuCanceled(PopupMenuEvent e) {
-            }
-        });
-        setComponentPopupMenu(popupMenu);
-    }
-
-    private void setupContextMenu() {
-        JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem copyItem = new JMenuItem("Copy");
-        copyItem.addActionListener(e -> copy());
-        popupMenu.add(copyItem);
-        popupMenu.addPopupMenuListener(new PopupMenuListener() {
-
-            @Override
-            public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-                copyItem.setEnabled(getSelectedText() != null && !getSelectedText().isEmpty());
-            }
-
-            @Override
-            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
-            }
-
-            @Override
-            public void popupMenuCanceled(PopupMenuEvent e) {
-            }
-        });
-        setComponentPopupMenu(popupMenu);
     }
 }

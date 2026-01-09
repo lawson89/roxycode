@@ -9,6 +9,7 @@ import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,6 +26,17 @@ public class ToolRegistry {
 
     public ToolRegistry(@Named("toml") ObjectMapper tomlMapper) {
         this.tomlMapper = tomlMapper;
+    }
+
+    @PostConstruct
+    void init() {
+        try {
+            // Force the classloader to resolve this class now,
+            // effectively "pre-warming" the cache to see if it fails on startup.
+            Class.forName("com.google.genai.types.Schema");
+        } catch (ClassNotFoundException e) {
+            LOG.error("GenAI classes missing from classpath", e);
+        }
     }
 
     /**
@@ -59,7 +71,7 @@ public class ToolRegistry {
             LOG.info("Loaded tool: {}", toolName);
             try {
                 loadGeminiTool(toolName, toolDefinition);
-            }catch (Exception e) {
+            } catch (Exception e) {
                 LOG.error("Failed to load gemini tool for: {}", toolName, e);
             }
         } catch (IOException e) {

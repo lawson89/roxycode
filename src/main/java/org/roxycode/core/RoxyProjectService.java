@@ -61,7 +61,7 @@ public class RoxyProjectService {
         if (!this.roxyHome.toFile().exists()) {
             throw new IllegalStateException("The roxy home directory does not exist: " + this.roxyHome);
         }
-        Path toolsHome = this.roxyHome.resolve("tools");
+        Path toolsHome = roxyHome.resolve("tools");
         LOG.info("RoxyProjectService loading tools from {}", toolsHome);
         toolRegistry.loadTools(toolsHome);
     }

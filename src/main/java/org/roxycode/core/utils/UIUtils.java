@@ -4,6 +4,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import javax.swing.text.JTextComponent;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.swing.FontIcon;
 import java.awt.*;
 
 public class UIUtils {
@@ -38,4 +43,48 @@ public class UIUtils {
 
         LOG.info("Dialog location to: {}", dialog.getLocation());
     }
+
+    public static void addContextMenu(JTextComponent component) {
+        JPopupMenu popupMenu = new JPopupMenu();
+
+        if (component.isEditable()) {
+            JMenuItem cutItem = new JMenuItem("Cut");
+            cutItem.setIcon(FontIcon.of(MaterialDesignC.CONTENT_CUT, 16));
+            cutItem.addActionListener(e -> component.cut());
+            popupMenu.add(cutItem);
+        }
+
+        JMenuItem copyItem = new JMenuItem("Copy");
+        copyItem.setIcon(FontIcon.of(MaterialDesignC.CONTENT_COPY, 16));
+        copyItem.addActionListener(e -> component.copy());
+        popupMenu.add(copyItem);
+
+        if (component.isEditable()) {
+            JMenuItem pasteItem = new JMenuItem("Paste");
+            pasteItem.setIcon(FontIcon.of(MaterialDesignC.CONTENT_PASTE, 16));
+            pasteItem.addActionListener(e -> component.paste());
+            popupMenu.add(pasteItem);
+        }
+
+        popupMenu.addPopupMenuListener(new PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+                boolean hasSelection = component.getSelectedText() != null && !component.getSelectedText().isEmpty();
+                copyItem.setEnabled(hasSelection);
+                if (component.isEditable()) {
+                    JMenuItem cutItem = (JMenuItem) popupMenu.getComponent(0);
+                    cutItem.setEnabled(hasSelection);
+                }
+            }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {}
+
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent e) {}
+        });
+
+        component.setComponentPopupMenu(popupMenu);
+    }
+
 }
