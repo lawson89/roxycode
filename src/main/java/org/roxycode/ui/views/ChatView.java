@@ -9,6 +9,7 @@ import org.fife.ui.autocomplete.AutoCompletion;
 import org.fife.ui.autocomplete.BasicCompletion;
 import org.fife.ui.autocomplete.DefaultCompletionProvider;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rtextarea.RTextScrollPane;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
@@ -128,7 +129,8 @@ public class ChatView extends JPanel {
         inputField.setHighlightCurrentLine(false);
         inputField.setAntiAliasingEnabled(true);
         // Hide the gutter
-        JScrollPane sp = new JScrollPane(inputField);
+        RTextScrollPane sp = new RTextScrollPane(inputField);
+        sp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         sp.setBorder(BorderFactory.createEmptyBorder());
         inputContainer.add(sp);
         initAutocomplete();
