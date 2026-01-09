@@ -229,6 +229,8 @@ public class GenAIService {
         long elapsed = System.currentTimeMillis() - turnStart;
         if (elapsed < minTurnDurationMillis) {
             try {
+                long sleepTime = minTurnDurationMillis - elapsed;
+                LOG.debug("Rate limiting: sleeping for {} ms", sleepTime);
                 Thread.sleep(minTurnDurationMillis - elapsed);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

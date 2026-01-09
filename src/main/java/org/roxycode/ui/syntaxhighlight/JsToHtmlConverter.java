@@ -34,22 +34,39 @@ public class JsToHtmlConverter {
 
             // 1. Create the tokenizer specifically for JavaScript
             TokenMaker tokenMaker = new JavaScriptTokenMaker();
-            Segment text = new Segment(jsCode.toCharArray(), 0, jsCode.length());
+            
+            String[] lines = jsCode.split("\r?\n", -1);
+            int currentState = Token.NULL;
 
-            // 2. Get the list of tokens from the code
-            Token token = tokenMaker.getTokenList(text, Token.NULL, 0);
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i];
+                Segment text = new Segment(line.toCharArray(), 0, line.length());
 
-            // 3. Iterate through the linked list of tokens
-            while (token != null && token.getType() != Token.NULL) {
-                String tokenText = token.getLexeme();
-                String escapedText = escapeHtml(tokenText);
-                String colorStyle = getColorForTokenType(token.getType(), isDark);
+                // 2. Get the list of tokens from the code for this line
+                Token token = tokenMaker.getTokenList(text, currentState, 0);
 
-                html.append("<span style='").append(colorStyle).append("'>")
-                        .append(escapedText)
-                        .append("</span>");
+                // 3. Iterate through the linked list of tokens
+                while (token != null && token.getType() != Token.NULL) {
+                    String tokenText = token.getLexeme();
+                    String escapedText = escapeHtml(tokenText);
+                    String colorStyle = getColorForTokenType(token.getType(), isDark);
 
-                token = token.getNextToken();
+                    html.append("<span style='").append(colorStyle).append("'>")
+                            .append(escapedText)
+                            .append("</span>");
+
+                    token = token.getNextToken();
+                }
+                
+                // Update state for next line from the NULL token
+                if (token != null) {
+                    currentState = token.getType();
+                }
+
+                // Add newline if not the last line
+                if (i < lines.length - 1) {
+                    html.append("\n");
+                }
             }
 
             html.append("</pre>");
