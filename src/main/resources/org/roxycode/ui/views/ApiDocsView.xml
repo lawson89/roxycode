@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE column-panel SYSTEM "sierra.dtd">
+<column-panel spacing="10" padding="16">
+    <row-panel spacing="10" alignToBaseline="false">
+        <label text="Tool API Documentation" styleClass="h3" weight="1"/>
+        <button name="refreshApiDocsButton" text="Refresh"/>
+    </row-panel>
+    <scroll-pane name="apiDocsScrollPane" weight="1"/>
+</column-panel>
