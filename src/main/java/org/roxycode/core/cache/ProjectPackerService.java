@@ -120,11 +120,6 @@ public class ProjectPackerService {
         writer.write(javaSourceGraphService.generateMermaidGraph(rootPath));
         writer.write("\n'''\n\n");
 
-        writer.write("[[content]]\n");
-        writer.write("name = \"system_prompt\"\n");
-        writer.write("content = '''\n");
-        writer.write(roxyProjectService.getStaticSystemPrompt());
-        writer.write("\n'''\n\n");
 
     }
 

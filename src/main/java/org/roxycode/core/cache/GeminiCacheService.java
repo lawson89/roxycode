@@ -103,7 +103,7 @@ public class GeminiCacheService {
             }
             String tomlData = Files.readString(cacheFile);
             Content cacheContent = Content.builder().role("user").parts(List.of(Part.builder().text(tomlData).build())).build();
-            Content systemInstruction = Content.builder().parts(List.of(Part.builder().text("You are RoxyCode. You have tools to assist in local coding. You have access to the full codebase context provided.").build())).build();
+            Content systemInstruction = Content.builder().parts(List.of(Part.builder().text(roxyProjectService.getStaticSystemPrompt()).build())).build();
             List<Tool> geminiTools = toolRegistry.getAllGeminiTools();
             CreateCachedContentConfig config = CreateCachedContentConfig.builder().displayName(cacheKey).systemInstruction(systemInstruction).contents(List.of(cacheContent)).tools(geminiTools).ttl(Duration.ofMinutes(settingsService.getCacheTTL())).build();
             LOG.info("Uploading {} bytes to Gemini...", tomlData.length());

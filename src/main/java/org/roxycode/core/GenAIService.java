@@ -121,8 +121,10 @@ public class GenAIService {
 
     public String buildSystemMessage(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
         StringBuilder contextBuilder = new StringBuilder();
-        String staticPrompt = roxyProjectService.getStaticSystemPrompt();
-        contextBuilder.append(staticPrompt).append(projectRoot).append("\n");
+        if (cacheMeta.isEmpty()) {
+            contextBuilder.append(roxyProjectService.getStaticSystemPrompt());
+        }
+        contextBuilder.append("Project Root: ").append(projectRoot).append("\n");
         if (cacheMeta.isPresent()) {
             contextBuilder.append("### Project Info (CACHED)\n");
             contextBuilder.append("[System: Codebase is currently cached in Gemini. You should have access to the file contents.]\n\n");
@@ -337,6 +339,11 @@ public class GenAIService {
             LOG.info("Tool results: {} {}", fnName, toolOutput);
         } catch (Exception e) {
             toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
+        }
+
+        if (toolOutput != null && toolOutput.length() > 20000) {
+            LOG.warn("Truncating tool output for {}: {} characters", fnName, toolOutput.length());
+            toolOutput = toolOutput.substring(0, 20000) + "\n\n[System: Output truncated due to length limits.]";
         }
         // Image Handling
         //@todo sandbox this
