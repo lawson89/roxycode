@@ -45,7 +45,7 @@ public class ChatView extends JPanel {
 
     private final MarkdownPane chatArea = new MarkdownPane();
 
-    private final RSyntaxTextArea inputField = new RSyntaxTextArea(3, 20);
+    private final RSyntaxTextArea inputField = new RSyntaxTextArea(10, 80);
 
     private final List<File> attachedFiles = new ArrayList<>();
 
@@ -126,6 +126,7 @@ public class ChatView extends JPanel {
         inputField.setWrapStyleWord(true);
         inputField.setAnimateBracketMatching(false);
         inputField.setHighlightCurrentLine(false);
+        inputField.setAntiAliasingEnabled(true);
         // Hide the gutter
         JScrollPane sp = new JScrollPane(inputField);
         sp.setBorder(BorderFactory.createEmptyBorder());
