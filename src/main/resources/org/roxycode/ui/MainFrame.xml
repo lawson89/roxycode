@@ -45,6 +45,8 @@
                            horizontalAlignment="left" group="navGroup"/>
             <toggle-button name="navGeminiCachesButton" text="Gemini Caches" borderPainted="false"
                            horizontalAlignment="left" group="navGroup"/>
+            <toggle-button name="navApiDocsButton" text="API Docs" borderPainted="false"
+                           horizontalAlignment="left" group="navGroup"/>
 
             <spacer weight="1"/>
         </column-panel>
