@@ -4,7 +4,6 @@ import com.google.genai.Client;
 import com.google.genai.types.*;
 import jakarta.inject.Singleton;
 import org.apache.commons.collections4.MapUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.core.tools.ToolDefinition;
@@ -120,7 +119,7 @@ public class GenAIService {
         return getClient().models.generateContent(model, history, config);
     }
 
-    public String buildSystemContext(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
+    public String buildSystemMessage(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
         StringBuilder contextBuilder = new StringBuilder();
         String staticPrompt = roxyProjectService.getStaticSystemPrompt();
         contextBuilder.append(staticPrompt).append(projectRoot).append("\n");
@@ -154,10 +153,10 @@ public class GenAIService {
         try {
             this.stopRequested = false;
             Optional<ProjectCacheMeta> cacheMeta = projectCacheMetaService.getProjectCacheMeta();
-            String systemContext = buildSystemContext(projectRoot, attachedFiles, cacheMeta);
-            LOG.info("systemContext: {}", systemContext);
+            String systemMessage = buildSystemMessage(projectRoot, attachedFiles, cacheMeta);
+            LOG.info("systemContext: {}", systemMessage);
 
-            initializeHistory(prompt, systemContext);
+            initializeHistory(prompt, systemMessage);
 
             int turns = 0;
             int maxTurns = settingsService.getMaxTurns();
@@ -240,7 +239,9 @@ public class GenAIService {
         return Optional.empty();
     }
     private void initializeHistory(String prompt, String systemContext) {
+        // user task and mode we are currently operating in
         String taskMessage = "Task: " + prompt;
+        taskMessage += roxyProjectService.getModeMessage();
         LOG.info("taskMessage: {}", taskMessage);
         // --- History Management (Index 0 is always System) ---
         if (history.isEmpty()) {
