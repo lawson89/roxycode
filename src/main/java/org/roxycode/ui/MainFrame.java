@@ -80,6 +80,9 @@ public class MainFrame extends JFrame implements Runnable {
     private JLabel roxyModeLabel;
 
     @Outlet
+    private JLabel currentPlanLabel;
+
+    @Outlet
     private ActivityIndicator activityIndicator;
 
     @Outlet
@@ -315,10 +318,6 @@ public class MainFrame extends JFrame implements Runnable {
             boolean isDark = com.formdev.flatlaf.FlatLaf.isLafDark();
 
             switch (mode) {
-                case ASK:
-                    iconCode = MaterialDesignA.ACCOUNT_QUESTION_OUTLINE;
-                    fgColor = isDark ? new Color(100, 200, 255) : new Color(0, 80, 200);
-                    break;
                 case PLAN:
                     iconCode = MaterialDesignC.CARD_TEXT_OUTLINE;
                     fgColor = isDark ? new Color(255, 200, 0) : new Color(150, 100, 0);
@@ -337,6 +336,16 @@ public class MainFrame extends JFrame implements Runnable {
             roxyModeLabel.setForeground(fgColor);
             roxyModeLabel.setIconTextGap(6);
             roxyModeLabel.setFont(roxyModeLabel.getFont().deriveFont(Font.BOLD));
+        }
+        if (currentPlanLabel != null) {
+            String plan = roxyProjectService.getCurrentPlan();
+            if (StringUtils.isNotBlank(plan)) {
+                currentPlanLabel.setText("Plan: " + plan);
+                currentPlanLabel.setVisible(true);
+            } else {
+                currentPlanLabel.setText("");
+                currentPlanLabel.setVisible(false);
+            }
         }
     }
 

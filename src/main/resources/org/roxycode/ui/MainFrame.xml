@@ -12,7 +12,11 @@
         <label name="gitBranchLabel" text="unknown" foreground="#888888"/>
         <button name="openFolderButton" text="Change Project" borderPainted="false" focusPainted="false" contentAreaFilled="false"/>
         <spacer weight="1"/>
-        <label name="roxyModeLabel" text="" style="font: bold"/>
+        
+        <column-panel spacing="2">
+            <label name="roxyModeLabel" text="" style="font: bold"/>
+            <label name="currentPlanLabel" text="" style="font-size: 10px"/>
+        </column-panel>
         <activity-indicator name="activityIndicator" indicatorSize="20" visible="false"/>
         <spacer size="16"/>
     </row-panel>

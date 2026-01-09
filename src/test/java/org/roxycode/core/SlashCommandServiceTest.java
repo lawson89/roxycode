@@ -2,7 +2,6 @@ package org.roxycode.core;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.roxycode.core.config.GeminiModel;
 import org.roxycode.core.config.GeminiModelRegistry;
 
@@ -95,14 +94,6 @@ class SlashCommandServiceTest {
         SlashCommandService.CommandResult result = slashCommandService.execute("/unknown");
         assertFalse(result.success());
         assertTrue(result.message().contains("Unknown command"));
-    }
-
-    @Test
-    void testExecuteAsk() {
-        SlashCommandService.CommandResult result = slashCommandService.execute("/ask");
-        assertTrue(result.success());
-        verify(roxyProjectService).setCurrentMode(RoxyMode.ASK);
-        assertEquals(SlashCommandService.CommandAction.UPDATE_STATS, result.action());
     }
 
     @Test

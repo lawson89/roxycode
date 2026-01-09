@@ -4,15 +4,11 @@ package org.roxycode.core;
  * Represents the modes of operation for RoxyCode.
  */
 public enum RoxyMode {
-    /**
-     * RoxyCode can answer questions about the current project.
-     */
-    ASK,
 
     /**
-     * RoxyCode can ask clarifying questions to develop a plan for a feature
-     * and store that plan in the plans folder. No changes other than to
-     * the plans folder are allowed.
+     * RoxyCode can answer any questions about the project.
+     * She can ask clarifying questions to develop a plan for a feature or bugfix
+     * No changes other than to the plans folder are allowed.
      */
     PLAN,
 

@@ -37,7 +37,8 @@ public class RoxyProjectService {
     private final ScriptServiceRegistry scriptServiceRegistry;
 
     private String currentBranch = "";
-    private RoxyMode currentMode = RoxyMode.ASK;
+    private RoxyMode currentMode = RoxyMode.PLAN;
+    private String currentPlan = "";
     private Path roxyHome;
 
     @Inject
@@ -114,6 +115,7 @@ public class RoxyProjectService {
         ensureProjectStructure();
         settingsService.setCurrentProject(getProjectRoot().toString());
         currentBranch = GitRunner.runGitCommand(sandbox.getRoot(), "branch", "--show-current").trim();
+        currentPlan = "";
     }
 
     public boolean isValidFolder(Path path) {
@@ -133,6 +135,14 @@ public class RoxyProjectService {
 
     public void setCurrentMode(RoxyMode currentMode) {
         this.currentMode = currentMode;
+    }
+
+    public String getCurrentPlan() {
+        return currentPlan;
+    }
+
+    public void setCurrentPlan(String currentPlan) {
+        this.currentPlan = currentPlan;
     }
 
     public Path getRoxyHome() {

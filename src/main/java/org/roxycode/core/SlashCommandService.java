@@ -42,9 +42,6 @@ public class SlashCommandService {
                 return new CommandResult(true, "Session reset. History cleared.", CommandAction.NONE);
             case "/help":
                 return new CommandResult(true, getHelpText(), CommandAction.NONE);
-                        case "/ask":
-                roxyProjectService.setCurrentMode(RoxyMode.ASK);
-                return new CommandResult(true, "Switched to ASK mode.", CommandAction.UPDATE_STATS);
             case "/plan":
                 roxyProjectService.setCurrentMode(RoxyMode.PLAN);
                 return new CommandResult(true, "Switched to PLAN mode.", CommandAction.UPDATE_STATS);
@@ -76,7 +73,7 @@ public class SlashCommandService {
                     .collect(Collectors.joining(", "));
             return new CommandResult(true, "Available models: " + models, CommandAction.NONE);
         }
-        
+
         var model = modelRegistry.getModelByName(args);
         if (model.isPresent()) {
             settingsService.setGeminiModel(args);
@@ -90,21 +87,23 @@ public class SlashCommandService {
         NONE, CLEAR, UPDATE_STATS
     }
 
-    public record CommandResult(boolean success, String message, CommandAction action) {}
+    public record CommandResult(boolean success, String message, CommandAction action) {
+    }
 
     public List<CommandInfo> getAvailableCommands() {
         return List.of(
-            new CommandInfo("/help", "Show available commands"),
-            new CommandInfo("/clear", "Clear the chat screen"),
-            new CommandInfo("/reset", "Reset the conversation history"),
-            new CommandInfo("/model", "Switch Gemini model"),
-            new CommandInfo("/ask", "Switch to ASK mode"),
-            new CommandInfo("/plan", "Switch to PLAN mode"),
-            new CommandInfo("/code", "Switch to CODE mode")
+                new CommandInfo("/help", "Show available commands"),
+                new CommandInfo("/clear", "Clear the chat screen"),
+                new CommandInfo("/reset", "Reset the conversation history"),
+                new CommandInfo("/model", "Switch Gemini model"),
+                new CommandInfo("/ask", "Switch to ASK mode"),
+                new CommandInfo("/plan", "Switch to PLAN mode"),
+                new CommandInfo("/code", "Switch to CODE mode")
         );
     }
 
 
-    public record CommandInfo(String command, String description) {}
+    public record CommandInfo(String command, String description) {
+    }
 
 }
