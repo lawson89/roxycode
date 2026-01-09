@@ -34,8 +34,7 @@ public class SettingsView extends JPanel {
     @Outlet
     private JTextField maxTurnsField;
 
-    @Outlet
-    private JTextField historyWindowSize;
+    
 
     @Outlet
     private JTextField maxTurnsPerMinuteField;
@@ -97,7 +96,7 @@ public class SettingsView extends JPanel {
         logLinesCountField.setText(String.valueOf(settingsService.getLogLinesCount()));
         themeComboBox.setSelectedItem(settingsService.getTheme());
         modelComboBox.setSelectedItem(settingsService.getGeminiModel());
-        historyWindowSize.setText(String.valueOf(settingsService.getHistoryWindowSize()));
+        
         cacheEnabledCheckBox.setSelected(settingsService.isCacheEnabled());
         cacheTTLField.setText(String.valueOf(settingsService.getCacheTTL()));
         cacheMinSizeField.setText(String.valueOf(settingsService.getCacheMinSize()));
@@ -134,7 +133,7 @@ public class SettingsView extends JPanel {
         settingsService.setLogLinesCount(Integer.parseInt(logLinesCountField.getText()));
         settingsService.setTheme((String) themeComboBox.getSelectedItem());
         settingsService.setGeminiModel((String) modelComboBox.getSelectedItem());
-        settingsService.setHistoryWindowSize(Integer.parseInt(historyWindowSize.getText()));
+        
         settingsService.setCacheEnabled(cacheEnabledCheckBox.isSelected());
         settingsService.setCacheTTL(Integer.parseInt(cacheTTLField.getText()));
         settingsService.setCacheMinSize(Integer.parseInt(cacheMinSizeField.getText()));

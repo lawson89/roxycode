@@ -3,6 +3,7 @@ package org.roxycode.ui;
 import io.micronaut.scheduling.annotation.Scheduled;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.roxycode.ui.views.LogsView;
 import org.roxycode.ui.views.ChatView;
 
 import javax.swing.*;
@@ -13,6 +14,8 @@ public class UISchedulerService {
 
     @Inject
     private ChatView chatView;
+    @Inject
+    private LogsView logsView;
 
     @Inject
     private MainFrame mainFrame;
@@ -26,6 +29,9 @@ public class UISchedulerService {
             }
             if (mainFrame != null) {
                 mainFrame.updateRoxyMode();
+            }
+            if (logsView != null) {
+                logsView.autoRefresh();
             }
         });
     }

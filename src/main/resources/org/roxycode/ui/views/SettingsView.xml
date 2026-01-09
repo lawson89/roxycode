@@ -43,10 +43,8 @@
             <row-panel spacing="8">
                 <text-field name="maxTurnsField" columns="10"/>
             </row-panel>
-            <label text="History Window Size:"/>
-            <row-panel spacing="8">
-                <text-field name="historyWindowSize" columns="10"/>
-            </row-panel>
+            
+            
             <spacer size="8"/>
             <label text="Max Turns Per Minute:"/>
             <row-panel spacing="8">

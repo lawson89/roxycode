@@ -55,8 +55,7 @@ public class MainFrame extends JFrame implements Runnable {
     @Inject
     private SystemPromptView systemPromptView;
 
-    @Inject
-    private MessageHistoryView messageHistoryView;
+    
 
     @Inject
     private LogsView logsView;
@@ -123,8 +122,7 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JToggleButton navSystemPromptButton;
 
-    @Outlet
-    private JToggleButton navMessageHistoryButton;
+    
 
     @Outlet
     private JToggleButton navSummaryQueueButton;
@@ -168,7 +166,7 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add(usageView);
             mainContentStack.add(settingsView);
             mainContentStack.add(systemPromptView);
-            mainContentStack.add(messageHistoryView);
+            
             mainContentStack.add(logsView);
             mainContentStack.add(codebaseCacheView);
             mainContentStack.add(geminiOnlineCachesView);
@@ -296,8 +294,7 @@ public class MainFrame extends JFrame implements Runnable {
             navSettingsButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.COG_OUTLINE, 18));
         if (navSystemPromptButton != null)
             navSystemPromptButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_OUTLINE, 18));
-        if (navMessageHistoryButton != null)
-            navMessageHistoryButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignM.MESSAGE_TEXT_CLOCK_OUTLINE, 18));
+        
         if (navLogsButton != null)
             navLogsButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FILE_DOCUMENT_OUTLINE, 18));
         if (navCodebaseCacheButton != null)
@@ -360,8 +357,7 @@ public class MainFrame extends JFrame implements Runnable {
             navSettingsButton.addActionListener(e -> showView("SETTINGS"));
         if (navSystemPromptButton != null)
             navSystemPromptButton.addActionListener(e -> showView("SYSTEM_PROMPT"));
-        if (navMessageHistoryButton != null)
-            navMessageHistoryButton.addActionListener(e -> showView("MESSAGE_HISTORY"));
+        
         if (navSummaryQueueButton != null)
             navSummaryQueueButton.addActionListener(e -> showView("SUMMARY_QUEUE"));
         if (navLogsButton != null)
@@ -380,7 +376,7 @@ public class MainFrame extends JFrame implements Runnable {
         usageView.setVisible(false);
         settingsView.setVisible(false);
         systemPromptView.setVisible(false);
-        messageHistoryView.setVisible(false);
+        
         logsView.setVisible(false);
         codebaseCacheView.setVisible(false);
         geminiOnlineCachesView.setVisible(false);
@@ -403,10 +399,7 @@ public class MainFrame extends JFrame implements Runnable {
                 systemPromptView.refresh();
                 systemPromptView.setVisible(true);
                 break;
-            case "MESSAGE_HISTORY":
-                messageHistoryView.refresh();
-                messageHistoryView.setVisible(true);
-                break;
+            
             case "LOGS":
                 logsView.refresh();
                 logsView.setVisible(true);
@@ -447,7 +440,7 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     public JTextPane[] getAllPanes() {
-        return new JTextPane[]{chatView.getChatArea(), systemPromptView.getSystemPromptArea(), messageHistoryView.getMessageHistoryArea(), codebaseCacheView.getCacheContentArea()};
+        return new JTextPane[]{chatView.getChatArea(), systemPromptView.getSystemPromptArea(), codebaseCacheView.getCacheContentArea()};
     }
 
     public void updateCacheStatus() {

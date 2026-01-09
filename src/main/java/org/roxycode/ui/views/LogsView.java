@@ -32,6 +32,8 @@ public class LogsView extends JPanel {
 
     @Outlet
     private JButton refreshLogsButton;
+    @Outlet
+    private JCheckBox autoRefreshCheckBox;
 
     @Inject
     public LogsView(LogCaptureService logCaptureService, SettingsService settingsService, ThemeService themeService) {
@@ -104,5 +106,11 @@ public class LogsView extends JPanel {
         }
 
         logsArea.setCaretPosition(doc.getLength());
+    }
+
+    public void autoRefresh() {
+        if (autoRefreshCheckBox != null && autoRefreshCheckBox.isSelected()) {
+            refresh();
+        }
     }
 }

@@ -35,7 +35,7 @@ public class GenAIService {
 
     private final UsageService usageService;
 
-    private final HistoryService historyService;
+    
 
     private final ProjectCacheMetaService projectCacheMetaService;
     private final RoxyProjectService roxyProjectService;
@@ -46,14 +46,14 @@ public class GenAIService {
     private String lastUsedApiKey;
 
     public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService,
-                        UsageService usageService, HistoryService historyService,
+                        UsageService usageService, 
                         RoxyProjectService roxyProjectService,
                         ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
         this.usageService = usageService;
-        this.historyService = historyService;
+        
         this.roxyProjectService = roxyProjectService;
         this.projectCacheMetaService = projectCacheMetaService;
         this.geminiClientFactory = geminiClientFactory;
@@ -170,7 +170,7 @@ public class GenAIService {
                     onStatusUpdate.accept(String.format("Thinking (%d/%d)...", turns, maxTurns));
                 }
 
-                historyService.applySlidingWindow(history);
+                
 
                 GenerateContentConfig config = prepareConfig(cacheMeta);
 
