@@ -103,8 +103,6 @@ public class LogsView extends JPanel {
             // Should not happen
         }
 
-        if (settingsService.isLogAutoScroll()) {
-            logsArea.setCaretPosition(doc.getLength());
-        }
+        logsArea.setCaretPosition(doc.getLength());
     }
 }

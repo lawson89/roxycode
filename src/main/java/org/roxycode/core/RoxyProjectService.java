@@ -155,11 +155,11 @@ public class RoxyProjectService {
             String toolApiDocs = scriptServiceRegistry.getApiDocs();
             return agentsMd + "\n\n" + toolApiDocs;
         } catch (Exception e) {
-            return "You are RoxyCode, an AI coding assistant. ";
+            return "You are RoxyCode, an AI coding assistant.";
         }
     }
 
     public String getModeMessage(){
-        return "IMPORTANT! Current Mode: " + currentMode + "\nPlease act in accordance with this mode.";
+        return "IMPORTANT! Current Mode: " + currentMode + ".\nPlease act in accordance with this mode.";
     }
 }

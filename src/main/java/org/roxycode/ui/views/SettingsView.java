@@ -44,9 +44,6 @@ public class SettingsView extends JPanel {
     private JTextField logLinesCountField;
 
     @Outlet
-    private JCheckBox logAutoScrollCheckBox;
-
-    @Outlet
     private JButton saveSettingsButton;
 
     @Outlet
@@ -98,7 +95,6 @@ public class SettingsView extends JPanel {
         apiKeyField.setText(settingsService.getGeminiApiKey());
         maxTurnsField.setText(String.valueOf(settingsService.getMaxTurns()));
         logLinesCountField.setText(String.valueOf(settingsService.getLogLinesCount()));
-        logAutoScrollCheckBox.setSelected(settingsService.isLogAutoScroll());
         themeComboBox.setSelectedItem(settingsService.getTheme());
         modelComboBox.setSelectedItem(settingsService.getGeminiModel());
         historyWindowSize.setText(String.valueOf(settingsService.getHistoryWindowSize()));
@@ -136,7 +132,6 @@ public class SettingsView extends JPanel {
         settingsService.setGeminiApiKey(new String(apiKeyField.getPassword()));
         settingsService.setMaxTurns(Integer.parseInt(maxTurnsField.getText()));
         settingsService.setLogLinesCount(Integer.parseInt(logLinesCountField.getText()));
-        settingsService.setLogAutoScroll(logAutoScrollCheckBox.isSelected());
         settingsService.setTheme((String) themeComboBox.getSelectedItem());
         settingsService.setGeminiModel((String) modelComboBox.getSelectedItem());
         settingsService.setHistoryWindowSize(Integer.parseInt(historyWindowSize.getText()));
