@@ -33,6 +33,9 @@ public class StructuralSearchService {
     @Inject
     Sandbox sandbox;
 
+    /**
+     * Initializes the Java analysis engine with a symbol solver.
+     */
     @PostConstruct
     public void init() {
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
@@ -42,6 +45,13 @@ public class StructuralSearchService {
         StaticJavaParser.getParserConfiguration().setSymbolResolver(symbolSolver);
     }
 
+    /**
+     * Finds empty catch blocks in the specified directory.
+     *
+     * @param pathStr The directory to search in, relative to the sandbox root.
+     * @return A list of SearchResult objects representing the empty catch blocks.
+     * @throws IOException If an I/O error occurs during file walking.
+     */
     @LLMDoc("Finds empty catch blocks in the specified directory")
     public List<SearchResult> findEmptyCatchBlocks(String pathStr) throws IOException {
         return walkAndSearch(pathStr, cu -> {
@@ -61,6 +71,13 @@ public class StructuralSearchService {
         });
     }
 
+    /**
+     * Finds methods or classes marked with @Deprecated that lack a Javadoc comment.
+     *
+     * @param pathStr The directory to search in, relative to the sandbox root.
+     * @return A list of SearchResult objects representing deprecated elements without Javadoc.
+     * @throws IOException If an I/O error occurs during file walking.
+     */
     @LLMDoc("Finds methods or classes marked with @Deprecated that lack a Javadoc comment")
     public List<SearchResult> findDeprecatedWithoutJavadoc(String pathStr) throws IOException {
         return walkAndSearch(pathStr, cu -> {
@@ -89,6 +106,14 @@ public class StructuralSearchService {
         });
     }
 
+    /**
+     * Finds methods with more than the specified number of parameters.
+     *
+     * @param pathStr   The directory to search in, relative to the sandbox root.
+     * @param threshold The maximum number of parameters allowed.
+     * @return A list of SearchResult objects representing methods with too many parameters.
+     * @throws IOException If an I/O error occurs during file walking.
+     */
     @LLMDoc("Finds methods with more than the specified number of parameters")
     public List<SearchResult> findMethodsWithTooManyParameters(String pathStr, int threshold) throws IOException {
         return walkAndSearch(pathStr, cu -> {
@@ -107,6 +132,14 @@ public class StructuralSearchService {
         });
     }
 
+    /**
+     * Finds classes with more than the specified number of lines.
+     *
+     * @param pathStr       The directory to search in, relative to the sandbox root.
+     * @param lineThreshold The maximum number of lines allowed.
+     * @return A list of SearchResult objects representing classes that are too large.
+     * @throws IOException If an I/O error occurs during file walking.
+     */
     @LLMDoc("Finds classes with more than the specified number of lines")
     public List<SearchResult> findLargeClasses(String pathStr, int lineThreshold) throws IOException {
         return walkAndSearch(pathStr, cu -> {
