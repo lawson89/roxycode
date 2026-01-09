@@ -24,12 +24,6 @@
             </row-panel>
 
             <spacer size="8"/>
-            <label text="Max Turns (Chat History):"/>
-            <row-panel spacing="8">
-                <text-field name="maxTurnsField" columns="10"/>
-            </row-panel>
-
-            <spacer size="8"/>
             <label text="System Log Lines:"/>
             <row-panel spacing="8">
                 <text-field name="logLinesCountField" columns="10"/>
@@ -45,9 +39,19 @@
         </column-panel>
 
         <column-panel tabTitle="Conversation Settings" spacing="8" padding="16">
+            <spacer size="8"/>
+            <label text="Max Turns (Chat History):"/>
+            <row-panel spacing="8">
+                <text-field name="maxTurnsField" columns="10"/>
+            </row-panel>
             <label text="History Window Size:"/>
             <row-panel spacing="8">
                 <text-field name="historyWindowSize" columns="10"/>
+            </row-panel>
+            <spacer size="8"/>
+            <label text="Max Turns Per Minute:"/>
+            <row-panel spacing="8">
+                <text-field name="maxTurnsPerMinuteField" columns="10"/>
             </row-panel>
             <spacer weight="1"/>
         </column-panel>

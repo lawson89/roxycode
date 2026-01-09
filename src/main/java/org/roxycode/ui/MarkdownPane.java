@@ -108,14 +108,14 @@ public class MarkdownPane extends JTextPane {
         }
     }
 
-    public void appendToolLog(String markdown) {
-        log.info("Rendering tool log: {}", markdown);
+    public void appendToolLog(String js) {
+        log.info("Rendering tool log: {}", js);
         String imgTag = generateIconTag(MaterialDesignW.WRENCH_OUTLINE, 16, FlatLaf.isLafDark() ? Color.LIGHT_GRAY : Color.DARK_GRAY, "wrench");
         if (!imgTag.isEmpty()) {
             imgTag += "&nbsp;";
         }
 //        String html = stripParagraph(renderer.render(parser.parse(markdown)));
-        String html = JsToHtmlConverter.convertToHtml(markdown, com.formdev.flatlaf.FlatLaf.isLafDark());
+        String html = JsToHtmlConverter.convertToHtml(js, com.formdev.flatlaf.FlatLaf.isLafDark());
         String combinedHtml = "<div style='background-color: " + (FlatLaf.isLafDark() ? "#2b2d30" : "#f2f2f2") + "; padding: 4px; border-radius: 4px; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
         try {
             HTMLDocument doc = (HTMLDocument) getDocument();

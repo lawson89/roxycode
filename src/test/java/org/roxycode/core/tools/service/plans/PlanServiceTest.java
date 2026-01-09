@@ -1,4 +1,4 @@
-package org.roxycode.core.plans;
+package org.roxycode.core.tools.service.plans;
 
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
@@ -7,6 +7,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.core.RoxyProjectService;
+import org.roxycode.core.tools.service.plans.Plan;
+import org.roxycode.core.tools.service.plans.PlanService;
+import org.roxycode.core.tools.service.plans.PlanStatus;
 
 import java.io.IOException;
 import java.nio.file.Path;

@@ -1,4 +1,4 @@
-package org.roxycode.core.plans;
+package org.roxycode.core.tools.service.plans;
 
 import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;

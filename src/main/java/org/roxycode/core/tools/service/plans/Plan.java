@@ -1,4 +1,4 @@
-package org.roxycode.core.plans;
+package org.roxycode.core.tools.service.plans;
 
 import java.util.ArrayList;
 import java.util.List;

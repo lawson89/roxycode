@@ -301,7 +301,6 @@ public class GenAIService {
         }
         if (onStatusUpdate != null) {
             String script = MapUtils.getString(fixedArgs, "script", "missing");
-            script = StringUtils.truncate(script, 200);
             // since we have moved to a script based model we just display the script
             onStatusUpdate.accept(script);
         }

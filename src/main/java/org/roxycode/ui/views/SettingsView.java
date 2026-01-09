@@ -38,6 +38,9 @@ public class SettingsView extends JPanel {
     private JTextField historyWindowSize;
 
     @Outlet
+    private JTextField maxTurnsPerMinuteField;
+
+    @Outlet
     private JTextField logLinesCountField;
 
     @Outlet
@@ -102,6 +105,7 @@ public class SettingsView extends JPanel {
         cacheEnabledCheckBox.setSelected(settingsService.isCacheEnabled());
         cacheTTLField.setText(String.valueOf(settingsService.getCacheTTL()));
         cacheMinSizeField.setText(String.valueOf(settingsService.getCacheMinSize()));
+        maxTurnsPerMinuteField.setText(String.valueOf(settingsService.getMaxTurnsPerMinute()));
         updateModelPricing();
     }
 
@@ -139,6 +143,7 @@ public class SettingsView extends JPanel {
         settingsService.setCacheEnabled(cacheEnabledCheckBox.isSelected());
         settingsService.setCacheTTL(Integer.parseInt(cacheTTLField.getText()));
         settingsService.setCacheMinSize(Integer.parseInt(cacheMinSizeField.getText()));
+        settingsService.setMaxTurnsPerMinute(Integer.parseInt(maxTurnsPerMinuteField.getText()));
         // Find top-level window to update the UI tree
         Window window = SwingUtilities.getWindowAncestor(this);
         themeService.applyTheme(settingsService.getTheme(), window);
