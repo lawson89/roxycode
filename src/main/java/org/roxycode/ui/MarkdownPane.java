@@ -114,6 +114,7 @@ public class MarkdownPane extends JTextPane {
         if (!imgTag.isEmpty()) {
             imgTag += "&nbsp;";
         }
+        imgTag = "";
 //        String html = stripParagraph(renderer.render(parser.parse(markdown)));
         String html = JsToHtmlConverter.convertToHtml(js, com.formdev.flatlaf.FlatLaf.isLafDark());
         String combinedHtml = "<div style='background-color: " + (FlatLaf.isLafDark() ? "#2b2d30" : "#f2f2f2") + "; padding: 4px; border-radius: 4px; margin: 2px 0;'>" + imgTag + "<span>" + html + "</span></div>";
