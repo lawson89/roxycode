@@ -12,10 +12,10 @@
                 <scroll-pane weight="1" verticalScrollBarPolicy="never">
                     <row-panel name="attachmentsContainer" spacing="8"/>
                 </scroll-pane>
+                <button name="attachButton" text="Attach"/>
                 <button name="clearAttachmentsButton" text="Clear"/>
             </row-panel>
             <row-panel spacing="8" padding="12" opaque="true" weight="1">
-                <button name="attachButton" text="Attach"/>
                 <column-panel weight="1" name="inputContainer"/>
                 <column-panel spacing="4">
                     <button name="sendButton" text="Send"/>
