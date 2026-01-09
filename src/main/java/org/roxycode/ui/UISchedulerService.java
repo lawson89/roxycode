@@ -17,7 +17,7 @@ public class UISchedulerService {
     @Inject
     private MainFrame mainFrame;
 
-    @Scheduled(fixedDelay = "2s", initialDelay = "1s")
+    @Scheduled(fixedDelay = "1s", initialDelay = "1s")
     void updateUI() {
         SwingUtilities.invokeLater(() -> {
             if (chatView != null) {
