@@ -15,6 +15,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
 
 @Singleton
@@ -162,4 +164,25 @@ public class ProjectCacheMetaService {
         }
     }
 
+
+    public List<ProjectCacheMeta> listAllMetadata() {
+        List<ProjectCacheMeta> allMeta = new ArrayList<>();
+        try {
+            Path cacheDir = roxyProjectService.getRoxyCacheDir();
+            if (!Files.exists(cacheDir)) return allMeta;
+            try (var stream = Files.list(cacheDir)) {
+                stream.filter(p -> p.toString().endsWith(".toml"))
+                        .forEach(p -> {
+                            try {
+                                allMeta.add(tomlMapper.readValue(p.toFile(), ProjectCacheMeta.class));
+                            } catch (IOException e) {
+                                LOG.warn("Failed to read metadata file: {}", p.getFileName());
+                            }
+                        });
+            }
+        } catch (IOException e) {
+            LOG.error("Failed to list cache directory: {}", e.getMessage());
+        }
+        return allMeta;
+    }
 }

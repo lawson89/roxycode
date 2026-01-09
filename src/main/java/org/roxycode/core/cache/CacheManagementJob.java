@@ -13,6 +13,12 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import com.google.genai.types.CachedContent;
+
+
 @Singleton
 @Requires(property = "cache.job.enabled", notEquals = "false")
 public class CacheManagementJob {
@@ -24,6 +30,7 @@ public class CacheManagementJob {
     private final ProjectCacheMetaService projectCacheMetaService;
     private final RoxyProjectService roxyProjectService;
     private final ProjectPackerService projectPackerService;
+    boolean cleanupDone = false;
 
     @Inject
     public CacheManagementJob(SettingsService settingsService,
@@ -40,6 +47,10 @@ public class CacheManagementJob {
 
     @Scheduled(fixedDelay = "1m", initialDelay = "10s")
     public void manageCache() {
+        if (!cleanupDone) {
+            cleanupCaches();
+            cleanupDone = true;
+        }
         LOG.debug("Checking cache status...");
         try {
             if (!settingsService.isCacheEnabled()) {
@@ -78,6 +89,36 @@ public class CacheManagementJob {
             }
         } catch (Exception e) {
             LOG.error("Error in cache management job: {}", e.getMessage(), e);
+        }
+    }
+
+    private void cleanupCaches() {
+        LOG.info("Cleaning up expired and orphaned caches...");
+        try {
+            List<ProjectCacheMeta> localMetas = projectCacheMetaService.listAllMetadata();
+            if (localMetas.isEmpty()) {
+                LOG.debug("No local cache metadata found to clean up.");
+                return;
+            }
+
+            List<CachedContent> onlineCaches = geminiCacheService.listCaches();
+            Set<String> onlineIds = onlineCaches.stream()
+                    .map(c -> c.name().orElse(""))
+                    .filter(name -> !name.isEmpty())
+                    .collect(Collectors.toSet());
+
+            for (ProjectCacheMeta meta : localMetas) {
+                boolean expired = projectCacheMetaService.getSecondsUntilExpiration(meta) <= 0;
+                boolean orphaned = !onlineIds.contains(meta.geminiCacheId());
+
+                if (expired || orphaned) {
+                    if (expired) LOG.info("Deleting expired cache metadata: {}", meta.cacheKey());
+                    else LOG.info("Deleting orphaned cache metadata: {} (Gemini ID {} not found online)", meta.cacheKey(), meta.geminiCacheId());
+                    projectCacheMetaService.deleteProjectCacheMetaByCacheKey(meta.cacheKey());
+                }
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to cleanup caches: {}", e.getMessage());
         }
     }
 }

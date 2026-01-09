@@ -4,6 +4,7 @@ import io.micronaut.test.annotation.MockBean;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.roxycode.core.RoxyProjectService;
@@ -11,6 +12,8 @@ import org.roxycode.core.GeminiClientFactory;
 import org.roxycode.core.SettingsService;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Collections;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -37,6 +40,11 @@ public class CacheManagementJobTest {
 
     @Inject
     ProjectPackerService projectPackerService;
+    @BeforeEach
+    void resetCleanup() {
+        cacheManagementJob.cleanupDone = false;
+    }
+
 
     @Test
     void testManageCache_WhenEnabledAndMissing() throws IOException {
@@ -145,4 +153,34 @@ public class CacheManagementJobTest {
         verify(geminiCacheService, never()).refreshCache(anyString());
     }
 
+
+    @Test
+    void testManageCache_PerformsCleanupOnFirstRun() throws IOException {
+        Path mockPath = Path.of("/mock/project");
+        when(settingsService.isCacheEnabled()).thenReturn(true);
+        when(settingsService.getGeminiApiKey()).thenReturn("mock-api-key");
+        when(roxyProjectService.getProjectRoot()).thenReturn(mockPath);
+
+        org.roxycode.core.beans.ProjectCacheMeta meta1 = mock(org.roxycode.core.beans.ProjectCacheMeta.class);
+        when(meta1.cacheKey()).thenReturn("key1");
+        when(meta1.geminiCacheId()).thenReturn("id1");
+        
+        org.roxycode.core.beans.ProjectCacheMeta meta2 = mock(org.roxycode.core.beans.ProjectCacheMeta.class);
+        when(meta2.cacheKey()).thenReturn("key2");
+        when(meta2.geminiCacheId()).thenReturn("id2");
+
+        when(projectCacheMetaService.listAllMetadata()).thenReturn(List.of(meta1, meta2));
+        
+        // Mock meta1 as expired
+        when(projectCacheMetaService.getSecondsUntilExpiration(meta1)).thenReturn(0L);
+        // Mock meta2 as active but orphaned (not in online caches)
+        when(projectCacheMetaService.getSecondsUntilExpiration(meta2)).thenReturn(1000L);
+        
+        when(geminiCacheService.listCaches()).thenReturn(Collections.emptyList());
+
+        cacheManagementJob.manageCache();
+
+        verify(projectCacheMetaService, times(1)).deleteProjectCacheMetaByCacheKey("key1");
+        verify(projectCacheMetaService, times(1)).deleteProjectCacheMetaByCacheKey("key2");
+    }
 }

@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -144,4 +145,22 @@ class ProjectCacheMetaServiceTest {
         assertEquals(0, projectCacheMetaService.getSecondsUntilExpiration(expiredMeta));
     }
 
+
+    @Test
+    void testListAllMetadata() throws IOException {
+        Path projectRoot = roxyProjectService.getProjectRoot();
+        String user = SystemUtils.getSystemUser();
+        
+        ProjectCacheMeta meta1 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "...", "key1", "id1");
+        ProjectCacheMeta meta2 = new ProjectCacheMeta(projectRoot.toString(), user, "...", "...", "key2", "id2");
+
+        projectCacheMetaService.writeProjectCacheMeta(meta1);
+        projectCacheMetaService.writeProjectCacheMeta(meta2);
+
+        List<ProjectCacheMeta> allMeta = projectCacheMetaService.listAllMetadata();
+        
+        assertEquals(2, allMeta.size());
+        assertTrue(allMeta.stream().anyMatch(m -> "key1".equals(m.cacheKey())));
+        assertTrue(allMeta.stream().anyMatch(m -> "key2".equals(m.cacheKey())));
+    }
 }
