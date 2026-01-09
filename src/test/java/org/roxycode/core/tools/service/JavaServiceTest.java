@@ -252,4 +252,37 @@ class JavaServiceTest {
         assertTrue(fieldJd.isPresent());
         assertTrue(fieldJd.get().contains("Field Javadoc"));
     }
+
+    @Test
+    void testTextBlockSupport() throws IOException {
+        Path path = tempDir.resolve("TextBlockTest.java");
+        Files.writeString(path, "public class TextBlockTest { String s = \"\"\"\n" +
+                "        hello\n" +
+                "        \"\"\"; }");
+
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path.toString());
+        assertNotNull(summary);
+        assertEquals("TextBlockTest", summary.classes().get(0).name());
+    }
+
+
+    @Test
+    void testRecordSupport() throws IOException {
+        Path path = tempDir.resolve("RecordTest.java");
+        Files.writeString(path, """
+            package test;
+            public record RecordTest(String name, int value) {
+                public void hello() {}
+            }
+            """);
+
+        JavaService.JavaFileSummary summary = javaAnalysisService.analyzeFile(path.toString());
+
+        assertNotNull(summary);
+        assertEquals(1, summary.classes().size());
+        JavaService.ClassSummary classSummary = summary.classes().get(0);
+        assertEquals("RecordTest", classSummary.name());
+        assertEquals(1, classSummary.methods().size());
+        assertEquals("hello", classSummary.methods().get(0).name());
+    }
 }

@@ -1,6 +1,7 @@
 package org.roxycode.core.analysis;
 
 import org.junit.jupiter.api.Test;
+import com.github.javaparser.ParserConfiguration;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -10,10 +11,16 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 class JavaAnalysisServiceNewTest {
+    private JavaSourceAnalysisService createService() {
+        JavaSourceAnalysisService service = new JavaSourceAnalysisService();
+        service.parserConfiguration = new com.github.javaparser.ParserConfiguration()
+                .setLanguageLevel(com.github.javaparser.ParserConfiguration.LanguageLevel.JAVA_21);
+        return service;
+    }
 
     @Test
     void testGenerateSkeletonToFile(@TempDir Path tempDir) throws IOException {
-        JavaSourceAnalysisService service = new JavaSourceAnalysisService();
+        JavaSourceAnalysisService service = createService();
         Path sourceDir = tempDir.resolve("src");
         Files.createDirectories(sourceDir);
         
@@ -32,7 +39,7 @@ class JavaAnalysisServiceNewTest {
 
     @Test
     void testGenerateSkeletonToString(@TempDir Path tempDir) throws IOException {
-        JavaSourceAnalysisService service = new JavaSourceAnalysisService();
+        JavaSourceAnalysisService service = createService();
         Path sourceDir = tempDir.resolve("src");
         Files.createDirectories(sourceDir);
         
@@ -48,7 +55,7 @@ class JavaAnalysisServiceNewTest {
 
     @Test
     void testJavadocInSkeleton(@TempDir Path tempDir) throws IOException {
-        JavaSourceAnalysisService service = new JavaSourceAnalysisService();
+        JavaSourceAnalysisService service = createService();
         Path sourceDir = tempDir.resolve("src");
         Files.createDirectories(sourceDir);
 
@@ -75,5 +82,33 @@ class JavaAnalysisServiceNewTest {
         assertTrue(content.contains("* Line 2."));
         assertTrue(content.contains("*/"));
         assertTrue(content.contains("String name;"));
+    }
+
+    @Test
+    void testTextBlockSupport(@TempDir Path tempDir) throws IOException {
+        JavaSourceAnalysisService service = createService();
+        Path sourceDir = tempDir.resolve("src");
+        Files.createDirectories(sourceDir);
+
+        Path javaFile = sourceDir.resolve("TextBlock.java");
+        Files.writeString(javaFile, "public class TextBlock { String s = \"\"\"\n        hello\n        \"\"\"; }");
+
+        String content = service.generateSkeletonToString(sourceDir);
+        assertTrue(content.contains("class TextBlock"));
+    }
+
+    @Test
+    void testRecordSupport(@TempDir Path tempDir) throws IOException {
+        JavaSourceAnalysisService service = createService();
+        Path sourceDir = tempDir.resolve("src");
+        Files.createDirectories(sourceDir);
+
+        Path javaFile = sourceDir.resolve("Point.java");
+        Files.writeString(javaFile, "public record Point(int x, int y) { }");
+
+        String content = service.generateSkeletonToString(sourceDir);
+        assertTrue(content.contains("record Point"));
+        assertTrue(content.contains("int x"));
+        assertTrue(content.contains("int y"));
     }
 }

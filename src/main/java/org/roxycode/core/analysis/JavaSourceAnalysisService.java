@@ -7,6 +7,7 @@ import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.RecordDeclaration;
 import com.github.javaparser.ast.comments.Comment;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.utils.SourceRoot;
@@ -26,6 +27,8 @@ import java.util.stream.Collectors;
 
 @Singleton
 public class JavaSourceAnalysisService {
+    @jakarta.inject.Inject
+    ParserConfiguration parserConfiguration = new ParserConfiguration();
 
     private static final Logger LOG = LoggerFactory.getLogger(JavaSourceAnalysisService.class);
 
@@ -72,11 +75,9 @@ public class JavaSourceAnalysisService {
      * @param writer     The open writer to stream the summary to
      */
     protected void generateSkeleton(Path sourcePath, BufferedWriter writer) {
-        // Configure Parser
-        ParserConfiguration config = new ParserConfiguration();
-        config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
 
-        SourceRoot sourceRoot = new SourceRoot(sourcePath, config);
+
+        SourceRoot sourceRoot = new SourceRoot(sourcePath, parserConfiguration);
 
         try {
             // Parse all files
@@ -128,6 +129,29 @@ public class JavaSourceAnalysisService {
             }
             if (!n.getExtendedTypes().isEmpty()) {
                 write(w, " extends " + n.getExtendedTypes().get(0).getNameAsString());
+            }
+
+            write(w, " {\n");
+            super.visit(n, w);
+            write(w, "}\n");
+        }
+
+        @Override
+        public void visit(RecordDeclaration n, Writer w) {
+            write(w, getJavadoc(n));
+            write(w, n.getAccessSpecifier().asString() + " ");
+            write(w, "record ");
+            write(w, n.getNameAsString());
+            write(w, "(");
+            write(w, n.getParameters().stream()
+                    .map(p -> p.getTypeAsString() + " " + p.getNameAsString())
+                    .collect(Collectors.joining(", ")));
+            write(w, ")");
+
+            if (!n.getImplementedTypes().isEmpty()) {
+                write(w, " implements " + n.getImplementedTypes().stream()
+                        .map(it -> it.getNameAsString())
+                        .collect(Collectors.joining(", ")));
             }
 
             write(w, " {\n");

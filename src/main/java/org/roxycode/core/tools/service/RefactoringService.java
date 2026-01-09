@@ -1,6 +1,5 @@
 package org.roxycode.core.tools.service;
 
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
@@ -13,6 +12,7 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.VoidType;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.Sandbox;
@@ -20,7 +20,6 @@ import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,24 +42,22 @@ public class RefactoringService {
     @Inject
     Sandbox sandbox;
 
+    @Inject
+    com.github.javaparser.JavaParser javaParser;
+
     @LLMDoc("Organizes imports in a Java file by removing unused ones.")
     public void organizeImports(String pathStr) throws IOException {
         Path path = sandbox.resolve(pathStr);
-        CompilationUnit cu = StaticJavaParser.parse(path);
-
+        CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
         Set<String> usedNames = new HashSet<>();
         cu.findAll(ClassOrInterfaceType.class).forEach(type -> usedNames.add(type.getNameAsString()));
         cu.findAll(NameExpr.class).forEach(name -> usedNames.add(name.getNameAsString()));
-
+        cu.findAll(AnnotationExpr.class).forEach(ann -> usedNames.add(ann.getNameAsString()));
         List<ImportDeclaration> imports = cu.getImports();
-        List<ImportDeclaration> toRemove = imports.stream()
-                .filter(id -> !id.isAsterisk() && !id.isStatic())
-                .filter(id -> {
-                    String name = id.getName().getIdentifier();
-                    return !usedNames.contains(name);
-                })
-                .collect(Collectors.toList());
-
+        List<ImportDeclaration> toRemove = imports.stream().filter(id -> !id.isAsterisk() && !id.isStatic()).filter(id -> {
+            String name = id.getName().getIdentifier();
+            return !usedNames.contains(name);
+        }).collect(Collectors.toList());
         if (!toRemove.isEmpty()) {
             logger.info("Removing {} unused imports from {}", toRemove.size(), pathStr);
             toRemove.forEach(ImportDeclaration::remove);
@@ -73,14 +70,9 @@ public class RefactoringService {
         int lastDot = oldFullyQualifiedName.lastIndexOf('.');
         String packageName = (lastDot != -1) ? oldFullyQualifiedName.substring(0, lastDot) : "";
         String oldSimpleName = (lastDot != -1) ? oldFullyQualifiedName.substring(lastDot + 1) : oldFullyQualifiedName;
-
         Path root = sandbox.getRoot();
         try (Stream<Path> paths = Files.walk(root)) {
-            List<Path> javaFiles = paths
-                    .filter(Files::isRegularFile)
-                    .filter(p -> p.toString().endsWith(".java"))
-                    .collect(Collectors.toList());
-
+            List<Path> javaFiles = paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".java")).collect(Collectors.toList());
             for (Path javaFile : javaFiles) {
                 updateClassReferencesInFile(javaFile, packageName, oldSimpleName, packageName, newName);
             }
@@ -92,14 +84,9 @@ public class RefactoringService {
         int lastDot = fullyQualifiedName.lastIndexOf('.');
         String oldPackageName = (lastDot != -1) ? fullyQualifiedName.substring(0, lastDot) : "";
         String simpleName = (lastDot != -1) ? fullyQualifiedName.substring(lastDot + 1) : fullyQualifiedName;
-
         Path root = sandbox.getRoot();
         try (Stream<Path> paths = Files.walk(root)) {
-            List<Path> javaFiles = paths
-                    .filter(Files::isRegularFile)
-                    .filter(p -> p.toString().endsWith(".java"))
-                    .collect(Collectors.toList());
-
+            List<Path> javaFiles = paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".java")).collect(Collectors.toList());
             for (Path javaFile : javaFiles) {
                 updateClassReferencesInFile(javaFile, oldPackageName, simpleName, newPackageName, simpleName);
             }
@@ -107,20 +94,16 @@ public class RefactoringService {
     }
 
     private void updateClassReferencesInFile(Path javaFile, String oldPackage, String oldName, String newPackage, String newName) throws IOException {
-        CompilationUnit cu = StaticJavaParser.parse(javaFile);
+        CompilationUnit cu = javaParser.parse(javaFile).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + javaFile));
         boolean changed = false;
-
         String filePackage = cu.getPackageDeclaration().map(pd -> pd.getNameAsString()).orElse("");
         boolean wasInSamePackage = filePackage.equals(oldPackage);
-        boolean isImported = cu.getImports().stream()
-                .anyMatch(id -> id.getNameAsString().equals(oldPackage + "." + oldName));
-
+        boolean isImported = cu.getImports().stream().anyMatch(id -> id.getNameAsString().equals(oldPackage + "." + oldName));
         // 1. Update package declaration if this IS the class being moved
         if (wasInSamePackage && javaFile.getFileName().toString().equals(oldName + ".java")) {
             cu.setPackageDeclaration(newPackage);
             changed = true;
         }
-
         // 2. Update class name if it changed
         if (wasInSamePackage || isImported) {
             for (ClassOrInterfaceDeclaration cd : cu.findAll(ClassOrInterfaceDeclaration.class)) {
@@ -150,11 +133,9 @@ public class RefactoringService {
                     }
                 }
             }
-
             // 3. Update or Add/Remove Imports
             boolean needsNewImport = !filePackage.equals(newPackage);
             boolean foundOldImport = false;
-            
             List<ImportDeclaration> imports = cu.getImports();
             for (int i = 0; i < imports.size(); i++) {
                 ImportDeclaration id = imports.get(i);
@@ -162,23 +143,21 @@ public class RefactoringService {
                     if (needsNewImport) {
                         id.setName(newPackage + "." + newName);
                     } else {
-                        id.remove(); // No longer needs import if now in same package
+                        // No longer needs import if now in same package
+                        id.remove();
                     }
                     foundOldImport = true;
                     changed = true;
                 }
             }
-            
             if (!foundOldImport && wasInSamePackage && !filePackage.equals(newPackage) && !javaFile.getFileName().toString().equals(oldName + ".java")) {
-                 // Used to be in same package, now needs an import
-                 cu.addImport(newPackage + "." + newName);
-                 changed = true;
+                // Used to be in same package, now needs an import
+                cu.addImport(newPackage + "." + newName);
+                changed = true;
             }
         }
-
         if (changed) {
             Files.writeString(javaFile, cu.toString());
-            
             // If we renamed or moved, we might need to move the file
             if (javaFile.getFileName().toString().equals(oldName + ".java") && wasInSamePackage) {
                 // Determine new path based on package
@@ -186,7 +165,6 @@ public class RefactoringService {
                 Path newDirPath = srcRoot.resolve(newPackage.replace('.', '/'));
                 Files.createDirectories(newDirPath);
                 Path newFilePath = newDirPath.resolve(newName + ".java");
-                
                 if (!javaFile.equals(newFilePath)) {
                     Files.move(javaFile, newFilePath);
                     logger.info("Moved file {} to {}", javaFile, newFilePath);
@@ -207,7 +185,7 @@ public class RefactoringService {
     @LLMDoc("Renames a class declaration in a specific file.")
     public void renameClassInFile(String pathStr, String oldName, String newName) throws IOException {
         Path path = sandbox.resolve(pathStr);
-        CompilationUnit cu = StaticJavaParser.parse(path);
+        CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
         boolean changed = false;
         for (ClassOrInterfaceDeclaration cd : cu.findAll(ClassOrInterfaceDeclaration.class)) {
             if (cd.getNameAsString().equals(oldName)) {
@@ -215,32 +193,27 @@ public class RefactoringService {
                 changed = true;
             }
         }
-        if (changed) Files.writeString(path, cu.toString());
+        if (changed)
+            Files.writeString(path, cu.toString());
     }
 
     @LLMDoc("Extracts a range of lines into a new private method in the same class.")
     public void extractMethod(String pathStr, int startLine, int endLine, String newMethodName) throws IOException {
         Path path = sandbox.resolve(pathStr);
-        CompilationUnit cu = StaticJavaParser.parse(path);
-
+        CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
         MethodDeclaration targetMethod = null;
         for (MethodDeclaration md : cu.findAll(MethodDeclaration.class)) {
-            if (md.getRange().isPresent() && 
-                md.getRange().get().begin.line <= startLine && 
-                md.getRange().get().end.line >= endLine) {
+            if (md.getRange().isPresent() && md.getRange().get().begin.line <= startLine && md.getRange().get().end.line >= endLine) {
                 targetMethod = md;
                 break;
             }
         }
-
         if (targetMethod == null || !targetMethod.getBody().isPresent()) {
             throw new IllegalArgumentException("Could not find a method containing the specified line range.");
         }
-
         BlockStmt body = targetMethod.getBody().get();
         List<Statement> allStatements = body.getStatements();
         List<Statement> statementsToExtract = new ArrayList<>();
-
         for (Statement stmt : allStatements) {
             if (stmt.getRange().isPresent()) {
                 int line = stmt.getRange().get().begin.line;
@@ -249,11 +222,9 @@ public class RefactoringService {
                 }
             }
         }
-
         if (statementsToExtract.isEmpty()) {
             throw new IllegalArgumentException("No statements found in the specified line range.");
         }
-
         MethodDeclaration newMethod = new MethodDeclaration();
         newMethod.setName(newMethodName);
         newMethod.setType(new VoidType());
@@ -261,13 +232,10 @@ public class RefactoringService {
         BlockStmt newBody = new BlockStmt();
         statementsToExtract.forEach(newBody::addStatement);
         newMethod.setBody(newBody);
-
         ClassOrInterfaceDeclaration clazz = (ClassOrInterfaceDeclaration) targetMethod.getParentNode().get();
         clazz.addMember(newMethod);
-
         MethodCallExpr call = new MethodCallExpr(null, newMethodName);
-        Statement callStmt = StaticJavaParser.parseStatement(call.toString() + ";");
-        
+        Statement callStmt = javaParser.parseStatement(call.toString() + ";").getResult().orElseThrow(() -> new RuntimeException("Failed to parse call statement: " + call));
         BlockStmt updatedBody = new BlockStmt();
         boolean callInserted = false;
         for (Statement stmt : allStatements) {
@@ -287,17 +255,12 @@ public class RefactoringService {
     @LLMDoc("Extracts an interface from a class, including specified methods.")
     public void extractInterface(String classPathStr, String interfaceName, List<String> methodNames) throws IOException {
         Path classPath = sandbox.resolve(classPathStr);
-        CompilationUnit classCu = StaticJavaParser.parse(classPath);
-        
-        ClassOrInterfaceDeclaration clazz = classCu.findFirst(ClassOrInterfaceDeclaration.class)
-                .orElseThrow(() -> new IllegalArgumentException("No class found in " + classPathStr));
-
+        CompilationUnit classCu = javaParser.parse(classPath).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + classPath));
+        ClassOrInterfaceDeclaration clazz = classCu.findFirst(ClassOrInterfaceDeclaration.class).orElseThrow(() -> new IllegalArgumentException("No class found in " + classPathStr));
         CompilationUnit interfaceCu = new CompilationUnit();
         classCu.getPackageDeclaration().ifPresent(interfaceCu::setPackageDeclaration);
-        
         ClassOrInterfaceDeclaration interfece = interfaceCu.addInterface(interfaceName);
         interfece.setModifiers(Modifier.Keyword.PUBLIC);
-
         for (String methodName : methodNames) {
             clazz.getMethodsByName(methodName).forEach(md -> {
                 MethodDeclaration interfaceMethod = interfece.addMethod(md.getNameAsString());
@@ -306,7 +269,6 @@ public class RefactoringService {
                 interfaceMethod.setBody(null);
             });
         }
-
         clazz.addImplementedType(interfaceName);
         Files.writeString(classPath, classCu.toString());
         Path interfacePath = classPath.resolveSibling(interfaceName + ".java");

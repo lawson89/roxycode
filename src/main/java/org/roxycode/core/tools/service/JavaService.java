@@ -1,7 +1,9 @@
 package org.roxycode.core.tools.service;
 
-import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.StaticJavaParser;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
+import org.roxycode.core.tools.LLMDoc;
+import org.roxycode.core.tools.ScriptService;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
@@ -9,18 +11,14 @@ import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import jakarta.annotation.PostConstruct;
-import jakarta.inject.Singleton;
-import org.roxycode.core.tools.LLMDoc;
-import org.roxycode.core.tools.ScriptService;
 import org.roxycode.core.Sandbox;
-import jakarta.inject.Inject;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -34,15 +32,8 @@ public class JavaService {
     @Inject
     Sandbox sandbox;
 
-    /**
-     * Initializes the Java analysis engine, setting the language level to Java 21.
-     */
-    @LLMDoc("Initializes the Java analysis engine")
-    @PostConstruct
-    public void init() {
-        StaticJavaParser.getParserConfiguration()
-                .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
-    }
+    @Inject
+    com.github.javaparser.JavaParser javaParser;
 
     /**
      * Analyzes a Java file and returns a summary of its structure.
@@ -54,54 +45,31 @@ public class JavaService {
     @LLMDoc("Analyzes a Java file and returns a summary of its classes, methods, and imports")
     public JavaFileSummary analyzeFile(String pathStr) throws IOException {
         Path path = sandbox.resolve(pathStr);
-        CompilationUnit cu = StaticJavaParser.parse(path);
-
-        List<String> imports = cu.getImports().stream()
-                .map(ImportDeclaration::getNameAsString)
-                .collect(Collectors.toList());
-
-        List<ClassSummary> classes = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                .map(this::summarizeClass)
-                .collect(Collectors.toList());
-
+        CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+        List<String> imports = cu.getImports().stream().map(ImportDeclaration::getNameAsString).collect(Collectors.toList());
+        List<ClassSummary> classes = cu.findAll(TypeDeclaration.class).stream().map(this::summarizeType).collect(Collectors.toList());
         return new JavaFileSummary(classes, imports);
     }
 
-    private ClassSummary summarizeClass(ClassOrInterfaceDeclaration n) {
-        List<MethodSummary> methods = n.getMethods().stream()
-                .map(this::summarizeMethod)
-                .collect(Collectors.toList());
-
-        List<FieldSummary> fields = n.getFields().stream()
-                .flatMap(f -> f.getVariables().stream().map(v -> new FieldSummary(
-                        v.getNameAsString(),
-                        v.getTypeAsString(),
-                        f.getComment().map(Node::toString).orElse(""),
-                        v.getBegin().map(p -> p.line).orElse(-1),
-                        v.getEnd().map(p -> p.line).orElse(-1)
-                )))
-                .collect(Collectors.toList());
-
+    private ClassSummary summarizeType(TypeDeclaration<?> n) {
+        List<MethodSummary> methods = new ArrayList<>();
+        List<FieldSummary> fields = new ArrayList<>();
+        for (BodyDeclaration<?> member : n.getMembers()) {
+            if (member instanceof MethodDeclaration m) {
+                methods.add(summarizeMethod(m));
+            } else if (member instanceof FieldDeclaration f) {
+                f.getVariables().forEach(v -> {
+                    fields.add(new FieldSummary(v.getNameAsString(), v.getTypeAsString(), f.getComment().map(Node::toString).orElse(""), v.getBegin().map(p -> p.line).orElse(-1), v.getEnd().map(p -> p.line).orElse(-1)));
+                });
+            }
+        }
         List<String> dependencies = extractDependencies(n);
-
-        return new ClassSummary(
-                n.getNameAsString(),
-                n.getComment().map(Node::toString).orElse(""),
-                methods,
-                fields,
-                n.isInterface(),
-                dependencies
-        );
+        boolean isInterface = n instanceof ClassOrInterfaceDeclaration ci && ci.isInterface();
+        return new ClassSummary(n.getNameAsString(), n.getComment().map(Node::toString).orElse(""), methods, fields, isInterface, dependencies);
     }
 
     private MethodSummary summarizeMethod(MethodDeclaration m) {
-        return new MethodSummary(
-                m.getNameAsString(),
-                m.getDeclarationAsString(),
-                m.getComment().map(Node::toString).orElse(""),
-                m.getBegin().map(p -> p.line).orElse(-1),
-                m.getEnd().map(p -> p.line).orElse(-1)
-        );
+        return new MethodSummary(m.getNameAsString(), m.getDeclarationAsString(), m.getComment().map(Node::toString).orElse(""), m.getBegin().map(p -> p.line).orElse(-1), m.getEnd().map(p -> p.line).orElse(-1));
     }
 
     /**
@@ -115,32 +83,21 @@ public class JavaService {
     @LLMDoc("Returns the list of classes that the specified class depends on (extends, implements, fields, method parameters, local variables)")
     public List<String> getClassDependencies(String pathStr, String className) throws IOException {
         Path path = sandbox.resolve(pathStr);
-        CompilationUnit cu = StaticJavaParser.parse(path);
-        Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                .filter(c -> c.getNameAsString().equals(className))
-                .findFirst();
-
-        if (classDecl.isPresent()) {
-            return extractDependencies(classDecl.get());
+        CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+        Optional<TypeDeclaration> typeDecl = cu.findAll(TypeDeclaration.class).stream().filter(c -> c.getNameAsString().equals(className)).map(t -> (TypeDeclaration) t).findFirst();
+        if (typeDecl.isPresent()) {
+            return extractDependencies(typeDecl.get());
         } else {
-            throw new RuntimeException("Class " + className + " not found in file " + path);
+            throw new RuntimeException("Type " + className + " not found in file " + path);
         }
     }
 
-    private List<String> extractDependencies(ClassOrInterfaceDeclaration n) {
-        return n.findAll(ClassOrInterfaceType.class).stream()
-                .map(ClassOrInterfaceType::getNameAsString)
-                .filter(name -> !name.equals(n.getNameAsString()))
-                .filter(name -> !isJavaLibraryType(name))
-                .distinct()
-                .sorted()
-                .collect(Collectors.toList());
+    private List<String> extractDependencies(TypeDeclaration<?> n) {
+        return n.findAll(ClassOrInterfaceType.class).stream().map(ClassOrInterfaceType::getNameAsString).filter(name -> !name.equals(n.getNameAsString())).filter(name -> !isJavaLibraryType(name)).distinct().sorted().collect(Collectors.toList());
     }
 
     private boolean isJavaLibraryType(String name) {
-        return List.of("String", "Integer", "Long", "Double", "Float", "Boolean", "Byte", "Character", "Short",
-                "Object", "List", "Set", "Map", "Optional", "ArrayList", "HashMap", "HashSet", "Collection", "Stream",
-                "Path", "Files", "IOException", "Exception", "RuntimeException").contains(name);
+        return List.of("String", "Integer", "Long", "Double", "Float", "Boolean", "Byte", "Character", "Short", "Object", "List", "Set", "Map", "Optional", "ArrayList", "HashMap", "HashSet", "Collection", "Stream", "Path", "Files", "IOException", "Exception", "RuntimeException").contains(name);
     }
 
     /**
@@ -155,15 +112,22 @@ public class JavaService {
     public Optional<String> getMethodSource(String pathStr, String className, String methodName) {
         Path path = sandbox.resolve(pathStr);
         try {
-            CompilationUnit cu = StaticJavaParser.parse(path);
-            return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                    .filter(c -> c.getNameAsString().equals(className))
-                    .flatMap(c -> c.getMethodsByName(methodName).stream())
-                    .findFirst()
-                    .map(Node::toString);
+            CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+            for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
+                if (type.getNameAsString().equals(className)) {
+                    for (BodyDeclaration<?> member : type.getMembers()) {
+                        if (member instanceof MethodDeclaration m) {
+                            if (m.getNameAsString().equals(methodName)) {
+                                return Optional.of(m.toString());
+                            }
+                        }
+                    }
+                }
+            }
         } catch (IOException e) {
-            return Optional.empty();
+            // ignore
         }
+        return Optional.empty();
     }
 
     /**
@@ -178,23 +142,23 @@ public class JavaService {
     @LLMDoc("Replaces the source code of a specific method in a class")
     public void replaceMethod(String pathStr, String className, String methodName, String newMethodSource) throws IOException {
         Path path = sandbox.resolve(pathStr);
-        CompilationUnit cu = StaticJavaParser.parse(path);
-        Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                .filter(c -> c.getNameAsString().equals(className))
-                .findFirst();
-
-        if (classDecl.isPresent()) {
-            List<MethodDeclaration> methods = classDecl.get().getMethodsByName(methodName);
-            if (!methods.isEmpty()) {
-                MethodDeclaration newMethod = StaticJavaParser.parseMethodDeclaration(newMethodSource);
-                methods.get(0).replace(newMethod);
-                Files.writeString(path, cu.toString());
-            } else {
-                throw new RuntimeException("Method " + methodName + " not found in class " + className);
+        CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+        for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
+            if (type.getNameAsString().equals(className)) {
+                for (BodyDeclaration<?> member : type.getMembers()) {
+                    if (member instanceof MethodDeclaration m) {
+                        if (m.getNameAsString().equals(methodName)) {
+                            MethodDeclaration newMethod = javaParser.parseMethodDeclaration(newMethodSource).getResult().orElseThrow(() -> new RuntimeException("Failed to parse method: " + newMethodSource));
+                            m.replace(newMethod);
+                            Files.writeString(path, cu.toString());
+                            return;
+                        }
+                    }
+                }
+                throw new RuntimeException("Method " + methodName + " not found in type " + className);
             }
-        } else {
-            throw new RuntimeException("Class " + className + " not found in file " + path);
         }
+        throw new RuntimeException("Type " + className + " not found in file " + path);
     }
 
     /**
@@ -209,16 +173,22 @@ public class JavaService {
     public Optional<String> getFieldSource(String pathStr, String className, String fieldName) {
         Path path = sandbox.resolve(pathStr);
         try {
-            CompilationUnit cu = StaticJavaParser.parse(path);
-            return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                    .filter(c -> c.getNameAsString().equals(className))
-                    .flatMap(c -> c.getFields().stream())
-                    .filter(f -> f.getVariables().stream().anyMatch(v -> v.getNameAsString().equals(fieldName)))
-                    .findFirst()
-                    .map(Node::toString);
+            CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+            for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
+                if (type.getNameAsString().equals(className)) {
+                    for (BodyDeclaration<?> member : type.getMembers()) {
+                        if (member instanceof FieldDeclaration f) {
+                            if (f.getVariables().stream().anyMatch(v -> v.getNameAsString().equals(fieldName))) {
+                                return Optional.of(f.toString());
+                            }
+                        }
+                    }
+                }
+            }
         } catch (IOException e) {
-            return Optional.empty();
+            // ignore
         }
+        return Optional.empty();
     }
 
     /**
@@ -233,30 +203,23 @@ public class JavaService {
     @LLMDoc("Replaces the source code of a specific field in a class")
     public void replaceField(String pathStr, String className, String fieldName, String newFieldSource) throws IOException {
         Path path = sandbox.resolve(pathStr);
-        CompilationUnit cu = StaticJavaParser.parse(path);
-        Optional<ClassOrInterfaceDeclaration> classDecl = cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                .filter(c -> c.getNameAsString().equals(className))
-                .findFirst();
-
-        if (classDecl.isPresent()) {
-            Optional<FieldDeclaration> fieldDecl = classDecl.get().getFields().stream()
-                    .filter(f -> f.getVariables().stream().anyMatch(v -> v.getNameAsString().equals(fieldName)))
-                    .findFirst();
-
-            if (fieldDecl.isPresent()) {
-                BodyDeclaration<?> newField = StaticJavaParser.parseBodyDeclaration(newFieldSource);
-                if (newField.isFieldDeclaration()) {
-                    fieldDecl.get().replace(newField);
-                    Files.writeString(path, cu.toString());
-                } else {
-                    throw new RuntimeException("New source is not a valid field declaration: " + newFieldSource);
+        CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+        for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
+            if (type.getNameAsString().equals(className)) {
+                for (BodyDeclaration<?> member : type.getMembers()) {
+                    if (member instanceof FieldDeclaration f) {
+                        if (f.getVariables().stream().anyMatch(v -> v.getNameAsString().equals(fieldName))) {
+                            BodyDeclaration<?> newField = javaParser.parseBodyDeclaration(newFieldSource).getResult().orElseThrow(() -> new RuntimeException("Failed to parse field: " + newFieldSource));
+                            f.replace(newField);
+                            Files.writeString(path, cu.toString());
+                            return;
+                        }
+                    }
                 }
-            } else {
-                throw new RuntimeException("Field " + fieldName + " not found in class " + className);
+                throw new RuntimeException("Field " + fieldName + " not found in type " + className);
             }
-        } else {
-            throw new RuntimeException("Class " + className + " not found in file " + path);
         }
+        throw new RuntimeException("Type " + className + " not found in file " + path);
     }
 
     /**
@@ -271,15 +234,22 @@ public class JavaService {
     public Optional<String> getMethodJavadoc(String pathStr, String className, String methodName) {
         Path path = sandbox.resolve(pathStr);
         try {
-            CompilationUnit cu = StaticJavaParser.parse(path);
-            return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                    .filter(c -> c.getNameAsString().equals(className))
-                    .flatMap(c -> c.getMethodsByName(methodName).stream())
-                    .findFirst()
-                    .flatMap(m -> m.getComment().map(Node::toString));
+            CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+            for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
+                if (type.getNameAsString().equals(className)) {
+                    for (BodyDeclaration<?> member : type.getMembers()) {
+                        if (member instanceof MethodDeclaration m) {
+                            if (m.getNameAsString().equals(methodName)) {
+                                return m.getComment().map(Node::toString);
+                            }
+                        }
+                    }
+                }
+            }
         } catch (IOException e) {
-            return Optional.empty();
+            // ignore
         }
+        return Optional.empty();
     }
 
     /**
@@ -293,11 +263,8 @@ public class JavaService {
     public Optional<String> getClassJavadoc(String pathStr, String className) {
         Path path = sandbox.resolve(pathStr);
         try {
-            CompilationUnit cu = StaticJavaParser.parse(path);
-            return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                    .filter(c -> c.getNameAsString().equals(className))
-                    .findFirst()
-                    .flatMap(c -> c.getComment().map(Node::toString));
+            CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+            return cu.findAll(TypeDeclaration.class).stream().filter(c -> c.getNameAsString().equals(className)).findFirst().flatMap(c -> c.getComment().map(Node::toString));
         } catch (IOException e) {
             return Optional.empty();
         }
@@ -315,16 +282,22 @@ public class JavaService {
     public Optional<String> getFieldJavadoc(String pathStr, String className, String fieldName) {
         Path path = sandbox.resolve(pathStr);
         try {
-            CompilationUnit cu = StaticJavaParser.parse(path);
-            return cu.findAll(ClassOrInterfaceDeclaration.class).stream()
-                    .filter(c -> c.getNameAsString().equals(className))
-                    .flatMap(c -> c.getFields().stream())
-                    .filter(f -> f.getVariables().stream().anyMatch(v -> v.getNameAsString().equals(fieldName)))
-                    .findFirst()
-                    .flatMap(f -> f.getComment().map(Node::toString));
+            CompilationUnit cu = javaParser.parse(path).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + path));
+            for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
+                if (type.getNameAsString().equals(className)) {
+                    for (BodyDeclaration<?> member : type.getMembers()) {
+                        if (member instanceof FieldDeclaration f) {
+                            if (f.getVariables().stream().anyMatch(v -> v.getNameAsString().equals(fieldName))) {
+                                return f.getComment().map(Node::toString);
+                            }
+                        }
+                    }
+                }
+            }
         } catch (IOException e) {
-            return Optional.empty();
+            // ignore
         }
+        return Optional.empty();
     }
 
     public record JavaFileSummary(List<ClassSummary> classes, List<String> imports) {

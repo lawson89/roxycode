@@ -103,4 +103,21 @@ class StructuralSearchServiceTest {
         assertEquals(1, results.size());
         assertEquals("Large", results.get(0).className());
     }
+
+    @Test
+    void testRecordSupport() throws IOException {
+        String code = """
+                public record Point(int x, int y) {
+                    void foo() {
+                        try {
+                        } catch (Exception e) {}
+                    }
+                }
+                """;
+        Files.writeString(tempDir.resolve("Point.java"), code);
+
+        List<SearchResult> results = searchService.findEmptyCatchBlocks(".");
+        assertEquals(1, results.size());
+        assertEquals("Point", results.get(0).className());
+    }
 }

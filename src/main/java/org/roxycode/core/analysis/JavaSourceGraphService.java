@@ -1,26 +1,26 @@
 package org.roxycode.core.analysis;
 
-import com.github.javaparser.StaticJavaParser;
+import jakarta.inject.Singleton;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
 @Singleton
 public class JavaSourceGraphService {
+
+    @jakarta.inject.Inject
+    com.github.javaparser.JavaParser javaParser = new com.github.javaparser.JavaParser();
 
     private static final Logger LOG = LoggerFactory.getLogger(JavaSourceGraphService.class);
 
@@ -33,44 +33,31 @@ public class JavaSourceGraphService {
     public String generateMermaidGraph(Path rootPath) {
         StringBuilder mermaid = new StringBuilder();
         mermaid.append("classDiagram\n");
-
         // Use a synchronized set if you plan to use parallel streams,
         // otherwise a standard HashSet is fine for sequential streams.
         Set<String> relationships = new HashSet<>();
-
         if (!Files.exists(rootPath)) {
             LOG.error("Source path does not exist: {}", rootPath);
             return "classDiagram\nnote \"Path not found: " + rootPath + "\"";
         }
-
         try (Stream<Path> paths = Files.walk(rootPath)) {
-            paths.filter(p -> p.toString().endsWith(".java"))
-                    .forEach(path -> parseFile(path.toFile(), mermaid, relationships));
+            paths.filter(p -> p.toString().endsWith(".java")).forEach(path -> parseFile(path.toFile(), mermaid, relationships));
         } catch (IOException e) {
             LOG.error("Error walking source files", e);
             return "classDiagram\nnote \"Error reading files\"";
         }
-
         return mermaid.toString();
     }
 
     private void parseFile(File file, StringBuilder sb, Set<String> relationships) {
         try {
-            CompilationUnit cu = StaticJavaParser.parse(file);
-
+            CompilationUnit cu = javaParser.parse(file).getResult().orElseThrow(() -> new RuntimeException("Failed to parse file: " + file));
             cu.findAll(ClassOrInterfaceDeclaration.class).forEach(clazz -> {
                 String className = clazz.getNameAsString();
-
                 // 1. Inheritance
-                clazz.getExtendedTypes().forEach(superType ->
-                        addRelation(sb, relationships, superType.getNameAsString() + " <|-- " + className)
-                );
-
+                clazz.getExtendedTypes().forEach(superType -> addRelation(sb, relationships, superType.getNameAsString() + " <|-- " + className));
                 // 2. Interfaces
-                clazz.getImplementedTypes().forEach(interfaceType ->
-                        addRelation(sb, relationships, interfaceType.getNameAsString() + " <|.. " + className)
-                );
-
+                clazz.getImplementedTypes().forEach(interfaceType -> addRelation(sb, relationships, interfaceType.getNameAsString() + " <|.. " + className));
                 // 3. Fields (Composition)
                 for (FieldDeclaration field : clazz.getFields()) {
                     Type type = field.getCommonType();
@@ -81,13 +68,12 @@ public class JavaSourceGraphService {
             });
         } catch (Exception e) {
             // Log but don't fail the whole process if one file is malformed
-            LOG.warn("Could not parse file: {}", file.getName());
+            LOG.warn("Could not parse file: {}", file.getName(), e);
         }
     }
 
     private void analyzeType(String sourceClass, ClassOrInterfaceType type, StringBuilder sb, Set<String> relationships) {
         String targetName = type.getNameAsString();
-
         // Handle Generics (e.g. List<Order>)
         if (type.getTypeArguments().isPresent()) {
             type.getTypeArguments().get().forEach(genericArg -> {
@@ -98,9 +84,8 @@ public class JavaSourceGraphService {
                     }
                 }
             });
-        }
-        // Handle standard references
-        else if (isCustomType(targetName)) {
+        } else // Handle standard references
+        if (isCustomType(targetName)) {
             addRelation(sb, relationships, sourceClass + " --> " + targetName);
         }
     }
@@ -114,13 +99,6 @@ public class JavaSourceGraphService {
 
     private boolean isCustomType(String name) {
         // Filter out basic Java types to keep the graph clean
-        return !name.startsWith("String") &&
-               !name.startsWith("Integer") &&
-               !name.startsWith("List") &&
-               !name.startsWith("Map") &&
-               !name.startsWith("Set") &&
-               !name.equals("int") &&
-               !name.equals("boolean") &&
-               !name.equals("long");
+        return !name.startsWith("String") && !name.startsWith("Integer") && !name.startsWith("List") && !name.startsWith("Map") && !name.startsWith("Set") && !name.equals("int") && !name.equals("boolean") && !name.equals("long");
     }
 }

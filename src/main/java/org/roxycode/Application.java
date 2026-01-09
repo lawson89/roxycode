@@ -12,6 +12,7 @@ public class Application {
         System.setProperty("swing.aatext", "true");
         // Set up FlatLaf before any UI components are created
         com.formdev.flatlaf.FlatLightLaf.setup();
+
         // 1. Initialize Micronaut Context
         var context = io.micronaut.runtime.Micronaut.run(Application.class, args);
         org.roxycode.ui.MainFrame mainFrame = context.getBean(org.roxycode.ui.MainFrame.class);
