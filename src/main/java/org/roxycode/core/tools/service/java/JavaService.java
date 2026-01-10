@@ -1,4 +1,4 @@
-package org.roxycode.core.tools.service;
+package org.roxycode.core.tools.service.java;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;

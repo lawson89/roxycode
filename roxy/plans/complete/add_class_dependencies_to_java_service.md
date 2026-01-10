@@ -13,7 +13,7 @@ Add the ability for `JavaService` to return a list of all types a class depends 
 
 ## Proposed Changes
 
-### `org.roxycode.core.tools.service.JavaService.java`
+### `org.roxycode.core.tools.service.java.JavaService.java`
 
 - Add `getClassDependencies(Path path, String className)` method.
 - Update `ClassSummary` record to include `List<String> dependencies`.

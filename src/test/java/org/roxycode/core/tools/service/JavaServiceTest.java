@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.roxycode.core.Sandbox;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.core.tools.service.java.JavaService;
 
 import java.io.IOException;
 import java.nio.file.Files;

@@ -101,6 +101,7 @@ public class ToolExecutionService {
             if (!logs.isEmpty()) {
                 return "--- LOGS ---\n" + logs + "\n--- ERROR ---\n" + errorMsg;
             }
+            LOG.error(errorMsg, e);
             return errorMsg;
         }
     }

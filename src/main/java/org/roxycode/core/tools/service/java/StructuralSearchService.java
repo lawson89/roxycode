@@ -1,12 +1,9 @@
-package org.roxycode.core.tools.service;
+package org.roxycode.core.tools.service.java;
 
 import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.Position;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.stmt.CatchClause;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
@@ -16,6 +13,7 @@ import jakarta.inject.Singleton;
 import org.roxycode.core.Sandbox;
 import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
+import org.roxycode.core.tools.service.SearchResult;
 
 import java.io.IOException;
 import java.nio.file.Files;
