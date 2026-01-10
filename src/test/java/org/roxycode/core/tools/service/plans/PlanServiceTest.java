@@ -1,96 +1,212 @@
 package org.roxycode.core.tools.service.plans;
 
-import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
 import org.roxycode.core.RoxyProjectService;
-import org.roxycode.core.tools.service.plans.Plan;
-import org.roxycode.core.tools.service.plans.PlanService;
-import org.roxycode.core.tools.service.plans.PlanStatus;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-@MicronautTest
-public class PlanServiceTest {
+class PlanServiceTest {
+
+    private RoxyProjectService roxyProjectService;
+    private PlanService planService;
 
     @TempDir
     Path tempDir;
 
-    @Inject
-    PlanService planService;
-
-    @Inject
-    RoxyProjectService projectService;
-
-    private Path originalRoot;
-
     @BeforeEach
     void setUp() {
-        originalRoot = projectService.getProjectRoot();
-        projectService.changeProjectRoot(tempDir);
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (originalRoot != null) {
-            projectService.changeProjectRoot(originalRoot);
-        }
+        roxyProjectService = Mockito.mock(RoxyProjectService.class);
+        when(roxyProjectService.getRoxyWorkingDir()).thenReturn(tempDir);
+        planService = new PlanService(roxyProjectService);
     }
 
     @Test
-    void testCreateAndLoadPlan() throws IOException {
-        String name = "test_plan";
-        String goal = "Test Goal";
-        List<String> changes = List.of("Change 1", "Change 2");
-        List<String> steps = List.of("Step 1", "Step 2");
+    void testCreatePlan() throws IOException {
+        String name = "test-plan";
+        String goal = "The goal of the plan";
+        List<String> changes = Arrays.asList("Change 1", "Change 2");
+        List<String> steps = Arrays.asList("Step 1", "Step 2");
 
         planService.createPlan(name, goal, changes, steps);
+
+        Path planPath = tempDir.resolve("plans").resolve("available").resolve(name + ".md");
+        assertTrue(Files.exists(planPath), "Plan file should be created in 'available' folder");
 
         Plan loaded = planService.loadPlan(name);
         assertEquals(name, loaded.getName());
         assertEquals(goal, loaded.getGoal());
         assertEquals(changes, loaded.getProposedChanges());
-        assertEquals(steps.size(), loaded.getImplementationSteps().size());
         assertEquals(PlanStatus.AVAILABLE, loaded.getStatus());
+        // Steps in markdown are prefixed with "[ ] " if not already present
+        assertEquals(Arrays.asList("- [ ] Step 1", "- [ ] Step 2"), loaded.getImplementationSteps());
     }
 
     @Test
-    void testUpdateSections() throws IOException {
-        String name = "update_test";
-        planService.createPlan(name, "Goal", List.of("Change"), List.of("Step"));
+    void testCreatePlan_AlreadyExists() throws IOException {
+        String name = "existing-plan";
+        planService.createPlan(name, "Goal", null, null);
+
+        assertThrows(IOException.class, () -> {
+            planService.createPlan(name, "New Goal", null, null);
+        });
+    }
+
+    @Test
+    void testUpdateGoal() throws IOException {
+        String name = "update-goal-plan";
+        planService.createPlan(name, "Old Goal", null, null);
 
         planService.updateGoal(name, "New Goal");
-        planService.updateProposedChanges(name, List.of("New Change"));
-        planService.updateImplementationSteps(name, List.of("- [ ] New Step"));
-        planService.updateImplementationProgress(name, List.of("- [x] Done"));
 
         Plan loaded = planService.loadPlan(name);
         assertEquals("New Goal", loaded.getGoal());
-        assertEquals(List.of("New Change"), loaded.getProposedChanges());
-        assertEquals(List.of("- [ ] New Step"), loaded.getImplementationSteps());
-        assertEquals(List.of("- [x] Done"), loaded.getImplementationProgress());
     }
 
     @Test
-    void testMovePlan() throws IOException {
-        String name = "move_test";
-        planService.createPlan(name, "Goal", List.of(), List.of());
+    void testUpdateGoal_CompletePlan_ThrowsException() throws IOException {
+        String name = "complete-plan";
+        planService.createPlan(name, "Goal", null, null);
+        planService.movePlan(name, "in_progress");
+        planService.movePlan(name, "complete");
 
-        planService.movePlan(name, PlanStatus.IN_PROGRESS);
+        assertThrows(IOException.class, () -> {
+            planService.updateGoal(name, "Modified Goal");
+        });
+    }
+
+    @Test
+    void testUpdateProposedChanges() throws IOException {
+        String name = "changes-plan";
+        planService.createPlan(name, "Goal", null, null);
+
+        List<String> newChanges = Arrays.asList("New Change");
+        planService.updateProposedChanges(name, newChanges);
+
         Plan loaded = planService.loadPlan(name);
-        assertEquals(PlanStatus.IN_PROGRESS, loaded.getStatus());
+        assertEquals(newChanges, loaded.getProposedChanges());
+    }
 
-        List<String> workingPlans = planService.listPlans(PlanStatus.IN_PROGRESS);
-        assertTrue(workingPlans.contains(name));
+    @Test
+    void testUpdateImplementationSteps() throws IOException {
+        String name = "steps-plan";
+        planService.createPlan(name, "Goal", null, null);
 
-        List<String> availablePlans = planService.listPlans(PlanStatus.AVAILABLE);
-        assertFalse(availablePlans.contains(name));
+        List<String> newSteps = Arrays.asList("New Step");
+        planService.updateImplementationSteps(name, newSteps);
+
+        Plan loaded = planService.loadPlan(name);
+        assertEquals(Arrays.asList("- [ ] New Step"), loaded.getImplementationSteps());
+    }
+
+    @Test
+    void testUpdateImplementationProgress() throws IOException {
+        String name = "progress-plan";
+        planService.createPlan(name, "Goal", null, null);
+
+        List<String> progress = Arrays.asList("Done Step");
+        planService.updateImplementationProgress(name, progress);
+
+        Plan loaded = planService.loadPlan(name);
+        assertEquals(Arrays.asList("- [x] Done Step"), loaded.getImplementationProgress());
+    }
+
+    @Test
+    void testMovePlan_ValidTransitions() throws IOException {
+        String name = "move-plan";
+        planService.createPlan(name, "Goal", null, null);
+
+        // Available -> In Progress
+        planService.movePlan(name, "in_progress");
+        assertEquals(PlanStatus.IN_PROGRESS, planService.loadPlan(name).getStatus());
+
+        // In Progress -> Available
+        planService.movePlan(name, "available");
+        assertEquals(PlanStatus.AVAILABLE, planService.loadPlan(name).getStatus());
+
+        // Available -> In Progress
+        planService.movePlan(name, "in_progress");
+
+        // In Progress -> Complete
+        planService.movePlan(name, "complete");
+        assertEquals(PlanStatus.COMPLETE, planService.loadPlan(name).getStatus());
+    }
+
+    @Test
+    void testMovePlan_InvalidTransition_ThrowsException() throws IOException {
+        String name = "invalid-move-plan";
+        planService.createPlan(name, "Goal", null, null);
+
+        // Available -> Complete is NOT allowed
+        assertThrows(IOException.class, () -> {
+            planService.movePlan(name, "complete");
+        });
+    }
+
+    @Test
+    void testDeletePlan() throws IOException {
+        String name = "delete-plan";
+        planService.createPlan(name, "Goal", null, null);
+
+        assertTrue(planService.planExists(name));
+        planService.deletePlan(name);
+        assertFalse(planService.planExists(name));
+    }
+
+    @Test
+    void testDeletePlan_InProgress_ThrowsException() throws IOException {
+        String name = "delete-in-progress-plan";
+        planService.createPlan(name, "Goal", null, null);
+        planService.movePlan(name, "in_progress");
+
+        assertThrows(IOException.class, () -> {
+            planService.deletePlan(name);
+        });
+    }
+
+    @Test
+    void testListPlans() throws IOException {
+        planService.createPlan("plan1", "Goal 1", null, null);
+        planService.createPlan("plan2", "Goal 2", null, null);
+        planService.createPlan("plan3", "Goal 3", null, null);
+
+        planService.movePlan("plan2", "in_progress");
+        planService.movePlan("plan3", "in_progress");
+        planService.movePlan("plan3", "complete");
+
+        List<String> available = planService.listAvailablePlans();
+        List<String> inProgress = planService.listInProgressPlans();
+        List<String> complete = planService.listCompletePlans();
+
+        assertTrue(available.contains("plan1"));
+        assertEquals(1, available.size());
+        
+        assertTrue(inProgress.contains("plan2"));
+        assertEquals(1, inProgress.size());
+
+        assertTrue(complete.contains("plan3"));
+        assertEquals(1, complete.size());
+    }
+
+    @Test
+    void testGetCurrentPlan_DelegatesToRoxyProjectService() {
+        when(roxyProjectService.getCurrentPlan()).thenReturn("current-plan");
+        assertEquals("current-plan", planService.getCurrentPlan());
+        verify(roxyProjectService).getCurrentPlan();
+    }
+
+    @Test
+    void testSetCurrentPlan_DelegatesToRoxyProjectService() {
+        planService.setCurrentPlan("new-plan");
+        verify(roxyProjectService).setCurrentPlan("new-plan");
     }
 }

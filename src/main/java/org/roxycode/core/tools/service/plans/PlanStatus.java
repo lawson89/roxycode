@@ -15,12 +15,16 @@ public enum PlanStatus {
         return dirName;
     }
 
-    public static PlanStatus fromDirName(String dirName) {
+    /**
+     * Case-insensitive lookup for GraalJS compatibility.
+     */
+    public static PlanStatus fromString(String value) {
+        if (value == null) return null;
         for (PlanStatus status : values()) {
-            if (status.dirName.equals(dirName)) {
+            if (status.name().equalsIgnoreCase(value) || status.dirName.equalsIgnoreCase(value)) {
                 return status;
             }
         }
-        throw new IllegalArgumentException("Unknown directory name: " + dirName);
+        throw new IllegalArgumentException("Invalid plan status: " + value);
     }
 }

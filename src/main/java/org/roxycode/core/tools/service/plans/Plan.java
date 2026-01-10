@@ -55,6 +55,13 @@ public class Plan {
         return status;
     }
 
+    /**
+     * Helper for JS bridge to get status as a simple String.
+     */
+    public String getStatusString() {
+        return status != null ? status.name() : null;
+    }
+
     public void setStatus(PlanStatus status) {
         this.status = status;
     }

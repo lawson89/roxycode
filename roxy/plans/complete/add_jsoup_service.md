@@ -1,17 +1,15 @@
 # Goal
-Add JSoup service to allow the assistant to manipulate HTML files using JSoup.
+Add Jsoup library to the project and expose it as a script service to allow web scraping and HTML parsing in JS tools.
 
 # Proposed Changes
-- Add jsoup dependency to pom.xml
-- Ensure JSoupService.java exists with required methods
-- Update roxy_home/tools/run_js.toml description
-- Add unit tests for JSoupService
+- Add 'org.jsoup:jsoup:1.18.1' dependency to pom.xml.
+- Create 'org.roxycode.core.tools.service.JsoupService' class.
+- Annotate 'JsoupService' with '@ScriptService("jsoup")' and '@LLMDoc'.
+- Implement 'fetch(url)' and 'parse(html)' methods in 'JsoupService' using Jsoup.
 
 # Implementation Steps
-- [ ] Check if jsoup dependency is in pom.xml
-- [ ] Review and potentially enhance JSoupService.java
-- [ ] Update run_js.toml description to include jsoup
-- [ ] Create JSoupServiceTest.java
-- [ ] Run tests to ensure everything works
+- [ ] Add Jsoup dependency to pom.xml.
+- [ ] Create JsoupService.java in 'src/main/java/org/roxycode/core/tools/service/'.
+- [ ] Run tests to ensure everything is working correctly (create a simple test for JsoupService).
 
 # Implementation Progress
