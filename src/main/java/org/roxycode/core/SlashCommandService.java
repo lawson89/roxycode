@@ -4,6 +4,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.core.config.GeminiModel;
 import org.roxycode.core.config.GeminiModelRegistry;
+import org.roxycode.core.tools.service.SkillService;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -15,13 +16,15 @@ public class SlashCommandService {
     private final SettingsService settingsService;
     private final GeminiModelRegistry modelRegistry;
     private final RoxyProjectService roxyProjectService;
+    private final SkillService skillService;
 
     @Inject
-    public SlashCommandService(GenAIService genAIService, SettingsService settingsService, GeminiModelRegistry modelRegistry, RoxyProjectService roxyProjectService) {
+    public SlashCommandService(GenAIService genAIService, SettingsService settingsService, GeminiModelRegistry modelRegistry, RoxyProjectService roxyProjectService, SkillService skillService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.modelRegistry = modelRegistry;
         this.roxyProjectService = roxyProjectService;
+        this.skillService = skillService;
     }
 
     public boolean isCommand(String text) {
@@ -50,6 +53,8 @@ public class SlashCommandService {
                 return new CommandResult(true, "Switched to CODE mode.", CommandAction.UPDATE_STATS);
             case "/model":
                 return handleModelCommand(args);
+            case "/skill":
+                return handleSkillCommand(args);
             default:
                 return new CommandResult(false, "Unknown command: " + command, CommandAction.NONE);
         }
@@ -63,7 +68,34 @@ public class SlashCommandService {
                "*   `/model <name>`: Switch to a different Gemini model.\n" +
                "*   `/ask`: Switch to ASK mode.\n" +
                "*   `/plan`: Switch to PLAN mode.\n" +
-               "*   `/code`: Switch to CODE mode.";
+               "*   `/code`: Switch to CODE mode.\n" +
+               "*   `/skill <name>`: Show skill details.";
+    }
+
+    private CommandResult handleSkillCommand(String args) {
+        if (args.isEmpty()) {
+            var skills = skillService.listSkills();
+            if (skills.isEmpty()) {
+                return new CommandResult(true, "No skills found in ~/.roxy/skills", CommandAction.NONE);
+            }
+            String names = skills.stream().map(s -> s.name()).collect(Collectors.joining(", "));
+            String current = roxyProjectService.getCurrentSkill() != null ? "\n\n**Current Skill:** " + roxyProjectService.getCurrentSkill().name() : "";
+            return new CommandResult(true, "Available skills: " + names + current, CommandAction.NONE);
+        }
+
+        if (args.equalsIgnoreCase("off") || args.equalsIgnoreCase("none") || args.equalsIgnoreCase("clear")) {
+            roxyProjectService.setCurrentSkill(null);
+            return new CommandResult(true, "Skill deactivated.", CommandAction.NONE);
+        }
+
+        var skill = skillService.getSkill(args);
+        if (skill != null) {
+            roxyProjectService.setCurrentSkill(skill);
+            String details = String.format("### Skill Activated: %s\n\n**Prompt:**\n%s", skill.name(), skill.prompt());
+            return new CommandResult(true, details, CommandAction.NONE);
+        } else {
+            return new CommandResult(false, "Skill not found: " + args, CommandAction.NONE);
+        }
     }
 
     private CommandResult handleModelCommand(String args) {
@@ -98,7 +130,8 @@ public class SlashCommandService {
                 new CommandInfo("/model", "Switch Gemini model"),
                 new CommandInfo("/ask", "Switch to ASK mode"),
                 new CommandInfo("/plan", "Switch to PLAN mode"),
-                new CommandInfo("/code", "Switch to CODE mode")
+                new CommandInfo("/code", "Switch to CODE mode"),
+                new CommandInfo("/skill", "Show/list skills")
         );
     }
 

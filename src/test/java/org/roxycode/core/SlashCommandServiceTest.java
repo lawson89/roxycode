@@ -1,5 +1,6 @@
 package org.roxycode.core;
 
+import org.roxycode.core.tools.service.SkillService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.core.config.GeminiModel;
@@ -16,6 +17,7 @@ class SlashCommandServiceTest {
     private GenAIService genAIService;
     private SettingsService settingsService;
     private GeminiModelRegistry modelRegistry;
+    private SkillService skillService;
     private RoxyProjectService roxyProjectService;
     private SlashCommandService slashCommandService;
 
@@ -25,7 +27,8 @@ class SlashCommandServiceTest {
         settingsService = mock(SettingsService.class);
         modelRegistry = mock(GeminiModelRegistry.class);
         roxyProjectService = mock(RoxyProjectService.class);
-        slashCommandService = new SlashCommandService(genAIService, settingsService, modelRegistry, roxyProjectService);
+        skillService = mock(SkillService.class);
+        slashCommandService = new SlashCommandService(genAIService, settingsService, modelRegistry, roxyProjectService, skillService);
     }
 
     @Test

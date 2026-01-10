@@ -18,6 +18,7 @@ import org.roxycode.core.NotificationService;
 import org.roxycode.core.NotificationType;
 import org.roxycode.core.SlashCommandService;
 import org.roxycode.core.beans.ProjectCacheMeta;
+import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.ui.MarkdownPane;
 import org.slf4j.Logger;
@@ -45,6 +46,7 @@ public class ChatView extends JPanel {
     private final org.roxycode.ui.ThemeService themeService;
 
     private final ProjectCacheMetaService projectCacheMetaService;
+    private final RoxyProjectService roxyProjectService;
     private final NotificationService notificationService;
 
     private final MarkdownPane chatArea = new MarkdownPane();
@@ -101,14 +103,18 @@ public class ChatView extends JPanel {
     @Outlet
     private JLabel cacheExpiryLabel;
 
+    @Outlet
+    private JLabel activeSkillLabel;
+
     @Inject
-    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService, NotificationService notificationService) {
+    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService, NotificationService notificationService, RoxyProjectService roxyProjectService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.themeService = themeService;
         this.slashCommandService = slashCommandService;
         this.projectCacheMetaService = projectCacheMetaService;
         this.notificationService = notificationService;
+        this.roxyProjectService = roxyProjectService;
         setLayout(new BorderLayout());
     }
 
@@ -180,6 +186,10 @@ public class ChatView extends JPanel {
 
     private void initIcons() {
         updateCacheStatus();
+        if (activeSkillLabel != null) {
+            String currentPlan = roxyProjectService.getCurrentPlan();
+            activeSkillLabel.setText("Skill: " + (currentPlan != null ? currentPlan : "None"));
+        }
         if (currentModelLabel != null) {
             currentModelLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_HAPPY_OUTLINE, 12));
             currentModelLabel.setIconTextGap(6);
@@ -205,6 +215,10 @@ public class ChatView extends JPanel {
         }
         if (clearAttachmentsButton != null) {
             clearAttachmentsButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CLOSE_CIRCLE_OUTLINE, 16));
+        }
+        if (activeSkillLabel != null) {
+            activeSkillLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignL.LIGHTBULB_OUTLINE, 12));
+            activeSkillLabel.setIconTextGap(4);
         }
         if (sendButton != null) {
             sendButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignS.SEND_OUTLINE, 16));

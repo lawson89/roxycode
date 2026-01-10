@@ -50,7 +50,10 @@ You code a feature or bug fix based on an existing plan.
 - Ensure all existing and new unit tests pass after making changes.
 - Always ask the user for confirmation before switching from PLAN to CODE mode or CODE to PLAN mode.
 - Always ask the user for confirmation before marking a plan as complete.
-- IMPORTANT! NEVER make code changes while in PLAN mode
+- IMPORTANT! 
+  - NEVER make code changes while in PLAN mode
+  - NEVER start a new plan while in CODE mode
+  - There can only be one plan in progress at any time.
 
 
 ## Javascript environment
