@@ -14,6 +14,8 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
 import org.roxycode.core.SettingsService;
+import org.roxycode.core.NotificationService;
+import org.roxycode.core.NotificationType;
 import org.roxycode.core.SlashCommandService;
 import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.cache.ProjectCacheMetaService;
@@ -43,6 +45,7 @@ public class ChatView extends JPanel {
     private final org.roxycode.ui.ThemeService themeService;
 
     private final ProjectCacheMetaService projectCacheMetaService;
+    private final NotificationService notificationService;
 
     private final MarkdownPane chatArea = new MarkdownPane();
 
@@ -99,12 +102,13 @@ public class ChatView extends JPanel {
     private JLabel cacheExpiryLabel;
 
     @Inject
-    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService) {
-        this.projectCacheMetaService = projectCacheMetaService;
+    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService, NotificationService notificationService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.themeService = themeService;
         this.slashCommandService = slashCommandService;
+        this.projectCacheMetaService = projectCacheMetaService;
+        this.notificationService = notificationService;
         setLayout(new BorderLayout());
     }
 
@@ -234,6 +238,10 @@ public class ChatView extends JPanel {
         String prompt = inputField.getText().trim();
         if (prompt.isEmpty())
             return;
+        if (settingsService.isCacheEnabled() && projectCacheMetaService.getProjectCacheMeta().isEmpty()) {
+            notificationService.showNotification("Context cache is being built. Please wait a moment before sending your message.", NotificationType.WARNING);
+            return;
+        }
         if (slashCommandService.isCommand(prompt)) {
             handleSlashCommand(prompt);
             return;

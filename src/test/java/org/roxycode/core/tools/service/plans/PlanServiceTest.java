@@ -209,4 +209,37 @@ class PlanServiceTest {
         planService.setCurrentPlan("new-plan");
         verify(roxyProjectService).setCurrentPlan("new-plan");
     }
+
+    @Test
+    void testLoadPlan() throws IOException {
+        String name = "load-plan";
+        String goal = "Load test goal";
+        List<String> changes = List.of("Change 1", "Change 2");
+        List<String> steps = List.of("Step 1", "Step 2");
+        
+        planService.createPlan(name, goal, changes, steps);
+        
+        Plan plan = planService.loadPlan(name);
+        
+        assertNotNull(plan);
+        assertEquals(name, plan.getName());
+        assertEquals(goal, plan.getGoal());
+        assertEquals(changes, plan.getProposedChanges());
+        assertEquals(List.of("- [ ] Step 1", "- [ ] Step 2"), plan.getImplementationSteps());
+        assertEquals(PlanStatus.AVAILABLE, plan.getStatus());
+        assertTrue(plan.getImplementationProgress().isEmpty());
+    }
+
+    @Test
+    void testPlanExists() throws IOException {
+        String name = "exists-test";
+        assertFalse(planService.planExists(name));
+        
+        planService.createPlan(name, "Goal", null, null);
+        assertTrue(planService.planExists(name));
+        
+        planService.deletePlan(name);
+        assertFalse(planService.planExists(name));
+    }
+
 }
