@@ -9,6 +9,7 @@ import org.roxycode.core.tools.LLMDoc;
 import org.roxycode.core.tools.ScriptService;
 import org.roxycode.core.tools.ScriptServiceRegistry;
 
+import java.nio.charset.StandardCharsets;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -111,6 +112,21 @@ public class BuildToolService {
         return executeCommand(command, "Test " + testName);
     }
 
+    /**
+     * Runs the verify goal (Maven) or check task (Gradle) for the project.
+     * This typically includes unit tests, integration tests, and static analysis like SpotBugs.
+     *
+     * @return The output of the verification process.
+     */
+    @LLMDoc("Runs the full build lifecycle (verify/check) including static analysis")
+    public String verify() {
+        BuildTool tool = detect();
+        if (tool == BuildTool.UNKNOWN) {
+            return "❌ Could not detect build tool (no pom.xml, build.gradle, or build.xml found).";
+        }
+        return executeCommand(getVerifyCommand(tool), "Verification");
+    }
+
     List<String> getSingleTestCommand(BuildTool tool, String testName) {
         List<String> command = new ArrayList<>();
         String executable = resolveExecutable(tool);
@@ -151,6 +167,23 @@ public class BuildToolService {
         List<String> command = new ArrayList<>();
         command.add(resolveExecutable(tool));
         command.add("test");
+        return command;
+    }
+
+    List<String> getVerifyCommand(BuildTool tool) {
+        List<String> command = new ArrayList<>();
+        command.add(resolveExecutable(tool));
+        switch (tool) {
+            case MAVEN:
+                command.add("verify");
+                break;
+            case GRADLE:
+                command.add("check");
+                break;
+            case ANT:
+                command.add("verify");
+                break;
+        }
         return command;
     }
 
@@ -201,7 +234,7 @@ public class BuildToolService {
         StringBuilder output = new StringBuilder();
         try {
             Process process = processBuilder.start();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output.append(line).append("\n");

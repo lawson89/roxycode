@@ -255,4 +255,28 @@ class BuildToolServiceTest {
         String result = buildToolService.runTest("MyTest");
         assertTrue(result.contains("Could not detect build tool"));
     }
+
+    @Test
+    void testGetVerifyCommandMaven() {
+        List<String> command = buildToolService.getVerifyCommand(BuildToolService.BuildTool.MAVEN);
+        assertTrue(command.contains("verify"));
+    }
+
+    @Test
+    void testGetVerifyCommandGradle() {
+        List<String> command = buildToolService.getVerifyCommand(BuildToolService.BuildTool.GRADLE);
+        assertTrue(command.contains("check"));
+    }
+
+    @Test
+    void testGetVerifyCommandAnt() {
+        List<String> command = buildToolService.getVerifyCommand(BuildToolService.BuildTool.ANT);
+        assertTrue(command.contains("verify"));
+    }
+
+    @Test
+    void testGetOperatingSystem() {
+        String os = buildToolService.getOperatingSystem();
+        assertTrue(os != null && !os.isEmpty());
+    }
 }

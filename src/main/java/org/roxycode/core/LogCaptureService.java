@@ -1,6 +1,7 @@
 package org.roxycode.core;
 
 import jakarta.inject.Singleton;
+import java.nio.charset.StandardCharsets;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -24,8 +25,8 @@ public class LogCaptureService {
         originalOut = System.out;
         originalErr = System.err;
 
-        System.setOut(new PrintStream(new DualOutputStream(originalOut, line -> addLogLine("[OUT] " + line))));
-        System.setErr(new PrintStream(new DualOutputStream(originalErr, line -> addLogLine("[ERR] " + line))));
+        System.setOut(new PrintStream(new DualOutputStream(originalOut, line -> addLogLine("[OUT] " + line)), true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(new DualOutputStream(originalErr, line -> addLogLine("[ERR] " + line)), true, StandardCharsets.UTF_8));
     }
 
     private void addLogLine(String line) {
@@ -61,7 +62,7 @@ public class LogCaptureService {
         public void write(int b) throws IOException {
             original.write(b);
             if (b == '\n') {
-                lineConsumer.accept(buffer.toString());
+                lineConsumer.accept(buffer.toString(StandardCharsets.UTF_8));
                 buffer.reset();
             } else {
                 buffer.write(b);

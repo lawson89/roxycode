@@ -257,17 +257,20 @@ public class GenAIService {
         }
         return Optional.empty();
     }
-    private void initializeHistory(String prompt, String systemContext) {
+    private void initializeHistory(String prompt, String systemMessage) {
+        LOG.info("Initializing chat history...");
+        LOG.info("Prompt: {}", prompt);
+        LOG.info("SystemMessage: {}", systemMessage);
         // user task and mode we are currently operating in
         String taskMessage = "Task: " + prompt + "\n";
         taskMessage += roxyProjectService.getModeMessage();
         LOG.info("taskMessage: {}", taskMessage);
         // --- History Management (Index 0 is always System) ---
         if (history.isEmpty()) {
-            history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemContext + "\n" + taskMessage).build())).build());
+            history.add(Content.builder().role("user").parts(List.of(Part.builder().text(systemMessage + "\n" + taskMessage).build())).build());
         } else {
             // Update System Prompt (Index 0) with latest known state
-            history.set(0, Content.builder().role("user").parts(List.of(Part.builder().text(systemContext).build())).build());
+            history.set(0, Content.builder().role("user").parts(List.of(Part.builder().text(systemMessage).build())).build());
             history.add(Content.builder().role("user").parts(List.of(Part.builder().text(taskMessage).build())).build());
         }
     }

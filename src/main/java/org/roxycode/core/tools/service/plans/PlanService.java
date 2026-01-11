@@ -1,6 +1,8 @@
 package org.roxycode.core.tools.service.plans;
 
+import jakarta.inject.Singleton;
 import org.roxycode.core.RoxyProjectService;
+import org.roxycode.core.tools.ScriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,10 +10,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@ScriptService("planService")
+@Singleton
 public class PlanService {
     private static final Logger logger = LoggerFactory.getLogger(PlanService.class);
     private final RoxyProjectService roxyProjectService;
@@ -41,7 +44,10 @@ public class PlanService {
         sb.append("# ").append(name).append("\n\n");
         sb.append("## Goal\n").append(goal != null ? goal : "").append("\n\n");
         sb.append("## Proposed Changes\n").append(convertToMarkdownList(proposedChanges, "-")).append("\n\n");
-        sb.append("## Implementation Steps\n").append(convertToMarkdownList(steps, "- [ ]")).append("\n\n");
+        
+        List<Plan.TaskItem> taskSteps = steps != null ? steps.stream().map(s -> new Plan.TaskItem(s, false)).toList() : new ArrayList<>();
+        sb.append("## Implementation Steps\n").append(convertTasksToMarkdown(taskSteps)).append("\n\n");
+        
         sb.append("## Implementation Progress\n\n");
         sb.append("## Agent Context\n").append(agentContext != null ? agentContext : "").append("\n");
 
@@ -57,6 +63,13 @@ public class PlanService {
                 .collect(Collectors.joining("\n"));
     }
 
+    private String convertTasksToMarkdown(List<Plan.TaskItem> items) {
+        if (items == null || items.isEmpty()) return "";
+        return items.stream()
+                .map(item -> "- " + item.toString())
+                .collect(Collectors.joining("\n"));
+    }
+
     public void updateGoal(String name, String goal) throws IOException {
         updatePlanSection(name, "Goal", goal);
     }
@@ -66,11 +79,43 @@ public class PlanService {
     }
 
     public void updateImplementationSteps(String name, List<String> steps) throws IOException {
-        updatePlanSection(name, "Implementation Steps", convertToMarkdownList(steps, "- [ ]"));
+        List<Plan.TaskItem> taskSteps = steps != null ? steps.stream().map(s -> new Plan.TaskItem(s, false)).toList() : new ArrayList<>();
+        updatePlanSection(name, "Implementation Steps", convertTasksToMarkdown(taskSteps));
     }
 
     public void updateImplementationProgress(String name, List<String> progress) throws IOException {
-        updatePlanSection(name, "Implementation Progress", convertToMarkdownList(progress, "- [x]"));
+        // Here we assume simple strings are completed tasks unless they have markers
+        List<Plan.TaskItem> taskProgress = progress != null ? progress.stream().map(s -> {
+            if (s.startsWith("[ ] ")) return new Plan.TaskItem(s.substring(4), false);
+            if (s.startsWith("[x] ") || s.startsWith("[X] ")) return new Plan.TaskItem(s.substring(4), true);
+            return new Plan.TaskItem(s, true);
+        }).toList() : new ArrayList<>();
+        updatePlanSection(name, "Implementation Progress", convertTasksToMarkdown(taskProgress));
+    }
+
+    public void addProgressStep(String name, String stepText, boolean completed) throws IOException {
+        Plan plan = loadPlan(name);
+        List<Plan.TaskItem> progress = new ArrayList<>(plan.getImplementationProgress());
+        progress.add(new Plan.TaskItem(stepText, completed));
+        updateImplementationProgress(name, progress.stream().map(Plan.TaskItem::toString).toList());
+    }
+
+    public void completeStep(String name, String stepText) throws IOException {
+        Plan plan = loadPlan(name);
+        List<Plan.TaskItem> progress = new ArrayList<>(plan.getImplementationProgress());
+        boolean found = false;
+        for (int i = 0; i < progress.size(); i++) {
+            Plan.TaskItem item = progress.get(i);
+            if (item.text().equalsIgnoreCase(stepText)) {
+                progress.set(i, new Plan.TaskItem(item.text(), true));
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            progress.add(new Plan.TaskItem(stepText, true));
+        }
+        updateImplementationProgress(name, progress.stream().map(Plan.TaskItem::toString).toList());
     }
 
     public void updateAgentContext(String name, String context) throws IOException {
@@ -107,7 +152,7 @@ public class PlanService {
         Path target = getPlanPath(name, targetStatus);
         Files.createDirectories(target.getParent());
         Files.move(source, target);
-        
+
         if (targetStatus == PlanStatus.COMPLETE) {
             if (name.equals(roxyProjectService.getCurrentPlan())) {
                 roxyProjectService.setCurrentPlan(null);
@@ -142,7 +187,7 @@ public class PlanService {
         try (var stream = Files.list(dir)) {
             return stream.filter(p -> p.toString().endsWith(".md"))
                     .map(p -> p.getFileName().toString().replace(".md", ""))
-                    .collect(Collectors.joining("\n")).lines().toList(); // Using lines().toList() for compatibility
+                    .collect(Collectors.joining("\n")).lines().toList();
         }
     }
 
@@ -156,8 +201,8 @@ public class PlanService {
         plan.setStatus(status);
         plan.setGoal(getSectionContent(markdown, "Goal"));
         plan.setProposedChanges(getLinesInSection(markdown, "Proposed Changes", "-"));
-        plan.setImplementationSteps(getLinesInSection(markdown, "Implementation Steps", "- [ ]"));
-        plan.setImplementationProgress(getLinesInSection(markdown, "Implementation Progress", "- [x]"));
+        plan.setImplementationSteps(getTasksInSection(markdown, "Implementation Steps"));
+        plan.setImplementationProgress(getTasksInSection(markdown, "Implementation Progress"));
         plan.setAgentContext(getSectionContent(markdown, "Agent Context"));
         return plan;
     }
@@ -206,6 +251,22 @@ public class PlanService {
             String trimmed = line.trim();
             if (trimmed.startsWith(prefix)) {
                 result.add(trimmed.substring(prefix.length()).trim());
+            }
+        }
+        return result;
+    }
+
+    private List<Plan.TaskItem> getTasksInSection(String markdown, String sectionName) {
+        String content = getSectionContent(markdown, sectionName);
+        List<Plan.TaskItem> result = new ArrayList<>();
+        for (String line : content.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("- [ ]")) {
+                result.add(new Plan.TaskItem(trimmed.substring(5).trim(), false));
+            } else if (trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]")) {
+                result.add(new Plan.TaskItem(trimmed.substring(5).trim(), true));
+            } else if (trimmed.startsWith("-")) {
+                result.add(new Plan.TaskItem(trimmed.substring(1).trim(), false));
             }
         }
         return result;

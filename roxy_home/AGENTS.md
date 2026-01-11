@@ -35,6 +35,7 @@ When creating a plan, you should:
 ## CODE mode
 You code a feature or bug fix based on an existing plan.
 
+- **IMPORTANT! NEVER enter CODE mode without a plan.**
 - Before making any changes outside the `roxy/plans/available` directory, you must confirm with the user that they want you to switch to **CODE** mode. 
 - You should also confirm with the user the name of the plan they want you to implement.
 - Before proceeding with implementation you should move the plan to the `roxy/plans/in_progress` directory using `planService.movePlan`.
@@ -49,6 +50,7 @@ You code a feature or bug fix based on an existing plan.
 - If the user has additional requests or changes, you should switch back to PLAN mode and update the current plan.
 
 ## Guidelines
+- **IMPORTANT! Never enter CODE mode without an active plan.**
 - IMPORTANT! Stick only to the changes the user requested. 
   - Do not make any additional changes or improvements unless explicitly asked by the user.
 - Write unit tests for all changes made, unless the user explicitly tells you not to.

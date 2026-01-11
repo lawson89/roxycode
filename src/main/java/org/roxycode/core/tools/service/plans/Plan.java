@@ -4,11 +4,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Plan {
+    public record TaskItem(String text, boolean completed) {
+        @Override
+        public String toString() {
+            return (completed ? "[x] " : "[ ] ") + text;
+        }
+    }
+
     private String name;
     private String goal;
     private List<String> proposedChanges = new ArrayList<>();
-    private List<String> implementationSteps = new ArrayList<>();
-    private List<String> implementationProgress = new ArrayList<>();
+    private List<TaskItem> implementationSteps = new ArrayList<>();
+    private List<TaskItem> implementationProgress = new ArrayList<>();
     private String agentContext;
     private PlanStatus status;
 
@@ -36,19 +43,19 @@ public class Plan {
         this.proposedChanges = proposedChanges;
     }
 
-    public List<String> getImplementationSteps() {
+    public List<TaskItem> getImplementationSteps() {
         return implementationSteps;
     }
 
-    public void setImplementationSteps(List<String> implementationSteps) {
+    public void setImplementationSteps(List<TaskItem> implementationSteps) {
         this.implementationSteps = implementationSteps;
     }
 
-    public List<String> getImplementationProgress() {
+    public List<TaskItem> getImplementationProgress() {
         return implementationProgress;
     }
 
-    public void setImplementationProgress(List<String> implementationProgress) {
+    public void setImplementationProgress(List<TaskItem> implementationProgress) {
         this.implementationProgress = implementationProgress;
     }
 
