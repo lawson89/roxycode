@@ -2,6 +2,7 @@ package org.roxycode.core.tools.service.plans;
 
 public enum PlanStatus {
     AVAILABLE("available"),
+    PLANNING("planning"),
     IN_PROGRESS("in_progress"),
     COMPLETE("complete");
 

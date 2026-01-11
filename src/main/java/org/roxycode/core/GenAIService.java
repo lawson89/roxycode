@@ -14,7 +14,6 @@ import java.util.Base64;
 import org.roxycode.core.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -41,18 +40,18 @@ public class GenAIService {
     private final HistoryService historyService;
 
     private final ProjectCacheMetaService projectCacheMetaService;
+
     private final PlanService planService;
+
     private final RoxyProjectService roxyProjectService;
+
     private final GeminiClientFactory geminiClientFactory;
 
     private Client client;
 
     private String lastUsedApiKey;
 
-    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService,
-                        UsageService usageService, HistoryService historyService,
-                        RoxyProjectService roxyProjectService,
-                        ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory, PlanService planService) {
+    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, UsageService usageService, HistoryService historyService, RoxyProjectService roxyProjectService, ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory, PlanService planService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
@@ -100,11 +99,10 @@ public class GenAIService {
     }
 
     private final AtomicBoolean isChatting = new AtomicBoolean(false);
+
     private final List<Consumer<Boolean>> busyListeners = new ArrayList<>();
 
-
     private volatile boolean stopRequested = false;
-
 
     public void addBusyListener(Consumer<Boolean> listener) {
         busyListeners.add(listener);
@@ -126,8 +124,6 @@ public class GenAIService {
 
     public String buildSystemMessage(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
         StringBuilder contextBuilder = new StringBuilder();
-        if (cacheMeta.isEmpty()) {
-
         // Add Plan Context
         try {
             String planMarkdown = planService.getCurrentPlanMarkdown();
@@ -139,6 +135,7 @@ public class GenAIService {
         } catch (IOException e) {
             LOG.error("Failed to load current plan", e);
         }
+        if (cacheMeta.isEmpty()) {
             contextBuilder.append(roxyProjectService.getStaticSystemPrompt());
         }
         contextBuilder.append("Project Root: ").append(projectRoot).append("\n");
@@ -174,9 +171,7 @@ public class GenAIService {
             Optional<ProjectCacheMeta> cacheMeta = projectCacheMetaService.getProjectCacheMeta();
             String systemMessage = buildSystemMessage(projectRoot, attachedFiles, cacheMeta);
             LOG.info("systemContext: {}", systemMessage);
-
             initializeHistory(prompt, systemMessage);
-
             int turns = 0;
             int maxTurns = settingsService.getMaxTurns();
             int maxTurnsPerMinute = settingsService.getMaxTurnsPerMinute();
@@ -188,17 +183,14 @@ public class GenAIService {
                 if (onStatusUpdate != null) {
                     onStatusUpdate.accept(String.format("Thinking (%d/%d)...", turns, maxTurns));
                 }
-
-                                String planMarkdown = null;
+                String planMarkdown = null;
                 try {
                     planMarkdown = planService.getCurrentPlanMarkdown();
                 } catch (Exception e) {
                     LOG.error("Failed to get plan markdown for sliding window", e);
                 }
                 historyService.applySlidingWindow(history, planMarkdown);
-
                 GenerateContentConfig config = prepareConfig(cacheMeta);
-
                 GenerateContentResponse response = doGenerateContent(settingsService.getGeminiModel(), history, config);
                 Candidate firstCandidate;
                 try {
@@ -206,16 +198,12 @@ public class GenAIService {
                 } catch (IllegalStateException e) {
                     return e.getMessage();
                 }
-
                 Content modelMessage = firstCandidate.content().orElse(Content.builder().build());
                 history.add(modelMessage);
-
                 // Check for Tool Calls
                 List<Content> subsequentUserMessages = new ArrayList<>();
                 List<Part> functionResponseParts = new ArrayList<>();
-
                 boolean hasFunctionCall = executeToolCalls(modelMessage, projectRoot, onStatusUpdate, subsequentUserMessages, functionResponseParts);
-
                 if (hasFunctionCall) {
                     if (stopRequested) {
                         return "Chat stopped by user.";
@@ -226,16 +214,16 @@ public class GenAIService {
                     history.addAll(subsequentUserMessages);
                     // Loop back for model to process tool output
                     Optional<String> error = waitForRateLimit(turnStart, minTurnDurationMillis);
-                    if (error.isPresent()) return error.get();
+                    if (error.isPresent())
+                        return error.get();
                     continue;
                 }
-
                 List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
                 String finalResponse = parts.stream().map(p -> p.text().orElse("")).collect(Collectors.joining(""));
-                
                 // Rate Limit Delay
                 Optional<String> error = waitForRateLimit(turnStart, minTurnDurationMillis);
-                if (error.isPresent()) return error.get();
+                if (error.isPresent())
+                    return error.get();
                 if (finalResponse.isBlank()) {
                     return "[Model returned an empty response. Finish reason: " + firstCandidate.finishReason().orElse(null) + "]";
                 }
@@ -247,7 +235,6 @@ public class GenAIService {
             notifyBusy(false);
         }
     }
-
 
     private Optional<String> waitForRateLimit(long turnStart, long minTurnDurationMillis) {
         long elapsed = System.currentTimeMillis() - turnStart;
@@ -263,6 +250,7 @@ public class GenAIService {
         }
         return Optional.empty();
     }
+
     private void initializeHistory(String prompt, String systemMessage) {
         LOG.info("Initializing chat history...");
         LOG.info("Prompt: {}", prompt);
@@ -283,7 +271,6 @@ public class GenAIService {
 
     private GenerateContentConfig prepareConfig(Optional<ProjectCacheMeta> cacheMeta) {
         GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder();
-
         if (cacheMeta.isPresent()) {
             LOG.info("Using cache!");
             // API Rule: Cannot pass tools if cachedContent is used.
@@ -302,7 +289,6 @@ public class GenAIService {
 
     private Candidate processResponse(GenerateContentResponse response) {
         handleUsageUpdate(response);
-
         Optional<List<Candidate>> candidatesOpt = response.candidates();
         if (candidatesOpt.isEmpty() || candidatesOpt.get().isEmpty()) {
             throw new IllegalStateException("Error: No response candidates.");
@@ -310,11 +296,9 @@ public class GenAIService {
         return candidatesOpt.get().getFirst();
     }
 
-    private boolean executeToolCalls(Content modelMessage, String projectRoot, Consumer<String> onStatusUpdate,
-                                     List<Content> subsequentUserMessages, List<Part> functionResponseParts) {
+    private boolean executeToolCalls(Content modelMessage, String projectRoot, Consumer<String> onStatusUpdate, List<Content> subsequentUserMessages, List<Part> functionResponseParts) {
         List<Part> parts = modelMessage.parts().orElse(Collections.emptyList());
         boolean hasFunctionCall = false;
-
         // handle 0-N function calls
         for (Part part : parts) {
             if (stopRequested) {
@@ -366,7 +350,6 @@ public class GenAIService {
         } catch (Exception e) {
             toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
         }
-
         // Handle Blobs (e.g. screenshots as Data URIs)
         if (toolOutput != null && toolOutput.startsWith("data:")) {
             try {
@@ -375,7 +358,6 @@ public class GenAIService {
                     String header = toolOutput.substring(0, commaIndex);
                     String base64Data = toolOutput.substring(commaIndex + 1);
                     String mimeType = header.substring(header.indexOf(":") + 1, header.indexOf(";"));
-
                     byte[] data = Base64.getDecoder().decode(base64Data);
                     Blob blob = Blob.builder().mimeType(mimeType).data(data).build();
                     subsequentUserMessages.add(Content.builder().role("user").parts(List.of(Part.builder().inlineData(blob).build(), Part.builder().text("Attachment captured.").build())).build());
@@ -386,7 +368,6 @@ public class GenAIService {
                 toolOutput = "Error parsing attachment: " + e.getMessage();
             }
         }
-
         if (toolOutput != null && toolOutput.length() > 20000) {
             LOG.warn("Truncating tool output for {}: {} characters", fnName, toolOutput.length());
             toolOutput = toolOutput.substring(0, 20000) + "\n\n[System: Output truncated due to length limits.]";

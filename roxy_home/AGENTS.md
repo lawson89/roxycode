@@ -17,6 +17,16 @@ The plan is to be a markdown (.md) file with a descriptive name based on the fea
 
 **Always use the `planService` to manage the lifecycle of plans (creation, moving, updating).**
 
+### Simple vs Complex Tasks
+- For **Simple Tasks** (e.g., answering a question, small refactoring, or a minor fix that can be planned in one turn), create the plan in `roxy/plans/available`.
+- For **Complex Tasks** (e.g., large features, complex bug fixes, or architectural changes that require analysis across multiple turns):
+    1. Create a "Planning Plan" using `planService.createPlan`.
+    2. Move it to the `planning` status using `planService.movePlan(name, 'planning')`.
+    3. Set it as the current plan using `planService.setCurrentPlan(name)`.
+    4. Use this plan to track your research, discovery, and incremental drafting of the final implementation plan.
+    5. Update the **Implementation Progress** and **Agent Context** sections as you progress through the planning phase.
+    6. Once the final plan is ready and approved by the user, move it to `in_progress` and switch to **CODE** mode.
+
 The plan should have 5 sections:
 1. **Goal** - A brief description of what the feature or bug fix is to accomplish.
 2. **Proposed Changes** - A detailed list of changes to be made to implement the feature or fix.

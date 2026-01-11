@@ -84,7 +84,6 @@ public class PlanService {
     }
 
     public void updateImplementationProgress(String name, List<String> progress) throws IOException {
-        // Here we assume simple strings are completed tasks unless they have markers
         List<Plan.TaskItem> taskProgress = progress != null ? progress.stream().map(s -> {
             if (s.startsWith("[ ] ")) return new Plan.TaskItem(s.substring(4), false);
             if (s.startsWith("[x] ") || s.startsWith("[X] ")) return new Plan.TaskItem(s.substring(4), true);
@@ -139,9 +138,9 @@ public class PlanService {
         PlanStatus currentStatus = currentPlan.getStatus();
         if (currentStatus == targetStatus) return;
 
-        // Transitions: Available <-> In_Progress -> Complete
-        if (currentStatus == PlanStatus.AVAILABLE && targetStatus == PlanStatus.COMPLETE) {
-            throw new IOException("Cannot move directly from AVAILABLE to COMPLETE. Move to IN_PROGRESS first.");
+        // Transitions: Available <-> Planning <-> In_Progress -> Complete
+        if ((currentStatus == PlanStatus.AVAILABLE || currentStatus == PlanStatus.PLANNING) && targetStatus == PlanStatus.COMPLETE) {
+            throw new IOException("Cannot move directly to COMPLETE from " + currentStatus + ". Move to IN_PROGRESS first.");
         }
         if (currentStatus == PlanStatus.COMPLETE) {
             throw new IOException("Cannot move a COMPLETE plan.");
@@ -151,21 +150,14 @@ public class PlanService {
         Path target = getPlanPath(name, targetStatus);
         Files.createDirectories(target.getParent());
         Files.move(source, target);
-
-        if (targetStatus == PlanStatus.COMPLETE) {
-            if (name.equals(roxyProjectService.getCurrentPlan())) {
-                roxyProjectService.setCurrentPlan(null);
-            }
-        }
     }
 
     public void deletePlan(String name) throws IOException {
-        if (!planExists(name)) return;
         Plan plan = loadPlan(name);
-        if (plan.getStatus() != PlanStatus.AVAILABLE) {
-            throw new IOException("Only AVAILABLE plans can be deleted.");
+        if (plan.getStatus() != PlanStatus.AVAILABLE && plan.getStatus() != PlanStatus.PLANNING) {
+            throw new IOException("Only AVAILABLE or PLANNING plans can be deleted.");
         }
-        Files.delete(getPlanPath(name, PlanStatus.AVAILABLE));
+        Files.delete(getPlanPath(name, plan.getStatus()));
     }
 
     public Path findPlanPath(String name) {
@@ -176,6 +168,10 @@ public class PlanService {
 
     public List<String> listAvailablePlans() throws IOException {
         return listPlans(PlanStatus.AVAILABLE);
+    }
+
+    public List<String> listPlanningPlans() throws IOException {
+        return listPlans(PlanStatus.PLANNING);
     }
 
     public List<String> listInProgressPlans() throws IOException {
@@ -192,7 +188,7 @@ public class PlanService {
         try (var stream = Files.list(dir)) {
             return stream.filter(p -> p.toString().endsWith(".md"))
                     .map(p -> p.getFileName().toString().replace(".md", ""))
-                    .collect(Collectors.joining("\n")).lines().toList();
+                    .collect(Collectors.toList());
         }
     }
 

@@ -140,6 +140,32 @@ class PlanServiceTest {
     }
 
     @Test
+    void testPlanningStatus() throws IOException {
+        String name = "planning-plan";
+        planService.createPlan(name, "Goal", null, null);
+
+        // Available -> Planning
+        planService.movePlan(name, "planning");
+        assertEquals(PlanStatus.PLANNING, planService.loadPlan(name).getStatus());
+        assertTrue(planService.listPlanningPlans().contains(name));
+
+        // Planning -> In Progress
+        planService.movePlan(name, "in_progress");
+        assertEquals(PlanStatus.IN_PROGRESS, planService.loadPlan(name).getStatus());
+
+        // In Progress -> Planning
+        planService.movePlan(name, "planning");
+        assertEquals(PlanStatus.PLANNING, planService.loadPlan(name).getStatus());
+
+        // PLANNING -> COMPLETE should be blocked
+        assertThrows(IOException.class, () -> planService.movePlan(name, "complete"));
+
+        // Test deletion of planning plan
+        planService.deletePlan(name);
+        assertFalse(planService.planExists(name));
+    }
+
+    @Test
     void testMovePlan_ValidTransitions() throws IOException {
         String name = "move-plan";
         planService.createPlan(name, "Goal", null, null);
@@ -219,6 +245,7 @@ class PlanServiceTest {
         Plan loaded = planService.loadPlan(name);
         assertEquals(context, loaded.getAgentContext());
     }
+
     @Test
     void testSetCurrentPlan_DelegatesToRoxyProjectService() {
         String planName = "test-plan";
@@ -248,6 +275,4 @@ class PlanServiceTest {
         assertNotNull(markdown);
         assertTrue(markdown.contains("Current Goal"));
     }
-
 }
-
