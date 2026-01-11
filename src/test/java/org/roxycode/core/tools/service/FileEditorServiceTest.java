@@ -74,6 +74,26 @@ class FileEditorServiceTest {
         assertEquals("1: line1\n2: line2\n3: line3", result);
     }
 
+
+    @Test
+    void testReadFile() throws IOException {
+        Path p = tempDir.resolve("test.txt");
+        List<String> lines = Arrays.asList("line1", "line2", "line3");
+        Files.write(p, lines, StandardCharsets.UTF_8);
+
+        String result = fileEditorService.readFile("test.txt");
+        assertEquals("line1\nline2\nline3", result);
+    }
+
+    @Test
+    void testReadFileWithNumbers() throws IOException {
+        Path p = tempDir.resolve("test.txt");
+        List<String> lines = Arrays.asList("line1", "line2");
+        Files.write(p, lines, StandardCharsets.UTF_8);
+
+        String result = fileEditorService.readFileWithNumbers("test.txt");
+        assertEquals("1: line1\n2: line2", result);
+    }
     @Test
     void testFindLine() throws IOException {
         Path p = tempDir.resolve("test.txt");

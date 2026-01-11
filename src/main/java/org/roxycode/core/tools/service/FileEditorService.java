@@ -115,6 +115,30 @@ public class FileEditorService {
      * @return The 1-based line number of the first match, or -1 if no match is found or the starting line is out of bounds.
      * @throws IOException If an I/O error occurs or the file does not exist.
      */
+
+    /**
+     * Reads the entire content of a file as a string.
+     *
+     * @param path The path to the file relative to the sandbox root.
+     * @return The file content.
+     * @throws IOException If an I/O error occurs or the file does not exist.
+     */
+    @LLMDoc("Returns the entire content of the file.")
+    public String readFile(String path) throws IOException {
+        return getLines(path, 1, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Reads the entire content of a file as a string, prefixed with 1-based line numbers.
+     *
+     * @param path The path to the file relative to the sandbox root.
+     * @return The file content with line numbers.
+     * @throws IOException If an I/O error occurs or the file does not exist.
+     */
+    @LLMDoc("Returns the entire content of the file with 1-based line numbers.")
+    public String readFileWithNumbers(String path) throws IOException {
+        return getLinesWithNumbers(path, 1, Integer.MAX_VALUE);
+    }
     @LLMDoc("Finds the first line matching the regex after startLine (1-based index). Returns -1 if not found.")
     public int findLine(String path, String regex, int startLine) throws IOException {
         Path p = sandbox.resolve(path);
