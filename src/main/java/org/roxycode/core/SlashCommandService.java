@@ -79,18 +79,15 @@ public class SlashCommandService {
                 return new CommandResult(true, "No skills found in ~/.roxy/skills", CommandAction.NONE);
             }
             String names = skills.stream().map(s -> s.name()).collect(Collectors.joining(", "));
-            String current = roxyProjectService.getCurrentSkill() != null ? "\n\n**Current Skill:** " + roxyProjectService.getCurrentSkill().name() : "";
-            return new CommandResult(true, "Available skills: " + names + current, CommandAction.NONE);
+            return new CommandResult(true, "Available skills: " + names , CommandAction.NONE);
         }
 
         if (args.equalsIgnoreCase("off") || args.equalsIgnoreCase("none") || args.equalsIgnoreCase("clear")) {
-            roxyProjectService.setCurrentSkill(null);
             return new CommandResult(true, "Skill deactivated.", CommandAction.NONE);
         }
 
         var skill = skillService.getSkill(args);
         if (skill != null) {
-            roxyProjectService.setCurrentSkill(skill);
             String details = String.format("### Skill Activated: %s\n\n**Prompt:**\n%s", skill.name(), skill.prompt());
             return new CommandResult(true, details, CommandAction.NONE);
         } else {

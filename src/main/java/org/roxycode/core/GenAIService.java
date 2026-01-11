@@ -140,11 +140,6 @@ public class GenAIService {
         }
             contextBuilder.append(roxyProjectService.getStaticSystemPrompt());
         }
-        var currentSkill = roxyProjectService.getCurrentSkill();
-        if (currentSkill != null) {
-            contextBuilder.append("\n### CURRENT SKILL: ").append(currentSkill.name()).append("\n");
-            contextBuilder.append(currentSkill.prompt()).append("\n");
-        }
         contextBuilder.append("Project Root: ").append(projectRoot).append("\n");
         if (cacheMeta.isPresent()) {
             contextBuilder.append("### Project Info (CACHED)\n");

@@ -15,7 +15,6 @@ import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.ui.views.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -54,8 +53,6 @@ public class MainFrame extends JFrame implements Runnable {
 
     @Inject
     private SystemPromptView systemPromptView;
-
-    
 
     @Inject
     private LogsView logsView;
@@ -125,8 +122,6 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JToggleButton navSystemPromptButton;
 
-    
-
     @Outlet
     private JToggleButton navSummaryQueueButton;
 
@@ -145,10 +140,8 @@ public class MainFrame extends JFrame implements Runnable {
     @Outlet
     private JButton openFolderButton;
 
-
     @Inject
-    public MainFrame(GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService,
-                     ThemeService themeService, NotificationService notificationService, ProjectCacheMetaService projectCacheMetaService) {
+    public MainFrame(GenAIService genAIService, SettingsService settingsService, RoxyProjectService roxyProjectService, ThemeService themeService, NotificationService notificationService, ProjectCacheMetaService projectCacheMetaService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.roxyProjectService = roxyProjectService;
@@ -172,7 +165,6 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add(usageView);
             mainContentStack.add(settingsView);
             mainContentStack.add(systemPromptView);
-            
             mainContentStack.add(logsView);
             mainContentStack.add(codebaseCacheView);
             mainContentStack.add(geminiOnlineCachesView);
@@ -201,7 +193,6 @@ public class MainFrame extends JFrame implements Runnable {
                 }
             }
         }));
-
         // Set initial view
         showView("CHAT");
         setSize(1200, 800);
@@ -225,7 +216,7 @@ public class MainFrame extends JFrame implements Runnable {
             Color fgColor;
             Ikon iconCode;
             boolean isDark = FlatLaf.isLafDark();
-            switch (request.type()) {
+            switch(request.type()) {
                 case SUCCESS:
                     bgColor = isDark ? new Color(30, 50, 30) : new Color(230, 250, 230);
                     fgColor = isDark ? new Color(100, 255, 100) : new Color(0, 120, 0);
@@ -280,7 +271,6 @@ public class MainFrame extends JFrame implements Runnable {
             currentModelLabel.setIconTextGap(6);
             currentModelLabel.setText(settingsService.getGeminiModel());
         }
-
         if (currentProjectLabel != null) {
             currentProjectLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FOLDER_OUTLINE, 16));
             currentProjectLabel.setIconTextGap(8);
@@ -289,7 +279,6 @@ public class MainFrame extends JFrame implements Runnable {
             gitBranchLabel.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignG.GIT, 16));
             gitBranchLabel.setIconTextGap(8);
         }
-
         // Set Icons for Nav Buttons
         if (navChatButton != null)
             navChatButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CHAT_OUTLINE, 18));
@@ -301,7 +290,6 @@ public class MainFrame extends JFrame implements Runnable {
             navSettingsButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.COG_OUTLINE, 18));
         if (navSystemPromptButton != null)
             navSystemPromptButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignR.ROBOT_OUTLINE, 18));
-        
         if (navLogsButton != null)
             navLogsButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FILE_DOCUMENT_OUTLINE, 18));
         if (navCodebaseCacheButton != null)
@@ -318,12 +306,10 @@ public class MainFrame extends JFrame implements Runnable {
         if (roxyModeLabel != null) {
             RoxyMode mode = roxyProjectService.getCurrentMode();
             roxyModeLabel.setText(mode.toString());
-
             Ikon iconCode;
             Color fgColor;
             boolean isDark = com.formdev.flatlaf.FlatLaf.isLafDark();
-
-            switch (mode) {
+            switch(mode) {
                 case PLAN:
                     iconCode = MaterialDesignC.CARD_TEXT_OUTLINE;
                     fgColor = isDark ? new Color(255, 200, 0) : new Color(150, 100, 0);
@@ -337,7 +323,6 @@ public class MainFrame extends JFrame implements Runnable {
                     fgColor = roxyModeLabel.getForeground();
                     break;
             }
-
             roxyModeLabel.setIcon(FontIcon.of(iconCode, 16, fgColor));
             roxyModeLabel.setForeground(fgColor);
             roxyModeLabel.setIconTextGap(6);
@@ -366,7 +351,6 @@ public class MainFrame extends JFrame implements Runnable {
             navSettingsButton.addActionListener(e -> showView("SETTINGS"));
         if (navSystemPromptButton != null)
             navSystemPromptButton.addActionListener(e -> showView("SYSTEM_PROMPT"));
-        
         if (navSummaryQueueButton != null)
             navSummaryQueueButton.addActionListener(e -> showView("SUMMARY_QUEUE"));
         if (navLogsButton != null)
@@ -387,12 +371,11 @@ public class MainFrame extends JFrame implements Runnable {
         usageView.setVisible(false);
         settingsView.setVisible(false);
         systemPromptView.setVisible(false);
-        
         logsView.setVisible(false);
         codebaseCacheView.setVisible(false);
         geminiOnlineCachesView.setVisible(false);
         apiDocsView.setVisible(false);
-        switch (viewName) {
+        switch(viewName) {
             case "CHAT":
                 chatView.setVisible(true);
                 break;
@@ -411,7 +394,6 @@ public class MainFrame extends JFrame implements Runnable {
                 systemPromptView.refresh();
                 systemPromptView.setVisible(true);
                 break;
-            
             case "LOGS":
                 logsView.refresh();
                 logsView.setVisible(true);
@@ -456,11 +438,10 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     public JTextPane[] getAllPanes() {
-        return new JTextPane[]{chatView.getChatArea(), systemPromptView.getSystemPromptArea(), codebaseCacheView.getCacheContentArea(), apiDocsView.getApiDocsArea()};
+        return new JTextPane[] { chatView.getChatArea(), systemPromptView.getSystemPromptArea(), codebaseCacheView.getCacheContentArea(), apiDocsView.getApiDocsArea() };
     }
 
     public void updateCacheStatus() {
         chatView.updateCacheStatus();
     }
-
 }

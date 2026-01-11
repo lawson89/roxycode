@@ -29,7 +29,6 @@
         <label name="cacheStatusLabel" text="Cache: Unknown" style="font: -2; foreground: #888888"/>
         <label name="cacheIdLabel" text="" style="font: -2; foreground: #888888"/>
         <label name="cacheExpiryLabel" text="" style="font: -2; foreground: #888888"/>
-        <label name="activeSkillLabel" text="Skill: None" style="font: -2; foreground: #888888"/>
         <spacer weight="1"/>
 
         <label name="currentModelLabel" text="[MODEL]" style="font: -2; foreground: #888888"/>

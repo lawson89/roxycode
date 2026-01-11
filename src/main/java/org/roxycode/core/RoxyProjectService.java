@@ -8,7 +8,6 @@ import org.roxycode.core.tools.ToolRegistry;
 import org.roxycode.core.tools.service.FileSystemService;
 import org.roxycode.core.tools.service.GitRunner;
 import org.roxycode.core.utils.SystemUtils;
-import org.roxycode.core.tools.service.Skill;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +39,6 @@ public class RoxyProjectService {
     private String currentBranch = "";
     private RoxyMode currentMode = RoxyMode.PLAN;
     private String currentPlan = "";
-    private Skill currentSkill;
     private Path roxyHome;
 
     @Inject
@@ -147,13 +145,6 @@ public class RoxyProjectService {
         this.currentPlan = currentPlan;
     }
 
-    public Skill getCurrentSkill() {
-        return currentSkill;
-    }
-
-    public void setCurrentSkill(Skill currentSkill) {
-        this.currentSkill = currentSkill;
-    }
 
     public Path getRoxyHome() {
         return roxyHome;

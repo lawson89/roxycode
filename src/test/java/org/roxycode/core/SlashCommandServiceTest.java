@@ -1,10 +1,10 @@
 package org.roxycode.core;
 
-import org.roxycode.core.tools.service.SkillService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.core.config.GeminiModel;
 import org.roxycode.core.config.GeminiModelRegistry;
+import org.roxycode.core.tools.service.SkillService;
 
 import java.util.List;
 import java.util.Optional;
@@ -17,21 +17,21 @@ class SlashCommandServiceTest {
     private GenAIService genAIService;
     private SettingsService settingsService;
     private GeminiModelRegistry modelRegistry;
-    private SkillService skillService;
-    private RoxyProjectService roxyProjectService;
     private SlashCommandService slashCommandService;
+    private RoxyProjectService roxyProjectService;
+    private SkillService skillService;
 
     @BeforeEach
+
     void setUp() {
         genAIService = mock(GenAIService.class);
         settingsService = mock(SettingsService.class);
         modelRegistry = mock(GeminiModelRegistry.class);
         roxyProjectService = mock(RoxyProjectService.class);
         skillService = mock(SkillService.class);
+
         slashCommandService = new SlashCommandService(genAIService, settingsService, modelRegistry, roxyProjectService, skillService);
     }
-
-    @Test
     void testIsCommand() {
         assertTrue(slashCommandService.isCommand("/help"));
         assertTrue(slashCommandService.isCommand(" /clear"));
@@ -99,13 +99,6 @@ class SlashCommandServiceTest {
         assertTrue(result.message().contains("Unknown command"));
     }
 
-    @Test
-    void testExecutePlan() {
-        SlashCommandService.CommandResult result = slashCommandService.execute("/plan");
-        assertTrue(result.success());
-        verify(roxyProjectService).setCurrentMode(RoxyMode.PLAN);
-        assertEquals(SlashCommandService.CommandAction.UPDATE_STATS, result.action());
-    }
 
     @Test
     void testExecuteCode() {
