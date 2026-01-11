@@ -30,6 +30,7 @@
         <label name="cacheIdLabel" text="" style="font: -2; foreground: #888888"/>
         <label name="cacheExpiryLabel" text="" style="font: -2; foreground: #888888"/>
         <spacer weight="1"/>
+        <button name="planContextButton" text="Plan: None" style="font: -2"/>
 
         <label name="currentModelLabel" text="[MODEL]" style="font: -2; foreground: #888888"/>
         <label name="msgCountLabel" text="0 Messages" style="font: -2; foreground: #888888"/>

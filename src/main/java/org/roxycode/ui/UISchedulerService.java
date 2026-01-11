@@ -4,6 +4,7 @@ import io.micronaut.scheduling.annotation.Scheduled;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.roxycode.ui.views.LogsView;
+import org.roxycode.ui.views.CurrentPlanView;
 import org.roxycode.ui.views.ChatView;
 
 import javax.swing.*;
@@ -12,6 +13,8 @@ import javax.swing.*;
 @io.micronaut.context.annotation.Requires(notEnv = "test")
 public class UISchedulerService {
 
+    @Inject
+    private CurrentPlanView currentPlanView;
     @Inject
     private ChatView chatView;
     @Inject
@@ -26,12 +29,16 @@ public class UISchedulerService {
             if (chatView != null) {
                 chatView.updateCacheStatus();
                 chatView.updateChatStats();
+                chatView.updatePlanContext();
             }
             if (mainFrame != null) {
                 mainFrame.updateRoxyMode();
             }
             if (logsView != null) {
                 logsView.autoRefresh();
+            }
+            if (currentPlanView != null) {
+                currentPlanView.refresh();
             }
         });
     }

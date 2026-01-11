@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE column-panel SYSTEM "sierra.dtd">
+<column-panel spacing="10" padding="16">
+    <row-panel spacing="10" alignToBaseline="false">
+        <label text="Current Plan" styleClass="h3" weight="1"/>
+        <button name="refreshPlanButton" text="Refresh"/>
+    </row-panel>
+    <scroll-pane name="planScrollPane" weight="1"/>
+</column-panel>

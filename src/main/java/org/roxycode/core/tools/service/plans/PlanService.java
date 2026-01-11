@@ -137,7 +137,6 @@ public class PlanService {
         PlanStatus targetStatus = PlanStatus.fromString(targetStatusStr);
         Plan currentPlan = loadPlan(name);
         PlanStatus currentStatus = currentPlan.getStatus();
-
         if (currentStatus == targetStatus) return;
 
         // Transitions: Available <-> In_Progress -> Complete
@@ -167,6 +166,12 @@ public class PlanService {
             throw new IOException("Only AVAILABLE plans can be deleted.");
         }
         Files.delete(getPlanPath(name, PlanStatus.AVAILABLE));
+    }
+
+    public Path findPlanPath(String name) {
+        PlanStatus status = findPlanStatus(name);
+        if (status == null) return null;
+        return getPlanPath(name, status);
     }
 
     public List<String> listAvailablePlans() throws IOException {
@@ -230,7 +235,7 @@ public class PlanService {
 
     public String getCurrentPlanMarkdown() throws IOException {
         String current = roxyProjectService.getCurrentPlan();
-        if (current == null) return null;
+        if (current == null || current.isBlank()) return null;
         return getPlanMarkdown(current);
     }
 

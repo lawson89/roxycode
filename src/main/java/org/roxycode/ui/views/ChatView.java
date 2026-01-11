@@ -13,6 +13,7 @@ import org.fife.ui.rtextarea.RTextScrollPane;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.httprpc.sierra.UILoader;
 import org.roxycode.core.GenAIService;
+import org.roxycode.core.tools.service.plans.PlanService;
 import org.roxycode.core.SettingsService;
 import org.roxycode.core.NotificationService;
 import org.roxycode.core.NotificationType;
@@ -21,6 +22,7 @@ import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.RoxyProjectService;
 import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.ui.MarkdownPane;
+import org.roxycode.ui.MainFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.swing.*;
@@ -28,6 +30,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.io.InterruptedIOException;
+import java.awt.Desktop;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +50,7 @@ public class ChatView extends JPanel {
 
     private final ProjectCacheMetaService projectCacheMetaService;
 
+    private final PlanService planService;
     private final RoxyProjectService roxyProjectService;
 
     private final NotificationService notificationService;
@@ -105,9 +109,12 @@ public class ChatView extends JPanel {
     @Outlet
     private JLabel cacheExpiryLabel;
 
+    @Outlet
+    private JButton planContextButton;
+
 
     @Inject
-    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService, NotificationService notificationService, RoxyProjectService roxyProjectService) {
+    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService, NotificationService notificationService, RoxyProjectService roxyProjectService, PlanService planService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.themeService = themeService;
@@ -115,6 +122,7 @@ public class ChatView extends JPanel {
         this.projectCacheMetaService = projectCacheMetaService;
         this.notificationService = notificationService;
         this.roxyProjectService = roxyProjectService;
+        this.planService = planService;
         setLayout(new BorderLayout());
     }
 
@@ -129,6 +137,10 @@ public class ChatView extends JPanel {
         initIcons();
         updateCacheStatus();
         initListeners();
+        if (planContextButton != null) {
+            planContextButton.addActionListener(e -> openCurrentPlan());
+        }
+        updatePlanContext();
     }
 
     private void setupInputField() {
@@ -415,6 +427,24 @@ public class ChatView extends JPanel {
                 }
             }
         });
+    }
+
+    public void updatePlanContext() {
+        if (planContextButton == null) return;
+        String plan = planService.getCurrentPlan();
+        if (plan != null && !plan.isEmpty()) {
+            planContextButton.setText("Plan: " + plan);
+            planContextButton.setVisible(true);
+        } else {
+            planContextButton.setVisible(false);
+        }
+    }
+
+    private void openCurrentPlan() {
+        Window window = SwingUtilities.getWindowAncestor(this);
+        if (window instanceof MainFrame mainFrame) {
+            mainFrame.showPlanView();
+        }
     }
 
     public void appendSystemMessage(String msg) {

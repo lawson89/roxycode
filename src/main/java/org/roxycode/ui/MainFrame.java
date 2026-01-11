@@ -37,6 +37,8 @@ public class MainFrame extends JFrame implements Runnable {
     private final NotificationService notificationService;
 
     private final ProjectCacheMetaService projectCacheMetaService;
+    @Inject
+    private CurrentPlanView currentPlanView;
 
     // -- VIEWS --
     @Inject
@@ -109,6 +111,8 @@ public class MainFrame extends JFrame implements Runnable {
     // Navigation Outlets
     @Outlet
     private JToggleButton navChatButton;
+    @Outlet
+    private JToggleButton navPlanButton;
 
     @Outlet
     private JToggleButton navChangesButton;
@@ -169,6 +173,7 @@ public class MainFrame extends JFrame implements Runnable {
             mainContentStack.add(codebaseCacheView);
             mainContentStack.add(geminiOnlineCachesView);
             mainContentStack.add(apiDocsView);
+            mainContentStack.add(currentPlanView);
         }
         // 3. Initialize UI Components
         initIcons();
@@ -298,6 +303,8 @@ public class MainFrame extends JFrame implements Runnable {
             navGeminiCachesButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CLOUD_OUTLINE, 18));
         if (navApiDocsButton != null)
             navApiDocsButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignB.BOOK_OPEN_VARIANT, 18));
+        if (navPlanButton != null)
+            navPlanButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CARD_TEXT_OUTLINE, 18));
         if (openFolderButton != null)
             openFolderButton.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.materialdesign2.MaterialDesignF.FOLDER_OPEN_OUTLINE, 16));
     }
@@ -361,9 +368,19 @@ public class MainFrame extends JFrame implements Runnable {
             navGeminiCachesButton.addActionListener(e -> showView("GEMINI_CACHES"));
         if (navApiDocsButton != null)
             navApiDocsButton.addActionListener(e -> showView("API_DOCS"));
+        if (navPlanButton != null)
+            navPlanButton.addActionListener(e -> showView("PLAN"));
         if (openFolderButton != null)
             openFolderButton.addActionListener(this::onOpenFolder);
     }
+
+    public void showPlanView() {
+        showView("PLAN");
+        if (navPlanButton != null) {
+            navPlanButton.setSelected(true);
+        }
+    }
+
 
     private void showView(String viewName) {
         chatView.setVisible(false);
@@ -375,6 +392,7 @@ public class MainFrame extends JFrame implements Runnable {
         codebaseCacheView.setVisible(false);
         geminiOnlineCachesView.setVisible(false);
         apiDocsView.setVisible(false);
+        currentPlanView.setVisible(false);
         switch(viewName) {
             case "CHAT":
                 chatView.setVisible(true);
@@ -410,6 +428,10 @@ public class MainFrame extends JFrame implements Runnable {
                 apiDocsView.refresh();
                 apiDocsView.setVisible(true);
                 break;
+            case "PLAN":
+                currentPlanView.refresh();
+                currentPlanView.setVisible(true);
+                break;
         }
     }
 
@@ -438,7 +460,7 @@ public class MainFrame extends JFrame implements Runnable {
     }
 
     public JTextPane[] getAllPanes() {
-        return new JTextPane[] { chatView.getChatArea(), systemPromptView.getSystemPromptArea(), codebaseCacheView.getCacheContentArea(), apiDocsView.getApiDocsArea() };
+        return new JTextPane[] { chatView.getChatArea(), systemPromptView.getSystemPromptArea(), codebaseCacheView.getCacheContentArea(), apiDocsView.getApiDocsArea(), currentPlanView.getPlanArea() };
     }
 
     public void updateCacheStatus() {

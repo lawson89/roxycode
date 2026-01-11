@@ -226,5 +226,28 @@ class PlanServiceTest {
         verify(roxyProjectService).setCurrentPlan(planName);
     }
 
+    @Test
+    void testGetCurrentPlanMarkdown_BlankPlanReturnsNull() throws IOException {
+        when(roxyProjectService.getCurrentPlan()).thenReturn("");
+        assertNull(planService.getCurrentPlanMarkdown());
+        
+        when(roxyProjectService.getCurrentPlan()).thenReturn("   ");
+        assertNull(planService.getCurrentPlanMarkdown());
+        
+        when(roxyProjectService.getCurrentPlan()).thenReturn(null);
+        assertNull(planService.getCurrentPlanMarkdown());
+    }
+
+    @Test
+    void testGetCurrentPlanMarkdown_ValidPlan() throws IOException {
+        String name = "current-plan";
+        planService.createPlan(name, "Current Goal", null, null);
+        when(roxyProjectService.getCurrentPlan()).thenReturn(name);
+        
+        String markdown = planService.getCurrentPlanMarkdown();
+        assertNotNull(markdown);
+        assertTrue(markdown.contains("Current Goal"));
+    }
+
 }
 
