@@ -32,6 +32,7 @@ public class RoxyProjectService {
 
     public static final String ROXY_HOME = "roxy_home";
 
+    public static final String ROXY_TRANSCRIPTS = "transcripts";
     private static final String README_FILE = "README.md";
 
     private final Sandbox sandbox;
@@ -106,6 +107,14 @@ public class RoxyProjectService {
             Files.createDirectories(cacheDir);
         }
         return cacheDir;
+    }
+
+    public Path getTranscriptsDir() throws IOException {
+        Path transcriptsDir = getRoxyWorkingDir().resolve(ROXY_TRANSCRIPTS);
+        if (!Files.exists(transcriptsDir)) {
+            Files.createDirectories(transcriptsDir);
+        }
+        return transcriptsDir;
     }
 
     public Path getProjectRoot() {

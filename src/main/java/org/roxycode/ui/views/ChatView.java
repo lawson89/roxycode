@@ -16,6 +16,7 @@ import org.roxycode.core.GenAIService;
 import org.roxycode.core.tools.service.plans.PlanService;
 import org.roxycode.core.SettingsService;
 import org.roxycode.core.NotificationService;
+import org.roxycode.core.TranscriptService;
 import org.roxycode.core.NotificationType;
 import org.roxycode.core.SlashCommandService;
 import org.roxycode.core.beans.ProjectCacheMeta;
@@ -60,6 +61,7 @@ public class ChatView extends JPanel {
     private final RSyntaxTextArea inputField = new RSyntaxTextArea(10, 80);
 
     private final List<File> attachedFiles = new ArrayList<>();
+    private final TranscriptService transcriptService;
 
     @Outlet
     private JComponent viewChat;
@@ -111,10 +113,12 @@ public class ChatView extends JPanel {
 
     @Outlet
     private JButton planContextButton;
+    @Outlet
+    private JCheckBox captureTranscriptCheckBox;
 
 
     @Inject
-    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService, NotificationService notificationService, RoxyProjectService roxyProjectService, PlanService planService) {
+    public ChatView(GenAIService genAIService, SettingsService settingsService, org.roxycode.ui.ThemeService themeService, SlashCommandService slashCommandService, ProjectCacheMetaService projectCacheMetaService, NotificationService notificationService, RoxyProjectService roxyProjectService, PlanService planService, TranscriptService transcriptService) {
         this.genAIService = genAIService;
         this.settingsService = settingsService;
         this.themeService = themeService;
@@ -123,6 +127,7 @@ public class ChatView extends JPanel {
         this.notificationService = notificationService;
         this.roxyProjectService = roxyProjectService;
         this.planService = planService;
+        this.transcriptService = transcriptService;
         setLayout(new BorderLayout());
     }
 
@@ -242,6 +247,10 @@ public class ChatView extends JPanel {
                 attachedFiles.clear();
                 updateAttachmentsLabel();
             });
+        if (captureTranscriptCheckBox != null) {
+            captureTranscriptCheckBox.setSelected(transcriptService.isEnabled());
+            captureTranscriptCheckBox.addActionListener(e -> transcriptService.setEnabled(captureTranscriptCheckBox.isSelected()));
+        }
         inputField.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "send-message");
         inputField.getActionMap().put("send-message", new AbstractAction() {
 

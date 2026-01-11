@@ -44,6 +44,7 @@ public class GenAIService {
     private final PlanService planService;
 
     private final RoxyProjectService roxyProjectService;
+    private final TranscriptService transcriptService;
 
     private final GeminiClientFactory geminiClientFactory;
 
@@ -51,12 +52,13 @@ public class GenAIService {
 
     private String lastUsedApiKey;
 
-    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, UsageService usageService, HistoryService historyService, RoxyProjectService roxyProjectService, ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory, PlanService planService) {
+    public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService, UsageService usageService, HistoryService historyService, RoxyProjectService roxyProjectService, ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory, PlanService planService, TranscriptService transcriptService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
         this.usageService = usageService;
         this.historyService = historyService;
+        this.transcriptService = transcriptService;
         this.roxyProjectService = roxyProjectService;
         this.projectCacheMetaService = projectCacheMetaService;
         this.geminiClientFactory = geminiClientFactory;
@@ -167,6 +169,7 @@ public class GenAIService {
         }
         notifyBusy(true);
         try {
+            transcriptService.log("user", prompt);
             this.stopRequested = false;
             Optional<ProjectCacheMeta> cacheMeta = projectCacheMetaService.getProjectCacheMeta();
             String systemMessage = buildSystemMessage(projectRoot, attachedFiles, cacheMeta);
@@ -227,6 +230,7 @@ public class GenAIService {
                 if (finalResponse.isBlank()) {
                     return "[Model returned an empty response. Finish reason: " + firstCandidate.finishReason().orElse(null) + "]";
                 }
+                transcriptService.log("model", finalResponse);
                 return finalResponse;
             }
             return "Max turns reached.";
@@ -338,6 +342,7 @@ public class GenAIService {
         }
         if (onStatusUpdate != null) {
             String script = MapUtils.getString(fixedArgs, "script", "missing");
+        transcriptService.logToolCall(fnName, fixedArgs);
             // since we have moved to a script based model we just display the script
             onStatusUpdate.accept(script);
         }
@@ -347,6 +352,7 @@ public class GenAIService {
             ToolDefinition toolDef = toolRegistry.getTool(fnName).orElseThrow(() -> new IllegalStateException("Tool not found: " + fnName));
             toolOutput = executionService.execute(toolDef, fixedArgs).get();
             LOG.info("Tool results: {} {}", fnName, toolOutput);
+            transcriptService.logToolResult(fnName, toolOutput);
         } catch (Exception e) {
             toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
         }
