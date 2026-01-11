@@ -189,7 +189,13 @@ public class GenAIService {
                     onStatusUpdate.accept(String.format("Thinking (%d/%d)...", turns, maxTurns));
                 }
 
-                historyService.applySlidingWindow(history);
+                                String planMarkdown = null;
+                try {
+                    planMarkdown = planService.getCurrentPlanMarkdown();
+                } catch (Exception e) {
+                    LOG.error("Failed to get plan markdown for sliding window", e);
+                }
+                historyService.applySlidingWindow(history, planMarkdown);
 
                 GenerateContentConfig config = prepareConfig(cacheMeta);
 

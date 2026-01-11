@@ -28,7 +28,7 @@ public class HistoryService {
      * 3. If a safe "User" node isn't found, it forces a cut before a "Model" node
      * and inserts a Synthetic User Message to keep the conversation valid.
      */
-    public void applySlidingWindow(List<Content> history) {
+    public void applySlidingWindow(List<Content> history, String planMarkdown) {
         int windowSize = settingsService.getHistoryWindowSize();
         if (history.size() <= windowSize) {
             return;
@@ -57,16 +57,30 @@ public class HistoryService {
         if ("user".equalsIgnoreCase(role)) {
             history.subList(1, cutIndex).clear();
             log.info("✂️ Sliding Window: Clean cut. Removed old messages.");
+
+            // If plan markdown is provided, insert a refresher message
+            if (planMarkdown != null && !planMarkdown.isBlank()) {
+                Content refresher = Content.builder()
+                        .role("user")
+                        .parts(List.of(Part.builder().text("[System: Conversation history trimmed. Refreshing plan context.]\n\n### CURRENT PLAN:\n" + planMarkdown).build()))
+                        .build();
+                history.add(1, refresher);
+            }
         }
         // Strategy B: Synthetic Cut (Next node is Model)
         else if ("model".equalsIgnoreCase(role)) {
             // We cannot leave "System -> Model". We must insert "System -> SyntheticUser -> Model"
             log.info("✂️ Sliding Window: Cutting before a Model message. Inserting Synthetic User bridge.");
 
+
             // 1. Insert Synthetic User Message at the cut point
+            String msgText = "[System: Conversation history trimmed. Resuming context.]";
+            if (planMarkdown != null && !planMarkdown.isBlank()) {
+                msgText += "\n\n### CURRENT PLAN:\n" + planMarkdown;
+            }
             Content syntheticMsg = Content.builder()
                     .role("user")
-                    .parts(List.of(Part.builder().text("[System: Conversation history trimmed. Resuming context.]").build()))
+                    .parts(List.of(Part.builder().text(msgText).build()))
                     .build();
             history.add(cutIndex, syntheticMsg);
 
@@ -89,6 +103,12 @@ public class HistoryService {
 
         // 1. Look forward
         for (int i = startIndex; i < history.size(); i++) {
+            // Prefer a clean cut at a User node if the next node is one
+            if (i + 1 < history.size() && "user".equalsIgnoreCase(history.get(i + 1).role().orElse("?"))) {
+                if (isCuttableNode(history.get(i + 1))) {
+                    return i + 1;
+                }
+            }
             if (isCuttableNode(history.get(i))) {
                 return i;
             }
