@@ -7,6 +7,8 @@ import org.apache.commons.collections4.MapUtils;
 import org.roxycode.core.beans.ProjectCacheMeta;
 import org.roxycode.core.cache.ProjectCacheMetaService;
 import org.roxycode.core.tools.ToolDefinition;
+import org.roxycode.core.tools.service.plans.Plan;
+import org.roxycode.core.tools.service.plans.PlanService;
 import org.roxycode.core.tools.ToolExecutionService;
 import org.roxycode.core.tools.ToolRegistry;
 import org.slf4j.Logger;
@@ -38,6 +40,7 @@ public class GenAIService {
     private final HistoryService historyService;
 
     private final ProjectCacheMetaService projectCacheMetaService;
+    private final PlanService planService;
     private final RoxyProjectService roxyProjectService;
     private final GeminiClientFactory geminiClientFactory;
 
@@ -48,7 +51,7 @@ public class GenAIService {
     public GenAIService(SettingsService settingsService, ToolRegistry toolRegistry, ToolExecutionService executionService,
                         UsageService usageService, HistoryService historyService,
                         RoxyProjectService roxyProjectService,
-                        ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory) {
+                        ProjectCacheMetaService projectCacheMetaService, GeminiClientFactory geminiClientFactory, PlanService planService) {
         this.settingsService = settingsService;
         this.toolRegistry = toolRegistry;
         this.executionService = executionService;
@@ -57,6 +60,7 @@ public class GenAIService {
         this.roxyProjectService = roxyProjectService;
         this.projectCacheMetaService = projectCacheMetaService;
         this.geminiClientFactory = geminiClientFactory;
+        this.planService = planService;
     }
 
     private synchronized Client getClient() {
@@ -122,6 +126,18 @@ public class GenAIService {
     public String buildSystemMessage(String projectRoot, List<File> attachedFiles, java.util.Optional<ProjectCacheMeta> cacheMeta) {
         StringBuilder contextBuilder = new StringBuilder();
         if (cacheMeta.isEmpty()) {
+
+        // Add Plan Context
+        try {
+            String planMarkdown = planService.getCurrentPlanMarkdown();
+            if (planMarkdown != null) {
+                contextBuilder.append("\n### CURRENT PLAN: ").append(roxyProjectService.getCurrentPlan()).append("\n");
+                contextBuilder.append(planMarkdown);
+                contextBuilder.append("\n----------------------\n");
+            }
+        } catch (IOException e) {
+            LOG.error("Failed to load current plan", e);
+        }
             contextBuilder.append(roxyProjectService.getStaticSystemPrompt());
         }
         var currentSkill = roxyProjectService.getCurrentSkill();
@@ -247,7 +263,7 @@ public class GenAIService {
     }
     private void initializeHistory(String prompt, String systemContext) {
         // user task and mode we are currently operating in
-        String taskMessage = "Task: " + prompt;
+        String taskMessage = "Task: " + prompt + "\n";
         taskMessage += roxyProjectService.getModeMessage();
         LOG.info("taskMessage: {}", taskMessage);
         // --- History Management (Index 0 is always System) ---

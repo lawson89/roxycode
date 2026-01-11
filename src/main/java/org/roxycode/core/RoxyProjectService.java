@@ -170,6 +170,6 @@ public class RoxyProjectService {
     }
 
     public String getModeMessage(){
-        return "IMPORTANT! Current Mode: " + currentMode + ".\nPlease act in accordance with this mode.";
+        return "IMPORTANT! Current Mode: " + currentMode + ".\nPlease act in accordance with this mode.\n";
     }
 }

@@ -197,7 +197,30 @@ class PlanServiceTest {
         assertEquals(1, complete.size());
     }
 
+
     @Test
+    void testGetPlanMarkdown() throws IOException {
+        String name = "test-plan";
+        Path planPath = tempDir.resolve("plans").resolve("available").resolve(name + ".md");
+        Files.createDirectories(planPath.getParent());
+        Files.writeString(planPath, "# Test Plan");
+
+        String markdown = planService.getPlanMarkdown(name);
+        assertEquals("# Test Plan", markdown);
+    }
+    @Test
+    void testGetCurrentPlanMarkdown() throws IOException {
+        String name = "current-plan";
+        when(roxyProjectService.getCurrentPlan()).thenReturn(name);
+        
+        planService.createPlan(name, "Goal", null, null);
+        planService.movePlan(name, "in_progress");
+        
+        String markdown = planService.getCurrentPlanMarkdown();
+        assertNotNull(markdown);
+        assertTrue(markdown.contains("Goal"));
+    }
+
     void testGetCurrentPlan_DelegatesToRoxyProjectService() {
         when(roxyProjectService.getCurrentPlan()).thenReturn("current-plan");
         assertEquals("current-plan", planService.getCurrentPlan());
@@ -242,4 +265,29 @@ class PlanServiceTest {
         assertFalse(planService.planExists(name));
     }
 
+
+    @Test
+    void testAgentContext() throws IOException {
+        String name = "context-plan";
+        planService.createPlan(name, "Goal", null, null);
+        
+        Plan plan = planService.loadPlan(name);
+        assertEquals("", plan.getAgentContext());
+        
+        String context = "This is some context";
+        planService.updateAgentContext(name, context);
+        
+        Plan loaded = planService.loadPlan(name);
+        assertEquals(context, loaded.getAgentContext());
+    }
+    @Test
+    void testCreatePlanWithContext() throws IOException {
+        String name = "context-plan-new";
+        String goal = "The goal";
+        String context = "Some context";
+        planService.createPlan(name, goal, null, null, context);
+
+        Plan loaded = planService.loadPlan(name);
+        assertEquals(context, loaded.getAgentContext());
+    }
 }

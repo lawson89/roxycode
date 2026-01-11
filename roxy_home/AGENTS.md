@@ -12,35 +12,40 @@ Use the following guidelines to determine which mode to operate in:
 
 ## PLAN mode
 You answer user questions about the project.
-If the user asks for a feature or bug fix you are to create a plan in the `plans/available` folder.
+If the user asks for a feature or bug fix you are to create a plan. 
 The plan is to be a markdown (.md) file with a descriptive name based on the feature or bug fix.
 
-The plan should have 3 sections:
-1. Goal - A brief description of what the feature or bug fix is to accomplish.
-2. Proposed Changes - A detailed list of changes to be made to implement the feature or fix
-3. Implementation Steps - A list of steps to be taken to implement the feature or fix.
-4. Implementation Progress - A checklist to track progress during implementation. Initially this should be empty.
+**Always use the `planService` to manage the lifecycle of plans (creation, moving, updating).**
+
+The plan should have 5 sections:
+1. **Goal** - A brief description of what the feature or bug fix is to accomplish.
+2. **Proposed Changes** - A detailed list of changes to be made to implement the feature or fix.
+3. **Implementation Steps** - A list of steps to be taken to implement the feature or fix.
+4. **Implementation Progress** - A checklist to track progress during implementation. Initially this should be empty.
+5. **Agent Context** - A scratchpad for the LLM to maintain state, notes, and technical details across multiple turns.
 
 When creating a plan, you should:
 - Analyze the user prompt to understand the requirements.
 - Ask clarifying questions if any part of the request is ambiguous or unclear.
 - Create a descriptive name for the feature or bug fix that encapsulates its purpose.
 - Draft a detailed plan outlining the steps needed to implement the feature or resolve the bug.
-- Save the plan as a markdown (.md) file in the roxy/plans/available directory, using the feature or bug fix name as the filename.
+- Use `planService.createPlan` to save the plan. It will be stored in the `roxy/plans/available` directory.
 - When responding to user queries, ensure that your plans are well-structured, easy to follow, and include all necessary details for implementation.
 
 ## CODE mode
 You code a feature or bug fix based on an existing plan.
 
-- Before making any changes outside the `plans/available` directory, you must confirm with the user that they want you to switch to IMPLEMENT mode. 
+- Before making any changes outside the `roxy/plans/available` directory, you must confirm with the user that they want you to switch to **CODE** mode. 
 - You should also confirm with the user the name of the plan they want you to implement.
-- Before proceeding with implementation you should move the plan to the `plans/in_progress` directory.
-- You should update the plan as you implement it, updating the Implementation Progress section with checkboxes and notes as needed.
-- Your goal should be to leave the plan in such as state as to be abel to resume a partially finished plan in the case of work interruption.
+- Before proceeding with implementation you should move the plan to the `roxy/plans/in_progress` directory using `planService.movePlan`.
+- You should update the plan as you implement it, updating the **Implementation Progress** section with checkboxes and notes as needed.
+- Use the **Agent Context** section to store complex state or intermediate notes.
+- Your goal should be to leave the plan in such as state as to be able to resume a partially finished plan in the case of work interruption.
 - When the work is complete you should display a summary of what was done to the user and ask for conformation before marking the plan as complete.
-- If the user confirms work is complete, you should 
-  - mark the plan as complete in the Implementation Progress section and move it to the `plans/complete` directory
-  - switch back to PLAN mode. 
+- **IMPORTANT!** Once the user confirms they are satisfied that work is complete, you MUST always:
+  - Update the **Implementation Progress** section of the plan to reflect completion.
+  - Move the plan to the `roxy/plans/complete` directory using `planService.movePlan`.
+  - Switch back to PLAN mode using `modeService.setPlanMode()`.
 - If the user has additional requests or changes, you should switch back to PLAN mode and update the current plan.
 
 ## Guidelines
@@ -51,8 +56,8 @@ You code a feature or bug fix based on an existing plan.
 - Always ask the user for confirmation before switching from PLAN to CODE mode or CODE to PLAN mode.
 - Always ask the user for confirmation before marking a plan as complete.
 - IMPORTANT! 
-  - NEVER make code changes while in PLAN mode
-  - NEVER start a new plan while in CODE mode
+  - NEVER make code changes while in PLAN mode.
+  - NEVER start a new plan while in CODE mode.
   - There can only be one plan in progress at any time.
 
 

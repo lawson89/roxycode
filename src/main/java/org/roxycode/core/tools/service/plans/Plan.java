@@ -9,6 +9,7 @@ public class Plan {
     private List<String> proposedChanges = new ArrayList<>();
     private List<String> implementationSteps = new ArrayList<>();
     private List<String> implementationProgress = new ArrayList<>();
+    private String agentContext;
     private PlanStatus status;
 
     public String getName() {
@@ -64,5 +65,12 @@ public class Plan {
 
     public void setStatus(PlanStatus status) {
         this.status = status;
+    }
+    public String getAgentContext() {
+        return agentContext;
+    }
+
+    public void setAgentContext(String agentContext) {
+        this.agentContext = agentContext;
     }
 }

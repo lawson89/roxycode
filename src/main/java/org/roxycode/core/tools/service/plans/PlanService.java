@@ -40,6 +40,20 @@ public class PlanService {
         roxyProjectService.setCurrentPlan(currentPlan);
     }
 
+    @LLMDoc("Returns the markdown content of the current plan")
+    public String getCurrentPlanMarkdown() throws IOException {
+        String currentPlanName = getCurrentPlan();
+        if (currentPlanName == null || currentPlanName.isBlank()) {
+            return null;
+        }
+        Path path = roxyProjectService.getRoxyWorkingDir().resolve(PLANS_DIR).resolve(PlanStatus.IN_PROGRESS.getDirName()).resolve(currentPlanName + ".md");
+        if (Files.exists(path)) {
+            return Files.readString(path);
+        }
+        return null;
+    }
+
+
     /**
      * Ensures all 3 status directories exist.
      */
@@ -62,6 +76,11 @@ public class PlanService {
 
     @LLMDoc("Creates a new plan. Plans are always created in 'available' status.")
     public void createPlan(String name, String goal, List<String> proposedChanges, List<String> steps) throws IOException {
+        createPlan(name, goal, proposedChanges, steps, null);
+    }
+
+    @LLMDoc("Creates a new plan with agent context. Plans are always created in 'available' status.")
+    public void createPlan(String name, String goal, List<String> proposedChanges, List<String> steps, String agentContext) throws IOException {
         if (planExists(name)) {
             throw new IOException("A plan with name '" + name + "' already exists.");
         }
@@ -71,6 +90,7 @@ public class PlanService {
         plan.setGoal(goal);
         plan.setProposedChanges(proposedChanges != null ? proposedChanges : Collections.emptyList());
         plan.setImplementationSteps(steps != null ? steps : Collections.emptyList());
+        plan.setAgentContext(agentContext);
         // Enforce creation rule: Always Available
         plan.setStatus(PlanStatus.AVAILABLE);
 
@@ -110,6 +130,13 @@ public class PlanService {
         savePlan(plan);
     }
 
+    @LLMDoc("Updates the Agent context of an existing plan. Only allowed for Available or In_Progress plans.")
+    public void updateAgentContext(String name, String context) throws IOException {
+        Plan plan = loadPlan(name);
+        checkModifiable(plan);
+        plan.setAgentContext(context);
+        savePlan(plan);
+    }
     @LLMDoc("Moves a plan to a new status (available, in_progress, complete). Enforces transition rules.")
     public void movePlan(String name, String targetStatusStr) throws IOException {
         Plan plan = loadPlan(name);
@@ -161,6 +188,19 @@ public class PlanService {
         return listPlans(PlanStatus.COMPLETE);
     }
 
+
+    @LLMDoc("Returns the raw markdown content of a plan")
+    public String getPlanMarkdown(String name) throws IOException {
+        PlanStatus[] searchOrder = {PlanStatus.IN_PROGRESS, PlanStatus.AVAILABLE, PlanStatus.COMPLETE};
+
+        for (PlanStatus status : searchOrder) {
+            Path path = roxyProjectService.getRoxyWorkingDir().resolve(PLANS_DIR).resolve(status.getDirName()).resolve(name + ".md");
+            if (Files.exists(path)) {
+                return Files.readString(path);
+            }
+        }
+        throw new IOException("Plan not found: " + name);
+    }
     // --- Helper Logic ---
 
     private void checkModifiable(Plan plan) throws IOException {
@@ -225,7 +265,7 @@ public class PlanService {
     }
 
     private void savePlan(Plan plan) throws IOException {
-        String markdown = generateMarkdown(plan);
+        String markdown = planToMarkdown(plan);
         Path path = getPlanPath(plan);
         Files.writeString(path, markdown);
     }
@@ -237,7 +277,7 @@ public class PlanService {
                 .resolve(plan.getName() + ".md");
     }
 
-    private String generateMarkdown(Plan plan) {
+    private String planToMarkdown(Plan plan) {
         StringBuilder sb = new StringBuilder();
         sb.append("# Goal\n").append(plan.getGoal() == null ? "" : plan.getGoal()).append("\n\n");
 
@@ -271,6 +311,10 @@ public class PlanService {
                 }
             }
         }
+        sb.append("\n");
+
+        sb.append("# Agent Context\n").append(plan.getAgentContext() == null ? "" : plan.getAgentContext()).append("\n");
+
         return sb.toString();
     }
 
@@ -290,12 +334,14 @@ public class PlanService {
                 plan.setGoal(String.join("\n", bodyLines));
             } else if ("Proposed Changes".equalsIgnoreCase(title)) {
                 plan.setProposedChanges(bodyLines.stream()
-                        .map(l -> l.replaceFirst("^[-*]\\s*", ""))
+                        .map(l -> l.replaceFirst("^[\\-*]\\s*", ""))
                         .collect(Collectors.toList()));
             } else if ("Implementation Steps".equalsIgnoreCase(title)) {
                 plan.setImplementationSteps(bodyLines);
             } else if ("Implementation Progress".equalsIgnoreCase(title)) {
                 plan.setImplementationProgress(bodyLines);
+            } else if ("Agent Context".equalsIgnoreCase(title)) {
+                plan.setAgentContext(String.join("\n", bodyLines));
             }
         }
         return plan;
