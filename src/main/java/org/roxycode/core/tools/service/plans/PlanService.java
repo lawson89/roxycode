@@ -277,11 +277,14 @@ public class PlanService {
         int start = markdown.indexOf(sectionHeader);
         if (start == -1) return markdown;
 
+        String trimmedContent = newContent != null ? newContent.trim() : "";
+        String contentWithNewline = trimmedContent.isEmpty() ? "" : trimmedContent + "\n";
+
         int nextSection = markdown.indexOf("## ", start + sectionHeader.length());
         if (nextSection == -1) {
-            return markdown.substring(0, start) + sectionHeader + "\n" + (newContent.isEmpty() ? "" : newContent + "\n");
+            return markdown.substring(0, start) + sectionHeader + "\n" + contentWithNewline;
         } else {
-            return markdown.substring(0, start) + sectionHeader + "\n" + (newContent.isEmpty() ? "" : newContent + "\n") + markdown.substring(nextSection);
+            return markdown.substring(0, start) + sectionHeader + "\n" + contentWithNewline + "\n" + markdown.substring(nextSection);
         }
     }
 }
