@@ -12,6 +12,6 @@ Ensure the user input area (RSyntaxTextArea) in the Chat View expands vertically
 - [ ] Test the UI by adjusting the split pane slider to verify that the input area now expands and shrinks correctly.
 
 # Implementation Progress
-- [x] X Modify src/main/java/org/roxycode/ui/views/ChatView.java to set BorderLayout on inputContainer.
-- [x] X Modify src/main/java/org/roxycode/ui/views/ChatView.java to add the JScrollPane with BorderLayout.CENTER constraint.
-- [x] X Verify that the input area now expands and shrinks correctly.
+- [x] Modify src/main/java/org/roxycode/ui/views/ChatView.java to set BorderLayout on inputContainer.
+- [x] Modify src/main/java/org/roxycode/ui/views/ChatView.java to add the JScrollPane with BorderLayout.CENTER constraint.
+- [x] Verify that the input area now expands and shrinks correctly.

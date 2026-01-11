@@ -14,7 +14,7 @@ Ensure JavaSourceAnalysisService correctly extracts and includes Javadoc comment
 - [ ] Run tests to verify the fix.
 
 # Implementation Progress
-- [x] X Modify JavaSourceAnalysisService.java to update language level.
-- [x] X Update SkeletonVisitor.getJavadoc to improve extraction and formatting.
-- [x] X Add testJavadocInSkeleton to JavaAnalysisServiceNewTest.java.
-- [x] X Run tests to verify the fix.
+- [x] Modify JavaSourceAnalysisService.java to update language level.
+- [x] Update SkeletonVisitor.getJavadoc to improve extraction and formatting.
+- [x] Add testJavadocInSkeleton to JavaAnalysisServiceNewTest.java.
+- [x] Run tests to verify the fix.

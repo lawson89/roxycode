@@ -281,7 +281,7 @@
                 <version>4.9.8.2</version>
                 <configuration>
                     <effort>Default</effort>
-                    <threshold>High</threshold>
+                    <threshold>Medium</threshold>
                     <failOnError>false</failOnError>
                     <excludeFilterFile>src/main/resources/spotbugs-exclude.xml</excludeFilterFile>
                     <xmlOutput>true</xmlOutput>

@@ -39,7 +39,7 @@ You code a feature or bug fix based on an existing plan.
 - Before making any changes outside the `roxy/plans/available` directory, you must confirm with the user that they want you to switch to **CODE** mode. 
 - You should also confirm with the user the name of the plan they want you to implement.
 - Before proceeding with implementation you should move the plan to the `roxy/plans/in_progress` directory using `planService.movePlan`.
-- You should update the plan as you implement it, updating the **Implementation Progress** section with checkboxes and notes as needed.
+- **IMPORTANT!** You should update the plan incrementally as each step is implemented. Update the **Implementation Progress** section with checkboxes and notes as needed after each significant step is completed. DO NOT wait until the very end to update the progress.
 - Use the **Agent Context** section to store complex state or intermediate notes.
 - Your goal should be to leave the plan in such as state as to be able to resume a partially finished plan in the case of work interruption.
 - When the work is complete you should display a summary of what was done to the user and ask for conformation before marking the plan as complete.

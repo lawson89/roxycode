@@ -11,4 +11,4 @@ Move the activity indicator to the left of the mode display and align it properl
 - [ ] Verify the layout by launching the application or using Sierra preview if possible.
 
 # Implementation Progress
-- [x] X Updated MainFrame.xml to move activity-indicator and adjust its size.
+- [x] Updated MainFrame.xml to move activity-indicator and adjust its size.

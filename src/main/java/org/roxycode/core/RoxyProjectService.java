@@ -10,7 +10,6 @@ import org.roxycode.core.tools.service.GitRunner;
 import org.roxycode.core.utils.SystemUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -24,27 +23,37 @@ import java.nio.file.Path;
  */
 @Singleton
 public class RoxyProjectService {
+
     private static final Logger LOG = LoggerFactory.getLogger(RoxyProjectService.class);
+
     public static final String ROXY_WORKING_DIR = "roxy";
+
     public static final String ROXY_CACHE = ".cache";
+
     public static final String ROXY_HOME = "roxy_home";
+
     private static final String README_FILE = "README.md";
 
     private final Sandbox sandbox;
+
     private final SettingsService settingsService;
+
     private final FileSystemService fileSystemService;
+
     private final ToolRegistry toolRegistry;
+
     private final ScriptServiceRegistry scriptServiceRegistry;
 
     private String currentBranch = "";
+
     private RoxyMode currentMode = RoxyMode.PLAN;
+
     private String currentPlan = "";
+
     private Path roxyHome;
 
     @Inject
-    public RoxyProjectService(Sandbox sandbox, FileSystemService fileSystemService,
-                              SettingsService settingsService,
-                              ToolRegistry toolRegistry, ScriptServiceRegistry scriptServiceRegistry) {
+    public RoxyProjectService(Sandbox sandbox, FileSystemService fileSystemService, SettingsService settingsService, ToolRegistry toolRegistry, ScriptServiceRegistry scriptServiceRegistry) {
         this.sandbox = sandbox;
         this.fileSystemService = fileSystemService;
         this.settingsService = settingsService;
@@ -71,12 +80,10 @@ public class RoxyProjectService {
         LOG.info("Ensuring Roxy project structure...");
         try {
             Path projectDir = getRoxyWorkingDir();
-
             if (!Files.exists(projectDir)) {
                 LOG.info("Creating {} directory.", ROXY_WORKING_DIR);
                 Files.createDirectories(projectDir);
             }
-
             Path readmePath = projectDir.resolve(README_FILE);
             if (!Files.exists(readmePath)) {
                 LOG.info("Creating {}/{}", ROXY_WORKING_DIR, README_FILE);
@@ -119,11 +126,11 @@ public class RoxyProjectService {
     }
 
     public boolean isValidFolder(Path path) {
-        return Files.isDirectory(path) // Checks if it exists AND is a standard file (not a directory)
-               && Files.isReadable(path)    // Checks if the JVM has read permissions
-               && Files.isWritable(path);   // Checks if the JVM has write permissions
+        return // Checks if it exists AND is a standard file (not a directory)
+        // Checks if the JVM has read permissions
+        Files.isDirectory(path) && // Checks if the JVM has write permissions
+        Files.isReadable(path) && Files.isWritable(path);
     }
-
 
     public String getCurrentBranch() {
         return currentBranch;
@@ -134,6 +141,9 @@ public class RoxyProjectService {
     }
 
     public void setCurrentMode(RoxyMode currentMode) {
+        if (currentMode == RoxyMode.CODE && (currentPlan == null || currentPlan.isBlank())) {
+            throw new IllegalStateException("Cannot switch to CODE mode without an active plan.");
+        }
         this.currentMode = currentMode;
     }
 
@@ -143,8 +153,10 @@ public class RoxyProjectService {
 
     public void setCurrentPlan(String currentPlan) {
         this.currentPlan = currentPlan;
+        if (currentPlan == null || currentPlan.isBlank()) {
+            this.currentMode = RoxyMode.PLAN;
+        }
     }
-
 
     public Path getRoxyHome() {
         return roxyHome;
@@ -160,7 +172,7 @@ public class RoxyProjectService {
         }
     }
 
-    public String getModeMessage(){
+    public String getModeMessage() {
         return "IMPORTANT! Current Mode: " + currentMode + ".\nPlease act in accordance with this mode.\n";
     }
 }

@@ -15,8 +15,8 @@ Ensure FileEditorService is robustly tested and its public API is clearly docume
 - [ ] Run all tests to ensure compliance.
 
 # Implementation Progress
-- [x] X Review FileEditorService.java and identify inconsistencies in line range handling.
-- [x] X Update Javadoc and @LLMDoc in FileEditorService.java.
-- [x] X Implement consistent line range logic if needed.
-- [x] X Add edge case tests to FileEditorServiceTest.java.
-- [x] X Run all tests to ensure compliance.
+- [x] Review FileEditorService.java and identify inconsistencies in line range handling.
+- [x] Update Javadoc and @LLMDoc in FileEditorService.java.
+- [x] Implement consistent line range logic if needed.
+- [x] Add edge case tests to FileEditorServiceTest.java.
+- [x] Run all tests to ensure compliance.

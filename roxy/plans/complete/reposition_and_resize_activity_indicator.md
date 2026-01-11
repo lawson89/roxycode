@@ -15,6 +15,6 @@ Display the activity indicator directly to the left of the mode label and resize
 - [ ] Move the plan to roxy/plans/complete.
 
 # Implementation Progress
-- [x] X Repositioned activity indicator in MainFrame.xml
-- [x] X Resized activity indicator to 16px in MainFrame.xml
-- [x] X Wrapped activity indicator and mode label in a row-panel for alignment
+- [x] Repositioned activity indicator in MainFrame.xml
+- [x] Resized activity indicator to 16px in MainFrame.xml
+- [x] Wrapped activity indicator and mode label in a row-panel for alignment

@@ -9,7 +9,7 @@ Update roxy_home/AGENTS.md with additional operational instructions for the agen
 - [ ] Modify roxy_home/AGENTS.md to include the new instructions.
 
 # Implementation Progress
-- [x] X Modify roxy_home/AGENTS.md to include the new instructions.
+- [x] Modify roxy_home/AGENTS.md to include the new instructions.
 
 # Agent Context
 

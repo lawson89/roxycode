@@ -35,6 +35,7 @@ public class ModeService {
     /**
      * Sets the current mode of the project to CODE.
      * In CODE mode, the assistant can make changes to the codebase and run tests.
+     * IMPORTANT: An active plan must be set before switching to CODE mode.
      */
     @LLMDoc("Sets the current mode of the project to CODE")
     public void setCodeMode() {

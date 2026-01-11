@@ -20,8 +20,8 @@ Extend JavaService to provide Javadoc information for classes, methods, and fiel
 - [ ] Test the new functionality with a sample Java file.
 
 # Implementation Progress
-- [x] X Modified JavaService.java to extract Javadocs during file analysis
-- [x] X Added getClassJavadoc, getMethodJavadoc, and getFieldJavadoc to JavaService
-- [x] X Updated summary records to include javadoc field
-- [x] X Added unit tests for Javadoc extraction in JavaAnalysisServiceTest
-- [x] X Verified all tests pass
+- [x] Modified JavaService.java to extract Javadocs during file analysis
+- [x] Added getClassJavadoc, getMethodJavadoc, and getFieldJavadoc to JavaService
+- [x] Updated summary records to include javadoc field
+- [x] Added unit tests for Javadoc extraction in JavaAnalysisServiceTest
+- [x] Verified all tests pass

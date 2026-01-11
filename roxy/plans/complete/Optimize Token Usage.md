@@ -15,7 +15,7 @@ Reduce input token consumption and prevent "exceeding input token limits" errors
 - [ ] Test the changes
 
 # Implementation Progress
-- [x] X [GeminiCacheService.java] Set systemInstruction using RoxyProjectService.getStaticSystemPrompt() during cache push.
-- [x] X [ProjectPackerService.java] Remove the redundant [[content]] system_prompt block from the codebase TOML generation.
-- [x] X [GenAIService.java] In buildSystemMessage(), skip appending the static system prompt if a cache is present.
-- [x] X [GenAIService.java] In handleFunctionCall(), truncate tool outputs to 20,000 characters to prevent context overflow.
+- [x] [GeminiCacheService.java] Set systemInstruction using RoxyProjectService.getStaticSystemPrompt() during cache push.
+- [x] [ProjectPackerService.java] Remove the redundant [[content]] system_prompt block from the codebase TOML generation.
+- [x] [GenAIService.java] In buildSystemMessage(), skip appending the static system prompt if a cache is present.
+- [x] [GenAIService.java] In handleFunctionCall(), truncate tool outputs to 20,000 characters to prevent context overflow.

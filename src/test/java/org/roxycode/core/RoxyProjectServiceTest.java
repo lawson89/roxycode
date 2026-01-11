@@ -56,5 +56,15 @@ class RoxyProjectServiceTest {
         assertTrue(Files.exists(projectDir));
         assertEquals(originalContent, Files.readString(readmePath), "Content should not be overwritten");
     }
+    @Test
+    void testSetCurrentPlan_ResetsToPlanModeWhenPlanCleared() {
+        roxyProjectService.setCurrentPlan("my-plan");
+        roxyProjectService.setCurrentMode(RoxyMode.CODE);
+        assertEquals(RoxyMode.CODE, roxyProjectService.getCurrentMode());
+
+        roxyProjectService.setCurrentPlan(null);
+        assertEquals(RoxyMode.PLAN, roxyProjectService.getCurrentMode());
+    }
+
 
 }

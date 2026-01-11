@@ -27,12 +27,12 @@ Implement a structural semantic search capability for Java code to find complex 
 - [ ] Run tests and verify functionality
 
 # Implementation Progress
-- [x] X Updated pom.xml with javaparser-symbol-solver-core
-- [x] X Created SearchResult.java
-- [x] X Created StructuralSearchService.java
-- [x] X Implemented findEmptyCatchBlocks
-- [x] X Implemented findDeprecatedWithoutJavadoc
-- [x] X Implemented findMethodsWithTooManyParameters
-- [x] X Implemented findLargeClasses
-- [x] X Verified with unit tests
-- [x] X Implementation complete
+- [x] Updated pom.xml with javaparser-symbol-solver-core
+- [x] Created SearchResult.java
+- [x] Created StructuralSearchService.java
+- [x] Implemented findEmptyCatchBlocks
+- [x] Implemented findDeprecatedWithoutJavadoc
+- [x] Implemented findMethodsWithTooManyParameters
+- [x] Implemented findLargeClasses
+- [x] Verified with unit tests
+- [x] Implementation complete

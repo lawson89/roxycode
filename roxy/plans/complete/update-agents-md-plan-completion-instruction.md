@@ -10,9 +10,9 @@ Add an instruction to roxy_home/AGENTS.md requiring that plans always be moved t
 - [ ] Verify the content of the file.
 
 # Implementation Progress
-- [x] X Located the Guidelines section in roxy_home/AGENTS.md.
-- [x] X Inserted the new instruction: "- Never leave a plan in the in_progress state after completion. Always move it to the complete folder".
-- [x] X Verified the content of the file.
+- [x] Located the Guidelines section in roxy_home/AGENTS.md.
+- [x] Inserted the new instruction: "- Never leave a plan in the in_progress state after completion. Always move it to the complete folder".
+- [x] Verified the content of the file.
 
 # Agent Context
 

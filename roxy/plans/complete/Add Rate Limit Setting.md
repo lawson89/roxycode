@@ -15,9 +15,9 @@ Add a new setting to specify the maximum requests per minute (rate limit) for th
 - [ ] 6. Save rateLimitField value in SettingsView.onSaveSettings.
 
 # Implementation Progress
-- [x] X Add KEY_RATE_LIMIT and DEFAULT_RATE_LIMIT to SettingsService.
-- [x] X Add getRateLimit and setRateLimit methods to SettingsService.
-- [x] X Add rateLimitField to SettingsView.xml in the Conversation Settings tab.
-- [x] X Add rateLimitField @Outlet to SettingsView.java.
-- [x] X Initialize rateLimitField in SettingsView.initSettings.
-- [x] X Save rateLimitField value in SettingsView.onSaveSettings.
+- [x] Add KEY_RATE_LIMIT and DEFAULT_RATE_LIMIT to SettingsService.
+- [x] Add getRateLimit and setRateLimit methods to SettingsService.
+- [x] Add rateLimitField to SettingsView.xml in the Conversation Settings tab.
+- [x] Add rateLimitField @Outlet to SettingsView.java.
+- [x] Initialize rateLimitField in SettingsView.initSettings.
+- [x] Save rateLimitField value in SettingsView.onSaveSettings.

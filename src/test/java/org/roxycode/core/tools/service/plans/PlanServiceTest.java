@@ -219,4 +219,11 @@ class PlanServiceTest {
         Plan loaded = planService.loadPlan(name);
         assertEquals(context, loaded.getAgentContext());
     }
+    @Test
+    void testSetCurrentPlan_DelegatesToRoxyProjectService() {
+        String planName = "test-plan";
+        planService.setCurrentPlan(planName);
+        verify(roxyProjectService).setCurrentPlan(planName);
+    }
+
 }

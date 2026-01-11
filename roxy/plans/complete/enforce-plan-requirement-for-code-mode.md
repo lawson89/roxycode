@@ -12,8 +12,8 @@ Modify AGENTS.md to explicitly state that CODE mode must never be entered withou
 - [ ] Verify the changes in the file.
 
 ## Implementation Progress
-- [x] X Locate the "CODE mode" and "Guidelines" sections in roxy_home/AGENTS.md.
-- [x] X Add a prominent instruction/warning about the plan requirement for CODE mode.
-- [x] X Verify the changes in the file.
+- [x] Locate the "CODE mode" and "Guidelines" sections in roxy_home/AGENTS.md.
+- [x] Add a prominent instruction/warning about the plan requirement for CODE mode.
+- [x] Verify the changes in the file.
 ## Agent Context
 

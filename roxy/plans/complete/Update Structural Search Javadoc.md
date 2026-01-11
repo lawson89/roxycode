@@ -12,6 +12,6 @@ Add comprehensive Javadoc to StructuralSearchService and SearchResult to improve
 - [ ] Verify that the project still compiles.
 
 # Implementation Progress
-- [x] X Updated SearchResult.java with Javadoc.
-- [x] X Updated StructuralSearchService.java with Javadoc for findEmptyCatchBlocks, findDeprecatedWithoutJavadoc, findMethodsWithTooManyParameters, and findLargeClasses.
-- [x] X Verified that the project still compiles.
+- [x] Updated SearchResult.java with Javadoc.
+- [x] Updated StructuralSearchService.java with Javadoc for findEmptyCatchBlocks, findDeprecatedWithoutJavadoc, findMethodsWithTooManyParameters, and findLargeClasses.
+- [x] Verified that the project still compiles.
