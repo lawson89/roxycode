@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -74,13 +76,13 @@ public class PreviewService {
             Rectangle captureSize = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
             BufferedImage image = robot.createScreenCapture(captureSize);
 
-            // Save to file inside sandbox
-            Path previewDir = sandbox.getRoot().resolve("roxy/previews");
-            Files.createDirectories(previewDir);
-            Path outputFile = previewDir.resolve("roxy_preview_" + UUID.randomUUID() + ".png");
-            ImageIO.write(image, "png", outputFile.toFile());
+            // Convert to Data URI
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", baos);
+            byte[] bytes = baos.toByteArray();
+            String base64 = Base64.getEncoder().encodeToString(bytes);
 
-            return outputFile.toAbsolutePath().toString();
+            return "data:image/png;base64," + base64;
         } finally {
             // 5. Cleanup
             if (appProcess.isAlive()) {

@@ -60,6 +60,9 @@ You code a feature or bug fix based on an existing plan.
   - NEVER start a new plan while in CODE mode.
   - There can only be one plan in progress at any time.
 
+- Always ensure at the end of a code session that the project compiles and all tests pass.
+- When in CODE mode - Never switch to a new plan until the current plan is complete
+- Never leave a plan in the in_progress state after completion. Always move it to the complete folder
 
 ## Javascript environment
 - You have at your disposal the ability to run javascript scripts in a secure sandboxed environment.

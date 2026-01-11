@@ -10,6 +10,7 @@ import org.roxycode.core.tools.ToolDefinition;
 import org.roxycode.core.tools.service.plans.Plan;
 import org.roxycode.core.tools.service.plans.PlanService;
 import org.roxycode.core.tools.ToolExecutionService;
+import java.util.Base64;
 import org.roxycode.core.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -357,22 +358,29 @@ public class GenAIService {
             toolOutput = "Error executing tool [" + fnName + "]: " + e.getMessage();
         }
 
+        // Handle Blobs (e.g. screenshots as Data URIs)
+        if (toolOutput != null && toolOutput.startsWith("data:")) {
+            try {
+                int commaIndex = toolOutput.indexOf(",");
+                if (commaIndex > 0) {
+                    String header = toolOutput.substring(0, commaIndex);
+                    String base64Data = toolOutput.substring(commaIndex + 1);
+                    String mimeType = header.substring(header.indexOf(":") + 1, header.indexOf(";"));
+
+                    byte[] data = Base64.getDecoder().decode(base64Data);
+                    Blob blob = Blob.builder().mimeType(mimeType).data(data).build();
+                    subsequentUserMessages.add(Content.builder().role("user").parts(List.of(Part.builder().inlineData(blob).build(), Part.builder().text("Attachment captured.").build())).build());
+                    toolOutput = "Attachment captured.";
+                }
+            } catch (Exception e) {
+                LOG.error("Failed to parse Data URI", e);
+                toolOutput = "Error parsing attachment: " + e.getMessage();
+            }
+        }
+
         if (toolOutput != null && toolOutput.length() > 20000) {
             LOG.warn("Truncating tool output for {}: {} characters", fnName, toolOutput.length());
             toolOutput = toolOutput.substring(0, 20000) + "\n\n[System: Output truncated due to length limits.]";
-        }
-        // Image Handling
-        //@todo sandbox this
-        Path path = Paths.get(toolOutput);
-        if (toolOutput.endsWith(".png") && Files.exists(path)) {
-            try {
-                byte[] imageBytes = Files.readAllBytes(path);
-                Blob imageBlob = Blob.builder().mimeType("image/png").data(imageBytes).build();
-                subsequentUserMessages.add(Content.builder().role("user").parts(List.of(Part.builder().inlineData(imageBlob).build(), Part.builder().text("Screenshot captured.").build())).build());
-                toolOutput = "Screenshot captured.";
-            } catch (Exception e) {
-                LOG.error("Image load fail", e);
-            }
         }
         return Part.builder().functionResponse(FunctionResponse.builder().name(fnName).response(Map.of("result", toolOutput)).build()).build();
     }

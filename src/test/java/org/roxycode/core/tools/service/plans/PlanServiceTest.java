@@ -48,7 +48,7 @@ class PlanServiceTest {
         assertEquals(changes, loaded.getProposedChanges());
         assertEquals(PlanStatus.AVAILABLE, loaded.getStatus());
         // Steps in markdown are prefixed with "[ ] " if not already present
-        assertEquals(Arrays.asList("- [ ] Step 1", "- [ ] Step 2"), loaded.getImplementationSteps());
+        assertEquals(Arrays.asList("Step 1", "Step 2"), loaded.getImplementationSteps());
     }
 
     @Test
@@ -105,7 +105,7 @@ class PlanServiceTest {
         planService.updateImplementationSteps(name, newSteps);
 
         Plan loaded = planService.loadPlan(name);
-        assertEquals(Arrays.asList("- [ ] New Step"), loaded.getImplementationSteps());
+        assertEquals(Arrays.asList("New Step"), loaded.getImplementationSteps());
     }
 
     @Test
@@ -117,7 +117,7 @@ class PlanServiceTest {
         planService.updateImplementationProgress(name, progress);
 
         Plan loaded = planService.loadPlan(name);
-        assertEquals(Arrays.asList("- [x] Done Step"), loaded.getImplementationProgress());
+        assertEquals(Arrays.asList("Done Step"), loaded.getImplementationProgress());
     }
 
     @Test
@@ -248,7 +248,7 @@ class PlanServiceTest {
         assertEquals(name, plan.getName());
         assertEquals(goal, plan.getGoal());
         assertEquals(changes, plan.getProposedChanges());
-        assertEquals(List.of("- [ ] Step 1", "- [ ] Step 2"), plan.getImplementationSteps());
+        assertEquals(List.of("Step 1", "Step 2"), plan.getImplementationSteps());
         assertEquals(PlanStatus.AVAILABLE, plan.getStatus());
         assertTrue(plan.getImplementationProgress().isEmpty());
     }

@@ -8,6 +8,8 @@ import org.roxycode.core.tools.ScriptService;
 import org.roxycode.core.utils.ComponentScreenshot;
 
 import javax.imageio.ImageIO;
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -71,14 +73,15 @@ public class SierraPreviewService {
             frame.revalidate();
             BufferedImage image = ComponentScreenshot.captureComponent(frame);
 
-            // Save to file inside sandbox
-            Path previewDir = sandbox.getRoot().resolve("roxy/previews");
-            Files.createDirectories(previewDir);
-            Path outputFile = previewDir.resolve("sierra_preview_" + UUID.randomUUID() + ".png");
-            ImageIO.write(image, "png", outputFile.toFile());
-            
+
+            // Convert to Data URI
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", baos);
+            byte[] bytes = baos.toByteArray();
+            String base64 = Base64.getEncoder().encodeToString(bytes);
+
             close();
-            return outputFile.toAbsolutePath().toString();
+            return "data:image/png;base64," + base64;
         } catch (IOException e) {
             return "Invalid Sierra file: " + pathStr + "\nError: " + e.getMessage();
         }
