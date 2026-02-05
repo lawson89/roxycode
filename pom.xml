@@ -51,10 +51,7 @@
       <artifactId>micronaut-views-jte</artifactId>
       <scope>compile</scope>
     </dependency>
-    <dependency>
-        <groupId>io.micronaut.dotenv</groupId>
-        <artifactId>micronaut-dotenv</artifactId>
-    </dependency>
+    
     <dependency>
         <groupId>com.google.genai</groupId>
         <artifactId>google-genai</artifactId>
