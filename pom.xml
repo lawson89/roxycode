@@ -52,6 +52,15 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
+        <groupId>io.micronaut.dotenv</groupId>
+        <artifactId>micronaut-dotenv</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.google.genai</groupId>
+        <artifactId>google-genai</artifactId>
+        <version>1.38.0</version>
+    </dependency>
+    <dependency>
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
       <scope>runtime</scope>
