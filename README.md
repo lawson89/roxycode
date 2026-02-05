@@ -1,2 +1,36 @@
-# roxycode
-Cross platform (Java) AI coding assistant
+## Micronaut 4.10.7 Documentation
+
+- [User Guide](https://docs.micronaut.io/4.10.7/guide/index.html)
+- [API Reference](https://docs.micronaut.io/4.10.7/api/index.html)
+- [Configuration Reference](https://docs.micronaut.io/4.10.7/guide/configurationreference.html)
+- [Micronaut Guides](https://guides.micronaut.io/index.html)
+---
+
+- [Micronaut Maven Plugin documentation](https://micronaut-projects.github.io/micronaut-maven-plugin/latest/)
+## Feature maven-enforcer-plugin documentation
+
+- [https://maven.apache.org/enforcer/maven-enforcer-plugin/](https://maven.apache.org/enforcer/maven-enforcer-plugin/)
+
+
+## Feature micronaut-aot documentation
+
+- [Micronaut AOT documentation](https://micronaut-projects.github.io/micronaut-aot/latest/guide/)
+
+
+## Feature views-jte documentation
+
+- [Micronaut JTE Views documentation](https://micronaut-projects.github.io/micronaut-views/latest/guide/#jte)
+
+- [https://jte.gg/](https://jte.gg/)
+
+
+## Feature serialization-jackson documentation
+
+- [Micronaut Serialization Jackson Core documentation](https://micronaut-projects.github.io/micronaut-serialization/latest/guide/)
+
+
+## Feature micronaut-aop documentation
+
+- [Micronaut Aspect-Oriented Programming (AOP) documentation](https://docs.micronaut.io/latest/guide/index.html#aop)
+
+
