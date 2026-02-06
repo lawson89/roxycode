@@ -1,0 +1,37 @@
+{% extends "layout/main" %}
+
+{% block title %}Configuration{% endblock %}
+
+{% block content %}
+<div class="box">
+    <h1 class="title">Gemini Configuration</h1>
+    <form action="/config/model" method="POST">
+        <div class="field">
+            <label class="label">Select Model</label>
+            <div class="control has-icons-left">
+                <div class="select is-fullwidth">
+                    <select name="modelName" id="modelName">
+                        {% for model in supportedModels %}
+                            <option value="{{ model }}" {% if model == currentModel %}selected{% endif %}>{{ model }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="icon is-small is-left">
+                    <i class="material-icons">model_training</i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="field mt-5">
+            <div class="control">
+                <button type="submit" class="button is-primary is-fullwidth">
+                    <span class="icon">
+                        <i class="material-icons">save</i>
+                    </span>
+                    <span>Save Changes</span>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

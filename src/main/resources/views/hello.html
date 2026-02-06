@@ -1,0 +1,22 @@
+{% extends "layout/main" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="box">
+    <h1 class="title">{{ message }}</h1>
+    <p class="subtitle">
+        Current Gemini Model: <strong>{{ modelName }}</strong>
+    </p>
+    <p class="is-italic">Layout Version: 1.1</p>
+    <hr>
+    <div class="buttons">
+        <a class="button is-link" href="/config">
+            <span class="icon">
+                <i class="material-icons">settings</i>
+            </span>
+            <span>Configure Model</span>
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@ package org.roxycode;
 
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
-import io.micronaut.views.View;
+import io.micronaut.views.ModelAndView;
 import java.util.Map;
 
 @Controller("/")
@@ -15,11 +15,10 @@ public class HelloController {
     }
 
     @Get
-    @View("hello")
-    public Map<String, Object> index() {
-        return Map.of(
-            "message", "Hello World from dynamic JTE!",
+    public ModelAndView<Map<String, Object>> index() {
+        return new ModelAndView<>("hello", Map.of(
+            "message", "Hello World from Pebble!",
             "modelName", configService.getModelName()
-        );
+        ));
     }
 }
