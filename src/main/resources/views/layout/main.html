@@ -1,45 +1,173 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="has-aside-left has-aside-mobile-transition has-navbar-fixed-top has-aside-expanded">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{% endblock %} - RoxyCode</title>
-    
-    <!-- Bulma CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
-    
-    <!-- Material Icons -->
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <style>
-        .material-icons {
-            vertical-align: middle;
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} - Admin One</title>
+
+  <!-- Bulma -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <!-- Material Design Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css">
+  
+  <style>
+    /* Essential Admin One Styles */
+    body {
+      padding-top: 3.25rem;
+    }
+    #aside {
+      width: 260px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 40;
+      background-color: #24292e;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    #aside .aside-brand {
+      height: 3.25rem;
+      padding: 0 1rem;
+      display: flex;
+      align-items: center;
+      color: #fff;
+      font-weight: bold;
+      background-color: #1a1d21;
+    }
+    #aside .menu-list a {
+      color: #b5b5b5;
+      padding: 0.75rem 1rem;
+    }
+    #aside .menu-list a:hover {
+      background-color: #32383e;
+      color: #fff;
+    }
+    #aside .menu-list a.is-active {
+      background-color: #00d1b2;
+      color: #fff;
+    }
+    .main-section {
+      padding: 1.5rem;
+      margin-left: 260px;
+      transition: all 0.2s ease;
+    }
+    @media screen and (max-width: 1023px) {
+      #aside {
+        left: -260px;
+      }
+      .main-section {
+        margin-left: 0;
+      }
+      body.is-aside-mobile-expanded #aside {
+        left: 0;
+      }
+    }
+    .navbar {
+      left: 260px;
+      transition: all 0.2s ease;
+    }
+    @media screen and (max-width: 1023px) {
+      .navbar {
+        left: 0;
+      }
+    }
+    .card {
+      margin-bottom: 1.5rem;
+    }
+  </style>
 </head>
 <body>
-    <nav class="navbar is-primary" role="navigation" aria-label="main navigation">
-        <div class="navbar-brand">
-            <a class="navbar-item" href="/">
-                <strong>RoxyCode</strong>
-            </a>
-        </div>
 
-        <div id="navbarBasicExample" class="navbar-menu is-active">
-            <div class="navbar-start">
-                <a class="navbar-item" href="/">
-                    Home
-                </a>
-                <a class="navbar-item" href="/config">
-                    Config
-                </a>
-            </div>
-        </div>
-    </nav>
+<nav id="navbar-main" class="navbar is-fixed-top">
+  <div class="navbar-brand">
+    <a class="navbar-item is-hidden-desktop jb-aside-mobile-toggle">
+      <span class="icon"><i class="mdi mdi-forwardburger mdi-24px"></i></span>
+    </a>
+    <div class="navbar-item">
+      <div class="control"><input placeholder="Search everywhere..." class="input"></div>
+    </div>
+  </div>
+  <div class="navbar-menu" id="navbar-menu">
+    <div class="navbar-end">
+      <div class="navbar-item has-divider has-user-avatar">
+        <a class="navbar-link">
+          <div class="user-avatar">
+            <span class="icon"><i class="mdi mdi-account-circle mdi-24px"></i></span>
+          </div>
+          <div class="is-user-name"><span>Admin User</span></div>
+        </a>
+      </div>
+      <a title="Log out" class="navbar-item is-desktop-icon-only">
+        <span class="icon"><i class="mdi mdi-logout"></i></span>
+        <span>Log out</span>
+      </a>
+    </div>
+  </div>
+</nav>
 
-    <section class="section">
-        <div class="container">
-            {% block content %}{% endblock %}
+<aside id="aside" class="aside is-placed-left is-expanded">
+  <div class="aside-brand">
+    <div>
+      <b>Roxy</b>Code
+    </div>
+  </div>
+  <div class="menu is-menu-main">
+    <p class="menu-label">General</p>
+    <ul class="menu-list">
+      <li>
+        <a href="/" class="{% if request.path == '/' %}is-active{% endif %}">
+          <span class="icon"><i class="mdi mdi-desktop-mac"></i></span>
+          <span class="menu-item-label">Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    <p class="menu-label">Settings</p>
+    <ul class="menu-list">
+      <li>
+        <a href="/config" class="{% if request.path == '/config' %}is-active{% endif %}">
+          <span class="icon"><i class="mdi mdi-cog"></i></span>
+          <span class="menu-item-label">Configuration</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<section class="section main-section">
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container-fluid">
+    <div class="level">
+      <div class="level-left">
+        <div class="level-item">
+          © 2024 RoxyCode
         </div>
-    </section>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Sidebar Toggle
+  document.querySelectorAll('.jb-aside-mobile-toggle').forEach(el => {
+    el.addEventListener('click', () => {
+      document.documentElement.classList.toggle('is-aside-mobile-expanded');
+      const icon = el.querySelector('.mdi');
+      if (document.documentElement.classList.contains('is-aside-mobile-expanded')) {
+        icon.classList.replace('mdi-forwardburger', 'mdi-backburger');
+      } else {
+        icon.classList.replace('mdi-backburger', 'mdi-forwardburger');
+      }
+    });
+  });
+</script>
+
 </body>
 </html>

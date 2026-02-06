@@ -1,22 +1,74 @@
 {% extends "layout/main" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="box">
-    <h1 class="title">{{ message }}</h1>
-    <p class="subtitle">
-        Current Gemini Model: <strong>{{ modelName }}</strong>
-    </p>
-    <p class="is-italic">Layout Version: 1.1</p>
-    <hr>
-    <div class="buttons">
-        <a class="button is-link" href="/config">
-            <span class="icon">
-                <i class="material-icons">settings</i>
-            </span>
-            <span>Configure Model</span>
-        </a>
+<section class="is-hero-bar">
+  <div class="flex-list">
+    <div>
+      <h1 class="title">
+        Overview
+      </h1>
     </div>
+  </div>
+</section>
+
+<div class="grid gap-6 grid-cols-1 md:grid-cols-3 mb-6">
+  <div class="card">
+    <div class="card-content">
+      <div class="level is-mobile">
+        <div class="level-item">
+          <div class="is-widget-label"><h3 class="subtitle is-spaced">
+            Model
+          </h3>
+            <h1 class="title">
+              {{ modelName }}
+            </h1>
+          </div>
+        </div>
+        <div class="level-item has-widget-icon">
+          <div class="is-widget-icon"><span class="icon has-text-primary is-large"><i
+              class="mdi mdi-brain mdi-48px"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="card">
+    <div class="card-content">
+      <div class="level is-mobile">
+        <div class="level-item">
+          <div class="is-widget-label"><h3 class="subtitle is-spaced">
+            Status
+          </h3>
+            <h1 class="title">
+              Online
+            </h1>
+          </div>
+        </div>
+        <div class="level-item has-widget-icon">
+          <div class="is-widget-icon"><span class="icon has-text-success is-large"><i
+              class="mdi mdi-check-circle mdi-48px"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card has-table">
+  <header class="card-header">
+    <p class="card-header-title">
+      <span class="icon"><i class="mdi mdi-information-outline"></i></span>
+      System Info
+    </p>
+  </header>
+  <div class="card-content">
+    <div class="content">
+        <p>{{ message }}</p>
+        <p>This application is powered by Micronaut and Pebble Templates, wrapped in the Admin One Bulma theme.</p>
+    </div>
+  </div>
 </div>
 {% endblock %}
