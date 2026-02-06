@@ -1,0 +1,68 @@
+{% extends "layout/main" %}
+
+{% block title %}Chat{% endblock %}
+
+{% block content %}
+<section class="is-hero-bar">
+  <div class="flex-list">
+    <div>
+      <h1 class="title">
+        Chat with AI
+      </h1>
+    </div>
+  </div>
+</section>
+
+<div class="card">
+  <header class="card-header">
+    <p class="card-header-title">
+      <span class="icon"><i class="mdi mdi-chat"></i></span>
+      Conversation
+    </p>
+  </header>
+  <div class="card-content">
+    {% if prompt %}
+    <div class="notification is-light">
+      <strong>You:</strong> {{ prompt }}
+    </div>
+    {% endif %}
+
+    {% if response %}
+    <div class="notification is-info is-light">
+      <strong>Gemini:</strong>
+      <div class="content mt-2">
+        {{ response | nl2br }}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="notification is-danger is-light">
+      <strong>Error:</strong> {{ error }}
+    </div>
+    {% endif %}
+
+    <hr>
+
+    <form action="/chat" method="POST">
+      <div class="field">
+        <label class="label">Ask something</label>
+        <div class="control">
+          <textarea name="prompt" class="textarea" placeholder="Type your message here..." required>{{ prompt }}</textarea>
+        </div>
+      </div>
+      <div class="field is-grouped">
+        <div class="control">
+          <button type="submit" class="button is-primary">
+            <span class="icon"><i class="mdi mdi-send"></i></span>
+            <span>Send</span>
+          </button>
+        </div>
+        <div class="control">
+            <a href="/chat" class="button is-light">Clear</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
