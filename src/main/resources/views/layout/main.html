@@ -10,73 +10,30 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
   <!-- Material Design Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css">
-  
+  <!-- Unpoly -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/unpoly@3.9.0/unpoly.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/unpoly@3.9.0/unpoly.min.js"></script>
+
   <style>
-    /* Essential Admin One Styles */
-    body {
-      padding-top: 3.25rem;
-    }
+    body { padding-top: 3.25rem; }
     #aside {
       width: 260px;
       position: fixed;
-      top: 0;
-      left: 0;
+      top: 0; left: 0;
       height: 100vh;
       z-index: 40;
       background-color: #24292e;
-      transition: all 0.2s ease;
       display: flex;
       flex-direction: column;
     }
-    #aside .aside-brand {
-      height: 3.25rem;
-      padding: 0 1rem;
-      display: flex;
-      align-items: center;
-      color: #fff;
-      font-weight: bold;
-      background-color: #1a1d21;
-    }
-    #aside .menu-list a {
-      color: #b5b5b5;
-      padding: 0.75rem 1rem;
-    }
-    #aside .menu-list a:hover {
-      background-color: #32383e;
-      color: #fff;
-    }
-    #aside .menu-list a.is-active {
-      background-color: #00d1b2;
-      color: #fff;
-    }
-    .main-section {
-      padding: 1.5rem;
-      margin-left: 260px;
-      transition: all 0.2s ease;
-    }
+    .main-section { margin-left: 260px; padding: 1.5rem; }
     @media screen and (max-width: 1023px) {
-      #aside {
-        left: -260px;
-      }
-      .main-section {
-        margin-left: 0;
-      }
-      body.is-aside-mobile-expanded #aside {
-        left: 0;
-      }
+      #aside { left: -260px; }
+      .main-section { margin-left: 0; }
     }
-    .navbar {
-      left: 260px;
-      transition: all 0.2s ease;
-    }
-    @media screen and (max-width: 1023px) {
-      .navbar {
-        left: 0;
-      }
-    }
-    .card {
-      margin-bottom: 1.5rem;
-    }
+    .navbar { left: 260px; }
+    @media screen and (max-width: 1023px) { .navbar { left: 0; } }
+    .card { margin-bottom: 1.5rem; }
   </style>
 </head>
 <body>

@@ -13,7 +13,7 @@
   </div>
 </section>
 
-<div class="card">
+<div class="card" id="chat-card">
   <header class="card-header">
     <p class="card-header-title">
       <span class="icon"><i class="mdi mdi-chat"></i></span>
@@ -44,7 +44,7 @@
 
     <hr>
 
-    <form action="/chat" method="POST">
+    <form action="/chat" method="POST" up-submit up-target="#chat-card">
       <div class="field">
         <label class="label">Ask something</label>
         <div class="control">
@@ -59,7 +59,7 @@
           </button>
         </div>
         <div class="control">
-            <a href="/chat" class="button is-light">Clear</a>
+            <a href="/chat" class="button is-light" up-follow up-target="#chat-card">Clear</a>
         </div>
       </div>
     </form>
