@@ -19,6 +19,6 @@ class HelloControllerTest {
     @Test
     void testHello() {
         String response = client.toBlocking().retrieve(HttpRequest.GET("/"));
-        assertTrue(response.contains("Hello World from dynamic JTE!"));
+        assertTrue(response.contains("Hello World from Pebble!"));
     }
 }
