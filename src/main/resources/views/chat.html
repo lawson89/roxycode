@@ -30,8 +30,8 @@
     {% if response %}
     <div class="notification is-info is-light">
       <strong>Gemini:</strong>
-      <div class="content mt-2">
-        {{ response | nl2br }}
+      <div class="content mt-2" style="white-space: pre-wrap;">
+        {{ response }}
       </div>
     </div>
     {% endif %}
