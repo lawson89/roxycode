@@ -4,7 +4,6 @@ import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import io.micronaut.context.annotation.Property;
 
 @MicronautTest
@@ -16,12 +15,11 @@ class AgentServiceTest {
 
     @Test
     void testChat() {
-        // We expect an exception because the key is fake, but bean instantiation should succeed.
         try {
-            String response = agentService.chat("Hello");
-            assertNotNull(response);
+            ChatResult result = agentService.chat("Hello");
+            assertNotNull(result);
         } catch (Exception e) {
-            // Expected failure due to fake key, but service was initialized
+            // Expected failure due to fake key
             System.out.println("Expected failure: " + e.getMessage());
         }
     }

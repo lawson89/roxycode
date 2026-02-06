@@ -1,0 +1,67 @@
+# Gemini API Pricing (per 1,000,000 tokens)
+# Source: https://ai.google.dev/gemini-api/docs/pricing
+# Note: Prices reflect the "High Context" tier (>128k/200k) where applicable.
+
+[gemini_3_pro_preview]
+api_name = "gemini-3-pro-preview"
+input_price_per_1m = 1.00 # ≤200k context; $2.00 if >200k
+cached_price_per_1m = 0.40 # ~10% of input price
+cache_storage_price_per_1m_per_hour = 0.045 # Standard Pro storage rate
+output_price_per_1m = 6.00 # ≤200k context; $9.00 if >200k
+description = "Reasoning-first model; caching recommended for active, long-context agent sessions."
+
+[gemini_3_flash_preview]
+api_name = "gemini-3-flash-preview"
+input_price_per_1m = 0.25 # Text/Image/Video; $0.50 for Audio
+cached_price_per_1m = 0.05 # ~20% of input price
+cache_storage_price_per_1m_per_hour = 0.01 # Standard Flash storage rate
+output_price_per_1m = 1.50
+description = "Designed for complex multimodal understanding and reasoning."
+
+[gemini_2_5_pro]
+api_name = "gemini-2.5-pro"
+input_price_per_1m = 1.25 # ≤200k context; $2.50 if >200k
+cached_price_per_1m = 0.625 # ~25% of input price
+cache_storage_price_per_1m_per_hour = 0.045
+output_price_per_1m = 10.00 # ≤200k context; $15.00 if >200k
+description = "High-capability model for complex reasoning and coding."
+
+[gemini_2_5_flash]
+api_name = "gemini-2.5-flash"
+input_price_per_1m = 0.15 # Flat rate for Text
+cached_price_per_1m = 0.03 # ~20% of input price
+cache_storage_price_per_1m_per_hour = 0.01
+output_price_per_1m = 0.60
+description = "Workhorse model balancing intelligence and latency."
+
+[gemini_2_5_flash_lite]
+api_name = "gemini-2.5-flash-lite"
+input_price_per_1m = 0.10
+cached_price_per_1m = 0.03
+cache_storage_price_per_1m_per_hour = 0.01
+output_price_per_1m = 0.40
+description = "Optimized for massive scale and high-throughput tasks."
+
+[gemini_2_0_flash]
+api_name = "gemini-2.0-flash"
+input_price_per_1m = 0.10
+cached_price_per_1m = 0.025 # ~25% of input price
+cache_storage_price_per_1m_per_hour = 0.01
+output_price_per_1m = 0.40
+description = "Cost-effective model for general-purpose tasks."
+
+[gemini_1_5_pro]
+api_name = "gemini-1.5-pro"
+input_price_per_1m = 1.25 # ≤128k context; $2.50 if >128k
+cached_price_per_1m = 0.3125 # ~25% of input price
+cache_storage_price_per_1m_per_hour = 0.045
+output_price_per_1m = 5.00 # ≤128k context; $10.00 if >128k
+description = "Mid-tier legacy Pro model."
+
+[gemini_1_5_flash]
+api_name = "gemini-1.5-flash"
+input_price_per_1m = 0.075 # ≤128k context; $0.15 if >128k
+cached_price_per_1m = 0.0375 # ~25% of input price
+cache_storage_price_per_1m_per_hour = 0.01
+output_price_per_1m = 0.30 # ≤128k context; $0.60 if >128k
+description = "Fast, cost-efficient legacy Flash model."

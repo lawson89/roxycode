@@ -1,73 +1,91 @@
 {% extends "layout/main" %}
-
 {% block title %}Dashboard{% endblock %}
-
 {% block content %}
-<section class="is-hero-bar">
-  <div class="flex-list">
-    <div>
-      <h1 class="title">
-        Overview
-      </h1>
-    </div>
-  </div>
-</section>
-
-<div class="grid gap-6 grid-cols-1 md:grid-cols-3 mb-6">
-  <div class="card">
-    <div class="card-content">
-      <div class="level is-mobile">
-        <div class="level-item">
-          <div class="is-widget-label"><h3 class="subtitle is-spaced">
-            Model
-          </h3>
-            <h1 class="title">
-              {{ modelName }}
-            </h1>
-          </div>
+<div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+  <!-- Card 1 -->
+  <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-200">
+    <div class="p-5">
+      <div class="flex items-center">
+        <div class="flex-shrink-0 bg-blue-500 rounded-md p-3">
+          <i class="mdi mdi-account-multiple text-white text-2xl"></i>
         </div>
-        <div class="level-item has-widget-icon">
-          <div class="is-widget-icon"><span class="icon has-text-primary is-large"><i
-              class="mdi mdi-brain mdi-48px"></i></span>
-          </div>
+        <div class="ml-5 w-0 flex-1">
+          <dl>
+            <dt class="text-sm font-medium text-gray-500 truncate">Total Users</dt>
+            <dd class="flex items-baseline">
+              <div class="text-2xl font-semibold text-gray-900">1,234</div>
+              <div class="ml-2 flex items-baseline text-sm font-semibold text-green-600">
+                <i class="mdi mdi-arrow-up text-xs mr-1"></i>
+                12%
+              </div>
+            </dd>
+          </dl>
         </div>
       </div>
     </div>
   </div>
-  
-  <div class="card">
-    <div class="card-content">
-      <div class="level is-mobile">
-        <div class="level-item">
-          <div class="is-widget-label"><h3 class="subtitle is-spaced">
-            Status
-          </h3>
-            <h1 class="title">
-              Online
-            </h1>
-          </div>
+
+  <!-- Card 2 -->
+  <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-200">
+    <div class="p-5">
+      <div class="flex items-center">
+        <div class="flex-shrink-0 bg-green-500 rounded-md p-3">
+          <i class="mdi mdi-chat text-white text-2xl"></i>
         </div>
-        <div class="level-item has-widget-icon">
-          <div class="is-widget-icon"><span class="icon has-text-success is-large"><i
-              class="mdi mdi-check-circle mdi-48px"></i></span>
-          </div>
+        <div class="ml-5 w-0 flex-1">
+          <dl>
+            <dt class="text-sm font-medium text-gray-500 truncate">Total Messages</dt>
+            <dd class="flex items-baseline">
+              <div class="text-2xl font-semibold text-gray-900">45,678</div>
+            </dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card 3 -->
+  <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-200">
+    <div class="p-5">
+      <div class="flex items-center">
+        <div class="flex-shrink-0 bg-purple-500 rounded-md p-3">
+          <i class="mdi mdi-clock text-white text-2xl"></i>
+        </div>
+        <div class="ml-5 w-0 flex-1">
+          <dl>
+            <dt class="text-sm font-medium text-gray-500 truncate">Uptime</dt>
+            <dd class="flex items-baseline">
+              <div class="text-2xl font-semibold text-gray-900">99.9%</div>
+            </dd>
+          </dl>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<div class="card has-table">
-  <header class="card-header">
-    <p class="card-header-title">
-      <span class="icon"><i class="mdi mdi-information-outline"></i></span>
-      System Info
-    </p>
-  </header>
-  <div class="card-content">
-    <div class="content">
-        <p>{{ message }}</p>
-        <p>This application is powered by Micronaut and Pebble Templates, wrapped in the Admin One Bulma theme.</p>
+<div class="mt-8 bg-white shadow rounded-lg border border-gray-200 overflow-hidden">
+  <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+    <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Activity</h3>
+  </div>
+  <div class="divide-y divide-gray-200">
+    <div class="p-4 flex items-center hover:bg-gray-50 transition">
+      <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+        <i class="mdi mdi-account-plus"></i>
+      </div>
+      <div class="ml-4">
+        <p class="text-sm font-medium text-gray-900">New user registered</p>
+        <p class="text-xs text-gray-500">2 minutes ago</p>
+      </div>
+    </div>
+    <div class="p-4 flex items-center hover:bg-gray-50 transition">
+      <div class="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600">
+        <i class="mdi mdi-alert"></i>
+      </div>
+      <div class="ml-4">
+        <p class="text-sm font-medium text-gray-900">System update pending</p>
+        <p class="text-xs text-gray-500">1 hour ago</p>
+      </div>
     </div>
   </div>
 </div>

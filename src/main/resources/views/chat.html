@@ -1,68 +1,116 @@
 {% extends "layout/main" %}
-
-{% block title %}Chat{% endblock %}
-
+{% block title %}AI Chat{% endblock %}
 {% block content %}
-<section class="is-hero-bar">
-  <div class="flex-list">
-    <div>
-      <h1 class="title">
-        Chat with AI
-      </h1>
+<div class="max-w-4xl mx-auto flex flex-col h-[calc(100vh-300px)]">
+  
+  <!-- Scrollable History Container -->
+  <div id="chat-history" 
+       class="flex-1 overflow-y-auto space-y-4 mb-6 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+    
+    <!-- Welcome Message (Only show on initial load) -->
+    {% if prompt is empty %}
+    <div id="welcome-message" class="flex items-start">
+      <div class="flex-shrink-0 bg-blue-500 rounded-full p-2">
+        <i class="mdi mdi-robot text-white text-xl"></i>
+      </div>
+      <div class="ml-3 bg-gray-100 p-4 rounded-lg text-sm text-gray-800 max-w-[80%] shadow-sm">
+        Hello! I'm your AI assistant. How can I help you today?
+      </div>
     </div>
+    {% endif %}
+
+    <!-- The Interaction Pair -->
+    {% if prompt is not empty %}
+    <div class="interaction-pair space-y-4">
+        <!-- User Message -->
+        <div class="flex items-start justify-end">
+          <div class="mr-3 bg-blue-600 p-4 rounded-lg text-sm text-white max-w-[80%] shadow-sm">
+            {{ prompt }}
+          </div>
+          <div class="flex-shrink-0 bg-gray-200 rounded-full p-2 border border-gray-300">
+            <i class="mdi mdi-account text-gray-600 text-xl"></i>
+          </div>
+        </div>
+
+        {% if response is not empty %}
+        <!-- AI Message -->
+        <div class="flex items-start">
+          <div class="flex-shrink-0 bg-blue-500 rounded-full p-2">
+            <i class="mdi mdi-robot text-white text-xl"></i>
+          </div>
+          <div class="ml-3 flex-1">
+            
+            {% for exec in toolExecutions %}
+            <div class="mb-3 p-3 bg-slate-800 rounded-lg border border-slate-700 font-mono text-[10px] text-slate-300 max-w-[90%] shadow-inner">
+               <div class="flex items-center mb-2 text-yellow-500 font-bold uppercase tracking-wider border-b border-slate-700 pb-1">
+                 <i class="mdi mdi-language-javascript text-lg mr-1"></i>
+                 Executing JavaScript
+               </div>
+               <pre class="bg-slate-900 p-2 rounded mb-2 overflow-x-auto text-yellow-100 border border-slate-700"><code>{{ exec.code }}</code></pre>
+               {% if exec.output is not empty %}
+               <div class="text-slate-400 mt-2">
+                 <div class="font-bold text-slate-500 mb-1 text-[9px]">OUTPUT:</div>
+                 <pre class="whitespace-pre-wrap">{{ exec.output }}</pre>
+               </div>
+               {% endif %}
+            </div>
+            {% endfor %}
+
+            <div class="bg-gray-100 p-4 rounded-lg text-sm text-gray-800 max-w-[90%] shadow-sm border border-gray-200">
+              {{ response }}
+            </div>
+          </div>
+        </div>
+        {% elseif error is not empty %}
+        <!-- Error -->
+        <div class="flex items-start">
+          <div class="flex-shrink-0 bg-red-500 rounded-full p-2">
+            <i class="mdi mdi-alert-circle text-white text-xl"></i>
+          </div>
+          <div class="ml-3 bg-red-50 p-4 rounded-lg text-sm text-red-800 max-w-[80%] border border-red-200">
+            <strong>Error:</strong> {{ error }}
+          </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
   </div>
-</section>
 
-<div class="card" id="chat-card">
-  <header class="card-header">
-    <p class="card-header-title">
-      <span class="icon"><i class="mdi mdi-chat"></i></span>
-      Conversation
-    </p>
-  </header>
-  <div class="card-content">
-    {% if prompt %}
-    <div class="notification is-light">
-      <strong>You:</strong> {{ prompt }}
-    </div>
-    {% endif %}
-
-    {% if response %}
-    <div class="notification is-info is-light">
-      <strong>Gemini:</strong>
-      <div class="content mt-2" style="white-space: pre-wrap;">
-        {{ response }}
+  <!-- Input Area -->
+  <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+    <form action="/chat" method="POST" 
+          up-submit 
+          up-target="#chat-history" 
+          up-insertion="append"
+          up-scroll="bottom"
+          class="flex space-x-3">
+      <div class="flex-1 relative">
+        <input id="chat-prompt-input" type="text" name="prompt" placeholder="Type your message..." required autocomplete="off" 
+               class="block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
       </div>
-    </div>
-    {% endif %}
-
-    {% if error %}
-    <div class="notification is-danger is-light">
-      <strong>Error:</strong> {{ error }}
-    </div>
-    {% endif %}
-
-    <hr>
-
-    <form action="/chat" method="POST" up-submit up-target="#chat-card">
-      <div class="field">
-        <label class="label">Ask something</label>
-        <div class="control">
-          <textarea name="prompt" class="textarea" placeholder="Type your message here..." required>{{ prompt }}</textarea>
-        </div>
-      </div>
-      <div class="field is-grouped">
-        <div class="control">
-          <button type="submit" class="button is-primary">
-            <span class="icon"><i class="mdi mdi-send"></i></span>
-            <span>Send</span>
-          </button>
-        </div>
-        <div class="control">
-            <a href="/chat" class="button is-light" up-follow up-target="#chat-card">Clear</a>
-        </div>
-      </div>
+      <button type="submit" class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+        <i class="mdi mdi-send mr-2"></i>
+        Send
+      </button>
     </form>
   </div>
 </div>
+
+<script>
+  // Robust clearing and scrolling logic
+  up.on('up:form:submit', function(event) {
+    const input = document.getElementById('chat-prompt-input');
+    if (input) {
+      // Clear input immediately after submission starts for better UX
+      setTimeout(() => { input.value = ''; }, 10);
+    }
+  });
+
+  up.on('up:fragment:inserted', function(event) {
+    const history = document.getElementById('chat-history');
+    if (history) {
+      history.scrollTop = history.scrollHeight;
+    }
+  });
+</script>
 {% endblock %}

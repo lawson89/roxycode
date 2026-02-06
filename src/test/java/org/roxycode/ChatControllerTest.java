@@ -24,6 +24,6 @@ class ChatControllerTest {
     void testChatPageLoads() {
         HttpResponse<String> response = client.toBlocking().exchange(HttpRequest.GET("/chat"), String.class);
         assertEquals(HttpStatus.OK, response.getStatus());
-        assertTrue(response.body().contains("Chat with AI"));
+        assertTrue(response.body().contains("AI Chat"));
     }
 }

@@ -6,11 +6,11 @@ import io.micronaut.views.ModelAndView;
 import java.util.Map;
 
 @Controller("/")
-public class HelloController {
+public class IndexController {
 
     private final ConfigService configService;
 
-    public HelloController(ConfigService configService) {
+    public IndexController(ConfigService configService) {
         this.configService = configService;
     }
 

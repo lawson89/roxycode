@@ -1,134 +1,138 @@
 <!DOCTYPE html>
-<html lang="en" class="has-aside-left has-aside-mobile-transition has-navbar-fixed-top has-aside-expanded">
+<html lang="en" class="h-full bg-gray-50">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{% endblock %} - Admin One</title>
+  <title>{% block title %}{% endblock %} - RoxyCode Admin</title>
 
-  <!-- Bulma -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <!-- Tailwind CSS Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
   <!-- Material Design Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css">
+  
   <!-- Unpoly -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/unpoly@3.9.0/unpoly.min.css">
   <script src="https://cdn.jsdelivr.net/npm/unpoly@3.9.0/unpoly.min.js"></script>
 
-  <style>
-    body { padding-top: 3.25rem; }
-    #aside {
-      width: 260px;
-      position: fixed;
-      top: 0; left: 0;
-      height: 100vh;
-      z-index: 40;
-      background-color: #24292e;
-      display: flex;
-      flex-direction: column;
+  <style type="text/tailwindcss">
+    @layer components {
+      .nav-link {
+        @apply flex items-center px-4 py-3 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors duration-200;
+      }
+      .nav-link.active {
+        @apply bg-gray-800 text-blue-400 border-l-4 border-blue-400;
+      }
     }
-    .main-section { margin-left: 260px; padding: 1.5rem; }
-    @media screen and (max-width: 1023px) {
-      #aside { left: -260px; }
-      .main-section { margin-left: 0; }
-    }
-    .navbar { left: 260px; }
-    @media screen and (max-width: 1023px) { .navbar { left: 0; } }
-    .card { margin-bottom: 1.5rem; }
   </style>
 </head>
-<body>
+<body class="h-full">
 
-<nav id="navbar-main" class="navbar is-fixed-top">
-  <div class="navbar-brand">
-    <a class="navbar-item is-hidden-desktop jb-aside-mobile-toggle">
-      <span class="icon"><i class="mdi mdi-forwardburger mdi-24px"></i></span>
-    </a>
-    <div class="navbar-item">
-      <div class="control"><input placeholder="Search everywhere..." class="input"></div>
+<div id="app" class="min-h-full">
+  <!-- Sidebar for Desktop -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 transition-transform duration-300 transform lg:translate-x-0 -translate-x-full">
+    <div class="flex items-center justify-center h-16 bg-slate-950 text-white font-bold text-xl border-b border-slate-800">
+      <span class="text-blue-500 mr-1">Roxy</span>Code
     </div>
-  </div>
-  <div class="navbar-menu" id="navbar-menu">
-    <div class="navbar-end">
-      <div class="navbar-item has-divider has-user-avatar">
-        <a class="navbar-link">
-          <div class="user-avatar">
-            <span class="icon"><i class="mdi mdi-account-circle mdi-24px"></i></span>
-          </div>
-          <div class="is-user-name"><span>Admin User</span></div>
-        </a>
-      </div>
-      <a title="Log out" class="navbar-item is-desktop-icon-only">
-        <span class="icon"><i class="mdi mdi-logout"></i></span>
-        <span>Log out</span>
+    <nav class="mt-4">
+      <div class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">General</div>
+      <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}" up-follow>
+        <i class="mdi mdi-view-dashboard mr-3 text-xl"></i>
+        <span>Dashboard</span>
       </a>
-    </div>
-  </div>
-</nav>
+      <a href="/chat" class="nav-link {% if request.path == '/chat' %}active{% endif %}" up-follow>
+        <i class="mdi mdi-chat mr-3 text-xl"></i>
+        <span>AI Chat</span>
+      </a>
+      
+      <div class="px-4 py-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Settings</div>
+      <a href="/config" class="nav-link {% if request.path == '/config' %}active{% endif %}" up-follow>
+        <i class="mdi mdi-cog mr-3 text-xl"></i>
+        <span>Configuration</span>
+      </a>
+    </nav>
+  </aside>
 
-<aside id="aside" class="aside is-placed-left is-expanded">
-  <div class="aside-brand">
-    <div>
-      <b>Roxy</b>Code
-    </div>
-  </div>
-  <div class="menu is-menu-main">
-    <p class="menu-label">General</p>
-    <ul class="menu-list">
-      <li>
-        <a href="/" class="{% if request.path == '/' %}is-active{% endif %}">
-          <span class="icon"><i class="mdi mdi-desktop-mac"></i></span>
-          <span class="menu-item-label">Dashboard</span>
-        </a>
-      </li>
-      <li>
-        <a href="/chat" class="{% if request.path == '/chat' %}is-active{% endif %}">
-          <span class="icon"><i class="mdi mdi-chat"></i></span>
-          <span class="menu-item-label">Chat</span>
-        </a>
-      </li>
-    </ul>
-    <p class="menu-label">Settings</p>
-    <ul class="menu-list">
-      <li>
-        <a href="/config" class="{% if request.path == '/config' %}is-active{% endif %}">
-          <span class="icon"><i class="mdi mdi-cog"></i></span>
-          <span class="menu-item-label">Configuration</span>
-        </a>
-      </li>
-    </ul>
-  </div>
-</aside>
-
-<section class="section main-section">
-  <div class="container">
-    {% block content %}{% endblock %}
-  </div>
-</section>
-
-<footer class="footer">
-  <div class="container-fluid">
-    <div class="level">
-      <div class="level-left">
-        <div class="level-item">
-          © 2024 RoxyCode
+  <!-- Main Content Wrapper -->
+  <div class="lg:pl-64 flex flex-col flex-1">
+    <!-- Top Header -->
+    <header class="sticky top-0 z-40 bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 lg:px-8">
+      <div class="flex items-center">
+        <!-- Mobile Toggle -->
+        <button id="mobile-menu-button" class="lg:hidden p-2 text-gray-500 hover:text-gray-600 focus:outline-none">
+          <i class="mdi mdi-menu text-2xl"></i>
+        </button>
+        
+        <!-- Search Box -->
+        <div class="ml-4 relative flex-1 min-w-[300px] hidden md:block">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+            <i class="mdi mdi-magnify"></i>
+          </span>
+          <input type="text" placeholder="Search for anything..." class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
         </div>
       </div>
-    </div>
+
+      <!-- User Profile -->
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center">
+          <img class="h-8 w-8 rounded-full" src="https://ui-avatars.com/api/?name=Admin+User&background=0D8ABC&color=fff" alt="User avatar">
+          <span class="ml-2 text-sm font-medium text-gray-700 hidden sm:block">Admin User</span>
+        </div>
+        <button class="text-gray-400 hover:text-gray-500">
+          <i class="mdi mdi-logout text-xl"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Section -->
+    <main class="flex-1 pb-8">
+      <!-- Breadcrumbs / Page Header -->
+      <div class="bg-white border-b border-gray-200 px-4 py-4 sm:px-6 lg:px-8">
+        <div class="flex items-center text-xs text-gray-500 mb-2">
+          <span>Admin</span>
+          <i class="mdi mdi-chevron-right mx-1"></i>
+          <span class="text-gray-700 font-medium">{% block title %}{% endblock %}</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900 leading-tight">{% block title %}{% endblock %}</h1>
+      </div>
+
+      <!-- Content Container -->
+      <div class="mt-8 px-4 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 py-4 px-4 sm:px-6 lg:px-8">
+      <div class="text-sm text-gray-500 text-center sm:text-left">
+        &copy; 2024 RoxyCode. All rights reserved.
+      </div>
+    </footer>
   </div>
-</footer>
+</div>
 
 <script>
-  // Sidebar Toggle
-  document.querySelectorAll('.jb-aside-mobile-toggle').forEach(el => {
-    el.addEventListener('click', () => {
-      document.documentElement.classList.toggle('is-aside-mobile-expanded');
-      const icon = el.querySelector('.mdi');
-      if (document.documentElement.classList.contains('is-aside-mobile-expanded')) {
-        icon.classList.replace('mdi-forwardburger', 'mdi-backburger');
-      } else {
-        icon.classList.replace('mdi-backburger', 'mdi-forwardburger');
+  // Mobile menu toggle logic
+  const mobileMenuButton = document.getElementById('mobile-menu-button');
+  const sidebar = document.getElementById('sidebar');
+
+  if (mobileMenuButton && sidebar) {
+    mobileMenuButton.addEventListener('click', () => {
+      sidebar.classList.toggle('-translate-x-full');
+    });
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (event) => {
+      const isClickInside = sidebar.contains(event.target) || mobileMenuButton.contains(event.target);
+      if (!isClickInside && !sidebar.classList.contains('-translate-x-full')) {
+        sidebar.classList.add('-translate-x-full');
       }
     });
+  }
+
+  // Handle Unpoly events to update active state
+  up.on('up:link:follow', (event) => {
+    // Optional: add loading indicator
   });
 </script>
 
