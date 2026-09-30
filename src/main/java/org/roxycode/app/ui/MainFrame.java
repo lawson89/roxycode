@@ -2,6 +2,7 @@ package org.roxycode.app.ui;
 
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.AiService;
 import javax.swing.*;
 import java.awt.*;
 
@@ -11,11 +12,13 @@ import java.awt.*;
 public class MainFrame extends JFrame {
 
     private final SettingsService settingsService;
+    private final AiService aiService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
-    public MainFrame(SettingsService settingsService) {
+    public MainFrame(SettingsService settingsService, AiService aiService) {
         this.settingsService = settingsService;
+        this.aiService = aiService;
         setupLaf();
         setupWindow();
         initComponents();
@@ -45,11 +48,7 @@ public class MainFrame extends JFrame {
         StatusPanel statusBar = new StatusPanel();
 
         // Content Area Panels
-        JPanel welcomePanel = new JPanel(new MigLayout("fill", "[center]", "[center]"));
-        welcomePanel.add(new JLabel("Welcome to RoxyCode Agent UI"));
-        // background will be default theme color
-        
-        contentArea.add(welcomePanel, "CHAT");
+        contentArea.add(new ChatPanel(aiService), "CHAT");
         contentArea.add(createPlaceholderPanel("Plan Management"), "PLAN");
         contentArea.add(createPlaceholderPanel("Context Viewer"), "CONTEXT");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
