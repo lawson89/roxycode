@@ -1,0 +1,79 @@
+package org.roxycode.app.service;
+
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import org.roxycode.app.model.AppSettings;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+/**
+ * Service for managing application settings.
+ */
+@Service
+public class SettingsService {
+    private static final String SETTINGS_DIR = ".roxycode";
+    private static final String SETTINGS_FILE = "settings.toml";
+    
+    private final TomlMapper mapper = new TomlMapper();
+    private AppSettings settings;
+    private Path settingsPathOverride;
+
+    /**
+     * Gets the current application settings.
+     * @return AppSettings object.
+     */
+    public AppSettings getSettings() {
+        if (settings == null) {
+            loadSettings();
+        }
+        return settings;
+    }
+
+    /**
+     * Saves the current settings to the TOML file.
+     */
+    public void saveSettings() {
+        try {
+            Path path = getSettingsPath();
+            if (path.getParent() != null) {
+                Files.createDirectories(path.getParent());
+            }
+            mapper.writeValue(path.toFile(), getSettings());
+        } catch (IOException e) {
+            // Log error
+        }
+    }
+
+    /**
+     * Overrides the settings path, useful for testing.
+     * @param path The path to use for settings.
+     */
+    public void setSettingsPathOverride(Path path) {
+        this.settingsPathOverride = path;
+        this.settings = null; // Force reload
+    }
+
+    private void loadSettings() {
+        Path path = getSettingsPath();
+        if (Files.exists(path)) {
+            try {
+                settings = mapper.readValue(path.toFile(), AppSettings.class);
+            } catch (IOException e) {
+                settings = new AppSettings();
+            }
+        } else {
+            settings = new AppSettings();
+        }
+    }
+
+    private Path getSettingsPath() {
+        if (settingsPathOverride != null) {
+            return settingsPathOverride;
+        }
+        String userHome = System.getProperty("user.home");
+        return Paths.get(userHome, SETTINGS_DIR, SETTINGS_FILE);
+    }
+}

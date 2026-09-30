@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MainFrameTest {
     @Test
-    void testMainFrameClassLoaded() {
+    void testMainFrameClassExists() {
         assertNotNull(MainFrame.class);
     }
 }

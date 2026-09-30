@@ -1,8 +1,7 @@
 package org.roxycode.app.ui;
 
-import com.formdev.flatlaf.FlatDarkLaf;
 import net.miginfocom.swing.MigLayout;
-
+import org.roxycode.app.service.SettingsService;
 import javax.swing.*;
 import java.awt.*;
 
@@ -11,24 +10,25 @@ import java.awt.*;
  */
 public class MainFrame extends JFrame {
 
-    public MainFrame() {
+    private final SettingsService settingsService;
+    private final CardLayout cardLayout = new CardLayout();
+    private final JPanel contentArea = new JPanel(cardLayout);
+
+    public MainFrame(SettingsService settingsService) {
+        this.settingsService = settingsService;
         setupLaf();
         setupWindow();
         initComponents();
     }
 
     private void setupLaf() {
-        try {
-            UIManager.setLookAndFeel(new FlatDarkLaf());
-        } catch (Exception ex) {
-            System.err.println("Failed to initialize LaF");
-        }
+        SettingsPanel.applyTheme(settingsService.getSettings().getTheme());
     }
 
     private void setupWindow() {
         setTitle("RoxyCode");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1024, 768);
+        setSize(1100, 800);
         setLocationRelativeTo(null);
     }
 
@@ -36,27 +36,35 @@ public class MainFrame extends JFrame {
         setLayout(new MigLayout("fill, insets 0", "[200!]0[fill, grow]", "[fill, grow]"));
 
         // Sidebar
-        JPanel sidebar = new JPanel(new MigLayout("wrap, fillx, insets 10", "[fill, grow]", "[]10[]10[]10[]push[]"));
-        sidebar.setBackground(new Color(45, 45, 45));
+        SidebarPanel sidebar = new SidebarPanel(settingsService, cardName -> cardLayout.show(contentArea, cardName));
 
-        sidebar.add(new JLabel("🤖 RoxyCode"), "h 40!, gapbottom 20");
-        sidebar.add(createNavButton("Chat"));
-        sidebar.add(createNavButton("Plan"));
-        sidebar.add(createNavButton("Context"));
-        sidebar.add(createNavButton("Settings"), "pushy, bottom");
+        // Main Workspace
+        JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
+        
+        HeaderPanel header = new HeaderPanel();
+        StatusPanel statusBar = new StatusPanel();
 
-        // Main Content
-        JPanel contentArea = new JPanel(new MigLayout("fill", "[center]", "[center]"));
-        contentArea.add(new JLabel("Welcome to RoxyCode Agent UI"), "");
+        // Content Area Panels
+        JPanel welcomePanel = new JPanel(new MigLayout("fill", "[center]", "[center]"));
+        welcomePanel.add(new JLabel("Welcome to RoxyCode Agent UI"));
+        // background will be default theme color
+        
+        contentArea.add(welcomePanel, "CHAT");
+        contentArea.add(createPlaceholderPanel("Plan Management"), "PLAN");
+        contentArea.add(createPlaceholderPanel("Context Viewer"), "CONTEXT");
+        contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
 
-        add(sidebar, "grow");
-        add(contentArea, "grow");
+        workspace.add(header, "h 110!, wrap");
+        workspace.add(contentArea, "grow, wrap");
+        workspace.add(statusBar, "h 30!");
+
+        add(sidebar, "growy");
+        add(workspace, "grow");
     }
-
-    private JButton createNavButton(String text) {
-        JButton btn = new JButton(text);
-        btn.setHorizontalAlignment(SwingConstants.LEFT);
-        btn.setFocusPainted(false);
-        return btn;
+    
+    private JPanel createPlaceholderPanel(String text) {
+        JPanel p = new JPanel(new MigLayout("fill", "[center]", "[center]"));
+        p.add(new JLabel(text));
+        return p;
     }
 }
