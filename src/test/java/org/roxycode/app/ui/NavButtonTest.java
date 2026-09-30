@@ -3,7 +3,10 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
 import org.junit.jupiter.api.Test;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import javax.swing.*;
+import java.awt.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NavButtonTest {
@@ -11,11 +14,9 @@ class NavButtonTest {
     void testSelectionStyling() {
         NavButton btn = new NavButton("Test", null);
         
-        // Initial state
         assertFalse(btn.isSelected());
         assertFalse(btn.isContentAreaFilled());
         
-        // Select
         btn.setSelected(true);
         assertTrue(btn.isSelected());
         assertTrue(btn.isContentAreaFilled());
@@ -29,7 +30,6 @@ class NavButtonTest {
             assertTrue(style.contains("foreground: #ffffff"));
         }
         
-        // Deselect
         btn.setSelected(false);
         assertFalse(btn.isSelected());
         assertFalse(btn.isContentAreaFilled());
@@ -40,5 +40,19 @@ class NavButtonTest {
     void testArcProperty() {
         NavButton btn = new NavButton("Test", null);
         assertEquals(6, btn.getClientProperty("JButton.arc"));
+    }
+
+    @Test
+    void testFontIconColorSync() {
+        FontIcon icon = FontIcon.of(Codicons.COMMENT_DISCUSSION, 16);
+        NavButton btn = new NavButton("Test", icon);
+        
+        btn.setForeground(Color.RED);
+        btn.setSelected(false);
+        assertEquals(Color.RED, icon.getIconColor());
+        
+        btn.setForeground(Color.BLUE);
+        btn.setSelected(false);
+        assertEquals(Color.BLUE, icon.getIconColor());
     }
 }

@@ -39,7 +39,8 @@ public class RoxyCode {
         SwingUtilities.invokeLater(() -> {
             SettingsService settingsService = context.getBean(SettingsService.class);
             AiService aiService = context.getBean(AiService.class);
-            MainFrame frame = new MainFrame(settingsService, aiService);
+            org.roxycode.app.service.SystemToolService toolService = context.getBean(org.roxycode.app.service.SystemToolService.class);
+            MainFrame frame = new MainFrame(settingsService, aiService, toolService);
             frame.setVisible(true);
         });
     }

@@ -5,7 +5,7 @@ import net.miginfocom.swing.MigLayout;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.geom.Ellipse2D;
+import java.awt.geom.RoundRectangle2D;
 import java.io.IOException;
 import java.net.URL;
 
@@ -42,6 +42,10 @@ public class UserProfileComponent extends JPanel {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
                 
+                int arc = 32;
+                RoundRectangle2D mask = new RoundRectangle2D.Float(0, 0, getWidth()-1, getHeight()-1, arc, arc);
+                g2.setClip(mask);
+                
                 if (avatarImage != null) {
                     g2.drawImage(avatarImage, 0, 0, getWidth(), getHeight(), null);
                 } else {
@@ -49,7 +53,7 @@ public class UserProfileComponent extends JPanel {
                     if (g2.getColor() == null) {
                         g2.setColor(new Color(100, 100, 255));
                     }
-                    g2.fillRect(0, 0, getWidth(), getHeight());
+                    g2.fill(mask);
                 }
                 g2.dispose();
             }

@@ -2,6 +2,8 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.service.SettingsService;
 import javax.swing.*;
 import java.awt.*;
@@ -24,26 +26,21 @@ public class SidebarPanel extends JPanel {
     }
 
     private void initComponents() {
-        // Reduced gaps between components for a cleaner vertical stack
         setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]5[]2[]2[]2[]15[]5[]push"));
         
-        // Use theme-aware styling
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
 
-        // Profile
         add(new UserProfileComponent("RoxyCode", System.getProperty("user.name")));
 
-        // MAIN Section
         add(createSectionHeader("MAIN"), "gaptop 10");
-        add(createNavButton("Chat", "CHAT"));
-        add(createNavButton("Plan", "PLAN"));
-        add(createNavButton("Context", "CONTEXT"));
+        add(createNavButton("Chat", "CHAT", Codicons.COMMENT_DISCUSSION));
+        add(createNavButton("Plan", "PLAN", Codicons.LIST_ORDERED));
+        add(createNavButton("Context", "CONTEXT", Codicons.BOOK));
 
-        // OTHER Section
         add(createSectionHeader("OTHER"), "gaptop 15");
-        add(createNavButton("Settings", "SETTINGS"));
+        add(createNavButton("System Tools", "TOOLS", Codicons.TOOLS));
+        add(createNavButton("Settings", "SETTINGS", Codicons.SETTINGS_GEAR));
         
-        // Default selection (Chat)
         if (!navButtons.isEmpty()) {
             updateSelection(navButtons.get(0));
         }
@@ -62,8 +59,9 @@ public class SidebarPanel extends JPanel {
         return label;
     }
 
-    private JButton createNavButton(String text, String cardName) {
-        NavButton btn = new NavButton(text, null);
+    private JButton createNavButton(String text, String cardName, Codicons iconCode) {
+        FontIcon icon = FontIcon.of(iconCode, 16);
+        NavButton btn = new NavButton(text, icon);
         btn.addActionListener(e -> {
             updateSelection(btn);
             navigationAction.accept(cardName);
