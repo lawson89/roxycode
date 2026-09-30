@@ -20,6 +20,7 @@ import java.awt.*;
 public class SettingsPanel extends JPanel {
     private final SettingsService settingsService;
     private final JComboBox<String> themeCombo;
+    private final JPasswordField geminiApiKeyField;
     private final JButton saveButton;
     private final JLabel statusLabel;
     private final Timer statusTimer;
@@ -40,6 +41,11 @@ public class SettingsPanel extends JPanel {
         themeCombo.setSelectedItem(settingsService.getSettings().getTheme());
         themeCombo.addActionListener(e -> updateTheme());
         add(themeCombo, "wrap");
+
+        add(new JLabel("Gemini API Key:"));
+        geminiApiKeyField = new JPasswordField(20);
+        geminiApiKeyField.setText(settingsService.getSettings().getGeminiApiKey());
+        add(geminiApiKeyField, "wrap");
 
         saveButton = new JButton("Save Settings");
         saveButton.addActionListener(e -> saveSettings());
@@ -64,6 +70,7 @@ public class SettingsPanel extends JPanel {
     }
 
     private void saveSettings() {
+        settingsService.getSettings().setGeminiApiKey(new String(geminiApiKeyField.getPassword()));
         settingsService.saveSettings();
         statusLabel.setText("Settings saved!");
         statusTimer.restart();

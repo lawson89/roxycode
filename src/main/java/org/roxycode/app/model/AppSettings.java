@@ -5,6 +5,7 @@ package org.roxycode.app.model;
  */
 public class AppSettings {
     private String theme = "FlatLaf Light";
+    private String geminiApiKey = "";
 
     public AppSettings() {}
 
@@ -14,5 +15,13 @@ public class AppSettings {
 
     public void setTheme(String theme) {
         this.theme = theme;
+    }
+
+    public String getGeminiApiKey() {
+        return geminiApiKey;
+    }
+
+    public void setGeminiApiKey(String geminiApiKey) {
+        this.geminiApiKey = geminiApiKey;
     }
 }

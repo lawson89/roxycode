@@ -21,11 +21,13 @@ class SettingsServiceTest {
 
         AppSettings settings = service.getSettings();
         settings.setTheme("Darcula");
+        settings.setGeminiApiKey("test-api-key");
         service.saveSettings();
 
         // New service instance to verify persistence
         SettingsService service2 = new SettingsService();
         service2.setSettingsPathOverride(settingsFile);
         assertEquals("Darcula", service2.getSettings().getTheme());
+        assertEquals("test-api-key", service2.getSettings().getGeminiApiKey());
     }
 }

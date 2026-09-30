@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.FlatLaf;
 import javax.swing.*;
 import java.awt.*;
 
@@ -22,13 +23,25 @@ public class NavButton extends JButton {
     public void setSelected(boolean b) {
         super.setSelected(b);
         if (b) {
-            putClientProperty(FlatClientProperties.STYLE, 
-                "background: $Component.accentColor; " +
-                "foreground: $Component.accentForeground");
+            if (FlatLaf.isLafDark()) {
+                putClientProperty(FlatClientProperties.STYLE, 
+                    "background: $Component.accentColor; " +
+                    "foreground: $Component.accentForeground");
+            } else {
+                putClientProperty(FlatClientProperties.STYLE, 
+                    "background: #0d6efd; " +
+                    "foreground: #ffffff");
+            }
             setContentAreaFilled(true);
         } else {
             putClientProperty(FlatClientProperties.STYLE, "");
             setContentAreaFilled(false);
         }
+    }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        setSelected(isSelected());
     }
 }

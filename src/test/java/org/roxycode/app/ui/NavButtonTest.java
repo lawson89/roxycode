@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.FlatLaf;
 import org.junit.jupiter.api.Test;
 import javax.swing.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,7 +21,13 @@ class NavButtonTest {
         assertTrue(btn.isContentAreaFilled());
         String style = (String) btn.getClientProperty(FlatClientProperties.STYLE);
         assertNotNull(style);
-        assertTrue(style.contains("background: $Component.accentColor"));
+        
+        if (FlatLaf.isLafDark()) {
+            assertTrue(style.contains("background: $Component.accentColor"));
+        } else {
+            assertTrue(style.contains("background: #0d6efd"));
+            assertTrue(style.contains("foreground: #ffffff"));
+        }
         
         // Deselect
         btn.setSelected(false);

@@ -52,6 +52,19 @@ class SettingsPanelTest {
         assertEquals("FlatLaf Dark", settings.getTheme());
         verify(settingsService, never()).saveSettings();
     }
+    @Test
+    void testGeminiApiKeyFieldUpdatesSettingsOnSave() {
+        JPasswordField apiKeyField = findPasswordField(settingsPanel);
+        assertNotNull(apiKeyField, "API key field should exist");
+
+        apiKeyField.setText("new-secret-key");
+        
+        JButton saveButton = findButton(settingsPanel, "Save Settings");
+        saveButton.doClick();
+
+        assertEquals("new-secret-key", settings.getGeminiApiKey());
+        verify(settingsService, times(1)).saveSettings();
+    }
 
     private JButton findButton(Container container, String text) {
         for (Component comp : container.getComponents()) {
@@ -60,6 +73,21 @@ class SettingsPanelTest {
             }
             if (comp instanceof Container) {
                 JButton res = findButton((Container) comp, text);
+                if (res != null) {
+                    return res;
+                }
+            }
+        }
+        return null;
+    }
+
+        private JPasswordField findPasswordField(Container container) {
+        for (Component comp : container.getComponents()) {
+            if (comp instanceof JPasswordField) {
+                return (JPasswordField) comp;
+            }
+            if (comp instanceof Container) {
+                JPasswordField res = findPasswordField((Container) comp);
                 if (res != null) {
                     return res;
                 }
