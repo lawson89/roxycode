@@ -5,6 +5,8 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.service.SettingsService;
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -13,6 +15,7 @@ import java.util.function.Consumer;
 public class SidebarPanel extends JPanel {
     private final SettingsService settingsService;
     private final Consumer<String> navigationAction;
+    private final List<NavButton> navButtons = new ArrayList<>();
 
     public SidebarPanel(SettingsService settingsService, Consumer<String> navigationAction) {
         this.settingsService = settingsService;
@@ -21,7 +24,8 @@ public class SidebarPanel extends JPanel {
     }
 
     private void initComponents() {
-        setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]10[]10[]20[]10[]push"));
+        // Reduced gaps between components for a cleaner vertical stack
+        setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]5[]2[]2[]2[]15[]5[]push"));
         
         // Use theme-aware styling
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
@@ -38,6 +42,17 @@ public class SidebarPanel extends JPanel {
         // OTHER Section
         add(createSectionHeader("OTHER"), "gaptop 15");
         add(createNavButton("Settings", "SETTINGS"));
+        
+        // Default selection (Chat)
+        if (!navButtons.isEmpty()) {
+            updateSelection(navButtons.get(0));
+        }
+    }
+
+    private void updateSelection(NavButton selectedBtn) {
+        for (NavButton btn : navButtons) {
+            btn.setSelected(btn == selectedBtn);
+        }
     }
 
     private JLabel createSectionHeader(String text) {
@@ -49,7 +64,11 @@ public class SidebarPanel extends JPanel {
 
     private JButton createNavButton(String text, String cardName) {
         NavButton btn = new NavButton(text, null);
-        btn.addActionListener(e -> navigationAction.accept(cardName));
+        btn.addActionListener(e -> {
+            updateSelection(btn);
+            navigationAction.accept(cardName);
+        });
+        navButtons.add(btn);
         return btn;
     }
 }

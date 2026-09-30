@@ -15,7 +15,20 @@ public class NavButton extends JButton {
         setContentAreaFilled(false);
         setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
         putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-        putClientProperty("JButton.arc", 12);
-        // Use default theme foreground
+        putClientProperty("JButton.arc", 6);
+    }
+
+    @Override
+    public void setSelected(boolean b) {
+        super.setSelected(b);
+        if (b) {
+            putClientProperty(FlatClientProperties.STYLE, 
+                "background: $Component.accentColor; " +
+                "foreground: $Component.accentForeground");
+            setContentAreaFilled(true);
+        } else {
+            putClientProperty(FlatClientProperties.STYLE, "");
+            setContentAreaFilled(false);
+        }
     }
 }

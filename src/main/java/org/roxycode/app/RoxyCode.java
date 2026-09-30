@@ -8,10 +8,10 @@ import org.roxycode.app.service.SettingsService;
 import javax.swing.SwingUtilities;
 
 @SpringBootApplication
-public class AppApplication {
+public class RoxyCode {
 
     public static void main(String[] args) {
-        ConfigurableApplicationContext context = new SpringApplicationBuilder(AppApplication.class)
+        ConfigurableApplicationContext context = new SpringApplicationBuilder(RoxyCode.class)
                 .headless(false)
                 .run(args);
 
