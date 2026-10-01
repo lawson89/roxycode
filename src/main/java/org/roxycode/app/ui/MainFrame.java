@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.explore.ExploreManager;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SystemToolService;
@@ -23,12 +24,13 @@ public class MainFrame extends JFrame {
     private final GitService gitService;
     private final EnvironmentService envService;
     private final JexlServiceRegistry jexlServiceRegistry;
+    private final ExploreManager exploreManager;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
     public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, 
                     ProjectService projectService, GitService gitService, EnvironmentService envService,
-                    JexlServiceRegistry jexlServiceRegistry) {
+                    JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -36,6 +38,7 @@ public class MainFrame extends JFrame {
         this.gitService = gitService;
         this.envService = envService;
         this.jexlServiceRegistry = jexlServiceRegistry;
+        this.exploreManager = exploreManager;
         setupLaf();
         setupWindow();
         initComponents();
@@ -65,7 +68,7 @@ public class MainFrame extends JFrame {
         StatusPanel statusBar = new StatusPanel(envService);
 
         // Content Area Panels
-        contentArea.add(new ChatPanel(aiService), "CHAT");
+        contentArea.add(new ChatPanel(aiService, exploreManager), "CHAT");
         contentArea.add(createPlaceholderPanel("Plan Management"), "PLAN");
         contentArea.add(new ContextViewerPanel(jexlServiceRegistry), "CONTEXT");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");

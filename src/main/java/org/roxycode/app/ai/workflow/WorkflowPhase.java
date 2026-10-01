@@ -5,6 +5,7 @@ import org.roxycode.app.ai.AgentDoc;
 
 @AgentDoc("Defines the current phase of the development workflow.")
 public enum WorkflowPhase {
+    EXPLORE(AgentRole.TECHNICAL_MENTOR),
     DISCOVERY(AgentRole.PRODUCT_OWNER),
     DESIGN(AgentRole.LEAD_ARCHITECT),
     DEVELOPMENT(AgentRole.SENIOR_DEVELOPER),

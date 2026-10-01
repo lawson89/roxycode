@@ -6,10 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class AppSettingsTest {
 
     @Test
-    void testMaxDiscoveryTurns() {
+    void testMaxAgentToolTurns() {
         AppSettings settings = new AppSettings();
-        assertEquals(5, settings.getMaxDiscoveryTurns());
-        settings.setMaxDiscoveryTurns(10);
-        assertEquals(10, settings.getMaxDiscoveryTurns());
+        assertEquals(5, settings.getMaxAgentToolTurns());
+        settings.setMaxAgentToolTurns(10);
+        assertEquals(10, settings.getMaxAgentToolTurns());
     }
 }

@@ -8,7 +8,7 @@ public class AppSettings {
     private String geminiApiKey = "";
     private String currentProjectPath = "";
     private String geminiModel = "gemini-1.5-flash";
-    private int maxDiscoveryTurns = 5;
+    private int maxAgentToolTurns = 5;
 
     public AppSettings() {}
 
@@ -44,11 +44,19 @@ public class AppSettings {
         this.geminiModel = geminiModel;
     }
 
-    public int getMaxDiscoveryTurns() {
-        return maxDiscoveryTurns;
+    /**
+     * Gets the maximum number of turns the agent can use tools during autonomous execution.
+     * @return the max agent tool turns
+     */
+    public int getMaxAgentToolTurns() {
+        return maxAgentToolTurns;
     }
 
-    public void setMaxDiscoveryTurns(int maxDiscoveryTurns) {
-        this.maxDiscoveryTurns = maxDiscoveryTurns;
+    /**
+     * Sets the maximum number of turns the agent can use tools during autonomous execution.
+     * @param maxAgentToolTurns the max agent tool turns to set
+     */
+    public void setMaxAgentToolTurns(int maxAgentToolTurns) {
+        this.maxAgentToolTurns = maxAgentToolTurns;
     }
 }

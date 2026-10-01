@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.ai.services.explore.ExploreManager;
 import org.roxycode.app.service.AiService;
 
 import javax.swing.*;
@@ -13,13 +14,15 @@ import java.awt.event.ActionEvent;
 public class ChatPanel extends JPanel {
 
     private final AiService aiService;
+    private final ExploreManager exploreManager;
     private final JTextPane outputArea;
     private final JEditorPane inputArea;
     private final JButton sendButton;
     private final JButton stopButton;
 
-    public ChatPanel(AiService aiService) {
+    public ChatPanel(AiService aiService, ExploreManager exploreManager) {
         this.aiService = aiService;
+        this.exploreManager = exploreManager;
 
         // Main layout: Output grows, Input area at bottom
         setLayout(new MigLayout("fill, insets 10", "[grow, fill]", "[grow, fill][]"));
@@ -64,7 +67,9 @@ public class ChatPanel extends JPanel {
             @Override
             protected String doInBackground() {
                 try {
-                    return aiService.chat(text);
+                    // Use the ExploreManager prompt for the chat
+                    String systemPrompt = exploreManager.generateSystemPrompt();
+                    return aiService.chat(text, systemPrompt);
                 } catch (Exception ex) {
                     return "Error: " + ex.getMessage();
                 }

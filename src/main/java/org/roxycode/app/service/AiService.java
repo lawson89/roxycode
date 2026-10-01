@@ -8,6 +8,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Service for interacting with the AI Chat Model.
@@ -31,15 +32,33 @@ public class AiService {
      * @return The AI response content.
      */
     public String chat(String message) {
+        return chat(message, null);
+    }
+
+    /**
+     * Sends a prompt to the AI with a custom system prompt and returns the response content.
+     * @param message The user message.
+     * @param systemPromptText The custom system prompt.
+     * @return The AI response content.
+     */
+    public String chat(String message, String systemPromptText) {
         String activeModel = settingsService.getSettings().getGeminiModel();
         String jexlDocs = jexlServiceRegistry.getDocumentation();
         
-        SystemMessage systemMessage = new SystemMessage("You have access to the following JEXL tools:\n" + jexlDocs);
+        String finalSystemPrompt = (systemPromptText != null ? systemPromptText : "You are Roxy, an AI pair programmer.") 
+                + "\n\nYou have access to the following JEXL tools:\n" + jexlDocs;
+        
+        SystemMessage systemMessage = new SystemMessage(finalSystemPrompt);
         UserMessage userMessage = new UserMessage(message);
         
-        Prompt prompt = new Prompt(List.of(systemMessage, userMessage), GoogleGenAiChatOptions.builder()
+        GoogleGenAiChatOptions options = GoogleGenAiChatOptions.builder()
                 .model(activeModel)
-                .build());
+                .build();
+        
+        // Try setting functions on the options object if builder method is missing
+        
+        
+        Prompt prompt = new Prompt(List.of(systemMessage, userMessage), options);
         return chatModel.call(prompt).getResult().getOutput().getText();
     }
 }

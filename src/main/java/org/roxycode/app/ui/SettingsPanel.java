@@ -27,7 +27,7 @@ public class SettingsPanel extends JPanel {
     private final JComboBox<String> themeCombo;
     private final JComboBox<GeminiModelConfig> modelCombo;
     private final JPasswordField geminiApiKeyField;
-    private final JSpinner maxDiscoveryTurnsSpinner;
+    private final JSpinner maxAgentToolTurnsSpinner;
     private final JButton saveButton;
     private final JLabel statusLabel;
     private final Timer statusTimer;
@@ -59,10 +59,10 @@ public class SettingsPanel extends JPanel {
         geminiApiKeyField.setText(settingsService.getSettings().getGeminiApiKey());
         add(geminiApiKeyField, "wrap");
 
-        add(new JLabel("Max Discovery Turns:"));
-        maxDiscoveryTurnsSpinner = new JSpinner(new SpinnerNumberModel(
-            settingsService.getSettings().getMaxDiscoveryTurns(), 1, 50, 1));
-        add(maxDiscoveryTurnsSpinner, "wrap");
+        add(new JLabel("Max Agent Tool Turns:"));
+        maxAgentToolTurnsSpinner = new JSpinner(new SpinnerNumberModel(
+            settingsService.getSettings().getMaxAgentToolTurns(), 1, 50, 1));
+        add(maxAgentToolTurnsSpinner, "wrap");
 
         saveButton = new JButton("Save Settings");
         saveButton.addActionListener(e -> saveSettings());
@@ -112,7 +112,7 @@ public class SettingsPanel extends JPanel {
         if (selectedModel != null) {
             settingsService.getSettings().setGeminiModel(selectedModel.apiName());
         }
-        settingsService.getSettings().setMaxDiscoveryTurns((Integer) maxDiscoveryTurnsSpinner.getValue());
+        settingsService.getSettings().setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settingsService.saveSettings();
         if (selectedModel != null) {
             statusLabel.setText("Active model switched to: " + selectedModel.name());
