@@ -8,6 +8,7 @@ public class AppSettings {
     private String geminiApiKey = "";
     private String currentProjectPath = "";
     private String geminiModel = "gemini-1.5-flash";
+    private int maxDiscoveryTurns = 5;
 
     public AppSettings() {}
 
@@ -41,5 +42,13 @@ public class AppSettings {
 
     public void setGeminiModel(String geminiModel) {
         this.geminiModel = geminiModel;
+    }
+
+    public int getMaxDiscoveryTurns() {
+        return maxDiscoveryTurns;
+    }
+
+    public void setMaxDiscoveryTurns(int maxDiscoveryTurns) {
+        this.maxDiscoveryTurns = maxDiscoveryTurns;
     }
 }

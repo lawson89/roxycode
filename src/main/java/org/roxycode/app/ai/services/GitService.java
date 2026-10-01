@@ -1,6 +1,7 @@
 package org.roxycode.app.ai.services;
 
 import org.roxycode.app.ai.AgentDoc;
+import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +16,7 @@ import java.util.List;
  * Service for read-only Git operations.
  */
 @Service
+@AgentService("gitService")
 @AgentDoc("Provides read-only access to Git repository information for the current project.")
 public class GitService {
     private final ProjectService projectService;

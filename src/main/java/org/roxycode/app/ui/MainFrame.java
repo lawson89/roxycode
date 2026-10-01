@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
@@ -21,17 +22,20 @@ public class MainFrame extends JFrame {
     private final ProjectService projectService;
     private final GitService gitService;
     private final EnvironmentService envService;
+    private final JexlServiceRegistry jexlServiceRegistry;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
     public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, 
-                    ProjectService projectService, GitService gitService, EnvironmentService envService) {
+                    ProjectService projectService, GitService gitService, EnvironmentService envService,
+                    JexlServiceRegistry jexlServiceRegistry) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
         this.projectService = projectService;
         this.gitService = gitService;
         this.envService = envService;
+        this.jexlServiceRegistry = jexlServiceRegistry;
         setupLaf();
         setupWindow();
         initComponents();
@@ -63,7 +67,7 @@ public class MainFrame extends JFrame {
         // Content Area Panels
         contentArea.add(new ChatPanel(aiService), "CHAT");
         contentArea.add(createPlaceholderPanel("Plan Management"), "PLAN");
-        contentArea.add(createPlaceholderPanel("Context Viewer"), "CONTEXT");
+        contentArea.add(new ContextViewerPanel(jexlServiceRegistry), "CONTEXT");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
 

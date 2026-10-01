@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.JexlServiceRegistry;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -28,6 +29,9 @@ class AiServiceTest {
     @Mock
     private SettingsService settingsService;
 
+    @Mock
+    private JexlServiceRegistry jexlServiceRegistry;
+
     private AiService aiService;
     private AppSettings settings;
 
@@ -35,12 +39,13 @@ class AiServiceTest {
     void setUp() {
         settings = new AppSettings();
         when(settingsService.getSettings()).thenReturn(settings);
-        aiService = new AiService(chatModel, settingsService);
+        aiService = new AiService(chatModel, settingsService, jexlServiceRegistry);
     }
 
     @Test
     void testChatUsesConfiguredModel() {
         settings.setGeminiModel("test-model-123");
+        when(jexlServiceRegistry.getDocumentation()).thenReturn("JEXL DOCS");
         
         ChatResponse mockResponse = mock(ChatResponse.class);
         Generation mockGeneration = mock(Generation.class);

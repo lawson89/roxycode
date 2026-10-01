@@ -1,5 +1,6 @@
 package org.roxycode.app;
 
+import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -53,7 +54,8 @@ public class RoxyCode {
             ProjectService projectService = context.getBean(ProjectService.class);
             GitService gitService = context.getBean(GitService.class);
             EnvironmentService envService = context.getBean(EnvironmentService.class);
-            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService);
+            JexlServiceRegistry jexlServiceRegistry = context.getBean(JexlServiceRegistry.class);
+            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService, jexlServiceRegistry);
             frame.setVisible(true);
         });
     }
