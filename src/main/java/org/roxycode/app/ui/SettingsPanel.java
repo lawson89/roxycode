@@ -13,6 +13,8 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.model.config.GeminiModelConfig;
 import org.roxycode.app.model.config.GeminiModels;
 import org.roxycode.app.service.SettingsService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
@@ -23,6 +25,7 @@ import java.util.List;
  * Panel for application settings.
  */
 public class SettingsPanel extends JPanel {
+    private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
     private final SettingsService settingsService;
     private final JComboBox<String> themeCombo;
     private final JComboBox<GeminiModelConfig> modelCombo;
@@ -94,7 +97,7 @@ public class SettingsPanel extends JPanel {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to load Gemini models: {}", e.getMessage(), e);
         }
     }
 
@@ -135,6 +138,7 @@ public class SettingsPanel extends JPanel {
             }
             FlatLaf.updateUI();
         } catch (Exception ex) {
+            log.error("Failed to apply theme {}: {}", themeName, ex.getMessage());
         }
     }
 }

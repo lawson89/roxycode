@@ -4,6 +4,8 @@ import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.explore.ExploreManager;
 import org.roxycode.app.ai.workflow.WorkflowService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -21,6 +23,8 @@ import java.nio.file.Paths;
 @SpringBootApplication
 public class RoxyCode {
 
+    private static final Logger log = LoggerFactory.getLogger(RoxyCode.class);
+
     public static void main(String[] args) {
         // Pre-load API key to set system property for Spring AI auto-configuration
         try {
@@ -37,6 +41,7 @@ public class RoxyCode {
                 }
             }
         } catch (Exception e) {
+            log.warn("Failed to pre-load settings for Spring AI configuration: {}", e.getMessage());
             // Ignore, default to application.properties
         }
 
@@ -59,8 +64,9 @@ public class RoxyCode {
             JexlServiceRegistry jexlServiceRegistry = context.getBean(JexlServiceRegistry.class);
             ExploreManager exploreManager = context.getBean(ExploreManager.class);
             WorkflowService workflowService = context.getBean(WorkflowService.class);
+            org.roxycode.app.ai.JexlTool jexlTool = context.getBean(org.roxycode.app.ai.JexlTool.class);
             
-            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService, jexlServiceRegistry, exploreManager, workflowService);
+            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService, jexlServiceRegistry, exploreManager, workflowService, jexlTool);
             frame.setVisible(true);
         });
     }

@@ -3,6 +3,8 @@ package org.roxycode.app.ai.services;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -19,6 +21,7 @@ import java.util.List;
 @AgentService("gitService")
 @AgentDoc("Provides read-only access to Git repository information for the current project.")
 public class GitService {
+    private static final Logger log = LoggerFactory.getLogger(GitService.class);
     private final ProjectService projectService;
 
     public GitService(ProjectService projectService) {
@@ -79,11 +82,13 @@ public class GitService {
                 if (out.contains("not a git repository")) {
                     return "Not a git repository";
                 }
+                log.warn("Git command {} failed with exit code {}: {}", String.join(" ", args), exitCode, out.trim());
                 return "Error (" + exitCode + "): " + out.trim();
             }
 
             return output.toString().trim();
         } catch (IOException | InterruptedException e) {
+            log.error("Exception executing git command {}: {}", String.join(" ", args), e.getMessage(), e);
             return "Error executing git command: " + e.getMessage();
         }
     }

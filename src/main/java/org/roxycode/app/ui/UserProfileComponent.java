@@ -2,6 +2,9 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
@@ -13,6 +16,7 @@ import java.net.URL;
  * Component displaying user profile information in the sidebar.
  */
 public class UserProfileComponent extends JPanel {
+    private static final Logger log = LoggerFactory.getLogger(UserProfileComponent.class);
     private Image avatarImage;
 
     /**
@@ -31,6 +35,7 @@ public class UserProfileComponent extends JPanel {
                 avatarImage = ImageIO.read(url);
             }
         } catch (IOException e) {
+            log.warn("Failed to load user avatar image: {}", e.getMessage());
             // Handle missing avatar image gracefully (fallback to colored oval)
         }
 

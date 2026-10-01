@@ -27,12 +27,13 @@ public class MainFrame extends JFrame {
     private final JexlServiceRegistry jexlServiceRegistry;
     private final ExploreManager exploreManager;
     private final WorkflowService workflowService;
+    private final org.roxycode.app.ai.JexlTool jexlTool;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
     public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, 
                     ProjectService projectService, GitService gitService, EnvironmentService envService,
-                    JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService) {
+                    JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService, org.roxycode.app.ai.JexlTool jexlTool) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -42,6 +43,7 @@ public class MainFrame extends JFrame {
         this.jexlServiceRegistry = jexlServiceRegistry;
         this.exploreManager = exploreManager;
         this.workflowService = workflowService;
+        this.jexlTool = jexlTool;
         setupLaf();
         setupWindow();
         initComponents();
@@ -71,7 +73,7 @@ public class MainFrame extends JFrame {
         StatusPanel statusBar = new StatusPanel(envService);
 
         // Content Area Panels
-        contentArea.add(new ChatPanel(aiService, exploreManager), "CHAT");
+        contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool), "CHAT");
         contentArea.add(createPlaceholderPanel("Plan Management"), "PLAN");
         contentArea.add(new ContextViewerPanel(jexlServiceRegistry), "CONTEXT");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");

@@ -2,21 +2,24 @@ package org.roxycode.app.service;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import org.roxycode.app.model.AppSettings;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Service for managing application settings.
  */
 @Service
 public class SettingsService {
+    private static final Logger log = LoggerFactory.getLogger(SettingsService.class);
     private static final String SETTINGS_DIR = ".roxycode";
     private static final String SETTINGS_FILE = "settings.toml";
     
@@ -52,7 +55,7 @@ public class SettingsService {
             mapper.writeValue(path.toFile(), getSettings());
             notifyListeners();
         } catch (IOException e) {
-            // Log error
+            log.error("Failed to save settings: {}", e.getMessage(), e);
         }
     }
 
@@ -71,6 +74,7 @@ public class SettingsService {
             try {
                 settings = mapper.readValue(path.toFile(), AppSettings.class);
             } catch (IOException e) {
+                log.error("Failed to load settings from {}: {}", path, e.getMessage(), e);
                 settings = new AppSettings();
             }
         } else {

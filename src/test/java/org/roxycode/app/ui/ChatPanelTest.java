@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.services.explore.ExploreManager;
 import org.roxycode.app.service.AiService;
 import static org.junit.jupiter.api.Assertions.*;
@@ -12,7 +13,8 @@ public class ChatPanelTest {
     public void testChatPanelInitialization() {
         AiService aiService = mock(AiService.class);
         ExploreManager exploreManager = mock(ExploreManager.class);
-        ChatPanel chatPanel = new ChatPanel(aiService, exploreManager);
+        JexlTool jexlTool = mock(JexlTool.class);
+        ChatPanel chatPanel = new ChatPanel(aiService, exploreManager, jexlTool);
         assertNotNull(chatPanel.getOutputArea(), "Output area should be initialized");
         assertNotNull(chatPanel.getInputArea(), "Input area should be initialized");
         assertNotNull(chatPanel.getSendButton(), "Send button should be initialized");

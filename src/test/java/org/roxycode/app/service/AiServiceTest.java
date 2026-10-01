@@ -7,30 +7,39 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.JexlServiceRegistry;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
+import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.model.AppSettings;
-
-import java.util.List;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AiServiceTest {
 
     @Mock
-    private ChatModel chatModel;
+    private ChatClient.Builder chatClientBuilder;
+
+    @Mock
+    private ChatClient chatClient;
+
+    @Mock
+    private ChatClient.ChatClientRequestSpec requestSpec;
+
+    @Mock
+    private ChatClient.CallResponseSpec responseSpec;
 
     @Mock
     private SettingsService settingsService;
 
     @Mock
     private JexlServiceRegistry jexlServiceRegistry;
+
+    @Mock
+    private JexlTool jexlTool;
 
     private AiService aiService;
     private AppSettings settings;
@@ -39,7 +48,12 @@ class AiServiceTest {
     void setUp() {
         settings = new AppSettings();
         when(settingsService.getSettings()).thenReturn(settings);
-        aiService = new AiService(chatModel, settingsService, jexlServiceRegistry);
+        
+        when(chatClientBuilder.defaultSystem(anyString())).thenReturn(chatClientBuilder);
+        when(chatClientBuilder.defaultTools(any())).thenReturn(chatClientBuilder);
+        when(chatClientBuilder.build()).thenReturn(chatClient);
+        
+        aiService = new AiService(chatClientBuilder, settingsService, jexlServiceRegistry, jexlTool);
     }
 
     @Test
@@ -47,24 +61,22 @@ class AiServiceTest {
         settings.setGeminiModel("test-model-123");
         when(jexlServiceRegistry.getDocumentation()).thenReturn("JEXL DOCS");
         
-        ChatResponse mockResponse = mock(ChatResponse.class);
-        Generation mockGeneration = mock(Generation.class);
-        org.springframework.ai.chat.messages.AssistantMessage mockMessage = mock(org.springframework.ai.chat.messages.AssistantMessage.class);
-        
-        when(chatModel.call(any(Prompt.class))).thenReturn(mockResponse);
-        when(mockResponse.getResult()).thenReturn(mockGeneration);
-        when(mockGeneration.getOutput()).thenReturn(mockMessage);
-        when(mockMessage.getText()).thenReturn("AI Response");
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.content()).thenReturn("AI Response");
 
         String result = aiService.chat("Hello");
 
         assertEquals("AI Response", result);
 
-        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
-        verify(chatModel).call(promptCaptor.capture());
+        // Note: The service now passes the builder to .options()
+        ArgumentCaptor<GoogleGenAiChatOptions.Builder> builderCaptor = ArgumentCaptor.forClass(GoogleGenAiChatOptions.Builder.class);
+        verify(requestSpec).options(builderCaptor.capture());
         
-        Prompt capturedPrompt = promptCaptor.getValue();
-        GoogleGenAiChatOptions options = (GoogleGenAiChatOptions) capturedPrompt.getOptions();
-        assertEquals("test-model-123", options.getModel());
+        GoogleGenAiChatOptions.Builder capturedBuilder = builderCaptor.getValue();
+        assertEquals("test-model-123", capturedBuilder.build().getModel());
     }
 }

@@ -3,11 +3,12 @@ package org.roxycode.app.ai.services;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -20,6 +21,7 @@ import java.util.stream.Stream;
 @AgentDoc("Provides read-only access to files within the current project.")
 public class FileReadService {
 
+    private static final Logger log = LoggerFactory.getLogger(FileReadService.class);
     private final ProjectService projectService;
 
     public FileReadService(ProjectService projectService) {
@@ -41,6 +43,7 @@ public class FileReadService {
         try {
             return Files.readString(path);
         } catch (IOException e) {
+            log.error("Failed to read file {}: {}", relativePath, e.getMessage(), e);
             return "Error reading file: " + e.getMessage();
         }
     }
@@ -55,6 +58,7 @@ public class FileReadService {
             return stream.map(p -> p.getFileName().toString())
                     .collect(Collectors.toList());
         } catch (IOException e) {
+            log.error("Failed to list directory {}: {}", relativePath, e.getMessage(), e);
             return Collections.singletonList("Error listing directory: " + e.getMessage());
         }
     }
