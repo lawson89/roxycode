@@ -5,6 +5,8 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.workflow.WorkflowPhase;
+import org.roxycode.app.ai.workflow.WorkflowService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import javax.swing.*;
@@ -20,12 +22,13 @@ public class HeaderPanel extends JPanel {
     private final JLabel projectLabel;
     private final JLabel branchLabel;
     private final JLabel modelLabel;
+    private final JLabel phaseLabel;
 
-    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService) {
+    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, WorkflowService workflowService) {
         this.projectService = projectService;
         this.gitService = gitService;
         
-        setLayout(new MigLayout("insets 30 30 20 30, fillx", "[]push[][]", "center"));
+        setLayout(new MigLayout("insets 30 30 20 30, fillx", "[]push[][][]", "center"));
         
         putClientProperty(FlatClientProperties.STYLE, "background: $Panel.background");
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
@@ -60,6 +63,12 @@ public class HeaderPanel extends JPanel {
         modelLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
         add(modelLabel, "gapright 20");
+
+        // Workflow Phase Display
+        phaseLabel = new JLabel();
+        phaseLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold; foreground: $Label.foreground");
+        add(phaseLabel, "gapright 20");
+
         add(new JLabel("🔔"));
 
         projectService.addProjectListener(newRoot -> {
@@ -73,6 +82,13 @@ public class HeaderPanel extends JPanel {
         settingsService.addSettingsListener(settings -> {
             updateModelDisplay(settings.getGeminiModel());
         });
+
+        workflowService.addPhaseListener(this::updatePhaseDisplay);
+    }
+
+    private void updatePhaseDisplay(WorkflowPhase phase) {
+        phaseLabel.setText(phase.getDisplayName());
+        phaseLabel.setIcon(FontIcon.of(phase.getIcon(), 16, UIManager.getColor("Label.foreground")));
     }
 
     private void updateBranchLabel() {

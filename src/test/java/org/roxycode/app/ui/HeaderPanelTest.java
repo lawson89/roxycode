@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.workflow.WorkflowService;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Component;
@@ -32,11 +33,15 @@ class HeaderPanelTest {
         return new GitService(ps);
     }
 
+    private WorkflowService createWorkflowService() {
+        return new WorkflowService();
+    }
+
     @Test
     void testHeaderPanelInstantiation() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService());
         assertNotNull(header);
     }
 
@@ -44,7 +49,7 @@ class HeaderPanelTest {
     void testSearchFieldIsRemoved() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService());
         boolean searchFieldFound = false;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JTextField) {
@@ -59,7 +64,7 @@ class HeaderPanelTest {
     void testNotificationIconIsPresent() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService());
         boolean notificationIconFound = false;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JLabel && ((JLabel) comp).getText().equals("🔔")) {
@@ -74,7 +79,7 @@ class HeaderPanelTest {
     void testOpenButtonIsInsideProjectInfoPanel() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService());
         
         JButton openButton = null;
         JPanel projectInfoPanel = null;

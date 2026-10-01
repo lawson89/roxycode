@@ -9,6 +9,7 @@ import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.EnvironmentService;
+import org.roxycode.app.ai.workflow.WorkflowService;
 import javax.swing.*;
 import java.awt.*;
 
@@ -25,12 +26,13 @@ public class MainFrame extends JFrame {
     private final EnvironmentService envService;
     private final JexlServiceRegistry jexlServiceRegistry;
     private final ExploreManager exploreManager;
+    private final WorkflowService workflowService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
     public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, 
                     ProjectService projectService, GitService gitService, EnvironmentService envService,
-                    JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager) {
+                    JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -39,6 +41,7 @@ public class MainFrame extends JFrame {
         this.envService = envService;
         this.jexlServiceRegistry = jexlServiceRegistry;
         this.exploreManager = exploreManager;
+        this.workflowService = workflowService;
         setupLaf();
         setupWindow();
         initComponents();
@@ -64,7 +67,7 @@ public class MainFrame extends JFrame {
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
         
-        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService);
+        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService);
         StatusPanel statusBar = new StatusPanel(envService);
 
         // Content Area Panels

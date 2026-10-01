@@ -3,6 +3,7 @@ package org.roxycode.app;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.explore.ExploreManager;
+import org.roxycode.app.ai.workflow.WorkflowService;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -57,8 +58,9 @@ public class RoxyCode {
             EnvironmentService envService = context.getBean(EnvironmentService.class);
             JexlServiceRegistry jexlServiceRegistry = context.getBean(JexlServiceRegistry.class);
             ExploreManager exploreManager = context.getBean(ExploreManager.class);
+            WorkflowService workflowService = context.getBean(WorkflowService.class);
             
-            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService, jexlServiceRegistry, exploreManager);
+            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService, jexlServiceRegistry, exploreManager, workflowService);
             frame.setVisible(true);
         });
     }
