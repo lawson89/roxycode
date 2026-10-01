@@ -6,6 +6,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.service.SettingsService;
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
@@ -18,41 +19,48 @@ public class HeaderPanel extends JPanel {
     private final GitService gitService;
     private final JLabel projectLabel;
     private final JLabel branchLabel;
+    private final JLabel modelLabel;
 
-    public HeaderPanel(ProjectService projectService, GitService gitService) {
+    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService) {
         this.projectService = projectService;
         this.gitService = gitService;
         
-        setLayout(new MigLayout("insets 20 20 10 20, fillx", "[][push][]", "center"));
+        setLayout(new MigLayout("insets 30 30 20 30, fillx", "[]push[][]", "center"));
         
         putClientProperty(FlatClientProperties.STYLE, "background: $Panel.background");
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
 
         // Project Info
-        JPanel projectInfoPanel = new JPanel(new MigLayout("insets 0", "[]10[]15[]"));
+        JPanel projectInfoPanel = new JPanel(new MigLayout("insets 0", "[]10[]", "[]2[]"));
         projectInfoPanel.setOpaque(false);
         
         FontIcon projectIcon = FontIcon.of(Codicons.FOLDER, 20);
-        projectInfoPanel.add(new JLabel(projectIcon));
+        projectInfoPanel.add(new JLabel(projectIcon), "top");
 
         projectLabel = new JLabel(projectService.getProjectName());
         projectLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
-        projectInfoPanel.add(projectLabel);
+        projectInfoPanel.add(projectLabel, "split 2");
         
         branchLabel = new JLabel();
         branchLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateBranchLabel();
-        projectInfoPanel.add(branchLabel);
+        projectInfoPanel.add(branchLabel, "gapleft 10, wrap");
         
         JButton openButton = new JButton("Open Project");
         openButton.setFocusable(false);
         openButton.addActionListener(e -> {
             chooseProject();
         });
+        projectInfoPanel.add(openButton, "skip 1");
 
-        add(projectInfoPanel, "west");
-        add(openButton, "center");
-        add(new JLabel("🔔"), "east");
+        add(projectInfoPanel);
+
+        // Active Model display
+        modelLabel = new JLabel();
+        modelLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
+        updateModelDisplay(settingsService.getSettings().getGeminiModel());
+        add(modelLabel, "gapright 20");
+        add(new JLabel("🔔"));
 
         projectService.addProjectListener(newRoot -> {
             projectLabel.setText(projectService.getProjectName());
@@ -61,6 +69,10 @@ public class HeaderPanel extends JPanel {
         });
         
         projectLabel.setToolTipText(projectService.getCurrentProjectRoot().toAbsolutePath().toString());
+
+        settingsService.addSettingsListener(settings -> {
+            updateModelDisplay(settings.getGeminiModel());
+        });
     }
 
     private void updateBranchLabel() {
@@ -74,6 +86,11 @@ public class HeaderPanel extends JPanel {
             branchLabel.setText("");
             branchLabel.setVisible(false);
         }
+    }
+
+    private void updateModelDisplay(String modelName) {
+        modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 16, UIManager.getColor("Label.disabledForeground")));
+        modelLabel.setText(modelName != null ? modelName : "No model selected");
     }
 
     private void chooseProject() {

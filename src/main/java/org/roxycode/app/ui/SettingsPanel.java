@@ -1,5 +1,6 @@
 package org.roxycode.app.ui;
 
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
@@ -9,10 +10,14 @@ import com.formdev.flatlaf.FlatDarculaLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.model.config.GeminiModelConfig;
+import org.roxycode.app.model.config.GeminiModels;
 import org.roxycode.app.service.SettingsService;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Panel for application settings.
@@ -20,6 +25,7 @@ import java.awt.*;
 public class SettingsPanel extends JPanel {
     private final SettingsService settingsService;
     private final JComboBox<String> themeCombo;
+    private final JComboBox<GeminiModelConfig> modelCombo;
     private final JPasswordField geminiApiKeyField;
     private final JButton saveButton;
     private final JLabel statusLabel;
@@ -42,6 +48,11 @@ public class SettingsPanel extends JPanel {
         themeCombo.addActionListener(e -> updateTheme());
         add(themeCombo, "wrap");
 
+        add(new JLabel("Gemini Model:"));
+        modelCombo = new JComboBox<>();
+        loadModels();
+        add(modelCombo, "wrap");
+
         add(new JLabel("Gemini API Key:"));
         geminiApiKeyField = new JPasswordField(20);
         geminiApiKeyField.setText(settingsService.getSettings().getGeminiApiKey());
@@ -61,6 +72,26 @@ public class SettingsPanel extends JPanel {
         statusTimer.setRepeats(false);
     }
 
+    private void loadModels() {
+        try {
+            TomlMapper mapper = new TomlMapper();
+            GeminiModels geminiModels = mapper.readValue(getClass().getResourceAsStream("/models.toml"), GeminiModels.class);
+            List<GeminiModelConfig> modelList = geminiModels.models();
+            DefaultComboBoxModel<GeminiModelConfig> model = new DefaultComboBoxModel<>(modelList.toArray(new GeminiModelConfig[0]));
+            modelCombo.setModel(model);
+            
+            String currentModelId = settingsService.getSettings().getGeminiModel();
+            for (int i = 0; i < modelCombo.getItemCount(); i++) {
+                if (modelCombo.getItemAt(i).apiName().equals(currentModelId)) {
+                    modelCombo.setSelectedIndex(i);
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     private void updateTheme() {
         String selectedTheme = (String) themeCombo.getSelectedItem();
         if (selectedTheme != null) {
@@ -71,15 +102,19 @@ public class SettingsPanel extends JPanel {
 
     private void saveSettings() {
         settingsService.getSettings().setGeminiApiKey(new String(geminiApiKeyField.getPassword()));
+        GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
+        if (selectedModel != null) {
+            settingsService.getSettings().setGeminiModel(selectedModel.apiName());
+        }
         settingsService.saveSettings();
-        statusLabel.setText("Settings saved!");
+        if (selectedModel != null) {
+            statusLabel.setText("Active model switched to: " + selectedModel.name());
+        } else {
+            statusLabel.setText("Settings saved!");
+        }
         statusTimer.restart();
     }
 
-    /**
-     * Applies the specified theme to the UI.
-     * @param themeName The name of the theme to apply.
-     */
     public static void applyTheme(String themeName) {
         try {
             switch (themeName) {
@@ -93,7 +128,6 @@ public class SettingsPanel extends JPanel {
             }
             FlatLaf.updateUI();
         } catch (Exception ex) {
-            // Log failure
         }
     }
 }

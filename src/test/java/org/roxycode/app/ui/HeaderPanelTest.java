@@ -11,15 +11,21 @@ import java.awt.Component;
 import java.nio.file.Path;
 import javax.swing.JTextField;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JButton;
 
 class HeaderPanelTest {
     @TempDir
     Path tempDir;
 
-    private ProjectService createProjectService() {
+    private SettingsService createSettingsService() {
         SettingsService settingsService = new SettingsService();
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-        return new ProjectService(settingsService);
+        return settingsService;
+    }
+
+    private ProjectService createProjectService(SettingsService ss) {
+        return new ProjectService(ss);
     }
 
     private GitService createGitService(ProjectService ps) {
@@ -28,15 +34,17 @@ class HeaderPanelTest {
 
     @Test
     void testHeaderPanelInstantiation() {
-        ProjectService ps = createProjectService();
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps));
+        SettingsService ss = createSettingsService();
+        ProjectService ps = createProjectService(ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
         assertNotNull(header);
     }
 
     @Test
     void testSearchFieldIsRemoved() {
-        ProjectService ps = createProjectService();
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps));
+        SettingsService ss = createSettingsService();
+        ProjectService ps = createProjectService(ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
         boolean searchFieldFound = false;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JTextField) {
@@ -49,8 +57,9 @@ class HeaderPanelTest {
 
     @Test
     void testNotificationIconIsPresent() {
-        ProjectService ps = createProjectService();
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps));
+        SettingsService ss = createSettingsService();
+        ProjectService ps = createProjectService(ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
         boolean notificationIconFound = false;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JLabel && ((JLabel) comp).getText().equals("🔔")) {
@@ -59,5 +68,30 @@ class HeaderPanelTest {
             }
         }
         assertTrue(notificationIconFound, "Notification icon should be present in HeaderPanel");
+    }
+
+    @Test
+    void testOpenButtonIsInsideProjectInfoPanel() {
+        SettingsService ss = createSettingsService();
+        ProjectService ps = createProjectService(ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        
+        JButton openButton = null;
+        JPanel projectInfoPanel = null;
+        
+        for (Component comp : header.getComponents()) {
+            if (comp instanceof JPanel) {
+                projectInfoPanel = (JPanel) comp;
+                for (Component subComp : projectInfoPanel.getComponents()) {
+                    if (subComp instanceof JButton && ((JButton) subComp).getText().equals("Open Project")) {
+                        openButton = (JButton) subComp;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        assertNotNull(projectInfoPanel, "Project info panel should be present");
+        assertNotNull(openButton, "Open Project button should be inside projectInfoPanel");
     }
 }

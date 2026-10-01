@@ -2,6 +2,9 @@ package org.roxycode.app.service;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import org.roxycode.app.model.AppSettings;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -20,6 +23,7 @@ public class SettingsService {
     private final TomlMapper mapper = new TomlMapper();
     private AppSettings settings;
     private Path settingsPathOverride;
+    private final List<Consumer<AppSettings>> listeners = new ArrayList<>();
 
     /**
      * Gets the current application settings.
@@ -35,6 +39,10 @@ public class SettingsService {
     /**
      * Saves the current settings to the TOML file.
      */
+    public void addSettingsListener(Consumer<AppSettings> listener) {
+        listeners.add(listener);
+    }
+
     public void saveSettings() {
         try {
             Path path = getSettingsPath();
@@ -42,6 +50,7 @@ public class SettingsService {
                 Files.createDirectories(path.getParent());
             }
             mapper.writeValue(path.toFile(), getSettings());
+            notifyListeners();
         } catch (IOException e) {
             // Log error
         }
@@ -66,6 +75,13 @@ public class SettingsService {
             }
         } else {
             settings = new AppSettings();
+        }
+    }
+
+    private void notifyListeners() {
+        AppSettings currentSettings = getSettings();
+        for (Consumer<AppSettings> listener : listeners) {
+            listener.accept(currentSettings);
         }
     }
 

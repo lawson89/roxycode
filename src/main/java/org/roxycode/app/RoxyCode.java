@@ -8,6 +8,7 @@ import org.roxycode.app.ui.MainFrame;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.model.AppSettings;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import javax.swing.SwingUtilities;
@@ -28,9 +29,17 @@ public class RoxyCode {
                 if (settings.getGeminiApiKey() != null && !settings.getGeminiApiKey().isEmpty()) {
                     System.setProperty("spring.ai.google.genai.api-key", settings.getGeminiApiKey());
                 }
+                if (settings.getGeminiModel() != null && !settings.getGeminiModel().isEmpty()) {
+                    System.setProperty("spring.ai.google.genai.chat.options.model", settings.getGeminiModel());
+                }
             }
         } catch (Exception e) {
             // Ignore, default to application.properties
+        }
+
+        // Fallback for model if not set via settings
+        if (System.getProperty("spring.ai.google.genai.chat.options.model") == null) {
+            System.setProperty("spring.ai.google.genai.chat.options.model", "gemini-1.5-flash");
         }
 
         ConfigurableApplicationContext context = new SpringApplicationBuilder(RoxyCode.class)
@@ -43,7 +52,8 @@ public class RoxyCode {
             org.roxycode.app.service.SystemToolService toolService = context.getBean(org.roxycode.app.service.SystemToolService.class);
             ProjectService projectService = context.getBean(ProjectService.class);
             GitService gitService = context.getBean(GitService.class);
-            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService);
+            EnvironmentService envService = context.getBean(EnvironmentService.class);
+            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService);
             frame.setVisible(true);
         });
     }

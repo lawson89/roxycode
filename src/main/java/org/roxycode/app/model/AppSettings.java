@@ -7,6 +7,7 @@ public class AppSettings {
     private String theme = "FlatLaf Light";
     private String geminiApiKey = "";
     private String currentProjectPath = "";
+    private String geminiModel = "gemini-1.5-flash";
 
     public AppSettings() {}
 
@@ -32,5 +33,13 @@ public class AppSettings {
 
     public void setCurrentProjectPath(String currentProjectPath) {
         this.currentProjectPath = currentProjectPath;
+    }
+
+    public String getGeminiModel() {
+        return geminiModel;
+    }
+
+    public void setGeminiModel(String geminiModel) {
+        this.geminiModel = geminiModel;
     }
 }

@@ -1,0 +1,29 @@
+[[models]]
+apiName = "gemini-3.8-flash"
+name = "Gemini 3.8 Flash"
+description = "Google's most intelligent Flash-tier model, featuring tunable effort configurations and optimized for long-horizon software engineering, autonomous agents, and complex enterprise workflows."
+
+[[models]]
+apiName = "gemini-3.7-flash"
+name = "Gemini 3.7 Flash"
+description = "Next-iteration Flash model featuring customizable thinking configurations, optimized for complex multi-step reasoning, fast agentic workflows, and enhanced coding fidelity."
+
+[[models]]
+apiName = "gemini-3.5-flash"
+name = "Gemini 3.5 Flash"
+description = "Our most intelligent Flash model for sustained frontier performance on agentic and coding tasks."
+
+[[models]]
+apiName = "gemini-3.6-flash"
+name = "Gemini 3.6 Flash"
+description = "Updated Flash model featuring enhanced token efficiency, improved multi-step agentic planning, and lower output pricing."
+
+[[models]]
+apiName = "gemini-3.1-pro-preview"
+name = "Gemini 3.1 Pro (Preview)"
+description = "Reasoning-first model; caching recommended for active, long-context agent sessions."
+
+[[models]]
+apiName = "gemini-3-flash-preview"
+name = "Gemini 3 Flash (Preview)"
+description = "Designed for complex multimodal understanding and reasoning."
