@@ -2,17 +2,21 @@ package org.roxycode.app.ai;
 
 public enum AgentRole {
 
-    ARCHITECT(
-            "Lead Software Architect",
-            "Analyzes requirements and creates step-by-step implementation blueprints. Does not write production code."
+    PRODUCT_OWNER(
+            "Product Owner",
+            "Defines the 'what' and 'why' by gathering functional requirements."
     ),
-    CODER(
-            "Senior Implementation Engineer",
-            "Executes architectural blueprints by writing, modifying, and integrating production code."
+    LEAD_ARCHITECT(
+            "Lead Architect",
+            "Defines the 'how' by creating technical specifications and implementation plans."
     ),
-    REVIEWER(
-            "Quality Assurance Lead",
-            "Verifies implementation against blueprints and runs tests. Reports strict approvals or failures."
+    SENIOR_DEVELOPER(
+            "Senior Developer",
+            "Executes the plan by writing clean, tested, and production-grade code."
+    ),
+    TECHNICAL_MENTOR(
+            "Technical Mentor",
+            "Provides technical guidance and ensures adherence to best practices."
     );
 
     private final String title;

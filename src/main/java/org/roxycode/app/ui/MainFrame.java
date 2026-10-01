@@ -4,6 +4,7 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SystemToolService;
+import org.roxycode.app.service.ProjectService;
 import javax.swing.*;
 import java.awt.*;
 
@@ -15,13 +16,15 @@ public class MainFrame extends JFrame {
     private final SettingsService settingsService;
     private final AiService aiService;
     private final SystemToolService toolService;
+    private final ProjectService projectService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
-    public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService) {
+    public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, ProjectService projectService) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
+        this.projectService = projectService;
         setupLaf();
         setupWindow();
         initComponents();
@@ -47,7 +50,7 @@ public class MainFrame extends JFrame {
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
         
-        HeaderPanel header = new HeaderPanel();
+        HeaderPanel header = new HeaderPanel(projectService);
         StatusPanel statusBar = new StatusPanel();
 
         // Content Area Panels
@@ -57,7 +60,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
 
-        workspace.add(header, "h 110!, wrap");
+        workspace.add(header, "h 60!, wrap");
         workspace.add(contentArea, "grow, wrap");
         workspace.add(statusBar, "h 30!");
 

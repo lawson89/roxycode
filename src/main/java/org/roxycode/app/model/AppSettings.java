@@ -6,6 +6,7 @@ package org.roxycode.app.model;
 public class AppSettings {
     private String theme = "FlatLaf Light";
     private String geminiApiKey = "";
+    private String currentProjectPath = "";
 
     public AppSettings() {}
 
@@ -23,5 +24,13 @@ public class AppSettings {
 
     public void setGeminiApiKey(String geminiApiKey) {
         this.geminiApiKey = geminiApiKey;
+    }
+
+    public String getCurrentProjectPath() {
+        return currentProjectPath;
+    }
+
+    public void setCurrentProjectPath(String currentProjectPath) {
+        this.currentProjectPath = currentProjectPath;
     }
 }

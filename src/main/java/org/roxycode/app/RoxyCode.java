@@ -6,10 +6,10 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.roxycode.app.ui.MainFrame;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
+import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.model.AppSettings;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import javax.swing.SwingUtilities;
-import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -40,7 +40,8 @@ public class RoxyCode {
             SettingsService settingsService = context.getBean(SettingsService.class);
             AiService aiService = context.getBean(AiService.class);
             org.roxycode.app.service.SystemToolService toolService = context.getBean(org.roxycode.app.service.SystemToolService.class);
-            MainFrame frame = new MainFrame(settingsService, aiService, toolService);
+            ProjectService projectService = context.getBean(ProjectService.class);
+            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService);
             frame.setVisible(true);
         });
     }
