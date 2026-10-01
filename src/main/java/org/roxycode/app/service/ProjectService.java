@@ -34,6 +34,11 @@ public class ProjectService {
         return currentProjectRoot;
     }
 
+    @AgentDoc("Returns true if there is an active project root set.")
+    public boolean hasActiveProject() {
+        return currentProjectRoot != null;
+    }
+
     @AgentDoc("Sets the active project root path and persists it in settings.")
     public void setCurrentProjectRoot(Path newRoot) {
         if (newRoot != null) {

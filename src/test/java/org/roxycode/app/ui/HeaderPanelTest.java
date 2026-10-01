@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.ai.services.GitService;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Component;
@@ -21,15 +22,21 @@ class HeaderPanelTest {
         return new ProjectService(settingsService);
     }
 
+    private GitService createGitService(ProjectService ps) {
+        return new GitService(ps);
+    }
+
     @Test
     void testHeaderPanelInstantiation() {
-        HeaderPanel header = new HeaderPanel(createProjectService());
+        ProjectService ps = createProjectService();
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps));
         assertNotNull(header);
     }
 
     @Test
     void testSearchFieldIsRemoved() {
-        HeaderPanel header = new HeaderPanel(createProjectService());
+        ProjectService ps = createProjectService();
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps));
         boolean searchFieldFound = false;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JTextField) {
@@ -42,11 +49,10 @@ class HeaderPanelTest {
 
     @Test
     void testNotificationIconIsPresent() {
-        HeaderPanel header = new HeaderPanel(createProjectService());
+        ProjectService ps = createProjectService();
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps));
         boolean notificationIconFound = false;
         for (Component comp : header.getComponents()) {
-            // Search recursively if needed, but HeaderPanel adds it directly or to nested panels
-            // Based on current implementation, it's added to HeaderPanel itself
             if (comp instanceof JLabel && ((JLabel) comp).getText().equals("🔔")) {
                 notificationIconFound = true;
                 break;

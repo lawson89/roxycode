@@ -1,5 +1,6 @@
 package org.roxycode.app;
 
+import org.roxycode.app.ai.services.GitService;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -41,7 +42,8 @@ public class RoxyCode {
             AiService aiService = context.getBean(AiService.class);
             org.roxycode.app.service.SystemToolService toolService = context.getBean(org.roxycode.app.service.SystemToolService.class);
             ProjectService projectService = context.getBean(ProjectService.class);
-            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService);
+            GitService gitService = context.getBean(GitService.class);
+            MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService);
             frame.setVisible(true);
         });
     }

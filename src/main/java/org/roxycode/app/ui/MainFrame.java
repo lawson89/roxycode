@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SystemToolService;
@@ -17,14 +18,16 @@ public class MainFrame extends JFrame {
     private final AiService aiService;
     private final SystemToolService toolService;
     private final ProjectService projectService;
+    private final GitService gitService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
-    public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, ProjectService projectService) {
+    public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, ProjectService projectService, GitService gitService) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
         this.projectService = projectService;
+        this.gitService = gitService;
         setupLaf();
         setupWindow();
         initComponents();
@@ -50,7 +53,7 @@ public class MainFrame extends JFrame {
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
         
-        HeaderPanel header = new HeaderPanel(projectService);
+        HeaderPanel header = new HeaderPanel(projectService, gitService);
         StatusPanel statusBar = new StatusPanel();
 
         // Content Area Panels
