@@ -5,13 +5,14 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
+import java.util.function.Consumer;
 
 /**
  * Header panel containing application controls and project selection.
@@ -22,55 +23,61 @@ public class HeaderPanel extends JPanel {
     private final JLabel projectLabel;
     private final JLabel branchLabel;
     private final JLabel modelLabel;
-    private final JLabel phaseLabel;
+    
 
-    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, WorkflowService workflowService) {
+    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, Consumer<String> navigationAction) {
         this.projectService = projectService;
         this.gitService = gitService;
         
-        setLayout(new MigLayout("insets 30 30 20 30, fillx", "[]push[][][]", "center"));
+        // 2-column layout: Left (Project), Right (Utils)
+        setLayout(new MigLayout("insets 10 20 10 20, fillx", "[left]push[right]", "center"));
         
-        putClientProperty(FlatClientProperties.STYLE, "background: $Panel.background");
+        putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
 
-        // Project Info
-        JPanel projectInfoPanel = new JPanel(new MigLayout("insets 0", "[]10[]", "[]2[]"));
-        projectInfoPanel.setOpaque(false);
-        
-        FontIcon projectIcon = FontIcon.of(Codicons.FOLDER, 20);
-        projectInfoPanel.add(new JLabel(projectIcon), "top");
+        // --- LEFT SECTION: Project Info ---
+        JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]", "[]0[]"));
+        leftPanel.setOpaque(false);
 
+        JPanel namePanel = new JPanel(new MigLayout("insets 0", "[]5[]", "center"));
+        namePanel.setOpaque(false);
+        
         projectLabel = new JLabel(projectService.getProjectName());
         projectLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
-        projectInfoPanel.add(projectLabel, "split 2");
+        namePanel.add(projectLabel);
         
+        JButton openButton = createIconButton(Codicons.FOLDER_OPENED, "Open Project", e -> chooseProject());
+        namePanel.add(openButton);
+        
+        leftPanel.add(namePanel, "wrap");
+
         branchLabel = new JLabel();
         branchLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateBranchLabel();
-        projectInfoPanel.add(branchLabel, "gapleft 10, wrap");
+        leftPanel.add(branchLabel, "gapleft 2");
+
+        add(leftPanel, "left");
+
         
-        JButton openButton = new JButton("Open Project");
-        openButton.setFocusable(false);
-        openButton.addActionListener(e -> {
-            chooseProject();
-        });
-        projectInfoPanel.add(openButton, "skip 1");
 
-        add(projectInfoPanel);
+        // --- RIGHT SECTION: Model & Utils ---
+        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]15[]15[]", "center"));
+        rightPanel.setOpaque(false);
 
-        // Active Model display
         modelLabel = new JLabel();
         modelLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
-        add(modelLabel, "gapright 20");
+        rightPanel.add(modelLabel);
 
-        // Workflow Phase Display
-        phaseLabel = new JLabel();
-        phaseLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold; foreground: $Label.foreground");
-        add(phaseLabel, "gapright 20");
+        JButton settingsButton = createIconButton(Codicons.SETTINGS_GEAR, "Settings", e -> navigationAction.accept("SETTINGS"));
+        rightPanel.add(settingsButton);
 
-        add(new JLabel("🔔"));
+        JLabel notificationLabel = new JLabel(FontIcon.of(Codicons.BELL, 16, UIManager.getColor("Label.disabledForeground")));
+        rightPanel.add(notificationLabel);
 
+        add(rightPanel, "right");
+
+        // Listeners
         projectService.addProjectListener(newRoot -> {
             projectLabel.setText(projectService.getProjectName());
             projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
@@ -82,13 +89,28 @@ public class HeaderPanel extends JPanel {
         settingsService.addSettingsListener(settings -> {
             updateModelDisplay(settings.getGeminiModel());
         });
-
-        workflowService.addPhaseListener(this::updatePhaseDisplay);
     }
 
-    private void updatePhaseDisplay(WorkflowPhase phase) {
-        phaseLabel.setText(phase.getDisplayName());
-        phaseLabel.setIcon(FontIcon.of(phase.getIcon(), 16, UIManager.getColor("Label.foreground")));
+    private JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
+        JButton button = new JButton(FontIcon.of(icon, 16, UIManager.getColor("Label.foreground")));
+        button.setToolTipText(tooltip);
+        button.setFocusable(false);
+        button.setContentAreaFilled(false);
+        button.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.addActionListener(listener);
+        
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                button.setContentAreaFilled(true);
+                button.setBackground(UIManager.getColor("Button.hoverBackground"));
+            }
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                button.setContentAreaFilled(false);
+            }
+        });
+        
+        return button;
     }
 
     private void updateBranchLabel() {

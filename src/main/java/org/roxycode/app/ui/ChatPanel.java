@@ -1,13 +1,19 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatClientProperties;
+
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.JexlExecutionEvent;
 import org.roxycode.app.ai.JexlExecutionListener;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.services.explore.ExploreManager;
 import org.roxycode.app.service.AiService;
+import org.roxycode.app.ai.workflow.WorkflowPhase;
+import org.roxycode.app.ai.workflow.WorkflowService;
 import org.roxycode.app.ui.syntaxhighlight.JexlToHtmlConverter;
 import org.apache.commons.text.StringEscapeUtils;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,19 +32,22 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final AiService aiService;
     private final ExploreManager exploreManager;
     private final JexlTool jexlTool;
+    private final WorkflowService workflowService;
     private final JTextPane outputArea;
     private final JEditorPane inputArea;
     private final JButton sendButton;
     private final JButton stopButton;
+    private final JButton approveButton;
 
-    public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool) {
+    public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, WorkflowService workflowService) {
         this.aiService = aiService;
         this.exploreManager = exploreManager;
         this.jexlTool = jexlTool;
+        this.workflowService = workflowService;
         this.jexlTool.addListener(this);
 
-        // Main layout: Output grows, Input area at bottom
-        setLayout(new MigLayout("fill, insets 10", "[grow, fill]", "[grow, fill][]"));
+        // Main layout: Resizable Split Pane
+        setLayout(new BorderLayout());
 
         // Output area (LLM response)
         outputArea = new JTextPane();
@@ -48,23 +57,57 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         outputScrollPane.setBorder(BorderFactory.createTitledBorder("Assistant"));
 
         // Input section
-        JPanel inputSection = new JPanel(new MigLayout("fill, insets 0", "[grow, fill][][]", "[fill]"));
+        JPanel inputSection = new JPanel(new MigLayout("fill, insets 0", "[grow, fill][][][]", "[grow, fill]"));
         
         inputArea = new JEditorPane();
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
         
-        sendButton = new JButton("Send");
-        stopButton = new JButton("Stop");
+        sendButton = new JButton(FontIcon.of(Codicons.CHEVRON_RIGHT, 16));
+        sendButton.setToolTipText("Send Message");
+        sendButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999; background: $Component.accentColor; foreground: $List.selectionForeground");
+
+        stopButton = new JButton(FontIcon.of(Codicons.DEBUG_STOP, 16));
+        stopButton.setToolTipText("Stop AI");
+        stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
         stopButton.setEnabled(false);
 
-        inputSection.add(inputScrollPane, "h 80!");
-        inputSection.add(sendButton, "aligny bottom");
-        inputSection.add(stopButton, "aligny bottom");
+        approveButton = new JButton(FontIcon.of(Codicons.CHECK, 16));
+        approveButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
+        approveButton.setVisible(false);
+        approveButton.addActionListener(e -> advancePhase());
 
-        add(outputScrollPane, "grow, wrap");
-        add(inputSection, "growx, h 80!");
+        inputSection.add(inputScrollPane, "grow");
+        inputSection.add(sendButton, "aligny bottom, h 32!, w 32!");
+        inputSection.add(stopButton, "aligny bottom, h 32!, w 32!");
+        inputSection.add(approveButton, "aligny bottom, h 32!, w 32!");
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, outputScrollPane, inputSection);
+        splitPane.setResizeWeight(0.7);
+        splitPane.setContinuousLayout(true);
+        splitPane.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        add(splitPane, BorderLayout.CENTER);
 
         sendButton.addActionListener(this::sendMessage);
+        workflowService.addPhaseListener(this::onPhaseChanged);
+    }
+
+    private void onPhaseChanged(WorkflowPhase phase) {
+        boolean canAdvance = phase.ordinal() < WorkflowPhase.values().length - 1;
+        approveButton.setVisible(canAdvance);
+        if (canAdvance) {
+            approveButton.setToolTipText("Advance from " + phase.getDisplayName());
+        }
+    }
+
+    private void advancePhase() {
+        WorkflowPhase current = workflowService.getCurrentPhase();
+        int nextOrdinal = current.ordinal() + 1;
+        if (nextOrdinal < WorkflowPhase.values().length) {
+            WorkflowPhase next = WorkflowPhase.values()[nextOrdinal];
+            workflowService.setCurrentPhase(next);
+            appendToOutput("<div style='margin: 10px 0; color: #98C379;'><b>System:</b> Advancing to phase <b>" + next.getDisplayName() + "</b>...</div><br>");
+        }
     }
 
     private void sendMessage(ActionEvent e) {
@@ -138,6 +181,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private void setLoading(boolean loading) {
         sendButton.setEnabled(!loading);
         inputArea.setEnabled(!loading);
+        approveButton.setEnabled(!loading);
         if (loading) {
             sendButton.setText("Sending...");
         } else {

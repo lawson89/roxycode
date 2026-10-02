@@ -10,6 +10,7 @@ import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.ai.workflow.WorkflowService;
+import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;
 import java.awt.*;
 
@@ -67,19 +68,26 @@ public class MainFrame extends JFrame {
         SidebarPanel sidebar = new SidebarPanel(settingsService, cardName -> cardLayout.show(contentArea, cardName));
 
         // Main Workspace
-        JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
+        JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[]0[fill, grow]0[]"));
         
-        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService);
+        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, 
+                cardName -> cardLayout.show(contentArea, cardName));
+        JPanel phaseRow = new JPanel(new MigLayout("insets 5 20 5 20, fillx", "[center]", "center"));
+        phaseRow.putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
+        phaseRow.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
+        phaseRow.add(new PhaseStepPanel(workflowService));
+
         StatusPanel statusBar = new StatusPanel(envService);
 
         // Content Area Panels
-        contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool), "CHAT");
+        contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService), "CHAT");
         contentArea.add(createPlaceholderPanel("Plan Management"), "PLAN");
         contentArea.add(new ContextViewerPanel(jexlServiceRegistry), "CONTEXT");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
 
-        workspace.add(header, "h 110!, wrap");
+        workspace.add(header, "h 60!, wrap");
+        workspace.add(phaseRow, "h 40!, wrap");
         workspace.add(contentArea, "grow, wrap");
         workspace.add(statusBar, "h 30!");
 

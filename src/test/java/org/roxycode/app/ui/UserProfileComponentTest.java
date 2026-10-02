@@ -35,4 +35,20 @@ class UserProfileComponentTest {
         assertTrue(foundAvatar, "Should find an avatar panel with 128x128 preferred size");
     }
 
+    @Test
+    void testLabelsPresent() {
+        UserProfileComponent profile = new UserProfileComponent("Test User", "test@example.com");
+        boolean foundName = false;
+        boolean foundEmail = false;
+        for (java.awt.Component comp : profile.getComponents()) {
+            if (comp instanceof javax.swing.JLabel) {
+                javax.swing.JLabel label = (javax.swing.JLabel) comp;
+                if ("Test User".equals(label.getText())) foundName = true;
+                if ("test@example.com".equals(label.getText())) foundEmail = true;
+            }
+        }
+        assertTrue(foundName, "Name label should be present");
+        assertTrue(foundEmail, "Email label should be present");
+    }
+
 }
