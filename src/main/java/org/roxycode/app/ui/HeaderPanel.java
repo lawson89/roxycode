@@ -69,11 +69,7 @@ public class HeaderPanel extends JPanel {
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
         rightPanel.add(modelLabel);
 
-        JButton settingsButton = createIconButton(Codicons.SETTINGS_GEAR, "Settings", e -> navigationAction.accept("SETTINGS"));
-        rightPanel.add(settingsButton);
 
-        JLabel notificationLabel = new JLabel(FontIcon.of(Codicons.BELL, 16, UIManager.getColor("Label.disabledForeground")));
-        rightPanel.add(notificationLabel);
 
         add(rightPanel, "right");
 

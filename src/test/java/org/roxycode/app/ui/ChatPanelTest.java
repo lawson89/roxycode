@@ -24,6 +24,8 @@ public class ChatPanelTest {
         assertNotNull(chatPanel.getInputArea(), "Input area should be initialized");
         assertNotNull(chatPanel.getSendButton(), "Send button should be initialized");
         assertNotNull(chatPanel.getStopButton(), "Stop button should be initialized");
+        assertEquals("Send", chatPanel.getSendButton().getText());
+        assertEquals("Stop", chatPanel.getStopButton().getText());
         assertFalse(chatPanel.getOutputArea().isEditable(), "Output area should not be editable");
 
         boolean hasSplitPane = false;

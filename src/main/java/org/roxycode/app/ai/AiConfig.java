@@ -12,8 +12,8 @@ import java.util.Map;
 public class AiConfig {
 
     @Bean
-    public JexlTool jexlTool() {
-        return new JexlTool();
+    public JexlTool jexlTool(JexlServiceRegistry registry) {
+        return new JexlTool(registry);
     }
 
     @Bean

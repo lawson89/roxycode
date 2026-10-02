@@ -62,24 +62,28 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         inputArea = new JEditorPane();
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
         
-        sendButton = new JButton(FontIcon.of(Codicons.CHEVRON_RIGHT, 16));
+        sendButton = new JButton("Send", FontIcon.of(Codicons.CHEVRON_RIGHT, 16));
         sendButton.setToolTipText("Send Message");
         sendButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999; background: $Component.accentColor; foreground: $List.selectionForeground");
 
-        stopButton = new JButton(FontIcon.of(Codicons.DEBUG_STOP, 16));
+        stopButton = new JButton("Stop", FontIcon.of(Codicons.DEBUG_STOP, 16));
         stopButton.setToolTipText("Stop AI");
         stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
         stopButton.setEnabled(false);
 
-        approveButton = new JButton(FontIcon.of(Codicons.CHECK, 16));
+        approveButton = new JButton("Advance", FontIcon.of(Codicons.CHECK, 16));
         approveButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
         approveButton.setVisible(false);
         approveButton.addActionListener(e -> advancePhase());
 
+        JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[][]"));
+        buttonPanel.setOpaque(false);
+        buttonPanel.add(sendButton, "growx, wrap");
+        buttonPanel.add(stopButton, "growx, wrap");
+        buttonPanel.add(approveButton, "growx");
+
         inputSection.add(inputScrollPane, "grow");
-        inputSection.add(sendButton, "aligny bottom, h 32!, w 32!");
-        inputSection.add(stopButton, "aligny bottom, h 32!, w 32!");
-        inputSection.add(approveButton, "aligny bottom, h 32!, w 32!");
+        inputSection.add(buttonPanel, "aligny bottom");
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, outputScrollPane, inputSection);
         splitPane.setResizeWeight(0.7);

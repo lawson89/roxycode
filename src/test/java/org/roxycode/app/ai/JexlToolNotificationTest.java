@@ -8,7 +8,8 @@ public class JexlToolNotificationTest {
 
     @Test
     public void testListenerNotification() {
-        JexlTool tool = new JexlTool();
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry);
         AtomicBoolean called = new AtomicBoolean(false);
         
         tool.addListener(event -> {

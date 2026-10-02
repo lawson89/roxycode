@@ -32,6 +32,11 @@ public class AiService {
             - DESIGN: Creating technical specifications and step-by-step implementation plans.
             - DEVELOPMENT: Writing, testing, and verifying code based on an approved plan.
             - VERIFICATION: Final review and quality assurance.
+            
+            ## STRUCTURED ARTIFACTS
+            - During DISCOVERY, you MUST submit a 'FunctionalSpec' using 'planManager.submitFunctionalSpec()'.
+            - During DESIGN, you MUST submit a 'TechnicalSpec' using 'planManager.submitTechnicalSpec()'.
+            - These artifacts are shared with the user for review and approval.
             """;
 
     private final ChatClient chatClient;

@@ -3,23 +3,31 @@ package org.roxycode.app.ai;
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlEngine;
 import org.apache.commons.jexl3.JexlScript;
+import org.apache.commons.jexl3.MapContext;
+import org.apache.commons.jexl3.JexlContext;
+import org.apache.commons.jexl3.introspection.JexlPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
- * A tool for executing Jexl scripts.
+ * A tool for executing Jexl scripts. This tool has access to services registered in the JexlServiceRegistry.
  */
 public class JexlTool {
 
     private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
     private final JexlEngine jexl;
+    private final JexlServiceRegistry registry;
     private final List<JexlExecutionListener> listeners = new ArrayList<>();
 
-    public JexlTool() {
-        this.jexl = new JexlBuilder().create();
+    public JexlTool(JexlServiceRegistry registry) {
+        this.jexl = new JexlBuilder()
+                .permissions(JexlPermissions.UNRESTRICTED)
+                .create();
+        this.registry = registry;
     }
 
     public void addListener(JexlExecutionListener listener) {
@@ -37,7 +45,8 @@ public class JexlTool {
         log.info("Executing JEXL script: {}", script);
         try {
             JexlScript jexlScript = jexl.createScript(script);
-            Object result = jexlScript.execute(null);
+            JexlContext context = new MapContext(registry.getServices());
+            Object result = jexlScript.execute(context);
             String output = result == null ? "null" : result.toString();
             fireEvent(new JexlExecutionEvent(script, result, true, null));
             return output;

@@ -60,26 +60,26 @@ class HeaderPanelTest {
         assertFalse(searchFieldFound, "Search field should be removed from HeaderPanel");
     }
 
+
     @Test
-    void testNotificationIconIsPresent() {
+    void testUtilityIconsAreRemoved() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, name -> {});
         
-        // Notification icon is now in the right panel
-        boolean found = false;
+        boolean settingsFound = false;
+        
         for (Component comp : header.getComponents()) {
             if (comp instanceof JPanel) {
                 JPanel panel = (JPanel) comp;
                 for (Component sub : panel.getComponents()) {
-                    if (sub instanceof JLabel && ((JLabel) sub).getIcon() != null) {
-                        // Assuming it's the bell icon or at least a JLabel with an icon in the right panel
-                        found = true;
+                    if (sub instanceof JButton && "Settings".equals(((JButton) sub).getToolTipText())) {
+                        settingsFound = true;
                     }
                 }
             }
         }
-        assertTrue(found, "Notification/utility icons should be present in HeaderPanel panels");
+        assertFalse(settingsFound, "Settings button should be removed");
     }
 
     @Test
