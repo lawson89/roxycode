@@ -88,8 +88,9 @@ public class MainFrame extends JFrame {
 
         // Content Area Panels
         contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge), "CHAT");
+        contentArea.add(new HistoryPanel(turnEventBridge, jexlTool), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
-        contentArea.add(new ContextViewerPanel(jexlServiceRegistry), "CONTEXT");
+        contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
 

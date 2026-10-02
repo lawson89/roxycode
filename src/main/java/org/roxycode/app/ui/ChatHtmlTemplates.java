@@ -26,9 +26,16 @@ public class ChatHtmlTemplates {
     }
 
     public static String renderToolLog(String toolName, String output) {
+        if (toolName == null || toolName.trim().isEmpty()) {
+            return """
+                <div class="tool-call">
+                    <div class="tool-body">%s</div>
+                </div>
+                """.formatted(output);
+        }
         return """
-            <div class="tool-log">
-                <div class="tool-header">🛠️ %s</div>
+            <div class="tool-call">
+                <div class="tool-header">%s</div>
                 <div class="tool-body">%s</div>
             </div>
             """.formatted(toolName, output);

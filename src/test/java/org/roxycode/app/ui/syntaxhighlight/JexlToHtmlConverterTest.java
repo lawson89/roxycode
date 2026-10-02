@@ -10,7 +10,7 @@ public class JexlToHtmlConverterTest {
         String script = "var x = 10;";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("var"));
-        assertTrue(html.contains("class=\'tk-rw\'"));
+        assertTrue(html.contains("class='tk-rw'"));
     }
 
     @Test
@@ -18,7 +18,7 @@ public class JexlToHtmlConverterTest {
         String script = "var s = \"hello\";";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("hello"));
-        assertTrue(html.contains("class=\'tk-st\'"));
+        assertTrue(html.contains("class='tk-st'"));
     }
 
     @Test
@@ -26,7 +26,7 @@ public class JexlToHtmlConverterTest {
         String script = "// This is a comment";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("This is a comment"));
-        assertTrue(html.contains("class=\'tk-cm\'"));
+        assertTrue(html.contains("class='tk-cm'"));
     }
 
     @Test
@@ -34,14 +34,14 @@ public class JexlToHtmlConverterTest {
         String script = "x = 42;";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("42"));
-        assertTrue(html.contains("class=\'tk-nm\'"));
+        assertTrue(html.contains("class='tk-nm'"));
     }
 
     @Test
     public void testWordBoundaries() {
         String script = "variable = 1;";
         String html = JexlToHtmlConverter.convert(script);
-        assertFalse(html.contains("<span class=\'tk-rw\'>var</span>iable"));
+        assertFalse(html.contains("<span class='tk-rw'>var</span>iable"));
     }
 
     @Test
@@ -50,5 +50,39 @@ public class JexlToHtmlConverterTest {
         String html = JexlToHtmlConverter.convert(script);
         assertFalse(html.startsWith("<pre>"));
         assertFalse(html.endsWith("</pre>"));
+    }
+
+    @Test
+    public void testJavaKeywordHighlighting() {
+        String script = "public interface GitService { void status(); }";
+        String html = JexlToHtmlConverter.convert(script);
+        assertTrue(html.contains("<span class='tk-rw'>public</span>"));
+        assertTrue(html.contains("<span class='tk-rw'>interface</span>"));
+        assertTrue(html.contains("<span class='tk-rw'>void</span>"));
+    }
+
+    @Test
+    public void testServiceHighlighting() {
+        String script = "gitService.status(); planService.createPlan();";
+        String html = JexlToHtmlConverter.convert(script);
+        assertTrue(html.contains("<span class='tk-rw'>gitService</span>"));
+        assertTrue(html.contains("<span class='tk-rw'>planService</span>"));
+    }
+
+    @Test
+    public void testNewServiceHighlighting() {
+        String script = "fileReadService.readFile(); workflowService.status();";
+        String html = JexlToHtmlConverter.convert(script);
+        assertTrue(html.contains("<span class='tk-rw'>fileReadService</span>"));
+        assertTrue(html.contains("<span class='tk-rw'>workflowService</span>"));
+    }
+
+    @Test
+    public void testSingleQuoteHighlighting() {
+        // Test single quotes in raw JEXL
+        String script = "var s = 'hello';";
+        String html = JexlToHtmlConverter.convert(script);
+        assertTrue(html.contains("hello"));
+        assertTrue(html.contains("class='tk-st'"));
     }
 }

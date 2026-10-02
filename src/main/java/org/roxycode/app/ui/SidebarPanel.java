@@ -34,8 +34,9 @@ public class SidebarPanel extends JPanel {
 
         add(createSectionHeader("MAIN"), "gaptop 10");
         add(createNavButton("Chat", "CHAT", Codicons.COMMENT_DISCUSSION));
+        add(createNavButton("History", "HISTORY", Codicons.HISTORY));
         add(createNavButton("Plan", "PLAN", Codicons.LIST_ORDERED));
-        add(createNavButton("Context", "CONTEXT", Codicons.BOOK));
+        add(createNavButton("API", "API", Codicons.CODE));
 
         add(createSectionHeader("OTHER"), "gaptop 15");
         add(createNavButton("System Tools", "TOOLS", Codicons.TOOLS));

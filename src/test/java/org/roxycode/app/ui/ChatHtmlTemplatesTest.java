@@ -37,8 +37,18 @@ class ChatHtmlTemplatesTest {
         String output = "diff output";
         String result = ChatHtmlTemplates.renderToolLog(toolName, output);
         
-        assertTrue(result.contains("tool-log"));
+        assertTrue(result.contains("tool-call"));
         assertTrue(result.contains("git"));
         assertTrue(result.contains("diff output"));
+    }    @Test
+    void testRenderToolLogEmptyToolName() {
+        String toolName = "";
+        String output = "jexl output";
+        String result = ChatHtmlTemplates.renderToolLog(toolName, output);
+        
+        assertTrue(result.contains("tool-call"));
+        assertFalse(result.contains("tool-header"));
+        assertTrue(result.contains("jexl output"));
     }
+
 }

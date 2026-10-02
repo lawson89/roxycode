@@ -38,6 +38,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final ExploreManager exploreManager;
     private final JexlTool jexlTool;
     private final WorkflowService workflowService;
+    private final TurnEventBridge turnEventBridge;
     private final MarkdownPane outputArea;
     private final ThoughtPanel thoughtPanel;
     private final JTextArea inputArea;
@@ -52,6 +53,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         this.exploreManager = exploreManager;
         this.jexlTool = jexlTool;
         this.workflowService = workflowService;
+        this.turnEventBridge = turnEventBridge;
         this.jexlTool.addListener(this);
         
         turnEventBridge.addTurnListener(this::onAgentTurn);
@@ -113,6 +115,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         workflowService.addPhaseListener(this::onPhaseChanged);
         setupInputContextMenu();
         setupUndoRedo();
+        setupKeyboardShortcuts();
     }
 
     private void setupUndoRedo() {
@@ -193,6 +196,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         String text = inputArea.getText().trim();
         if (text.isEmpty()) return;
 
+        turnEventBridge.publishUserMessage("You", text);
         outputArea.appendMessage("You", text);
         inputArea.setText("");
         setLoading(true);
@@ -229,7 +233,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     @Override
     public void onJexlExecuted(JexlExecutionEvent event) {
         SwingUtilities.invokeLater(() -> {
-            String toolName = "JEXL";
+            String toolName = "";
             StringBuilder logContent = new StringBuilder();
             logContent.append("<pre><code>").append(JexlToHtmlConverter.convert(event.script())).append("</code></pre>");
             if (event.success()) {
@@ -255,6 +259,30 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     }
 
     public MarkdownPane getOutputArea() { return outputArea; }
+    private void setupKeyboardShortcuts() {
+        InputMap im = inputArea.getInputMap(JComponent.WHEN_FOCUSED);
+        ActionMap am = inputArea.getActionMap();
+
+        // Enter sends the message
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "send-message");
+        am.put("send-message", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendMessage(null);
+            }
+        });
+
+        // Shift+Enter inserts a newline
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "insert-newline");
+        am.put("insert-newline", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                inputArea.insert("\n", inputArea.getCaretPosition());
+            }
+        });
+    }
+
+
     public JTextArea getInputArea() { return inputArea; }
     public JButton getSendButton() { return sendButton; }
     public JButton getStopButton() { return stopButton; }
