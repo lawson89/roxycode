@@ -1,0 +1,112 @@
+package org.roxycode.app.ai.services;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.workflow.WorkflowPhase;
+import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.service.ProjectService;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class FileEditorServiceTest {
+
+    @TempDir
+    Path tempDir;
+
+    private ProjectService projectService;
+    private WorkflowService workflowService;
+    private FileEditorService fileEditorService;
+
+    @BeforeEach
+    void setUp() {
+        projectService = mock(ProjectService.class);
+        workflowService = mock(WorkflowService.class);
+        fileEditorService = new FileEditorService(projectService, workflowService);
+
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOPMENT);
+    }
+
+    @Test
+    void testWriteFileSuccess() throws IOException {
+        String relativePath = "test.txt";
+        String content = "Hello World";
+
+        fileEditorService.writeFile(relativePath, content);
+
+        Path filePath = tempDir.resolve(relativePath);
+        assertTrue(Files.exists(filePath));
+        assertEquals(content, Files.readString(filePath));
+    }
+
+    @Test
+    void testWriteFileWrongPhaseThrowsException() {
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DESIGN);
+
+        assertThrows(IllegalStateException.class, () -> 
+            fileEditorService.writeFile("test.txt", "content")
+        );
+    }
+
+    @Test
+    void testReplaceBlockSuccess() throws IOException {
+        Path filePath = tempDir.resolve("test.java");
+        Files.writeString(filePath, "public class Test {\n // TODO\n }");
+
+        fileEditorService.replaceBlock("test.java", "// TODO", "// Done");
+
+        String content = Files.readString(filePath);
+        assertTrue(content.contains("// Done"));
+        assertFalse(content.contains("// TODO"));
+    }
+
+    @Test
+    void testReplaceBlockNotUniqueThrowsException() throws IOException {
+        Path filePath = tempDir.resolve("test.java");
+        Files.writeString(filePath, "// TODO\n // TODO");
+
+        assertThrows(IllegalArgumentException.class, () -> 
+            fileEditorService.replaceBlock("test.java", "// TODO", "// Done")
+        );
+    }
+
+    @Test
+    void testReplaceLinesSuccess() throws IOException {
+        Path filePath = tempDir.resolve("test.txt");
+        Files.write(filePath, List.of("Line 1", "Line 2", "Line 3", "Line 4"));
+
+        fileEditorService.replaceLines("test.txt", 2, 3, "New Content");
+
+        List<String> lines = Files.readAllLines(filePath);
+        assertEquals(3, lines.size());
+        assertEquals("Line 1", lines.get(0));
+        assertEquals("New Content", lines.get(1));
+        assertEquals("Line 4", lines.get(2));
+    }
+
+    @Test
+    void testInsertAtLineSuccess() throws IOException {
+        Path filePath = tempDir.resolve("test.txt");
+        Files.write(filePath, List.of("Line 1", "Line 3"));
+
+        fileEditorService.insertAtLine("test.txt", 2, "Line 2");
+
+        List<String> lines = Files.readAllLines(filePath);
+        assertEquals(3, lines.size());
+        assertEquals("Line 2", lines.get(1));
+    }
+
+    @Test
+    void testPathTraversalThrowsSecurityException() {
+        assertThrows(SecurityException.class, () -> 
+            fileEditorService.writeFile("../outside.txt", "content")
+        );
+    }
+}
