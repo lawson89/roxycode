@@ -8,6 +8,7 @@ import org.roxycode.app.service.AiService;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import javax.swing.JSplitPane;
+import javax.swing.JTextArea;
 import java.awt.Component;
 
 public class ChatPanelTest {
@@ -22,11 +23,13 @@ public class ChatPanelTest {
         ChatPanel chatPanel = new ChatPanel(aiService, exploreManager, jexlTool, workflowService);
         assertNotNull(chatPanel.getOutputArea(), "Output area should be initialized");
         assertNotNull(chatPanel.getInputArea(), "Input area should be initialized");
+        assertTrue(chatPanel.getInputArea() instanceof JTextArea, "Input area should be a JTextArea");
         assertNotNull(chatPanel.getSendButton(), "Send button should be initialized");
         assertNotNull(chatPanel.getStopButton(), "Stop button should be initialized");
         assertEquals("Send", chatPanel.getSendButton().getText());
         assertEquals("Stop", chatPanel.getStopButton().getText());
         assertFalse(chatPanel.getOutputArea().isEditable(), "Output area should not be editable");
+        assertNotNull(chatPanel.getOutputArea());
 
         boolean hasSplitPane = false;
         for (Component comp : chatPanel.getComponents()) {
@@ -36,5 +39,18 @@ public class ChatPanelTest {
             }
         }
         assertTrue(hasSplitPane, "ChatPanel should contain a JSplitPane");
+    }
+
+    @Test
+    public void testContextMenuListeners() {
+        AiService aiService = mock(AiService.class);
+        ExploreManager exploreManager = mock(ExploreManager.class);
+        JexlTool jexlTool = mock(JexlTool.class);
+        WorkflowService workflowService = mock(WorkflowService.class);
+        
+        ChatPanel chatPanel = new ChatPanel(aiService, exploreManager, jexlTool, workflowService);
+        // Check that mouse listeners are present on both input and output areas
+        assertTrue(chatPanel.getInputArea().getMouseListeners().length > 0, "Input area should have mouse listeners for context menu");
+        assertTrue(chatPanel.getOutputArea().getMouseListeners().length > 0, "Output area should have mouse listeners for context menu");
     }
 }

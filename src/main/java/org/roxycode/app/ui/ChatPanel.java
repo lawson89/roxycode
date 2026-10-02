@@ -1,8 +1,8 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
-
 import net.miginfocom.swing.MigLayout;
+import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.ai.JexlExecutionEvent;
 import org.roxycode.app.ai.JexlExecutionListener;
 import org.roxycode.app.ai.JexlTool;
@@ -10,21 +10,23 @@ import org.roxycode.app.ai.services.explore.ExploreManager;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.ui.components.ThoughtPanel;
 import org.roxycode.app.ui.syntaxhighlight.JexlToHtmlConverter;
-import org.apache.commons.text.StringEscapeUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
-import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.DefaultEditorKit;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.ActionEvent;
 
 /**
  * Panel for the chat interface, including output display and user input area.
+ * Upgraded to support Markdown rendering and streaming LLM responses.
  */
 public class ChatPanel extends JPanel implements JexlExecutionListener {
 
@@ -33,8 +35,9 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final ExploreManager exploreManager;
     private final JexlTool jexlTool;
     private final WorkflowService workflowService;
-    private final JTextPane outputArea;
-    private final JEditorPane inputArea;
+    private final MarkdownPane outputArea;
+    private final ThoughtPanel thoughtPanel;
+    private final JTextArea inputArea;
     private final JButton sendButton;
     private final JButton stopButton;
     private final JButton approveButton;
@@ -46,20 +49,25 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         this.workflowService = workflowService;
         this.jexlTool.addListener(this);
 
-        // Main layout: Resizable Split Pane
         setLayout(new BorderLayout());
 
-        // Output area (LLM response)
-        outputArea = new JTextPane();
-        outputArea.setContentType("text/html");
-        outputArea.setEditable(false);
+        // Output section
+        outputArea = new MarkdownPane();
         JScrollPane outputScrollPane = new JScrollPane(outputArea);
         outputScrollPane.setBorder(BorderFactory.createTitledBorder("Assistant"));
+
+        thoughtPanel = new ThoughtPanel();
+
+        JPanel outputWrapper = new JPanel(new BorderLayout());
+        outputWrapper.add(thoughtPanel, BorderLayout.NORTH);
+        outputWrapper.add(outputScrollPane, BorderLayout.CENTER);
 
         // Input section
         JPanel inputSection = new JPanel(new MigLayout("fill, insets 0", "[grow, fill][][][]", "[grow, fill]"));
         
-        inputArea = new JEditorPane();
+        inputArea = new JTextArea();
+        inputArea.setLineWrap(true);
+        inputArea.setWrapStyleWord(true);
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
         
         sendButton = new JButton("Send", FontIcon.of(Codicons.CHEVRON_RIGHT, 16));
@@ -85,8 +93,8 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         inputSection.add(inputScrollPane, "grow");
         inputSection.add(buttonPanel, "aligny bottom");
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, outputScrollPane, inputSection);
-        splitPane.setResizeWeight(0.7);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, outputWrapper, inputSection);
+        splitPane.setResizeWeight(0.8);
         splitPane.setContinuousLayout(true);
         splitPane.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -94,6 +102,40 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
 
         sendButton.addActionListener(this::sendMessage);
         workflowService.addPhaseListener(this::onPhaseChanged);
+        setupInputContextMenu();
+    }
+
+    private void setupInputContextMenu() {
+        inputArea.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) showPopup(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) showPopup(e);
+            }
+
+            private void showPopup(MouseEvent e) {
+                inputArea.requestFocusInWindow();
+                JPopupMenu menu = new JPopupMenu();
+                JMenuItem cut = new JMenuItem(new DefaultEditorKit.CutAction());
+                cut.setText("Cut");
+                menu.add(cut);
+                JMenuItem copy = new JMenuItem(new DefaultEditorKit.CopyAction());
+                copy.setText("Copy");
+                menu.add(copy);
+                JMenuItem paste = new JMenuItem(new DefaultEditorKit.PasteAction());
+                paste.setText("Paste");
+                menu.add(paste);
+                menu.addSeparator();
+                JMenuItem selectAll = new JMenuItem("Select All");
+                selectAll.addActionListener(ae -> inputArea.selectAll());
+                menu.add(selectAll);
+                menu.show(e.getComponent(), e.getX(), e.getY());
+            }
+        });
     }
 
     private void onPhaseChanged(WorkflowPhase phase) {
@@ -110,7 +152,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         if (nextOrdinal < WorkflowPhase.values().length) {
             WorkflowPhase next = WorkflowPhase.values()[nextOrdinal];
             workflowService.setCurrentPhase(next);
-            appendToOutput("<div style='margin: 10px 0; color: #98C379;'><b>System:</b> Advancing to phase <b>" + next.getDisplayName() + "</b>...</div><br>");
+            outputArea.appendMessage("System", "Advancing to phase **" + next.getDisplayName() + "**...");
         }
     }
 
@@ -120,9 +162,10 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             return;
         }
 
-        appendToOutput("<b>You:</b> " + StringEscapeUtils.escapeHtml4(text).replace("\n", "<br>") + "<br><br>");
+        outputArea.appendMessage("You", text);
         inputArea.setText("");
         setLoading(true);
+        thoughtPanel.clear();
 
         SwingWorker<String, Void> worker = new SwingWorker<>() {
             @Override
@@ -140,10 +183,10 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             protected void done() {
                 try {
                     String response = get();
-                    appendToOutput("<b>Roxy:</b> " + StringEscapeUtils.escapeHtml4(response).replace("\n", "<br>") + "<br><br>");
+                    outputArea.appendMessage("Roxy", response);
                 } catch (Exception ex) {
                     log.error("Failed to retrieve AI response: {}", ex.getMessage(), ex);
-                    appendToOutput("<b>Roxy:</b> <font color='#E06C75'>Error communicating with AI.</font><br><br>");
+                    outputArea.appendMessage("Roxy", "_Error communicating with AI._");
                 } finally {
                     setLoading(false);
                 }
@@ -152,34 +195,31 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         worker.execute();
     }
 
-    private void appendToOutput(String htmlSnippet) {
-        SwingUtilities.invokeLater(() -> {
-            HTMLDocument doc = (HTMLDocument) outputArea.getStyledDocument();
-            HTMLEditorKit kit = (HTMLEditorKit) outputArea.getEditorKit();
-            try {
-                kit.insertHTML(doc, doc.getLength(), htmlSnippet, 0, 0, null);
-            } catch (Exception ex) {
-                log.error("Failed to append HTML to chat output: {}", ex.getMessage());
-            }
-            outputArea.setCaretPosition(doc.getLength());
-        });
-    }
-
     @Override
     public void onJexlExecuted(JexlExecutionEvent event) {
-        String html = JexlToHtmlConverter.convert(event.script());
-        StringBuilder snippet = new StringBuilder();
-        snippet.append("<div style='margin: 10px; padding: 10px; border: 1px solid #3E4451; background-color: #21252B;'>");
-        snippet.append("<b style='color: #61AFEF;'>🛠️ Tool Execution (JEXL):</b><br><br>");
-        snippet.append(html);
-        if (event.success()) {
-            snippet.append("<br><b style='color: #98C379;'>Result:</b> " + StringEscapeUtils.escapeHtml4(String.valueOf(event.result())));
-        } else {
-            snippet.append("<br><b style='color: #E06C75;'>Error:</b> " + StringEscapeUtils.escapeHtml4(event.error()));
-        }
-        snippet.append("</div><br>");
-        
-        appendToOutput(snippet.toString());
+        SwingUtilities.invokeLater(() -> {
+            String toolName = "JEXL";
+            StringBuilder logContent = new StringBuilder();
+            
+            // Script part - highlighted content is already HTML escaped inside convert
+            logContent.append("<pre><code>")
+                      .append(JexlToHtmlConverter.convert(event.script()))
+                      .append("</code></pre>");
+            
+            if (event.success()) {
+                String resultStr = truncateResult(event.result());
+                String safeResult = StringEscapeUtils.escapeHtml4(resultStr);
+                logContent.append("<div class='tool-result'><b>Result:</b> ")
+                          .append(safeResult)
+                          .append("</div>");
+            } else {
+                String safeError = StringEscapeUtils.escapeHtml4(event.error());
+                logContent.append("<div class='tool-error'><b>Error:</b> ")
+                          .append(safeError)
+                          .append("</div>");
+            }
+            outputArea.appendToolLog(toolName, logContent.toString());
+        });
     }
 
     private void setLoading(boolean loading) {
@@ -193,11 +233,11 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         }
     }
 
-    public JTextPane getOutputArea() {
+    public MarkdownPane getOutputArea() {
         return outputArea;
     }
 
-    public JEditorPane getInputArea() {
+    public JTextArea getInputArea() {
         return inputArea;
     }
 
@@ -207,5 +247,16 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
 
     public JButton getStopButton() {
         return stopButton;
+    }
+
+    static String truncateResult(Object result) {
+        if (result == null) {
+            return "null";
+        }
+        String resultStr = String.valueOf(result);
+        if (resultStr.length() > 100) {
+            return resultStr.substring(0, 100) + "... [Truncated]";
+        }
+        return resultStr;
     }
 }

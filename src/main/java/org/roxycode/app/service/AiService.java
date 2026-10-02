@@ -6,6 +6,7 @@ import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.stereotype.Service;
 
@@ -14,6 +15,10 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AiService {
+    public String chat(String message) {
+        return chat(message, null);
+    }
+
 
     private static final String CORE_WORKFLOW_PROMPT = """
             # ROXY CORE WORKFLOW PROTOCOL
@@ -55,22 +60,13 @@ public class AiService {
                 .build();
     }
 
-    /**
-     * Sends a prompt to the AI and returns the response content.
-     * @param message The user message.
-     * @return The AI response content.
-     */
-    public String chat(String message) {
-        return chat(message, null);
+    public String chat(String message, String systemPromptText) {
+        return buildPrompt(message, systemPromptText)
+                .call()
+                .content();
     }
 
-    /**
-     * Sends a prompt to the AI with a custom system prompt and returns the response content.
-     * @param message The user message.
-     * @param systemPromptText The custom system prompt.
-     * @return The AI response content.
-     */
-    public String chat(String message, String systemPromptText) {
+    private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText) {
         String activeModel = settingsService.getSettings().getGeminiModel();
         String jexlDocs = jexlServiceRegistry.getDocumentation();
         
@@ -92,8 +88,6 @@ public class AiService {
         return chatClient.prompt()
                 .system(systemPrompt.toString())
                 .user(message)
-                .options(GoogleGenAiChatOptions.builder().model(activeModel))
-                .call()
-                .content();
+                .options(GoogleGenAiChatOptions.builder().model(activeModel));
     }
 }

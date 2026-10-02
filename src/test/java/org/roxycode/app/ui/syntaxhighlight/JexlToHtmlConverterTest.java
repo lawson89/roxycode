@@ -10,9 +10,7 @@ public class JexlToHtmlConverterTest {
         String script = "var x = 10;";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("var"));
-        // Check for font color tag
-        assertTrue(html.contains("color='#C678DD'"));
-        assertTrue(html.contains("<b>var</b>"));
+        assertTrue(html.contains("class=\'tk-rw\'"));
     }
 
     @Test
@@ -20,7 +18,7 @@ public class JexlToHtmlConverterTest {
         String script = "var s = \"hello\";";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("hello"));
-        assertTrue(html.contains("color='#98C379'"));
+        assertTrue(html.contains("class=\'tk-st\'"));
     }
 
     @Test
@@ -28,7 +26,7 @@ public class JexlToHtmlConverterTest {
         String script = "// This is a comment";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("This is a comment"));
-        assertTrue(html.contains("color='#5C6370'"));
+        assertTrue(html.contains("class=\'tk-cm\'"));
     }
 
     @Test
@@ -36,14 +34,21 @@ public class JexlToHtmlConverterTest {
         String script = "x = 42;";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("42"));
-        assertTrue(html.contains("color='#D19A66'"));
+        assertTrue(html.contains("class=\'tk-nm\'"));
     }
-    
+
     @Test
     public void testWordBoundaries() {
-        // "variable" should NOT be highlighted as "var"
         String script = "variable = 1;";
         String html = JexlToHtmlConverter.convert(script);
-        assertFalse(html.contains("<b>var</b>iable"), "Keyword 'var' should not match inside 'variable'");
+        assertFalse(html.contains("<span class=\'tk-rw\'>var</span>iable"));
+    }
+
+    @Test
+    public void testNoPreWrapping() {
+        String script = "var x = 1;";
+        String html = JexlToHtmlConverter.convert(script);
+        assertFalse(html.startsWith("<pre>"));
+        assertFalse(html.endsWith("</pre>"));
     }
 }
