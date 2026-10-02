@@ -31,13 +31,15 @@ public class MainFrame extends JFrame {
     private final WorkflowService workflowService;
     private final PlanManagerService planManagerService;
     private final org.roxycode.app.ai.JexlTool jexlTool;
+    private final org.roxycode.app.events.TurnEventBridge turnEventBridge;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
     public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, 
                     ProjectService projectService, GitService gitService, EnvironmentService envService,
                     JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService, 
-                    PlanManagerService planManagerService, org.roxycode.app.ai.JexlTool jexlTool) {
+                    PlanManagerService planManagerService, org.roxycode.app.ai.JexlTool jexlTool,
+                    org.roxycode.app.events.TurnEventBridge turnEventBridge) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -49,6 +51,7 @@ public class MainFrame extends JFrame {
         this.workflowService = workflowService;
         this.planManagerService = planManagerService;
         this.jexlTool = jexlTool;
+        this.turnEventBridge = turnEventBridge;
         setupLaf();
         setupWindow();
         initComponents();
@@ -84,7 +87,7 @@ public class MainFrame extends JFrame {
         StatusPanel statusBar = new StatusPanel(envService);
 
         // Content Area Panels
-        contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService), "CHAT");
+        contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge), "CHAT");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
         contentArea.add(new ContextViewerPanel(jexlServiceRegistry), "CONTEXT");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");

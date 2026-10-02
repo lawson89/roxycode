@@ -34,6 +34,12 @@ public class WorkflowService {
         }
     }
 
+    @AgentDoc("Transitions to a new phase with a summary of the previous phase.")
+    public void transitionPhase(WorkflowPhase nextPhase, String summary) {
+        // The summary can be logged or used to compress context in the future
+        setCurrentPhase(nextPhase);
+    }
+
     public void addPhaseListener(Consumer<WorkflowPhase> listener) {
         listeners.add(listener);
         listener.accept(currentPhase);

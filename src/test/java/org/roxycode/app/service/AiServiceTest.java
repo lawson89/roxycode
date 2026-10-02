@@ -12,7 +12,8 @@ import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
 import org.roxycode.app.model.AppSettings;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -47,6 +48,12 @@ class AiServiceTest {
     @Mock
     private WorkflowService workflowService;
 
+    @Mock
+    private ChatMemory chatMemory;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private AiService aiService;
     private AppSettings settings;
 
@@ -58,7 +65,7 @@ class AiServiceTest {
         when(chatClientBuilder.defaultTools(any())).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
         
-        aiService = new AiService(chatClientBuilder, settingsService, jexlServiceRegistry, jexlTool, workflowService);
+        aiService = new AiService(chatClientBuilder, settingsService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher);
     }
 
     @Test
@@ -71,10 +78,12 @@ class AiServiceTest {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(anyString())).thenReturn(requestSpec);
-        // Use any() for options to avoid generic bound issues in Mockito when stubbing
+        when(requestSpec.messages(anyList())).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
         when(responseSpec.content()).thenReturn("AI Response");
+        
+        when(chatMemory.get(anyString())).thenReturn(new java.util.ArrayList<>());
 
         String result = aiService.chat("Hello");
 
@@ -84,11 +93,31 @@ class AiServiceTest {
         verify(requestSpec).system(systemPromptCaptor.capture());
         String capturedPrompt = systemPromptCaptor.getValue();
         
-        // Verify it contains workflow context
         assertTrue(capturedPrompt.contains("CURRENT PHASE: DEVELOPMENT"));
         assertTrue(capturedPrompt.contains("Senior Developer"));
         assertTrue(capturedPrompt.contains("JEXL DOCS"));
         
         verify(requestSpec).options(any());
+    }
+
+    @Test
+    void testChatHandlesTurnLimitExceeded() {
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.messages(anyList())).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        
+        // Mocking the call to throw the limit exception
+        when(requestSpec.call()).thenThrow(new RuntimeException("MAX_TOOL_TURNS_EXCEEDED"));
+        
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
+        when(chatMemory.get(anyString())).thenReturn(new java.util.ArrayList<>());
+        
+        settings.setMaxAgentToolTurns(3);
+        
+        String result = aiService.chat("Hello");
+        
+        assertTrue(result.contains("Maximum tool turns (3) exceeded"));
     }
 }

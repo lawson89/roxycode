@@ -34,6 +34,10 @@ public class JexlTool {
         listeners.add(listener);
     }
 
+    public void removeListener(JexlExecutionListener listener) {
+        listeners.remove(listener);
+    }
+
     /**
      * Executes a Jexl script and returns the result.
      *
