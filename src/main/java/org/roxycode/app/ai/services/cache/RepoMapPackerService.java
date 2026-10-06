@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,10 +16,8 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Service to generate a token-optimized map of the repository.
@@ -33,10 +32,12 @@ public class RepoMapPackerService {
 
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
+    private final GrepService grepService;
 
-    public RepoMapPackerService(ProjectService projectService, ObjectMapper objectMapper) {
+    public RepoMapPackerService(ProjectService projectService, ObjectMapper objectMapper, GrepService grepService) {
         this.projectService = projectService;
         this.objectMapper = objectMapper;
+        this.grepService = grepService;
     }
 
     /**
@@ -51,10 +52,13 @@ public class RepoMapPackerService {
         }
 
         Path root = projectService.getCurrentProjectRoot();
-        List<String> files = listFiles(root);
+        List<String> files = grepService.listFiles(null);
         
         StringBuilder sb = new StringBuilder();
         sb.append("# Repo Map Snapshot\n\n");
+        sb.append("## Project Tree\n\n```\n");
+        sb.append(FileTreeFormatter.format(files));
+        sb.append("\n```\n\n");
         
         for (String relPath : files) {
             Path filePath = root.resolve(relPath);
@@ -86,22 +90,6 @@ public class RepoMapPackerService {
         log.info("Generated repo map. Length: {}, Estimated tokens: {}", map.length(), map.length() / 4);
         
         return new EditorResult(true, map, null);
-    }
-
-    private List<String> listFiles(Path root) {
-        try {
-            Process process = new ProcessBuilder("rg", "--files", "--color=never")
-                    .directory(root.toFile())
-                    .start();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                return reader.lines().collect(Collectors.toList());
-            } finally {
-                process.waitFor();
-            }
-        } catch (Exception e) {
-            log.error("Ripgrep failed: {}", e.getMessage());
-            return Collections.emptyList();
-        }
     }
 
     private String getSkeleton(Path filePath, Path root) {

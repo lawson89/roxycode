@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.service.ProjectService;
+import java.util.List;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,13 +24,15 @@ class RepoMapPackerServiceTest {
 
     private ProjectService projectService;
     private ObjectMapper objectMapper;
+    private GrepService grepService;
     private RepoMapPackerService service;
 
     @BeforeEach
     void setUp() {
         projectService = Mockito.mock(ProjectService.class);
         objectMapper = new ObjectMapper();
-        service = new RepoMapPackerService(projectService, objectMapper);
+        grepService = Mockito.mock(GrepService.class);
+        service = new RepoMapPackerService(projectService, objectMapper, grepService);
     }
 
     @Test
@@ -46,11 +50,11 @@ class RepoMapPackerServiceTest {
         
         Path testFile = tempDir.resolve("test.txt");
         Files.writeString(testFile, "Hello World");
+        when(grepService.listFiles(null)).thenReturn(List.of("test.txt"));
 
-        // Note: listFiles uses 'rg' which might return empty if git init is not done or rg is missing.
-        // But the service should still return a successful result with at least the header.
         EditorResult result = service.generateRepoMap();
         assertTrue(result.success());
         assertTrue(result.content().contains("# Repo Map Snapshot"));
+        assertTrue(result.content().contains("## Project Tree"));
     }
 }

@@ -90,6 +90,45 @@ public class GrepService {
         }
     }
 
+    /**
+     * Lists files in the project using RipGrep, respecting .gitignore.
+     *
+     * @param relativePath the starting path relative to the project root (null or empty for root)
+     * @return a list of file paths relative to the project root
+     */
+    public List<String> listFiles(String relativePath) {
+        if (!projectService.hasActiveProject()) {
+            return new ArrayList<>();
+        }
+
+        Path root = projectService.getCurrentProjectRoot();
+        Path searchDir = resolvePath(relativePath);
+
+        List<String> command = new ArrayList<>();
+        command.add("rg");
+        command.add("--files");
+        command.add("--color=never");
+        command.add(searchDir.toString());
+
+        List<String> files = new ArrayList<>();
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.directory(root.toFile());
+            Process process = pb.start();
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    files.add(line);
+                }
+            }
+            process.waitFor();
+        } catch (IOException | InterruptedException e) {
+            log.error("Failed to list files using RipGrep: {}", e.getMessage());
+        }
+        return files;
+    }
+
     private Path resolvePath(String relativePath) {
         Path projectRoot = projectService.getCurrentProjectRoot();
         if (projectRoot == null) {

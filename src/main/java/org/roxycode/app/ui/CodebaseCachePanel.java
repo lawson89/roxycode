@@ -26,13 +26,14 @@ public class CodebaseCachePanel extends JPanel {
 
     private final JLabel statusLabel = new JLabel("Status: Unknown");
     private final JProgressBar progressBar = new JProgressBar(0, 100);
-    private final JButton createCacheButton = new JButton("Create/Refresh Cache");
+    private final JButton packButton = new JButton("Pack Local Codebase");
+    private final JButton uploadButton = new JButton("Upload to Gemini");
     private final JTextArea metaInfoArea = new JTextArea(8, 40);
     private final JTextArea packedCodebaseArea = new JTextArea(20, 60);
 
     public CodebaseCachePanel(ProjectService projectService, SettingsService settingsService,
-                              ProjectPackerService packerService, ProjectCacheMetaService metaService,
-                              GeminiCacheService geminiCacheService) {
+                               ProjectPackerService packerService, ProjectCacheMetaService metaService,
+                               GeminiCacheService geminiCacheService) {
         this.projectService = projectService;
         this.settingsService = settingsService;
         this.packerService = packerService;
@@ -54,7 +55,12 @@ public class CodebaseCachePanel extends JPanel {
         statusPanel.add(new JLabel("Status:"));
         statusPanel.add(statusLabel, "wrap");
         statusPanel.add(progressBar, "span 2, growx, wrap");
-        statusPanel.add(createCacheButton, "span 2");
+        
+        JPanel buttonPanel = new JPanel(new MigLayout("insets 0", "[]10[]"));
+        buttonPanel.add(packButton);
+        buttonPanel.add(uploadButton);
+        statusPanel.add(buttonPanel, "span 2");
+        
         add(statusPanel, "growx, wrap");
 
         metaInfoArea.setEditable(false);
@@ -65,7 +71,9 @@ public class CodebaseCachePanel extends JPanel {
         packedCodebaseArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
         add(new JScrollPane(packedCodebaseArea), "grow, push");
 
-        createCacheButton.addActionListener(e -> createCache());
+        packButton.addActionListener(e -> runPack());
+        uploadButton.addActionListener(e -> runUpload());
+        
         progressBar.setStringPainted(true);
         progressBar.setVisible(false);
     }
@@ -91,31 +99,33 @@ public class CodebaseCachePanel extends JPanel {
             statusLabel.setText("No active cache found.");
             metaInfoArea.setText("Metadata will appear here after cache creation.");
             packedCodebaseArea.setText("");
+            
+            if (packed.isPresent()) {
+                 statusLabel.setText("Local codebase packed. Ready to upload.");
+                 packedCodebaseArea.setText(packed.get());
+            }
         }
+        
+        uploadButton.setEnabled(packed.isPresent());
     }
 
-    private void createCache() {
-        createCacheButton.setEnabled(false);
+    private void runPack() {
+        packButton.setEnabled(false);
+        uploadButton.setEnabled(false);
         progressBar.setVisible(true);
         progressBar.setValue(0);
-        statusLabel.setText("Starting cache creation...");
+        statusLabel.setText("Packing codebase...");
 
-        SwingWorker<String, ProgressUpdate> worker = new SwingWorker<>() {
-            private long estimatedTokens = 0;
-
+        SwingWorker<Long, ProgressUpdate> worker = new SwingWorker<>() {
             @Override
-            protected String doInBackground() throws Exception {
+            protected Long doInBackground() throws Exception {
                 var packResult = packerService.packCodebase((current, total, message) -> {
                     publish(new ProgressUpdate(current, total, message));
                 });
-                if (!packResult.success()) return "Error packing: " + packResult.errorHint();
+                if (!packResult.success()) throw new RuntimeException("Packing failed: " + packResult.errorHint());
                 
                 publish(new ProgressUpdate(0, 1, "Estimating tokens..."));
-                estimatedTokens = geminiCacheService.estimateTokens(packResult.content());
-                
-                publish(new ProgressUpdate(0, 1, "Uploading to Gemini cache..."));
-                String model = settingsService.getSettings().getGeminiModel();
-                return geminiCacheService.createCache(model, packResult.content());
+                return geminiCacheService.estimateTokens(packResult.content());
             }
 
             @Override
@@ -134,6 +144,48 @@ public class CodebaseCachePanel extends JPanel {
             @Override
             protected void done() {
                 try {
+                    long tokens = get();
+                    statusLabel.setText("Codebase packed. Estimated tokens: " + tokens);
+                    refreshStatus();
+                } catch (Exception e) {
+                    log.error("Packing failed", e);
+                    statusLabel.setText("Failed: " + e.getMessage());
+                } finally {
+                    packButton.setEnabled(true);
+                    progressBar.setVisible(false);
+                }
+            }
+        };
+        worker.execute();
+    }
+
+    private void runUpload() {
+        Optional<String> packedContent = metaService.loadRepoCache();
+        if (packedContent.isEmpty()) {
+            statusLabel.setText("Error: No packed codebase found. Pack first.");
+            return;
+        }
+
+        packButton.setEnabled(false);
+        uploadButton.setEnabled(false);
+        progressBar.setVisible(true);
+        progressBar.setIndeterminate(true);
+        statusLabel.setText("Uploading to Gemini cache...");
+
+        SwingWorker<String, Void> worker = new SwingWorker<>() {
+            private long estimatedTokens = 0;
+
+            @Override
+            protected String doInBackground() throws Exception {
+                String content = packedContent.get();
+                estimatedTokens = geminiCacheService.estimateTokens(content);
+                String model = settingsService.getSettings().getGeminiModel();
+                return geminiCacheService.createCache(model, content);
+            }
+
+            @Override
+            protected void done() {
+                try {
                     String result = get();
                     if (result.startsWith("Error")) {
                         statusLabel.setText(result);
@@ -146,13 +198,15 @@ public class CodebaseCachePanel extends JPanel {
                                 estimatedTokens
                         );
                         metaService.saveMeta(meta);
+                        statusLabel.setText("Upload successful.");
                         refreshStatus();
                     }
                 } catch (Exception e) {
-                    log.error("Cache creation failed", e);
-                    statusLabel.setText("Failed: " + e.getMessage());
+                    log.error("Upload failed", e);
+                    statusLabel.setText("Upload failed: " + e.getMessage());
                 } finally {
-                    createCacheButton.setEnabled(true);
+                    packButton.setEnabled(true);
+                    uploadButton.setEnabled(true);
                     progressBar.setVisible(false);
                 }
             }

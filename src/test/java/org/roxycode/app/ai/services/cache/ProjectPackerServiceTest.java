@@ -3,7 +3,9 @@ package org.roxycode.app.ai.services.cache;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.service.ProjectService;
+import java.util.List;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,11 +24,13 @@ public class ProjectPackerServiceTest {
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
 
         ProjectCacheMetaService metaService = new ProjectCacheMetaService(projectService);
+        GrepService grepService = mock(GrepService.class);
+        when(grepService.listFiles(null)).thenReturn(List.of("file1.txt"));
 
         // Create some dummy files
         Files.writeString(tempDir.resolve("file1.txt"), "Content 1");
 
-        ProjectPackerService service = new ProjectPackerService(projectService, metaService);
+        ProjectPackerService service = new ProjectPackerService(projectService, metaService, grepService);
         EditorResult result = service.packCodebase();
 
         assertTrue(result.success());
@@ -41,8 +45,10 @@ public class ProjectPackerServiceTest {
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
 
         ProjectCacheMetaService metaService = mock(ProjectCacheMetaService.class);
+        GrepService grepService = mock(GrepService.class);
+        when(grepService.listFiles(null)).thenReturn(List.of("file1.txt"));
 
-        ProjectPackerService service = new ProjectPackerService(projectService, metaService);
+        ProjectPackerService service = new ProjectPackerService(projectService, metaService, grepService);
         ProgressCallback callback = mock(ProgressCallback.class);
 
         EditorResult result = service.packCodebase(callback);
