@@ -41,6 +41,7 @@ public class SidebarPanel extends JPanel {
 
         add(createSectionHeader("OTHER"), "gaptop 15");
         add(createNavButton("System Tools", "TOOLS", Codicons.TOOLS));
+        add(createNavButton("Prompt", "PROMPT", Codicons.BOOK));
         add(createNavButton("Settings", "SETTINGS", Codicons.SETTINGS_GEAR));
         
         if (!navButtons.isEmpty()) {

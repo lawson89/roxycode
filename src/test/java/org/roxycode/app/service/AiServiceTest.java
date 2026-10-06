@@ -17,8 +17,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +37,9 @@ class AiServiceTest {
 
     @Mock
     private SettingsService settingsService;
+
+    @Mock
+    private PromptService promptService;
 
     @Mock
     private JexlServiceRegistry jexlServiceRegistry;
@@ -65,7 +67,7 @@ class AiServiceTest {
         when(chatClientBuilder.defaultTools(any())).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
         
-        aiService = new AiService(chatClientBuilder, settingsService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher);
+        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher);
     }
 
     @Test
@@ -74,6 +76,8 @@ class AiServiceTest {
         settings.setGeminiModel("test-model-123");
         when(jexlServiceRegistry.getDocumentation()).thenReturn("JEXL DOCS");
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOPMENT);
+        when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
+        when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
         
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
@@ -93,9 +97,12 @@ class AiServiceTest {
         verify(requestSpec).system(systemPromptCaptor.capture());
         String capturedPrompt = systemPromptCaptor.getValue();
         
+        assertTrue(capturedPrompt.contains("CORE PROMPT"));
         assertTrue(capturedPrompt.contains("CURRENT PHASE: DEVELOPMENT"));
         assertTrue(capturedPrompt.contains("Senior Developer"));
         assertTrue(capturedPrompt.contains("JEXL DOCS"));
+        assertTrue(capturedPrompt.contains("JEXL CONTEXT"));
+        assertTrue(capturedPrompt.contains("JEXL CONTEXT"));
         
         verify(requestSpec).options(any());
     }
@@ -107,6 +114,8 @@ class AiServiceTest {
         when(requestSpec.user(anyString())).thenReturn(requestSpec);
         when(requestSpec.messages(anyList())).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
+        when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
         
         // Mocking the call to throw the limit exception
         when(requestSpec.call()).thenThrow(new RuntimeException("MAX_TOOL_TURNS_EXCEEDED"));

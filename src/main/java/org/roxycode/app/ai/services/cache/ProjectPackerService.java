@@ -4,10 +4,13 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.service.PromptService;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Lazy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,11 +28,19 @@ public class ProjectPackerService {
     private final ProjectService projectService;
     private final ProjectCacheMetaService metaService;
     private final GrepService grepService;
+    private final PromptService promptService;
+    private final JexlServiceRegistry registry;
 
-    public ProjectPackerService(ProjectService projectService, ProjectCacheMetaService metaService, GrepService grepService) {
+    public ProjectPackerService(ProjectService projectService,
+                               ProjectCacheMetaService metaService,
+                               GrepService grepService,
+                               PromptService promptService,
+                               @Lazy JexlServiceRegistry registry) {
         this.projectService = projectService;
         this.metaService = metaService;
         this.grepService = grepService;
+        this.promptService = promptService;
+        this.registry = registry;
     }
 
     @AgentDoc("Generates a packed representation of the codebase.")
@@ -52,6 +63,22 @@ public class ProjectPackerService {
         int totalFiles = files.size();
         StringBuilder packed = new StringBuilder();
         packed.append("# Codebase Snapshot\n\n");
+
+        // Include Agent Instructions
+        packed.append("## Agent Instructions\n\n");
+        packed.append(promptService.loadCoreWorkflowPrompt());
+        packed.append("\n\n");
+
+        // Include JEXL Context
+        packed.append(promptService.loadJexlContext());
+        packed.append("\n\n");
+
+        // Include JEXL API Documentation
+        packed.append("## JEXL API Documentation\n\n");
+        packed.append("```java\n");
+        packed.append(registry.getDocumentation());
+        packed.append("\n```\n\n");
+
         packed.append("## Project Tree\n\n```\n");
         packed.append(FileTreeFormatter.format(files));
         packed.append("\n```\n\n");

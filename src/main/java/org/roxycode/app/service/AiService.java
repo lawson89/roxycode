@@ -17,7 +17,6 @@ import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -30,32 +29,9 @@ public class AiService {
         return chat(message, null);
     }
 
-    private static final String CORE_WORKFLOW_PROMPT = """
-            # ROXY CORE WORKFLOW PROTOCOL
-            
-            You are operating in a multi-role agent workflow. Your personality, goals, and available actions are determined by your current ROLE and the current workflow PHASE.
-            
-            ## OPERATIONAL CONSTRAINTS
-            1. PHASE INTEGRITY: You MUST NOT skip ahead or perform actions reserved for future phases.
-            2. ROLE ADHERENCE: You must strictly embody the current Role provided in the Dynamic Context.
-            3. HUMAN-IN-THE-LOOP (HITL): Major transitions and plan approvals require explicit human confirmation.
-            4. TOOL USAGE: Use the JEXL tools provided to perform your tasks.
-            
-            ## WORKFLOW PHASES
-            - EXPLORE: Broad codebase exploration and context gathering.
-            - DISCOVERY: Gathering functional requirements and defining project goals.
-            - DESIGN: Creating technical specifications and step-by-step implementation plans.
-            - DEVELOPMENT: Writing, testing, and verifying code based on an approved plan.
-            - VERIFICATION: Final review and quality assurance.
-            
-            ## STRUCTURED ARTIFACTS
-            - During DISCOVERY, you MUST submit a 'FunctionalSpec' using 'planManager.submitFunctionalSpec()'.
-            - During DESIGN, you MUST submit a 'TechnicalSpec' using 'planManager.submitTechnicalSpec()'.
-            - These artifacts are shared with the user for review and approval.
-            """;
-
     private final ChatClient chatClient;
     private final SettingsService settingsService;
+    private final PromptService promptService;
     private final JexlServiceRegistry jexlServiceRegistry;
     private final WorkflowService workflowService;
     private final JexlTool jexlTool;
@@ -63,10 +39,12 @@ public class AiService {
     private final ApplicationEventPublisher eventPublisher;
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
+                     PromptService promptService,
                      JexlServiceRegistry jexlServiceRegistry, JexlTool jexlTool,
                      WorkflowService workflowService, ChatMemory chatMemory,
                      ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
+        this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
         this.workflowService = workflowService;
         this.jexlTool = jexlTool;
@@ -118,11 +96,12 @@ public class AiService {
     private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText) {
         String activeModel = settingsService.getSettings().getGeminiModel();
         String jexlDocs = jexlServiceRegistry.getDocumentation();
+        String jexlContext = promptService.loadJexlContext();
         
         WorkflowPhase currentPhase = workflowService.getCurrentPhase();
         AgentRole currentRole = currentPhase.getRole();
         
-        StringBuilder systemPrompt = new StringBuilder(CORE_WORKFLOW_PROMPT);
+        StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
         systemPrompt.append("\n\n## DYNAMIC CONTEXT\n");
         systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append(" (").append(currentPhase.getDisplayName()).append(")\n");
         systemPrompt.append("CURRENT ROLE: ").append(currentRole.getTitle()).append("\n");
@@ -131,7 +110,7 @@ public class AiService {
         if (systemPromptText != null) {
             systemPrompt.append(systemPromptText).append("\n\n");
         }
-        
+        systemPrompt.append("\n\n## JEXL CONTEXT\n").append(jexlContext).append("\n\n");
         systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlDocs);
         
         // Retrieve history from memory

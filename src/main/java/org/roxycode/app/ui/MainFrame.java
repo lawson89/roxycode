@@ -35,6 +35,7 @@ public class MainFrame extends JFrame {
     private final org.roxycode.app.ai.services.cache.ProjectPackerService packerService;
     private final org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
     private final org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService;
+    private final org.roxycode.app.service.PromptService promptService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
@@ -45,7 +46,8 @@ public class MainFrame extends JFrame {
                     org.roxycode.app.events.TurnEventBridge turnEventBridge,
                     org.roxycode.app.ai.services.cache.ProjectPackerService packerService,
                     org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
-                    org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService) {
+                    org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService,
+                    org.roxycode.app.service.PromptService promptService) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -61,6 +63,7 @@ public class MainFrame extends JFrame {
         this.packerService = packerService;
         this.cacheMetaService = cacheMetaService;
         this.geminiCacheService = geminiCacheService;
+        this.promptService = promptService;
         setupLaf();
         setupWindow();
         initComponents();
@@ -103,6 +106,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
+        contentArea.add(new PromptPanel(promptService, settingsService), "PROMPT");
 
         workspace.add(header, "h 60!, wrap");
         workspace.add(phaseRow, "h 40!, wrap");
