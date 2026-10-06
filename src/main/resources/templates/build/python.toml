@@ -1,7 +1,14 @@
 [build]
-compile = "python -m compileall ."
-clean = "find . -name '*.pyc' -delete"
+compile = "python3 -m py_compile **/*.py"
+clean = "find . -type d -name __pycache__ -exec rm -rf {} +"
 
 [test]
 run_all = "pytest"
 run_single = "pytest -k {testName}"
+
+[env]
+ROXY_CODE = "true"
+
+[parse]
+error_regex = '(?m)^E\\s+(.*)$'
+test_failure_regex = '(?m)^FAILED (.*)$'

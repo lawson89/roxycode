@@ -5,3 +5,10 @@ clean = "echo 'No clean command configured'"
 [test]
 run_all = "echo 'No test command configured'"
 run_single = "echo 'No test command configured'"
+
+[env]
+ROXY_CODE = "true"
+
+[parse]
+error_regex = '(?m)^ERROR: (.*)$'
+test_failure_regex = '(?m)^FAIL: (.*)$'

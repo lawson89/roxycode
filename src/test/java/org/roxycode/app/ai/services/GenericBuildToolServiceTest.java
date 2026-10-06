@@ -26,8 +26,11 @@ class GenericBuildToolServiceTest {
     void setUp() {
         projectService = mock(ProjectService.class);
         tomlMapper = new TomlMapper();
-        buildToolService = new GenericBuildToolService(projectService, tomlMapper);
 
+        // In the original test, buildToolService was initialized BEFORE mocks were configured,
+        // so ensureConfig() wasn't called in constructor.
+        buildToolService = new GenericBuildToolService(projectService, tomlMapper);
+        
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
     }
@@ -39,8 +42,8 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testDetectWithConfig() throws IOException {
-        Files.createDirectories(tempDir.resolve("agents"));
-        Files.writeString(tempDir.resolve("agents/colinxcode.toml"), "[build]\ncompile = \"echo 'hi'\"");
+        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.writeString(tempDir.resolve(".roxycode/build.toml"), "[build]\ncompile = \"echo 'hi'\"");
         assertTrue(buildToolService.detect());
     }
 
@@ -51,7 +54,7 @@ class GenericBuildToolServiceTest {
         // This will call ensureConfig() internally
         buildToolService.compile();
         
-        Path configPath = tempDir.resolve("agents/colinxcode.toml");
+        Path configPath = tempDir.resolve(".roxycode/build.toml");
         assertTrue(Files.exists(configPath));
         String content = Files.readString(configPath);
         assertTrue(content.contains("compile"));
@@ -59,10 +62,35 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testCommandPlaceholders() throws IOException {
-        Files.createDirectories(tempDir.resolve("agents"));
-        Files.writeString(tempDir.resolve("agents/colinxcode.toml"), "[test]\nrun_single = \"echo {testName}\"");
+        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.writeString(tempDir.resolve(".roxycode/build.toml"), "[test]\nrun_single = \"echo {testName}\"");
         
         BuildResult result = buildToolService.runSingleTest("MyTest");
         assertTrue(result.log().contains("MyTest"));
     }
+    
+    @Test
+    void testRegexParsing() throws IOException {
+        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.writeString(tempDir.resolve(".roxycode/build.toml"), 
+            "[build]\ncompile = \"echo '[ERROR] Compilation failed'\"\n" +
+            "[parse]\nerror_regex = '(?m)^\\[ERROR\\] (.*)$'");
+            
+        BuildResult result = buildToolService.compile();
+        assertEquals(1, result.errors().size());
+        assertEquals("Compilation failed", result.errors().get(0));
+    }
+    @Test
+    void testEnvironmentVariables() throws IOException {
+        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.writeString(tempDir.resolve(".roxycode/build.toml"), 
+            "[build]\n" +
+            "compile = \"echo test\"\n" +
+            "[env]\n" +
+            "TEST_VAR = \"hello-env\"");
+        
+        BuildResult result = buildToolService.compile();
+        assertTrue(result.success());
+    }
+
 }

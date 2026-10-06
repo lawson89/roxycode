@@ -12,6 +12,7 @@ import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.ai.workflow.WorkflowService;
+import org.springframework.ai.chat.memory.ChatMemory;
 import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;
 import java.awt.*;
@@ -36,6 +37,7 @@ public class MainFrame extends JFrame {
     private final org.roxycode.app.ai.services.cache.RepoMapPackerService packerService;
     private final org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
     private final org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService;
+    private final ChatMemory chatMemory;
     private final org.roxycode.app.service.PromptService promptService;
     private final GenericBuildToolService buildToolService;
     private final CardLayout cardLayout = new CardLayout();
@@ -50,7 +52,7 @@ public class MainFrame extends JFrame {
                     org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
                     org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService,
                     org.roxycode.app.service.PromptService promptService,
-                    GenericBuildToolService buildToolService) {
+                    GenericBuildToolService buildToolService, ChatMemory chatMemory) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -68,6 +70,7 @@ public class MainFrame extends JFrame {
         this.geminiCacheService = geminiCacheService;
         this.promptService = promptService;
         this.buildToolService = buildToolService;
+        this.chatMemory = chatMemory;
         setupLaf();
         setupWindow();
         initComponents();
@@ -114,7 +117,7 @@ public class MainFrame extends JFrame {
 
         // Content Area Panels
         contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge), "CHAT");
-        contentArea.add(new HistoryPanel(turnEventBridge, jexlTool), "HISTORY");
+        contentArea.add(new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
         contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");

@@ -5,6 +5,8 @@ import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.UserMessageEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import javax.swing.JScrollPane;
@@ -17,7 +19,9 @@ public class HistoryPanelTest {
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
         JexlTool jexlTool = mock(JexlTool.class);
 
-        HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, jexlTool);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
+        HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService);
         
         // Verify listeners registered
         verify(turnEventBridge).addUserMessageListener(any());

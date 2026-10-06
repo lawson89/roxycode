@@ -1,0 +1,14 @@
+[build]
+compile = "go build ./..."
+clean = "go clean"
+
+[test]
+run_all = "go test ./..."
+run_single = "go test -run {testName}"
+
+[env]
+ROXY_CODE = "true"
+
+[parse]
+error_regex = '(?m)^# (.*)\\n(.*):(\\d+):(\\d+): (.*)$'
+test_failure_regex = '(?m)^--- FAIL: (.*)$'

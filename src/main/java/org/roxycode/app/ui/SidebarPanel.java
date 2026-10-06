@@ -26,7 +26,7 @@ public class SidebarPanel extends JPanel {
     }
 
     private void initComponents() {
-        setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]5[]2[]2[]2[]15[]5[]push"));
+        setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]5[]2[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
         
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
 
@@ -36,12 +36,14 @@ public class SidebarPanel extends JPanel {
         add(createNavButton("Chat", "CHAT", Codicons.COMMENT_DISCUSSION));
         add(createNavButton("History", "HISTORY", Codicons.HISTORY));
         add(createNavButton("Plan", "PLAN", Codicons.LIST_ORDERED));
+
+        add(createSectionHeader("CONTEXT"), "gaptop 15");
         add(createNavButton("Codebase Cache", "CACHE", Codicons.DATABASE));
         add(createNavButton("API", "API", Codicons.CODE));
-
-        add(createSectionHeader("OTHER"), "gaptop 15");
-        add(createNavButton("System Tools", "TOOLS", Codicons.TOOLS));
         add(createNavButton("Prompt", "PROMPT", Codicons.BOOK));
+
+        add(createSectionHeader("CONFIG"), "gaptop 15");
+        add(createNavButton("System Tools", "TOOLS", Codicons.TOOLS));
         add(createNavButton("Build Config", "BUILD_CONFIG", Codicons.PACKAGE));
         add(createNavButton("Settings", "SETTINGS", Codicons.SETTINGS_GEAR));
         

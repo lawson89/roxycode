@@ -1,7 +1,14 @@
 [build]
 compile = "npm run build"
-clean = "rm -rf dist build"
+clean = "rm -rf dist/"
 
 [test]
 run_all = "npm test"
 run_single = "npm test -- -t {testName}"
+
+[env]
+ROXY_CODE = "true"
+
+[parse]
+error_regex = '(?m)^error (.*)$'
+test_failure_regex = '(?m)^\\s*✖ (.*)$'

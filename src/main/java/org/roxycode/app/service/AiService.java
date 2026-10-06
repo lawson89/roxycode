@@ -13,6 +13,9 @@ import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import reactor.core.scheduler.Schedulers;
+
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -62,6 +65,7 @@ public class AiService {
         this.gitService = gitService;
         this.chatClient = chatClientBuilder
                 .defaultTools(jexlTool)
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
     }
 
@@ -82,6 +86,7 @@ public class AiService {
             String content;
             try {
                 content = buildPrompt(message, systemPromptText)
+                        .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                         .call()
                         .content();
             } catch (Exception e) {
@@ -92,9 +97,7 @@ public class AiService {
                 }
             }
             
-            // Save to memory manually
-            chatMemory.add(conversationId, List.of(new UserMessage(message)));
-            chatMemory.add(conversationId, List.of(new AssistantMessage(content)));
+            // Memory handled by MessageChatMemoryAdvisor
             
             eventPublisher.publishEvent(new AgentTurnCompleteEvent("Roxy", turnCount.get(), content));
             return content;
@@ -140,11 +143,11 @@ public class AiService {
         }
         
         // Retrieve history from memory
-        List<Message> history = chatMemory.get("default");
+        
         
         return chatClient.prompt()
                 .system(systemPrompt.toString())
-                .messages(history)
+                
                 .user(message)
                 .options(GoogleGenAiChatOptions.builder().model(activeModel));
     }

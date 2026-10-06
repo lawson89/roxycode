@@ -1,7 +1,14 @@
 [build]
-compile = "./mvnw clean compile"
+compile = "./mvnw compile"
 clean = "./mvnw clean"
 
 [test]
 run_all = "./mvnw test"
 run_single = "./mvnw test -Dtest={testName}"
+
+[env]
+ROXY_CODE = "true"
+
+[parse]
+error_regex = '(?m)^\[ERROR\] (.*)$'
+test_failure_regex = '(?m)^\[ERROR\] Failures:\\s+\\n\[ERROR\]\\s+([\\w.#]+)'

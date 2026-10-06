@@ -18,9 +18,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Service for interacting with arbitrary build tools via agents/colinxcode.toml.
+ * Service for interacting with arbitrary build tools via .roxycode/build.toml.
  * Provides methods for compilation, testing, and cleaning.
  */
 @Service
@@ -28,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 public class GenericBuildToolService {
 
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
-    private static final String CONFIG_PATH = "agents/colinxcode.toml";
+    private static final String CONFIG_PATH = ".roxycode/build.toml";
 
     private final ProjectService projectService;
     private final TomlMapper tomlMapper;
@@ -53,7 +55,7 @@ public class GenericBuildToolService {
         return runCommand("compile");
     }
 
-    @AgentDoc("Checks if a generic build configuration exists (agents/colinxcode.toml)")
+    @AgentDoc("Checks if a generic build configuration exists (.roxycode/build.toml)")
     public boolean detect() {
         if (!projectService.hasActiveProject()) {
             return false;
@@ -93,8 +95,11 @@ public class GenericBuildToolService {
                 command = command.replace("{" + entry.getKey() + "}", entry.getValue());
             }
 
+            String errorRegex = getParseRegex(config, "error_regex");
+            String testFailureRegex = getParseRegex(config, "test_failure_regex");
+
             Map<String, String> env = getEnv(config);
-            return execute(command, env);
+            return execute(command, env, errorRegex, testFailureRegex);
         } catch (Exception e) {
             log.error("Failed to run build command: {}", commandKey, e);
             return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of(), e.getMessage());
@@ -136,6 +141,12 @@ public class GenericBuildToolService {
         if (Files.exists(root.resolve("requirements.txt")) || Files.exists(root.resolve("pyproject.toml"))) {
             return "python";
         }
+        if (Files.exists(root.resolve("go.mod")) || Files.exists(root.resolve("main.go"))) {
+            return "go";
+        }
+        if (Files.exists(root.resolve("CMakeLists.txt"))) {
+            return "cmake";
+        }
         return "default";
     }
 
@@ -156,6 +167,11 @@ public class GenericBuildToolService {
         return null;
     }
 
+    private String getParseRegex(Map<String, Object> config, String key) {
+        Map<String, Object> parse = (Map<String, Object>) config.get("parse");
+        return parse != null ? (String) parse.get(key) : null;
+    }
+
     private Map<String, String> getEnv(Map<String, Object> config) {
         Map<String, Object> envObj = (Map<String, Object>) config.get("env");
         if (envObj == null) {
@@ -168,10 +184,11 @@ public class GenericBuildToolService {
         return env;
     }
 
-    private BuildResult execute(String command, Map<String, String> env) {
+    private BuildResult execute(String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
         log.info("Executing build command: {}", command);
         StringBuilder output = new StringBuilder();
         List<String> errors = new ArrayList<>();
+        List<String> failedTests = new ArrayList<>();
         int exitCode = -1;
 
         try {
@@ -209,8 +226,34 @@ public class GenericBuildToolService {
             errors.add(e.getMessage());
         }
 
+        String fullOutput = output.toString();
+        
+        if (errorRegex != null && !errorRegex.isBlank()) {
+            try {
+                Pattern p = Pattern.compile(errorRegex);
+                Matcher m = p.matcher(fullOutput);
+                while (m.find()) {
+                    errors.add(m.group(m.groupCount() > 0 ? 1 : 0));
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse errors with regex: {}", errorRegex, e);
+            }
+        }
+
+        if (testFailureRegex != null && !testFailureRegex.isBlank()) {
+            try {
+                Pattern p = Pattern.compile(testFailureRegex);
+                Matcher m = p.matcher(fullOutput);
+                while (m.find()) {
+                    failedTests.add(m.group(m.groupCount() > 0 ? 1 : 0));
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse test failures with regex: {}", testFailureRegex, e);
+            }
+        }
+
         boolean success = exitCode == 0 && errors.isEmpty();
-        return new BuildResult(success, exitCode, output.toString(), errors, List.of(), output.toString());
+        return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
     }
 
     public String getConfigContent() throws IOException {

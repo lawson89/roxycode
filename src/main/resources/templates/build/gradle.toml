@@ -5,3 +5,10 @@ clean = "./gradlew clean"
 [test]
 run_all = "./gradlew test"
 run_single = "./gradlew test --tests {testName}"
+
+[env]
+ROXY_CODE = "true"
+
+[parse]
+error_regex = '(?m)^> Compilation failed; see the compiler error output for details\\.\\n(.*)$'
+test_failure_regex = '(?m)^([\\w.]+ > [\\w.]+) FAILED'

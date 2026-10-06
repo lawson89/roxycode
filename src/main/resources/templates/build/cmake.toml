@@ -1,0 +1,14 @@
+[build]
+compile = "mkdir -p build && cd build && cmake .. && make"
+clean = "rm -rf build/"
+
+[test]
+run_all = "cd build && ctest"
+run_single = "cd build && ctest -R {testName}"
+
+[env]
+ROXY_CODE = "true"
+
+[parse]
+error_regex = '(?m)^error: (.*)$'
+test_failure_regex = '(?m)^\\d+: Test\\s+#\\d+:\\s+(\\w+)\\s+\\.+\\s+[\\*]*Failed'

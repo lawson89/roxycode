@@ -75,6 +75,7 @@ class AiServiceTest {
         when(settingsService.getSettings()).thenReturn(settings);
         
         when(chatClientBuilder.defaultTools(any())).thenReturn(chatClientBuilder);
+        when(chatClientBuilder.defaultAdvisors(any(org.springframework.ai.chat.client.advisor.api.Advisor[].class))).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
         
         aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher, repoMapPackerService, gitService);
@@ -97,12 +98,13 @@ class AiServiceTest {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(anyString())).thenReturn(requestSpec);
-        when(requestSpec.messages(anyList())).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
+        
         when(requestSpec.options(any())).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
         when(responseSpec.content()).thenReturn("AI Response");
         
-        when(chatMemory.get(anyString())).thenReturn(new java.util.ArrayList<>());
+        
 
         String result = aiService.chat("Hello");
 
@@ -130,7 +132,8 @@ class AiServiceTest {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(anyString())).thenReturn(requestSpec);
-        when(requestSpec.messages(anyList())).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
+        
         when(requestSpec.options(any())).thenReturn(requestSpec);
         when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
         when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
@@ -144,7 +147,7 @@ class AiServiceTest {
         when(requestSpec.call()).thenThrow(new RuntimeException("MAX_TOOL_TURNS_EXCEEDED"));
         
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
-        when(chatMemory.get(anyString())).thenReturn(new java.util.ArrayList<>());
+        
         
         settings.setMaxAgentToolTurns(3);
         
