@@ -32,6 +32,9 @@ public class MainFrame extends JFrame {
     private final PlanManagerService planManagerService;
     private final org.roxycode.app.ai.JexlTool jexlTool;
     private final org.roxycode.app.events.TurnEventBridge turnEventBridge;
+    private final org.roxycode.app.ai.services.cache.ProjectPackerService packerService;
+    private final org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
+    private final org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
@@ -39,7 +42,10 @@ public class MainFrame extends JFrame {
                     ProjectService projectService, GitService gitService, EnvironmentService envService,
                     JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService, 
                     PlanManagerService planManagerService, org.roxycode.app.ai.JexlTool jexlTool,
-                    org.roxycode.app.events.TurnEventBridge turnEventBridge) {
+                    org.roxycode.app.events.TurnEventBridge turnEventBridge,
+                    org.roxycode.app.ai.services.cache.ProjectPackerService packerService,
+                    org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
+                    org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -52,6 +58,9 @@ public class MainFrame extends JFrame {
         this.planManagerService = planManagerService;
         this.jexlTool = jexlTool;
         this.turnEventBridge = turnEventBridge;
+        this.packerService = packerService;
+        this.cacheMetaService = cacheMetaService;
+        this.geminiCacheService = geminiCacheService;
         setupLaf();
         setupWindow();
         initComponents();
@@ -90,6 +99,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge), "CHAT");
         contentArea.add(new HistoryPanel(turnEventBridge, jexlTool), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
+        contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
