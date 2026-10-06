@@ -45,6 +45,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final JButton sendButton;
     private final JButton stopButton;
     private final JButton approveButton;
+    private final JButton rejectButton;
     private final JLabel turnLabel;
 
     public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, 
@@ -90,16 +91,22 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         approveButton = new JButton("Advance", FontIcon.of(Codicons.CHECK, 16));
         approveButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
         approveButton.setVisible(false);
-        approveButton.addActionListener(e -> advancePhase());
+        approveButton.addActionListener(e -> approvePhase());
+
+        rejectButton = new JButton("Reject", FontIcon.of(Codicons.CLOSE, 16));
+        rejectButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
+        rejectButton.setVisible(false);
+        rejectButton.addActionListener(e -> rejectPhase());
 
         turnLabel = new JLabel("Turns: 0");
         turnLabel.putClientProperty(FlatClientProperties.STYLE, "font: $small.font; foreground: $Label.disabledForeground");
 
-        JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[][][]"));
+        JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[][][][]"));
         buttonPanel.setOpaque(false);
         buttonPanel.add(sendButton, "growx, wrap");
         buttonPanel.add(stopButton, "growx, wrap");
         buttonPanel.add(approveButton, "growx, wrap");
+        buttonPanel.add(rejectButton, "growx, wrap");
         buttonPanel.add(turnLabel, "center");
 
         inputSection.add(inputScrollPane, "grow");
@@ -113,6 +120,8 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
 
         sendButton.addActionListener(this::sendMessage);
         workflowService.addPhaseListener(this::onPhaseChanged);
+        workflowService.addTransitionRequestListener(this::onTransitionRequested);
+
         setupInputContextMenu();
         setupUndoRedo();
         setupKeyboardShortcuts();
@@ -178,17 +187,39 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     }
 
     private void onPhaseChanged(WorkflowPhase phase) {
-        boolean canAdvance = phase.ordinal() < WorkflowPhase.values().length - 1;
-        approveButton.setVisible(canAdvance);
+        SwingUtilities.invokeLater(() -> {
+            approveButton.setVisible(false);
+            rejectButton.setVisible(false);
+        });
     }
 
-    private void advancePhase() {
-        WorkflowPhase current = workflowService.getCurrentPhase();
-        int nextOrdinal = current.ordinal() + 1;
-        if (nextOrdinal < WorkflowPhase.values().length) {
-            WorkflowPhase next = WorkflowPhase.values()[nextOrdinal];
-            workflowService.transitionPhase(next, "Phase transition from " + current.name());
-            outputArea.appendMessage("System", "Advancing to phase **" + next.getDisplayName() + "**...");
+    private void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested) {
+        SwingUtilities.invokeLater(() -> {
+            if (requested != null) {
+                approveButton.setText("Approve " + requested.getDisplayName());
+                approveButton.setVisible(true);
+                rejectButton.setVisible(true);
+                outputArea.appendMessage("System", "Roxy requested a transition to **" + requested.getDisplayName() + "**. Please approve or reject.");
+            } else {
+                approveButton.setVisible(false);
+                rejectButton.setVisible(false);
+            }
+        });
+    }
+
+    private void approvePhase() {
+        WorkflowPhase requested = workflowService.getPendingPhase();
+        if (requested != null) {
+            workflowService.approveTransition();
+            outputArea.appendMessage("System", "Phase transition to **" + requested.getDisplayName() + "** approved.");
+        }
+    }
+
+    private void rejectPhase() {
+        WorkflowPhase requested = workflowService.getPendingPhase();
+        if (requested != null) {
+            workflowService.rejectTransition();
+            outputArea.appendMessage("System", "Phase transition to **" + requested.getDisplayName() + "** rejected.");
         }
     }
 
@@ -249,6 +280,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         sendButton.setEnabled(!loading);
         inputArea.setEnabled(!loading);
         approveButton.setEnabled(!loading);
+        rejectButton.setEnabled(!loading);
         sendButton.setText(loading ? "Sending..." : "Send");
     }
 

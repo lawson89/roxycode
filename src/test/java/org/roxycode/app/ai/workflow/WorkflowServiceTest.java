@@ -13,7 +13,9 @@ class WorkflowServiceTest {
         service.setCurrentPhase(WorkflowPhase.DESIGN);
         assertEquals(WorkflowPhase.DESIGN, service.getCurrentPhase());
 
-        service.setPhaseByName("DEVELOPMENT");
+        service.requestPhaseByName("DEVELOPMENT");
+        assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
+        service.approveTransition();
         assertEquals(WorkflowPhase.DEVELOPMENT, service.getCurrentPhase());
     }
 
@@ -27,5 +29,33 @@ class WorkflowServiceTest {
 
         service.setCurrentPhase(WorkflowPhase.VERIFICATION);
         assertEquals(WorkflowPhase.VERIFICATION, observed.get());
+    }
+
+    @Test
+    void testHitlPhaseTransition() {
+        WorkflowService service = new WorkflowService();
+        AtomicReference<WorkflowPhase> requestedPhase = new AtomicReference<>();
+        
+        service.addTransitionRequestListener((current, requested) -> requestedPhase.set(requested));
+        
+        service.requestPhaseTransition(WorkflowPhase.DESIGN);
+        assertEquals(WorkflowPhase.DESIGN, service.getPendingPhase());
+        assertEquals(WorkflowPhase.DESIGN, requestedPhase.get());
+        assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase()); // Should not have changed yet
+        
+        service.approveTransition();
+        assertEquals(WorkflowPhase.DESIGN, service.getCurrentPhase());
+        assertNull(service.getPendingPhase());
+    }
+
+    @Test
+    void testRejectTransition() {
+        WorkflowService service = new WorkflowService();
+        service.requestPhaseTransition(WorkflowPhase.DEVELOPMENT);
+        assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
+        
+        service.rejectTransition();
+        assertNull(service.getPendingPhase());
+        assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
     }
 }
