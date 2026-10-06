@@ -5,7 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,13 +24,15 @@ class FileEditorServiceTest {
 
     private ProjectService projectService;
     private WorkflowService workflowService;
+    private ApplicationEventPublisher eventPublisher;
     private FileEditorService fileEditorService;
 
     @BeforeEach
     void setUp() {
         projectService = mock(ProjectService.class);
         workflowService = mock(WorkflowService.class);
-        fileEditorService = new FileEditorService(projectService, workflowService);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        fileEditorService = new FileEditorService(projectService, workflowService, eventPublisher);
 
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOPMENT);
@@ -44,6 +48,7 @@ class FileEditorServiceTest {
         Path filePath = tempDir.resolve(relativePath);
         assertTrue(Files.exists(filePath));
         assertEquals(content, Files.readString(filePath));
+        verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test
@@ -65,6 +70,7 @@ class FileEditorServiceTest {
         String content = Files.readString(filePath);
         assertTrue(content.contains("// Done"));
         assertFalse(content.contains("// TODO"));
+        verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test
@@ -89,6 +95,7 @@ class FileEditorServiceTest {
         assertEquals("Line 1", lines.get(0));
         assertEquals("New Content", lines.get(1));
         assertEquals("Line 4", lines.get(2));
+        verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test
@@ -101,6 +108,7 @@ class FileEditorServiceTest {
         List<String> lines = Files.readAllLines(filePath);
         assertEquals(3, lines.size());
         assertEquals("Line 2", lines.get(1));
+        verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test

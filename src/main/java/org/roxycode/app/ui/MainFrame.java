@@ -32,7 +32,7 @@ public class MainFrame extends JFrame {
     private final PlanManagerService planManagerService;
     private final org.roxycode.app.ai.JexlTool jexlTool;
     private final org.roxycode.app.events.TurnEventBridge turnEventBridge;
-    private final org.roxycode.app.ai.services.cache.ProjectPackerService packerService;
+    private final org.roxycode.app.ai.services.cache.RepoMapPackerService packerService;
     private final org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
     private final org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService;
     private final org.roxycode.app.service.PromptService promptService;
@@ -44,7 +44,7 @@ public class MainFrame extends JFrame {
                     JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService, 
                     PlanManagerService planManagerService, org.roxycode.app.ai.JexlTool jexlTool,
                     org.roxycode.app.events.TurnEventBridge turnEventBridge,
-                    org.roxycode.app.ai.services.cache.ProjectPackerService packerService,
+                    org.roxycode.app.ai.services.cache.RepoMapPackerService packerService,
                     org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
                     org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService,
                     org.roxycode.app.service.PromptService promptService) {
@@ -67,6 +67,7 @@ public class MainFrame extends JFrame {
         setupLaf();
         setupWindow();
         initComponents();
+        projectService.addProjectListener(path -> updateTitle());
     }
 
     private void setupLaf() {
@@ -74,10 +75,19 @@ public class MainFrame extends JFrame {
     }
 
     private void setupWindow() {
-        setTitle("RoxyCode");
+        updateTitle();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1100, 800);
         setLocationRelativeTo(null);
+
+        try {
+            java.net.URL iconUrl = getClass().getResource("/static/images/roxy.png");
+            if (iconUrl != null) {
+                setIconImage(new ImageIcon(iconUrl).getImage());
+            }
+        } catch (Exception e) {
+            // Ignore icon loading errors
+        }
     }
 
     private void initComponents() {
@@ -102,7 +112,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge), "CHAT");
         contentArea.add(new HistoryPanel(turnEventBridge, jexlTool), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
-        contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService), "CACHE");
+        contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
@@ -121,5 +131,9 @@ public class MainFrame extends JFrame {
         JPanel p = new JPanel(new MigLayout("fill", "[center]", "[center]"));
         p.add(new JLabel(text));
         return p;
+    }
+
+    private void updateTitle() {
+        setTitle("RoxyCode - [" + projectService.getProjectName() + "]");
     }
 }

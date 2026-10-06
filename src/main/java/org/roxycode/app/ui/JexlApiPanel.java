@@ -52,6 +52,14 @@ public class JexlApiPanel extends JPanel {
         refresh();
     }
 
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (registry != null) {
+            updateTheme();
+        }
+    }
+
     private void setupContextMenu() {
         textPane.addMouseListener(new MouseAdapter() {
             @Override

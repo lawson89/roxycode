@@ -7,7 +7,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
-import org.roxycode.app.ai.services.cache.ProjectPackerService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 
@@ -23,7 +23,8 @@ class CodebaseCachePanelTest {
 
     @Mock private ProjectService projectService;
     @Mock private SettingsService settingsService;
-    @Mock private ProjectPackerService packerService;
+    private org.roxycode.app.service.PromptService promptService;
+    @Mock private RepoMapPackerService packerService;
     @Mock private ProjectCacheMetaService metaService;
     @Mock private GeminiCacheService geminiCacheService;
 
@@ -34,16 +35,19 @@ class CodebaseCachePanelTest {
         when(metaService.loadMeta()).thenReturn(Optional.empty());
         when(metaService.loadRepoCache()).thenReturn(Optional.empty());
         
-        panel = new CodebaseCachePanel(projectService, settingsService, packerService, metaService, geminiCacheService);
+        panel = new CodebaseCachePanel(projectService, settingsService, packerService, metaService, geminiCacheService, promptService);
     }
 
     @Test
     void testButtonsExist() {
-        JButton packButton = findButton(panel, "Pack Local Codebase");
-        JButton uploadButton = findButton(panel, "Upload to Gemini");
-
-        assertNotNull(packButton, "Pack button should exist");
-        assertNotNull(uploadButton, "Upload button should exist");
+        JButton packButton = findButton(panel, "Update Implicit Cache");
+        assertNotNull(packButton, "Update button should exist");
+    }
+    
+    @Test
+    void testRepoMapAreaExists() {
+        JTextArea textArea = findComponent(panel, JTextArea.class);
+        assertNotNull(textArea, "JTextArea should exist for repo map content");
     }
 
     private JButton findButton(Container container, String text) {
@@ -53,6 +57,21 @@ class CodebaseCachePanelTest {
             }
             if (comp instanceof Container) {
                 JButton res = findButton((Container) comp, text);
+                if (res != null) {
+                    return res;
+                }
+            }
+        }
+        return null;
+    }
+    
+    private <T> T findComponent(Container container, Class<T> clazz) {
+        for (Component comp : container.getComponents()) {
+            if (clazz.isInstance(comp)) {
+                return clazz.cast(comp);
+            }
+            if (comp instanceof Container) {
+                T res = findComponent((Container) comp, clazz);
                 if (res != null) {
                     return res;
                 }

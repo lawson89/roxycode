@@ -3,7 +3,7 @@ package org.roxycode.app.ui;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
-import org.roxycode.app.ai.services.cache.ProjectPackerService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.cache.ProjectCacheMeta;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -12,32 +12,30 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
-import java.time.LocalDateTime;
-import java.util.List;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
 public class CodebaseCachePanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
-    private final ProjectService projectService;
-    private final SettingsService settingsService;
-    private final ProjectPackerService packerService;
     private final ProjectCacheMetaService metaService;
+    private final RepoMapPackerService packerService;
+    private final org.roxycode.app.service.PromptService promptService;
     private final GeminiCacheService geminiCacheService;
 
     private final JLabel statusLabel = new JLabel("Status: Unknown");
     private final JProgressBar progressBar = new JProgressBar(0, 100);
-    private final JButton packButton = new JButton("Pack Local Codebase");
-    private final JButton uploadButton = new JButton("Upload to Gemini");
-    private final JTextArea metaInfoArea = new JTextArea(8, 40);
-    private final JTextArea packedCodebaseArea = new JTextArea(20, 60);
+    private final JButton packButton = new JButton("Update Implicit Cache");
+    
+    private final JTextArea repoMapArea = new JTextArea();
+    private final JTextArea stableContextArea = new JTextArea();
+    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public CodebaseCachePanel(ProjectService projectService, SettingsService settingsService,
-                               ProjectPackerService packerService, ProjectCacheMetaService metaService,
-                               GeminiCacheService geminiCacheService) {
-        this.projectService = projectService;
-        this.settingsService = settingsService;
+                                RepoMapPackerService packerService, ProjectCacheMetaService metaService,
+                                GeminiCacheService geminiCacheService, org.roxycode.app.service.PromptService promptService) {
         this.packerService = packerService;
         this.metaService = metaService;
+        this.promptService = promptService;
         this.geminiCacheService = geminiCacheService;
 
         initComponents();
@@ -45,37 +43,46 @@ public class CodebaseCachePanel extends JPanel {
     }
 
     private void initComponents() {
-        setLayout(new MigLayout("fill, insets 20", "[grow]", "[]20[]10[]20[150!]20[grow]"));
+        setLayout(new MigLayout("fill, insets 20", "[grow]", "[]20[]10[grow]"));
 
-        JLabel title = new JLabel("Gemini Codebase Caching");
+        JLabel title = new JLabel("Implicit Context Cache (Repo Map)");
         title.setFont(new Font("SansSerif", Font.BOLD, 18));
         add(title, "wrap");
 
         JPanel statusPanel = new JPanel(new MigLayout("insets 0, fillx", "[]10[grow]", "[][]10[]"));
-        statusPanel.add(new JLabel("Status:"));
-        statusPanel.add(statusLabel, "wrap");
+        statusPanel.add(statusLabel, "wrap, span 2");
         statusPanel.add(progressBar, "span 2, growx, wrap");
         
         JPanel buttonPanel = new JPanel(new MigLayout("insets 0", "[]10[]"));
         buttonPanel.add(packButton);
-        buttonPanel.add(uploadButton);
         statusPanel.add(buttonPanel, "span 2");
         
         add(statusPanel, "growx, wrap");
 
-        metaInfoArea.setEditable(false);
-        metaInfoArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        add(new JScrollPane(metaInfoArea), "growx, wrap");
-
-        packedCodebaseArea.setEditable(false);
-        packedCodebaseArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
-        add(new JScrollPane(packedCodebaseArea), "grow, push");
+        repoMapArea.setEditable(false);
+        repoMapArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        stableContextArea.setEditable(false);
+        stableContextArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        
+        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane.addTab("Repo Map (Dynamic)", new JScrollPane(repoMapArea));
+        tabbedPane.addTab("Prompts & Docs (Stable)", new JScrollPane(stableContextArea));
+        
+        add(tabbedPane, "grow, push");
 
         packButton.addActionListener(e -> runPack());
-        uploadButton.addActionListener(e -> runUpload());
         
         progressBar.setStringPainted(true);
         progressBar.setVisible(false);
+    }
+
+    public void updateTheme() {
+        repoMapArea.setBackground(UIManager.getColor("TextArea.background"));
+        repoMapArea.setForeground(UIManager.getColor("TextArea.foreground"));
+        repoMapArea.setCaretColor(UIManager.getColor("TextArea.caretForeground"));
+        stableContextArea.setBackground(UIManager.getColor("TextArea.background"));
+        stableContextArea.setForeground(UIManager.getColor("TextArea.foreground"));
+        stableContextArea.setCaretColor(UIManager.getColor("TextArea.caretForeground"));
     }
 
     private void refreshStatus() {
@@ -84,71 +91,71 @@ public class CodebaseCachePanel extends JPanel {
 
         if (meta.isPresent()) {
             ProjectCacheMeta m = meta.get();
-            statusLabel.setText("Cached on " + m.lastCached());
-            metaInfoArea.setText("Project: " + m.projectName() + "\n" +
-                    "Cache Name: " + m.cacheName() + "\n" +
-                    "Last Cached: " + m.lastCached() + "\n" +
-                    "TTL: " + m.ttlSeconds() + "s\n" +
-                    "Estimated Tokens: " + m.estimatedTokens());
+            long stableTokens = geminiCacheService.estimateTokens(getStableContextString());
+            String status = String.format("Status: Last updated on %s | Stable: %,d | Repo Map: %,d | Total: %,d", 
+                m.lastUpdated().format(dateFormatter), stableTokens, m.estimatedTokens(), stableTokens + m.estimatedTokens());
+            statusLabel.setText(status);
             
-            packed.ifPresent(packedCodebaseArea::setText);
-            if (packed.isEmpty()) {
-                packedCodebaseArea.setText("(Packed codebase content not found on disk)");
-            }
+            repoMapArea.setText(packed.orElse("Content not found on disk."));
+            updateStableContext();
+            repoMapArea.setCaretPosition(0);
         } else {
-            statusLabel.setText("No active cache found.");
-            metaInfoArea.setText("Metadata will appear here after cache creation.");
-            packedCodebaseArea.setText("");
+            statusLabel.setText("Status: No implicit cache found.");
+            repoMapArea.setText("Repo Map will appear here after generation.");
             
             if (packed.isPresent()) {
-                 statusLabel.setText("Local codebase packed. Ready to upload.");
-                 packedCodebaseArea.setText(packed.get());
+                 statusLabel.setText("Status: Repo Map available locally.");
+                 repoMapArea.setText(packed.get());
+                 repoMapArea.setCaretPosition(0);
             }
         }
-        
-        uploadButton.setEnabled(packed.isPresent());
+    }
+
+    private String getStableContextString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Stable Context Artifacts\n\n");
+        sb.append("## Core Workflow Prompt\n").append(promptService.loadCoreWorkflowPrompt()).append("\n\n");
+        sb.append("## JEXL Context (jexl.md)\n").append(promptService.loadJexlContext()).append("\n\n");
+        sb.append("## Additional Prompts\n").append(promptService.loadAllPrompts()).append("\n\n");
+        sb.append("## Additional Docs\n").append(promptService.loadAllDocs());
+        return sb.toString();
+    }
+
+    private void updateStableContext() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Stable Context Artifacts\n\n");
+        sb.append("## Core Workflow Prompt\n").append(promptService.loadCoreWorkflowPrompt()).append("\n\n");
+        sb.append("## JEXL Context (jexl.md)\n").append(promptService.loadJexlContext()).append("\n\n");
+        sb.append("## Additional Prompts\n").append(promptService.loadAllPrompts()).append("\n\n");
+        sb.append("## Additional Docs\n").append(promptService.loadAllDocs());
+        stableContextArea.setText(getStableContextString());
+        stableContextArea.setCaretPosition(0);
     }
 
     private void runPack() {
         packButton.setEnabled(false);
-        uploadButton.setEnabled(false);
         progressBar.setVisible(true);
-        progressBar.setValue(0);
-        statusLabel.setText("Packing codebase...");
+        progressBar.setIndeterminate(true);
+        statusLabel.setText("Generating Repo Map...");
 
-        SwingWorker<Long, ProgressUpdate> worker = new SwingWorker<>() {
+        SwingWorker<org.roxycode.app.ai.services.EditorResult, Void> worker = new SwingWorker<>() {
             @Override
-            protected Long doInBackground() throws Exception {
-                var packResult = packerService.packCodebase((current, total, message) -> {
-                    publish(new ProgressUpdate(current, total, message));
-                });
-                if (!packResult.success()) throw new RuntimeException("Packing failed: " + packResult.errorHint());
-                
-                publish(new ProgressUpdate(0, 1, "Estimating tokens..."));
-                return geminiCacheService.estimateTokens(packResult.content());
-            }
-
-            @Override
-            protected void process(List<ProgressUpdate> chunks) {
-                ProgressUpdate last = chunks.get(chunks.size() - 1);
-                if (last.total > 0) {
-                    progressBar.setIndeterminate(false);
-                    progressBar.setMaximum(last.total);
-                    progressBar.setValue(last.current);
-                } else {
-                    progressBar.setIndeterminate(true);
-                }
-                statusLabel.setText(last.message);
+            protected org.roxycode.app.ai.services.EditorResult doInBackground() throws Exception {
+                return packerService.generateRepoMap();
             }
 
             @Override
             protected void done() {
                 try {
-                    long tokens = get();
-                    statusLabel.setText("Codebase packed. Estimated tokens: " + tokens);
-                    refreshStatus();
+                    var result = get();
+                    if (result.success()) {
+                        statusLabel.setText("Repo Map updated successfully.");
+                        refreshStatus();
+                    } else {
+                        statusLabel.setText("Failed: " + result.errorHint());
+                    }
                 } catch (Exception e) {
-                    log.error("Packing failed", e);
+                    log.error("Repo map generation failed", e);
                     statusLabel.setText("Failed: " + e.getMessage());
                 } finally {
                     packButton.setEnabled(true);
@@ -158,61 +165,4 @@ public class CodebaseCachePanel extends JPanel {
         };
         worker.execute();
     }
-
-    private void runUpload() {
-        Optional<String> packedContent = metaService.loadRepoCache();
-        if (packedContent.isEmpty()) {
-            statusLabel.setText("Error: No packed codebase found. Pack first.");
-            return;
-        }
-
-        packButton.setEnabled(false);
-        uploadButton.setEnabled(false);
-        progressBar.setVisible(true);
-        progressBar.setIndeterminate(true);
-        statusLabel.setText("Uploading to Gemini cache...");
-
-        SwingWorker<String, Void> worker = new SwingWorker<>() {
-            private long estimatedTokens = 0;
-
-            @Override
-            protected String doInBackground() throws Exception {
-                String content = packedContent.get();
-                estimatedTokens = geminiCacheService.estimateTokens(content);
-                String model = settingsService.getSettings().getGeminiModel();
-                return geminiCacheService.createCache(model, content);
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    String result = get();
-                    if (result.startsWith("Error")) {
-                        statusLabel.setText(result);
-                    } else {
-                        ProjectCacheMeta meta = new ProjectCacheMeta(
-                                projectService.getProjectName(),
-                                LocalDateTime.now(),
-                                result,
-                                3600,
-                                estimatedTokens
-                        );
-                        metaService.saveMeta(meta);
-                        statusLabel.setText("Upload successful.");
-                        refreshStatus();
-                    }
-                } catch (Exception e) {
-                    log.error("Upload failed", e);
-                    statusLabel.setText("Upload failed: " + e.getMessage());
-                } finally {
-                    packButton.setEnabled(true);
-                    uploadButton.setEnabled(true);
-                    progressBar.setVisible(false);
-                }
-            }
-        };
-        worker.execute();
-    }
-
-    private static record ProgressUpdate(int current, int total, String message) {}
 }

@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -40,6 +41,31 @@ public class PromptService {
             log.error("Failed to load JEXL context from classpath: {}", e.getMessage());
             return "";
         }
+    }
+
+    public String loadAllPrompts() {
+        return loadMarkdownFromClasspath("prompts", "core_workflow.md");
+    }
+
+    public String loadAllDocs() {
+        return loadMarkdownFromClasspath("docs", "jexl.md");
+    }
+
+    private String loadMarkdownFromClasspath(String directory, String excludeFile) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            Resource[] resources = resolver.getResources("classpath*:" + directory + "/*.md");
+            for (Resource resource : resources) {
+                if (resource.getFilename() != null && !resource.getFilename().equals(excludeFile)) {
+                    sb.append("\n\n## ").append(resource.getFilename()).append("\n");
+                    sb.append(new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+                }
+            }
+        } catch (IOException e) {
+            log.error("Failed to discover markdown files in {}: {}", directory, e.getMessage());
+        }
+        return sb.toString();
     }
 
     public void saveCoreWorkflowPrompt(String content) {

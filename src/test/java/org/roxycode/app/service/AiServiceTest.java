@@ -6,8 +6,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.AgentRole;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
+import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
 import org.roxycode.app.model.AppSettings;
@@ -56,6 +60,12 @@ class AiServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private RepoMapPackerService repoMapPackerService;
+
+    @Mock
+    private GitService gitService;
+
     private AiService aiService;
     private AppSettings settings;
 
@@ -67,7 +77,7 @@ class AiServiceTest {
         when(chatClientBuilder.defaultTools(any())).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
         
-        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher);
+        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher, repoMapPackerService, gitService);
     }
 
     @Test
@@ -78,7 +88,12 @@ class AiServiceTest {
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOPMENT);
         when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
         when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
+        when(promptService.loadAllPrompts()).thenReturn(" ALL PROMPTS");
+        when(promptService.loadAllDocs()).thenReturn(" ALL DOCS");
         
+        when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
+        when(gitService.getStatus()).thenReturn("GIT STATUS OUTPUT");
+
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(anyString())).thenReturn(requestSpec);
@@ -98,11 +113,14 @@ class AiServiceTest {
         String capturedPrompt = systemPromptCaptor.getValue();
         
         assertTrue(capturedPrompt.contains("CORE PROMPT"));
+        assertTrue(capturedPrompt.contains("ALL PROMPTS"));
+        assertTrue(capturedPrompt.contains("ALL DOCS"));
         assertTrue(capturedPrompt.contains("CURRENT PHASE: DEVELOPMENT"));
         assertTrue(capturedPrompt.contains("Senior Developer"));
         assertTrue(capturedPrompt.contains("JEXL DOCS"));
         assertTrue(capturedPrompt.contains("JEXL CONTEXT"));
-        assertTrue(capturedPrompt.contains("JEXL CONTEXT"));
+        assertTrue(capturedPrompt.contains("REPO MAP CONTENT"));
+        assertTrue(capturedPrompt.contains("GIT STATUS OUTPUT"));
         
         verify(requestSpec).options(any());
     }
@@ -116,7 +134,12 @@ class AiServiceTest {
         when(requestSpec.options(any())).thenReturn(requestSpec);
         when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
         when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
+        when(promptService.loadAllPrompts()).thenReturn(" ALL PROMPTS");
+        when(promptService.loadAllDocs()).thenReturn(" ALL DOCS");
         
+        when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
+        when(gitService.getStatus()).thenReturn("GIT STATUS OUTPUT");
+
         // Mocking the call to throw the limit exception
         when(requestSpec.call()).thenThrow(new RuntimeException("MAX_TOOL_TURNS_EXCEEDED"));
         

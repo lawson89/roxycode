@@ -4,6 +4,9 @@ import org.roxycode.app.ai.AgentRole;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.JexlExecutionListener;
+import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
 import org.roxycode.app.events.AgentTurnEvent;
@@ -22,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Service for interacting with the AI Chat Model using the modern ChatClient fluent API.
+ * Optimized for Gemini implicit context caching by ordering prompts from stable to dynamic.
  */
 @Service
 public class AiService {
@@ -37,12 +41,16 @@ public class AiService {
     private final JexlTool jexlTool;
     private final ChatMemory chatMemory;
     private final ApplicationEventPublisher eventPublisher;
+    private final RepoMapPackerService repoMapPackerService;
+    private final GitService gitService;
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
                      PromptService promptService,
                      JexlServiceRegistry jexlServiceRegistry, JexlTool jexlTool,
                      WorkflowService workflowService, ChatMemory chatMemory,
-                     ApplicationEventPublisher eventPublisher) {
+                     ApplicationEventPublisher eventPublisher,
+                     RepoMapPackerService repoMapPackerService,
+                     GitService gitService) {
         this.settingsService = settingsService;
         this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
@@ -50,6 +58,8 @@ public class AiService {
         this.jexlTool = jexlTool;
         this.chatMemory = chatMemory;
         this.eventPublisher = eventPublisher;
+        this.repoMapPackerService = repoMapPackerService;
+        this.gitService = gitService;
         this.chatClient = chatClientBuilder
                 .defaultTools(jexlTool)
                 .build();
@@ -101,17 +111,33 @@ public class AiService {
         WorkflowPhase currentPhase = workflowService.getCurrentPhase();
         AgentRole currentRole = currentPhase.getRole();
         
+        // --- STABLE CONTEXT (Candidates for Caching) ---
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
-        systemPrompt.append("\n\n## DYNAMIC CONTEXT\n");
+        systemPrompt.append(promptService.loadAllPrompts());
+        systemPrompt.append("\n\n## JEXL CONTEXT\n").append(jexlContext).append("\n\n");
+        systemPrompt.append(promptService.loadAllDocs());
+        systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlDocs);
+        
+        // --- SEMI-STABLE CONTEXT (Project Structure) ---
+        EditorResult repoMap = repoMapPackerService.generateRepoMap();
+        if (repoMap.success()) {
+            systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.content()).append("\n");
+        }
+
+        // --- DYNAMIC CONTEXT (Session/Turn specific) ---
+        systemPrompt.append("\n\n## SESSION CONTEXT\n");
         systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append(" (").append(currentPhase.getDisplayName()).append(")\n");
         systemPrompt.append("CURRENT ROLE: ").append(currentRole.getTitle()).append("\n");
         systemPrompt.append(currentRole.getSystemPromptPrefix()).append("\n\n");
         
-        if (systemPromptText != null) {
-            systemPrompt.append(systemPromptText).append("\n\n");
+        String gitStatus = gitService.getStatus();
+        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error") && !gitStatus.startsWith("No active project") && !gitStatus.startsWith("Not a git repository")) {
+            systemPrompt.append("## GIT STATUS\n").append(gitStatus).append("\n\n");
         }
-        systemPrompt.append("\n\n## JEXL CONTEXT\n").append(jexlContext).append("\n\n");
-        systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlDocs);
+
+        if (systemPromptText != null) {
+            systemPrompt.append("## ADDITIONAL INSTRUCTIONS\n").append(systemPromptText).append("\n\n");
+        }
         
         // Retrieve history from memory
         List<Message> history = chatMemory.get("default");

@@ -26,14 +26,13 @@ public class ProjectCacheMetaServiceTest {
         ProjectCacheMetaService service = new ProjectCacheMetaService(projectService);
         
         LocalDateTime now = LocalDateTime.now();
-        ProjectCacheMeta meta = new ProjectCacheMeta("TestProject", now, "cache-123", 3600, 5000);
+        ProjectCacheMeta meta = new ProjectCacheMeta("TestProject", now, 5000);
         
         service.saveMeta(meta);
         
         Optional<ProjectCacheMeta> loaded = service.loadMeta();
         assertTrue(loaded.isPresent());
         assertEquals("TestProject", loaded.get().projectName());
-        assertEquals("cache-123", loaded.get().cacheName());
         assertEquals(5000, loaded.get().estimatedTokens());
         
         // Check that .roxycode directory was created

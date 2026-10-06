@@ -4,10 +4,12 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -26,11 +28,13 @@ public class FileEditorService {
 
     private final ProjectService projectService;
     private final WorkflowService workflowService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
-    public FileEditorService(ProjectService projectService, WorkflowService workflowService) {
+    public FileEditorService(ProjectService projectService, WorkflowService workflowService, ApplicationEventPublisher eventPublisher) {
         this.projectService = projectService;
         this.workflowService = workflowService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -47,6 +51,7 @@ public class FileEditorService {
         Files.createDirectories(path.getParent());
         Files.writeString(path, content);
         log.info("Wrote file: {}", relativePath);
+        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
     }
 
     /**
@@ -77,6 +82,7 @@ public class FileEditorService {
         String newContent = content.replace(targetBlock, replacementBlock);
         Files.writeString(path, newContent);
         log.info("Replaced block in file: {}", relativePath);
+        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
     }
 
     /**
@@ -114,6 +120,7 @@ public class FileEditorService {
 
         Files.write(path, newLines);
         log.info("Replaced lines {}-{} in file: {}", startLine, endLine, relativePath);
+        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
     }
 
     /**
@@ -139,6 +146,7 @@ public class FileEditorService {
 
         Files.write(path, newLines);
         log.info("Inserted content at line {} in file: {}", lineNumber, relativePath);
+        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
     }
 
     private void checkPhase() {
