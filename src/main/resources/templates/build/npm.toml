@@ -1,0 +1,7 @@
+[build]
+compile = "npm run build"
+clean = "rm -rf dist build"
+
+[test]
+run_all = "npm test"
+run_single = "npm test -- -t {testName}"

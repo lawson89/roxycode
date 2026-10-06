@@ -11,6 +11,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.roxycode.app.ui.MainFrame;
+import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProjectService;
@@ -72,10 +73,11 @@ public class RoxyCode {
             org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService = context.getBean(org.roxycode.app.ai.services.cache.ProjectCacheMetaService.class);
             org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService = context.getBean(org.roxycode.app.ai.services.cache.GeminiCacheService.class);
             org.roxycode.app.service.PromptService promptService = context.getBean(org.roxycode.app.service.PromptService.class);
+            GenericBuildToolService buildToolService = context.getBean(GenericBuildToolService.class);
             
             MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService, 
                     jexlServiceRegistry, exploreManager, workflowService, planManagerService, jexlTool, turnEventBridge,
-                    packerService, cacheMetaService, geminiCacheService, promptService);
+                    packerService, cacheMetaService, geminiCacheService, promptService, buildToolService);
             frame.setVisible(true);
         });
     }

@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.explore.ExploreManager;
 import org.roxycode.app.ai.services.plan.PlanManagerService;
 import org.roxycode.app.service.SettingsService;
@@ -36,6 +37,7 @@ public class MainFrame extends JFrame {
     private final org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
     private final org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService;
     private final org.roxycode.app.service.PromptService promptService;
+    private final GenericBuildToolService buildToolService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
@@ -47,7 +49,8 @@ public class MainFrame extends JFrame {
                     org.roxycode.app.ai.services.cache.RepoMapPackerService packerService,
                     org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
                     org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService,
-                    org.roxycode.app.service.PromptService promptService) {
+                    org.roxycode.app.service.PromptService promptService,
+                    GenericBuildToolService buildToolService) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -64,6 +67,7 @@ public class MainFrame extends JFrame {
         this.cacheMetaService = cacheMetaService;
         this.geminiCacheService = geminiCacheService;
         this.promptService = promptService;
+        this.buildToolService = buildToolService;
         setupLaf();
         setupWindow();
         initComponents();
@@ -117,6 +121,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
         contentArea.add(new PromptPanel(promptService, settingsService), "PROMPT");
+        contentArea.add(new BuildConfigPanel(buildToolService, settingsService, projectService), "BUILD_CONFIG");
 
         workspace.add(header, "h 60!, wrap");
         workspace.add(phaseRow, "h 40!, wrap");

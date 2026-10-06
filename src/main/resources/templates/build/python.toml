@@ -1,0 +1,7 @@
+[build]
+compile = "python -m compileall ."
+clean = "find . -name '*.pyc' -delete"
+
+[test]
+run_all = "pytest"
+run_single = "pytest -k {testName}"

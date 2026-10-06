@@ -1,0 +1,7 @@
+[build]
+compile = "./gradlew classes"
+clean = "./gradlew clean"
+
+[test]
+run_all = "./gradlew test"
+run_single = "./gradlew test --tests {testName}"
