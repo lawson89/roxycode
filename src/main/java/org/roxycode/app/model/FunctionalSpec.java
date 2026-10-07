@@ -1,4 +1,4 @@
-package org.roxycode.app.ai.services.specs;
+package org.roxycode.app.model;
 
 import org.roxycode.app.ai.AgentDoc;
 import java.util.List;

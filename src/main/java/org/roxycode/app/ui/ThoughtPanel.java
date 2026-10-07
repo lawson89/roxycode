@@ -1,4 +1,4 @@
-package org.roxycode.app.ui.components;
+package org.roxycode.app.ui;
 
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;

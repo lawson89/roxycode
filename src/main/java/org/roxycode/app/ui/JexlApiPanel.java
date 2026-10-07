@@ -1,7 +1,7 @@
 package org.roxycode.app.ui;
 
 import org.roxycode.app.ai.JexlServiceRegistry;
-import org.roxycode.app.ui.syntaxhighlight.JexlToHtmlConverter;
+import org.roxycode.app.ui.JexlToHtmlConverter;
 
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;

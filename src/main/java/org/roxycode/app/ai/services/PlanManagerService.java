@@ -1,9 +1,9 @@
-package org.roxycode.app.ai.services.plan;
+package org.roxycode.app.ai.services;
 
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.ai.services.specs.FunctionalSpec;
-import org.roxycode.app.ai.services.specs.TechnicalSpec;
+import org.roxycode.app.model.FunctionalSpec;
+import org.roxycode.app.model.TechnicalSpec;
 
 import java.util.List;
 import java.util.Map;

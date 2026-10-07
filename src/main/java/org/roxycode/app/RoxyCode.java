@@ -2,8 +2,8 @@ package org.roxycode.app;
 
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.services.explore.ExploreManager;
-import org.roxycode.app.ai.services.plan.PlanManagerService;
+import org.roxycode.app.ai.services.ExploreManager;
+import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.ai.workflow.WorkflowService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

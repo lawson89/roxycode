@@ -2,7 +2,7 @@ package org.roxycode.app.ai.workflow;
 
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.AgentDoc;
-import org.roxycode.app.ai.services.plan.PlanManagerService;
+import org.roxycode.app.ai.services.PlanManagerService;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;

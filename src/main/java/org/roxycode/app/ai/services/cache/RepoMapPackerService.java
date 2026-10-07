@@ -7,7 +7,7 @@ import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
-import org.roxycode.app.model.cache.ProjectCacheMeta;
+import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

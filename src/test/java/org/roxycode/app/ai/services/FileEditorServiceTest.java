@@ -60,8 +60,6 @@ class FileEditorServiceTest {
         );
     }
 
-
-
     @Test
     void testReplaceBlockSuccess() throws IOException {
         Path filePath = tempDir.resolve("test.java");
@@ -73,6 +71,18 @@ class FileEditorServiceTest {
         assertTrue(content.contains("// Done"));
         assertFalse(content.contains("// TODO"));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
+    }
+
+    @Test
+    void testReplaceBlockWithVariableWhitespace() throws IOException {
+        Path filePath = tempDir.resolve("test.java");
+        Files.writeString(filePath, "public    void   myMethod() { }");
+
+        // Should match despite different whitespace in target block
+        fileEditorService.replaceBlock("test.java", "public void myMethod", "private int newMethod");
+
+        String content = Files.readString(filePath);
+        assertEquals("private int newMethod() { }", content);
     }
 
     @Test

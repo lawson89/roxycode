@@ -1,4 +1,4 @@
-package org.roxycode.app.model.cache;
+package org.roxycode.app.model;
 
 import java.time.LocalDateTime;
 

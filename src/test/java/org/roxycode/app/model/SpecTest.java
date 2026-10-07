@@ -1,4 +1,4 @@
-package org.roxycode.app.ai.services.specs;
+package org.roxycode.app.model;
 
 import org.junit.jupiter.api.Test;
 import java.util.List;

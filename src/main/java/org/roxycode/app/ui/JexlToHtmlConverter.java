@@ -1,4 +1,4 @@
-package org.roxycode.app.ui.syntaxhighlight;
+package org.roxycode.app.ui;
 
 import org.apache.commons.text.StringEscapeUtils;
 import java.util.regex.Matcher;

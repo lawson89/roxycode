@@ -2,7 +2,7 @@ package org.roxycode.app.ai.services.cache;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.roxycode.app.model.cache.ProjectCacheMeta;
+import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProjectService;
 import java.io.IOException;
 import java.nio.file.Files;

@@ -4,7 +4,7 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
-import org.roxycode.app.model.cache.ProjectCacheMeta;
+import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;

@@ -1,4 +1,4 @@
-package org.roxycode.app.ai.services.explore;
+package org.roxycode.app.ai.services;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

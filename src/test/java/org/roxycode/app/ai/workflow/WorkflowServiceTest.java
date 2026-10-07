@@ -5,9 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.roxycode.app.ai.services.plan.PlanManagerService;
-import org.roxycode.app.ai.services.specs.FunctionalSpec;
-import org.roxycode.app.ai.services.specs.TechnicalSpec;
+import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.model.FunctionalSpec;
+import org.roxycode.app.model.TechnicalSpec;
 
 import java.util.concurrent.atomic.AtomicReference;
 

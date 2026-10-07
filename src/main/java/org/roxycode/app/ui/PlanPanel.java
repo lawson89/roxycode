@@ -1,8 +1,8 @@
 package org.roxycode.app.ui;
 
-import org.roxycode.app.ai.services.plan.PlanManagerService;
-import org.roxycode.app.ai.services.specs.FunctionalSpec;
-import org.roxycode.app.ai.services.specs.TechnicalSpec;
+import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.model.FunctionalSpec;
+import org.roxycode.app.model.TechnicalSpec;
 
 import javax.swing.*;
 import java.awt.*;

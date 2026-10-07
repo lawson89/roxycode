@@ -75,7 +75,7 @@ public class FileEditorService {
             if (parts[i].isEmpty()) continue;
             sb.append(java.util.regex.Pattern.quote(parts[i]));
             if (i < parts.length - 1) {
-                sb.append("\s*");
+                sb.append("\\s+");
             }
         }
         String patternString = sb.toString();

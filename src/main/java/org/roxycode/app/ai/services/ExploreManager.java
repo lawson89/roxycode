@@ -1,4 +1,4 @@
-package org.roxycode.app.ai.services.explore;
+package org.roxycode.app.ai.services;
 
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentRole;
