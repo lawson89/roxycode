@@ -1510,6 +1510,131 @@ test "quote"
 Cross platform LLM coding harness
 
 
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentService.java ---
+package org.roxycode.app.ai;
+
+import org.springframework.stereotype.Service;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+/**
+ * Annotation to mark Spring services for exposure to the AI Agent via JEXL.
+ * This annotation is meta-annotated with {@link Service} to ensure Spring bean discovery.
+ */
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Service
+public @interface AgentService {
+    /**
+     * The name of the variable as it will be exposed in the JEXL context.
+     * @return the JEXL variable name
+     */
+    String value();
+
+    /**
+     * The roles allowed to access this service.
+     * Defaults to an empty array, meaning no roles are allowed.
+     * Use "*" as a wildcard to allow access to all agent roles.
+     * @return the allowed roles
+     */
+    String[] roles() default {};
+}
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AiConfig.java ---
+package org.roxycode.app.ai;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import java.util.Map;
+
+/**
+ * Configuration for AI-related beans.
+ */
+@Configuration
+public class AiConfig {
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
+    }
+
+    @Bean
+    public TomlMapper tomlMapper() {
+        return new TomlMapper();
+    }
+
+    @Bean
+    public JexlTool jexlTool(JexlServiceRegistry registry) {
+        return new JexlTool(registry);
+    }
+
+    @Bean
+    public JexlServiceRegistry jexlServiceRegistry(ApplicationContext context) {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        Map<String, Object> beans = context.getBeansWithAnnotation(AgentService.class);
+        for (Object bean : beans.values()) {
+            registry.register(bean);
+        }
+        return registry;
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/WorkflowPhase.java ---
+package org.roxycode.app.ai;
+
+import org.kordamp.ikonli.codicons.Codicons;
+
+@AgentDoc("Defines the current phase of the development workflow.")
+public enum WorkflowPhase {
+    EXPLORE(AgentRole.TECHNICAL_MENTOR, "Explore", Codicons.SEARCH),
+    DISCOVERY(AgentRole.PRODUCT_OWNER, "Discovery", Codicons.TELESCOPE),
+    DESIGN(AgentRole.LEAD_ARCHITECT, "Design", Codicons.SYMBOL_RULER),
+    DEVELOPMENT(AgentRole.SENIOR_DEVELOPER, "Development", Codicons.CODE),
+    VERIFICATION(AgentRole.TECHNICAL_MENTOR, "Verification", Codicons.BEAKER);
+
+    private final AgentRole role;
+    private final String displayName;
+    private final Codicons icon;
+
+    WorkflowPhase(AgentRole role, String displayName, Codicons icon) {
+        this.role = role;
+        this.displayName = displayName;
+        this.icon = icon;
+    }
+
+    public AgentRole getRole() {
+        return role;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public Codicons getIcon() {
+        return icon;
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GitService.java ---
+1: package org.roxycode.app.ai.services;
+23: public class GitService {
+24: private static final Logger log = LoggerFactory.getLogger(GitService.class);
+25: private final ProjectService projectService;
+27: public GitService(ProjectService projectService) {
+32: public String getCurrentBranch() {
+37: public String getStatus() {
+42: public String getDiff() {
+47: public String getLog(int limit) {
+52: public String showCommit(String hash) {
+56: private String executeGitCommand(String... args) {
+
+
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GenericBuildToolService.java ---
 1: package org.roxycode.app.ai.services;
 30: public class GenericBuildToolService {
@@ -1646,130 +1771,59 @@ public record EditorResult(
 ) {}
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GitService.java ---
-1: package org.roxycode.app.ai.services;
-23: public class GitService {
-24: private static final Logger log = LoggerFactory.getLogger(GitService.class);
-25: private final ProjectService projectService;
-27: public GitService(ProjectService projectService) {
-32: public String getCurrentBranch() {
-37: public String getStatus() {
-42: public String getDiff() {
-47: public String getLog(int limit) {
-52: public String showCommit(String hash) {
-56: private String executeGitCommand(String... args) {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/workflow/WorkflowService.java ---
+// MOVED TO NEW PACKAGE
 
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/workflow/WorkflowPhase.java ---
+// MOVED TO NEW PACKAGE
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentService.java ---
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentRole.java ---
 package org.roxycode.app.ai;
 
-import org.springframework.stereotype.Service;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+public enum AgentRole {
 
-/**
- * Annotation to mark Spring services for exposure to the AI Agent via JEXL.
- * This annotation is meta-annotated with {@link Service} to ensure Spring bean discovery.
- */
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-@Service
-public @interface AgentService {
+    PRODUCT_OWNER(
+            "Product Owner",
+            "Defines the 'what' and 'why' by gathering functional requirements."
+    ),
+    LEAD_ARCHITECT(
+            "Lead Architect",
+            "Defines the 'how' by creating technical specifications and implementation plans."
+    ),
+    SENIOR_DEVELOPER(
+            "Senior Developer",
+            "Executes the plan by writing clean, tested, and production-grade code."
+    ),
+    TECHNICAL_MENTOR(
+            "Technical Mentor",
+            "Provides technical guidance and ensures adherence to best practices."
+    );
+
+    private final String title;
+    private final String description;
+
+    AgentRole(String title, String description) {
+        this.title = title;
+        this.description = description;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
     /**
-     * The name of the variable as it will be exposed in the JEXL context.
-     * @return the JEXL variable name
+     * Helper method to generate the standard system prompt prefix for each
+     * role.
      */
-    String value();
-
-    /**
-     * The roles allowed to access this service.
-     * Defaults to an empty array, meaning no roles are allowed.
-     * Use "*" as a wildcard to allow access to all agent roles.
-     * @return the allowed roles
-     */
-    String[] roles() default {};
-}
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AiConfig.java ---
-package org.roxycode.app.ai;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import java.util.Map;
-
-/**
- * Configuration for AI-related beans.
- */
-@Configuration
-public class AiConfig {
-
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
-    }
-
-    @Bean
-    public TomlMapper tomlMapper() {
-        return new TomlMapper();
-    }
-
-    @Bean
-    public JexlTool jexlTool(JexlServiceRegistry registry) {
-        return new JexlTool(registry);
-    }
-
-    @Bean
-    public JexlServiceRegistry jexlServiceRegistry(ApplicationContext context) {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        Map<String, Object> beans = context.getBeansWithAnnotation(AgentService.class);
-        for (Object bean : beans.values()) {
-            registry.register(bean);
-        }
-        return registry;
+    public String getSystemPromptPrefix() {
+        return String.format("You are the %s. %s", this.title, this.description);
     }
 }
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/WorkflowPhase.java ---
-package org.roxycode.app.ai;
-
-import org.kordamp.ikonli.codicons.Codicons;
-
-@AgentDoc("Defines the current phase of the development workflow.")
-public enum WorkflowPhase {
-    EXPLORE(AgentRole.TECHNICAL_MENTOR, "Explore", Codicons.SEARCH),
-    DISCOVERY(AgentRole.PRODUCT_OWNER, "Discovery", Codicons.TELESCOPE),
-    DESIGN(AgentRole.LEAD_ARCHITECT, "Design", Codicons.SYMBOL_RULER),
-    DEVELOPMENT(AgentRole.SENIOR_DEVELOPER, "Development", Codicons.CODE),
-    VERIFICATION(AgentRole.TECHNICAL_MENTOR, "Verification", Codicons.BEAKER);
-
-    private final AgentRole role;
-    private final String displayName;
-    private final Codicons icon;
-
-    WorkflowPhase(AgentRole role, String displayName, Codicons icon) {
-        this.role = role;
-        this.displayName = displayName;
-        this.icon = icon;
-    }
-
-    public AgentRole getRole() {
-        return role;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public Codicons getIcon() {
-        return icon;
-    }
-}
 
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentDoc.java ---
 package org.roxycode.app.ai;
@@ -1821,54 +1875,6 @@ public record BuildResult(
     List<String> failedTests,
     String log
 ) {}
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentRole.java ---
-package org.roxycode.app.ai;
-
-public enum AgentRole {
-
-    PRODUCT_OWNER(
-            "Product Owner",
-            "Defines the 'what' and 'why' by gathering functional requirements."
-    ),
-    LEAD_ARCHITECT(
-            "Lead Architect",
-            "Defines the 'how' by creating technical specifications and implementation plans."
-    ),
-    SENIOR_DEVELOPER(
-            "Senior Developer",
-            "Executes the plan by writing clean, tested, and production-grade code."
-    ),
-    TECHNICAL_MENTOR(
-            "Technical Mentor",
-            "Provides technical guidance and ensures adherence to best practices."
-    );
-
-    private final String title;
-    private final String description;
-
-    AgentRole(String title, String description) {
-        this.title = title;
-        this.description = description;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    /**
-     * Helper method to generate the standard system prompt prefix for each
-     * role.
-     */
-    public String getSystemPromptPrefix() {
-        return String.format("You are the %s. %s", this.title, this.description);
-    }
-}
-
 
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/FileTreeFormatter.java ---
 1: package org.roxycode.app.ai.services.cache;
@@ -1963,12 +1969,6 @@ public class GeminiCacheService {
 141: private String getSkeleton(Path filePath, Path root) {
 190: private record Tag(String name, int line) {}
 
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/workflow/WorkflowService.java ---
-// MOVED TO NEW PACKAGE
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/workflow/WorkflowPhase.java ---
-// MOVED TO NEW PACKAGE
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/events/TurnEventBridgeTest.java ---
 package org.roxycode.app.events;
@@ -2286,239 +2286,90 @@ class AppApplicationTests {
 }
 
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/LLMDocGeneratorTest.java ---
-package org.roxycode.app.ai;
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/config/GeminiModelsTest.java ---
+// MOVED TO NEW PACKAGE
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/AppSettingsTest.java ---
+package org.roxycode.app.model;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class AppSettingsTest {
+
+    @Test
+    void testMaxAgentToolTurns() {
+        AppSettings settings = new AppSettings();
+        assertEquals(5, settings.getMaxAgentToolTurns());
+        settings.setMaxAgentToolTurns(10);
+        assertEquals(10, settings.getMaxAgentToolTurns());
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/SpecTest.java ---
+package org.roxycode.app.model;
 
 import org.junit.jupiter.api.Test;
 import java.util.List;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-class LLMDocGeneratorTest {
-
-    @Test
-    void testGenerateDoc() {
-        LLMDocGenerator generator = new LLMDocGenerator();
-        MockAgentService service = new MockAgentService();
-        
-        String doc = generator.generateDoc(List.of(service));
-        
-        assertTrue(doc.contains("### JEXL API Documentation"));
-        assertTrue(doc.contains("// Global variable exposed in JEXL: mockService"));
-        assertTrue(doc.contains("public class MockAgentService"));
-        assertTrue(doc.contains("doSomething"));
-        assertTrue(doc.contains("This is a mock service"));
-    }
-
-    @AgentService("mockService")
-    @AgentDoc("This is a mock service")
-    public static class MockAgentService {
-        @AgentDoc("Does something")
-        public String doSomething(String input) {
-            return input;
-        }
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/WorkflowPhaseTest.java ---
-package org.roxycode.app.ai;
-
-import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.AgentRole;
-import org.kordamp.ikonli.codicons.Codicons;
 import static org.junit.jupiter.api.Assertions.*;
 
-class WorkflowPhaseTest {
+class SpecTest {
     @Test
-    void testPhaseProperties() {
-        assertEquals(AgentRole.PRODUCT_OWNER, WorkflowPhase.DISCOVERY.getRole());
-        assertEquals("Discovery", WorkflowPhase.DISCOVERY.getDisplayName());
-        assertEquals(Codicons.TELESCOPE, WorkflowPhase.DISCOVERY.getIcon());
+    void testFunctionalSpec() {
+        FunctionalSpec spec = new FunctionalSpec("Title", "Goal", List.of("Req 1"));
+        assertEquals("Title", spec.title());
+        assertEquals(1, spec.requirements().size());
+    }
 
-        assertEquals(AgentRole.SENIOR_DEVELOPER, WorkflowPhase.DEVELOPMENT.getRole());
-        assertEquals("Development", WorkflowPhase.DEVELOPMENT.getDisplayName());
-        assertEquals(Codicons.CODE, WorkflowPhase.DEVELOPMENT.getIcon());
+    @Test
+    void testTechnicalSpec() {
+        TechnicalSpec spec = new TechnicalSpec("Goal", List.of("Con 1"), List.of("Step 1"));
+        assertEquals("Goal", spec.architectureGoal());
+        assertEquals(1, spec.constraints().size());
+        assertEquals(1, spec.implementationSteps().size());
     }
 }
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/JexlToolNotificationTest.java ---
-package org.roxycode.app.ai;
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/DiscoverySessionTest.java ---
+package org.roxycode.app.model;
 
 import org.junit.jupiter.api.Test;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
-public class JexlToolNotificationTest {
-
+class DiscoverySessionTest {
     @Test
-    public void testListenerNotification() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
-        AtomicBoolean called = new AtomicBoolean(false);
-        
-        tool.addListener(event -> {
-            called.set(true);
-            assertEquals("1 + 1", event.script());
-            assertEquals(2, ((Number)event.result()).intValue());
-            assertTrue(event.success());
-        });
-        
-        tool.executeJexl("1 + 1");
-        assertTrue(called.get());
+    void testDiscoverySessionImmutability() {
+        List<String> needs = List.of("Need 1");
+        DiscoverySession session = new DiscoverySession("Feature", needs, List.of(), false);
+        assertEquals(1, session.userNeeds().size());
+        assertThrows(UnsupportedOperationException.class, () -> session.userNeeds().add("Need 2"));
     }
 }
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/WorkflowServiceTest.java ---
-1: package org.roxycode.app.ai;
-19: class WorkflowServiceTest {
-22: private PlanManagerService planManager;
-24: private WorkflowService service;
-27: void setUp() {
-32: void testPhaseManagement() {
-45: void testListeners() {
-56: void testHitlPhaseTransition() {
-72: void testRejectTransition() {
-82: void testVisitedPhasesTracking() {
-96: void testResetWorkflowHistory() {
-106: void testAdvanceToPhaseAutoTransition() {
-113: void testAdvanceToPhaseGatedTransition() {
-122: void testAdvanceToPhaseGuardrailFailure() {
-130: void testResetWorkflow() {
-144: void testRouteToPhaseBackward() {
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/GeminiModelsTest.java ---
+package org.roxycode.app.model;
 
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/AgentDocTest.java ---
-package org.roxycode.app.ai;
-
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import java.util.List;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-
-public class AgentDocTest {
-
-    @AgentDoc(
-        value = "Test class",
-        examples = {"example1", "example2"},
-        notes = {"note1"}
-    )
-    static class TestClass {
-        @AgentDoc("Test field")
-        public String testField;
-
-        @AgentDoc(value = "Test method", examples = {"methodExample"})
-        public void testMethod(@AgentDoc("Test param") String param) {}
-    }
+public class GeminiModelsTest {
 
     @Test
-    public void testAnnotationValues() throws Exception {
-        AgentDoc classDoc = TestClass.class.getAnnotation(AgentDoc.class);
-        assertNotNull(classDoc);
-        assertEquals("Test class", classDoc.value());
-        assertArrayEquals(new String[]{"example1", "example2"}, classDoc.examples());
-        assertArrayEquals(new String[]{"note1"}, classDoc.notes());
-
-        Field field = TestClass.class.getField("testField");
-        AgentDoc fieldDoc = field.getAnnotation(AgentDoc.class);
-        assertNotNull(fieldDoc);
-        assertEquals("Test field", fieldDoc.value());
-
-        Method method = TestClass.class.getMethod("testMethod", String.class);
-        AgentDoc methodDoc = method.getAnnotation(AgentDoc.class);
-        assertNotNull(methodDoc);
-        assertEquals("Test method", methodDoc.value());
-        assertArrayEquals(new String[]{"methodExample"}, methodDoc.examples());
-
-        AgentDoc paramDoc = (AgentDoc) method.getParameters()[0].getAnnotation(AgentDoc.class);
-        assertNotNull(paramDoc);
-        assertEquals("Test param", paramDoc.value());
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/JexlToolTest.java ---
-package org.roxycode.app.ai;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-
-public class JexlToolTest {
-
-    @AgentService("testService")
-    public static class TestService {
-        public String hello(String name) {
-            return "Hello, " + name;
-        }
-    }
-
-    @Test
-    public void testExecuteJexlWithService() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new TestService());
+    public void testTomlParsing() throws Exception {
+        String toml = "[[models]]\napiName = \"test-id\"\nname = \"Test Name\"\ndescription = \"Test Desc\"";
+        TomlMapper mapper = new TomlMapper();
+        GeminiModels models = mapper.readValue(toml, GeminiModels.class);
         
-        JexlTool tool = new JexlTool(registry);
-        
-        String varCheck = tool.executeJexl("testService");
-        assertNotEquals("null", varCheck, "testService should be found in context");
-
-        String result = tool.executeJexl("testService.hello('Roxy')");
-        assertEquals("Hello, Roxy", result);
-    }
-
-    @Test
-    public void testExecuteJexlSuccess() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
-        String result = tool.executeJexl("1 + 1");
-        assertEquals("2", result);
-    }
-
-    @Test
-    public void testExecuteJexlWithVariable() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
-        String result = tool.executeJexl("var x = 10; x * 2");
-        assertEquals("20", result);
-    }
-
-    @Test
-    public void testExecuteJexlNull() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
-        String result = tool.executeJexl("null");
-        assertEquals("null", result);
-    }
-
-    @Test
-    public void testExecuteJexlError() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
-        String result = tool.executeJexl("if (");
-        assertTrue(result.contains("Error executing Jexl script"));
+        assertNotNull(models);
+        assertEquals(1, models.models().size());
+        assertEquals("test-id", models.models().get(0).apiName());
+        assertEquals("Test Name", models.models().get(0).name());
+        assertEquals("Test Desc", models.models().get(0).description());
     }
 }
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/JexlDocumentationTest.java ---
-package org.roxycode.app.ai;
-
-import org.junit.jupiter.api.Test;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-public class JexlDocumentationTest {
-    @Test
-    public void testJexlDocExists() {
-        Path path = Paths.get("src/main/resources/docs/jexl.md");
-        assertTrue(Files.exists(path), "JEXL documentation should exist at src/main/resources/docs/jexl.md");
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/config/GeminiModelsTest.java ---
-// MOVED TO NEW PACKAGE
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/SidebarPanelTest.java ---
 package org.roxycode.app.ui;
@@ -2718,23 +2569,6 @@ class MainFrameIconTest {
 81: public void testSingleQuoteHighlighting() {
 
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/AppSettingsTest.java ---
-package org.roxycode.app.model;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-public class AppSettingsTest {
-
-    @Test
-    void testMaxAgentToolTurns() {
-        AppSettings settings = new AppSettings();
-        assertEquals(5, settings.getMaxAgentToolTurns());
-        settings.setMaxAgentToolTurns(10);
-        assertEquals(10, settings.getMaxAgentToolTurns());
-    }
-}
-
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/PromptPanelTest.java ---
 package org.roxycode.app.ui;
 
@@ -2766,30 +2600,6 @@ class PromptPanelTest {
     }
 }
 
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/SpecTest.java ---
-package org.roxycode.app.model;
-
-import org.junit.jupiter.api.Test;
-import java.util.List;
-import static org.junit.jupiter.api.Assertions.*;
-
-class SpecTest {
-    @Test
-    void testFunctionalSpec() {
-        FunctionalSpec spec = new FunctionalSpec("Title", "Goal", List.of("Req 1"));
-        assertEquals("Title", spec.title());
-        assertEquals(1, spec.requirements().size());
-    }
-
-    @Test
-    void testTechnicalSpec() {
-        TechnicalSpec spec = new TechnicalSpec("Goal", List.of("Con 1"), List.of("Step 1"));
-        assertEquals("Goal", spec.architectureGoal());
-        assertEquals(1, spec.constraints().size());
-        assertEquals(1, spec.implementationSteps().size());
-    }
-}
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatPanelTruncationTest.java ---
 package org.roxycode.app.ui;
@@ -3034,88 +2844,236 @@ public class HistoryPanelTest {
 }
 
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/AgentServiceTest.java ---
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/LLMDocGeneratorTest.java ---
+package org.roxycode.app.ai;
+
+import org.junit.jupiter.api.Test;
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class LLMDocGeneratorTest {
+
+    @Test
+    void testGenerateDoc() {
+        LLMDocGenerator generator = new LLMDocGenerator();
+        MockAgentService service = new MockAgentService();
+        
+        String doc = generator.generateDoc(List.of(service));
+        
+        assertTrue(doc.contains("### JEXL API Documentation"));
+        assertTrue(doc.contains("// Global variable exposed in JEXL: mockService"));
+        assertTrue(doc.contains("public class MockAgentService"));
+        assertTrue(doc.contains("doSomething"));
+        assertTrue(doc.contains("This is a mock service"));
+    }
+
+    @AgentService("mockService")
+    @AgentDoc("This is a mock service")
+    public static class MockAgentService {
+        @AgentDoc("Does something")
+        public String doSomething(String input) {
+            return input;
+        }
+    }
+}
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/WorkflowPhaseTest.java ---
+package org.roxycode.app.ai;
+
+import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.AgentRole;
+import org.kordamp.ikonli.codicons.Codicons;
+import static org.junit.jupiter.api.Assertions.*;
+
+class WorkflowPhaseTest {
+    @Test
+    void testPhaseProperties() {
+        assertEquals(AgentRole.PRODUCT_OWNER, WorkflowPhase.DISCOVERY.getRole());
+        assertEquals("Discovery", WorkflowPhase.DISCOVERY.getDisplayName());
+        assertEquals(Codicons.TELESCOPE, WorkflowPhase.DISCOVERY.getIcon());
+
+        assertEquals(AgentRole.SENIOR_DEVELOPER, WorkflowPhase.DEVELOPMENT.getRole());
+        assertEquals("Development", WorkflowPhase.DEVELOPMENT.getDisplayName());
+        assertEquals(Codicons.CODE, WorkflowPhase.DEVELOPMENT.getIcon());
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/JexlToolNotificationTest.java ---
+package org.roxycode.app.ai;
+
+import org.junit.jupiter.api.Test;
+import java.util.concurrent.atomic.AtomicBoolean;
+import static org.junit.jupiter.api.Assertions.*;
+
+public class JexlToolNotificationTest {
+
+    @Test
+    public void testListenerNotification() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry);
+        AtomicBoolean called = new AtomicBoolean(false);
+        
+        tool.addListener(event -> {
+            called.set(true);
+            assertEquals("1 + 1", event.script());
+            assertEquals(2, ((Number)event.result()).intValue());
+            assertTrue(event.success());
+        });
+        
+        tool.executeJexl("1 + 1");
+        assertTrue(called.get());
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/WorkflowServiceTest.java ---
+1: package org.roxycode.app.ai;
+19: class WorkflowServiceTest {
+22: private PlanManagerService planManager;
+24: private WorkflowService service;
+27: void setUp() {
+32: void testPhaseManagement() {
+45: void testListeners() {
+56: void testHitlPhaseTransition() {
+72: void testRejectTransition() {
+82: void testVisitedPhasesTracking() {
+96: void testResetWorkflowHistory() {
+106: void testAdvanceToPhaseAutoTransition() {
+113: void testAdvanceToPhaseGatedTransition() {
+122: void testAdvanceToPhaseGuardrailFailure() {
+130: void testResetWorkflow() {
+144: void testRouteToPhaseBackward() {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/AgentDocTest.java ---
 package org.roxycode.app.ai;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-class AgentServiceTest {
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
-    @AgentService(value = "testService", roles = {"RESEARCH", "ANALYST"})
-    private static class MockService {}
+public class AgentDocTest {
 
-    @AgentService("defaultService")
-    private static class DefaultService {}
+    @AgentDoc(
+        value = "Test class",
+        examples = {"example1", "example2"},
+        notes = {"note1"}
+    )
+    static class TestClass {
+        @AgentDoc("Test field")
+        public String testField;
 
-    @Test
-    void testAnnotationProperties() {
-        AgentService annotation = MockService.class.getAnnotation(AgentService.class);
-        assertNotNull(annotation);
-        assertEquals("testService", annotation.value());
-        assertArrayEquals(new String[]{"RESEARCH", "ANALYST"}, annotation.roles());
+        @AgentDoc(value = "Test method", examples = {"methodExample"})
+        public void testMethod(@AgentDoc("Test param") String param) {}
     }
 
     @Test
-    void testDefaultValues() {
-        AgentService annotation = DefaultService.class.getAnnotation(AgentService.class);
-        assertNotNull(annotation);
-        assertEquals("defaultService", annotation.value());
-        assertEquals(0, annotation.roles().length);
-    }
+    public void testAnnotationValues() throws Exception {
+        AgentDoc classDoc = TestClass.class.getAnnotation(AgentDoc.class);
+        assertNotNull(classDoc);
+        assertEquals("Test class", classDoc.value());
+        assertArrayEquals(new String[]{"example1", "example2"}, classDoc.examples());
+        assertArrayEquals(new String[]{"note1"}, classDoc.notes());
 
-    @AgentService(value = "wildcardService", roles = {"*"})
-    private static class WildcardService {}
+        Field field = TestClass.class.getField("testField");
+        AgentDoc fieldDoc = field.getAnnotation(AgentDoc.class);
+        assertNotNull(fieldDoc);
+        assertEquals("Test field", fieldDoc.value());
 
-    @Test
-    void testWildcardRole() {
-        AgentService annotation = WildcardService.class.getAnnotation(AgentService.class);
-        assertNotNull(annotation);
-        assertEquals("wildcardService", annotation.value());
-        assertArrayEquals(new String[]{"*"}, annotation.roles());
-    }
-}
+        Method method = TestClass.class.getMethod("testMethod", String.class);
+        AgentDoc methodDoc = method.getAnnotation(AgentDoc.class);
+        assertNotNull(methodDoc);
+        assertEquals("Test method", methodDoc.value());
+        assertArrayEquals(new String[]{"methodExample"}, methodDoc.examples());
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/DiscoverySessionTest.java ---
-package org.roxycode.app.model;
-
-import org.junit.jupiter.api.Test;
-import java.util.List;
-import static org.junit.jupiter.api.Assertions.*;
-
-class DiscoverySessionTest {
-    @Test
-    void testDiscoverySessionImmutability() {
-        List<String> needs = List.of("Need 1");
-        DiscoverySession session = new DiscoverySession("Feature", needs, List.of(), false);
-        assertEquals(1, session.userNeeds().size());
-        assertThrows(UnsupportedOperationException.class, () -> session.userNeeds().add("Need 2"));
+        AgentDoc paramDoc = (AgentDoc) method.getParameters()[0].getAnnotation(AgentDoc.class);
+        assertNotNull(paramDoc);
+        assertEquals("Test param", paramDoc.value());
     }
 }
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/GeminiModelsTest.java ---
-package org.roxycode.app.model;
 
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/JexlToolTest.java ---
+package org.roxycode.app.ai;
+
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import java.util.List;
 
-public class GeminiModelsTest {
+public class JexlToolTest {
+
+    @AgentService("testService")
+    public static class TestService {
+        public String hello(String name) {
+            return "Hello, " + name;
+        }
+    }
 
     @Test
-    public void testTomlParsing() throws Exception {
-        String toml = "[[models]]\napiName = \"test-id\"\nname = \"Test Name\"\ndescription = \"Test Desc\"";
-        TomlMapper mapper = new TomlMapper();
-        GeminiModels models = mapper.readValue(toml, GeminiModels.class);
+    public void testExecuteJexlWithService() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        registry.register(new TestService());
         
-        assertNotNull(models);
-        assertEquals(1, models.models().size());
-        assertEquals("test-id", models.models().get(0).apiName());
-        assertEquals("Test Name", models.models().get(0).name());
-        assertEquals("Test Desc", models.models().get(0).description());
+        JexlTool tool = new JexlTool(registry);
+        
+        String varCheck = tool.executeJexl("testService");
+        assertNotEquals("null", varCheck, "testService should be found in context");
+
+        String result = tool.executeJexl("testService.hello('Roxy')");
+        assertEquals("Hello, Roxy", result);
+    }
+
+    @Test
+    public void testExecuteJexlSuccess() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry);
+        String result = tool.executeJexl("1 + 1");
+        assertEquals("2", result);
+    }
+
+    @Test
+    public void testExecuteJexlWithVariable() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry);
+        String result = tool.executeJexl("var x = 10; x * 2");
+        assertEquals("20", result);
+    }
+
+    @Test
+    public void testExecuteJexlNull() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry);
+        String result = tool.executeJexl("null");
+        assertEquals("null", result);
+    }
+
+    @Test
+    public void testExecuteJexlError() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry);
+        String result = tool.executeJexl("if (");
+        assertTrue(result.contains("Error executing Jexl script"));
     }
 }
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/JexlDocumentationTest.java ---
+package org.roxycode.app.ai;
+
+import org.junit.jupiter.api.Test;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+public class JexlDocumentationTest {
+    @Test
+    public void testJexlDocExists() {
+        Path path = Paths.get("src/main/resources/docs/jexl.md");
+        assertTrue(Files.exists(path), "JEXL documentation should exist at src/main/resources/docs/jexl.md");
+    }
+}
+
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/services/FileReadServiceTest.java ---
 1: package org.roxycode.app.ai.services;
@@ -3236,12 +3194,6 @@ public class ExploreManagerTest {
 127: void testPathTraversalThrowsSecurityException() {
 
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/workflow/WorkflowPhaseTest.java ---
-// MOVED TO NEW PACKAGE
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/workflow/WorkflowServiceTest.java ---
-// MOVED TO NEW PACKAGE
-
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/services/cache/RepoMapPackerServiceTest.java ---
 1: package org.roxycode.app.ai.services.cache;
 20: class RepoMapPackerServiceTest {
@@ -3300,4 +3252,52 @@ class FileTreeFormatterTest {
 21: public void testSaveAndLoadMeta() throws IOException {
 44: public void testRepoCache() throws IOException {
 
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/workflow/WorkflowPhaseTest.java ---
+// MOVED TO NEW PACKAGE
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/workflow/WorkflowServiceTest.java ---
+// MOVED TO NEW PACKAGE
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/AgentServiceTest.java ---
+package org.roxycode.app.ai;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class AgentServiceTest {
+
+    @AgentService(value = "testService", roles = {"RESEARCH", "ANALYST"})
+    private static class MockService {}
+
+    @AgentService("defaultService")
+    private static class DefaultService {}
+
+    @Test
+    void testAnnotationProperties() {
+        AgentService annotation = MockService.class.getAnnotation(AgentService.class);
+        assertNotNull(annotation);
+        assertEquals("testService", annotation.value());
+        assertArrayEquals(new String[]{"RESEARCH", "ANALYST"}, annotation.roles());
+    }
+
+    @Test
+    void testDefaultValues() {
+        AgentService annotation = DefaultService.class.getAnnotation(AgentService.class);
+        assertNotNull(annotation);
+        assertEquals("defaultService", annotation.value());
+        assertEquals(0, annotation.roles().length);
+    }
+
+    @AgentService(value = "wildcardService", roles = {"*"})
+    private static class WildcardService {}
+
+    @Test
+    void testWildcardRole() {
+        AgentService annotation = WildcardService.class.getAnnotation(AgentService.class);
+        assertNotNull(annotation);
+        assertEquals("wildcardService", annotation.value());
+        assertArrayEquals(new String[]{"*"}, annotation.roles());
+    }
+}
 
