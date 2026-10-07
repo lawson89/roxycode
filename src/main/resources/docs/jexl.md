@@ -6,9 +6,20 @@ This document describes the JEXL syntax and the RoxyCode API available to AI age
 
 ### Core Rules
 - **Variables**: Define with `var` (e.g., `var x = 1;`).
-- **Strings**: Single or double quotes (e.g., `'hello'` or `"world"`).
+- **Strings**: Use single or double quotes for single-line strings (e.g., `'hello'` or `"world"`). **MULTI-LINE STRINGS MUST USE BACKTICKS (`). If you use double or single quotes for a string that spans multiple lines, JEXL will crash with a tokenization error.
 - **Control Flow**: Standard `if/else`, `for`, `while` loops.
 - **Implicit Return**: The value of the last expression in the script is returned to the system.
+
+### Multi-Line String Example (Required for replaceLines / replaceBlock)
+// BAD: Will throw a tokenization error
+var bad = "line 1
+line 2";
+
+// GOOD: Uses backticks for multi-line text
+var good = `line 1
+line 2`;
+
+fileEditorService.replaceLines('src/App.java', 1, 2, good);
 
 ### Array vs. List Literals (Crucial for Java Interop)
 JEXL supports distinct syntax for creating native arrays versus `java.util.List` objects. You must use the correct literal syntax to match the expected Java method signature.

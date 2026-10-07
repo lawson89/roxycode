@@ -40,14 +40,13 @@ public class PhaseStepPanel extends JPanel {
 
     private void initComponents() {
         planLabel = new JLabel();
-        planLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
+        planLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
         add(planLabel, "hidemode 3");
         // Mode Badge for EXPLORE
         modeBadge = new JLabel("Explore");
-        modeBadge.setIcon(FontIcon.of(WorkflowPhase.EXPLORE.getIcon(), 16, UIManager.getColor("List.selectionForeground")));
-        modeBadge.putClientProperty(FlatClientProperties.STYLE, "arc: 12; font: +1; background: $Component.accentColor; foreground: $List.selectionForeground");
-        modeBadge.setOpaque(true);
-        modeBadge.setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
+        modeBadge.setIcon(FontIcon.of(WorkflowPhase.EXPLORE.getIcon(), 14, UIManager.getColor("Label.disabledForeground")));
+        modeBadge.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
+        modeBadge.setOpaque(false);
         add(modeBadge, "hidemode 3");
 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 10", "[]", "center"));
@@ -94,8 +93,9 @@ public class PhaseStepPanel extends JPanel {
 
         java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
         for (PhaseIndicator indicator : indicators) {
-            indicator.setActive(indicator.phase == currentPhase);
-            indicator.setCompleted(visited.contains(indicator.phase));
+            boolean active = (indicator.phase == currentPhase);
+            indicator.setActive(active); 
+            indicator.setCompleted(visited.contains(indicator.phase) && !active);
         }
         revalidate();
         repaint();
@@ -110,13 +110,10 @@ public class PhaseStepPanel extends JPanel {
 
         public PhaseIndicator(WorkflowPhase phase) {
             this.phase = phase;
-            setLayout(new MigLayout("insets 2 8 2 8, gapx 5", "[][]", "center"));
+            setLayout(new MigLayout("insets 2 0 2 0, gapx 4", "[][]", "center"));
             setOpaque(false);
             
-            // Apply a slight round border
-            putClientProperty(FlatClientProperties.STYLE, "arc: 12");
-
-            iconLabel = new JLabel(FontIcon.of(phase.getIcon(), 16, UIManager.getColor("Label.disabledForeground")));
+            iconLabel = new JLabel(FontIcon.of(phase.getIcon(), 14, UIManager.getColor("Label.disabledForeground")));
             textLabel = new JLabel(phase.getDisplayName());
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
 
@@ -130,30 +127,20 @@ public class PhaseStepPanel extends JPanel {
         }
 
         public void setCompleted(boolean completed) {
-            this.isCompleted = completed;
+            this.isCompleted = completed; 
             updateStyle();
         }
 
         private void updateStyle() {
             if (isActive) {
-                setOpaque(true);
-                // Use a slightly lighter version of the accent color for background if possible, 
-                // or just the accent color if it's high contrast.
-                setBackground(UIManager.getColor("Component.accentColor"));
-                if (getBackground() == null) {
-                    setBackground(UIManager.getColor("List.selectionBackground"));
-                }
-                textLabel.setForeground(UIManager.getColor("List.selectionForeground"));
-                iconLabel.setIcon(FontIcon.of(phase.getIcon(), 16, UIManager.getColor("List.selectionForeground")));
+                textLabel.setForeground(UIManager.getColor("Component.accentColor"));
+                iconLabel.setIcon(FontIcon.of(Codicons.SYNC, 14, UIManager.getColor("Component.accentColor")));
             } else if (isCompleted) {
-                setOpaque(false);
-                Color successColor = new Color(100, 180, 100);
-                textLabel.setForeground(successColor);
-                iconLabel.setIcon(FontIcon.of(phase.getIcon(), 16, successColor));
+                textLabel.setForeground(UIManager.getColor("Label.foreground"));
+                iconLabel.setIcon(FontIcon.of(Codicons.CHECK, 14, UIManager.getColor("Label.foreground")));
             } else {
-                setOpaque(false);
                 textLabel.setForeground(UIManager.getColor("Label.disabledForeground"));
-                iconLabel.setIcon(FontIcon.of(phase.getIcon(), 16, UIManager.getColor("Label.disabledForeground")));
+                iconLabel.setIcon(FontIcon.of(phase.getIcon(), 14, UIManager.getColor("Label.disabledForeground")));
             }
         }
     }
