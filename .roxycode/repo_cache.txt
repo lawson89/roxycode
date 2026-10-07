@@ -429,46 +429,6 @@ description = "Designed for complex multimodal understanding and reasoning."
 150: ### ⚠️ Pitfalls & Constraints
 
 
---- /home/lawson89/code/roxycode/pom.xml ---
-3: xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-11: <groupId>org.roxycode</groupId>
-12: <artifactId>roxycode</artifactId>
-41: <java.version>25</java.version>
-
-
---- /home/lawson89/code/roxycode/mvnw.cmd ---
-36: IF "%%A"=="MVN_CMD" (set __MVNW_CMD__=%%B) ELSE IF "%%B"=="" (echo %%A) ELSE (echo %%A=%%B)
-
-
---- /home/lawson89/code/roxycode/LICENSE ---
-[Full content omitted due to size - no skeleton available]
-
-
---- /home/lawson89/code/roxycode/README.md ---
-# roxycode
-Cross platform LLM coding harness
-
-
---- /home/lawson89/code/roxycode/mvnw ---
-36: native_path() { printf %s\\n "$1"; }
-40: native_path() { cygpath --path --windows "$1"; }
-45: set_java_home() {
-82: hash_string() {
-92: verbose() { :; }
-93: [ "${MVNW_VERBOSE-}" != true ] || verbose() { printf %s\\n "${1-}"; }
-95: die() {
-100: trim() {
-148: exec_maven() {
-165: clean() { rm -rf -- "$TMP_DOWNLOAD_DIR"; }
-204: cat >"$javaSource" <<-END
-
-
---- /home/lawson89/code/roxycode/simple.txt ---
-test "quote"
-
---- /home/lawson89/code/roxycode/test_quotes.txt ---
-This has a "double quote" and a \n newline.
-
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/events/FileChangedEvent.java ---
 package org.roxycode.app.events;
 
@@ -691,108 +651,6 @@ public class EnvironmentService {
     }
 }
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/JexlServiceRegistry.java ---
-package org.roxycode.app.ai;
-
-import java.util.*;
-
-/**
- * Registry for JEXL-exposed services.
- */
-public class JexlServiceRegistry {
-    private final Map<String, Object> services = new LinkedHashMap<>();
-    private final LLMDocGenerator docGenerator = new LLMDocGenerator();
-
-    public void register(Object service) {
-        AgentService ann = service.getClass().getAnnotation(AgentService.class);
-        if (ann != null) {
-            services.put(ann.value(), service);
-        }
-    }
-
-    public Map<String, Object> getServices() {
-        return Collections.unmodifiableMap(services);
-    }
-
-    public String getDocumentation() {
-        return docGenerator.generateDoc(services.values());
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/JexlExecutionListener.java ---
-package org.roxycode.app.ai;
-
-public interface JexlExecutionListener {
-    void onJexlExecuted(JexlExecutionEvent event);
-}
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/JexlExecutionEvent.java ---
-package org.roxycode.app.ai;
-
-public record JexlExecutionEvent(String script, Object result, boolean success, String error) {}
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/LLMDocGenerator.java ---
-1: package org.roxycode.app.ai;
-10: public class LLMDocGenerator {
-12: public String generateDoc(Collection<Object> services) {
-56: private void generateClassStub(Class<?> clazz, StringBuilder sb, Set<Class<?>> extraTypes) {
-89: private String getTypeName(Class<?> type, Set<Class<?>> extraTypes) {
-104: private void generateTypeSchema(Class<?> type, StringBuilder sb) {
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/JexlTool.java ---
-1: package org.roxycode.app.ai;
-19: public class JexlTool {
-21: private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
-22: private final JexlEngine jexl;
-23: private final JexlServiceRegistry registry;
-24: private final List<JexlExecutionListener> listeners = new ArrayList<>();
-26: public JexlTool(JexlServiceRegistry registry) {
-33: public void addListener(JexlExecutionListener listener) {
-37: public void removeListener(JexlExecutionListener listener) {
-48: public String executeJexl(String script) {
-72: private void fireEvent(JexlExecutionEvent event) {
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AiMemoryConfig.java ---
-package org.roxycode.app.ai;
-
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.ai.chat.messages.Message;
-
-@Configuration
-public class AiMemoryConfig {
-
-    @Bean
-    public ChatMemory chatMemory() {
-        return new ChatMemory() {
-            private final Map<String, List<Message>> memories = new ConcurrentHashMap<>();
-            @Override
-            public void add(String conversationId, List<Message> messages) {
-                memories.computeIfAbsent(conversationId, k -> new ArrayList<>()).addAll(messages);
-            }
-            @Override
-            public List<Message> get(String conversationId) {
-                return memories.getOrDefault(conversationId, new ArrayList<>());
-            }
-            @Override
-            public void clear(String conversationId) {
-                memories.remove(conversationId);
-            }
-        };
-    }
-}
-
-
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/model/AppSettings.java ---
 package org.roxycode.app.model;
 
@@ -872,6 +730,83 @@ public record ProjectCacheMeta(
 ) {
 }
 
+--- /home/lawson89/code/roxycode/test_quotes.txt ---
+This has a "double quote" and a \n newline.
+
+--- /home/lawson89/code/roxycode/mvnw ---
+36: native_path() { printf %s\\n "$1"; }
+40: native_path() { cygpath --path --windows "$1"; }
+45: set_java_home() {
+82: hash_string() {
+92: verbose() { :; }
+93: [ "${MVNW_VERBOSE-}" != true ] || verbose() { printf %s\\n "${1-}"; }
+95: die() {
+100: trim() {
+148: exec_maven() {
+165: clean() { rm -rf -- "$TMP_DOWNLOAD_DIR"; }
+204: cat >"$javaSource" <<-END
+
+
+--- /home/lawson89/code/roxycode/simple.txt ---
+test "quote"
+
+--- /home/lawson89/code/roxycode/pom.xml ---
+3: xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+11: <groupId>org.roxycode</groupId>
+12: <artifactId>roxycode</artifactId>
+41: <java.version>25</java.version>
+
+
+--- /home/lawson89/code/roxycode/mvnw.cmd ---
+36: IF "%%A"=="MVN_CMD" (set __MVNW_CMD__=%%B) ELSE IF "%%B"=="" (echo %%A) ELSE (echo %%A=%%B)
+
+
+--- /home/lawson89/code/roxycode/LICENSE ---
+[Full content omitted due to size - no skeleton available]
+
+
+--- /home/lawson89/code/roxycode/README.md ---
+# roxycode
+Cross platform LLM coding harness
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/model/DiscoverySession.java ---
+package org.roxycode.app.model;
+
+import org.roxycode.app.ai.AgentDoc;
+import java.util.List;
+
+@AgentDoc("Tracks the requirements gathering progress for a feature.")
+public record DiscoverySession(
+    String featureName,
+    List<String> userNeeds,
+    List<String> clarifications,
+    boolean complete
+) {
+    public DiscoverySession {
+        userNeeds = List.copyOf(userNeeds);
+        clarifications = List.copyOf(clarifications);
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/model/TechnicalSpec.java ---
+package org.roxycode.app.model;
+
+import org.roxycode.app.ai.AgentDoc;
+import java.util.List;
+
+@AgentDoc("Immutable structure for implementation tasks.")
+public record TechnicalSpec(
+    String architectureGoal,
+    List<String> constraints,
+    List<String> implementationSteps
+) {
+    public TechnicalSpec {
+        constraints = List.copyOf(constraints);
+        implementationSteps = List.copyOf(implementationSteps);
+    }
+}
+
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/model/config/GeminiModels.java ---
 package org.roxycode.app.model.config;
 
@@ -922,381 +857,194 @@ public record SystemTool(
     String description
 ) {}
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/model/DiscoverySession.java ---
-package org.roxycode.app.model;
-
-import org.roxycode.app.ai.AgentDoc;
-import java.util.List;
-
-@AgentDoc("Tracks the requirements gathering progress for a feature.")
-public record DiscoverySession(
-    String featureName,
-    List<String> userNeeds,
-    List<String> clarifications,
-    boolean complete
-) {
-    public DiscoverySession {
-        userNeeds = List.copyOf(userNeeds);
-        clarifications = List.copyOf(clarifications);
-    }
-}
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/model/TechnicalSpec.java ---
-package org.roxycode.app.model;
-
-import org.roxycode.app.ai.AgentDoc;
-import java.util.List;
-
-@AgentDoc("Immutable structure for implementation tasks.")
-public record TechnicalSpec(
-    String architectureGoal,
-    List<String> constraints,
-    List<String> implementationSteps
-) {
-    public TechnicalSpec {
-        constraints = List.copyOf(constraints);
-        implementationSteps = List.copyOf(implementationSteps);
-    }
-}
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GenericBuildToolService.java ---
-1: package org.roxycode.app.ai.services;
-30: public class GenericBuildToolService {
-32: private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
-33: private static final String CONFIG_PATH = ".roxycode/build.toml";
-35: private final ProjectService projectService;
-36: private final TomlMapper tomlMapper;
-39: public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper) {
-49: public BuildResult clean() {
-54: public BuildResult compile() {
-59: public boolean detect() {
-67: public BuildResult runTests() {
-72: public BuildResult runSingleTest(String testName) {
-76: private BuildResult runCommand(String commandKey) {
-80: private BuildResult runCommand(String commandKey, Map<String, String> placeholders) {
-109: private void ensureConfig() {
-130: private String detectTemplate() {
-153: private Map<String, Object> loadConfig() throws IOException {
-158: private String getCommand(Map<String, Object> config, String key) {
-170: private String getParseRegex(Map<String, Object> config, String key) {
-175: private Map<String, String> getEnv(Map<String, Object> config) {
-187: private BuildResult execute(String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
-259: public String getConfigContent() throws IOException {
-270: public void saveConfigContent(String content) throws IOException {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/MarkdownPane.java ---
+1: package org.roxycode.app.ui;
+26: public class MarkdownPane extends JTextPane {
+27: private final Parser parser;
+28: private final HtmlRenderer renderer;
+29: private final List<Message> messages = new ArrayList<>();
+30: private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+32: private record Message(String role, StringBuilder content, String timestamp, boolean isTool) {}
+34: public MarkdownPane() {
+47: private void setupContextMenu() {
+74: public void updateTheme() {
+87: public void appendMessage(String role, String content) {
+92: public void appendToolLog(String toolName, String output) {
+97: private void renderAll() {
+116: public void clear() {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/ExploreManager.java ---
-package org.roxycode.app.ai.services;
-
-import org.roxycode.app.ai.AgentDoc;
-import org.roxycode.app.ai.AgentRole;
-import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.service.SettingsService;
-import org.roxycode.app.service.PromptService;
-import org.springframework.stereotype.Service;
-
-/**
- * Service for the Technical Mentor role during the EXPLORE phase.
- * Provides system prompt generation for stateless exploration.
- */
-@Service
-@AgentService(value = "exploreManager", roles = {"TECHNICAL_MENTOR"})
-@AgentDoc("Manages the EXPLORE phase and provides system prompts for technical exploration.")
-public class ExploreManager {
-
-    private final SettingsService settingsService;
-    private final PromptService promptService;
-
-    public ExploreManager(SettingsService settingsService, PromptService promptService) {
-        this.settingsService = settingsService;
-        this.promptService = promptService;
-    }
-
-    @AgentDoc("Generates the system prompt for the Technical Mentor during the EXPLORE phase.")
-    public String generateSystemPrompt() {
-        int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
-        String template = promptService.loadExplorePrompt();
-        return AgentRole.TECHNICAL_MENTOR.getSystemPromptPrefix() + template.formatted(maxTurns);
-    }
-}
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/FileEditorService.java ---
-1: package org.roxycode.app.ai.services;
-25: public class FileEditorService {
-27: private static final Logger log = LoggerFactory.getLogger(FileEditorService.class);
-29: private final ProjectService projectService;
-30: private final WorkflowService workflowService;
-31: private final ApplicationEventPublisher eventPublisher;
-34: public FileEditorService(ProjectService projectService, WorkflowService workflowService, ApplicationEventPublisher eventPublisher) {
-48: public void writeFile(String relativePath, String content) throws IOException {
-67: public void replaceBlock(String relativePath, String targetBlock, String replacementBlock) throws IOException {
-110: public void replaceLines(String relativePath, int startLine, int endLine, String replacementText) throws IOException {
-147: public void insertAtLine(String relativePath, int lineNumber, String content) throws IOException {
-164: private void checkPhase() {
-170: private Path resolvePath(String relativePath) {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/SidebarPanel.java ---
+1: package org.roxycode.app.ui;
+17: public class SidebarPanel extends JPanel {
+18: private final SettingsService settingsService;
+19: private final Consumer<String> navigationAction;
+20: private final List<NavButton> navButtons = new ArrayList<>();
+22: public SidebarPanel(SettingsService settingsService, Consumer<String> navigationAction) {
+28: private void initComponents() {
+55: private void updateSelection(NavButton selectedBtn) {
+61: private JLabel createSectionHeader(String text) {
+68: private JButton createNavButton(String text, String cardName, Codicons iconCode) {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/PlanManagerService.java ---
-1: package org.roxycode.app.ai.services;
-17: public class PlanManagerService {
-19: private FunctionalSpec currentFunctionalSpec;
-20: private TechnicalSpec currentTechnicalSpec;
-21: private final List<PlanUpdateListener> listeners = new CopyOnWriteArrayList<>();
-26: public interface PlanUpdateListener {
-27: void onSpecsUpdated(FunctionalSpec functionalSpec, TechnicalSpec technicalSpec);
-34: public void addListener(PlanUpdateListener listener) {
-44: public String submitFunctionalSpec(
-59: public String submitFunctionalSpec(
-73: public String submitFunctionalSpec(
-87: public String submitTechnicalSpec(
-102: public String submitTechnicalSpec(
-116: public String submitTechnicalSpec(
-128: public FunctionalSpec getCurrentFunctionalSpec() {
-136: public TechnicalSpec getCurrentTechnicalSpec() {
-143: public void clearSpecs() {
-150: private List<String> extractStringList(Object obj) {
-173: private void notifyListeners() {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/SettingsPanel.java ---
+1: package org.roxycode.app.ui;
+27: public class SettingsPanel extends JPanel {
+28: private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
+29: private final SettingsService settingsService;
+30: private final JComboBox<String> themeCombo;
+31: private final JComboBox<GeminiModelConfig> modelCombo;
+32: private final JPasswordField geminiApiKeyField;
+33: private final JSpinner maxAgentToolTurnsSpinner;
+34: private final JButton saveButton;
+35: private final JLabel statusLabel;
+36: private final Timer statusTimer;
+38: public SettingsPanel(SettingsService settingsService) {
+84: private void loadModels() {
+104: private void updateTheme() {
+112: private void saveSettings() {
+128: public static void applyTheme(String themeName) {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/FileReadService.java ---
-1: package org.roxycode.app.ai.services;
-22: public class FileReadService {
-24: private static final Logger log = LoggerFactory.getLogger(FileReadService.class);
-25: private final ProjectService projectService;
-27: public FileReadService(ProjectService projectService) {
-32: public boolean fileExists(String relativePath) {
-38: public String readFile(String relativePath) {
-52: public List<String> listDirectory(String relativePath) {
-66: private Path resolvePath(String relativePath) {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/PhaseStepPanel.java ---
+1: package org.roxycode.app.ui;
+17: public class PhaseStepPanel extends JPanel {
+19: private final List<PhaseIndicator> indicators = new ArrayList<>();
+20: private JLabel modeBadge;
+21: private JPanel progressTracker;
+22: private final WorkflowService workflowService;
+24: public PhaseStepPanel(WorkflowService workflowService) {
+35: private void initComponents() {
+69: private void updateActivePhase(WorkflowPhase currentPhase) {
+83: private static class PhaseIndicator extends JPanel {
+84: private final WorkflowPhase phase;
+85: private final JLabel iconLabel;
+86: private final JLabel textLabel;
+87: private boolean isActive;
+88: private boolean isCompleted;
+90: public PhaseIndicator(WorkflowPhase phase) {
+106: public void setActive(boolean active) {
+111: public void setCompleted(boolean completed) {
+116: private void updateStyle() {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GrepService.java ---
-1: package org.roxycode.app.ai.services;
-23: public class GrepService {
-24: private static final Logger log = LoggerFactory.getLogger(GrepService.class);
-25: private final ProjectService projectService;
-27: public GrepService(ProjectService projectService) {
-41: public EditorResult grep(String pattern, String relativePath, String filePattern) {
-99: public List<String> listFiles(String relativePath) {
-132: private Path resolvePath(String relativePath) {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/UserProfileComponent.java ---
+1: package org.roxycode.app.ui;
+18: public class UserProfileComponent extends JPanel {
+19: private static final Logger log = LoggerFactory.getLogger(UserProfileComponent.class);
+20: private Image avatarImage;
+27: public UserProfileComponent(String name, String email) {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/EditorResult.java ---
-package org.roxycode.app.ai.services;
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/NavButton.java ---
+package org.roxycode.app.ui;
+
+import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.FlatLaf;
+import org.kordamp.ikonli.swing.FontIcon;
+import javax.swing.*;
+import java.awt.*;
 
 /**
- * Result of a file operation or search.
+ * Styled navigation button for the sidebar.
  */
-public record EditorResult(
-    boolean success,
-    String content,
-    String errorHint
-) {}
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GitService.java ---
-1: package org.roxycode.app.ai.services;
-23: public class GitService {
-24: private static final Logger log = LoggerFactory.getLogger(GitService.class);
-25: private final ProjectService projectService;
-27: public GitService(ProjectService projectService) {
-32: public String getCurrentBranch() {
-37: public String getStatus() {
-42: public String getDiff() {
-47: public String getLog(int limit) {
-52: public String showCommit(String hash) {
-56: private String executeGitCommand(String... args) {
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/events/TurnEventBridgeTest.java ---
-package org.roxycode.app.events;
-
-import org.junit.jupiter.api.Test;
-import org.springframework.context.ApplicationEventPublisher;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-class TurnEventBridgeTest {
-
-    @Test
-    void testEventDispatching() {
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge bridge = new TurnEventBridge(publisher);
-        AtomicBoolean turnCalled = new AtomicBoolean(false);
-        AtomicBoolean completeCalled = new AtomicBoolean(false);
-        AtomicReference<UserMessageEvent> userMsgRef = new AtomicReference<>();
-
-        bridge.addTurnListener(event -> turnCalled.set(true));
-        bridge.addCompleteListener(event -> completeCalled.set(true));
-        bridge.addUserMessageListener(userMsgRef::set);
-
-        bridge.handleTurn(new AgentTurnEvent("Test", 1, "EXPLORE"));
-        bridge.handleComplete(new AgentTurnCompleteEvent("Test", 1, "Done"));
-        bridge.handleUserMessage(new UserMessageEvent("You", "Hello"));
-
-        assertTrue(turnCalled.get(), "Turn listener should be called");
-        assertTrue(completeCalled.get(), "Complete listener should be called");
-        assertNotNull(userMsgRef.get(), "User message listener should be called");
-        assertEquals("Hello", userMsgRef.get().message());
+public class NavButton extends JButton {
+    public NavButton(String text, Icon icon) {
+        super(text, icon);
+        setHorizontalAlignment(SwingConstants.LEFT);
+        setFocusPainted(false);
+        setContentAreaFilled(false);
+        setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+        putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        putClientProperty("JButton.arc", 6);
+        setIconTextGap(10);
     }
 
-    @Test
-    void testPublishUserMessage() {
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge bridge = new TurnEventBridge(publisher);
-        
-        bridge.publishUserMessage("You", "Test Message");
-        
-        verify(publisher).publishEvent(any(UserMessageEvent.class));
+    @Override
+    public void setSelected(boolean b) {
+        super.setSelected(b);
+        if (b) {
+            if (FlatLaf.isLafDark()) {
+                putClientProperty(FlatClientProperties.STYLE, 
+                    "background: $Component.accentColor; " +
+                    "foreground: $Component.accentForeground");
+            } else {
+                putClientProperty(FlatClientProperties.STYLE, 
+                    "background: #0d6efd; " +
+                    "foreground: #ffffff");
+            }
+            setContentAreaFilled(true);
+        } else {
+            putClientProperty(FlatClientProperties.STYLE, "");
+            setContentAreaFilled(false);
+        }
+        updateIconColor();
+    }
+
+    private void updateIconColor() {
+        Icon icon = getIcon();
+        if (icon instanceof FontIcon) {
+            FontIcon fontIcon = (FontIcon) icon;
+            Color fg = getForeground();
+            if (fg != null) {
+                fontIcon.setIconColor(fg);
+            }
+        }
+    }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        setSelected(isSelected());
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        updateIconColor();
+        super.paintComponent(g);
     }
 }
 
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/FileTreeFormatter.java ---
-1: package org.roxycode.app.ai.services.cache;
-8: public class FileTreeFormatter {
-15: public static String format(List<String> paths) {
-40: private static void renderTree(TreeNode node, String prefix, StringBuilder sb) {
-61: private static class TreeNode {
-62: String name;
-63: Map<String, TreeNode> children = new HashMap<>();
-65: TreeNode(String name) {
-69: TreeNode getOrCreateChild(String part) {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/JexlToHtmlConverter.java ---
+1: package org.roxycode.app.ui;
+11: public class JexlToHtmlConverter {
+13: private static final String[] KEYWORDS = {
+26: private static final String KEYWORDS_PATTERN = "(" + String.join("|", KEYWORDS) + ")";
+27: private static final String REGEX = "(//.*|##.*)|(&quot;.*?&quot;|&#39;.*?&#39;|&apos;.*?&apos;|'.*?')|(?<![a-zA-Z0-9_])" + KEYWORDS_PATTERN + "(?![a-zA-Z0-9_])|(?<![a-zA-Z0-9_])([0-9]+)(?![a-zA-Z0-9_])";
+28: private static final Pattern PATTERN = Pattern.compile(REGEX);
+35: public static String convert(String script) {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/ProgressCallback.java ---
-package org.roxycode.app.ai.services.cache;
-
-/**
- * Callback interface for reporting progress of long-running operations.
- */
-public interface ProgressCallback {
-    /**
-     * Called when progress is made.
-     * @param current The current step or units completed.
-     * @param total The total steps or units expected.
-     * @param message A descriptive message for the current step.
-     */
-    void onProgress(int current, int total, String message);
-}
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/ThoughtPanel.java ---
+1: package org.roxycode.app.ui;
+13: public class ThoughtPanel extends JPanel {
+14: private final JTextArea textArea;
+15: private final JButton toggleButton;
+16: private final JScrollPane scrollPane;
+17: private boolean expanded = false;
+19: public ThoughtPanel() {
+53: private void updateColors() {
+64: public void appendThought(String text) {
+72: public void setExpanded(boolean expanded) {
+80: public void clear() {
+87: public void updateUI() {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/GeminiCacheService.java ---
-package org.roxycode.app.ai.services.cache;
-
-import org.roxycode.app.ai.AgentDoc;
-import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.service.SettingsService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
-@Service
-@AgentService("geminiCacheService")
-@AgentDoc("Manages Gemini API context caching indicators.")
-public class GeminiCacheService {
-    private static final Logger log = LoggerFactory.getLogger(GeminiCacheService.class);
-    private final SettingsService settingsService;
-
-    public GeminiCacheService(SettingsService settingsService) {
-        this.settingsService = settingsService;
-    }
-
-    public long estimateTokens(String text) {
-        if (text == null) return 0;
-        return text.length() / 4;
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/ProjectCacheMetaService.java ---
-1: package org.roxycode.app.ai.services.cache;
-18: public class ProjectCacheMetaService {
-19: private static final Logger log = LoggerFactory.getLogger(ProjectCacheMetaService.class);
-20: private static final String ROXY_DIR = ".roxycode";
-21: private static final String CACHE_FILE = ROXY_DIR + "/cache_meta.toml";
-22: private static final String REPO_CACHE_FILE = ROXY_DIR + "/repo_cache.txt";
-24: private final ProjectService projectService;
-25: private final ObjectMapper mapper;
-27: public ProjectCacheMetaService(ProjectService projectService) {
-33: private void ensureRoxyDir() {
-45: public Optional<ProjectCacheMeta> loadMeta() {
-59: public void saveMeta(ProjectCacheMeta meta) {
-70: public void saveRepoCache(String content) {
-81: public Optional<String> loadRepoCache() {
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/RepoMapPackerService.java ---
-1: package org.roxycode.app.ai.services.cache;
-34: public class RepoMapPackerService {
-35: private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
-36: private static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB
-38: private final ProjectService projectService;
-39: private final ObjectMapper objectMapper;
-40: private final GrepService grepService;
-41: private final ProjectCacheMetaService metaService;
-42: private final GeminiCacheService geminiCacheService;
-44: private String cachedMap = null;
-45: private boolean needsUpdate = true;
-46: private List<String> excludePatterns = new ArrayList<>();
-48: public RepoMapPackerService(ProjectService projectService, ObjectMapper objectMapper, GrepService grepService,
-65: public void handleFileChanged(FileChangedEvent event) {
-76: public EditorResult generateRepoMap() {
-141: private String getSkeleton(Path filePath, Path root) {
-190: private record Tag(String name, int line) {}
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/BuildResult.java ---
-package org.roxycode.app.ai.services;
-
-import java.util.List;
-
-/**
- * Result of a build tool command.
- */
-public record BuildResult(
-    boolean success,
-    int exitCode,
-    String output,
-    List<String> errors,
-    List<String> failedTests,
-    String log
-) {}
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentDoc.java ---
-package org.roxycode.app.ai;
-
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-
-/**
- * Provides rich documentation for AI agents about JEXL-exposed components.
- */
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
-public @interface AgentDoc {
-    /**
-     * A description of the component.
-     * @return the description
-     */
-    String value();
-
-    /**
-     * Usage examples for the component.
-     * @return the examples
-     */
-    String[] examples() default {};
-
-    /**
-     * Additional notes about the component.
-     * @return the notes
-     */
-    String[] notes() default {};
-}
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/BuildConfigPanel.java ---
+1: package org.roxycode.app.ui;
+19: public class BuildConfigPanel extends JPanel {
+20: private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
+21: private final GenericBuildToolService buildToolService;
+22: private final SettingsService settingsService;
+23: private final ProjectService projectService;
+24: private final RSyntaxTextArea textArea;
+25: private final JButton saveButton;
+26: private final JLabel statusLabel;
+27: private final Timer statusTimer;
+29: public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService, ProjectService projectService) {
+72: private void loadConfig() {
+82: private void saveConfig() {
+93: private void updateTextAreaTheme() {
 
 
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/PromptPanel.java ---
@@ -1451,43 +1199,44 @@ public class StatusPanel extends JPanel {
 
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/ChatPanel.java ---
 1: package org.roxycode.app.ui;
-34: public class ChatPanel extends JPanel implements JexlExecutionListener {
-36: private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
-37: private final AiService aiService;
-38: private final ExploreManager exploreManager;
-39: private final JexlTool jexlTool;
-40: private final WorkflowService workflowService;
-41: private final TurnEventBridge turnEventBridge;
-42: private final MarkdownPane outputArea;
-43: private final ThoughtPanel thoughtPanel;
-44: private final JTextArea inputArea;
-45: private final JButton sendButton;
-46: private final JButton stopButton;
-47: private final JButton approveButton;
-48: private final JButton rejectButton;
-49: private final JButton cancelTaskButton;
-50: private final JLabel turnLabel;
-51: private SwingWorker<String, Void> currentWorker;
-53: public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool,
-139: private void setupUndoRedo() {
-171: private void onAgentTurn(AgentTurnEvent event) {
-177: private void setupInputContextMenu() {
-198: private void onPhaseChanged(WorkflowPhase phase) {
-206: private void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested) {
-222: private void approvePhase() {
-231: private void rejectPhase() {
-239: private void cancelTask() {
-252: private void updateCancelButtonVisibility() {
-258: private void sendMessage(ActionEvent e) {
-268: private void triggerTurn(String text) {
-309: public void onJexlExecuted(JexlExecutionEvent event) {
-323: private void setLoading(boolean loading) {
-332: static String truncateResult(Object result) {
-338: public MarkdownPane getOutputArea() { return outputArea; }
-339: private void setupKeyboardShortcuts() {
-363: public JTextArea getInputArea() { return inputArea; }
-364: public JButton getSendButton() { return sendButton; }
-365: public JButton getStopButton() { return stopButton; }
+35: public class ChatPanel extends JPanel implements JexlExecutionListener {
+37: private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
+38: private final AiService aiService;
+39: private final ExploreManager exploreManager;
+40: private final JexlTool jexlTool;
+41: private final WorkflowService workflowService;
+42: private final TurnEventBridge turnEventBridge;
+43: private final ChatMemory chatMemory;
+44: private final MarkdownPane outputArea;
+45: private final ThoughtPanel thoughtPanel;
+46: private final JTextArea inputArea;
+47: private final JButton sendButton;
+48: private final JButton stopButton;
+49: private final JButton approveButton;
+50: private final JButton rejectButton;
+51: private final JButton cancelTaskButton;
+52: private final JLabel turnLabel;
+53: private SwingWorker<String, Void> currentWorker;
+55: public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool,
+151: private void setupUndoRedo() {
+183: private void onAgentTurn(AgentTurnEvent event) {
+189: private void setupInputContextMenu() {
+210: private void onPhaseChanged(WorkflowPhase phase) {
+218: private void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested) {
+234: private void approvePhase() {
+243: private void rejectPhase() {
+251: private void cancelTask() {
+266: private void updateCancelButtonVisibility() {
+272: private void sendMessage(ActionEvent e) {
+282: private void triggerTurn(String text) {
+323: public void onJexlExecuted(JexlExecutionEvent event) {
+337: private void setLoading(boolean loading) {
+346: static String truncateResult(Object result) {
+352: public MarkdownPane getOutputArea() { return outputArea; }
+353: private void setupKeyboardShortcuts() {
+377: public JTextArea getInputArea() { return inputArea; }
+378: public JButton getSendButton() { return sendButton; }
+379: public JButton getStopButton() { return stopButton; }
 
 
 --- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/ChatHtmlTemplates.java ---
@@ -1590,194 +1339,525 @@ public class ChatHtmlTemplates {
 144: private void updateTitle() {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/BuildConfigPanel.java ---
-1: package org.roxycode.app.ui;
-19: public class BuildConfigPanel extends JPanel {
-20: private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
-21: private final GenericBuildToolService buildToolService;
-22: private final SettingsService settingsService;
-23: private final ProjectService projectService;
-24: private final RSyntaxTextArea textArea;
-25: private final JButton saveButton;
-26: private final JLabel statusLabel;
-27: private final Timer statusTimer;
-29: public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService, ProjectService projectService) {
-72: private void loadConfig() {
-82: private void saveConfig() {
-93: private void updateTextAreaTheme() {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentService.java ---
+package org.roxycode.app.ai;
 
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/ThoughtPanel.java ---
-1: package org.roxycode.app.ui;
-13: public class ThoughtPanel extends JPanel {
-14: private final JTextArea textArea;
-15: private final JButton toggleButton;
-16: private final JScrollPane scrollPane;
-17: private boolean expanded = false;
-19: public ThoughtPanel() {
-53: private void updateColors() {
-64: public void appendThought(String text) {
-72: public void setExpanded(boolean expanded) {
-80: public void clear() {
-87: public void updateUI() {
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/JexlToHtmlConverter.java ---
-1: package org.roxycode.app.ui;
-11: public class JexlToHtmlConverter {
-13: private static final String[] KEYWORDS = {
-26: private static final String KEYWORDS_PATTERN = "(" + String.join("|", KEYWORDS) + ")";
-27: private static final String REGEX = "(//.*|##.*)|(&quot;.*?&quot;|&#39;.*?&#39;|&apos;.*?&apos;|'.*?')|(?<![a-zA-Z0-9_])" + KEYWORDS_PATTERN + "(?![a-zA-Z0-9_])|(?<![a-zA-Z0-9_])([0-9]+)(?![a-zA-Z0-9_])";
-28: private static final Pattern PATTERN = Pattern.compile(REGEX);
-35: public static String convert(String script) {
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/NavButton.java ---
-package org.roxycode.app.ui;
-
-import com.formdev.flatlaf.FlatClientProperties;
-import com.formdev.flatlaf.FlatLaf;
-import org.kordamp.ikonli.swing.FontIcon;
-import javax.swing.*;
-import java.awt.*;
+import org.springframework.stereotype.Service;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
- * Styled navigation button for the sidebar.
+ * Annotation to mark Spring services for exposure to the AI Agent via JEXL.
+ * This annotation is meta-annotated with {@link Service} to ensure Spring bean discovery.
  */
-public class NavButton extends JButton {
-    public NavButton(String text, Icon icon) {
-        super(text, icon);
-        setHorizontalAlignment(SwingConstants.LEFT);
-        setFocusPainted(false);
-        setContentAreaFilled(false);
-        setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
-        putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-        putClientProperty("JButton.arc", 6);
-        setIconTextGap(10);
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Service
+public @interface AgentService {
+    /**
+     * The name of the variable as it will be exposed in the JEXL context.
+     * @return the JEXL variable name
+     */
+    String value();
+
+    /**
+     * The roles allowed to access this service.
+     * Defaults to an empty array, meaning no roles are allowed.
+     * Use "*" as a wildcard to allow access to all agent roles.
+     * @return the allowed roles
+     */
+    String[] roles() default {};
+}
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AiConfig.java ---
+package org.roxycode.app.ai;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import java.util.Map;
+
+/**
+ * Configuration for AI-related beans.
+ */
+@Configuration
+public class AiConfig {
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
     }
 
-    @Override
-    public void setSelected(boolean b) {
-        super.setSelected(b);
-        if (b) {
-            if (FlatLaf.isLafDark()) {
-                putClientProperty(FlatClientProperties.STYLE, 
-                    "background: $Component.accentColor; " +
-                    "foreground: $Component.accentForeground");
-            } else {
-                putClientProperty(FlatClientProperties.STYLE, 
-                    "background: #0d6efd; " +
-                    "foreground: #ffffff");
-            }
-            setContentAreaFilled(true);
-        } else {
-            putClientProperty(FlatClientProperties.STYLE, "");
-            setContentAreaFilled(false);
+    @Bean
+    public TomlMapper tomlMapper() {
+        return new TomlMapper();
+    }
+
+    @Bean
+    public JexlTool jexlTool(JexlServiceRegistry registry) {
+        return new JexlTool(registry);
+    }
+
+    @Bean
+    public JexlServiceRegistry jexlServiceRegistry(ApplicationContext context) {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        Map<String, Object> beans = context.getBeansWithAnnotation(AgentService.class);
+        for (Object bean : beans.values()) {
+            registry.register(bean);
         }
-        updateIconColor();
-    }
-
-    private void updateIconColor() {
-        Icon icon = getIcon();
-        if (icon instanceof FontIcon) {
-            FontIcon fontIcon = (FontIcon) icon;
-            Color fg = getForeground();
-            if (fg != null) {
-                fontIcon.setIconColor(fg);
-            }
-        }
-    }
-
-    @Override
-    public void updateUI() {
-        super.updateUI();
-        setSelected(isSelected());
-    }
-
-    @Override
-    protected void paintComponent(Graphics g) {
-        updateIconColor();
-        super.paintComponent(g);
+        return registry;
     }
 }
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/PhaseStepPanel.java ---
-1: package org.roxycode.app.ui;
-17: public class PhaseStepPanel extends JPanel {
-19: private final List<PhaseIndicator> indicators = new ArrayList<>();
-20: private JLabel modeBadge;
-21: private JPanel progressTracker;
-22: private final WorkflowService workflowService;
-24: public PhaseStepPanel(WorkflowService workflowService) {
-35: private void initComponents() {
-69: private void updateActivePhase(WorkflowPhase currentPhase) {
-83: private static class PhaseIndicator extends JPanel {
-84: private final WorkflowPhase phase;
-85: private final JLabel iconLabel;
-86: private final JLabel textLabel;
-87: private boolean isActive;
-88: private boolean isCompleted;
-90: public PhaseIndicator(WorkflowPhase phase) {
-106: public void setActive(boolean active) {
-111: public void setCompleted(boolean completed) {
-116: private void updateStyle() {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentRole.java ---
+package org.roxycode.app.ai;
+
+public enum AgentRole {
+
+    PRODUCT_OWNER(
+            "Product Owner",
+            "Defines the 'what' and 'why' by gathering functional requirements."
+    ),
+    LEAD_ARCHITECT(
+            "Lead Architect",
+            "Defines the 'how' by creating technical specifications and implementation plans."
+    ),
+    SENIOR_DEVELOPER(
+            "Senior Developer",
+            "Executes the plan by writing clean, tested, and production-grade code."
+    ),
+    TECHNICAL_MENTOR(
+            "Technical Mentor",
+            "Provides technical guidance and ensures adherence to best practices."
+    );
+
+    private final String title;
+    private final String description;
+
+    AgentRole(String title, String description) {
+        this.title = title;
+        this.description = description;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    /**
+     * Helper method to generate the standard system prompt prefix for each
+     * role.
+     */
+    public String getSystemPromptPrefix() {
+        return String.format("You are the %s. %s", this.title, this.description);
+    }
+}
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/UserProfileComponent.java ---
-1: package org.roxycode.app.ui;
-18: public class UserProfileComponent extends JPanel {
-19: private static final Logger log = LoggerFactory.getLogger(UserProfileComponent.class);
-20: private Image avatarImage;
-27: public UserProfileComponent(String name, String email) {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AiMemoryConfig.java ---
+package org.roxycode.app.ai;
+
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.ai.chat.messages.Message;
+
+@Configuration
+public class AiMemoryConfig {
+
+    @Bean
+    public ChatMemory chatMemory() {
+        return new ChatMemory() {
+            private final Map<String, List<Message>> memories = new ConcurrentHashMap<>();
+            @Override
+            public void add(String conversationId, List<Message> messages) {
+                memories.computeIfAbsent(conversationId, k -> new ArrayList<>()).addAll(messages);
+            }
+            @Override
+            public List<Message> get(String conversationId) {
+                return memories.getOrDefault(conversationId, new ArrayList<>());
+            }
+            @Override
+            public void clear(String conversationId) {
+                memories.remove(conversationId);
+            }
+        };
+    }
+}
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/MarkdownPane.java ---
-1: package org.roxycode.app.ui;
-26: public class MarkdownPane extends JTextPane {
-27: private final Parser parser;
-28: private final HtmlRenderer renderer;
-29: private final List<Message> messages = new ArrayList<>();
-30: private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
-32: private record Message(String role, StringBuilder content, String timestamp, boolean isTool) {}
-34: public MarkdownPane() {
-47: private void setupContextMenu() {
-74: public void updateTheme() {
-87: public void appendMessage(String role, String content) {
-92: public void appendToolLog(String toolName, String output) {
-97: private void renderAll() {
-116: public void clear() {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/JexlExecutionEvent.java ---
+package org.roxycode.app.ai;
+
+public record JexlExecutionEvent(String script, Object result, boolean success, String error) {}
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/SidebarPanel.java ---
-1: package org.roxycode.app.ui;
-17: public class SidebarPanel extends JPanel {
-18: private final SettingsService settingsService;
-19: private final Consumer<String> navigationAction;
-20: private final List<NavButton> navButtons = new ArrayList<>();
-22: public SidebarPanel(SettingsService settingsService, Consumer<String> navigationAction) {
-28: private void initComponents() {
-55: private void updateSelection(NavButton selectedBtn) {
-61: private JLabel createSectionHeader(String text) {
-68: private JButton createNavButton(String text, String cardName, Codicons iconCode) {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/LLMDocGenerator.java ---
+1: package org.roxycode.app.ai;
+10: public class LLMDocGenerator {
+12: public String generateDoc(Collection<Object> services) {
+56: private void generateClassStub(Class<?> clazz, StringBuilder sb, Set<Class<?>> extraTypes) {
+89: private String getTypeName(Class<?> type, Set<Class<?>> extraTypes) {
+104: private void generateTypeSchema(Class<?> type, StringBuilder sb) {
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ui/SettingsPanel.java ---
-1: package org.roxycode.app.ui;
-27: public class SettingsPanel extends JPanel {
-28: private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
-29: private final SettingsService settingsService;
-30: private final JComboBox<String> themeCombo;
-31: private final JComboBox<GeminiModelConfig> modelCombo;
-32: private final JPasswordField geminiApiKeyField;
-33: private final JSpinner maxAgentToolTurnsSpinner;
-34: private final JButton saveButton;
-35: private final JLabel statusLabel;
-36: private final Timer statusTimer;
-38: public SettingsPanel(SettingsService settingsService) {
-84: private void loadModels() {
-104: private void updateTheme() {
-112: private void saveSettings() {
-128: public static void applyTheme(String themeName) {
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/JexlTool.java ---
+1: package org.roxycode.app.ai;
+19: public class JexlTool {
+21: private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
+22: private final JexlEngine jexl;
+23: private final JexlServiceRegistry registry;
+24: private final List<JexlExecutionListener> listeners = new ArrayList<>();
+26: public JexlTool(JexlServiceRegistry registry) {
+33: public void addListener(JexlExecutionListener listener) {
+37: public void removeListener(JexlExecutionListener listener) {
+48: public String executeJexl(String script) {
+72: private void fireEvent(JexlExecutionEvent event) {
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/JexlExecutionListener.java ---
+package org.roxycode.app.ai;
+
+public interface JexlExecutionListener {
+    void onJexlExecuted(JexlExecutionEvent event);
+}
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/JexlServiceRegistry.java ---
+package org.roxycode.app.ai;
+
+import java.util.*;
+
+/**
+ * Registry for JEXL-exposed services.
+ */
+public class JexlServiceRegistry {
+    private final Map<String, Object> services = new LinkedHashMap<>();
+    private final LLMDocGenerator docGenerator = new LLMDocGenerator();
+
+    public void register(Object service) {
+        AgentService ann = service.getClass().getAnnotation(AgentService.class);
+        if (ann != null) {
+            services.put(ann.value(), service);
+        }
+    }
+
+    public Map<String, Object> getServices() {
+        return Collections.unmodifiableMap(services);
+    }
+
+    public String getDocumentation() {
+        return docGenerator.generateDoc(services.values());
+    }
+}
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentDoc.java ---
+package org.roxycode.app.ai;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+/**
+ * Provides rich documentation for AI agents about JEXL-exposed components.
+ */
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
+public @interface AgentDoc {
+    /**
+     * A description of the component.
+     * @return the description
+     */
+    String value();
+
+    /**
+     * Usage examples for the component.
+     * @return the examples
+     */
+    String[] examples() default {};
+
+    /**
+     * Additional notes about the component.
+     * @return the notes
+     */
+    String[] notes() default {};
+}
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/workflow/WorkflowService.java ---
+1: package org.roxycode.app.ai.workflow;
+15: public class WorkflowService {
+16: private final PlanManagerService planManager;
+18: public WorkflowService(PlanManagerService planManager) {
+21: private WorkflowPhase currentPhase = WorkflowPhase.EXPLORE;
+22: private final Set<WorkflowPhase> visitedPhases = new HashSet<>(Collections.singletonList(WorkflowPhase.EXPLORE));
+23: private WorkflowPhase pendingPhase;
+24: private final List<Consumer<WorkflowPhase>> phaseListeners = new ArrayList<>();
+25: private final List<TransitionRequestListener> requestListeners = new ArrayList<>();
+30: public interface TransitionRequestListener {
+36: void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested);
+41: public String routeToPhase(String phaseName) {
+78: public WorkflowPhase getCurrentPhase() {
+83: public WorkflowPhase getPendingPhase() {
+91: public void setCurrentPhase(WorkflowPhase phase) {
+104: public Set<WorkflowPhase> getVisitedPhases() {
+112: public void resetWorkflow() {
+122: public void requestPhaseTransition(WorkflowPhase nextPhase) {
+129: public void requestPhaseByName(String phaseName) {
+140: public void approveTransition() {
+149: public void rejectTransition() {
+154: public void transitionPhase(WorkflowPhase nextPhase, String summary) {
+162: public void addPhaseListener(Consumer<WorkflowPhase> listener) {
+171: public void addTransitionRequestListener(TransitionRequestListener listener) {
+175: private void notifyPhaseListeners() {
+181: private void notifyRequestListeners() {
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/workflow/WorkflowPhase.java ---
+package org.roxycode.app.ai.workflow;
+
+import org.roxycode.app.ai.AgentRole;
+import org.roxycode.app.ai.AgentDoc;
+import org.kordamp.ikonli.codicons.Codicons;
+
+@AgentDoc("Defines the current phase of the development workflow.")
+public enum WorkflowPhase {
+    EXPLORE(AgentRole.TECHNICAL_MENTOR, "Explore", Codicons.SEARCH),
+    DISCOVERY(AgentRole.PRODUCT_OWNER, "Discovery", Codicons.TELESCOPE),
+    DESIGN(AgentRole.LEAD_ARCHITECT, "Design", Codicons.SYMBOL_RULER),
+    DEVELOPMENT(AgentRole.SENIOR_DEVELOPER, "Development", Codicons.CODE),
+    VERIFICATION(AgentRole.TECHNICAL_MENTOR, "Verification", Codicons.BEAKER);
+
+    private final AgentRole role;
+    private final String displayName;
+    private final Codicons icon;
+
+    WorkflowPhase(AgentRole role, String displayName, Codicons icon) {
+        this.role = role;
+        this.displayName = displayName;
+        this.icon = icon;
+    }
+
+    public AgentRole getRole() {
+        return role;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public Codicons getIcon() {
+        return icon;
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/events/TurnEventBridgeTest.java ---
+package org.roxycode.app.events;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class TurnEventBridgeTest {
+
+    @Test
+    void testEventDispatching() {
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        TurnEventBridge bridge = new TurnEventBridge(publisher);
+        AtomicBoolean turnCalled = new AtomicBoolean(false);
+        AtomicBoolean completeCalled = new AtomicBoolean(false);
+        AtomicReference<UserMessageEvent> userMsgRef = new AtomicReference<>();
+
+        bridge.addTurnListener(event -> turnCalled.set(true));
+        bridge.addCompleteListener(event -> completeCalled.set(true));
+        bridge.addUserMessageListener(userMsgRef::set);
+
+        bridge.handleTurn(new AgentTurnEvent("Test", 1, "EXPLORE"));
+        bridge.handleComplete(new AgentTurnCompleteEvent("Test", 1, "Done"));
+        bridge.handleUserMessage(new UserMessageEvent("You", "Hello"));
+
+        assertTrue(turnCalled.get(), "Turn listener should be called");
+        assertTrue(completeCalled.get(), "Complete listener should be called");
+        assertNotNull(userMsgRef.get(), "User message listener should be called");
+        assertEquals("Hello", userMsgRef.get().message());
+    }
+
+    @Test
+    void testPublishUserMessage() {
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        TurnEventBridge bridge = new TurnEventBridge(publisher);
+        
+        bridge.publishUserMessage("You", "Test Message");
+        
+        verify(publisher).publishEvent(any(UserMessageEvent.class));
+    }
+}
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GenericBuildToolService.java ---
+1: package org.roxycode.app.ai.services;
+30: public class GenericBuildToolService {
+32: private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
+33: private static final String CONFIG_PATH = ".roxycode/build.toml";
+35: private final ProjectService projectService;
+36: private final TomlMapper tomlMapper;
+39: public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper) {
+49: public BuildResult clean() {
+54: public BuildResult compile() {
+59: public boolean detect() {
+67: public BuildResult runTests() {
+72: public BuildResult runSingleTest(String testName) {
+76: private BuildResult runCommand(String commandKey) {
+80: private BuildResult runCommand(String commandKey, Map<String, String> placeholders) {
+109: private void ensureConfig() {
+130: private String detectTemplate() {
+153: private Map<String, Object> loadConfig() throws IOException {
+158: private String getCommand(Map<String, Object> config, String key) {
+170: private String getParseRegex(Map<String, Object> config, String key) {
+175: private Map<String, String> getEnv(Map<String, Object> config) {
+187: private BuildResult execute(String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
+259: public String getConfigContent() throws IOException {
+270: public void saveConfigContent(String content) throws IOException {
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/ExploreManager.java ---
+package org.roxycode.app.ai.services;
+
+import org.roxycode.app.ai.AgentDoc;
+import org.roxycode.app.ai.AgentRole;
+import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.PromptService;
+import org.springframework.stereotype.Service;
+
+/**
+ * Service for the Technical Mentor role during the EXPLORE phase.
+ * Provides system prompt generation for stateless exploration.
+ */
+@Service
+@AgentService(value = "exploreManager", roles = {"TECHNICAL_MENTOR"})
+@AgentDoc("Manages the EXPLORE phase and provides system prompts for technical exploration.")
+public class ExploreManager {
+
+    private final SettingsService settingsService;
+    private final PromptService promptService;
+
+    public ExploreManager(SettingsService settingsService, PromptService promptService) {
+        this.settingsService = settingsService;
+        this.promptService = promptService;
+    }
+
+    @AgentDoc("Generates the system prompt for the Technical Mentor during the EXPLORE phase.")
+    public String generateSystemPrompt() {
+        int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
+        String template = promptService.loadExplorePrompt();
+        return AgentRole.TECHNICAL_MENTOR.getSystemPromptPrefix() + template.formatted(maxTurns);
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/FileEditorService.java ---
+1: package org.roxycode.app.ai.services;
+25: public class FileEditorService {
+27: private static final Logger log = LoggerFactory.getLogger(FileEditorService.class);
+29: private final ProjectService projectService;
+30: private final WorkflowService workflowService;
+31: private final ApplicationEventPublisher eventPublisher;
+34: public FileEditorService(ProjectService projectService, WorkflowService workflowService, ApplicationEventPublisher eventPublisher) {
+48: public void writeFile(String relativePath, String content) throws IOException {
+67: public void replaceBlock(String relativePath, String targetBlock, String replacementBlock) throws IOException {
+110: public void replaceLines(String relativePath, int startLine, int endLine, String replacementText) throws IOException {
+147: public void insertAtLine(String relativePath, int lineNumber, String content) throws IOException {
+164: private void checkPhase() {
+170: private Path resolvePath(String relativePath) {
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/PlanManagerService.java ---
+1: package org.roxycode.app.ai.services;
+17: public class PlanManagerService {
+19: private FunctionalSpec currentFunctionalSpec;
+20: private TechnicalSpec currentTechnicalSpec;
+21: private final List<PlanUpdateListener> listeners = new CopyOnWriteArrayList<>();
+26: public interface PlanUpdateListener {
+27: void onSpecsUpdated(FunctionalSpec functionalSpec, TechnicalSpec technicalSpec);
+34: public void addListener(PlanUpdateListener listener) {
+44: public String submitFunctionalSpec(
+59: public String submitFunctionalSpec(
+73: public String submitFunctionalSpec(
+87: public String submitTechnicalSpec(
+102: public String submitTechnicalSpec(
+116: public String submitTechnicalSpec(
+128: public FunctionalSpec getCurrentFunctionalSpec() {
+136: public TechnicalSpec getCurrentTechnicalSpec() {
+143: public void clearSpecs() {
+150: private List<String> extractStringList(Object obj) {
+173: private void notifyListeners() {
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/FileReadService.java ---
+1: package org.roxycode.app.ai.services;
+22: public class FileReadService {
+24: private static final Logger log = LoggerFactory.getLogger(FileReadService.class);
+25: private final ProjectService projectService;
+27: public FileReadService(ProjectService projectService) {
+32: public boolean fileExists(String relativePath) {
+38: public String readFile(String relativePath) {
+52: public List<String> listDirectory(String relativePath) {
+66: private Path resolvePath(String relativePath) {
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GrepService.java ---
+1: package org.roxycode.app.ai.services;
+23: public class GrepService {
+24: private static final Logger log = LoggerFactory.getLogger(GrepService.class);
+25: private final ProjectService projectService;
+27: public GrepService(ProjectService projectService) {
+41: public EditorResult grep(String pattern, String relativePath, String filePattern) {
+99: public List<String> listFiles(String relativePath) {
+132: private Path resolvePath(String relativePath) {
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/EditorResult.java ---
+package org.roxycode.app.ai.services;
+
+/**
+ * Result of a file operation or search.
+ */
+public record EditorResult(
+    boolean success,
+    String content,
+    String errorHint
+) {}
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/GitService.java ---
+1: package org.roxycode.app.ai.services;
+23: public class GitService {
+24: private static final Logger log = LoggerFactory.getLogger(GitService.class);
+25: private final ProjectService projectService;
+27: public GitService(ProjectService projectService) {
+32: public String getCurrentBranch() {
+37: public String getStatus() {
+42: public String getDiff() {
+47: public String getLog(int limit) {
+52: public String showCommit(String hash) {
+56: private String executeGitCommand(String... args) {
 
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/service/SettingsServiceTest.java ---
@@ -1834,6 +1914,18 @@ class SettingsServiceTest {
 }
 
 
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/FileTreeFormatter.java ---
+1: package org.roxycode.app.ai.services.cache;
+8: public class FileTreeFormatter {
+15: public static String format(List<String> paths) {
+40: private static void renderTree(TreeNode node, String prefix, StringBuilder sb) {
+61: private static class TreeNode {
+62: String name;
+63: Map<String, TreeNode> children = new HashMap<>();
+65: TreeNode(String name) {
+69: TreeNode getOrCreateChild(String part) {
+
+
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/service/AiServiceTest.java ---
 1: package org.roxycode.app.service;
 28: class AiServiceTest {
@@ -1855,6 +1947,23 @@ class SettingsServiceTest {
 73: void setUp() {
 86: void testChatUsesConfiguredModelAndDynamicPrompt() {
 131: void testChatHandlesTurnLimitExceeded() {
+
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/ProgressCallback.java ---
+package org.roxycode.app.ai.services.cache;
+
+/**
+ * Callback interface for reporting progress of long-running operations.
+ */
+public interface ProgressCallback {
+    /**
+     * Called when progress is made.
+     * @param current The current step or units completed.
+     * @param total The total steps or units expected.
+     * @param message A descriptive message for the current step.
+     */
+    void onProgress(int current, int total, String message);
+}
 
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/service/SystemToolServiceTest.java ---
@@ -1887,6 +1996,34 @@ class SystemToolServiceTest {
         }
     }
 }
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/GeminiCacheService.java ---
+package org.roxycode.app.ai.services.cache;
+
+import org.roxycode.app.ai.AgentDoc;
+import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.service.SettingsService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+@Service
+@AgentService("geminiCacheService")
+@AgentDoc("Manages Gemini API context caching indicators.")
+public class GeminiCacheService {
+    private static final Logger log = LoggerFactory.getLogger(GeminiCacheService.class);
+    private final SettingsService settingsService;
+
+    public GeminiCacheService(SettingsService settingsService) {
+        this.settingsService = settingsService;
+    }
+
+    public long estimateTokens(String text) {
+        if (text == null) return 0;
+        return text.length() / 4;
+    }
+}
+
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/service/PromptServiceTest.java ---
 package org.roxycode.app.service;
@@ -1954,6 +2091,23 @@ class PromptServiceTest {
     }
 
 }
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/ProjectCacheMetaService.java ---
+1: package org.roxycode.app.ai.services.cache;
+18: public class ProjectCacheMetaService {
+19: private static final Logger log = LoggerFactory.getLogger(ProjectCacheMetaService.class);
+20: private static final String ROXY_DIR = ".roxycode";
+21: private static final String CACHE_FILE = ROXY_DIR + "/cache_meta.toml";
+22: private static final String REPO_CACHE_FILE = ROXY_DIR + "/repo_cache.txt";
+24: private final ProjectService projectService;
+25: private final ObjectMapper mapper;
+27: public ProjectCacheMetaService(ProjectService projectService) {
+33: private void ensureRoxyDir() {
+45: public Optional<ProjectCacheMeta> loadMeta() {
+59: public void saveMeta(ProjectCacheMeta meta) {
+70: public void saveRepoCache(String content) {
+81: public Optional<String> loadRepoCache() {
+
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/service/ProjectServiceTest.java ---
 package org.roxycode.app.service;
@@ -2050,195 +2204,83 @@ class AppApplicationTests {
 }
 
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentService.java ---
-package org.roxycode.app.ai;
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/cache/RepoMapPackerService.java ---
+1: package org.roxycode.app.ai.services.cache;
+34: public class RepoMapPackerService {
+35: private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
+36: private static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB
+38: private final ProjectService projectService;
+39: private final ObjectMapper objectMapper;
+40: private final GrepService grepService;
+41: private final ProjectCacheMetaService metaService;
+42: private final GeminiCacheService geminiCacheService;
+44: private String cachedMap = null;
+45: private boolean needsUpdate = true;
+46: private List<String> excludePatterns = new ArrayList<>();
+48: public RepoMapPackerService(ProjectService projectService, ObjectMapper objectMapper, GrepService grepService,
+65: public void handleFileChanged(FileChangedEvent event) {
+76: public EditorResult generateRepoMap() {
+141: private String getSkeleton(Path filePath, Path root) {
+190: private record Tag(String name, int line) {}
 
-import org.springframework.stereotype.Service;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+
+--- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/services/BuildResult.java ---
+package org.roxycode.app.ai.services;
+
+import java.util.List;
 
 /**
- * Annotation to mark Spring services for exposure to the AI Agent via JEXL.
- * This annotation is meta-annotated with {@link Service} to ensure Spring bean discovery.
+ * Result of a build tool command.
  */
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-@Service
-public @interface AgentService {
-    /**
-     * The name of the variable as it will be exposed in the JEXL context.
-     * @return the JEXL variable name
-     */
-    String value();
+public record BuildResult(
+    boolean success,
+    int exitCode,
+    String output,
+    List<String> errors,
+    List<String> failedTests,
+    String log
+) {}
 
-    /**
-     * The roles allowed to access this service.
-     * Defaults to an empty array, meaning no roles are allowed.
-     * Use "*" as a wildcard to allow access to all agent roles.
-     * @return the allowed roles
-     */
-    String[] roles() default {};
-}
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/config/GeminiModelsTest.java ---
+package org.roxycode.app.model.config;
 
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AiConfig.java ---
-package org.roxycode.app.ai;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import java.util.Map;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import java.util.List;
 
-/**
- * Configuration for AI-related beans.
- */
-@Configuration
-public class AiConfig {
+public class GeminiModelsTest {
 
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
-    }
-
-    @Bean
-    public TomlMapper tomlMapper() {
-        return new TomlMapper();
-    }
-
-    @Bean
-    public JexlTool jexlTool(JexlServiceRegistry registry) {
-        return new JexlTool(registry);
-    }
-
-    @Bean
-    public JexlServiceRegistry jexlServiceRegistry(ApplicationContext context) {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        Map<String, Object> beans = context.getBeansWithAnnotation(AgentService.class);
-        for (Object bean : beans.values()) {
-            registry.register(bean);
-        }
-        return registry;
+    @Test
+    public void testTomlParsing() throws Exception {
+        String toml = "[[models]]\napiName = \"test-id\"\nname = \"Test Name\"\ndescription = \"Test Desc\"";
+        TomlMapper mapper = new TomlMapper();
+        GeminiModels models = mapper.readValue(toml, GeminiModels.class);
+        
+        assertNotNull(models);
+        assertEquals(1, models.models().size());
+        assertEquals("test-id", models.models().get(0).apiName());
+        assertEquals("Test Name", models.models().get(0).name());
+        assertEquals("Test Desc", models.models().get(0).description());
     }
 }
 
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/workflow/WorkflowPhase.java ---
-package org.roxycode.app.ai.workflow;
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/AppSettingsTest.java ---
+package org.roxycode.app.model;
 
-import org.roxycode.app.ai.AgentRole;
-import org.roxycode.app.ai.AgentDoc;
-import org.kordamp.ikonli.codicons.Codicons;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@AgentDoc("Defines the current phase of the development workflow.")
-public enum WorkflowPhase {
-    EXPLORE(AgentRole.TECHNICAL_MENTOR, "Explore", Codicons.SEARCH),
-    DISCOVERY(AgentRole.PRODUCT_OWNER, "Discovery", Codicons.TELESCOPE),
-    DESIGN(AgentRole.LEAD_ARCHITECT, "Design", Codicons.SYMBOL_RULER),
-    DEVELOPMENT(AgentRole.SENIOR_DEVELOPER, "Development", Codicons.CODE),
-    VERIFICATION(AgentRole.TECHNICAL_MENTOR, "Verification", Codicons.BEAKER);
+public class AppSettingsTest {
 
-    private final AgentRole role;
-    private final String displayName;
-    private final Codicons icon;
-
-    WorkflowPhase(AgentRole role, String displayName, Codicons icon) {
-        this.role = role;
-        this.displayName = displayName;
-        this.icon = icon;
-    }
-
-    public AgentRole getRole() {
-        return role;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public Codicons getIcon() {
-        return icon;
+    @Test
+    void testMaxAgentToolTurns() {
+        AppSettings settings = new AppSettings();
+        assertEquals(5, settings.getMaxAgentToolTurns());
+        settings.setMaxAgentToolTurns(10);
+        assertEquals(10, settings.getMaxAgentToolTurns());
     }
 }
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/AgentRole.java ---
-package org.roxycode.app.ai;
-
-public enum AgentRole {
-
-    PRODUCT_OWNER(
-            "Product Owner",
-            "Defines the 'what' and 'why' by gathering functional requirements."
-    ),
-    LEAD_ARCHITECT(
-            "Lead Architect",
-            "Defines the 'how' by creating technical specifications and implementation plans."
-    ),
-    SENIOR_DEVELOPER(
-            "Senior Developer",
-            "Executes the plan by writing clean, tested, and production-grade code."
-    ),
-    TECHNICAL_MENTOR(
-            "Technical Mentor",
-            "Provides technical guidance and ensures adherence to best practices."
-    );
-
-    private final String title;
-    private final String description;
-
-    AgentRole(String title, String description) {
-        this.title = title;
-        this.description = description;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    /**
-     * Helper method to generate the standard system prompt prefix for each
-     * role.
-     */
-    public String getSystemPromptPrefix() {
-        return String.format("You are the %s. %s", this.title, this.description);
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/main/java/org/roxycode/app/ai/workflow/WorkflowService.java ---
-1: package org.roxycode.app.ai.workflow;
-15: public class WorkflowService {
-16: private final PlanManagerService planManager;
-18: public WorkflowService(PlanManagerService planManager) {
-21: private WorkflowPhase currentPhase = WorkflowPhase.EXPLORE;
-22: private final Set<WorkflowPhase> visitedPhases = new HashSet<>(Collections.singletonList(WorkflowPhase.EXPLORE));
-23: private WorkflowPhase pendingPhase;
-24: private final List<Consumer<WorkflowPhase>> phaseListeners = new ArrayList<>();
-25: private final List<TransitionRequestListener> requestListeners = new ArrayList<>();
-30: public interface TransitionRequestListener {
-36: void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested);
-41: public String routeToPhase(String phaseName) {
-78: public WorkflowPhase getCurrentPhase() {
-83: public WorkflowPhase getPendingPhase() {
-91: public void setCurrentPhase(WorkflowPhase phase) {
-104: public Set<WorkflowPhase> getVisitedPhases() {
-112: public void resetWorkflow() {
-122: public void requestPhaseTransition(WorkflowPhase nextPhase) {
-129: public void requestPhaseByName(String phaseName) {
-140: public void approveTransition() {
-149: public void rejectTransition() {
-154: public void transitionPhase(WorkflowPhase nextPhase, String summary) {
-162: public void addPhaseListener(Consumer<WorkflowPhase> listener) {
-171: public void addTransitionRequestListener(TransitionRequestListener listener) {
-175: private void notifyPhaseListeners() {
-181: private void notifyRequestListeners() {
-
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/SpecTest.java ---
 package org.roxycode.app.model;
@@ -2278,605 +2320,6 @@ class DiscoverySessionTest {
         DiscoverySession session = new DiscoverySession("Feature", needs, List.of(), false);
         assertEquals(1, session.userNeeds().size());
         assertThrows(UnsupportedOperationException.class, () -> session.userNeeds().add("Need 2"));
-    }
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/AppSettingsTest.java ---
-package org.roxycode.app.model;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-public class AppSettingsTest {
-
-    @Test
-    void testMaxAgentToolTurns() {
-        AppSettings settings = new AppSettings();
-        assertEquals(5, settings.getMaxAgentToolTurns());
-        settings.setMaxAgentToolTurns(10);
-        assertEquals(10, settings.getMaxAgentToolTurns());
-    }
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatPanelTruncationTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-
-public class ChatPanelTruncationTest {
-
-    @Test
-    public void testTruncateResult_Null() {
-        assertEquals("null", ChatPanel.truncateResult(null));
-    }
-
-    @Test
-    public void testTruncateResult_Short() {
-        String result = "Hello World";
-        assertEquals(result, ChatPanel.truncateResult(result));
-    }
-
-    @Test
-    public void testTruncateResult_Exact100() {
-        String result = "a".repeat(100);
-        assertEquals(result, ChatPanel.truncateResult(result));
-    }
-
-    @Test
-    public void testTruncateResult_Long() {
-        String base = "a".repeat(100);
-        String result = base + "Extra";
-        String expected = base + "... [Truncated]";
-        assertEquals(expected, ChatPanel.truncateResult(result));
-    }
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/UserProfileComponentTest.java ---
-1: package org.roxycode.app.ui;
-6: class UserProfileComponentTest {
-8: void testUserProfileInstantiation() {
-15: void testPaintComponentDoesNotThrow() {
-23: void testAvatarPreferredSize() {
-39: void testLabelsPresent() {
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/MarkdownViewerTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-
-class MarkdownViewerTest {
-    @Test
-    void testSetContent() {
-        MarkdownViewer viewer = new MarkdownViewer();
-        viewer.setContent("# Hello");
-        String text = viewer.getText();
-        // The HTML output might contain more than just the tag, but it should contain the tag
-        assertNotNull(text);
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/SettingsPanelTest.java ---
-1: package org.roxycode.app.ui;
-18: class SettingsPanelTest {
-21: private SettingsService settingsService;
-23: private SettingsPanel settingsPanel;
-24: private AppSettings settings;
-27: void setUp() {
-36: void testSaveSettingsCallsService() {
-46: void testThemeSelectionUpdatesSettingsButDoesNotSave() {
-56: void testGeminiApiKeyFieldUpdatesSettingsOnSave() {
-69: private JButton findButton(Container container, String text) {
-84: private JPasswordField findPasswordField(Container container) {
-100: private JComboBox<String> findCombo(Container container) {
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/HeaderPanelTest.java ---
-1: package org.roxycode.app.ui;
-18: class HeaderPanelTest {
-20: Path tempDir;
-22: private SettingsService createSettingsService() {
-28: private ProjectService createProjectService(SettingsService ss) {
-32: private GitService createGitService(ProjectService ps) {
-36: private WorkflowService createWorkflowService() {
-41: void testHeaderPanelInstantiation() {
-49: void testSearchFieldIsRemoved() {
-65: void testUtilityIconsAreRemoved() {
-86: void testOpenButtonIsPresent() {
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatPanelTest.java ---
-1: package org.roxycode.app.ui;
-15: public class ChatPanelTest {
-18: public void testChatPanelInitialization() {
-46: public void testContextMenuListeners() {
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatHtmlTemplatesTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-
-class ChatHtmlTemplatesTest {
-
-    @Test
-    void testRenderChatEntry() {
-        String role = "user";
-        String content = "<p>Hello</p>";
-        String timestamp = "12:00:00";
-        String result = ChatHtmlTemplates.renderChatEntry(role, content, timestamp);
-        
-        assertTrue(result.contains("user-entry"));
-        assertTrue(result.contains("<p>Hello</p>"));
-        assertTrue(result.contains("12:00:00"));
-    }
-
-    @Test
-    void testRenderDivider() {
-        String result = ChatHtmlTemplates.renderDivider();
-        assertTrue(result.contains("chat-divider"));
-    }
-
-    @Test
-    void testRenderTimestamp() {
-        String timestamp = "12:00:00";
-        String result = ChatHtmlTemplates.renderTimestamp(timestamp);
-        assertTrue(result.contains("chat-timestamp"));
-        assertTrue(result.contains("12:00:00"));
-    }
-
-    @Test
-    void testRenderToolLog() {
-        String toolName = "git";
-        String output = "diff output";
-        String result = ChatHtmlTemplates.renderToolLog(toolName, output);
-        
-        assertTrue(result.contains("tool-call"));
-        assertTrue(result.contains("git"));
-        assertTrue(result.contains("diff output"));
-    }    @Test
-    void testRenderToolLogEmptyToolName() {
-        String toolName = "";
-        String output = "jexl output";
-        String result = ChatHtmlTemplates.renderToolLog(toolName, output);
-        
-        assertTrue(result.contains("tool-call"));
-        assertFalse(result.contains("tool-header"));
-        assertTrue(result.contains("jexl output"));
-    }
-
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/SystemToolsPanelTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import org.roxycode.app.model.SystemTool;
-import org.roxycode.app.service.SystemToolService;
-import org.mockito.Mockito;
-
-import javax.swing.table.DefaultTableModel;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-
-import static org.junit.jupiter.api.Assertions.*;
-
-public class SystemToolsPanelTest {
-
-    @Test
-    public void testSystemToolsPanelInstantiation() {
-        SystemToolService service = Mockito.mock(SystemToolService.class);
-        Mockito.when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(new ArrayList<>()));
-        SystemToolsPanel panel = new SystemToolsPanel(service);
-        assertNotNull(panel);
-    }
-
-    @Test
-    public void testRefreshToolsPopulatesTableModel() {
-        SystemToolService service = Mockito.mock(SystemToolService.class);
-        List<SystemTool> tools = new ArrayList<>();
-        tools.add(new SystemTool("Test Tool", "1.0", "Detected", "Description"));
-        Mockito.when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(tools));
-
-        SystemToolsPanel panel = new SystemToolsPanel(service);
-        
-        // Wait for async execution and SwingUtilities.invokeLater
-        try { Thread.sleep(500); } catch (InterruptedException e) {}
-
-        assertEquals(1, panel.tableModel.getRowCount());
-        assertEquals("Test Tool", panel.tableModel.getValueAt(0, 0));
-        assertEquals("1.0", panel.tableModel.getValueAt(0, 1));
-        assertEquals("Detected", panel.tableModel.getValueAt(0, 2));
-        assertEquals("Description", panel.tableModel.getValueAt(0, 3));
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/HistoryPanelTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.JexlTool;
-import org.roxycode.app.events.TurnEventBridge;
-import org.roxycode.app.events.UserMessageEvent;
-import org.roxycode.app.events.AgentTurnCompleteEvent;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.roxycode.app.ai.services.cache.GeminiCacheService;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-import javax.swing.JScrollPane;
-import java.awt.Component;
-
-public class HistoryPanelTest {
-
-    @Test
-    public void testHistoryPanelInitialization() {
-        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
-        JexlTool jexlTool = mock(JexlTool.class);
-
-        ChatMemory chatMemory = mock(ChatMemory.class);
-        GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
-        HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService);
-        
-        // Verify listeners registered
-        verify(turnEventBridge).addUserMessageListener(any());
-        verify(turnEventBridge).addCompleteListener(any());
-        verify(jexlTool).addListener(historyPanel);
-
-        // Verify layout
-        boolean hasScrollPane = false;
-        for (Component comp : historyPanel.getComponents()) {
-            if (comp instanceof JScrollPane) {
-                hasScrollPane = true;
-                break;
-            }
-        }
-        assertTrue(hasScrollPane, "HistoryPanel should contain a JScrollPane");
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatPanelStopButtonTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.JexlTool;
-import org.roxycode.app.ai.services.ExploreManager;
-import org.roxycode.app.ai.workflow.WorkflowService;
-import org.roxycode.app.service.AiService;
-import org.roxycode.app.events.TurnEventBridge;
-import javax.swing.*;
-import java.awt.event.ActionEvent;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-public class ChatPanelStopButtonTest {
-
-    @Test
-    public void testStopButtonEnablement() {
-        AiService aiService = mock(AiService.class);
-        ExploreManager exploreManager = mock(ExploreManager.class);
-        JexlTool jexlTool = mock(JexlTool.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
-        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
-
-        ChatPanel chatPanel = new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge);
-        JButton stopButton = chatPanel.getStopButton();
-        JButton sendButton = chatPanel.getSendButton();
-        JTextArea inputArea = chatPanel.getInputArea();
-
-        // Initially disabled
-        assertFalse(stopButton.isEnabled(), "Stop button should be disabled initially");
-        assertTrue(sendButton.isEnabled(), "Send button should be enabled initially");
-
-        // Simulate sending a message
-        inputArea.setText("test message");
-        
-        // sendMessage is private, but it's the action listener for sendButton
-        for (java.awt.event.ActionListener al : sendButton.getActionListeners()) {
-            al.actionPerformed(new ActionEvent(sendButton, ActionEvent.ACTION_PERFORMED, null));
-        }
-
-        // Now loading should be true
-        assertTrue(stopButton.isEnabled(), "Stop button should be enabled while sending");
-        assertFalse(sendButton.isEnabled(), "Send button should be disabled while sending");
-        assertFalse(inputArea.isEnabled(), "Input area should be disabled while sending");
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/NavButtonTest.java ---
-package org.roxycode.app.ui;
-
-import com.formdev.flatlaf.FlatClientProperties;
-import com.formdev.flatlaf.FlatLaf;
-import org.junit.jupiter.api.Test;
-import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.swing.FontIcon;
-import javax.swing.*;
-import java.awt.*;
-import static org.junit.jupiter.api.Assertions.*;
-
-class NavButtonTest {
-    @Test
-    void testSelectionStyling() {
-        NavButton btn = new NavButton("Test", null);
-        
-        assertFalse(btn.isSelected());
-        assertFalse(btn.isContentAreaFilled());
-        
-        btn.setSelected(true);
-        assertTrue(btn.isSelected());
-        assertTrue(btn.isContentAreaFilled());
-        String style = (String) btn.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(style);
-        
-        if (FlatLaf.isLafDark()) {
-            assertTrue(style.contains("background: $Component.accentColor"));
-        } else {
-            assertTrue(style.contains("background: #0d6efd"));
-            assertTrue(style.contains("foreground: #ffffff"));
-        }
-        
-        btn.setSelected(false);
-        assertFalse(btn.isSelected());
-        assertFalse(btn.isContentAreaFilled());
-        assertEquals("", btn.getClientProperty(FlatClientProperties.STYLE));
-    }
-    
-    @Test
-    void testArcProperty() {
-        NavButton btn = new NavButton("Test", null);
-        assertEquals(6, btn.getClientProperty("JButton.arc"));
-    }
-
-    @Test
-    void testFontIconColorSync() {
-        FontIcon icon = FontIcon.of(Codicons.COMMENT_DISCUSSION, 16);
-        NavButton btn = new NavButton("Test", icon);
-        
-        btn.setForeground(Color.RED);
-        btn.setSelected(false);
-        assertEquals(Color.RED, icon.getIconColor());
-        
-        btn.setForeground(Color.BLUE);
-        btn.setSelected(false);
-        assertEquals(Color.BLUE, icon.getIconColor());
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/MainFrameIconTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import javax.swing.ImageIcon;
-import java.net.URL;
-import static org.junit.jupiter.api.Assertions.*;
-
-class MainFrameIconTest {
-    @Test
-    void testIconResourceIsLoadable() {
-        URL iconUrl = MainFrame.class.getResource("/static/images/roxy.png");
-        assertNotNull(iconUrl, "Icon resource should exist on classpath");
-        ImageIcon icon = new ImageIcon(iconUrl);
-        assertNotNull(icon.getImage(), "Image should be loadable from the URL");
-    }
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/JexlToHtmlConverterTest.java ---
-1: package org.roxycode.app.ui;
-6: public class JexlToHtmlConverterTest {
-9: public void testKeywordHighlighting() {
-17: public void testStringHighlighting() {
-25: public void testCommentHighlighting() {
-33: public void testNumberHighlighting() {
-41: public void testWordBoundaries() {
-48: public void testNoPreWrapping() {
-56: public void testJavaKeywordHighlighting() {
-65: public void testServiceHighlighting() {
-73: public void testNewServiceHighlighting() {
-81: public void testSingleQuoteHighlighting() {
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/PromptPanelTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.service.PromptService;
-import org.roxycode.app.service.SettingsService;
-
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.when;
-
-@ExtendWith(MockitoExtension.class)
-class PromptPanelTest {
-
-    @Mock
-    private PromptService promptService;
-
-    @Mock
-    private SettingsService settingsService;
-
-    @Test
-    void testPromptPanelInstantiation() {
-        when(settingsService.getSettings()).thenReturn(new AppSettings());
-        PromptPanel panel = new PromptPanel(promptService, settingsService);
-        assertNotNull(panel);
-    }
-}
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/MainFrameTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-
-class MainFrameTest {
-    @Test
-    void testMainFrameClassExists() {
-        assertNotNull(MainFrame.class);
-    }
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/StatusPanelTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import org.roxycode.app.service.EnvironmentService;
-import static org.junit.jupiter.api.Assertions.*;
-
-class StatusPanelTest {
-    @Test
-    void testStatusPanelInstantiation() {
-        EnvironmentService envService = new EnvironmentService();
-        StatusPanel status = new StatusPanel(envService);
-        assertNotNull(status);
-    }
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/CodebaseCachePanelTest.java ---
-1: package org.roxycode.app.ui;
-22: class CodebaseCachePanelTest {
-24: @Mock private ProjectService projectService;
-25: @Mock private SettingsService settingsService;
-26: private org.roxycode.app.service.PromptService promptService;
-27: @Mock private RepoMapPackerService packerService;
-28: @Mock private ProjectCacheMetaService metaService;
-29: @Mock private GeminiCacheService geminiCacheService;
-31: private CodebaseCachePanel panel;
-34: void setUp() {
-42: void testButtonsExist() {
-48: void testRepoMapAreaExists() {
-53: private JButton findButton(Container container, String text) {
-68: private <T> T findComponent(Container container, Class<T> clazz) {
-
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/SidebarPanelTest.java ---
-package org.roxycode.app.ui;
-
-import org.junit.jupiter.api.Test;
-import org.roxycode.app.service.SettingsService;
-import javax.swing.*;
-import java.awt.*;
-import java.nio.file.Path;
-import org.junit.jupiter.api.io.TempDir;
-import static org.junit.jupiter.api.Assertions.*;
-
-class SidebarPanelTest {
-    @TempDir
-    Path tempDir;
-
-    @Test
-    void testSidebarPanelInstantiation() {
-        SettingsService settingsService = new SettingsService();
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-        
-        SidebarPanel sidebar = new SidebarPanel(settingsService, card -> {});
-        assertNotNull(sidebar);
-    }
-
-    @Test
-    void testSidebarStructure() {
-        SettingsService settingsService = new SettingsService();
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings_structure.toml"));
-        
-        SidebarPanel sidebar = new SidebarPanel(settingsService, card -> {});
-        
-        Component[] components = sidebar.getComponents();
-        
-        // Expected: 1 UserProfile, 3 Headers, 9 NavButtons = 13
-        assertEquals(13, components.length, "Sidebar should have exactly 13 components");
-
-        int headerCount = 0;
-        int buttonCount = 0;
-        int profileCount = 0;
-
-        for (Component c : components) {
-            if (c instanceof JLabel) headerCount++;
-            if (c instanceof JButton) buttonCount++;
-            if (c instanceof UserProfileComponent) profileCount++;
-        }
-
-        assertEquals(1, profileCount, "Should have 1 user profile");
-        assertEquals(3, headerCount, "Should have 3 headers (MAIN, CONTEXT, CONFIG)");
-        assertEquals(9, buttonCount, "Should have 9 navigation buttons");
-    }
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/model/config/GeminiModelsTest.java ---
-package org.roxycode.app.model.config;
-
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-import java.util.List;
-
-public class GeminiModelsTest {
-
-    @Test
-    public void testTomlParsing() throws Exception {
-        String toml = "[[models]]\napiName = \"test-id\"\nname = \"Test Name\"\ndescription = \"Test Desc\"";
-        TomlMapper mapper = new TomlMapper();
-        GeminiModels models = mapper.readValue(toml, GeminiModels.class);
-        
-        assertNotNull(models);
-        assertEquals(1, models.models().size());
-        assertEquals("test-id", models.models().get(0).apiName());
-        assertEquals("Test Name", models.models().get(0).name());
-        assertEquals("Test Desc", models.models().get(0).description());
-    }
-}
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/AgentServiceTest.java ---
-package org.roxycode.app.ai;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-
-class AgentServiceTest {
-
-    @AgentService(value = "testService", roles = {"RESEARCH", "ANALYST"})
-    private static class MockService {}
-
-    @AgentService("defaultService")
-    private static class DefaultService {}
-
-    @Test
-    void testAnnotationProperties() {
-        AgentService annotation = MockService.class.getAnnotation(AgentService.class);
-        assertNotNull(annotation);
-        assertEquals("testService", annotation.value());
-        assertArrayEquals(new String[]{"RESEARCH", "ANALYST"}, annotation.roles());
-    }
-
-    @Test
-    void testDefaultValues() {
-        AgentService annotation = DefaultService.class.getAnnotation(AgentService.class);
-        assertNotNull(annotation);
-        assertEquals("defaultService", annotation.value());
-        assertEquals(0, annotation.roles().length);
-    }
-
-    @AgentService(value = "wildcardService", roles = {"*"})
-    private static class WildcardService {}
-
-    @Test
-    void testWildcardRole() {
-        AgentService annotation = WildcardService.class.getAnnotation(AgentService.class);
-        assertNotNull(annotation);
-        assertEquals("wildcardService", annotation.value());
-        assertArrayEquals(new String[]{"*"}, annotation.roles());
     }
 }
 
@@ -3071,45 +2514,57 @@ public class JexlDocumentationTest {
 }
 
 
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/workflow/WorkflowPhaseTest.java ---
-package org.roxycode.app.ai.workflow;
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/SidebarPanelTest.java ---
+package org.roxycode.app.ui;
 
 import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.AgentRole;
-import org.kordamp.ikonli.codicons.Codicons;
+import org.roxycode.app.service.SettingsService;
+import javax.swing.*;
+import java.awt.*;
+import java.nio.file.Path;
+import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
-class WorkflowPhaseTest {
-    @Test
-    void testPhaseProperties() {
-        assertEquals(AgentRole.PRODUCT_OWNER, WorkflowPhase.DISCOVERY.getRole());
-        assertEquals("Discovery", WorkflowPhase.DISCOVERY.getDisplayName());
-        assertEquals(Codicons.TELESCOPE, WorkflowPhase.DISCOVERY.getIcon());
+class SidebarPanelTest {
+    @TempDir
+    Path tempDir;
 
-        assertEquals(AgentRole.SENIOR_DEVELOPER, WorkflowPhase.DEVELOPMENT.getRole());
-        assertEquals("Development", WorkflowPhase.DEVELOPMENT.getDisplayName());
-        assertEquals(Codicons.CODE, WorkflowPhase.DEVELOPMENT.getIcon());
+    @Test
+    void testSidebarPanelInstantiation() {
+        SettingsService settingsService = new SettingsService();
+        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
+        
+        SidebarPanel sidebar = new SidebarPanel(settingsService, card -> {});
+        assertNotNull(sidebar);
+    }
+
+    @Test
+    void testSidebarStructure() {
+        SettingsService settingsService = new SettingsService();
+        settingsService.setSettingsPathOverride(tempDir.resolve("settings_structure.toml"));
+        
+        SidebarPanel sidebar = new SidebarPanel(settingsService, card -> {});
+        
+        Component[] components = sidebar.getComponents();
+        
+        // Expected: 1 UserProfile, 3 Headers, 9 NavButtons = 13
+        assertEquals(13, components.length, "Sidebar should have exactly 13 components");
+
+        int headerCount = 0;
+        int buttonCount = 0;
+        int profileCount = 0;
+
+        for (Component c : components) {
+            if (c instanceof JLabel) headerCount++;
+            if (c instanceof JButton) buttonCount++;
+            if (c instanceof UserProfileComponent) profileCount++;
+        }
+
+        assertEquals(1, profileCount, "Should have 1 user profile");
+        assertEquals(3, headerCount, "Should have 3 headers (MAIN, CONTEXT, CONFIG)");
+        assertEquals(9, buttonCount, "Should have 9 navigation buttons");
     }
 }
-
---- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/workflow/WorkflowServiceTest.java ---
-1: package org.roxycode.app.ai.workflow;
-19: class WorkflowServiceTest {
-22: private PlanManagerService planManager;
-24: private WorkflowService service;
-27: void setUp() {
-32: void testPhaseManagement() {
-45: void testListeners() {
-56: void testHitlPhaseTransition() {
-72: void testRejectTransition() {
-82: void testVisitedPhasesTracking() {
-96: void testResetWorkflowHistory() {
-106: void testAdvanceToPhaseAutoTransition() {
-113: void testAdvanceToPhaseGatedTransition() {
-122: void testAdvanceToPhaseGuardrailFailure() {
-130: void testResetWorkflow() {
-144: void testRouteToPhaseBackward() {
-
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/services/FileReadServiceTest.java ---
 1: package org.roxycode.app.ai.services;
@@ -3131,6 +2586,23 @@ class WorkflowPhaseTest {
 16: void testSubmitSpecsAndNotifyListeners() {
 38: void testSubmitSpecsWithArrays() {
 58: void testOverloadedSubmitSpecs() {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/CodebaseCachePanelTest.java ---
+1: package org.roxycode.app.ui;
+22: class CodebaseCachePanelTest {
+24: @Mock private ProjectService projectService;
+25: @Mock private SettingsService settingsService;
+26: private org.roxycode.app.service.PromptService promptService;
+27: @Mock private RepoMapPackerService packerService;
+28: @Mock private ProjectCacheMetaService metaService;
+29: @Mock private GeminiCacheService geminiCacheService;
+31: private CodebaseCachePanel panel;
+34: void setUp() {
+42: void testButtonsExist() {
+48: void testRepoMapAreaExists() {
+53: private JButton findButton(Container container, String text) {
+68: private <T> T findComponent(Container container, Class<T> clazz) {
 
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/services/ExploreManagerTest.java ---
@@ -3186,6 +2658,19 @@ public class ExploreManagerTest {
     }
 }
 
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/MainFrameTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class MainFrameTest {
+    @Test
+    void testMainFrameClassExists() {
+        assertNotNull(MainFrame.class);
+    }
+}
+
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/services/GrepServiceTest.java ---
 1: package org.roxycode.app.ai.services;
 14: class GrepServiceTest {
@@ -3194,6 +2679,22 @@ public class ExploreManagerTest {
 42: void testPathTraversalProtection() {
 54: void testNoProjectRoot() {
 
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/StatusPanelTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import org.roxycode.app.service.EnvironmentService;
+import static org.junit.jupiter.api.Assertions.*;
+
+class StatusPanelTest {
+    @Test
+    void testStatusPanelInstantiation() {
+        EnvironmentService envService = new EnvironmentService();
+        StatusPanel status = new StatusPanel(envService);
+        assertNotNull(status);
+    }
+}
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/services/GenericBuildToolServiceTest.java ---
 1: package org.roxycode.app.ai.services;
@@ -3209,6 +2710,12 @@ public class ExploreManagerTest {
 64: void testCommandPlaceholders() throws IOException {
 73: void testRegexParsing() throws IOException {
 84: void testEnvironmentVariables() throws IOException {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatPanelStopButtonTest.java ---
+1: package org.roxycode.app.ui;
+15: public class ChatPanelStopButtonTest {
+18: public void testStopButtonEnablement() {
 
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/services/FileEditorServiceTest.java ---
@@ -3229,6 +2736,417 @@ public class ExploreManagerTest {
 114: void testInsertAtLineSuccess() throws IOException {
 127: void testPathTraversalThrowsSecurityException() {
 
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/NavButtonTest.java ---
+package org.roxycode.app.ui;
+
+import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.FlatLaf;
+import org.junit.jupiter.api.Test;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
+import javax.swing.*;
+import java.awt.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+class NavButtonTest {
+    @Test
+    void testSelectionStyling() {
+        NavButton btn = new NavButton("Test", null);
+        
+        assertFalse(btn.isSelected());
+        assertFalse(btn.isContentAreaFilled());
+        
+        btn.setSelected(true);
+        assertTrue(btn.isSelected());
+        assertTrue(btn.isContentAreaFilled());
+        String style = (String) btn.getClientProperty(FlatClientProperties.STYLE);
+        assertNotNull(style);
+        
+        if (FlatLaf.isLafDark()) {
+            assertTrue(style.contains("background: $Component.accentColor"));
+        } else {
+            assertTrue(style.contains("background: #0d6efd"));
+            assertTrue(style.contains("foreground: #ffffff"));
+        }
+        
+        btn.setSelected(false);
+        assertFalse(btn.isSelected());
+        assertFalse(btn.isContentAreaFilled());
+        assertEquals("", btn.getClientProperty(FlatClientProperties.STYLE));
+    }
+    
+    @Test
+    void testArcProperty() {
+        NavButton btn = new NavButton("Test", null);
+        assertEquals(6, btn.getClientProperty("JButton.arc"));
+    }
+
+    @Test
+    void testFontIconColorSync() {
+        FontIcon icon = FontIcon.of(Codicons.COMMENT_DISCUSSION, 16);
+        NavButton btn = new NavButton("Test", icon);
+        
+        btn.setForeground(Color.RED);
+        btn.setSelected(false);
+        assertEquals(Color.RED, icon.getIconColor());
+        
+        btn.setForeground(Color.BLUE);
+        btn.setSelected(false);
+        assertEquals(Color.BLUE, icon.getIconColor());
+    }
+}
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/MainFrameIconTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import javax.swing.ImageIcon;
+import java.net.URL;
+import static org.junit.jupiter.api.Assertions.*;
+
+class MainFrameIconTest {
+    @Test
+    void testIconResourceIsLoadable() {
+        URL iconUrl = MainFrame.class.getResource("/static/images/roxy.png");
+        assertNotNull(iconUrl, "Icon resource should exist on classpath");
+        ImageIcon icon = new ImageIcon(iconUrl);
+        assertNotNull(icon.getImage(), "Image should be loadable from the URL");
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/JexlToHtmlConverterTest.java ---
+1: package org.roxycode.app.ui;
+6: public class JexlToHtmlConverterTest {
+9: public void testKeywordHighlighting() {
+17: public void testStringHighlighting() {
+25: public void testCommentHighlighting() {
+33: public void testNumberHighlighting() {
+41: public void testWordBoundaries() {
+48: public void testNoPreWrapping() {
+56: public void testJavaKeywordHighlighting() {
+65: public void testServiceHighlighting() {
+73: public void testNewServiceHighlighting() {
+81: public void testSingleQuoteHighlighting() {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/PromptPanelTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.service.PromptService;
+import org.roxycode.app.service.SettingsService;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class PromptPanelTest {
+
+    @Mock
+    private PromptService promptService;
+
+    @Mock
+    private SettingsService settingsService;
+
+    @Test
+    void testPromptPanelInstantiation() {
+        when(settingsService.getSettings()).thenReturn(new AppSettings());
+        PromptPanel panel = new PromptPanel(promptService, settingsService);
+        assertNotNull(panel);
+    }
+}
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatPanelTruncationTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+public class ChatPanelTruncationTest {
+
+    @Test
+    public void testTruncateResult_Null() {
+        assertEquals("null", ChatPanel.truncateResult(null));
+    }
+
+    @Test
+    public void testTruncateResult_Short() {
+        String result = "Hello World";
+        assertEquals(result, ChatPanel.truncateResult(result));
+    }
+
+    @Test
+    public void testTruncateResult_Exact100() {
+        String result = "a".repeat(100);
+        assertEquals(result, ChatPanel.truncateResult(result));
+    }
+
+    @Test
+    public void testTruncateResult_Long() {
+        String base = "a".repeat(100);
+        String result = base + "Extra";
+        String expected = base + "... [Truncated]";
+        assertEquals(expected, ChatPanel.truncateResult(result));
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/UserProfileComponentTest.java ---
+1: package org.roxycode.app.ui;
+6: class UserProfileComponentTest {
+8: void testUserProfileInstantiation() {
+15: void testPaintComponentDoesNotThrow() {
+23: void testAvatarPreferredSize() {
+39: void testLabelsPresent() {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/MarkdownViewerTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class MarkdownViewerTest {
+    @Test
+    void testSetContent() {
+        MarkdownViewer viewer = new MarkdownViewer();
+        viewer.setContent("# Hello");
+        String text = viewer.getText();
+        // The HTML output might contain more than just the tag, but it should contain the tag
+        assertNotNull(text);
+    }
+}
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/SettingsPanelTest.java ---
+1: package org.roxycode.app.ui;
+18: class SettingsPanelTest {
+21: private SettingsService settingsService;
+23: private SettingsPanel settingsPanel;
+24: private AppSettings settings;
+27: void setUp() {
+36: void testSaveSettingsCallsService() {
+46: void testThemeSelectionUpdatesSettingsButDoesNotSave() {
+56: void testGeminiApiKeyFieldUpdatesSettingsOnSave() {
+69: private JButton findButton(Container container, String text) {
+84: private JPasswordField findPasswordField(Container container) {
+100: private JComboBox<String> findCombo(Container container) {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/HeaderPanelTest.java ---
+1: package org.roxycode.app.ui;
+18: class HeaderPanelTest {
+20: Path tempDir;
+22: private SettingsService createSettingsService() {
+28: private ProjectService createProjectService(SettingsService ss) {
+32: private GitService createGitService(ProjectService ps) {
+36: private WorkflowService createWorkflowService() {
+41: void testHeaderPanelInstantiation() {
+49: void testSearchFieldIsRemoved() {
+65: void testUtilityIconsAreRemoved() {
+86: void testOpenButtonIsPresent() {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatPanelTest.java ---
+1: package org.roxycode.app.ui;
+16: public class ChatPanelTest {
+19: public void testChatPanelInitialization() {
+48: public void testContextMenuListeners() {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/ChatHtmlTemplatesTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class ChatHtmlTemplatesTest {
+
+    @Test
+    void testRenderChatEntry() {
+        String role = "user";
+        String content = "<p>Hello</p>";
+        String timestamp = "12:00:00";
+        String result = ChatHtmlTemplates.renderChatEntry(role, content, timestamp);
+        
+        assertTrue(result.contains("user-entry"));
+        assertTrue(result.contains("<p>Hello</p>"));
+        assertTrue(result.contains("12:00:00"));
+    }
+
+    @Test
+    void testRenderDivider() {
+        String result = ChatHtmlTemplates.renderDivider();
+        assertTrue(result.contains("chat-divider"));
+    }
+
+    @Test
+    void testRenderTimestamp() {
+        String timestamp = "12:00:00";
+        String result = ChatHtmlTemplates.renderTimestamp(timestamp);
+        assertTrue(result.contains("chat-timestamp"));
+        assertTrue(result.contains("12:00:00"));
+    }
+
+    @Test
+    void testRenderToolLog() {
+        String toolName = "git";
+        String output = "diff output";
+        String result = ChatHtmlTemplates.renderToolLog(toolName, output);
+        
+        assertTrue(result.contains("tool-call"));
+        assertTrue(result.contains("git"));
+        assertTrue(result.contains("diff output"));
+    }    @Test
+    void testRenderToolLogEmptyToolName() {
+        String toolName = "";
+        String output = "jexl output";
+        String result = ChatHtmlTemplates.renderToolLog(toolName, output);
+        
+        assertTrue(result.contains("tool-call"));
+        assertFalse(result.contains("tool-header"));
+        assertTrue(result.contains("jexl output"));
+    }
+
+}
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/SystemToolsPanelTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import org.roxycode.app.model.SystemTool;
+import org.roxycode.app.service.SystemToolService;
+import org.mockito.Mockito;
+
+import javax.swing.table.DefaultTableModel;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class SystemToolsPanelTest {
+
+    @Test
+    public void testSystemToolsPanelInstantiation() {
+        SystemToolService service = Mockito.mock(SystemToolService.class);
+        Mockito.when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(new ArrayList<>()));
+        SystemToolsPanel panel = new SystemToolsPanel(service);
+        assertNotNull(panel);
+    }
+
+    @Test
+    public void testRefreshToolsPopulatesTableModel() {
+        SystemToolService service = Mockito.mock(SystemToolService.class);
+        List<SystemTool> tools = new ArrayList<>();
+        tools.add(new SystemTool("Test Tool", "1.0", "Detected", "Description"));
+        Mockito.when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(tools));
+
+        SystemToolsPanel panel = new SystemToolsPanel(service);
+        
+        // Wait for async execution and SwingUtilities.invokeLater
+        try { Thread.sleep(500); } catch (InterruptedException e) {}
+
+        assertEquals(1, panel.tableModel.getRowCount());
+        assertEquals("Test Tool", panel.tableModel.getValueAt(0, 0));
+        assertEquals("1.0", panel.tableModel.getValueAt(0, 1));
+        assertEquals("Detected", panel.tableModel.getValueAt(0, 2));
+        assertEquals("Description", panel.tableModel.getValueAt(0, 3));
+    }
+}
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ui/HistoryPanelTest.java ---
+package org.roxycode.app.ui;
+
+import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.JexlTool;
+import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.UserMessageEvent;
+import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.roxycode.app.ai.services.cache.GeminiCacheService;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import javax.swing.JScrollPane;
+import java.awt.Component;
+
+public class HistoryPanelTest {
+
+    @Test
+    public void testHistoryPanelInitialization() {
+        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+        JexlTool jexlTool = mock(JexlTool.class);
+
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
+        HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService);
+        
+        // Verify listeners registered
+        verify(turnEventBridge).addUserMessageListener(any());
+        verify(turnEventBridge).addCompleteListener(any());
+        verify(jexlTool).addListener(historyPanel);
+
+        // Verify layout
+        boolean hasScrollPane = false;
+        for (Component comp : historyPanel.getComponents()) {
+            if (comp instanceof JScrollPane) {
+                hasScrollPane = true;
+                break;
+            }
+        }
+        assertTrue(hasScrollPane, "HistoryPanel should contain a JScrollPane");
+    }
+}
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/AgentServiceTest.java ---
+package org.roxycode.app.ai;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class AgentServiceTest {
+
+    @AgentService(value = "testService", roles = {"RESEARCH", "ANALYST"})
+    private static class MockService {}
+
+    @AgentService("defaultService")
+    private static class DefaultService {}
+
+    @Test
+    void testAnnotationProperties() {
+        AgentService annotation = MockService.class.getAnnotation(AgentService.class);
+        assertNotNull(annotation);
+        assertEquals("testService", annotation.value());
+        assertArrayEquals(new String[]{"RESEARCH", "ANALYST"}, annotation.roles());
+    }
+
+    @Test
+    void testDefaultValues() {
+        AgentService annotation = DefaultService.class.getAnnotation(AgentService.class);
+        assertNotNull(annotation);
+        assertEquals("defaultService", annotation.value());
+        assertEquals(0, annotation.roles().length);
+    }
+
+    @AgentService(value = "wildcardService", roles = {"*"})
+    private static class WildcardService {}
+
+    @Test
+    void testWildcardRole() {
+        AgentService annotation = WildcardService.class.getAnnotation(AgentService.class);
+        assertNotNull(annotation);
+        assertEquals("wildcardService", annotation.value());
+        assertArrayEquals(new String[]{"*"}, annotation.roles());
+    }
+}
 
 --- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/services/cache/RepoMapPackerServiceTest.java ---
 1: package org.roxycode.app.ai.services.cache;
@@ -3287,5 +3205,45 @@ class FileTreeFormatterTest {
 18: Path tempDir;
 21: public void testSaveAndLoadMeta() throws IOException {
 44: public void testRepoCache() throws IOException {
+
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/workflow/WorkflowPhaseTest.java ---
+package org.roxycode.app.ai.workflow;
+
+import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.AgentRole;
+import org.kordamp.ikonli.codicons.Codicons;
+import static org.junit.jupiter.api.Assertions.*;
+
+class WorkflowPhaseTest {
+    @Test
+    void testPhaseProperties() {
+        assertEquals(AgentRole.PRODUCT_OWNER, WorkflowPhase.DISCOVERY.getRole());
+        assertEquals("Discovery", WorkflowPhase.DISCOVERY.getDisplayName());
+        assertEquals(Codicons.TELESCOPE, WorkflowPhase.DISCOVERY.getIcon());
+
+        assertEquals(AgentRole.SENIOR_DEVELOPER, WorkflowPhase.DEVELOPMENT.getRole());
+        assertEquals("Development", WorkflowPhase.DEVELOPMENT.getDisplayName());
+        assertEquals(Codicons.CODE, WorkflowPhase.DEVELOPMENT.getIcon());
+    }
+}
+
+--- /home/lawson89/code/roxycode/src/test/java/org/roxycode/app/ai/workflow/WorkflowServiceTest.java ---
+1: package org.roxycode.app.ai.workflow;
+19: class WorkflowServiceTest {
+22: private PlanManagerService planManager;
+24: private WorkflowService service;
+27: void setUp() {
+32: void testPhaseManagement() {
+45: void testListeners() {
+56: void testHitlPhaseTransition() {
+72: void testRejectTransition() {
+82: void testVisitedPhasesTracking() {
+96: void testResetWorkflowHistory() {
+106: void testAdvanceToPhaseAutoTransition() {
+113: void testAdvanceToPhaseGatedTransition() {
+122: void testAdvanceToPhaseGuardrailFailure() {
+130: void testResetWorkflow() {
+144: void testRouteToPhaseBackward() {
 
 

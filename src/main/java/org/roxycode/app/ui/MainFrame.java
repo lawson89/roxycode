@@ -116,7 +116,7 @@ public class MainFrame extends JFrame {
         StatusPanel statusBar = new StatusPanel(envService);
 
         // Content Area Panels
-        contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge), "CHAT");
+        contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge, chatMemory), "CHAT");
         contentArea.add(new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
         contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService), "CACHE");

@@ -6,6 +6,7 @@ import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.workflow.WorkflowService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.events.TurnEventBridge;
+import org.springframework.ai.chat.memory.ChatMemory;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import static org.junit.jupiter.api.Assertions.*;
@@ -18,10 +19,11 @@ public class ChatPanelStopButtonTest {
         AiService aiService = mock(AiService.class);
         ExploreManager exploreManager = mock(ExploreManager.class);
         JexlTool jexlTool = mock(JexlTool.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
+                WorkflowService workflowService = mock(WorkflowService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel chatPanel = new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge);
+        ChatPanel chatPanel = new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge, chatMemory);
         JButton stopButton = chatPanel.getStopButton();
         JButton sendButton = chatPanel.getSendButton();
         JTextArea inputArea = chatPanel.getInputArea();

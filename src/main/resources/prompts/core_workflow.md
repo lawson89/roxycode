@@ -48,5 +48,5 @@ To minimize tool turns and latency, you should aim for 'Power Turns' by batching
 
 1. **Read Batching**: Instead of reading files one-by-one, batch multiple `readFile` or `listDirectory` calls.
 2. **Search & Read**: Combine `grep` with `readFile` to find and extract code in a single turn.
-3. **Atomic Edits**: During DEVELOPMENT, write a file and immediately verify it (if tools allow) in the same script.
+3. **Atomic Edits & Visibility**: During DEVELOPMENT, if you write or modify a file, you MUST include `gitService.getDiff()` in the same script and return it as the final output so the user can immediately see what changed.
 4. **Logic in JEXL**: Use JEXL's control flow (if/for/while) to process data and only return the final result or a summary.

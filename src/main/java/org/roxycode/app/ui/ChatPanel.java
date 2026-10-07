@@ -10,6 +10,7 @@ import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.ai.workflow.WorkflowPhase;
 import org.roxycode.app.ai.workflow.WorkflowService;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.ui.ThoughtPanel;
@@ -38,7 +39,8 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final ExploreManager exploreManager;
     private final JexlTool jexlTool;
     private final WorkflowService workflowService;
-    private final TurnEventBridge turnEventBridge;
+        private final TurnEventBridge turnEventBridge;
+    private final ChatMemory chatMemory;
     private final MarkdownPane outputArea;
     private final ThoughtPanel thoughtPanel;
     private final JTextArea inputArea;
@@ -50,13 +52,14 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final JLabel turnLabel;
     private SwingWorker<String, Void> currentWorker;
 
-    public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, 
-                     WorkflowService workflowService, TurnEventBridge turnEventBridge) {
+        public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, 
+                     WorkflowService workflowService, TurnEventBridge turnEventBridge, ChatMemory chatMemory) {
         this.aiService = aiService;
         this.exploreManager = exploreManager;
         this.jexlTool = jexlTool;
         this.workflowService = workflowService;
         this.turnEventBridge = turnEventBridge;
+        this.chatMemory = chatMemory;
         this.jexlTool.addListener(this);
         
         turnEventBridge.addTurnListener(this::onAgentTurn);
@@ -101,18 +104,27 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         rejectButton.setVisible(false);
         rejectButton.addActionListener(e -> rejectPhase());
 
-        cancelTaskButton = new JButton("Cancel Task", FontIcon.of(Codicons.DEBUG_STOP, 16));
+                cancelTaskButton = new JButton("Cancel Task", FontIcon.of(Codicons.DEBUG_STOP, 16));
         cancelTaskButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999; foreground: $Label.disabledForeground");
         cancelTaskButton.setVisible(false);
         cancelTaskButton.addActionListener(e -> cancelTask());
 
+        JButton clearChatButton = new JButton("Clear", FontIcon.of(Codicons.TRASH, 16));
+        clearChatButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
+        clearChatButton.addActionListener(e -> {
+            chatMemory.clear("default");
+            outputArea.clear();
+            outputArea.appendMessage("System", "Conversation history cleared.");
+        });
+
         turnLabel = new JLabel("Turns: 0");
         turnLabel.putClientProperty(FlatClientProperties.STYLE, "font: $small.font; foreground: $Label.disabledForeground");
 
-        JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[][][][]"));
+        JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[]"));
         buttonPanel.setOpaque(false);
         buttonPanel.add(sendButton, "growx, wrap");
         buttonPanel.add(stopButton, "growx, wrap");
+        buttonPanel.add(clearChatButton, "growx, wrap");
         buttonPanel.add(approveButton, "growx, wrap");
         buttonPanel.add(rejectButton, "growx, wrap");
         buttonPanel.add(cancelTaskButton, "growx, wrap");
@@ -243,8 +255,10 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE);
 
-        if (result == JOptionPane.YES_OPTION) {
+                if (result == JOptionPane.YES_OPTION) {
             workflowService.resetWorkflow();
+            chatMemory.clear("default");
+            outputArea.clear();
             outputArea.appendMessage("System", "Task cancelled. Workflow reset to **Explore** phase.");
         }
     }
