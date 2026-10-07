@@ -35,6 +35,26 @@ class PlanManagerServiceTest {
     }
 
     @Test
+    void testSubmitSpecsWithArrays() {
+        PlanManagerService service = new PlanManagerService();
+        
+        // Passing String array instead of List
+        String[] reqs = {"Req 1", "Req 2"};
+        service.submitFunctionalSpec("Title", "Goal", reqs);
+        
+        assertEquals(2, service.getCurrentFunctionalSpec().requirements().size());
+        assertEquals("Req 1", service.getCurrentFunctionalSpec().requirements().get(0));
+
+        // Technical spec with arrays
+        String[] cons = {"Con 1"};
+        String[] steps = {"Step 1"};
+        service.submitTechnicalSpec("Arch", cons, steps);
+        
+        assertEquals(1, service.getCurrentTechnicalSpec().constraints().size());
+        assertEquals(1, service.getCurrentTechnicalSpec().implementationSteps().size());
+    }
+
+    @Test
     void testOverloadedSubmitSpecs() {
         PlanManagerService service = new PlanManagerService();
         

@@ -59,8 +59,8 @@ public class PlanManagerService {
     public String submitFunctionalSpec(
             @AgentDoc("The title of the project.") String title,
             @AgentDoc("The high-level goal.") String goal,
-            @AgentDoc("List of functional requirements.") List<String> requirements) {
-        return submitFunctionalSpec(new FunctionalSpec(title, goal, requirements));
+            @AgentDoc("List of functional requirements.") Object requirements) {
+        return submitFunctionalSpec(new FunctionalSpec(title, goal, extractStringList(requirements)));
     }
 
     /**
@@ -74,7 +74,7 @@ public class PlanManagerService {
             @AgentDoc("Map containing title, goal, and requirements.") Map<String, Object> specMap) {
         String title = (String) specMap.getOrDefault("title", "");
         String goal = (String) specMap.getOrDefault("goal", "");
-        List<String> requirements = (List<String>) specMap.getOrDefault("requirements", List.of());
+        List<String> requirements = extractStringList(specMap.get("requirements"));
         return submitFunctionalSpec(new FunctionalSpec(title, goal, requirements));
     }
 
@@ -101,9 +101,9 @@ public class PlanManagerService {
     @AgentDoc("Submits a technical specification for the project via simple arguments.")
     public String submitTechnicalSpec(
             @AgentDoc("The architectural goal.") String architectureGoal,
-            @AgentDoc("List of technical constraints.") List<String> constraints,
-            @AgentDoc("List of implementation steps.") List<String> implementationSteps) {
-        return submitTechnicalSpec(new TechnicalSpec(architectureGoal, constraints, implementationSteps));
+            @AgentDoc("List of technical constraints.") Object constraints,
+            @AgentDoc("List of implementation steps.") Object implementationSteps) {
+        return submitTechnicalSpec(new TechnicalSpec(architectureGoal, extractStringList(constraints), extractStringList(implementationSteps)));
     }
 
     /**
@@ -116,8 +116,8 @@ public class PlanManagerService {
     public String submitTechnicalSpec(
             @AgentDoc("Map containing architectureGoal, constraints, and implementationSteps.") Map<String, Object> specMap) {
         String architectureGoal = (String) specMap.getOrDefault("architectureGoal", "");
-        List<String> constraints = (List<String>) specMap.getOrDefault("constraints", List.of());
-        List<String> implementationSteps = (List<String>) specMap.getOrDefault("implementationSteps", List.of());
+        List<String> constraints = extractStringList(specMap.get("constraints"));
+        List<String> implementationSteps = extractStringList(specMap.get("implementationSteps"));
         return submitTechnicalSpec(new TechnicalSpec(architectureGoal, constraints, implementationSteps));
     }
 
@@ -144,6 +144,30 @@ public class PlanManagerService {
         this.currentFunctionalSpec = null;
         this.currentTechnicalSpec = null;
         notifyListeners();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> extractStringList(Object obj) {
+        if (obj == null) {
+            return List.of();
+        }
+        if (obj instanceof List) {
+            return (List<String>) obj;
+        }
+        if (obj instanceof String[]) {
+            return List.of((String[]) obj);
+        }
+        if (obj instanceof Object[]) {
+            Object[] arr = (Object[]) obj;
+            List<String> list = new java.util.ArrayList<>();
+            for (Object o : arr) {
+                if (o != null) {
+                    list.add(o.toString());
+                }
+            }
+            return list;
+        }
+        return List.of(obj.toString());
     }
 
     private void notifyListeners() {

@@ -56,7 +56,14 @@ public class JexlTool {
             return output;
         } catch (Exception e) {
             log.error("Error executing JEXL script: {}", e.getMessage(), e);
-            String error = e.getMessage();
+            Throwable cause = e;
+            while (cause.getCause() != null && cause.getCause() != cause) {
+                cause = cause.getCause();
+            }
+            String error = cause.getMessage();
+            if (error == null) {
+                error = cause.toString();
+            }
             fireEvent(new JexlExecutionEvent(script, null, false, error));
             return "Error executing Jexl script: " + error;
         }

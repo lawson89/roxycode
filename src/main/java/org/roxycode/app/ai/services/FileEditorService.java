@@ -69,17 +69,29 @@ public class FileEditorService {
         Path path = resolvePath(relativePath);
         String content = Files.readString(path);
 
-        int firstIndex = content.indexOf(targetBlock);
-        if (firstIndex == -1) {
+        String[] parts = targetBlock.trim().split("\s+");
+        StringBuilder sb = new StringBuilder("(?s)");
+        for (int i = 0; i < parts.length; i++) {
+            if (parts[i].isEmpty()) continue;
+            sb.append(java.util.regex.Pattern.quote(parts[i]));
+            if (i < parts.length - 1) {
+                sb.append("\s*");
+            }
+        }
+        String patternString = sb.toString();
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(patternString);
+        java.util.regex.Matcher matcher = pattern.matcher(content);
+
+        if (!matcher.find()) {
             throw new IllegalArgumentException("TargetBlock not found in file: " + relativePath);
         }
-
-        int lastIndex = content.lastIndexOf(targetBlock);
-        if (firstIndex != lastIndex) {
+        int start = matcher.start();
+        int end = matcher.end();
+        if (matcher.find()) {
             throw new IllegalArgumentException("TargetBlock is not unique in file: " + relativePath);
         }
 
-        String newContent = content.replace(targetBlock, replacementBlock);
+        String newContent = content.substring(0, start) + replacementBlock + content.substring(end);
         Files.writeString(path, newContent);
         log.info("Replaced block in file: {}", relativePath);
         eventPublisher.publishEvent(new FileChangedEvent(relativePath));
