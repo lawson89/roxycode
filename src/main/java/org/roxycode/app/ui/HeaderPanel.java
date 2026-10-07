@@ -87,13 +87,21 @@ public class HeaderPanel extends JPanel {
         add(rightPanel, "right");
 
         // Listeners
-        projectService.addProjectListener(newRoot -> {
+                projectService.addProjectListener(newRoot -> {
             projectLabel.setText(projectService.getProjectName());
-            projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
+            if (newRoot != null) {
+                projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
+            } else {
+                projectLabel.setToolTipText("No project selected");
+            }
             updateBranchLabel();
         });
         
-        projectLabel.setToolTipText(projectService.getCurrentProjectRoot().toAbsolutePath().toString());
+        if (projectService.getCurrentProjectRoot() != null) {
+            projectLabel.setToolTipText(projectService.getCurrentProjectRoot().toAbsolutePath().toString());
+        } else {
+            projectLabel.setToolTipText("No project selected");
+        }
 
         settingsService.addSettingsListener(settings -> {
             updateModelDisplay(settings.getGeminiModel());
@@ -143,10 +151,12 @@ public class HeaderPanel extends JPanel {
         modelLabel.setText(modelName != null ? modelName : "No model selected");
     }
 
-    private void chooseProject() {
+        private void chooseProject() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setCurrentDirectory(projectService.getCurrentProjectRoot().toFile());
+        if (projectService.getCurrentProjectRoot() != null) {
+            chooser.setCurrentDirectory(projectService.getCurrentProjectRoot().toFile());
+        }
         
         int returnVal = chooser.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {

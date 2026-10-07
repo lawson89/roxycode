@@ -26,8 +26,14 @@ public class JexlServiceRegistry {
             AgentService ann = service.getClass().getAnnotation(AgentService.class);
             if (ann != null) {
                 String[] roles = ann.roles();
-                // Allow if currentRole is null (for UI panel), roles array contains "*", or explicitly contains the current role
-                if (currentRole == null || roles.length == 0 || java.util.Arrays.asList(roles).contains("*") || java.util.Arrays.asList(roles).contains(currentRole.name())) {
+                
+                boolean allowed = currentRole == null || roles.length == 0;
+                if (!allowed) {
+                    List<String> roleList = java.util.Arrays.asList(roles);
+                    allowed = roleList.contains("*") || roleList.contains(currentRole.name());
+                }
+
+                if (allowed) {
                     allowedServices.add(service);
                 }
             }

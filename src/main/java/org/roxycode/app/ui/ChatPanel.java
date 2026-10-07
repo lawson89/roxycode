@@ -104,27 +104,17 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         rejectButton.setVisible(false);
         rejectButton.addActionListener(e -> rejectPhase());
 
-                cancelTaskButton = new JButton("Cancel Task", FontIcon.of(Codicons.DEBUG_STOP, 16));
+                        cancelTaskButton = new JButton("Reset Session", FontIcon.of(Codicons.REFRESH, 16));
         cancelTaskButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999; foreground: $Label.disabledForeground");
-        cancelTaskButton.setVisible(false);
-        cancelTaskButton.addActionListener(e -> cancelTask());
-
-        JButton clearChatButton = new JButton("Clear", FontIcon.of(Codicons.TRASH, 16));
-        clearChatButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
-        clearChatButton.addActionListener(e -> {
-            chatMemory.clear("default");
-            outputArea.clear();
-            outputArea.appendMessage("System", "Conversation history cleared.");
-        });
+        cancelTaskButton.addActionListener(e -> resetSession());
 
         turnLabel = new JLabel("Turns: 0");
         turnLabel.putClientProperty(FlatClientProperties.STYLE, "font: $small.font; foreground: $Label.disabledForeground");
 
         JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[]"));
         buttonPanel.setOpaque(false);
-        buttonPanel.add(sendButton, "growx, wrap");
+                buttonPanel.add(sendButton, "growx, wrap");
         buttonPanel.add(stopButton, "growx, wrap");
-        buttonPanel.add(clearChatButton, "growx, wrap");
         buttonPanel.add(approveButton, "growx, wrap");
         buttonPanel.add(rejectButton, "growx, wrap");
         buttonPanel.add(cancelTaskButton, "growx, wrap");
@@ -248,25 +238,23 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         }
     }
 
-    private void cancelTask() {
+        private void resetSession() {
         int result = JOptionPane.showConfirmDialog(this,
-                "Are you sure you want to cancel the current task and reset to Explore phase?",
-                "Cancel Task",
+                "Resetting the session will clear the chat history and return the workflow to the Explore phase. Continue?",
+                "Reset Session",
                 JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE);
+                JOptionPane.QUESTION_MESSAGE);
 
-                if (result == JOptionPane.YES_OPTION) {
+        if (result == JOptionPane.YES_OPTION) {
             workflowService.resetWorkflow();
             chatMemory.clear("default");
             outputArea.clear();
-            outputArea.appendMessage("System", "Task cancelled. Workflow reset to **Explore** phase.");
+            outputArea.appendMessage("System", "Session reset. Workflow returned to **Explore** phase.");
         }
     }
 
-    private void updateCancelButtonVisibility() {
-        boolean isPending = workflowService.getPendingPhase() != null;
-        boolean isNotExplore = workflowService.getCurrentPhase() != WorkflowPhase.EXPLORE;
-        cancelTaskButton.setVisible(isPending || isNotExplore);
+        private void updateCancelButtonVisibility() {
+        cancelTaskButton.setVisible(true);
     }
 
     private void sendMessage(ActionEvent e) {

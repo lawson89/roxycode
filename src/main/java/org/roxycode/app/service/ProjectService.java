@@ -25,7 +25,8 @@ public class ProjectService {
         if (savedPath != null && !savedPath.isEmpty()) {
             this.currentProjectRoot = Paths.get(savedPath);
         } else {
-            this.currentProjectRoot = Paths.get(System.getProperty("user.dir"));
+            // Fix: Do not default to user.dir to avoid accidental indexing of home directory
+            this.currentProjectRoot = null;
         }
     }
 
