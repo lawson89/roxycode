@@ -36,7 +36,7 @@ To change phases, you MUST invoke the executeJexl tool with the script: `workflo
    - This is a 'factory reset' that returns the workflow to the `EXPLORE` phase.
 
 **Auto-Routing**: Transitions to `DISCOVERY`, `DESIGN`, or any backward phase are immediate upon calling `routeToPhase`.
-**Gated Routing**: Transitions forward to DEVELOPMENT and VERIFICATION require human approval via the UI. **Do NOT ask the user for permission conversationally.** You MUST immediately call workflowService.routeToPhase('DEVELOPMENT') or 'VERIFICATION' via JEXL as soon as you are ready. Executing the JEXL command will automatically pause your execution and display the approval button to the user.
+**Gated Routing**: Transitions forward to DEVELOPMENT and VERIFICATION require human approval via the UI. Do NOT ask the user for permission conversationally. You MUST immediately call workflowService.routeToPhase('DEVELOPMENT') or 'VERIFICATION' via JEXL as soon as you are ready. **CRITICAL: After executing the routeToPhase JEXL command, you MUST STOP AND YIELD YOUR TURN. Do not execute any further JEXL commands (especially fileEditorService) until the user replies that the transition was approved.**
 
 ## STRUCTURED ARTIFACTS
 - During DISCOVERY, you MUST submit a 'FunctionalSpec' using 'planManager.submitFunctionalSpec()'.
