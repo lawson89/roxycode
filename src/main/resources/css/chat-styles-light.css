@@ -14,3 +14,11 @@ code { font-family: monospace; background-color: #eeeeee; padding: 2px 4px; bord
 .tool-call { background-color: #fffaf0; border-left: 4px solid #ff9800; margin: 10px 0; padding: 8px; border-radius: 4px; }
 .tool-header { font-size: 10px; color: #888888; margin-bottom: 4px; font-weight: bold; text-transform: uppercase; }
 .tool-body { font-family: monospace; }
+.timestamp {
+    text-align: right;
+    font-size: 9px;
+    color: #888888;
+    margin-bottom: 0px;
+    display: block;
+}
+.content p { margin-top: 2px; }

@@ -20,6 +20,8 @@ public class PromptService {
     private static final String PROMPT_FILE = "core_workflow.md";
     private static final String CLASSPATH_PROMPT = "prompts/core_workflow.md";
     private static final String JEXL_DOC_PATH = "docs/jexl.md";
+    private static final String EXPLORE_PROMPT_PATH = "prompts/explore_phase.md";
+
 
     public String loadCoreWorkflowPrompt() {
         Path overridePath = getOverridePath();
@@ -42,6 +44,16 @@ public class PromptService {
             return "";
         }
     }
+    public String loadExplorePrompt() {
+        try {
+            Resource resource = new ClassPathResource(EXPLORE_PROMPT_PATH);
+            return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("Failed to load EXPLORE prompt from classpath: {}", e.getMessage());
+            return "";
+        }
+    }
+
 
     public String loadAllPrompts() {
         return loadMarkdownFromClasspath("prompts", "core_workflow.md");

@@ -42,3 +42,11 @@ To change phases, you MUST use `workflowService.routeToPhase(phaseName)`.
 - During DISCOVERY, you MUST submit a 'FunctionalSpec' using 'planManager.submitFunctionalSpec()'.
 - During DESIGN, you MUST submit a 'TechnicalSpec' using 'planManager.submitTechnicalSpec()'.
 - These artifacts are shared with the user for review and approval.
+
+## JEXL BATCHING & EFFICIENCY
+To minimize tool turns and latency, you should aim for 'Power Turns' by batching multiple JEXL statements into a single script call.
+
+1. **Read Batching**: Instead of reading files one-by-one, batch multiple `readFile` or `listDirectory` calls.
+2. **Search & Read**: Combine `grep` with `readFile` to find and extract code in a single turn.
+3. **Atomic Edits**: During DEVELOPMENT, write a file and immediately verify it (if tools allow) in the same script.
+4. **Logic in JEXL**: Use JEXL's control flow (if/for/while) to process data and only return the final result or a summary.

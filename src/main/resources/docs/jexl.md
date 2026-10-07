@@ -121,3 +121,33 @@ var techSpec = {
 };
 planManagerService.submitTechnicalSpec(techSpec);
 ```
+
+
+## ⚡️ Efficiency: Power Turns & Batching
+
+Minimize tool-call overhead by batching logic. Use JEXL's multi-statement support to perform complex operations in a single turn.
+
+### Pattern: Search and Read
+Find a pattern and read the matching files immediately.
+```javascript
+var grepResult = grepService.grep('class AuthService', 'src', '*.java');
+var results = [...];
+if (grepResult.success()) {
+    // Basic logic to extract paths from grep output if needed, 
+    // or just read known files.
+    results.add(fileReadService.readFile('src/main/java/org/roxycode/app/AuthService.java'));
+}
+results;
+```
+
+### Pattern: Multi-File Inspection
+```javascript
+var config = fileReadService.readFile('pom.xml');
+var main = fileReadService.readFile('src/main/java/org/roxycode/app/RoxyCode.java');
+{ "pom": config.content(), "main": main.content() };
+```
+
+### ⚠️ Pitfalls & Constraints
+1. **Output Size**: Returning extremely large objects (e.g., contents of 50 files) may exceed context limits. Be selective.
+2. **Map Syntax**: Use `{ "key": value, ... }` for Map literals.
+3. **Error Handling**: Always check `.success()` on service results within your script to avoid cascading failures.

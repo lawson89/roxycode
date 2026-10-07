@@ -9,10 +9,10 @@ public class ChatHtmlTemplates {
     public static String renderChatEntry(String role, String content, String timestamp) {
         return """
             <div class="chat-entry %s-entry">
-                <div class="content">%s</div>
                 <div class="timestamp">%s</div>
+                <div class="content">%s</div>
             </div>
-            """.formatted(role, content, timestamp);
+            """.formatted(role, timestamp, content);
     }
 
     public static String renderDivider() {

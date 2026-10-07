@@ -55,4 +55,11 @@ class PromptServiceTest {
         // jexl.md should NOT be in the result of loadAllDocs
         assertFalse(allDocs.contains("## jexl.md"));
     }
+    @Test
+    void testLoadExplorePrompt() {
+        String prompt = promptService.loadExplorePrompt();
+        assertNotNull(prompt);
+        assertTrue(prompt.contains("EXPLORE phase"));
+    }
+
 }
