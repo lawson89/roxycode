@@ -6,6 +6,8 @@ import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.events.TurnEventBridge;
+import static org.mockito.Mockito.mock;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Component;
@@ -41,7 +43,7 @@ class HeaderPanelTest {
     void testHeaderPanelInstantiation() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, mock(TurnEventBridge.class), name -> {});
         assertNotNull(header);
     }
 
@@ -49,7 +51,7 @@ class HeaderPanelTest {
     void testSearchFieldIsRemoved() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, mock(TurnEventBridge.class), name -> {});
         boolean searchFieldFound = false;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JTextField) {
@@ -65,7 +67,7 @@ class HeaderPanelTest {
     void testUtilityIconsAreRemoved() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, mock(TurnEventBridge.class), name -> {});
         
         boolean settingsFound = false;
         
@@ -86,7 +88,7 @@ class HeaderPanelTest {
     void testOpenButtonIsPresent() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, mock(TurnEventBridge.class), name -> {});
         
         JButton openButton = null;
         

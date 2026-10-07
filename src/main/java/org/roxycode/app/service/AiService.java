@@ -93,11 +93,10 @@ public class AiService {
                 if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
                     content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
                 } else {
+                    eventPublisher.publishEvent(new AgentTurnCompleteEvent("Roxy", turnCount.get(), "Error: " + e.getMessage()));
                     throw e;
                 }
             }
-            
-            // Memory handled by MessageChatMemoryAdvisor
             
             eventPublisher.publishEvent(new AgentTurnCompleteEvent("Roxy", turnCount.get(), content));
             return content;

@@ -297,7 +297,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
                     return aiService.chat(text, systemPrompt);
                 } catch (Exception ex) {
                     log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
-                    return "Error: " + ex.getMessage();
+                    return "Error: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
                 }
             }
             @Override

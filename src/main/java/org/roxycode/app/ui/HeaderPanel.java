@@ -6,6 +6,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 
@@ -23,9 +24,10 @@ public class HeaderPanel extends JPanel {
     private final JLabel projectLabel;
     private final JLabel branchLabel;
     private final JLabel modelLabel;
+    private final JProgressBar progressBar;
     
 
-    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, Consumer<String> navigationAction) {
+    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, TurnEventBridge turnEventBridge, Consumer<String> navigationAction) {
         this.projectService = projectService;
         this.gitService = gitService;
         
@@ -67,7 +69,18 @@ public class HeaderPanel extends JPanel {
         modelLabel = new JLabel();
         modelLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
-        rightPanel.add(modelLabel);
+
+        progressBar = new JProgressBar();
+        progressBar.setIndeterminate(true);
+        progressBar.setVisible(false);
+        // height: 2 is not a valid FlatLaf style for JProgressBar, using MigLayout constraint instead
+
+        JPanel modelPanel = new JPanel(new MigLayout("insets 0", "[]", "[]0[]"));
+        modelPanel.setOpaque(false);
+        modelPanel.add(modelLabel, "wrap");
+        modelPanel.add(progressBar, "growx, h 2!");
+
+        rightPanel.add(modelPanel);
 
 
 
@@ -85,6 +98,9 @@ public class HeaderPanel extends JPanel {
         settingsService.addSettingsListener(settings -> {
             updateModelDisplay(settings.getGeminiModel());
         });
+
+        turnEventBridge.addUserMessageListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(true)));
+        turnEventBridge.addCompleteListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(false)));
     }
 
     private JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {

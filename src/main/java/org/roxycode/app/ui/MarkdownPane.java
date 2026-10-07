@@ -85,12 +85,14 @@ public class MarkdownPane extends JTextPane {
     }
 
     public void appendMessage(String role, String content) {
-        messages.add(new Message(role, new StringBuilder(content), LocalDateTime.now().format(timeFormatter), false));
+        String safeContent = content != null ? content : "";
+        messages.add(new Message(role, new StringBuilder(safeContent), LocalDateTime.now().format(timeFormatter), false));
         renderAll();
     }
 
     public void appendToolLog(String toolName, String output) {
-        messages.add(new Message(toolName, new StringBuilder(output), LocalDateTime.now().format(timeFormatter), true));
+        String safeOutput = output != null ? output : "";
+        messages.add(new Message(toolName, new StringBuilder(safeOutput), LocalDateTime.now().format(timeFormatter), true));
         renderAll();
     }
 

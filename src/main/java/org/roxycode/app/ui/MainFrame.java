@@ -108,7 +108,7 @@ public class MainFrame extends JFrame {
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[]0[fill, grow]0[]"));
         
-        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, this::showCard);
+        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, turnEventBridge, this::showCard);
         JPanel phaseRow = new JPanel(new MigLayout("insets 5 20 5 20, fillx", "[center]", "center"));
         phaseRow.putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         phaseRow.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
