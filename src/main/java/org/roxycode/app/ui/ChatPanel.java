@@ -46,7 +46,9 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final JButton stopButton;
     private final JButton approveButton;
     private final JButton rejectButton;
+    private final JButton cancelTaskButton;
     private final JLabel turnLabel;
+    private SwingWorker<String, Void> currentWorker;
 
     public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, 
                      WorkflowService workflowService, TurnEventBridge turnEventBridge) {
@@ -87,6 +89,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         stopButton = new JButton("Stop", FontIcon.of(Codicons.DEBUG_STOP, 16));
         stopButton.setEnabled(false);
         stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
+        stopButton.addActionListener(e -> { if (currentWorker != null) currentWorker.cancel(true); });
 
         approveButton = new JButton("Advance", FontIcon.of(Codicons.CHECK, 16));
         approveButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
@@ -98,6 +101,11 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         rejectButton.setVisible(false);
         rejectButton.addActionListener(e -> rejectPhase());
 
+        cancelTaskButton = new JButton("Cancel Task", FontIcon.of(Codicons.DEBUG_STOP, 16));
+        cancelTaskButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999; foreground: $Label.disabledForeground");
+        cancelTaskButton.setVisible(false);
+        cancelTaskButton.addActionListener(e -> cancelTask());
+
         turnLabel = new JLabel("Turns: 0");
         turnLabel.putClientProperty(FlatClientProperties.STYLE, "font: $small.font; foreground: $Label.disabledForeground");
 
@@ -107,6 +115,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         buttonPanel.add(stopButton, "growx, wrap");
         buttonPanel.add(approveButton, "growx, wrap");
         buttonPanel.add(rejectButton, "growx, wrap");
+        buttonPanel.add(cancelTaskButton, "growx, wrap");
         buttonPanel.add(turnLabel, "center");
 
         inputSection.add(inputScrollPane, "grow");
@@ -190,6 +199,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         SwingUtilities.invokeLater(() -> {
             approveButton.setVisible(false);
             rejectButton.setVisible(false);
+            updateCancelButtonVisibility();
         });
     }
 
@@ -200,9 +210,11 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
                 approveButton.setVisible(true);
                 rejectButton.setVisible(true);
                 outputArea.appendMessage("System", "Roxy requested a transition to **" + requested.getDisplayName() + "**. Please approve or reject.");
+                updateCancelButtonVisibility();
             } else {
                 approveButton.setVisible(false);
                 rejectButton.setVisible(false);
+                updateCancelButtonVisibility();
             }
         });
     }
@@ -212,6 +224,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         if (requested != null) {
             workflowService.approveTransition();
             outputArea.appendMessage("System", "Phase transition to **" + requested.getDisplayName() + "** approved.");
+            triggerTurn("I approve the transition to " + requested.getDisplayName() + ". Please proceed with the next phase.");
         }
     }
 
@@ -223,6 +236,25 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         }
     }
 
+    private void cancelTask() {
+        int result = JOptionPane.showConfirmDialog(this,
+                "Are you sure you want to cancel the current task and reset to Explore phase?",
+                "Cancel Task",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+
+        if (result == JOptionPane.YES_OPTION) {
+            workflowService.resetWorkflow();
+            outputArea.appendMessage("System", "Task cancelled. Workflow reset to **Explore** phase.");
+        }
+    }
+
+    private void updateCancelButtonVisibility() {
+        boolean isPending = workflowService.getPendingPhase() != null;
+        boolean isNotExplore = workflowService.getCurrentPhase() != WorkflowPhase.EXPLORE;
+        cancelTaskButton.setVisible(isPending || isNotExplore);
+    }
+
     private void sendMessage(ActionEvent e) {
         String text = inputArea.getText().trim();
         if (text.isEmpty()) return;
@@ -230,15 +262,24 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         turnEventBridge.publishUserMessage("You", text);
         outputArea.appendMessage("You", text);
         inputArea.setText("");
+        triggerTurn(text);
+    }
+
+    private void triggerTurn(String text) {
+        if (text == null || text.trim().isEmpty()) return;
+
         setLoading(true);
         thoughtPanel.clear();
         turnLabel.setText("Turns: 0");
 
-        SwingWorker<String, Void> worker = new SwingWorker<>() {
+        currentWorker = new SwingWorker<>() {
             @Override
             protected String doInBackground() {
                 try {
-                    String systemPrompt = exploreManager.generateSystemPrompt();
+                    String systemPrompt = null;
+                    if (workflowService.getCurrentPhase() == WorkflowPhase.EXPLORE) {
+                        systemPrompt = exploreManager.generateSystemPrompt();
+                    }
                     return aiService.chat(text, systemPrompt);
                 } catch (Exception ex) {
                     log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
@@ -250,15 +291,18 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
                 try {
                     String response = get();
                     outputArea.appendMessage("Roxy", response);
+                } catch (java.util.concurrent.CancellationException ce) {
+                    outputArea.appendMessage("System", "_Request cancelled by user._");
                 } catch (Exception ex) {
                     log.error("Failed to retrieve AI response: {}", ex.getMessage(), ex);
                     outputArea.appendMessage("Roxy", "_Error communicating with AI._");
                 } finally {
+                    currentWorker = null;
                     setLoading(false);
                 }
             }
         };
-        worker.execute();
+        currentWorker.execute();
     }
 
     @Override
@@ -281,6 +325,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         inputArea.setEnabled(!loading);
         approveButton.setEnabled(!loading);
         rejectButton.setEnabled(!loading);
+        stopButton.setEnabled(loading);
         sendButton.setText(loading ? "Sending..." : "Send");
     }
 

@@ -34,7 +34,7 @@ class HeaderPanelTest {
     }
 
     private WorkflowService createWorkflowService() {
-        return new WorkflowService();
+        return new WorkflowService(null);
     }
 
     @Test

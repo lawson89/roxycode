@@ -17,6 +17,8 @@ import java.util.List;
 public class PhaseStepPanel extends JPanel {
 
     private final List<PhaseIndicator> indicators = new ArrayList<>();
+    private JLabel modeBadge;
+    private JPanel progressTracker;
     private final WorkflowService workflowService;
 
     public PhaseStepPanel(WorkflowService workflowService) {
@@ -31,24 +33,48 @@ public class PhaseStepPanel extends JPanel {
     }
 
     private void initComponents() {
+        // Mode Badge for EXPLORE
+        modeBadge = new JLabel("Explore");
+        modeBadge.setIcon(FontIcon.of(WorkflowPhase.EXPLORE.getIcon(), 16, UIManager.getColor("List.selectionForeground")));
+        modeBadge.putClientProperty(FlatClientProperties.STYLE, "arc: 12; font: +1; background: $Component.accentColor; foreground: $List.selectionForeground");
+        modeBadge.setOpaque(true);
+        modeBadge.setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
+        add(modeBadge, "hidemode 3");
+
+        progressTracker = new JPanel(new MigLayout("insets 0, gapx 10", "[]", "center"));
+        progressTracker.setOpaque(false);
+
         WorkflowPhase[] phases = WorkflowPhase.values();
-        for (int i = 0; i < phases.length; i++) {
-            WorkflowPhase phase = phases[i];
-            PhaseIndicator indicator = new PhaseIndicator(phase);
-            indicators.add(indicator);
-            add(indicator);
-            
-            if (i < phases.length - 1) {
-                JLabel separator = new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 12, UIManager.getColor("Label.disabledForeground")));
-                add(separator);
+        List<WorkflowPhase> linearPhases = new ArrayList<>();
+        for (WorkflowPhase p : phases) {
+            if (p != WorkflowPhase.EXPLORE) {
+                linearPhases.add(p);
             }
         }
+
+        for (int i = 0; i < linearPhases.size(); i++) {
+            WorkflowPhase phase = linearPhases.get(i);
+            PhaseIndicator indicator = new PhaseIndicator(phase);
+            indicators.add(indicator);
+            progressTracker.add(indicator);
+            
+            if (i < linearPhases.size() - 1) {
+                JLabel separator = new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 12, UIManager.getColor("Label.disabledForeground")));
+                progressTracker.add(separator);
+            }
+        }
+        add(progressTracker, "hidemode 3");
     }
 
     private void updateActivePhase(WorkflowPhase currentPhase) {
+        boolean isExplore = (currentPhase == WorkflowPhase.EXPLORE);
+        if (modeBadge != null) modeBadge.setVisible(isExplore);
+        if (progressTracker != null) progressTracker.setVisible(!isExplore);
+
+        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
         for (PhaseIndicator indicator : indicators) {
             indicator.setActive(indicator.phase == currentPhase);
-            indicator.setCompleted(indicator.phase.ordinal() < currentPhase.ordinal());
+            indicator.setCompleted(visited.contains(indicator.phase));
         }
         revalidate();
         repaint();

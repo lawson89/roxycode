@@ -90,12 +90,34 @@ When accumulating results dynamically, do not initialize empty collections with 
 - `getDiff()`: Returns the git diff.
 - `getLog(limit)`: Returns the git log.
 - `getCurrentBranch()`: Returns the name of the current branch.
-- `showCommit(hash)`: Shows details for a specific commit.
+- `showCommit(hash)`: Shows details for a specific commit.\n
 
 ### `grepService`
 - `grep(pattern, relativePath, filePattern)`: Searches for a pattern using RipGrep. Returns an `EditorResult` record.
 - `listFiles(relativePath)`: Lists files relative to project root using RipGrep.
 
 ### `planManagerService`
-- `submitFunctionalSpec(spec)`: Submits a functional specification.
-- `submitTechnicalSpec(spec)`: Submits a technical specification.
+- `submitFunctionalSpec(spec)`: Submits a functional specification using a `FunctionalSpec` record.
+- `submitFunctionalSpec(title, goal, requirements)`: Submits a functional specification using simple arguments.
+- `submitFunctionalSpec(specMap)`: Submits a functional specification using a Map (keys: `title`, `goal`, `requirements`).
+- `submitTechnicalSpec(spec)`: Submits a technical specification using a `TechnicalSpec` record.
+- `submitTechnicalSpec(architectureGoal, constraints, implementationSteps)`: Submits a technical specification using simple arguments.
+- `submitTechnicalSpec(specMap)`: Submits a technical specification using a Map (keys: `architectureGoal`, `constraints`, `implementationSteps`).
+
+#### Spec Submission Examples
+```javascript
+// Example: Submitting functional spec via simple arguments
+planManagerService.submitFunctionalSpec(
+    "User Auth", 
+    "Allow users to login", 
+    ["Login via email", "Password reset", ...]
+);
+
+// Example: Submitting technical spec via Map
+var techSpec = {
+    "architectureGoal": "Spring Boot Microservice",
+    "constraints": ["Java 17", "PostgreSQL", ...],
+    "implementationSteps": ["Setup DB", "Auth API", ...]
+};
+planManagerService.submitTechnicalSpec(techSpec);
+```

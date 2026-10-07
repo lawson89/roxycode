@@ -5,6 +5,7 @@ import org.roxycode.app.ai.services.specs.FunctionalSpec;
 import org.roxycode.app.ai.services.specs.TechnicalSpec;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -31,5 +32,39 @@ class PlanManagerServiceTest {
         assertEquals("Technical spec submitted successfully.", res2);
         assertEquals(ts, service.getCurrentTechnicalSpec());
         assertEquals(2, notifications.get());
+    }
+
+    @Test
+    void testOverloadedSubmitSpecs() {
+        PlanManagerService service = new PlanManagerService();
+        
+        // Simple arguments
+        service.submitFunctionalSpec("Title", "Goal", List.of("Req 1"));
+        assertNotNull(service.getCurrentFunctionalSpec());
+        assertEquals("Title", service.getCurrentFunctionalSpec().title());
+        
+        service.submitTechnicalSpec("Arch", List.of("Con 1"), List.of("Step 1"));
+        assertNotNull(service.getCurrentTechnicalSpec());
+        assertEquals("Arch", service.getCurrentTechnicalSpec().architectureGoal());
+        
+        // Map arguments
+        service.clearSpecs();
+        assertNull(service.getCurrentFunctionalSpec());
+        
+        Map<String, Object> fsMap = Map.of(
+            "title", "Map Title",
+            "goal", "Map Goal",
+            "requirements", List.of("Req A")
+        );
+        service.submitFunctionalSpec(fsMap);
+        assertEquals("Map Title", service.getCurrentFunctionalSpec().title());
+        
+        Map<String, Object> tsMap = Map.of(
+            "architectureGoal", "Map Arch",
+            "constraints", List.of("Con A"),
+            "implementationSteps", List.of("Step A")
+        );
+        service.submitTechnicalSpec(tsMap);
+        assertEquals("Map Arch", service.getCurrentTechnicalSpec().architectureGoal());
     }
 }
