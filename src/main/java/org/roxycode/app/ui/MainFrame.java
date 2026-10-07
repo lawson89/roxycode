@@ -116,9 +116,11 @@ public class MainFrame extends JFrame {
         StatusPanel statusBar = new StatusPanel(envService);
 
         // Content Area Panels
+        var gitChangesPanel = new GitChangesPanel(gitService);
         contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge, chatMemory), "CHAT");
         contentArea.add(new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
+        contentArea.add(gitChangesPanel, "GIT");
         contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");

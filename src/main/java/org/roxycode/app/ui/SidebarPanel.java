@@ -40,6 +40,7 @@ public class SidebarPanel extends JPanel {
         add(createSectionHeader("CONTEXT"), "gaptop 15");
         add(createNavButton("Codebase Cache", "CACHE", Codicons.DATABASE));
         add(createNavButton("API", "API", Codicons.CODE));
+        add(createNavButton("Git Changes", "GIT", Codicons.DIFF));
         add(createNavButton("Prompt", "PROMPT", Codicons.BOOK));
 
         add(createSectionHeader("CONFIG"), "gaptop 15");
