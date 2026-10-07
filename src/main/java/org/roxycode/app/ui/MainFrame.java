@@ -42,6 +42,8 @@ public class MainFrame extends JFrame {
     private final GenericBuildToolService buildToolService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
+    
+    private GitChangesPanel gitChangesPanel;
 
     public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, 
                     ProjectService projectService, GitService gitService, EnvironmentService envService,
@@ -101,13 +103,12 @@ public class MainFrame extends JFrame {
         setLayout(new MigLayout("fill, insets 0", "[200!]0[fill, grow]", "[fill, grow]"));
 
         // Sidebar
-        SidebarPanel sidebar = new SidebarPanel(settingsService, cardName -> cardLayout.show(contentArea, cardName));
+        SidebarPanel sidebar = new SidebarPanel(settingsService, this::showCard);
 
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[]0[fill, grow]0[]"));
         
-        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, 
-                cardName -> cardLayout.show(contentArea, cardName));
+        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, this::showCard);
         JPanel phaseRow = new JPanel(new MigLayout("insets 5 20 5 20, fillx", "[center]", "center"));
         phaseRow.putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         phaseRow.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
@@ -116,7 +117,7 @@ public class MainFrame extends JFrame {
         StatusPanel statusBar = new StatusPanel(envService);
 
         // Content Area Panels
-        var gitChangesPanel = new GitChangesPanel(gitService);
+        gitChangesPanel = new GitChangesPanel(gitService);
         contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge, chatMemory), "CHAT");
         contentArea.add(new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
@@ -135,6 +136,13 @@ public class MainFrame extends JFrame {
 
         add(sidebar, "growy");
         add(workspace, "grow");
+    }
+    
+    private void showCard(String cardName) {
+        cardLayout.show(contentArea, cardName);
+        if ("GIT".equals(cardName) && gitChangesPanel != null) {
+            gitChangesPanel.refresh();
+        }
     }
     
     private JPanel createPlaceholderPanel(String text) {

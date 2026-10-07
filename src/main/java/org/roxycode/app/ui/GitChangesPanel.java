@@ -2,6 +2,8 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,9 +24,20 @@ public class GitChangesPanel extends JPanel {
         this.gitService = gitService;
         setLayout(new MigLayout("fill, insets 10", "[grow]", "[][grow]"));
 
+        JPanel headerPanel = new JPanel(new MigLayout("insets 0", "[grow][]", "center"));
+        headerPanel.setOpaque(false);
+
         JLabel header = new JLabel("Git Changes");
         header.putClientProperty(FlatClientProperties.STYLE, "font: h2");
-        add(header, "wrap");
+        headerPanel.add(header);
+
+        JButton refreshButton = new JButton(FontIcon.of(Codicons.REFRESH, 16));
+        refreshButton.setToolTipText("Refresh Git Status");
+        refreshButton.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        refreshButton.addActionListener(e -> refresh());
+        headerPanel.add(refreshButton);
+
+        add(headerPanel, "wrap, growx");
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
         splitPane.setDividerLocation(150);
@@ -45,16 +58,15 @@ public class GitChangesPanel extends JPanel {
 
         add(splitPane, "grow");
 
-        JButton refreshButton = new JButton("Refresh");
-        refreshButton.addActionListener(e -> refresh());
-        add(refreshButton, "south");
-
         refresh();
     }
 
     public void refresh() {
         statusArea.setText(gitService.getStatus());
         diffArea.setText(gitService.getDiff());
+        // Scroll to top
+        statusArea.setCaretPosition(0);
+        diffArea.setCaretPosition(0);
     }
 
     @Override
