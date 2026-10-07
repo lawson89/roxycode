@@ -46,10 +46,12 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final JTextArea inputArea;
     private final JButton sendButton;
     private final JButton stopButton;
-    private final JButton approveButton;
+        private final JButton approveButton;
     private final JButton rejectButton;
-    private final JButton cancelTaskButton;
+    private final JButton resetSessionButton;
+    private final JPanel inlineActionPanel;
     private final JLabel turnLabel;
+    private final JScrollPane outputScrollPane;
     private SwingWorker<String, Void> currentWorker;
 
         public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, 
@@ -67,10 +69,44 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
 
         setLayout(new BorderLayout());
 
-        // Output section
+                // Output section
         outputArea = new MarkdownPane();
-        JScrollPane outputScrollPane = new JScrollPane(outputArea);
+
+        // Create inline action panel
+        inlineActionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        inlineActionPanel.setOpaque(false);
+        inlineActionPanel.setVisible(false);
+
+        approveButton = new JButton("Approve", FontIcon.of(Codicons.CHECK, 16));
+        approveButton.putClientProperty(FlatClientProperties.STYLE, "background: $Actions.Green; foreground: #ffffff");
+        approveButton.addActionListener(e -> approvePhase());
+
+        rejectButton = new JButton("Reject", FontIcon.of(Codicons.CLOSE, 16));
+        rejectButton.putClientProperty(FlatClientProperties.STYLE, "background: $Actions.Red; foreground: #ffffff");
+        rejectButton.addActionListener(e -> rejectPhase());
+
+        inlineActionPanel.add(approveButton);
+        inlineActionPanel.add(rejectButton);
+
+                // Wrap text area and action panel together
+        JPanel scrollContent = new JPanel(new BorderLayout());
+        scrollContent.putClientProperty(FlatClientProperties.STYLE, "background: $TextPane.background");
+        scrollContent.add(outputArea, BorderLayout.CENTER);
+        scrollContent.add(inlineActionPanel, BorderLayout.SOUTH);
+
+        outputScrollPane = new JScrollPane(scrollContent);
         outputScrollPane.setBorder(BorderFactory.createTitledBorder("Assistant"));
+
+        // Autoscroll to bottom when content changes (messages or action panel visibility)
+        scrollContent.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                SwingUtilities.invokeLater(() -> {
+                    JScrollBar vertical = outputScrollPane.getVerticalScrollBar();
+                    vertical.setValue(vertical.getMaximum());
+                });
+            }
+        });
 
         thoughtPanel = new ThoughtPanel();
 
@@ -94,30 +130,18 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
         stopButton.addActionListener(e -> { if (currentWorker != null) currentWorker.cancel(true); });
 
-        approveButton = new JButton("Advance", FontIcon.of(Codicons.CHECK, 16));
-        approveButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
-        approveButton.setVisible(false);
-        approveButton.addActionListener(e -> approvePhase());
-
-        rejectButton = new JButton("Reject", FontIcon.of(Codicons.CLOSE, 16));
-        rejectButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
-        rejectButton.setVisible(false);
-        rejectButton.addActionListener(e -> rejectPhase());
-
-                        cancelTaskButton = new JButton("Reset Session", FontIcon.of(Codicons.REFRESH, 16));
-        cancelTaskButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999; foreground: $Label.disabledForeground");
-        cancelTaskButton.addActionListener(e -> resetSession());
+        resetSessionButton = new JButton("Reset Session", FontIcon.of(Codicons.REFRESH, 16));
+        resetSessionButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999; foreground: $Label.disabledForeground");
+        resetSessionButton.addActionListener(e -> resetSession());
 
         turnLabel = new JLabel("Turns: 0");
         turnLabel.putClientProperty(FlatClientProperties.STYLE, "font: $small.font; foreground: $Label.disabledForeground");
 
         JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[]"));
         buttonPanel.setOpaque(false);
-                buttonPanel.add(sendButton, "growx, wrap");
+        buttonPanel.add(sendButton, "growx, wrap");
         buttonPanel.add(stopButton, "growx, wrap");
-        buttonPanel.add(approveButton, "growx, wrap");
-        buttonPanel.add(rejectButton, "growx, wrap");
-        buttonPanel.add(cancelTaskButton, "growx, wrap");
+        buttonPanel.add(resetSessionButton, "growx, wrap");
         buttonPanel.add(turnLabel, "center");
 
         inputSection.add(inputScrollPane, "grow");
@@ -197,11 +221,9 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
-    private void onPhaseChanged(WorkflowPhase phase) {
+        private void onPhaseChanged(WorkflowPhase phase) {
         SwingUtilities.invokeLater(() -> {
-            approveButton.setVisible(false);
-            rejectButton.setVisible(false);
-            updateCancelButtonVisibility();
+            inlineActionPanel.setVisible(false);
         });
     }
 
@@ -209,14 +231,10 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         SwingUtilities.invokeLater(() -> {
             if (requested != null) {
                 approveButton.setText("Approve " + requested.getDisplayName());
-                approveButton.setVisible(true);
-                rejectButton.setVisible(true);
-                outputArea.appendMessage("System", "Roxy requested a transition to **" + requested.getDisplayName() + "**. Please approve or reject.");
-                updateCancelButtonVisibility();
+                inlineActionPanel.setVisible(true);
+                outputArea.appendMessage("system", "Roxy requested a transition to **" + requested.getDisplayName() + "**. Please approve or reject below.");
             } else {
-                approveButton.setVisible(false);
-                rejectButton.setVisible(false);
-                updateCancelButtonVisibility();
+                inlineActionPanel.setVisible(false);
             }
         });
     }
@@ -225,7 +243,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         WorkflowPhase requested = workflowService.getPendingPhase();
         if (requested != null) {
             workflowService.approveTransition();
-            outputArea.appendMessage("System", "Phase transition to **" + requested.getDisplayName() + "** approved.");
+            outputArea.appendMessage("system", "Phase transition to **" + requested.getDisplayName() + "** approved.");
             triggerTurn("I approve the transition to " + requested.getDisplayName() + ". Please proceed with the next phase.");
         }
     }
@@ -234,35 +252,26 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         WorkflowPhase requested = workflowService.getPendingPhase();
         if (requested != null) {
             workflowService.rejectTransition();
-            outputArea.appendMessage("System", "Phase transition to **" + requested.getDisplayName() + "** rejected.");
+            outputArea.appendMessage("system", "Phase transition to **" + requested.getDisplayName() + "** rejected.");
         }
     }
 
-        private void resetSession() {
-        int result = JOptionPane.showConfirmDialog(this,
-                "Resetting the session will clear the chat history and return the workflow to the Explore phase. Continue?",
-                "Reset Session",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE);
-
+    private void resetSession() {
+        int result = JOptionPane.showConfirmDialog(this, "Reset session? This cancels active tasks and clears chat history.", "Reset", JOptionPane.YES_NO_OPTION);
         if (result == JOptionPane.YES_OPTION) {
             workflowService.resetWorkflow();
             chatMemory.clear("default");
             outputArea.clear();
-            outputArea.appendMessage("System", "Session reset. Workflow returned to **Explore** phase.");
+            outputArea.appendMessage("system", "Session reset to Explore phase.");
         }
-    }
-
-        private void updateCancelButtonVisibility() {
-        cancelTaskButton.setVisible(true);
     }
 
     private void sendMessage(ActionEvent e) {
         String text = inputArea.getText().trim();
         if (text.isEmpty()) return;
 
-        turnEventBridge.publishUserMessage("You", text);
-        outputArea.appendMessage("You", text);
+        turnEventBridge.publishUserMessage("user", text);
+        outputArea.appendMessage("user", text);
         inputArea.setText("");
         triggerTurn(text);
     }
@@ -292,12 +301,12 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             protected void done() {
                 try {
                     String response = get();
-                    outputArea.appendMessage("Roxy", response);
+                    outputArea.appendMessage("ai", response);
                 } catch (java.util.concurrent.CancellationException ce) {
-                    outputArea.appendMessage("System", "_Request cancelled by user._");
+                    outputArea.appendMessage("system", "_Request cancelled by user._");
                 } catch (Exception ex) {
                     log.error("Failed to retrieve AI response: {}", ex.getMessage(), ex);
-                    outputArea.appendMessage("Roxy", "_Error communicating with AI._");
+                    outputArea.appendMessage("ai", "_Error communicating with AI._");
                 } finally {
                     currentWorker = null;
                     setLoading(false);

@@ -27,11 +27,7 @@ public class JexlServiceRegistry {
             if (ann != null) {
                 String[] roles = ann.roles();
                 
-                boolean allowed = currentRole == null || roles.length == 0;
-                if (!allowed) {
-                    List<String> roleList = java.util.Arrays.asList(roles);
-                    allowed = roleList.contains("*") || roleList.contains(currentRole.name());
-                }
+                                boolean allowed = currentRole == null || roles.length == 0 || java.util.Arrays.asList(roles).contains("*") || java.util.Arrays.asList(roles).contains(currentRole.name());
 
                 if (allowed) {
                     allowedServices.add(service);

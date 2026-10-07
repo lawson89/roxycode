@@ -1,24 +1,27 @@
-body { font-family: sans-serif; font-size: 13px; color: #cccccc; margin: 10px; background-color: #1e1e1e; }
-.chat-entry { margin-bottom: 15px; padding: 10px; border-radius: 8px; }
-.user-entry { background-color: #2d2d2d; border-left: 4px solid #007acc; }
-.ai-entry { background-color: #252526; border-left: 4px solid #388e3c; }
-.thought-panel { background-color: #3e3e3e; border: 1px solid #555555; padding: 8px; font-style: italic; font-size: 12px; color: #aaaaaa; margin-bottom: 10px; }
-pre { background-color: #1e1e1e; border: 1px solid #333333; padding: 10px; border-radius: 4px; overflow-x: auto; }
-code { font-family: monospace; background-color: #2d2d2d; padding: 2px 4px; border-radius: 3px; }
-.tk-rw { color: #569cd6; font-weight: bold; } /* keyword */
-.tk-st { color: #6a9955; } /* string */
-.tk-nm { color: #b5cea8; } /* number */
-.tk-cm { color: #6a9955; font-style: italic; } /* comment */
-.tool-result { color: #4caf50; margin-top: 5px; }
-.tool-error { color: #f44336; margin-top: 5px; }
-.tool-call { background-color: #2d2620; border-left: 4px solid #f57c00; margin: 10px 0; padding: 8px; border-radius: 4px; }
+body { font-family: sans-serif; font-size: 13px; color: #cccccc; margin: 10px; background-color: transparent; }
+.chat-entry { margin-bottom: 8px; }
+.user-entry { background-color: #252a33; }
+.user-accent { background-color: #007acc; }
+.ai-entry { background-color: #252526; }
+.ai-accent { background-color: #388e3c; }
+.system-entry { background-color: #2d2d2d; }
+.system-accent { background-color: #666666; }
+
+.tool-call { background-color: #2d2620; margin: 8px 0; }
+.tool-accent { background-color: #f57c00; }
 .tool-header { font-size: 10px; color: #999999; margin-bottom: 4px; font-weight: bold; text-transform: uppercase; }
-.tool-body { font-family: monospace; }
-.timestamp {
-    text-align: right;
-    font-size: 9px;
-    color: #888888;
-    margin-bottom: 0px;
-    display: block;
-}
-.content p { margin-top: 2px; }
+.tool-body { font-family: monospace; color: #aaaaaa; }
+
+.timestamp { text-align: right; font-size: 9px; color: #888888; margin-bottom: 4px; }
+.content { color: #cccccc; }
+.content p { margin-top: 0px; margin-bottom: 8px; }
+
+pre { background-color: #1e1e1e; color: #d4d4d4; padding: 10px; }
+code { font-family: monospace; background-color: #2d2d2d; color: #d4d4d4; }
+
+.tk-rw { color: #569cd6; font-weight: bold; }
+.tk-st { color: #ce9178; }
+.tk-nm { color: #b5cea8; }
+.tk-cm { color: #6a9955; font-style: italic; }
+.tool-result { color: #4caf50; }
+.tool-error { color: #f44336; }

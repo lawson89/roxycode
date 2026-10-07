@@ -1,5 +1,6 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatLaf;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ui.JexlToHtmlConverter;
 
@@ -26,6 +27,7 @@ public class JexlApiPanel extends JPanel {
         textPane = new JTextPane();
         textPane.setEditable(false);
         textPane.setContentType("text/html");
+        textPane.putClientProperty("JEditorPane.honorDisplayProperties", Boolean.TRUE);
         
         setupContextMenu();
         updateTheme();
@@ -33,6 +35,7 @@ public class JexlApiPanel extends JPanel {
         add(new JScrollPane(textPane), BorderLayout.CENTER);
 
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        toolbar.setOpaque(false);
         JButton refreshBtn = new JButton("Refresh");
         refreshBtn.addActionListener(e -> {
             refresh();
@@ -93,19 +96,38 @@ public class JexlApiPanel extends JPanel {
         });
     }
 
-    /**
+            /**
      * Updates the look and feel of the documentation view.
      */
     public void updateTheme() {
         HTMLEditorKit kit = new HTMLEditorKit();
-        StyleSheet sheet = kit.getStyleSheet();
-        boolean isDark = UIManager.getBoolean("flatlaf.dark");
+        StyleSheet sheet = new StyleSheet();
+        boolean isDark = FlatLaf.isLafDark();
         String cssPath = isDark ? "/css/chat-styles-dark.css" : "/css/chat-styles-light.css";
         URL cssUrl = getClass().getResource(cssPath);
         if (cssUrl != null) {
             sheet.importStyleSheet(cssUrl);
         }
+        
+        Color bg = UIManager.getColor("TextPane.background");
+        Color fg = UIManager.getColor("TextPane.foreground");
+        
+        if (bg == null) bg = isDark ? new Color(30, 30, 30) : Color.WHITE;
+        if (fg == null) fg = isDark ? Color.LIGHT_GRAY : Color.BLACK;
+
+        textPane.setBackground(bg);
+        textPane.setForeground(fg);
+        textPane.setOpaque(true);
+        
+        // Ensure body background matches in HTML
+        String bodyRule = String.format("body { background-color: #%02x%02x%02x; color: #%02x%02x%02x; margin: 10px; }", 
+            bg.getRed(), bg.getGreen(), bg.getBlue(),
+            fg.getRed(), fg.getGreen(), fg.getBlue());
+        sheet.addRule(bodyRule);
+        
+        kit.setStyleSheet(sheet);
         textPane.setEditorKit(kit);
+        
         refresh();
     }
 

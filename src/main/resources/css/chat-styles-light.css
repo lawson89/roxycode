@@ -1,24 +1,27 @@
-body { font-family: sans-serif; font-size: 13px; color: #333333; margin: 10px; }
-.chat-entry { margin-bottom: 15px; padding: 10px; border-radius: 8px; }
-.user-entry { background-color: #f0f0f0; border-left: 4px solid #007acc; }
-.ai-entry { background-color: #ffffff; border-left: 4px solid #388e3c; }
-.thought-panel { background-color: #fff9c4; border: 1px solid #fbc02d; padding: 8px; font-style: italic; font-size: 12px; margin-bottom: 10px; }
-pre { background-color: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
-code { font-family: monospace; background-color: #eeeeee; padding: 2px 4px; border-radius: 3px; }
-.tk-rw { color: #0000ff; font-weight: bold; } /* keyword */
-.tk-st { color: #008000; } /* string */
-.tk-nm { color: #098658; } /* number */
-.tk-cm { color: #008000; font-style: italic; } /* comment */
-.tool-result { color: #2e7d32; margin-top: 5px; }
-.tool-error { color: #d32f2f; margin-top: 5px; }
-.tool-call { background-color: #fffaf0; border-left: 4px solid #ff9800; margin: 10px 0; padding: 8px; border-radius: 4px; }
+body { font-family: sans-serif; font-size: 13px; color: #333333; margin: 10px; background-color: transparent; }
+.chat-entry { margin-bottom: 8px; }
+.user-entry { background-color: #f0f7ff; }
+.user-accent { background-color: #007acc; }
+.ai-entry { background-color: #f9fff9; }
+.ai-accent { background-color: #388e3c; }
+.system-entry { background-color: #f5f5f5; }
+.system-accent { background-color: #999999; }
+
+.tool-call { background-color: #fffaf0; margin: 8px 0; }
+.tool-accent { background-color: #ff9800; }
 .tool-header { font-size: 10px; color: #888888; margin-bottom: 4px; font-weight: bold; text-transform: uppercase; }
-.tool-body { font-family: monospace; }
-.timestamp {
-    text-align: right;
-    font-size: 9px;
-    color: #888888;
-    margin-bottom: 0px;
-    display: block;
-}
-.content p { margin-top: 2px; }
+.tool-body { font-family: monospace; color: #444444; }
+
+.timestamp { text-align: right; font-size: 9px; color: #888888; margin-bottom: 4px; }
+.content { color: #333333; }
+.content p { margin-top: 0px; margin-bottom: 8px; }
+
+pre { background-color: #f5f5f5; color: #000000; padding: 10px; }
+code { font-family: monospace; background-color: #eeeeee; color: #000000; }
+
+.tk-rw { color: #0000ff; font-weight: bold; }
+.tk-st { color: #a31515; }
+.tk-nm { color: #098658; }
+.tk-cm { color: #008000; font-style: italic; }
+.tool-result { color: #2e7d32; }
+.tool-error { color: #d32f2f; }

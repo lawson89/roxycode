@@ -19,7 +19,7 @@ public class SystemToolsPanel extends JPanel {
     public SystemToolsPanel(SystemToolService toolService) {
         this.toolService = toolService;
         setLayout(new MigLayout("fill, insets 20", "[grow]", "[]20[grow]"));
-        setOpaque(false);
+        setOpaque(true);
 
         JLabel title = new JLabel("System Tools Status");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
@@ -28,7 +28,7 @@ public class SystemToolsPanel extends JPanel {
         refreshBtn.addActionListener(e -> refreshTools());
 
         JPanel header = new JPanel(new MigLayout("fillx, insets 0", "[grow][]", "[]"));
-        header.setOpaque(false);
+        header.setOpaque(true);
         header.add(title);
         header.add(refreshBtn);
         add(header, "wrap");
@@ -53,8 +53,8 @@ public class SystemToolsPanel extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(toolTable);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        scrollPane.setOpaque(false);
-        scrollPane.getViewport().setOpaque(false);
+        scrollPane.setOpaque(true);
+        scrollPane.getViewport().setOpaque(true);
         add(scrollPane, "grow");
 
         refreshTools();
@@ -88,4 +88,13 @@ public class SystemToolsPanel extends JPanel {
             return c;
         }
     }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (toolTable != null) {
+            toolTable.getTableHeader().putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE, "background: $Table.background; foreground: $Table.foreground; font: bold");
+        }
+    }
+
 }

@@ -76,6 +76,15 @@ public class CodebaseCachePanel extends JPanel {
         progressBar.setVisible(false);
     }
 
+        @Override
+    public void updateUI() {
+        super.updateUI();
+        // Check for null because updateUI() is called during constructor via initComponents()
+        if (repoMapArea != null) {
+            updateTheme();
+        }
+    }
+
     public void updateTheme() {
         repoMapArea.setBackground(UIManager.getColor("TextArea.background"));
         repoMapArea.setForeground(UIManager.getColor("TextArea.foreground"));

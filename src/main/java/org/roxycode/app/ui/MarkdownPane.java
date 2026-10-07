@@ -1,5 +1,6 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatLaf;
 import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
 import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
@@ -9,6 +10,7 @@ import com.vladsch.flexmark.util.data.MutableDataSet;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.html.HTMLEditorKit;
+import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import javax.swing.text.html.StyleSheet;
@@ -34,6 +36,8 @@ public class MarkdownPane extends JTextPane {
     public MarkdownPane() {
         setEditable(false);
         setContentType("text/html");
+        setOpaque(true);
+        putClientProperty("JEditorPane.honorDisplayProperties", true);
 
         MutableDataSet options = new MutableDataSet();
         options.set(Parser.EXTENSIONS, Arrays.asList(TablesExtension.create(), StrikethroughExtension.create()));
@@ -71,16 +75,43 @@ public class MarkdownPane extends JTextPane {
         });
     }
 
-    public void updateTheme() {
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (parser != null) {
+            updateTheme();
+        }
+    }
+
+        public void updateTheme() {
         HTMLEditorKit kit = new HTMLEditorKit();
-        StyleSheet sheet = kit.getStyleSheet();
-        boolean isDark = UIManager.getBoolean("flatlaf.dark");
+        StyleSheet sheet = new StyleSheet();
+        
+        boolean isDark = FlatLaf.isLafDark();
         String cssPath = isDark ? "/css/chat-styles-dark.css" : "/css/chat-styles-light.css";
         URL cssUrl = getClass().getResource(cssPath);
         if (cssUrl != null) {
             sheet.importStyleSheet(cssUrl);
         }
+        
+        Color bg = UIManager.getColor("TextPane.background");
+        Color fg = UIManager.getColor("TextPane.foreground");
+        if (bg == null) bg = isDark ? new Color(30, 30, 30) : Color.WHITE;
+        if (fg == null) fg = isDark ? Color.LIGHT_GRAY : Color.BLACK;
+
+        setBackground(bg);
+        setForeground(fg);
+        setOpaque(true);
+
+        // Ensure body background matches in HTML
+        String bodyRule = String.format("body { background-color: #%02x%02x%02x; color: #%02x%02x%02x; margin: 10px; }", 
+            bg.getRed(), bg.getGreen(), bg.getBlue(),
+            fg.getRed(), fg.getGreen(), fg.getBlue());
+        sheet.addRule(bodyRule);
+
+        kit.setStyleSheet(sheet);
         setEditorKit(kit);
+        
         renderAll();
     }
 

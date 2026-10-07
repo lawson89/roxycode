@@ -1,11 +1,15 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatLaf;
 import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.model.FunctionalSpec;
 import org.roxycode.app.model.TechnicalSpec;
 
 import javax.swing.*;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
 import java.awt.*;
+import java.net.URL;
 
 /**
  * UI panel for displaying the current project plan and specifications.
@@ -22,17 +26,59 @@ public class PlanPanel extends JPanel {
         displayArea = new JEditorPane();
         displayArea.setEditable(false);
         displayArea.setContentType("text/html");
+        displayArea.setOpaque(true);
+        displayArea.putClientProperty("JEditorPane.honorDisplayProperties", true);
         
         JScrollPane scrollPane = new JScrollPane(displayArea);
         scrollPane.setBorder(null);
         this.add(scrollPane, BorderLayout.CENTER);
 
+        updateTheme();
         planManagerService.addListener(this::updateDisplay);
         updateDisplay(planManagerService.getCurrentFunctionalSpec(), planManagerService.getCurrentTechnicalSpec());
     }
 
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (displayArea != null) {
+            updateTheme();
+            updateDisplay(planManagerService.getCurrentFunctionalSpec(), planManagerService.getCurrentTechnicalSpec());
+        }
+    }
+
+        private void updateTheme() {
+        HTMLEditorKit kit = new HTMLEditorKit();
+        StyleSheet sheet = new StyleSheet();
+
+        boolean isDark = FlatLaf.isLafDark();
+        String cssPath = isDark ? "/css/chat-styles-dark.css" : "/css/chat-styles-light.css";
+        URL cssUrl = getClass().getResource(cssPath);
+        if (cssUrl != null) {
+            sheet.importStyleSheet(cssUrl);
+        }
+
+        Color bg = UIManager.getColor("TextPane.background");
+        Color fg = UIManager.getColor("TextPane.foreground");
+        if (bg == null) bg = isDark ? new Color(30, 30, 30) : Color.WHITE;
+        if (fg == null) fg = isDark ? Color.LIGHT_GRAY : Color.BLACK;
+
+        displayArea.setBackground(bg);
+        displayArea.setForeground(fg);
+        displayArea.setOpaque(true);
+
+        // Ensure body background matches in HTML
+        String bodyRule = String.format("body { background-color: #%02x%02x%02x; color: #%02x%02x%02x; margin: 15px; }", 
+            bg.getRed(), bg.getGreen(), bg.getBlue(),
+            fg.getRed(), fg.getGreen(), fg.getBlue());
+        sheet.addRule(bodyRule);
+
+        kit.setStyleSheet(sheet);
+        displayArea.setEditorKit(kit);
+    }
+
     private void updateDisplay(FunctionalSpec functionalSpec, TechnicalSpec technicalSpec) {
-        StringBuilder html = new StringBuilder("<html><body style='font-family: sans-serif; padding: 10px;'>");
+        StringBuilder html = new StringBuilder("<html><body>");
 
         if (functionalSpec == null && technicalSpec == null) {
             html.append("<h3>No specifications submitted yet.</h3>");

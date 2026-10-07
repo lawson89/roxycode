@@ -7,12 +7,20 @@ package org.roxycode.app.ui;
 public class ChatHtmlTemplates {
 
     public static String renderChatEntry(String role, String content, String timestamp) {
+        String entryClass = role + "-entry";
+        String accentClass = role + "-accent";
         return """
-            <div class="chat-entry %s-entry">
-                <div class="timestamp">%s</div>
-                <div class="content">%s</div>
-            </div>
-            """.formatted(role, timestamp, content);
+            <table class="chat-entry %s" width="100%%" cellpadding="10" cellspacing="0">
+                <tr>
+                    <td class="accent-bar %s" width="4">&nbsp;</td>
+                    <td class="message-body">
+                        <div class="timestamp">%s</div>
+                        <div class="content">%s</div>
+                    </td>
+                </tr>
+            </table>
+            <div style="font-size: 4px;">&nbsp;</div>
+            """.formatted(entryClass, accentClass, timestamp, content);
     }
 
     public static String renderDivider() {
@@ -26,18 +34,18 @@ public class ChatHtmlTemplates {
     }
 
     public static String renderToolLog(String toolName, String output) {
-        if (toolName == null || toolName.trim().isEmpty()) {
-            return """
-                <div class="tool-call">
-                    <div class="tool-body">%s</div>
-                </div>
-                """.formatted(output);
-        }
+        String header = (toolName == null || toolName.trim().isEmpty()) ? "" : "<div class='tool-header'>" + toolName + "</div>";
         return """
-            <div class="tool-call">
-                <div class="tool-header">%s</div>
-                <div class="tool-body">%s</div>
-            </div>
-            """.formatted(toolName, output);
+            <table class="tool-call" width="100%%" cellpadding="8" cellspacing="0">
+                <tr>
+                    <td class="accent-bar tool-accent" width="4">&nbsp;</td>
+                    <td class="tool-body-container">
+                        %s
+                        <div class="tool-body">%s</div>
+                    </td>
+                </tr>
+            </table>
+            <div style="font-size: 4px;">&nbsp;</div>
+            """.formatted(header, output);
     }
 }
