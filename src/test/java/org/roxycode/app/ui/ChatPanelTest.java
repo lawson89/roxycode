@@ -3,7 +3,7 @@ package org.roxycode.app.ui;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.services.ExploreManager;
-import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.springframework.ai.chat.memory.ChatMemory;

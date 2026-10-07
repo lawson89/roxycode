@@ -5,7 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.ai.WorkflowService;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Component;

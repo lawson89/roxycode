@@ -2,8 +2,8 @@ package org.roxycode.app.ai.services;
 
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.ai.workflow.WorkflowPhase;
-import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;

@@ -11,7 +11,7 @@ import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.EnvironmentService;
-import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.ai.WorkflowService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;

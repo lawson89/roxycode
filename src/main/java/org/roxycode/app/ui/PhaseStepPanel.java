@@ -1,8 +1,8 @@
 package org.roxycode.app.ui;
 
 import net.miginfocom.swing.MigLayout;
-import org.roxycode.app.ai.workflow.WorkflowPhase;
-import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.WorkflowService;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.kordamp.ikonli.codicons.Codicons;
 import com.formdev.flatlaf.FlatClientProperties;

@@ -5,7 +5,7 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 

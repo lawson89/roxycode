@@ -77,6 +77,24 @@ public class GenericBuildToolService {
         return runCommand(commandKey, Map.of());
     }
 
+    @AgentDoc("Compiles the project and, if successful, runs all tests. Use this for the Verification phase.")
+    public BuildResult buildAndTest() {
+        BuildResult compileResult = compile();
+        if (!compileResult.success()) {
+            return compileResult; // Fast fail if compilation breaks
+        }
+        BuildResult testResult = runTests();
+        // Combine outputs for the LLM
+        return new BuildResult(
+            testResult.success(),
+            testResult.exitCode(),
+            "COMPILE OUTPUT:\n" + compileResult.output() + "\n\nTEST OUTPUT:\n" + testResult.output(),
+            testResult.errors(),
+            testResult.failedTests(),
+            testResult.log()
+        );
+    }
+
     private BuildResult runCommand(String commandKey, Map<String, String> placeholders) {
         if (!projectService.hasActiveProject()) {
             return new BuildResult(false, -1, "", List.of("No active project"), List.of(), "No active project");

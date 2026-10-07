@@ -4,7 +4,7 @@ import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.services.PlanManagerService;
-import org.roxycode.app.ai.workflow.WorkflowService;
+import org.roxycode.app.ai.WorkflowService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
