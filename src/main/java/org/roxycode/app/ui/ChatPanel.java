@@ -319,15 +319,13 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         currentWorker.execute();
     }
 
-    @Override
+        @Override
     public void onJexlExecuted(JexlExecutionEvent event) {
         SwingUtilities.invokeLater(() -> {
             String toolName = "";
             StringBuilder logContent = new StringBuilder();
             logContent.append("<pre><code>").append(JexlToHtmlConverter.convert(event.script())).append("</code></pre>");
-            if (event.success()) {
-                logContent.append("<div class='tool-result'><b>Result:</b> ").append(StringEscapeUtils.escapeHtml4(truncateResult(event.result()))).append("</div>");
-            } else {
+            if (!event.success()) {
                 logContent.append("<div class='tool-error'><b>Error:</b> ").append(StringEscapeUtils.escapeHtml4(event.error())).append("</div>");
             }
             outputArea.appendToolLog(toolName, logContent.toString());
@@ -343,11 +341,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         sendButton.setText(loading ? "Sending..." : "Send");
     }
 
-    static String truncateResult(Object result) {
-        if (result == null) return "null";
-        String resultStr = String.valueOf(result);
-        return resultStr.length() > 100 ? resultStr.substring(0, 100) + "... [Truncated]" : resultStr;
-    }
+    
 
     public MarkdownPane getOutputArea() { return outputArea; }
     private void setupKeyboardShortcuts() {
