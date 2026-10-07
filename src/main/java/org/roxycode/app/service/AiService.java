@@ -108,18 +108,18 @@ public class AiService {
 
     private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText) {
         String activeModel = settingsService.getSettings().getGeminiModel();
-        String jexlDocs = jexlServiceRegistry.getDocumentation();
-        String jexlContext = promptService.loadJexlContext();
         
         WorkflowPhase currentPhase = workflowService.getCurrentPhase();
         AgentRole currentRole = currentPhase.getRole();
+        
+        String jexlDocs = jexlServiceRegistry.getDocumentation(currentRole);
+        String jexlContext = promptService.loadJexlContext();
         
         // --- STABLE CONTEXT (Candidates for Caching) ---
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
         systemPrompt.append(promptService.loadAllPrompts());
         systemPrompt.append("\n\n## JEXL CONTEXT\n").append(jexlContext).append("\n\n");
         systemPrompt.append(promptService.loadAllDocs());
-        systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlDocs);
         
         // --- SEMI-STABLE CONTEXT (Project Structure) ---
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
@@ -133,6 +133,8 @@ public class AiService {
         systemPrompt.append("CURRENT ROLE: ").append(currentRole.getTitle()).append("\n");
         systemPrompt.append(currentRole.getSystemPromptPrefix()).append("\n\n");
         
+        systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlDocs);
+        
         String gitStatus = gitService.getStatus();
         if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error") && !gitStatus.startsWith("No active project") && !gitStatus.startsWith("Not a git repository")) {
             systemPrompt.append("## GIT STATUS\n").append(gitStatus).append("\n\n");
@@ -142,12 +144,8 @@ public class AiService {
             systemPrompt.append("## ADDITIONAL INSTRUCTIONS\n").append(systemPromptText).append("\n\n");
         }
         
-        // Retrieve history from memory
-        
-        
         return chatClient.prompt()
                 .system(systemPrompt.toString())
-                
                 .user(message)
                 .options(GoogleGenAiChatOptions.builder().model(activeModel));
     }

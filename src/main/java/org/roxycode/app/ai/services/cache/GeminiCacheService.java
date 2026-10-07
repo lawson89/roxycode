@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
-@AgentService("geminiCacheService")
+@AgentService(value = "geminiCacheService", roles = {"*"})
 @AgentDoc("Manages Gemini API context caching indicators.")
 public class GeminiCacheService {
     private static final Logger log = LoggerFactory.getLogger(GeminiCacheService.class);

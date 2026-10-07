@@ -110,7 +110,7 @@ public class JexlApiPanel extends JPanel {
     }
 
     private void refresh() {
-        String doc = registry.getDocumentation();
+        String doc = registry.getDocumentation(null);
         String highlighted = JexlToHtmlConverter.convert(doc);
         String html = "<html><body><pre>" + highlighted + "</pre></body></html>";
         textPane.setText(html);

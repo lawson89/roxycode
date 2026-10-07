@@ -74,6 +74,10 @@ When accumulating results dynamically, do not initialize empty collections with 
 
 ## RoxyCode API Services
 
+**CRITICAL TOOL VISIBILITY NOTE:** 
+If you do not see a service listed in your JEXL API Documentation (e.g., `fileEditorService` or `buildToolService`), it means you do not have permission to use it in your current PHASE. 
+- If you are asked to write/edit code, you MUST first call `workflowService.routeToPhase('DEVELOPMENT')`. The mutation tools will dynamically become available to you only after the user approves the phase transition.
+
 ### `fileReadService`
 - `readFile(relativePath)`: Reads the content of a file.
 - `listDirectory(relativePath)`: Lists the files in a directory.

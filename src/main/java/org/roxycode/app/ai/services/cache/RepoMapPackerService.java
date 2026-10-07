@@ -29,7 +29,7 @@ import java.util.List;
  * Implements lazy evaluation to avoid redundant processing.
  */
 @Service
-@AgentService("repoMapPackerService")
+@AgentService(value = "repoMapPackerService", roles = {"*"})
 @AgentDoc("Generates a token-optimized map of the repository using ripgrep and universal-ctags.")
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);

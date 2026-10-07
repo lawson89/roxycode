@@ -20,7 +20,18 @@ public class JexlServiceRegistry {
         return Collections.unmodifiableMap(services);
     }
 
-    public String getDocumentation() {
-        return docGenerator.generateDoc(services.values());
+    public String getDocumentation(org.roxycode.app.ai.AgentRole currentRole) {
+        java.util.List<Object> allowedServices = new java.util.ArrayList<>();
+        for (Object service : services.values()) {
+            AgentService ann = service.getClass().getAnnotation(AgentService.class);
+            if (ann != null) {
+                String[] roles = ann.roles();
+                // Allow if currentRole is null (for UI panel), roles array contains "*", or explicitly contains the current role
+                if (currentRole == null || roles.length == 0 || java.util.Arrays.asList(roles).contains("*") || java.util.Arrays.asList(roles).contains(currentRole.name())) {
+                    allowedServices.add(service);
+                }
+            }
+        }
+        return docGenerator.generateDoc(allowedServices);
     }
 }

@@ -85,7 +85,7 @@ class AiServiceTest {
     @SuppressWarnings("unchecked")
     void testChatUsesConfiguredModelAndDynamicPrompt() {
         settings.setGeminiModel("test-model-123");
-        when(jexlServiceRegistry.getDocumentation()).thenReturn("JEXL DOCS");
+        when(jexlServiceRegistry.getDocumentation(any())).thenReturn("JEXL DOCS");
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOPMENT);
         when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
         when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");

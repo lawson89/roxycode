@@ -18,7 +18,7 @@ import java.util.List;
  * Service for read-only Git operations.
  */
 @Service
-@AgentService("gitService")
+@AgentService(value = "gitService", roles = {"*"})
 @AgentDoc("Provides read-only access to Git repository information for the current project.")
 public class GitService {
     private static final Logger log = LoggerFactory.getLogger(GitService.class);
