@@ -3,6 +3,8 @@ package org.roxycode.app.ui;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.model.FunctionalSpec;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.kordamp.ikonli.codicons.Codicons;
 import com.formdev.flatlaf.FlatClientProperties;
@@ -20,19 +22,26 @@ public class PhaseStepPanel extends JPanel {
     private JLabel modeBadge;
     private JPanel progressTracker;
     private final WorkflowService workflowService;
+    private final PlanManagerService planManagerService;
+    private JLabel planLabel;
 
-    public PhaseStepPanel(WorkflowService workflowService) {
+    public PhaseStepPanel(WorkflowService workflowService, PlanManagerService planManagerService) {
+        this.planManagerService = planManagerService;
         this.workflowService = workflowService;
         setLayout(new MigLayout("insets 0, gapx 10", "[]", "center"));
         setOpaque(false);
         initComponents();
         workflowService.addPhaseListener(this::updateActivePhase);
+        planManagerService.addListener((fs, ts) -> updatePlanDisplay(workflowService.getCurrentPhase()));
         
         // Initialize with current phase
         updateActivePhase(workflowService.getCurrentPhase());
     }
 
     private void initComponents() {
+        planLabel = new JLabel();
+        planLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
+        add(planLabel, "hidemode 3");
         // Mode Badge for EXPLORE
         modeBadge = new JLabel("Explore");
         modeBadge.setIcon(FontIcon.of(WorkflowPhase.EXPLORE.getIcon(), 16, UIManager.getColor("List.selectionForeground")));
@@ -66,10 +75,22 @@ public class PhaseStepPanel extends JPanel {
         add(progressTracker, "hidemode 3");
     }
 
+    private void updatePlanDisplay(WorkflowPhase currentPhase) {
+        if (planLabel == null) return;
+        FunctionalSpec spec = planManagerService.getCurrentFunctionalSpec();
+        if (currentPhase == WorkflowPhase.EXPLORE || spec == null || spec.title() == null || spec.title().isBlank()) {
+            planLabel.setVisible(false);
+        } else {
+            planLabel.setText(spec.title().toUpperCase() + ":");
+            planLabel.setVisible(true);
+        }
+    }
+
     private void updateActivePhase(WorkflowPhase currentPhase) {
         boolean isExplore = (currentPhase == WorkflowPhase.EXPLORE);
         if (modeBadge != null) modeBadge.setVisible(isExplore);
         if (progressTracker != null) progressTracker.setVisible(!isExplore);
+        updatePlanDisplay(currentPhase);
 
         java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
         for (PhaseIndicator indicator : indicators) {

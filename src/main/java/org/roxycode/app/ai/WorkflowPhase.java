@@ -1,7 +1,5 @@
 package org.roxycode.app.ai;
 
-import org.roxycode.app.ai.AgentRole;
-import org.roxycode.app.ai.AgentDoc;
 import org.kordamp.ikonli.codicons.Codicons;
 
 @AgentDoc("Defines the current phase of the development workflow.")

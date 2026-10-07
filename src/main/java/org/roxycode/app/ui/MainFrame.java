@@ -111,7 +111,7 @@ public class MainFrame extends JFrame {
         JPanel phaseRow = new JPanel(new MigLayout("insets 5 20 5 20, fillx", "[center]", "center"));
         phaseRow.putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         phaseRow.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
-        phaseRow.add(new PhaseStepPanel(workflowService));
+        phaseRow.add(new PhaseStepPanel(workflowService, planManagerService));
 
         StatusPanel statusBar = new StatusPanel(envService);
 
