@@ -86,7 +86,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         outputArea = new MarkdownPane();
 
                         // Create inline action panel (Decision Bar)
-        inlineActionPanel = new JPanel(new MigLayout("insets 10 20 10 20, gap 15", "[][]push[][]", "center"));
+        inlineActionPanel = new JPanel(new MigLayout("insets 10 20 10 20, gap 15", "", "center"));
         inlineActionPanel.putClientProperty(FlatClientProperties.STYLE, 
             "background: darken($TextPane.background, 3%); " +
             "border: 1,0,0,0,$Component.borderColor");
