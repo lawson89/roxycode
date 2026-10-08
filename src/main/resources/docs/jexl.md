@@ -145,6 +145,13 @@ planManagerService.submitTechnicalSpec(techSpec);
 
 ## ⚡️ Efficiency: Power Turns & Batching
 
+
+### `workflowService`
+- `getCurrentPhase()`: Returns the current `WorkflowPhase` enum.
+- `routeToPhase(phaseName)`: Requests or performs a transition to a new phase.
+- `resetWorkflow()`: Resets the workflow to the initial `EXPLORE` phase.
+
+
 Minimize tool-call overhead by batching logic. Use JEXL's multi-statement support to perform complex operations in a single turn.
 
 ### Pattern: Search and Read

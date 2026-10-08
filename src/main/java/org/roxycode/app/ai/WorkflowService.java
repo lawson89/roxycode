@@ -88,7 +88,14 @@ public class WorkflowService {
      * Sets the current workflow phase and notifies listeners.
      * @param phase The new phase to set.
      */
+    /**
+     * Sets the current workflow phase and notifies listeners.
+     * @param phase The new phase to set.
+     */
     public void setCurrentPhase(WorkflowPhase phase) {
+        if (phase == null) {
+            return;
+        }
         if (this.currentPhase != phase) {
             this.currentPhase = phase;
             this.visitedPhases.add(phase);

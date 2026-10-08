@@ -149,4 +149,12 @@ class WorkflowServiceTest {
         assertEquals("Routed back to phase: EXPLORE", result);
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
     }
+
+    @Test
+    void testSetCurrentPhaseNullCheck() {
+        WorkflowPhase initial = service.getCurrentPhase();
+        service.setCurrentPhase(null);
+        assertEquals(initial, service.getCurrentPhase(), "Phase should not change when null is passed");
+    }
 }
+
