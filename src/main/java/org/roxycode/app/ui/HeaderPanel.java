@@ -108,8 +108,8 @@ public class HeaderPanel extends JPanel {
 
         JPanel modelPanel = new JPanel(new MigLayout("insets 0", "[]", "[]0[]"));
         modelPanel.setOpaque(false);
-        modelPanel.add(modelLabel, "wrap");
-        modelPanel.add(progressBar, "growx, h 2!");
+                modelPanel.add(modelLabel, "wrap");
+        modelPanel.add(progressBar, "growx, h 4!");
 
         rightPanel.add(modelPanel);
         add(rightPanel, "right");
@@ -138,8 +138,16 @@ public class HeaderPanel extends JPanel {
         workflowService.addPhaseListener(this::updateActivePhase);
         planManagerService.addListener((plan) -> updateActivePhase(workflowService.getCurrentPhase()));
         
-        turnEventBridge.addUserMessageListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(true)));
-        turnEventBridge.addCompleteListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(false)));
+                turnEventBridge.addUserMessageListener(event -> SwingUtilities.invokeLater(() -> {
+            progressBar.setVisible(true);
+            revalidate();
+            repaint();
+        }));
+        turnEventBridge.addCompleteListener(event -> SwingUtilities.invokeLater(() -> {
+            progressBar.setVisible(false);
+            revalidate();
+            repaint();
+        }));
 
         // Initialize workflow display
         updateActivePhase(workflowService.getCurrentPhase());

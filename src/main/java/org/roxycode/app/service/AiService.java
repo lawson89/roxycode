@@ -14,34 +14,24 @@ import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-// import removed
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
-import reactor.core.scheduler.Schedulers;
-
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Service for interacting with the AI Chat Model using the modern ChatClient fluent API.
- * Optimized for Gemini implicit context caching by ordering prompts from stable to dynamic.
- */
 @Service
 public class AiService {
-    public String chat(String message) {
-        return chat(message, null, null);
-    }
-
-    public String chat(String message, List<byte[]> images) {
-        return chat(message, null, images);
-    }
+    public String chat(String message) { return chat(message, null, null); }
+    public String chat(String message, List<byte[]> images) { return chat(message, null, images); }
 
     private final ChatClient chatClient;
     private final SettingsService settingsService;
@@ -85,16 +75,14 @@ public class AiService {
         JexlExecutionListener turnListener = event -> {
             int turn = turnCount.incrementAndGet();
             eventPublisher.publishEvent(new AgentTurnEvent("Roxy", turn, workflowService.getCurrentPhase().name()));
-            if (turn > maxTurns) {
-                throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED");
-            }
+            if (turn > maxTurns) throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED");
         };
         
         jexlTool.addListener(turnListener);
         try {
             String conversationId = "default";
             String content;
-                        try {
+            try {
                 content = buildPrompt(message, systemPromptText, images)
                         .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                         .call()
@@ -113,6 +101,16 @@ public class AiService {
 
                 if (yieldEx != null) {
                     content = yieldEx.getMessage();
+                    try {
+                        JsonNode node = new ObjectMapper().readTree(content);
+                        if (node.has("summary") && node.has("message")) {
+                            content = node.get("summary").asText() + "\n\n" + node.get("message").asText();
+                        } else if (node.has("summary")) {
+                            content = node.get("summary").asText();
+                        }
+                    } catch (Exception jsonEx) {
+                        // Fallback to raw message
+                    }
                 } else if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
                     content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
                 } else {
@@ -130,53 +128,34 @@ public class AiService {
 
     private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText, List<byte[]> images) {
         String activeModel = settingsService.getSettings().getGeminiModel();
-        
         WorkflowPhase currentPhase = workflowService.getCurrentPhase();
         AgentRole currentRole = currentPhase.getRole();
         
-        String jexlDocs = jexlServiceRegistry.getDocumentation(currentRole);
-        String jexlContext = promptService.loadJexlContext();
-        
-        // --- STABLE CONTEXT (Candidates for Caching) ---
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
         systemPrompt.append(promptService.loadAllPrompts());
-        systemPrompt.append("\n\n## JEXL CONTEXT\n").append(jexlContext).append("\n\n");
+        systemPrompt.append("\n\n## JEXL CONTEXT\n").append(promptService.loadJexlContext()).append("\n\n");
         systemPrompt.append(promptService.loadAllDocs());
         systemPrompt.append(promptService.loadProjectContext());
         
-        // --- SEMI-STABLE CONTEXT (Project Structure) ---
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
-        if (repoMap.success()) {
-            systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.content()).append("\n");
-        }
+        if (repoMap.success()) systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.content()).append("\n");
 
-        // --- DYNAMIC CONTEXT (Session/Turn specific) ---
         systemPrompt.append("\n\n## SESSION CONTEXT\n");
-        systemPrompt.append("DOMINANT LANGUAGE: You are operating in a ").append(projectAnalysisService.getDominantLanguage()).append(" codebase.\n");
-        systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append(" (").append(currentPhase.getDisplayName()).append(")\n");
+        systemPrompt.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage()).append("\n");
+        systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
         systemPrompt.append("CURRENT ROLE: ").append(currentRole.getTitle()).append("\n");
         systemPrompt.append(currentRole.getSystemPromptPrefix()).append("\n\n");
-        
-        systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlDocs);
+        systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlServiceRegistry.getDocumentation(currentRole));
         
         String gitStatus = gitService.getStatus();
-        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error") && !gitStatus.startsWith("No active project") && !gitStatus.startsWith("Not a git repository")) {
-            systemPrompt.append("## GIT STATUS\n").append(gitStatus).append("\n\n");
-        }
-
-        if (systemPromptText != null) {
-            systemPrompt.append("## ADDITIONAL INSTRUCTIONS\n").append(systemPromptText).append("\n\n");
-        }
+        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) systemPrompt.append("## GIT STATUS\n").append(gitStatus).append("\n\n");
+        if (systemPromptText != null) systemPrompt.append("## ADDITIONAL INSTRUCTIONS\n").append(systemPromptText).append("\n\n");
         
-                return chatClient.prompt()
+        return chatClient.prompt()
                 .system(systemPrompt.toString())
                 .user(u -> {
                     u.text(message);
-                    if (images != null && !images.isEmpty()) {
-                        for (byte[] imgBytes : images) {
-                            u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(imgBytes));
-                        }
-                    }
+                    if (images != null) for (byte[] img : images) u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(img));
                 })
                 .options(GoogleGenAiChatOptions.builder().model(activeModel));
     }

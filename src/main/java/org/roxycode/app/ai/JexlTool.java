@@ -9,6 +9,7 @@ import org.apache.commons.jexl3.introspection.JexlPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
+import org.apache.commons.text.StringEscapeUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +64,7 @@ public class JexlTool {
                 output = "<empty result>";
             }
             fireEvent(new JexlExecutionEvent(script, result, true, null));
-            return output;
+                                                return "{\"result\": \"" + StringEscapeUtils.escapeJson(output) + "\"}";
         } catch (Exception e) {
             // Check if this is a YieldTurnException wrapping or direct
             Throwable current = e;
@@ -85,7 +86,7 @@ public class JexlTool {
                 error = cause.toString();
             }
             fireEvent(new JexlExecutionEvent(script, null, false, error));
-            return "Error executing Jexl script: " + error;
+                                                return "{\"error\": \"" + StringEscapeUtils.escapeJson(error) + "\"}";
         }
     }
 

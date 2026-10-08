@@ -425,12 +425,26 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     }
 
 
-    private void setLoading(boolean loading) {
-        sendButton.setEnabled(!loading);
-        inputArea.setEnabled(!loading);
-        approveButton.setEnabled(!loading);
-        rejectButton.setEnabled(!loading);
-        stopButton.setEnabled(loading);
+            private void setLoading(boolean loading) {
+        // Reorder enablement and focus to prevent jump to 'Reset Session' button
+        if (loading) {
+                        stopButton.setEnabled(true);
+            SwingUtilities.invokeLater(() -> stopButton.requestFocusInWindow());
+            
+            sendButton.setEnabled(false);
+            inputArea.setEnabled(false);
+            approveButton.setEnabled(false);
+            rejectButton.setEnabled(false);
+        } else {
+            sendButton.setEnabled(true);
+            inputArea.setEnabled(true);
+            approveButton.setEnabled(true);
+            rejectButton.setEnabled(true);
+            
+                        stopButton.setEnabled(false);
+            SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow());
+        }
+        
         sendButton.setText(loading ? "Sending..." : "Send");
     }
 

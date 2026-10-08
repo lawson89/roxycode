@@ -23,7 +23,7 @@ public class JexlToolTest {
         assertNotEquals("null", varCheck, "testService should be found in context");
 
         String result = tool.executeJexl("testService.hello('Roxy')");
-        assertEquals("Hello, Roxy", result);
+        assertEquals("{\"result\": \"Hello, Roxy\"}", result);
     }
 
     @Test
@@ -31,7 +31,7 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry);
         String result = tool.executeJexl("1 + 1");
-        assertEquals("2", result);
+        assertEquals("{\"result\": \"2\"}", result);
     }
 
     @Test
@@ -39,7 +39,7 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry);
         String result = tool.executeJexl("var x = 10; x * 2");
-        assertEquals("20", result);
+        assertEquals("{\"result\": \"20\"}", result);
     }
 
     @Test
@@ -47,7 +47,7 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry);
         String result = tool.executeJexl("null");
-        assertEquals("null", result);
+        assertEquals("{\"result\": \"null\"}", result);
     }
 
     @Test

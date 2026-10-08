@@ -174,6 +174,9 @@ var main = fileReadService.readFile('src/main/java/org/roxycode/app/RoxyCode.jav
 { "pom": config.content(), "main": main.content() };
 ```
 
+### CRITICAL INSTRUCTION: When you need to read multiple files, you MUST batch them into a single JEXL execution. 
+Do not issue separate tool calls. Assign the results to variables and return a Map literal containing all the file contents.
+
 ### ⚠️ Pitfalls & Constraints
 1. **Output Size**: Returning extremely large objects (e.g., contents of 50 files) may exceed context limits. Be selective.
 2. **Map Syntax**: Use `{ "key": value, ... }` for Map literals.
