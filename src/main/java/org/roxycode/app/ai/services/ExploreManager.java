@@ -1,11 +1,14 @@
 package org.roxycode.app.ai.services;
 
+import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentRole;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.PromptService;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 /**
  * Service for the Technical Mentor role during the EXPLORE phase.
@@ -28,6 +31,10 @@ public class ExploreManager {
     public String generateSystemPrompt() {
         int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
         String template = promptService.loadExplorePrompt();
-        return AgentRole.TECHNICAL_MENTOR.getSystemPromptPrefix() + template.formatted(maxTurns);
+        
+        Map<String, Object> values = Map.of("maxTurns", maxTurns);
+        String substituted = StringSubstitutor.replace(template, values);
+        
+        return AgentRole.TECHNICAL_MENTOR.getSystemPromptPrefix() + substituted;
     }
 }
