@@ -14,7 +14,12 @@ public class ChatHtmlTemplates {
                 <tr>
                     <td class="accent-bar %s" width="4">&nbsp;</td>
                     <td class="message-body">
-                        <div class="timestamp">%s</div>
+                        <table width="100%%" cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                                <td align="left" valign="middle">&nbsp;</td>
+                                <td align="right" valign="middle" class="timestamp">%s</td>
+                            </tr>
+                        </table>
                         <div class="content">%s</div>
                     </td>
                 </tr>

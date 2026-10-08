@@ -40,7 +40,9 @@ class ChatHtmlTemplatesTest {
         assertTrue(result.contains("tool-call"));
         assertTrue(result.contains("git"));
         assertTrue(result.contains("diff output"));
-    }    @Test
+    }
+
+    @Test
     void testRenderToolLogEmptyToolName() {
         String toolName = "";
         String output = "jexl output";

@@ -83,7 +83,7 @@ public class MarkdownPane extends JTextPane {
         }
     }
 
-        public void updateTheme() {
+    public void updateTheme() {
         HTMLEditorKit kit = new HTMLEditorKit();
         StyleSheet sheet = new StyleSheet();
         
@@ -111,7 +111,6 @@ public class MarkdownPane extends JTextPane {
 
         kit.setStyleSheet(sheet);
         setEditorKit(kit);
-        
         renderAll();
     }
 
