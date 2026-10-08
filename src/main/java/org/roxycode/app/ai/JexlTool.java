@@ -57,8 +57,11 @@ public class JexlTool {
 
         try {
             JexlContext context = new MapContext(registry.getServices());
-            Object result = jexlScript.execute(context);
+                        Object result = jexlScript.execute(context);
             String output = result == null ? "null" : result.toString();
+            if (output.trim().isEmpty()) {
+                output = "<empty result>";
+            }
             fireEvent(new JexlExecutionEvent(script, result, true, null));
             return output;
         } catch (Exception e) {
