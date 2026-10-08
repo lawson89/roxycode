@@ -248,11 +248,12 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         }
     }
 
-    private void rejectPhase() {
+        private void rejectPhase() {
         WorkflowPhase requested = workflowService.getPendingPhase();
         if (requested != null) {
             workflowService.rejectTransition();
             outputArea.appendMessage("system", "Phase transition to **" + requested.getDisplayName() + "** rejected.");
+            triggerTurn("I have rejected the transition to " + requested.getDisplayName() + ". Let's discuss what needs to be fixed or adjusted.");
         }
     }
 

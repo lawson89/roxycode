@@ -68,6 +68,12 @@ public class WorkflowService {
             }
         }
 
+                // HITL Gate for concluding a task
+        if (currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE) {
+            requestPhaseTransition(nextPhase);
+            return "Task completion and transition to EXPLORE requested. Awaiting human sign-off.";
+        }
+
         // Backward movement or forward movement not requiring approval
         setCurrentPhase(nextPhase);
         String direction = isForward ? "Advanced" : "Routed back";
