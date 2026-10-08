@@ -85,14 +85,20 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         // Output section
         outputArea = new MarkdownPane();
 
-                // Create inline action panel
-        inlineActionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 10));
-        inlineActionPanel.setOpaque(false);
+                        // Create inline action panel (Decision Bar)
+        inlineActionPanel = new JPanel(new MigLayout("insets 10 20 10 20, gap 15", "[][]push[][]", "center"));
+        inlineActionPanel.putClientProperty(FlatClientProperties.STYLE, 
+            "background: darken($TextPane.background, 3%); " +
+            "border: 1,0,0,0,$Component.borderColor");
         inlineActionPanel.setVisible(false);
 
-        JLabel arrowLabel = new JLabel("==>");
-        arrowLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
-        arrowLabel.setForeground(UIManager.getColor("Component.accentColor"));
+                Color accentColor = UIManager.getColor("Component.accentColor");
+        if (accentColor == null) accentColor = UIManager.getColor("Label.foreground");
+        if (accentColor == null) accentColor = Color.GRAY;
+
+        JLabel transitionLabel = new JLabel("Workflow Transition", FontIcon.of(Codicons.ROCKET, 16, accentColor), SwingConstants.LEFT);
+        transitionLabel.setFont(transitionLabel.getFont().deriveFont(Font.BOLD));
+        transitionLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Component.accentColor");
 
         approveButton = new JButton("Approve", FontIcon.of(Codicons.CHECK, 16));
         approveButton.putClientProperty(FlatClientProperties.STYLE, "background: $Actions.Green; foreground: #ffffff");
@@ -102,8 +108,8 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         rejectButton.putClientProperty(FlatClientProperties.STYLE, "background: $Actions.Red; foreground: #ffffff");
         rejectButton.addActionListener(e -> rejectPhase());
 
-        inlineActionPanel.add(Box.createHorizontalStrut(30)); // Offset by 50px (30 + 20 gap)
-        inlineActionPanel.add(arrowLabel);
+        inlineActionPanel.add(transitionLabel);
+        inlineActionPanel.add(Box.createHorizontalStrut(10));
         inlineActionPanel.add(approveButton);
         inlineActionPanel.add(rejectButton);
 
