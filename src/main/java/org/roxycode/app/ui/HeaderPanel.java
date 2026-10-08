@@ -147,8 +147,6 @@ public class HeaderPanel extends JPanel {
         planManagerService.addListener((plan) -> updateActivePhase(workflowService.getCurrentPhase()));
         
         turnEventBridge.addUserMessageListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(true)));
-        turnEventBridge.addCompleteListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(false)));
-
         // Initialize workflow display
         updateActivePhase(workflowService.getCurrentPhase());
     }
@@ -156,7 +154,7 @@ public class HeaderPanel extends JPanel {
     private void updateActivePhase(WorkflowPhase currentPhase) {
         ImplementationPlan plan = planManagerService.getCurrentPlan();
         if (currentPhase != WorkflowPhase.EXPLORE && plan != null && plan.title() != null && !plan.title().isBlank()) {
-            planLabel.setText(plan.title().toUpperCase() + ":");
+            planLabel.setText(plan.title().toUpperCase());
             planLabel.setVisible(true);
         } else {
             planLabel.setVisible(false);
@@ -226,23 +224,21 @@ public class HeaderPanel extends JPanel {
         }
     }
 
-    private static class PhaseIndicator extends JPanel {
+        private static class PhaseIndicator extends JPanel {
         private final WorkflowPhase phase;
-        private final JLabel iconLabel;
         private final JLabel textLabel;
         private boolean isActive;
         private boolean isCompleted;
 
         public PhaseIndicator(WorkflowPhase phase) {
             this.phase = phase;
-            setLayout(new MigLayout("insets 1 0 1 0, gapx 4", "[][]", "center"));
+            setLayout(new MigLayout("insets 2 8 2 8", "[]", "center"));
             setOpaque(false);
+            putClientProperty(FlatClientProperties.STYLE, "arc: 12");
             
-            iconLabel = new JLabel(FontIcon.of(phase.getIcon(), 12, UIManager.getColor("Label.disabledForeground")));
             textLabel = new JLabel(phase.getDisplayName());
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -2");
 
-            add(iconLabel);
             add(textLabel);
         }
 
@@ -256,7 +252,7 @@ public class HeaderPanel extends JPanel {
             updateStyle();
         }
 
-                private void updateStyle() {
+        private void updateStyle() {
             Color accentColor = UIManager.getColor("Component.accentColor");
             if (accentColor == null) accentColor = Color.BLUE;
             
@@ -267,14 +263,12 @@ public class HeaderPanel extends JPanel {
             if (disabledForeground == null) disabledForeground = Color.GRAY;
 
             if (isActive) {
-                textLabel.setForeground(accentColor);
-                iconLabel.setIcon(FontIcon.of(Codicons.SYNC, 12, accentColor));
-            } else if (isCompleted) {
-                textLabel.setForeground(foreground);
-                iconLabel.setIcon(FontIcon.of(Codicons.CHECK, 12, foreground));
+                setOpaque(true);
+                setBackground(accentColor);
+                textLabel.setForeground(UIManager.getColor("Component.accentForeground"));
             } else {
-                textLabel.setForeground(disabledForeground);
-                iconLabel.setIcon(FontIcon.of(phase.getIcon(), 12, disabledForeground));
+                setOpaque(false);
+                textLabel.setForeground(isCompleted ? foreground : disabledForeground);
             }
         }
     }

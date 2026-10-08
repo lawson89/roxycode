@@ -42,9 +42,8 @@ public class PhaseStepPanel extends JPanel {
         planLabel = new JLabel();
         planLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
         add(planLabel, "hidemode 3");
-        // Mode Badge for EXPLORE
+                // Mode Badge for EXPLORE
         modeBadge = new JLabel("Explore");
-        modeBadge.setIcon(FontIcon.of(WorkflowPhase.EXPLORE.getIcon(), 14, UIManager.getColor("Label.disabledForeground")));
         modeBadge.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         modeBadge.setOpaque(false);
         add(modeBadge, "hidemode 3");
@@ -71,7 +70,6 @@ public class PhaseStepPanel extends JPanel {
                 progressTracker.add(separator);
             }
         }
-        add(progressTracker, "hidemode 3");
     }
 
     private void updatePlanDisplay(WorkflowPhase currentPhase) {
@@ -80,7 +78,7 @@ public class PhaseStepPanel extends JPanel {
         if (currentPhase == WorkflowPhase.EXPLORE || plan == null || plan.title() == null || plan.title().isBlank()) {
             planLabel.setVisible(false);
         } else {
-            planLabel.setText(plan.title().toUpperCase() + ":");
+            planLabel.setText(plan.title().toUpperCase());
             planLabel.setVisible(true);
         }
     }
@@ -101,23 +99,21 @@ public class PhaseStepPanel extends JPanel {
         repaint();
     }
 
-    private static class PhaseIndicator extends JPanel {
+        private static class PhaseIndicator extends JPanel {
         private final WorkflowPhase phase;
-        private final JLabel iconLabel;
         private final JLabel textLabel;
         private boolean isActive;
         private boolean isCompleted;
 
         public PhaseIndicator(WorkflowPhase phase) {
             this.phase = phase;
-            setLayout(new MigLayout("insets 2 0 2 0, gapx 4", "[][]", "center"));
+            setLayout(new MigLayout("insets 2 10 2 10", "[]", "center"));
             setOpaque(false);
+            putClientProperty(FlatClientProperties.STYLE, "arc: 12");
             
-            iconLabel = new JLabel(FontIcon.of(phase.getIcon(), 14, UIManager.getColor("Label.disabledForeground")));
             textLabel = new JLabel(phase.getDisplayName());
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
 
-            add(iconLabel);
             add(textLabel);
         }
 
@@ -132,15 +128,17 @@ public class PhaseStepPanel extends JPanel {
         }
 
         private void updateStyle() {
+            Color accentColor = UIManager.getColor("Component.accentColor");
             if (isActive) {
-                textLabel.setForeground(UIManager.getColor("Component.accentColor"));
-                iconLabel.setIcon(FontIcon.of(Codicons.SYNC, 14, UIManager.getColor("Component.accentColor")));
+                setOpaque(true);
+                setBackground(accentColor);
+                textLabel.setForeground(UIManager.getColor("Component.accentForeground"));
             } else if (isCompleted) {
+                setOpaque(false);
                 textLabel.setForeground(UIManager.getColor("Label.foreground"));
-                iconLabel.setIcon(FontIcon.of(Codicons.CHECK, 14, UIManager.getColor("Label.foreground")));
             } else {
+                setOpaque(false);
                 textLabel.setForeground(UIManager.getColor("Label.disabledForeground"));
-                iconLabel.setIcon(FontIcon.of(phase.getIcon(), 14, UIManager.getColor("Label.disabledForeground")));
             }
         }
     }

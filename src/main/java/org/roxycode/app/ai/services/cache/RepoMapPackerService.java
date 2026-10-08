@@ -84,9 +84,10 @@ public class RepoMapPackerService {
         }
 
         Path root = projectService.getCurrentProjectRoot();
-        List<String> files = grepService.listFiles(null);
+                List<String> files = grepService.listFiles(null);
         files = files.stream()
             .filter(f -> excludePatterns.stream().noneMatch(p -> f.startsWith(p)))
+            .filter(f -> !isBinaryFile(root.resolve(f)))
             .toList();
         
         StringBuilder sb = new StringBuilder();
@@ -185,6 +186,27 @@ public class RepoMapPackerService {
             log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
             return null;
         }
+    }
+
+    
+    private boolean isBinaryFile(Path path) {
+        try {
+            // Check for NUL bytes in the first 1024 bytes
+            if (Files.exists(path)) {
+                try (java.io.InputStream is = Files.newInputStream(path)) {
+                    byte[] buffer = new byte[1024];
+                    int bytesRead = is.read(buffer);
+                    for (int i = 0; i < bytesRead; i++) {
+                        if (buffer[i] == 0) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not determine if file is binary: {}", path, e);
+        }
+        return false;
     }
 
     private record Tag(String name, int line) {}

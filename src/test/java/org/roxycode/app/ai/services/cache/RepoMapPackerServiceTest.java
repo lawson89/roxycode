@@ -58,7 +58,28 @@ class RepoMapPackerServiceTest {
 
         EditorResult result = service.generateRepoMap();
         assertTrue(result.success());
-        assertTrue(result.content().contains("# Repo Map Snapshot"));
+                assertTrue(result.content().contains("# Repo Map Snapshot"));
         assertTrue(result.content().contains("## Project Tree"));
+    }
+
+    @Test
+    void testExcludeBinaryFiles() throws IOException {
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        
+        // Create a text file
+        Path textFile = tempDir.resolve("test.txt");
+        Files.writeString(textFile, "Hello Text");
+        
+        // Create a binary file (contains NUL byte)
+        Path binaryFile = tempDir.resolve("test.bin");
+        Files.write(binaryFile, new byte[]{0, 1, 2, 3});
+        
+        when(grepService.listFiles(null)).thenReturn(List.of("test.txt", "test.bin"));
+
+        EditorResult result = service.generateRepoMap();
+        assertTrue(result.success());
+        assertTrue(result.content().contains("test.txt"));
+        assertFalse(result.content().contains("test.bin"), "Binary file should be excluded");
     }
 }
