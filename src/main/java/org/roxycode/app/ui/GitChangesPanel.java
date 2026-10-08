@@ -18,7 +18,8 @@ public class GitChangesPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(GitChangesPanel.class);
     private final GitService gitService;
     private final JTextArea statusArea;
-    private final JTextArea diffArea;
+    private final JTextPane diffArea;
+    private String currentDiffHtml = "";
 
     public GitChangesPanel(GitService gitService) {
         this.gitService = gitService;
@@ -45,13 +46,17 @@ public class GitChangesPanel extends JPanel {
         statusArea = new JTextArea();
         statusArea.setEditable(false);
         statusArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        SwingHtmlUtils.installTextContextMenu(statusArea);
         JScrollPane statusScroll = new JScrollPane(statusArea);
         statusScroll.setBorder(BorderFactory.createTitledBorder("Status"));
         splitPane.setTopComponent(statusScroll);
 
-        diffArea = new JTextArea();
+        diffArea = new JTextPane();
         diffArea.setEditable(false);
-        diffArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        diffArea.setContentType("text/html");
+        diffArea.putClientProperty("JEditorPane.honorDisplayProperties", Boolean.TRUE);
+        SwingHtmlUtils.applyTheme(diffArea, 5);
+        SwingHtmlUtils.installTextContextMenu(diffArea);
         JScrollPane diffScroll = new JScrollPane(diffArea);
         diffScroll.setBorder(BorderFactory.createTitledBorder("Diff"));
         splitPane.setBottomComponent(diffScroll);
@@ -62,11 +67,59 @@ public class GitChangesPanel extends JPanel {
     }
 
     public void refresh() {
-        statusArea.setText(gitService.getStatus());
-        diffArea.setText(gitService.getDiff());
-        // Scroll to top
-        statusArea.setCaretPosition(0);
-        diffArea.setCaretPosition(0);
+        refreshAsync();
+    }
+
+    SwingWorker<GitChangesResult, Void> refreshAsync() {
+        SwingWorker<GitChangesResult, Void> worker = new SwingWorker<>() {
+            @Override
+            protected GitChangesResult doInBackground() {
+                String status = gitService.getStatus();
+                String diff = gitService.getDiff();
+                return new GitChangesResult(status, formatDiff(diff));
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    GitChangesResult result = get();
+                    statusArea.setText(result.status() != null ? result.status() : "");
+                    currentDiffHtml = result.formattedDiff() != null ? result.formattedDiff() : "";
+                    diffArea.setText(currentDiffHtml);
+                    statusArea.setCaretPosition(0);
+                    diffArea.setCaretPosition(0);
+                } catch (Exception e) {
+                    log.error("Failed to refresh git changes", e);
+                }
+            }
+        };
+        worker.execute();
+        return worker;
+    }
+
+    public static String formatDiff(String diff) {
+        if (diff == null || diff.isEmpty()) {
+            return "<pre style=\"font-family: monospace; font-size: 11px;\"></pre>";
+        }
+        String[] lines = diff.split("\n");
+        StringBuilder sb = new StringBuilder();
+        sb.append("<pre style=\"font-family: monospace; font-size: 11px;\">");
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String escaped = SwingHtmlUtils.escapeHtml(line);
+            if (line.startsWith("+")) {
+                sb.append("<span style=\"color: #28a745;\">").append(escaped).append("</span>");
+            } else if (line.startsWith("-")) {
+                sb.append("<span style=\"color: #d73a49;\">").append(escaped).append("</span>");
+            } else {
+                sb.append(escaped);
+            }
+            if (i < lines.length - 1) {
+                sb.append("\n");
+            }
+        }
+        sb.append("</pre>");
+        return sb.toString();
     }
 
     @Override
@@ -77,8 +130,20 @@ public class GitChangesPanel extends JPanel {
             statusArea.setForeground(UIManager.getColor("TextArea.foreground"));
         }
         if (diffArea != null) {
-            diffArea.setBackground(UIManager.getColor("TextArea.background"));
-            diffArea.setForeground(UIManager.getColor("TextArea.foreground"));
+            SwingHtmlUtils.applyTheme(diffArea, 5);
+            if (currentDiffHtml != null && !currentDiffHtml.isEmpty()) {
+                diffArea.setText(currentDiffHtml);
+            }
         }
     }
+
+    JTextArea getStatusArea() {
+        return statusArea;
+    }
+
+    JTextPane getDiffArea() {
+        return diffArea;
+    }
+
+    record GitChangesResult(String status, String formattedDiff) {}
 }
