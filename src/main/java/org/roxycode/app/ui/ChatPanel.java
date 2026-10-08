@@ -478,6 +478,16 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        JRootPane rootPane = SwingUtilities.getRootPane(this);
+        if (rootPane != null) {
+            rootPane.setDefaultButton(sendButton);
+        }
+    }
+
+
     public JTextArea getInputArea() { return inputArea; }
     public JButton getSendButton() { return sendButton; }
     public JButton getStopButton() { return stopButton; }

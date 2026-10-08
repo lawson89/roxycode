@@ -87,17 +87,9 @@ public class HeaderPanel extends JPanel {
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", "center"));
         progressTracker.setOpaque(false);
 
-        WorkflowPhase[] phases = WorkflowPhase.values();
-        for (int i = 0; i < phases.length; i++) {
-            WorkflowPhase phase = phases[i];
-            PhaseIndicator indicator = new PhaseIndicator(phase);
-            indicators.add(indicator);
-            progressTracker.add(indicator);
-            
-            if (i < phases.length - 1) {
-                JLabel separator = new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 10, UIManager.getColor("Label.disabledForeground")));
-                progressTracker.add(separator);
-            }
+                WorkflowPhase[] phases = WorkflowPhase.values();
+        for (WorkflowPhase phase : phases) {
+            indicators.add(new PhaseIndicator(phase));
         }
                 workflowPanel.add(progressTracker, "center, hidemode 3");
         add(workflowPanel, "center");
@@ -160,11 +152,14 @@ public class HeaderPanel extends JPanel {
             planLabel.setVisible(false);
         }
 
-        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
+                progressTracker.removeAll();
         for (PhaseIndicator indicator : indicators) {
-            boolean active = (indicator.phase == currentPhase);
-            indicator.setActive(active); 
-            indicator.setCompleted(visited.contains(indicator.phase) && !active);
+            if (indicator.phase == currentPhase) {
+                indicator.setActive(true);
+                progressTracker.add(indicator);
+            } else {
+                indicator.setActive(false);
+            }
         }
         revalidate();
         repaint();

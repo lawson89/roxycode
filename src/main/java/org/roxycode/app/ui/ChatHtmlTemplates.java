@@ -14,7 +14,7 @@ public class ChatHtmlTemplates {
         
         String indicator = "&nbsp;";
         if (role.equals("ai")) {
-            indicator = "<span style='font-family: monospace; color: #888888; font-size: 10px;'>AI</span>";
+            indicator = "<span style='font-family: monospace; color: #888888; font-size: 10px;'>ROXY /\\_/\\</span>";
         } else if (role.equals("user")) {
             indicator = "<span style='font-family: monospace; color: #888888; font-size: 10px;'>USER</span>";
         } else if (role.equals("system")) {

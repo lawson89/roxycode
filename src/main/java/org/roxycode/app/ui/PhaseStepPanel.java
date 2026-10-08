@@ -51,24 +51,9 @@ public class PhaseStepPanel extends JPanel {
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 10", "[]", "center"));
         progressTracker.setOpaque(false);
 
-        WorkflowPhase[] phases = WorkflowPhase.values();
-        List<WorkflowPhase> linearPhases = new ArrayList<>();
-        for (WorkflowPhase p : phases) {
-            if (p != WorkflowPhase.EXPLORE) {
-                linearPhases.add(p);
-            }
-        }
-
-        for (int i = 0; i < linearPhases.size(); i++) {
-            WorkflowPhase phase = linearPhases.get(i);
-            PhaseIndicator indicator = new PhaseIndicator(phase);
-            indicators.add(indicator);
-            progressTracker.add(indicator);
-            
-            if (i < linearPhases.size() - 1) {
-                JLabel separator = new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 12, UIManager.getColor("Label.disabledForeground")));
-                progressTracker.add(separator);
-            }
+                WorkflowPhase[] phases = WorkflowPhase.values();
+        for (WorkflowPhase phase : phases) {
+            indicators.add(new PhaseIndicator(phase));
         }
     }
 
@@ -83,17 +68,18 @@ public class PhaseStepPanel extends JPanel {
         }
     }
 
-    private void updateActivePhase(WorkflowPhase currentPhase) {
-        boolean isExplore = (currentPhase == WorkflowPhase.EXPLORE);
-        if (modeBadge != null) modeBadge.setVisible(isExplore);
-        if (progressTracker != null) progressTracker.setVisible(!isExplore);
+        private void updateActivePhase(WorkflowPhase currentPhase) {
+        if (modeBadge != null) modeBadge.setVisible(false);
         updatePlanDisplay(currentPhase);
 
-        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
+        progressTracker.removeAll();
         for (PhaseIndicator indicator : indicators) {
-            boolean active = (indicator.phase == currentPhase);
-            indicator.setActive(active); 
-            indicator.setCompleted(visited.contains(indicator.phase) && !active);
+            if (indicator.phase == currentPhase) {
+                indicator.setActive(true);
+                progressTracker.add(indicator);
+            } else {
+                indicator.setActive(false);
+            }
         }
         revalidate();
         repaint();
