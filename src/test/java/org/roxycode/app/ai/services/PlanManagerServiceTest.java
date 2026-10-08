@@ -1,8 +1,7 @@
 package org.roxycode.app.ai.services;
 
 import org.junit.jupiter.api.Test;
-import org.roxycode.app.model.FunctionalSpec;
-import org.roxycode.app.model.TechnicalSpec;
+import org.roxycode.app.model.ImplementationPlan;
 
 import java.util.List;
 import java.util.Map;
@@ -13,78 +12,53 @@ import static org.junit.jupiter.api.Assertions.*;
 class PlanManagerServiceTest {
 
     @Test
-    void testSubmitSpecsAndNotifyListeners() {
+    void testSubmitPlanAndNotifyListeners() {
         PlanManagerService service = new PlanManagerService();
         AtomicInteger notifications = new AtomicInteger(0);
         
-        service.addListener((fs, ts) -> notifications.incrementAndGet());
+        service.addListener((plan) -> notifications.incrementAndGet());
         
-        FunctionalSpec fs = new FunctionalSpec("Title", "Goal", List.of("Req 1"));
-        String res1 = service.submitFunctionalSpec(fs);
+        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), List.of("Step 1"));
+        String res = service.submitPlan(plan);
         
-        assertEquals("Functional spec submitted successfully.", res1);
-        assertEquals(fs, service.getCurrentFunctionalSpec());
+        assertEquals("Implementation plan submitted successfully.", res);
+        assertEquals(plan, service.getCurrentPlan());
         assertEquals(1, notifications.get());
-        
-        TechnicalSpec ts = new TechnicalSpec("Arch", List.of("Con 1"), List.of("Step 1"));
-        String res2 = service.submitTechnicalSpec(ts);
-        
-        assertEquals("Technical spec submitted successfully.", res2);
-        assertEquals(ts, service.getCurrentTechnicalSpec());
-        assertEquals(2, notifications.get());
     }
 
     @Test
-    void testSubmitSpecsWithArrays() {
+    void testSubmitPlanWithArrays() {
         PlanManagerService service = new PlanManagerService();
         
-        // Passing String array instead of List
         String[] reqs = {"Req 1", "Req 2"};
-        service.submitFunctionalSpec("Title", "Goal", reqs);
-        
-        assertEquals(2, service.getCurrentFunctionalSpec().requirements().size());
-        assertEquals("Req 1", service.getCurrentFunctionalSpec().requirements().get(0));
-
-        // Technical spec with arrays
-        String[] cons = {"Con 1"};
         String[] steps = {"Step 1"};
-        service.submitTechnicalSpec("Arch", cons, steps);
+        service.submitPlan("Title", "Goal", reqs, steps);
         
-        assertEquals(1, service.getCurrentTechnicalSpec().constraints().size());
-        assertEquals(1, service.getCurrentTechnicalSpec().implementationSteps().size());
+        assertEquals(2, service.getCurrentPlan().requirements().size());
+        assertEquals(1, service.getCurrentPlan().technicalSteps().size());
+        assertEquals("Req 1", service.getCurrentPlan().requirements().get(0));
     }
 
     @Test
-    void testOverloadedSubmitSpecs() {
+    void testOverloadedSubmitPlan() {
         PlanManagerService service = new PlanManagerService();
         
         // Simple arguments
-        service.submitFunctionalSpec("Title", "Goal", List.of("Req 1"));
-        assertNotNull(service.getCurrentFunctionalSpec());
-        assertEquals("Title", service.getCurrentFunctionalSpec().title());
-        
-        service.submitTechnicalSpec("Arch", List.of("Con 1"), List.of("Step 1"));
-        assertNotNull(service.getCurrentTechnicalSpec());
-        assertEquals("Arch", service.getCurrentTechnicalSpec().architectureGoal());
+        service.submitPlan("Title", "Goal", List.of("Req 1"), List.of("Step 1"));
+        assertNotNull(service.getCurrentPlan());
+        assertEquals("Title", service.getCurrentPlan().title());
         
         // Map arguments
         service.clearSpecs();
-        assertNull(service.getCurrentFunctionalSpec());
+        assertNull(service.getCurrentPlan());
         
-        Map<String, Object> fsMap = Map.of(
+        Map<String, Object> planMap = Map.of(
             "title", "Map Title",
             "goal", "Map Goal",
-            "requirements", List.of("Req A")
+            "requirements", List.of("Req A"),
+            "technicalSteps", List.of("Step A")
         );
-        service.submitFunctionalSpec(fsMap);
-        assertEquals("Map Title", service.getCurrentFunctionalSpec().title());
-        
-        Map<String, Object> tsMap = Map.of(
-            "architectureGoal", "Map Arch",
-            "constraints", List.of("Con A"),
-            "implementationSteps", List.of("Step A")
-        );
-        service.submitTechnicalSpec(tsMap);
-        assertEquals("Map Arch", service.getCurrentTechnicalSpec().architectureGoal());
+        service.submitPlan(planMap);
+        assertEquals("Map Title", service.getCurrentPlan().title());
     }
 }

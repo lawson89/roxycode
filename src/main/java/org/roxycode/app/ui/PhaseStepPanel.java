@@ -4,7 +4,7 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanManagerService;
-import org.roxycode.app.model.FunctionalSpec;
+import org.roxycode.app.model.ImplementationPlan;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.kordamp.ikonli.codicons.Codicons;
 import com.formdev.flatlaf.FlatClientProperties;
@@ -32,7 +32,7 @@ public class PhaseStepPanel extends JPanel {
         setOpaque(false);
         initComponents();
         workflowService.addPhaseListener(this::updateActivePhase);
-        planManagerService.addListener((fs, ts) -> updatePlanDisplay(workflowService.getCurrentPhase()));
+        planManagerService.addListener((plan) -> updatePlanDisplay(workflowService.getCurrentPhase()));
         
         // Initialize with current phase
         updateActivePhase(workflowService.getCurrentPhase());
@@ -76,11 +76,11 @@ public class PhaseStepPanel extends JPanel {
 
     private void updatePlanDisplay(WorkflowPhase currentPhase) {
         if (planLabel == null) return;
-        FunctionalSpec spec = planManagerService.getCurrentFunctionalSpec();
-        if (currentPhase == WorkflowPhase.EXPLORE || spec == null || spec.title() == null || spec.title().isBlank()) {
+        ImplementationPlan plan = planManagerService.getCurrentPlan();
+        if (currentPhase == WorkflowPhase.EXPLORE || plan == null || plan.title() == null || plan.title().isBlank()) {
             planLabel.setVisible(false);
         } else {
-            planLabel.setText(spec.title().toUpperCase() + ":");
+            planLabel.setText(plan.title().toUpperCase() + ":");
             planLabel.setVisible(true);
         }
     }

@@ -37,13 +37,13 @@ public class WorkflowService {
     }
 
 
-    @AgentDoc("Routes the workflow to the specified phase. Backward transitions (e.g., from DESIGN back to EXPLORE) are automatic and do not require specs. Forward transitions may require specifications (e.g., Functional Spec for DESIGN, Technical Spec for DEVELOPMENT) and some (DEVELOPMENT, VERIFICATION) always require human approval.")
+    @AgentDoc("Routes the workflow to the specified phase. Backward transitions (e.g., from PLANNING back to EXPLORE) are automatic and do not require specs. Forward transitions may require an Implementation Plan for DEVELOPMENT and always require human approval for DEVELOPMENT and VERIFICATION.")
     public String routeToPhase(String phaseName) {
         WorkflowPhase nextPhase;
         try {
             nextPhase = WorkflowPhase.valueOf(phaseName.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, DISCOVERY, DESIGN, DEVELOPMENT, VERIFICATION.";
+            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT, VERIFICATION.";
         }
 
         if (nextPhase == currentPhase) {
@@ -54,11 +54,8 @@ public class WorkflowService {
 
         if (isForward) {
             // Guardrails for forward movement
-            if (nextPhase == WorkflowPhase.DESIGN && planManager.getCurrentFunctionalSpec() == null) {
-                return "Error: Cannot advance to DESIGN. Functional Specification is missing. Call planManager.submitFunctionalSpec() first.";
-            }
-            if (nextPhase == WorkflowPhase.DEVELOPMENT && planManager.getCurrentTechnicalSpec() == null) {
-                return "Error: Cannot advance to DEVELOPMENT. Technical Specification is missing. Call planManager.submitTechnicalSpec() first.";
+            if (nextPhase == WorkflowPhase.DEVELOPMENT && planManager.getCurrentPlan() == null) {
+                return "Error: Cannot advance to DEVELOPMENT. Implementation Plan is missing. Call planManagerService.submitPlan() first.";
             }
 
             // Approval routing for forward movement
@@ -68,7 +65,7 @@ public class WorkflowService {
             }
         }
 
-                // HITL Gate for concluding a task
+        // HITL Gate for concluding a task
         if (currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE) {
             requestPhaseTransition(nextPhase);
             return "Task completion and transition to EXPLORE requested. Awaiting human sign-off.";
@@ -90,10 +87,6 @@ public class WorkflowService {
         return pendingPhase;
     }
 
-    /**
-     * Sets the current workflow phase and notifies listeners.
-     * @param phase The new phase to set.
-     */
     /**
      * Sets the current workflow phase and notifies listeners.
      * @param phase The new phase to set.

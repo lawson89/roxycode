@@ -53,7 +53,7 @@ class FileEditorServiceTest {
 
     @Test
     void testWriteFileWrongPhaseThrowsException() {
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DESIGN);
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLANNING);
 
         assertThrows(IllegalStateException.class, () -> 
             fileEditorService.writeFile("test.txt", "content")

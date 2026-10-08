@@ -5,8 +5,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 @AgentDoc("Defines the current phase of the development workflow.")
 public enum WorkflowPhase {
     EXPLORE(AgentRole.TECHNICAL_MENTOR, "Explore", Codicons.SEARCH),
-    DISCOVERY(AgentRole.PRODUCT_OWNER, "Discovery", Codicons.TELESCOPE),
-    DESIGN(AgentRole.LEAD_ARCHITECT, "Design", Codicons.SYMBOL_RULER),
+    PLANNING(AgentRole.LEAD_ARCHITECT, "Planning", Codicons.LIGHTBULB),
     DEVELOPMENT(AgentRole.SENIOR_DEVELOPER, "Development", Codicons.CODE),
     VERIFICATION(AgentRole.TECHNICAL_MENTOR, "Verification", Codicons.BEAKER);
 

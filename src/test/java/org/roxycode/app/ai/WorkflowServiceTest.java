@@ -6,13 +6,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.services.PlanManagerService;
-import org.roxycode.app.model.FunctionalSpec;
-import org.roxycode.app.model.TechnicalSpec;
+import org.roxycode.app.model.ImplementationPlan;
 
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import java.util.Set;
+import java.util.Collections;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,8 +33,8 @@ class WorkflowServiceTest {
     void testPhaseManagement() {
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
 
-        service.setCurrentPhase(WorkflowPhase.DESIGN);
-        assertEquals(WorkflowPhase.DESIGN, service.getCurrentPhase());
+        service.setCurrentPhase(WorkflowPhase.PLANNING);
+        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
 
         service.requestPhaseByName("DEVELOPMENT");
         assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
@@ -58,13 +59,13 @@ class WorkflowServiceTest {
         
         service.addTransitionRequestListener((current, requested) -> requestedPhase.set(requested));
         
-        service.requestPhaseTransition(WorkflowPhase.DESIGN);
-        assertEquals(WorkflowPhase.DESIGN, service.getPendingPhase());
-        assertEquals(WorkflowPhase.DESIGN, requestedPhase.get());
+        service.requestPhaseTransition(WorkflowPhase.PLANNING);
+        assertEquals(WorkflowPhase.PLANNING, service.getPendingPhase());
+        assertEquals(WorkflowPhase.PLANNING, requestedPhase.get());
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase()); // Should not have changed yet
         
         service.approveTransition();
-        assertEquals(WorkflowPhase.DESIGN, service.getCurrentPhase());
+        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
         assertNull(service.getPendingPhase());
     }
 
@@ -82,20 +83,18 @@ class WorkflowServiceTest {
     void testVisitedPhasesTracking() {
         assertTrue(service.getVisitedPhases().contains(WorkflowPhase.EXPLORE));
         
-        service.setCurrentPhase(WorkflowPhase.DISCOVERY);
-        service.setCurrentPhase(WorkflowPhase.DESIGN);
+        service.setCurrentPhase(WorkflowPhase.PLANNING);
         
         Set<WorkflowPhase> visited = service.getVisitedPhases();
         assertTrue(visited.contains(WorkflowPhase.EXPLORE));
-        assertTrue(visited.contains(WorkflowPhase.DISCOVERY));
-        assertTrue(visited.contains(WorkflowPhase.DESIGN));
+        assertTrue(visited.contains(WorkflowPhase.PLANNING));
         assertFalse(visited.contains(WorkflowPhase.DEVELOPMENT));
     }
 
     @Test
     void testResetWorkflowHistory() {
-        service.setCurrentPhase(WorkflowPhase.DISCOVERY);
-        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.DISCOVERY));
+        service.setCurrentPhase(WorkflowPhase.PLANNING);
+        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.PLANNING));
         
         service.resetWorkflow();
         assertEquals(1, service.getVisitedPhases().size());
@@ -104,14 +103,14 @@ class WorkflowServiceTest {
 
     @Test
     void testAdvanceToPhaseAutoTransition() {
-        String result = service.routeToPhase("DISCOVERY");
-        assertEquals("Advanced to phase: DISCOVERY", result);
-        assertEquals(WorkflowPhase.DISCOVERY, service.getCurrentPhase());
+        String result = service.routeToPhase("PLANNING");
+        assertEquals("Advanced to phase: PLANNING", result);
+        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
     @Test
     void testAdvanceToPhaseGatedTransition() {
-        when(planManager.getCurrentTechnicalSpec()).thenReturn(new TechnicalSpec("Goal", new java.util.ArrayList<>(), new java.util.ArrayList<>()));
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
         String result = service.routeToPhase("DEVELOPMENT");
         assertEquals("Transition to DEVELOPMENT requested. Awaiting human approval.", result);
         assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
@@ -120,15 +119,15 @@ class WorkflowServiceTest {
 
     @Test
     void testAdvanceToPhaseGuardrailFailure() {
-        when(planManager.getCurrentFunctionalSpec()).thenReturn(null);
-        String result = service.routeToPhase("DESIGN");
-        assertTrue(result.contains("Functional Specification is missing"));
+        when(planManager.getCurrentPlan()).thenReturn(null);
+        String result = service.routeToPhase("DEVELOPMENT");
+        assertTrue(result.contains("Implementation Plan is missing"));
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
     }
 
     @Test
     void testResetWorkflow() {
-        service.setCurrentPhase(WorkflowPhase.DISCOVERY);
+        service.setCurrentPhase(WorkflowPhase.PLANNING);
         service.requestPhaseTransition(WorkflowPhase.DEVELOPMENT);
         
         service.resetWorkflow();
@@ -142,7 +141,7 @@ class WorkflowServiceTest {
 
     @Test
     void testRouteToPhaseBackward() {
-        service.setCurrentPhase(WorkflowPhase.DESIGN);
+        service.setCurrentPhase(WorkflowPhase.PLANNING);
         
         String result = service.routeToPhase("EXPLORE");
         
@@ -157,4 +156,3 @@ class WorkflowServiceTest {
         assertEquals(initial, service.getCurrentPhase(), "Phase should not change when null is passed");
     }
 }
-
