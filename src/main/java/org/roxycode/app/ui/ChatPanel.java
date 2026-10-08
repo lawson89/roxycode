@@ -86,7 +86,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         outputArea = new MarkdownPane();
 
         // Create inline action panel
-        inlineActionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        inlineActionPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
         inlineActionPanel.setOpaque(false);
         inlineActionPanel.setVisible(false);
 
