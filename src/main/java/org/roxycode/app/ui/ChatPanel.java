@@ -396,10 +396,10 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         currentWorker.execute();
     }
 
-    @Override
+        @Override
     public void onJexlExecuted(JexlExecutionEvent event) {
         SwingUtilities.invokeLater(() -> {
-            String toolName = "JEXL Execution";
+            String toolName = "";
             StringBuilder logContent = new StringBuilder();
             logContent.append("<pre><code>").append(JexlToHtmlConverter.convert(event.script())).append("</code></pre>");
             if (!event.success()) {
