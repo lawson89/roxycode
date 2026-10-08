@@ -14,6 +14,9 @@ import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+// import removed
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.util.MimeTypeUtils;
 import reactor.core.scheduler.Schedulers;
 
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -33,7 +36,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class AiService {
     public String chat(String message) {
-        return chat(message, null);
+        return chat(message, null, null);
+    }
+
+    public String chat(String message, List<byte[]> images) {
+        return chat(message, null, images);
     }
 
     private final ChatClient chatClient;
@@ -72,7 +79,7 @@ public class AiService {
                 .build();
     }
 
-    public String chat(String message, String systemPromptText) {
+    public String chat(String message, String systemPromptText, List<byte[]> images) {
         AtomicInteger turnCount = new AtomicInteger(0);
         int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
         JexlExecutionListener turnListener = event -> {
@@ -88,7 +95,7 @@ public class AiService {
             String conversationId = "default";
             String content;
             try {
-                content = buildPrompt(message, systemPromptText)
+                content = buildPrompt(message, systemPromptText, images)
                         .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                         .call()
                         .content();
@@ -108,7 +115,7 @@ public class AiService {
         }
     }
 
-    private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText) {
+    private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText, List<byte[]> images) {
         String activeModel = settingsService.getSettings().getGeminiModel();
         
         WorkflowPhase currentPhase = workflowService.getCurrentPhase();
@@ -117,7 +124,7 @@ public class AiService {
         String jexlDocs = jexlServiceRegistry.getDocumentation(currentRole);
         String jexlContext = promptService.loadJexlContext();
         
-                // --- STABLE CONTEXT (Candidates for Caching) ---
+        // --- STABLE CONTEXT (Candidates for Caching) ---
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
         systemPrompt.append(promptService.loadAllPrompts());
         systemPrompt.append("\n\n## JEXL CONTEXT\n").append(jexlContext).append("\n\n");
@@ -148,9 +155,16 @@ public class AiService {
             systemPrompt.append("## ADDITIONAL INSTRUCTIONS\n").append(systemPromptText).append("\n\n");
         }
         
-        return chatClient.prompt()
+                return chatClient.prompt()
                 .system(systemPrompt.toString())
-                .user(message)
+                .user(u -> {
+                    u.text(message);
+                    if (images != null && !images.isEmpty()) {
+                        for (byte[] imgBytes : images) {
+                            u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(imgBytes));
+                        }
+                    }
+                })
                 .options(GoogleGenAiChatOptions.builder().model(activeModel));
     }
 }

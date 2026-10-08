@@ -100,7 +100,7 @@ class AiServiceTest {
 
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
-        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
         
         when(requestSpec.options(any())).thenReturn(requestSpec);
@@ -133,7 +133,7 @@ class AiServiceTest {
     void testChatHandlesTurnLimitExceeded() {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
-        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
         
         when(requestSpec.options(any())).thenReturn(requestSpec);

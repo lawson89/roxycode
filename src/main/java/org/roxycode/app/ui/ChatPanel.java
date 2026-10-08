@@ -23,6 +23,13 @@ import org.slf4j.LoggerFactory;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.io.ByteArrayOutputStream;
+import java.util.List;
+import java.util.ArrayList;
 import java.awt.event.KeyEvent;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
@@ -39,22 +46,24 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final ExploreManager exploreManager;
     private final JexlTool jexlTool;
     private final WorkflowService workflowService;
-        private final TurnEventBridge turnEventBridge;
+    private final TurnEventBridge turnEventBridge;
     private final ChatMemory chatMemory;
     private final MarkdownPane outputArea;
     private final ThoughtPanel thoughtPanel;
     private final JTextArea inputArea;
     private final JButton sendButton;
     private final JButton stopButton;
-        private final JButton approveButton;
+    private final JButton approveButton;
     private final JButton rejectButton;
     private final JButton resetSessionButton;
     private final JPanel inlineActionPanel;
     private final JLabel turnLabel;
     private final JScrollPane outputScrollPane;
     private SwingWorker<String, Void> currentWorker;
+    private final List<BufferedImage> pendingImages = new ArrayList<>();
+    private final JPanel attachmentPanel;
 
-        public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, 
+    public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, 
                      WorkflowService workflowService, TurnEventBridge turnEventBridge, ChatMemory chatMemory) {
         this.aiService = aiService;
         this.exploreManager = exploreManager;
@@ -64,12 +73,16 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         this.chatMemory = chatMemory;
         this.jexlTool.addListener(this);
         
+        attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        attachmentPanel.setOpaque(false);
+        attachmentPanel.setVisible(false);
+
         turnEventBridge.addTurnListener(this::onAgentTurn);
         turnEventBridge.addCompleteListener(event -> setLoading(false));
 
         setLayout(new BorderLayout());
 
-                // Output section
+        // Output section
         outputArea = new MarkdownPane();
 
         // Create inline action panel
@@ -88,7 +101,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         inlineActionPanel.add(approveButton);
         inlineActionPanel.add(rejectButton);
 
-                // Wrap text area and action panel together
+        // Wrap text area and action panel together
         JPanel scrollContent = new JPanel(new BorderLayout());
         scrollContent.putClientProperty(FlatClientProperties.STYLE, "background: $TextPane.background");
         scrollContent.add(outputArea, BorderLayout.CENTER);
@@ -121,6 +134,11 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
+
+        JPanel inputAreaContainer = new JPanel(new BorderLayout());
+        inputAreaContainer.setOpaque(false);
+        inputAreaContainer.add(attachmentPanel, BorderLayout.NORTH);
+        inputAreaContainer.add(inputScrollPane, BorderLayout.CENTER);
         
         sendButton = new JButton("Send", FontIcon.of(Codicons.CHEVRON_RIGHT, 16));
         sendButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999; background: $Component.accentColor; foreground: $List.selectionForeground");
@@ -144,7 +162,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         buttonPanel.add(resetSessionButton, "growx, wrap");
         buttonPanel.add(turnLabel, "center");
 
-        inputSection.add(inputScrollPane, "grow");
+        inputSection.add(inputAreaContainer, "grow");
         inputSection.add(buttonPanel, "aligny bottom");
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, outputWrapper, inputSection);
@@ -221,7 +239,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
-        private void onPhaseChanged(WorkflowPhase phase) {
+    private void onPhaseChanged(WorkflowPhase phase) {
         SwingUtilities.invokeLater(() -> {
             inlineActionPanel.setVisible(false);
         });
@@ -239,7 +257,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
-        private void approvePhase() {
+    private void approvePhase() {
         WorkflowPhase requested = workflowService.getPendingPhase();
         if (requested != null) {
             workflowService.approveTransition();
@@ -252,7 +270,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         }
     }
 
-        private void rejectPhase() {
+    private void rejectPhase() {
         WorkflowPhase requested = workflowService.getPendingPhase();
         if (requested != null) {
             workflowService.rejectTransition();
@@ -281,12 +299,69 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         triggerTurn(text);
     }
 
+    private void addPendingImage(Image img) {
+        BufferedImage bimage;
+        if (img instanceof BufferedImage) {
+            bimage = (BufferedImage) img;
+        } else {
+            bimage = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D bGr = bimage.createGraphics();
+            bGr.drawImage(img, 0, 0, null);
+            bGr.dispose();
+        }
+
+        pendingImages.add(bimage);
+
+        // Create a 64x64 thumbnail
+        Image thumbnail = bimage.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
+        JLabel thumbLabel = new JLabel(new ImageIcon(thumbnail));
+        thumbLabel.setBorder(BorderFactory.createLineBorder(UIManager.getColor("Component.borderColor")));
+
+        // Wrap in a panel with a close button
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
+        wrapper.add(thumbLabel, BorderLayout.CENTER);
+
+        JButton removeBtn = new JButton(FontIcon.of(Codicons.CLOSE, 12));
+        removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        removeBtn.setMargin(new Insets(0, 0, 0, 0));
+        removeBtn.addActionListener(ae -> {
+            pendingImages.remove(bimage);
+            attachmentPanel.remove(wrapper);
+            attachmentPanel.setVisible(!pendingImages.isEmpty());
+            attachmentPanel.revalidate();
+            attachmentPanel.repaint();
+        });
+        wrapper.add(removeBtn, BorderLayout.NORTH);
+
+        attachmentPanel.add(wrapper);
+        attachmentPanel.setVisible(true);
+        attachmentPanel.revalidate();
+        attachmentPanel.repaint();
+    }
+
     private void triggerTurn(String text) {
         if (text == null || text.trim().isEmpty()) return;
 
         setLoading(true);
         thoughtPanel.clear();
         turnLabel.setText("Turns: 0");
+
+        List<byte[]> imageBytes = new ArrayList<>();
+        for (BufferedImage bimg : pendingImages) {
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(bimg, "png", baos);
+                imageBytes.add(baos.toByteArray());
+            } catch (Exception ex) {
+                log.error("Failed to encode image", ex);
+            }
+        }
+
+        // Clear UI state
+        pendingImages.clear();
+        attachmentPanel.removeAll();
+        attachmentPanel.setVisible(false);
 
         currentWorker = new SwingWorker<>() {
             @Override
@@ -296,7 +371,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
                     if (workflowService.getCurrentPhase() == WorkflowPhase.EXPLORE) {
                         systemPrompt = exploreManager.generateSystemPrompt();
                     }
-                    return aiService.chat(text, systemPrompt);
+                    return aiService.chat(text, systemPrompt, imageBytes);
                 } catch (Exception ex) {
                     log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
                     return "Error: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
@@ -321,7 +396,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         currentWorker.execute();
     }
 
-                @Override
+    @Override
     public void onJexlExecuted(JexlExecutionEvent event) {
         SwingUtilities.invokeLater(() -> {
             String toolName = "JEXL Execution";
@@ -345,9 +420,8 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         sendButton.setText(loading ? "Sending..." : "Send");
     }
 
-    
-
     public MarkdownPane getOutputArea() { return outputArea; }
+    
     private void setupKeyboardShortcuts() {
         InputMap im = inputArea.getInputMap(JComponent.WHEN_FOCUSED);
         ActionMap am = inputArea.getActionMap();
@@ -369,8 +443,26 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
                 inputArea.insert("\n", inputArea.getCaretPosition());
             }
         });
-    }
 
+        // Intercept Paste
+        Action defaultPaste = inputArea.getActionMap().get(DefaultEditorKit.pasteAction);
+        inputArea.getActionMap().put(DefaultEditorKit.pasteAction, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                if (clipboard.isDataFlavorAvailable(DataFlavor.imageFlavor)) {
+                    try {
+                        Image img = (Image) clipboard.getData(DataFlavor.imageFlavor);
+                        addPendingImage(img);
+                    } catch (Exception ex) {
+                        log.error("Failed to paste image", ex);
+                    }
+                } else {
+                    defaultPaste.actionPerformed(e);
+                }
+            }
+        });
+    }
 
     public JTextArea getInputArea() { return inputArea; }
     public JButton getSendButton() { return sendButton; }
