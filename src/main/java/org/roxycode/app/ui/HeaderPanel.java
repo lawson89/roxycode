@@ -139,6 +139,8 @@ public class HeaderPanel extends JPanel {
         planManagerService.addListener((plan) -> updateActivePhase(workflowService.getCurrentPhase()));
         
         turnEventBridge.addUserMessageListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(true)));
+        turnEventBridge.addCompleteListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(false)));
+
         // Initialize workflow display
         updateActivePhase(workflowService.getCurrentPhase());
     }
@@ -152,14 +154,12 @@ public class HeaderPanel extends JPanel {
             planLabel.setVisible(false);
         }
 
-                progressTracker.removeAll();
+                        progressTracker.removeAll();
+        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
         for (PhaseIndicator indicator : indicators) {
-            if (indicator.phase == currentPhase) {
-                indicator.setActive(true);
-                progressTracker.add(indicator);
-            } else {
-                indicator.setActive(false);
-            }
+            indicator.setActive(indicator.phase == currentPhase);
+            indicator.setCompleted(visited.contains(indicator.phase));
+            progressTracker.add(indicator);
         }
         revalidate();
         repaint();

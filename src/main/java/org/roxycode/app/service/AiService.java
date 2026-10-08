@@ -94,13 +94,26 @@ public class AiService {
         try {
             String conversationId = "default";
             String content;
-            try {
+                        try {
                 content = buildPrompt(message, systemPromptText, images)
                         .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                         .call()
                         .content();
             } catch (Exception e) {
-                if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
+                org.roxycode.app.ai.YieldTurnException yieldEx = null;
+                Throwable current = e;
+                while (current != null) {
+                    if (current instanceof org.roxycode.app.ai.YieldTurnException) {
+                        yieldEx = (org.roxycode.app.ai.YieldTurnException) current;
+                        break;
+                    }
+                    if (current.getCause() == current) break;
+                    current = current.getCause();
+                }
+
+                if (yieldEx != null) {
+                    content = yieldEx.getMessage();
+                } else if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
                     content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
                 } else {
                     eventPublisher.publishEvent(new AgentTurnCompleteEvent("Roxy", turnCount.get(), "Error: " + e.getMessage()));

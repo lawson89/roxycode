@@ -55,9 +55,9 @@ public class JexlTool {
             return "Syntax Error (Script not executed): " + e.getMessage();
         }
 
-        try {
+                try {
             JexlContext context = new MapContext(registry.getServices());
-                        Object result = jexlScript.execute(context);
+            Object result = jexlScript.execute(context);
             String output = result == null ? "null" : result.toString();
             if (output.trim().isEmpty()) {
                 output = "<empty result>";
@@ -65,6 +65,16 @@ public class JexlTool {
             fireEvent(new JexlExecutionEvent(script, result, true, null));
             return output;
         } catch (Exception e) {
+            // Check if this is a YieldTurnException wrapping or direct
+            Throwable current = e;
+            while (current != null) {
+                if (current instanceof YieldTurnException) {
+                    throw (YieldTurnException) current;
+                }
+                if (current.getCause() == current) break;
+                current = current.getCause();
+            }
+
             log.error("Error executing JEXL script: {}", e.getMessage(), e);
             Throwable cause = e;
             while (cause.getCause() != null && cause.getCause() != cause) {

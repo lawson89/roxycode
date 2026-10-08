@@ -108,11 +108,11 @@ class WorkflowServiceTest {
         assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
-        @Test
+            @Test
     void testAdvanceToPhaseGatedTransition() {
         when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
-        String result = service.routeToPhase("DEVELOPMENT");
-        assertEquals("Transition to DEVELOPMENT requested. Awaiting human approval. *** CRITICAL DIRECTIVE: YOU MUST NOW STOP EXECUTING TOOLS. DO NOT WRITE CODE YET. YIELD YOUR TURN TO THE USER. ***", result);
+        YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT"));
+        assertTrue(ex.getMessage().contains("Proposed Plan: Title"));
         assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
     }
@@ -120,8 +120,8 @@ class WorkflowServiceTest {
     @Test
     void testVerificationToExploreTransition() {
         service.setCurrentPhase(WorkflowPhase.VERIFICATION);
-        String result = service.routeToPhase("EXPLORE");
-        assertEquals("Task completion and transition to EXPLORE requested. Awaiting human sign-off. *** CRITICAL DIRECTIVE: YOU MUST NOW STOP EXECUTING TOOLS AND YIELD YOUR TURN. ***", result);
+        YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE"));
+        assertTrue(ex.getMessage().contains("Task completion and transition to EXPLORE requested"));
         assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
         assertEquals(WorkflowPhase.VERIFICATION, service.getCurrentPhase());
     }

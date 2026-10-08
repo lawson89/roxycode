@@ -37,7 +37,7 @@ public class WorkflowService {
     }
 
 
-    @AgentDoc("Routes the workflow to the specified phase. Backward transitions (e.g., from PLANNING back to EXPLORE) are automatic and do not require specs. Forward transitions may require an Implementation Plan for DEVELOPMENT and always require human approval for DEVELOPMENT and VERIFICATION.")
+        @AgentDoc("Routes the workflow to the specified phase. Backward transitions (e.g., from PLANNING back to EXPLORE) are automatic and do not require specs. Forward transitions may require an Implementation Plan for DEVELOPMENT and always require human approval for DEVELOPMENT and VERIFICATION.")
     public String routeToPhase(String phaseName) {
         WorkflowPhase nextPhase;
         try {
@@ -59,16 +59,34 @@ public class WorkflowService {
             }
 
             // Approval routing for forward movement
-                        if (nextPhase == WorkflowPhase.DEVELOPMENT) {
+            if (nextPhase == WorkflowPhase.DEVELOPMENT) {
                 requestPhaseTransition(nextPhase);
-                return "Transition to " + nextPhase + " requested. Awaiting human approval. *** CRITICAL DIRECTIVE: YOU MUST NOW STOP EXECUTING TOOLS. DO NOT WRITE CODE YET. YIELD YOUR TURN TO THE USER. ***";
+                org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
+                StringBuilder sb = new StringBuilder();
+                sb.append("### 🤖 Proposed Plan: ").append(plan.title()).append("\n");
+                sb.append("**Goal:** ").append(plan.goal()).append("\n\n");
+                sb.append("#### 📋 Requirements\n");
+                for (String req : plan.requirements()) {
+                    sb.append("* ").append(req).append("\n");
+                }
+                sb.append("\n#### 🛠️ Technical Steps\n");
+                for (String step : plan.technicalSteps()) {
+                    sb.append("* ").append(step).append("\n");
+                }
+                sb.append("\n**Transition to DEVELOPMENT requested. Awaiting human approval.**");
+                throw new YieldTurnException(sb.toString());
+            }
+            
+            if (nextPhase == WorkflowPhase.VERIFICATION) {
+                requestPhaseTransition(nextPhase);
+                throw new YieldTurnException("Transition to VERIFICATION requested. Awaiting human approval.");
             }
         }
 
         // HITL Gate for concluding a task
-                if (currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE) {
+        if (currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE) {
             requestPhaseTransition(nextPhase);
-            return "Task completion and transition to EXPLORE requested. Awaiting human sign-off. *** CRITICAL DIRECTIVE: YOU MUST NOW STOP EXECUTING TOOLS AND YIELD YOUR TURN. ***";
+            throw new YieldTurnException("Task completion and transition to EXPLORE requested. Awaiting human sign-off.");
         }
 
         // Backward movement or forward movement not requiring approval
