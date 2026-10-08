@@ -2,6 +2,7 @@ package org.roxycode.app.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -12,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.stream.Stream;
 
 @Service
 public class PromptService {
@@ -21,7 +23,18 @@ public class PromptService {
     private static final String CLASSPATH_PROMPT = "prompts/core_workflow.md";
     private static final String JEXL_DOC_PATH = "docs/jexl.md";
     private static final String EXPLORE_PROMPT_PATH = "prompts/explore_phase.md";
+    private static final String CONTEXT_DIR = ".roxycode/context";
 
+    private final ProjectService projectService;
+
+    public PromptService() {
+        this.projectService = null;
+    }
+
+    @Autowired
+    public PromptService(ProjectService projectService) {
+        this.projectService = projectService;
+    }
 
     public String loadCoreWorkflowPrompt() {
         Path overridePath = getOverridePath();
@@ -44,6 +57,7 @@ public class PromptService {
             return "";
         }
     }
+
     public String loadExplorePrompt() {
         try {
             Resource resource = new ClassPathResource(EXPLORE_PROMPT_PATH);
@@ -54,13 +68,42 @@ public class PromptService {
         }
     }
 
-
     public String loadAllPrompts() {
         return loadMarkdownFromClasspath("prompts", "core_workflow.md");
     }
 
     public String loadAllDocs() {
         return loadMarkdownFromClasspath("docs", "jexl.md");
+    }
+
+    public String loadProjectContext() {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return "";
+        }
+        Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
+        if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        try (Stream<Path> stream = Files.list(contextDir)) {
+            stream.filter(Files::isRegularFile)
+                  .filter(p -> p.getFileName().toString().endsWith(".md"))
+                  .sorted((p1, p2) -> p1.getFileName().toString().compareToIgnoreCase(p2.getFileName().toString()))
+                  .forEach(p -> {
+                      try {
+                          String content = Files.readString(p, StandardCharsets.UTF_8);
+                          sb.append("\n\n## Project Context: ").append(p.getFileName().toString()).append("\n");
+                          sb.append(content);
+                      } catch (IOException e) {
+                          log.error("Failed to read project context file {}: {}", p, e.getMessage());
+                      }
+                  });
+        } catch (IOException e) {
+            log.error("Failed to list project context files in {}: {}", contextDir, e.getMessage());
+        }
+
+        return sb.toString();
     }
 
     private String loadMarkdownFromClasspath(String directory, String excludeFile) {

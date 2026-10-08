@@ -1,5 +1,4 @@
 body { font-family: sans-serif; font-size: 13px; color: #333333; margin: 10px; background-color: transparent; }
-.chat-entry { margin-bottom: 8px; }
 .user-entry { background-color: #f0f7ff; }
 .user-accent { background-color: #007acc; }
 .ai-entry { background-color: #f9fff9; }
@@ -7,17 +6,19 @@ body { font-family: sans-serif; font-size: 13px; color: #333333; margin: 10px; b
 .system-entry { background-color: #f5f5f5; }
 .system-accent { background-color: #999999; }
 
-.tool-call { background-color: #fffaf0; margin: 8px 0; }
+.tool-call { background-color: #fffaf0; }
 .tool-accent { background-color: #ff9800; }
-.tool-header { font-size: 10px; color: #888888; margin-bottom: 4px; font-weight: bold; text-transform: uppercase; }
+.tool-header { font-size: 10px; color: #888888; font-weight: bold; }
 .tool-body { font-family: monospace; color: #444444; }
 
 .timestamp { font-size: 9px; color: #888888; }
-.content { color: #333333; margin-top: 4px; }
-.content p { margin-top: 0px; margin-bottom: 8px; }
+.content { color: #333333; }
 
-pre { background-color: #f5f5f5; color: #000000; padding: 10px; }
+pre { background-color: #f5f5f5; color: #000000; }
 code { font-family: monospace; background-color: #eeeeee; color: #000000; }
+
+.spec-functional-header { color: #2196F3; }
+.spec-technical-header { color: #4CAF50; }
 
 .tk-rw { color: #0000ff; font-weight: bold; }
 .tk-st { color: #a31515; }

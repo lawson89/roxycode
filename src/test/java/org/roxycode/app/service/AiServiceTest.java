@@ -91,6 +91,7 @@ class AiServiceTest {
         when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
         when(promptService.loadAllPrompts()).thenReturn(" ALL PROMPTS");
         when(promptService.loadAllDocs()).thenReturn(" ALL DOCS");
+        when(promptService.loadProjectContext()).thenReturn("\n\n## Project Context: rules.md\nCUSTOM RULES");
         
         when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
         when(gitService.getStatus()).thenReturn("GIT STATUS OUTPUT");
@@ -104,8 +105,6 @@ class AiServiceTest {
         when(requestSpec.call()).thenReturn(responseSpec);
         when(responseSpec.content()).thenReturn("AI Response");
         
-        
-
         String result = aiService.chat("Hello");
 
         assertEquals("AI Response", result);
@@ -117,6 +116,7 @@ class AiServiceTest {
         assertTrue(capturedPrompt.contains("CORE PROMPT"));
         assertTrue(capturedPrompt.contains("ALL PROMPTS"));
         assertTrue(capturedPrompt.contains("ALL DOCS"));
+        assertTrue(capturedPrompt.contains("CUSTOM RULES"));
         assertTrue(capturedPrompt.contains("CURRENT PHASE: DEVELOPMENT"));
         assertTrue(capturedPrompt.contains("Senior Developer"));
         assertTrue(capturedPrompt.contains("JEXL DOCS"));
@@ -139,6 +139,7 @@ class AiServiceTest {
         when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
         when(promptService.loadAllPrompts()).thenReturn(" ALL PROMPTS");
         when(promptService.loadAllDocs()).thenReturn(" ALL DOCS");
+        when(promptService.loadProjectContext()).thenReturn("");
         
         when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
         when(gitService.getStatus()).thenReturn("GIT STATUS OUTPUT");
@@ -147,7 +148,6 @@ class AiServiceTest {
         when(requestSpec.call()).thenThrow(new RuntimeException("MAX_TOOL_TURNS_EXCEEDED"));
         
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
-        
         
         settings.setMaxAgentToolTurns(3);
         

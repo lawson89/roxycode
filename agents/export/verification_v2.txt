@@ -1,0 +1,33 @@
+## 🤖 Plan: Verification Plan
+**Status:** `PLAN` | **Approved:** `❌ No`
+
+---
+### Goal:
+
+** Test all services **
+
+---
+
+### 📋 Functional Requirements
+* [ ] Req 1
+* [ ] Req 2
+
+---
+
+### ⚙️ Technical Constraints
+* 🛠️ Con 1
+* 🛠️ Con 2
+
+---
+
+### 🛠️ Implementation Steps
+* [ ] Step 1
+* [ ] Unit tests added for any new or modified code
+* [ ] A clean compile of the project
+* [ ] All unit tests for the project pass
+* [ ] Step 2
+
+---
+
+### 📈 Implementation Progress
+*Not started.*

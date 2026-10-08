@@ -114,11 +114,12 @@ public class AiService {
         String jexlDocs = jexlServiceRegistry.getDocumentation(currentRole);
         String jexlContext = promptService.loadJexlContext();
         
-        // --- STABLE CONTEXT (Candidates for Caching) ---
+                // --- STABLE CONTEXT (Candidates for Caching) ---
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
         systemPrompt.append(promptService.loadAllPrompts());
         systemPrompt.append("\n\n## JEXL CONTEXT\n").append(jexlContext).append("\n\n");
         systemPrompt.append(promptService.loadAllDocs());
+        systemPrompt.append(promptService.loadProjectContext());
         
         // --- SEMI-STABLE CONTEXT (Project Structure) ---
         EditorResult repoMap = repoMapPackerService.generateRepoMap();

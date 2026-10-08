@@ -120,23 +120,21 @@ public class CodebaseCachePanel extends JPanel {
         }
     }
 
-    private String getStableContextString() {
+        private String getStableContextString() {
         StringBuilder sb = new StringBuilder();
         sb.append("# Stable Context Artifacts\n\n");
         sb.append("## Core Workflow Prompt\n").append(promptService.loadCoreWorkflowPrompt()).append("\n\n");
         sb.append("## JEXL Context (jexl.md)\n").append(promptService.loadJexlContext()).append("\n\n");
         sb.append("## Additional Prompts\n").append(promptService.loadAllPrompts()).append("\n\n");
         sb.append("## Additional Docs\n").append(promptService.loadAllDocs());
+        String projectContext = promptService.loadProjectContext();
+        if (projectContext != null && !projectContext.isBlank()) {
+            sb.append("\n\n## Project Context Docs").append(projectContext);
+        }
         return sb.toString();
     }
 
     private void updateStableContext() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("# Stable Context Artifacts\n\n");
-        sb.append("## Core Workflow Prompt\n").append(promptService.loadCoreWorkflowPrompt()).append("\n\n");
-        sb.append("## JEXL Context (jexl.md)\n").append(promptService.loadJexlContext()).append("\n\n");
-        sb.append("## Additional Prompts\n").append(promptService.loadAllPrompts()).append("\n\n");
-        sb.append("## Additional Docs\n").append(promptService.loadAllDocs());
         stableContextArea.setText(getStableContextString());
         stableContextArea.setCaretPosition(0);
     }
