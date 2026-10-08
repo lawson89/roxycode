@@ -4,15 +4,20 @@ import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -21,18 +26,29 @@ import java.util.function.Consumer;
 public class HeaderPanel extends JPanel {
     private final ProjectService projectService;
     private final GitService gitService;
+    private final WorkflowService workflowService;
+    private final PlanManagerService planManagerService;
+    
     private final JLabel projectLabel;
     private final JLabel branchLabel;
     private final JLabel modelLabel;
     private final JProgressBar progressBar;
     
+    // Workflow components
+    private final JLabel planLabel;
+    private final JPanel progressTracker;
+    private final List<PhaseIndicator> indicators = new ArrayList<>();
 
-    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, TurnEventBridge turnEventBridge, Consumer<String> navigationAction) {
+    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, 
+                       WorkflowService workflowService, PlanManagerService planManagerService,
+                       TurnEventBridge turnEventBridge, Consumer<String> navigationAction) {
         this.projectService = projectService;
         this.gitService = gitService;
+        this.workflowService = workflowService;
+        this.planManagerService = planManagerService;
         
-        // 2-column layout: Left (Project), Right (Utils)
-        setLayout(new MigLayout("insets 10 20 10 20, fillx", "[left]push[right]", "center"));
+        // 3-column layout: Left (Project), Center (Workflow), Right (Utils)
+        setLayout(new MigLayout("insets 10 20 10 20, fillx", "[left][center, grow][right]", "center"));
         
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
@@ -60,7 +76,31 @@ public class HeaderPanel extends JPanel {
 
         add(leftPanel, "left");
 
-        
+                // --- CENTER SECTION: Workflow Info ---
+        JPanel workflowPanel = new JPanel(new MigLayout("insets 0, gapy 2", "[center]", "[]0[]"));
+        workflowPanel.setOpaque(false);
+
+        planLabel = new JLabel();
+        planLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
+        workflowPanel.add(planLabel, "center, wrap, hidemode 3");
+
+        progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", "center"));
+        progressTracker.setOpaque(false);
+
+        WorkflowPhase[] phases = WorkflowPhase.values();
+        for (int i = 0; i < phases.length; i++) {
+            WorkflowPhase phase = phases[i];
+            PhaseIndicator indicator = new PhaseIndicator(phase);
+            indicators.add(indicator);
+            progressTracker.add(indicator);
+            
+            if (i < phases.length - 1) {
+                JLabel separator = new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 10, UIManager.getColor("Label.disabledForeground")));
+                progressTracker.add(separator);
+            }
+        }
+                workflowPanel.add(progressTracker, "center, hidemode 3");
+        add(workflowPanel, "center");
 
         // --- RIGHT SECTION: Model & Utils ---
         JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]15[]15[]", "center"));
@@ -73,7 +113,6 @@ public class HeaderPanel extends JPanel {
         progressBar = new JProgressBar();
         progressBar.setIndeterminate(true);
         progressBar.setVisible(false);
-        // height: 2 is not a valid FlatLaf style for JProgressBar, using MigLayout constraint instead
 
         JPanel modelPanel = new JPanel(new MigLayout("insets 0", "[]", "[]0[]"));
         modelPanel.setOpaque(false);
@@ -81,13 +120,10 @@ public class HeaderPanel extends JPanel {
         modelPanel.add(progressBar, "growx, h 2!");
 
         rightPanel.add(modelPanel);
-
-
-
         add(rightPanel, "right");
 
         // Listeners
-                projectService.addProjectListener(newRoot -> {
+        projectService.addProjectListener(newRoot -> {
             projectLabel.setText(projectService.getProjectName());
             if (newRoot != null) {
                 projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
@@ -107,8 +143,33 @@ public class HeaderPanel extends JPanel {
             updateModelDisplay(settings.getGeminiModel());
         });
 
+        workflowService.addPhaseListener(this::updateActivePhase);
+        planManagerService.addListener((plan) -> updateActivePhase(workflowService.getCurrentPhase()));
+        
         turnEventBridge.addUserMessageListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(true)));
         turnEventBridge.addCompleteListener(event -> SwingUtilities.invokeLater(() -> progressBar.setVisible(false)));
+
+        // Initialize workflow display
+        updateActivePhase(workflowService.getCurrentPhase());
+    }
+
+    private void updateActivePhase(WorkflowPhase currentPhase) {
+        ImplementationPlan plan = planManagerService.getCurrentPlan();
+        if (currentPhase != WorkflowPhase.EXPLORE && plan != null && plan.title() != null && !plan.title().isBlank()) {
+            planLabel.setText(plan.title().toUpperCase() + ":");
+            planLabel.setVisible(true);
+        } else {
+            planLabel.setVisible(false);
+        }
+
+        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
+        for (PhaseIndicator indicator : indicators) {
+            boolean active = (indicator.phase == currentPhase);
+            indicator.setActive(active); 
+            indicator.setCompleted(visited.contains(indicator.phase) && !active);
+        }
+        revalidate();
+        repaint();
     }
 
     private JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
@@ -151,7 +212,7 @@ public class HeaderPanel extends JPanel {
         modelLabel.setText(modelName != null ? modelName : "No model selected");
     }
 
-        private void chooseProject() {
+    private void chooseProject() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         if (projectService.getCurrentProjectRoot() != null) {
@@ -162,6 +223,59 @@ public class HeaderPanel extends JPanel {
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
             projectService.setCurrentProjectRoot(file.toPath());
+        }
+    }
+
+    private static class PhaseIndicator extends JPanel {
+        private final WorkflowPhase phase;
+        private final JLabel iconLabel;
+        private final JLabel textLabel;
+        private boolean isActive;
+        private boolean isCompleted;
+
+        public PhaseIndicator(WorkflowPhase phase) {
+            this.phase = phase;
+            setLayout(new MigLayout("insets 1 0 1 0, gapx 4", "[][]", "center"));
+            setOpaque(false);
+            
+            iconLabel = new JLabel(FontIcon.of(phase.getIcon(), 12, UIManager.getColor("Label.disabledForeground")));
+            textLabel = new JLabel(phase.getDisplayName());
+            textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -2");
+
+            add(iconLabel);
+            add(textLabel);
+        }
+
+        public void setActive(boolean active) {
+            this.isActive = active;
+            updateStyle();
+        }
+
+        public void setCompleted(boolean completed) {
+            this.isCompleted = completed; 
+            updateStyle();
+        }
+
+                private void updateStyle() {
+            Color accentColor = UIManager.getColor("Component.accentColor");
+            if (accentColor == null) accentColor = Color.BLUE;
+            
+            Color foreground = UIManager.getColor("Label.foreground");
+            if (foreground == null) foreground = Color.BLACK;
+            
+            Color disabledForeground = UIManager.getColor("Label.disabledForeground");
+            if (disabledForeground == null) disabledForeground = Color.GRAY;
+
+            if (isActive) {
+                textLabel.setForeground(accentColor);
+                iconLabel.setIcon(FontIcon.of(Codicons.SYNC, 12, accentColor));
+            } else if (isCompleted) {
+                textLabel.setForeground(foreground);
+                iconLabel.setIcon(FontIcon.of(Codicons.CHECK, 12, foreground));
+            } else {
+                textLabel.setForeground(disabledForeground);
+                iconLabel.setIcon(FontIcon.of(phase.getIcon(), 12, disabledForeground));
+            }
         }
     }
 }

@@ -106,13 +106,9 @@ public class MainFrame extends JFrame {
         SidebarPanel sidebar = new SidebarPanel(settingsService, this::showCard);
 
         // Main Workspace
-        JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[]0[fill, grow]0[]"));
+        JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
         
-        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, turnEventBridge, this::showCard);
-        JPanel phaseRow = new JPanel(new MigLayout("insets 5 20 5 20, fillx", "[center]", "center"));
-        phaseRow.putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
-        phaseRow.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
-        phaseRow.add(new PhaseStepPanel(workflowService, planManagerService));
+        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService, planManagerService, turnEventBridge, this::showCard);
 
         StatusPanel statusBar = new StatusPanel(envService);
 
@@ -131,7 +127,6 @@ public class MainFrame extends JFrame {
         contentArea.add(new ContextManagerPanel(promptService), "CONTEXT_MGR");
 
         workspace.add(header, "h 60!, wrap");
-        workspace.add(phaseRow, "h 40!, wrap");
         workspace.add(contentArea, "grow, wrap");
         workspace.add(statusBar, "h 30!");
 
