@@ -41,9 +41,18 @@ public class WorkflowService {
             return "Already in phase: " + nextPhase;
         }
 
-        if (nextPhase.ordinal() < currentPhase.ordinal() && !(currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE)) {
+        // Handle backward transitions (except to EXPLORE which is always gated)
+        if (nextPhase.ordinal() < currentPhase.ordinal() && nextPhase != WorkflowPhase.EXPLORE) {
             setCurrentPhase(nextPhase);
             return "Routed back to phase: " + nextPhase;
+        }
+
+        // Any transition to EXPLORE from another phase is gated as "Task Completion" or "Reset"
+        if (nextPhase == WorkflowPhase.EXPLORE) {
+            requestPhaseTransition(nextPhase);
+            String summary = formatPlanSummary(planManager.getCurrentPlan());
+            String message = "**Transition to EXPLORE requested (Task Completion/Reset). Awaiting human sign-off.**";
+            throw new YieldTurnException("{\"summary\": \"" + StringEscapeUtils.escapeJson(summary) + "\", \"message\": \"" + StringEscapeUtils.escapeJson(message) + "\"}");
         }
 
         if (currentPhase == WorkflowPhase.EXPLORE) {
@@ -53,6 +62,7 @@ public class WorkflowService {
             }
             return "Error: Cannot transition from EXPLORE to " + nextPhase + ". You must go to PLANNING first.";
         }
+        
         if (currentPhase == WorkflowPhase.PLANNING) {
             if (nextPhase == WorkflowPhase.DEVELOPMENT) {
                 if (planManager.getCurrentPlan() == null) {
@@ -65,6 +75,7 @@ public class WorkflowService {
             }
             return "Error: Cannot transition from PLANNING to " + nextPhase + ".";
         }
+        
         if (currentPhase == WorkflowPhase.DEVELOPMENT) {
             if (nextPhase == WorkflowPhase.VERIFICATION) {
                 setCurrentPhase(nextPhase);
@@ -72,22 +83,19 @@ public class WorkflowService {
             }
             return "Error: Cannot transition from DEVELOPMENT to " + nextPhase + ". You must go to VERIFICATION next.";
         }
+        
         if (currentPhase == WorkflowPhase.VERIFICATION) {
-            if (nextPhase == WorkflowPhase.EXPLORE) {
-                requestPhaseTransition(nextPhase);
-                String summary = formatPlanSummary(planManager.getCurrentPlan());
-                String message = "**Task completion and transition to EXPLORE requested. Awaiting human sign-off.**";
-                throw new YieldTurnException("{\"summary\": \"" + StringEscapeUtils.escapeJson(summary) + "\", \"message\": \"" + StringEscapeUtils.escapeJson(message) + "\"}");
-            }
+            // Forward transitions from VERIFICATION are not allowed
             return "Error: Cannot transition from VERIFICATION to " + nextPhase + ".";
         }
+
         return "Error: Transition from " + currentPhase + " to " + nextPhase + " is not allowed.";
     }
 
     public WorkflowPhase getCurrentPhase() { return currentPhase; }
     public WorkflowPhase getPendingPhase() { return pendingPhase; }
 
-    public void setCurrentPhase(WorkflowPhase phase) {
+    void setCurrentPhase(WorkflowPhase phase) {
         if (phase != null && this.currentPhase != phase) {
             this.currentPhase = phase;
             this.visitedPhases.add(phase);
@@ -109,14 +117,14 @@ public class WorkflowService {
         notifyRequestListeners();
     }
 
-    public void requestPhaseTransition(WorkflowPhase nextPhase) {
+    void requestPhaseTransition(WorkflowPhase nextPhase) {
         if (nextPhase != null && nextPhase != currentPhase) {
             this.pendingPhase = nextPhase;
             notifyRequestListeners();
         }
     }
 
-    public void requestPhaseByName(String phaseName) {
+    void requestPhaseByName(String phaseName) {
         try { requestPhaseTransition(WorkflowPhase.valueOf(phaseName.toUpperCase())); } catch (IllegalArgumentException e) {}
     }
 
@@ -128,8 +136,6 @@ public class WorkflowService {
         this.pendingPhase = null;
         notifyRequestListeners();
     }
-
-    public void transitionPhase(WorkflowPhase nextPhase, String summary) { setCurrentPhase(nextPhase); }
 
     public void addPhaseListener(Consumer<WorkflowPhase> listener) {
         phaseListeners.add(listener);

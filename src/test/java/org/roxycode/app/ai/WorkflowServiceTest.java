@@ -102,7 +102,6 @@ class WorkflowServiceTest {
     }
 
     @Test
-
     void testExploreToPlanning() {
         String result = service.routeToPhase("PLANNING");
         assertEquals("Advanced to phase: PLANNING", result);
@@ -110,11 +109,11 @@ class WorkflowServiceTest {
     }
 
     @Test
-    void testPlanningToExplore() {
+    void testPlanningToExploreGated() {
         service.setCurrentPhase(WorkflowPhase.PLANNING);
-        String result = service.routeToPhase("EXPLORE");
-        assertEquals("Routed back to phase: EXPLORE", result);
-        assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE"));
+        assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
+        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
     @Test
@@ -168,12 +167,12 @@ class WorkflowServiceTest {
         
         YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE"));
         assertTrue(ex.getMessage().contains("Final Title"));
-        assertTrue(ex.getMessage().contains("Task completion and transition to EXPLORE requested"));
+        assertTrue(ex.getMessage().contains("Transition to EXPLORE requested"));
         assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
         assertEquals(WorkflowPhase.VERIFICATION, service.getCurrentPhase());
     }
 
-        @Test
+    @Test
     void testIllegalTransitions() {
         // EXPLORE -> VERIFICATION
         assertTrue(service.routeToPhase("VERIFICATION").contains("Error"));
@@ -181,8 +180,6 @@ class WorkflowServiceTest {
         // PLANNING -> VERIFICATION
         service.setCurrentPhase(WorkflowPhase.PLANNING);
         assertTrue(service.routeToPhase("VERIFICATION").contains("Error"));
-        
-        // Forward jumps are still illegal (e.g. EXPLORE -> DEVELOPMENT handled by other tests)
     }
 
     @Test

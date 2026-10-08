@@ -205,7 +205,7 @@ public class GenericBuildToolService {
 
     private BuildResult execute(String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
         log.info("Executing build command: {}", command);
-        StringBuilder output = new StringBuilder();
+                StringBuffer output = new StringBuffer();
         List<String> errors = new ArrayList<>();
         List<String> failedTests = new ArrayList<>();
         int exitCode = -1;
