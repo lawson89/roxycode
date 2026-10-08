@@ -11,11 +11,11 @@ public class ChatHtmlTemplates {
         
         String indicator = "&nbsp;";
         if (role.equals("ai")) {
-            indicator = "<span style=\"font-family: monospace; color: #888888; font-size: 10px;\">/\\_/\\</span>";
+            indicator = "<span style='font-family: monospace; color: #888888; font-size: 10px;'>AI</span>";
         } else if (role.equals("user")) {
-            indicator = "<span style=\"font-family: monospace; color: #888888; font-size: 10px;\">USER</span>";
+            indicator = "<span style='font-family: monospace; color: #888888; font-size: 10px;'>USER</span>";
         } else if (role.equals("system")) {
-            indicator = "<span style=\"font-family: monospace; color: #888888; font-size: 10px;\">SYSTEM</span>";
+            indicator = "<span style='font-family: monospace; color: #888888; font-size: 10px;'>SYSTEM</span>";
         }
         
         return """
@@ -39,7 +39,7 @@ public class ChatHtmlTemplates {
     }
 
     public static String renderDivider() {
-        return "<hr class=\"chat-divider\"/>";
+        return "<hr class='chat-divider'/>";
     }
 
     public static String renderTimestamp(String timestamp) {
@@ -49,14 +49,14 @@ public class ChatHtmlTemplates {
     }
 
     public static String renderToolLog(String toolName, String output) {
-        String header = (toolName == null || toolName.trim().isEmpty()) ? "" : "<div class=\"tool-header\">" + toolName + "</div>";
+        String header = (toolName == null || toolName.trim().isEmpty()) ? "" : "<div class='tool-header'>" + toolName + "</div>";
         return """
             <table class="tool-call" width="100%%" cellpadding="8" cellspacing="0" border="0">
                 <tr>
                     <td class="accent-bar tool-accent" width="4">&nbsp;</td>
                     <td class="tool-body-container">
                         %s
-                        <div class="tool-body">%s</div>
+                        <pre class="tool-body">%s</pre>
                     </td>
                 </tr>
             </table>

@@ -108,13 +108,22 @@ class WorkflowServiceTest {
         assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
-    @Test
+        @Test
     void testAdvanceToPhaseGatedTransition() {
         when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
         String result = service.routeToPhase("DEVELOPMENT");
-        assertEquals("Transition to DEVELOPMENT requested. Awaiting human approval.", result);
+        assertEquals("Transition to DEVELOPMENT requested. Awaiting human approval. *** CRITICAL DIRECTIVE: YOU MUST NOW STOP EXECUTING TOOLS. DO NOT WRITE CODE YET. YIELD YOUR TURN TO THE USER. ***", result);
         assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
+    }
+
+    @Test
+    void testVerificationToExploreTransition() {
+        service.setCurrentPhase(WorkflowPhase.VERIFICATION);
+        String result = service.routeToPhase("EXPLORE");
+        assertEquals("Task completion and transition to EXPLORE requested. Awaiting human sign-off. *** CRITICAL DIRECTIVE: YOU MUST NOW STOP EXECUTING TOOLS AND YIELD YOUR TURN. ***", result);
+        assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
+        assertEquals(WorkflowPhase.VERIFICATION, service.getCurrentPhase());
     }
 
     @Test

@@ -85,10 +85,14 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         // Output section
         outputArea = new MarkdownPane();
 
-        // Create inline action panel
-        inlineActionPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
+                // Create inline action panel
+        inlineActionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 10));
         inlineActionPanel.setOpaque(false);
         inlineActionPanel.setVisible(false);
+
+        JLabel arrowLabel = new JLabel("==>");
+        arrowLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
+        arrowLabel.setForeground(UIManager.getColor("Component.accentColor"));
 
         approveButton = new JButton("Approve", FontIcon.of(Codicons.CHECK, 16));
         approveButton.putClientProperty(FlatClientProperties.STYLE, "background: $Actions.Green; foreground: #ffffff");
@@ -98,6 +102,8 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         rejectButton.putClientProperty(FlatClientProperties.STYLE, "background: $Actions.Red; foreground: #ffffff");
         rejectButton.addActionListener(e -> rejectPhase());
 
+        inlineActionPanel.add(Box.createHorizontalStrut(30)); // Offset by 50px (30 + 20 gap)
+        inlineActionPanel.add(arrowLabel);
         inlineActionPanel.add(approveButton);
         inlineActionPanel.add(rejectButton);
 
@@ -396,20 +402,22 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         currentWorker.execute();
     }
 
-        @Override
+            @Override
     public void onJexlExecuted(JexlExecutionEvent event) {
         SwingUtilities.invokeLater(() -> {
             String toolName = "";
             StringBuilder logContent = new StringBuilder();
-            logContent.append("<pre><code>").append(JexlToHtmlConverter.convert(event.script())).append("</code></pre>");
-            if (!event.success()) {
+            logContent.append(JexlToHtmlConverter.convert(event.script()));
+                        if (!event.success()) {
                 logContent.append("<div class='tool-error'><b>Error:</b> ")
                           .append(StringEscapeUtils.escapeHtml4(event.error()))
                           .append("</div>");
             }
+
             outputArea.appendToolLog(toolName, logContent.toString());
         });
     }
+
 
     private void setLoading(boolean loading) {
         sendButton.setEnabled(!loading);

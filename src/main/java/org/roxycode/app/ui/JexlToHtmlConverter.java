@@ -55,7 +55,7 @@ public class JexlToHtmlConverter {
      * @param escapedCode The HTML-escaped code snippet.
      * @return HTML string with span tags for tokens.
      */
-    public static String highlightHtml(String escapedCode) {
+        public static String highlightHtml(String escapedCode) {
         if (escapedCode == null) {
             return "";
         }
@@ -63,7 +63,7 @@ public class JexlToHtmlConverter {
         StringBuilder sb = new StringBuilder();
         int lastEnd = 0;
 
-        while (matcher.find()) {
+                while (matcher.find()) {
             sb.append(escapedCode, lastEnd, matcher.start());
             if (matcher.group(1) != null) {
                 sb.append("<span class='tk-cm'>").append(matcher.group(1)).append("</span>");
@@ -76,6 +76,7 @@ public class JexlToHtmlConverter {
             }
             lastEnd = matcher.end();
         }
+
         sb.append(escapedCode.substring(lastEnd));
 
         return sb.toString();
@@ -119,4 +120,5 @@ public class JexlToHtmlConverter {
 
         return sb.toString();
     }
+
 }

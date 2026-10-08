@@ -59,16 +59,16 @@ public class WorkflowService {
             }
 
             // Approval routing for forward movement
-            if (nextPhase == WorkflowPhase.DEVELOPMENT) {
+                        if (nextPhase == WorkflowPhase.DEVELOPMENT) {
                 requestPhaseTransition(nextPhase);
-                return "Transition to " + nextPhase + " requested. Awaiting human approval.";
+                return "Transition to " + nextPhase + " requested. Awaiting human approval. *** CRITICAL DIRECTIVE: YOU MUST NOW STOP EXECUTING TOOLS. DO NOT WRITE CODE YET. YIELD YOUR TURN TO THE USER. ***";
             }
         }
 
         // HITL Gate for concluding a task
-        if (currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE) {
+                if (currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE) {
             requestPhaseTransition(nextPhase);
-            return "Task completion and transition to EXPLORE requested. Awaiting human sign-off.";
+            return "Task completion and transition to EXPLORE requested. Awaiting human sign-off. *** CRITICAL DIRECTIVE: YOU MUST NOW STOP EXECUTING TOOLS AND YIELD YOUR TURN. ***";
         }
 
         // Backward movement or forward movement not requiring approval
