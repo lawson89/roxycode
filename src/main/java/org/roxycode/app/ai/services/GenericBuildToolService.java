@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -225,15 +226,27 @@ public class GenericBuildToolService {
             pb.redirectErrorStream(true);
 
             Process process = pb.start();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
+
+            // Asynchronously read the output to prevent blocking the timeout logic
+            CompletableFuture<Void> readerFuture = CompletableFuture.runAsync(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                    }
+                } catch (IOException e) {
+                    log.error("Error reading process output", e);
                 }
-            }
+            });
 
             if (process.waitFor(10, TimeUnit.MINUTES)) {
                 exitCode = process.exitValue();
+                // Ensure the reader has finished processing the stream
+                try {
+                    readerFuture.get(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    log.warn("Output reader did not complete within 5 seconds of process exit", e);
+                }
             } else {
                 process.destroyForcibly();
                 errors.add("Command timed out after 10 minutes");
@@ -245,7 +258,7 @@ public class GenericBuildToolService {
         }
 
         String fullOutput = output.toString();
-        
+
         if (errorRegex != null && !errorRegex.isBlank()) {
             try {
                 Pattern p = Pattern.compile(errorRegex);
