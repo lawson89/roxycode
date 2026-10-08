@@ -102,60 +102,87 @@ class WorkflowServiceTest {
     }
 
     @Test
-    void testAdvanceToPhaseAutoTransition() {
+
+    void testExploreToPlanning() {
         String result = service.routeToPhase("PLANNING");
         assertEquals("Advanced to phase: PLANNING", result);
         assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
-            @Test
-    void testAdvanceToPhaseGatedTransition() {
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
-        YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT"));
-        assertTrue(ex.getMessage().contains("Proposed Plan: Title"));
-        assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
+    @Test
+    void testPlanningToExplore() {
+        service.setCurrentPhase(WorkflowPhase.PLANNING);
+        String result = service.routeToPhase("EXPLORE");
+        assertEquals("Routed back to phase: EXPLORE", result);
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
     }
 
     @Test
-    void testVerificationToExploreTransition() {
+    void testExploreToDevelopmentBlocked() {
+        String result = service.routeToPhase("DEVELOPMENT");
+        assertTrue(result.contains("Error: Cannot transition from EXPLORE to DEVELOPMENT"));
+        assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
+    }
+
+    @Test
+    void testPlanningToDevelopmentGated() {
+        service.setCurrentPhase(WorkflowPhase.PLANNING);
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
+        
+        YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT"));
+        assertTrue(ex.getMessage().contains("Title"));
+        assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
+        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
+    }
+
+    @Test
+    void testPlanningToDevelopmentMissingPlan() {
+        service.setCurrentPhase(WorkflowPhase.PLANNING);
+        when(planManager.getCurrentPlan()).thenReturn(null);
+        
+        String result = service.routeToPhase("DEVELOPMENT");
+        assertTrue(result.contains("Implementation Plan is missing"));
+        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
+    }
+
+    @Test
+    void testDevelopmentToVerificationFree() {
+        service.setCurrentPhase(WorkflowPhase.DEVELOPMENT);
+        String result = service.routeToPhase("VERIFICATION");
+        assertEquals("Advanced to phase: VERIFICATION", result);
+        assertEquals(WorkflowPhase.VERIFICATION, service.getCurrentPhase());
+    }
+
+    @Test
+    void testVerificationToDevelopmentFree() {
         service.setCurrentPhase(WorkflowPhase.VERIFICATION);
+        String result = service.routeToPhase("DEVELOPMENT");
+        assertEquals("Routed back to phase: DEVELOPMENT", result);
+        assertEquals(WorkflowPhase.DEVELOPMENT, service.getCurrentPhase());
+    }
+
+    @Test
+    void testVerificationToExploreGated() {
+        service.setCurrentPhase(WorkflowPhase.VERIFICATION);
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Final Title", "Goal", List.of(), List.of()));
+        
         YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE"));
+        assertTrue(ex.getMessage().contains("Final Title"));
         assertTrue(ex.getMessage().contains("Task completion and transition to EXPLORE requested"));
         assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
         assertEquals(WorkflowPhase.VERIFICATION, service.getCurrentPhase());
     }
 
-    @Test
-    void testAdvanceToPhaseGuardrailFailure() {
-        when(planManager.getCurrentPlan()).thenReturn(null);
-        String result = service.routeToPhase("DEVELOPMENT");
-        assertTrue(result.contains("Implementation Plan is missing"));
-        assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
-    }
-
-    @Test
-    void testResetWorkflow() {
+        @Test
+    void testIllegalTransitions() {
+        // EXPLORE -> VERIFICATION
+        assertTrue(service.routeToPhase("VERIFICATION").contains("Error"));
+        
+        // PLANNING -> VERIFICATION
         service.setCurrentPhase(WorkflowPhase.PLANNING);
-        service.requestPhaseTransition(WorkflowPhase.DEVELOPMENT);
+        assertTrue(service.routeToPhase("VERIFICATION").contains("Error"));
         
-        service.resetWorkflow();
-        
-        assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
-        assertNull(service.getPendingPhase());
-        assertEquals(1, service.getVisitedPhases().size());
-        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.EXPLORE));
-        verify(planManager).clearSpecs();
-    }
-
-    @Test
-    void testRouteToPhaseBackward() {
-        service.setCurrentPhase(WorkflowPhase.PLANNING);
-        
-        String result = service.routeToPhase("EXPLORE");
-        
-        assertEquals("Routed back to phase: EXPLORE", result);
-        assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
+        // Forward jumps are still illegal (e.g. EXPLORE -> DEVELOPMENT handled by other tests)
     }
 
     @Test

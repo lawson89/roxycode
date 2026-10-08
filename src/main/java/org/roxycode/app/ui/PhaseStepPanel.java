@@ -68,18 +68,16 @@ public class PhaseStepPanel extends JPanel {
         }
     }
 
-        private void updateActivePhase(WorkflowPhase currentPhase) {
+            private void updateActivePhase(WorkflowPhase currentPhase) {
         if (modeBadge != null) modeBadge.setVisible(false);
         updatePlanDisplay(currentPhase);
 
         progressTracker.removeAll();
+        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
         for (PhaseIndicator indicator : indicators) {
-            if (indicator.phase == currentPhase) {
-                indicator.setActive(true);
-                progressTracker.add(indicator);
-            } else {
-                indicator.setActive(false);
-            }
+            indicator.setActive(indicator.phase == currentPhase);
+            indicator.setCompleted(visited.contains(indicator.phase));
+            progressTracker.add(indicator);
         }
         revalidate();
         repaint();
@@ -91,11 +89,10 @@ public class PhaseStepPanel extends JPanel {
         private boolean isActive;
         private boolean isCompleted;
 
-        public PhaseIndicator(WorkflowPhase phase) {
+                public PhaseIndicator(WorkflowPhase phase) {
             this.phase = phase;
             setLayout(new MigLayout("insets 2 10 2 10", "[]", "center"));
             setOpaque(false);
-            putClientProperty(FlatClientProperties.STYLE, "arc: 12");
             
             textLabel = new JLabel(phase.getDisplayName());
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
@@ -113,18 +110,18 @@ public class PhaseStepPanel extends JPanel {
             updateStyle();
         }
 
-        private void updateStyle() {
-            Color accentColor = UIManager.getColor("Component.accentColor");
+                private void updateStyle() {
             if (isActive) {
                 setOpaque(true);
-                setBackground(accentColor);
+                putClientProperty(FlatClientProperties.STYLE, "arc: 12");
+                setBackground(UIManager.getColor("Component.accentColor"));
                 textLabel.setForeground(UIManager.getColor("Component.accentForeground"));
-            } else if (isCompleted) {
-                setOpaque(false);
-                textLabel.setForeground(UIManager.getColor("Label.foreground"));
             } else {
                 setOpaque(false);
-                textLabel.setForeground(UIManager.getColor("Label.disabledForeground"));
+                putClientProperty(FlatClientProperties.STYLE, "arc: 0");
+                Color foreground = UIManager.getColor("Label.foreground");
+                Color disabledForeground = UIManager.getColor("Label.disabledForeground");
+                textLabel.setForeground(isCompleted ? foreground : disabledForeground);
             }
         }
     }

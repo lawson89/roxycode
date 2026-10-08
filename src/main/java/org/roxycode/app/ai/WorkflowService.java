@@ -37,7 +37,17 @@ public class WorkflowService {
     }
 
 
-        @AgentDoc("Routes the workflow to the specified phase. Backward transitions (e.g., from PLANNING back to EXPLORE) are automatic and do not require specs. Forward transitions may require an Implementation Plan for DEVELOPMENT and always require human approval for DEVELOPMENT and VERIFICATION.")
+    /**
+     * Routes the workflow to the specified phase. Transitions between EXPLORE and PLANNING are free.
+     * Transition to DEVELOPMENT is only allowed from PLANNING (requires HIL approval and Implementation Plan) 
+     * or from VERIFICATION (free). Transition to VERIFICATION is only allowed from DEVELOPMENT and is free.
+     * Transition from VERIFICATION to EXPLORE requires HIL approval.
+     * 
+     * @param phaseName The name of the phase to route to.
+     * @return A status message describing the result of the routing attempt.
+     * @throws YieldTurnException if human approval is required for the requested transition.
+     */
+            @AgentDoc("Routes the workflow to the specified phase according to strict transition rules.")
     public String routeToPhase(String phaseName) {
         WorkflowPhase nextPhase;
         try {
@@ -45,54 +55,50 @@ public class WorkflowService {
         } catch (IllegalArgumentException e) {
             return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT, VERIFICATION.";
         }
-
         if (nextPhase == currentPhase) {
             return "Already in phase: " + nextPhase;
         }
 
-        boolean isForward = nextPhase.ordinal() > currentPhase.ordinal();
+        // Backward transitions are always allowed, except from VERIFICATION to EXPLORE which requires sign-off
+        if (nextPhase.ordinal() < currentPhase.ordinal() && !(currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE)) {
+            setCurrentPhase(nextPhase);
+            return "Routed back to phase: " + nextPhase;
+        }
 
-        if (isForward) {
-            // Guardrails for forward movement
-            if (nextPhase == WorkflowPhase.DEVELOPMENT && planManager.getCurrentPlan() == null) {
-                return "Error: Cannot advance to DEVELOPMENT. Implementation Plan is missing. Call planManagerService.submitPlan() first.";
+        if (currentPhase == WorkflowPhase.EXPLORE) {
+            if (nextPhase == WorkflowPhase.PLANNING) {
+                setCurrentPhase(nextPhase);
+                return "Advanced to phase: " + nextPhase;
             }
-
-            // Approval routing for forward movement
+            return "Error: Cannot transition from EXPLORE to " + nextPhase + ". You must go to PLANNING first.";
+        }
+        if (currentPhase == WorkflowPhase.PLANNING) {
             if (nextPhase == WorkflowPhase.DEVELOPMENT) {
+                if (planManager.getCurrentPlan() == null) {
+                    return "Error: Cannot advance to DEVELOPMENT. Implementation Plan is missing. Call planManagerService.submitPlan() first.";
+                }
                 requestPhaseTransition(nextPhase);
-                org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
-                StringBuilder sb = new StringBuilder();
-                sb.append("### 🤖 Proposed Plan: ").append(plan.title()).append("\n");
-                sb.append("**Goal:** ").append(plan.goal()).append("\n\n");
-                sb.append("#### 📋 Requirements\n");
-                for (String req : plan.requirements()) {
-                    sb.append("* ").append(req).append("\n");
-                }
-                sb.append("\n#### 🛠️ Technical Steps\n");
-                for (String step : plan.technicalSteps()) {
-                    sb.append("* ").append(step).append("\n");
-                }
-                sb.append("\n**Transition to DEVELOPMENT requested. Awaiting human approval.**");
-                throw new YieldTurnException(sb.toString());
+                String summary = formatPlanSummary(planManager.getCurrentPlan());
+                throw new YieldTurnException(summary + "\n\n**Transition to DEVELOPMENT requested. Awaiting human approval.**");
             }
-            
+            return "Error: Cannot transition from PLANNING to " + nextPhase + ".";
+        }
+        if (currentPhase == WorkflowPhase.DEVELOPMENT) {
             if (nextPhase == WorkflowPhase.VERIFICATION) {
-                requestPhaseTransition(nextPhase);
-                throw new YieldTurnException("Transition to VERIFICATION requested. Awaiting human approval.");
+                setCurrentPhase(nextPhase);
+                return "Advanced to phase: " + nextPhase;
             }
+            return "Error: Cannot transition from DEVELOPMENT to " + nextPhase + ". You must go to VERIFICATION next.";
         }
-
-        // HITL Gate for concluding a task
-        if (currentPhase == WorkflowPhase.VERIFICATION && nextPhase == WorkflowPhase.EXPLORE) {
-            requestPhaseTransition(nextPhase);
-            throw new YieldTurnException("Task completion and transition to EXPLORE requested. Awaiting human sign-off.");
+        if (currentPhase == WorkflowPhase.VERIFICATION) {
+            if (nextPhase == WorkflowPhase.EXPLORE) {
+                requestPhaseTransition(nextPhase);
+                String summary = formatPlanSummary(planManager.getCurrentPlan());
+                throw new YieldTurnException(summary + "\n\n**Task completion and transition to EXPLORE requested. Awaiting human sign-off.**");
+            }
+            return "Error: Cannot transition from VERIFICATION to " + nextPhase + ".";
         }
-
-        // Backward movement or forward movement not requiring approval
-        setCurrentPhase(nextPhase);
-        String direction = isForward ? "Advanced" : "Routed back";
-        return direction + " to phase: " + nextPhase;
+        return "Error: Transition from " + currentPhase + " to " + nextPhase + " is not allowed.";
     }
 
     @AgentDoc("Gets the current workflow phase.")
@@ -207,4 +213,24 @@ public class WorkflowService {
             listener.onTransitionRequested(currentPhase, pendingPhase);
         }
     }
+
+        private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
+        if (plan == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        // Start with a prefix to avoid triggering JSON parsing errors (e.g. starting with #)
+        sb.append("PLAN SUMMARY:\n\n### 🤖 ").append(plan.title()).append("\n");
+        sb.append("**Goal:** ").append(plan.goal()).append("\n\n");
+        sb.append("#### 📋 Requirements\n");
+        for (String req : plan.requirements()) {
+            sb.append("* ").append(req).append("\n");
+        }
+        sb.append("\n#### 🛠️ Technical Steps\n");
+        for (String step : plan.technicalSteps()) {
+            sb.append("* ").append(step).append("\n");
+        }
+        return sb.toString();
+    }
+
 }

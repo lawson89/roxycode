@@ -225,11 +225,10 @@ public class HeaderPanel extends JPanel {
         private boolean isActive;
         private boolean isCompleted;
 
-        public PhaseIndicator(WorkflowPhase phase) {
+                public PhaseIndicator(WorkflowPhase phase) {
             this.phase = phase;
             setLayout(new MigLayout("insets 2 8 2 8", "[]", "center"));
             setOpaque(false);
-            putClientProperty(FlatClientProperties.STYLE, "arc: 12");
             
             textLabel = new JLabel(phase.getDisplayName());
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -2");
@@ -247,22 +246,17 @@ public class HeaderPanel extends JPanel {
             updateStyle();
         }
 
-        private void updateStyle() {
-            Color accentColor = UIManager.getColor("Component.accentColor");
-            if (accentColor == null) accentColor = Color.BLUE;
-            
-            Color foreground = UIManager.getColor("Label.foreground");
-            if (foreground == null) foreground = Color.BLACK;
-            
-            Color disabledForeground = UIManager.getColor("Label.disabledForeground");
-            if (disabledForeground == null) disabledForeground = Color.GRAY;
-
+                private void updateStyle() {
             if (isActive) {
                 setOpaque(true);
-                setBackground(accentColor);
+                putClientProperty(FlatClientProperties.STYLE, "arc: 12");
+                setBackground(UIManager.getColor("Component.accentColor"));
                 textLabel.setForeground(UIManager.getColor("Component.accentForeground"));
             } else {
                 setOpaque(false);
+                putClientProperty(FlatClientProperties.STYLE, "arc: 0");
+                Color foreground = UIManager.getColor("Label.foreground");
+                Color disabledForeground = UIManager.getColor("Label.disabledForeground");
                 textLabel.setForeground(isCompleted ? foreground : disabledForeground);
             }
         }
