@@ -316,13 +316,21 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         currentWorker.execute();
     }
 
-        @Override
+            @Override
     public void onJexlExecuted(JexlExecutionEvent event) {
         SwingUtilities.invokeLater(() -> {
-            String toolName = "";
+            String toolName = "JEXL Execution";
             StringBuilder logContent = new StringBuilder();
             logContent.append("<pre><code>").append(JexlToHtmlConverter.convert(event.script())).append("</code></pre>");
-            if (!event.success()) {
+            if (event.success()) {
+                if (event.result() != null) {
+                    String resStr = String.valueOf(event.result());
+                    if (!resStr.isEmpty() && !resStr.equals("null")) {
+                        String preview = resStr.length() > 600 ? resStr.substring(0, 600) + "..." : resStr;
+                        logContent.append("<div class='tool-result'><b>Result:</b> ").append(StringEscapeUtils.escapeHtml4(preview)).append("</div>");
+                    }
+                }
+            } else {
                 logContent.append("<div class='tool-error'><b>Error:</b> ").append(StringEscapeUtils.escapeHtml4(event.error())).append("</div>");
             }
             outputArea.appendToolLog(toolName, logContent.toString());

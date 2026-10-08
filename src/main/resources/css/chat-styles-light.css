@@ -8,13 +8,20 @@ body { font-family: sans-serif; font-size: 13px; color: #333333; margin: 10px; b
 
 .tool-call { background-color: #fffaf0; }
 .tool-accent { background-color: #ff9800; }
-.tool-header { font-size: 10px; color: #888888; font-weight: bold; }
+.tool-header { font-size: 11px; color: #d97706; font-weight: bold; margin-bottom: 4px; }
 .tool-body { font-family: monospace; color: #444444; }
 
 .timestamp { font-size: 9px; color: #888888; }
 .content { color: #333333; }
 
-pre { background-color: #f5f5f5; color: #000000; }
+h1 { font-size: 15px; font-weight: bold; color: #111111; margin-top: 8px; margin-bottom: 4px; }
+h2 { font-size: 14px; font-weight: bold; color: #005fb8; margin-top: 6px; margin-bottom: 4px; }
+h3 { font-size: 13px; font-weight: bold; color: #16825d; margin-top: 5px; margin-bottom: 2px; }
+h4, h5, h6 { font-size: 12px; font-weight: bold; color: #3b82f6; margin-top: 4px; margin-bottom: 2px; }
+blockquote { color: #4b5563; margin-left: 10px; }
+a { color: #0066cc; text-decoration: none; }
+
+pre { background-color: #f5f5f5; color: #000000; padding: 4px; margin: 4px 0px 4px 0px; }
 code { font-family: monospace; background-color: #eeeeee; color: #000000; }
 
 .spec-functional-header { color: #2196F3; }
@@ -24,5 +31,5 @@ code { font-family: monospace; background-color: #eeeeee; color: #000000; }
 .tk-st { color: #a31515; }
 .tk-nm { color: #098658; }
 .tk-cm { color: #008000; font-style: italic; }
-.tool-result { color: #2e7d32; }
-.tool-error { color: #d32f2f; }
+.tool-result { color: #2e7d32; margin-top: 4px; }
+.tool-error { color: #d32f2f; margin-top: 4px; }

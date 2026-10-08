@@ -50,9 +50,10 @@ public class MarkdownViewer extends JTextPane {
         render();
     }
 
-    private void render() {
+        private void render() {
         String htmlContent = renderer.render(parser.parse(currentMarkdown));
-        setText("<html><body>" + htmlContent + "</body></html>");
+        String highlightedHtml = JexlToHtmlConverter.highlightCodeBlocks(htmlContent);
+        setText("<html><body>" + highlightedHtml + "</body></html>");
         setCaretPosition(0);
     }
 }

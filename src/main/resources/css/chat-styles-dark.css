@@ -8,13 +8,20 @@ body { font-family: sans-serif; font-size: 13px; color: #cccccc; margin: 10px; b
 
 .tool-call { background-color: #2d2620; }
 .tool-accent { background-color: #f57c00; }
-.tool-header { font-size: 10px; color: #999999; font-weight: bold; }
+.tool-header { font-size: 11px; color: #e5a00d; font-weight: bold; margin-bottom: 4px; }
 .tool-body { font-family: monospace; color: #aaaaaa; }
 
 .timestamp { font-size: 9px; color: #888888; }
 .content { color: #cccccc; }
 
-pre { background-color: #1e1e1e; color: #d4d4d4; }
+h1 { font-size: 15px; font-weight: bold; color: #ffffff; margin-top: 8px; margin-bottom: 4px; }
+h2 { font-size: 14px; font-weight: bold; color: #569cd6; margin-top: 6px; margin-bottom: 4px; }
+h3 { font-size: 13px; font-weight: bold; color: #4ec9b0; margin-top: 5px; margin-bottom: 2px; }
+h4, h5, h6 { font-size: 12px; font-weight: bold; color: #9cdcfe; margin-top: 4px; margin-bottom: 2px; }
+blockquote { color: #9cdcfe; margin-left: 10px; }
+a { color: #3794ff; text-decoration: none; }
+
+pre { background-color: #1e1e1e; color: #d4d4d4; padding: 4px; margin: 4px 0px 4px 0px; }
 code { font-family: monospace; background-color: #2d2d2d; color: #d4d4d4; }
 
 .spec-functional-header { color: #2196F3; }
@@ -24,5 +31,5 @@ code { font-family: monospace; background-color: #2d2d2d; color: #d4d4d4; }
 .tk-st { color: #ce9178; }
 .tk-nm { color: #b5cea8; }
 .tk-cm { color: #6a9955; font-style: italic; }
-.tool-result { color: #4caf50; }
-.tool-error { color: #f44336; }
+.tool-result { color: #4caf50; margin-top: 4px; }
+.tool-error { color: #f44336; margin-top: 4px; }

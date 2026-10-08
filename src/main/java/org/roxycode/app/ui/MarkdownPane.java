@@ -72,8 +72,9 @@ public class MarkdownPane extends JTextPane {
                 if (msg.isTool()) {
                     fullHtml.append(ChatHtmlTemplates.renderToolLog(msg.role(), msg.content().toString()));
                 } else {
-                    String renderedMarkdown = renderer.render(parser.parse(msg.content().toString()));
-                    fullHtml.append(ChatHtmlTemplates.renderChatEntry(msg.role().toLowerCase(), renderedMarkdown, msg.timestamp()));
+                                        String renderedMarkdown = renderer.render(parser.parse(msg.content().toString()));
+                    String highlightedHtml = JexlToHtmlConverter.highlightCodeBlocks(renderedMarkdown);
+                    fullHtml.append(ChatHtmlTemplates.renderChatEntry(msg.role().toLowerCase(), highlightedHtml, msg.timestamp()));
                 }
             } catch (Exception e) {
                 fullHtml.append("<div>Error rendering message</div>");
