@@ -239,12 +239,16 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
-    private void approvePhase() {
+        private void approvePhase() {
         WorkflowPhase requested = workflowService.getPendingPhase();
         if (requested != null) {
             workflowService.approveTransition();
             outputArea.appendMessage("system", "Phase transition to **" + requested.getDisplayName() + "** approved.");
-            triggerTurn("I approve the transition to " + requested.getDisplayName() + ". Please proceed with the next phase.");
+            if (requested == WorkflowPhase.EXPLORE) {
+                outputArea.appendMessage("system", "Task complete. We are back in Explore mode. Please enter a new question or task.");
+            } else {
+                triggerTurn("I approve the transition to " + requested.getDisplayName() + ". Please proceed with the next phase.");
+            }
         }
     }
 
