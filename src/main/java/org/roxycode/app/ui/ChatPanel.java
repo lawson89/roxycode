@@ -95,7 +95,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         scrollContent.add(inlineActionPanel, BorderLayout.SOUTH);
 
         outputScrollPane = new JScrollPane(scrollContent);
-        outputScrollPane.setBorder(BorderFactory.createTitledBorder("Assistant"));
+        outputScrollPane.setBorder(BorderFactory.createTitledBorder("Roxy"));
 
         // Autoscroll to bottom when content changes (messages or action panel visibility)
         scrollContent.addComponentListener(new java.awt.event.ComponentAdapter() {

@@ -55,6 +55,6 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry);
         String result = tool.executeJexl("if (");
-        assertTrue(result.contains("Error executing Jexl script"));
+        assertTrue(result.contains("Syntax Error"));
     }
 }

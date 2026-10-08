@@ -128,6 +128,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
         contentArea.add(new PromptPanel(promptService, settingsService), "PROMPT");
         contentArea.add(new BuildConfigPanel(buildToolService, settingsService, projectService), "BUILD_CONFIG");
+        contentArea.add(new ContextManagerPanel(promptService), "CONTEXT_MGR");
 
         workspace.add(header, "h 60!, wrap");
         workspace.add(phaseRow, "h 40!, wrap");

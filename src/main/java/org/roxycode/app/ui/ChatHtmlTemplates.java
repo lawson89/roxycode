@@ -8,6 +8,8 @@ public class ChatHtmlTemplates {
     public static String renderChatEntry(String role, String content, String timestamp) {
         String entryClass = role + "-entry";
         String accentClass = role + "-accent";
+        String leftHeader = role.equals("ai") ? "<span style=\"font-family: monospace; color: #888888; font-size: 10px;\">/\\_/\\</span>" : "&nbsp;";
+        
         return """
             <table class="chat-entry %s" width="100%%" cellpadding="10" cellspacing="0" border="0">
                 <tr>
@@ -15,7 +17,7 @@ public class ChatHtmlTemplates {
                     <td class="message-body">
                         <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                             <tr>
-                                <td align="left" valign="middle">&nbsp;</td>
+                                <td align="left" valign="middle">%s</td>
                                 <td align="right" valign="middle" class="timestamp">%s</td>
                             </tr>
                         </table>
@@ -26,7 +28,7 @@ public class ChatHtmlTemplates {
             <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                 <tr><td height="4">&nbsp;</td></tr>
             </table>
-            """.formatted(entryClass, accentClass, timestamp, content);
+            """.formatted(entryClass, accentClass, leftHeader, timestamp, content);
     }
 
     public static String renderDivider() {

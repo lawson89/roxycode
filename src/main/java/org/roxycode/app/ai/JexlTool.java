@@ -47,8 +47,15 @@ public class JexlTool {
     @Tool(description = "Executes a Jexl script and returns the result as a string. Useful for calculations and logic.")
     public String executeJexl(String script) {
         log.info("Executing JEXL script: {}", script);
+        JexlScript jexlScript;
         try {
-            JexlScript jexlScript = jexl.createScript(script);
+            jexlScript = jexl.createScript(script);
+        } catch (Exception e) {
+            log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
+            return "Syntax Error (Script not executed): " + e.getMessage();
+        }
+
+        try {
             JexlContext context = new MapContext(registry.getServices());
             Object result = jexlScript.execute(context);
             String output = result == null ? "null" : result.toString();

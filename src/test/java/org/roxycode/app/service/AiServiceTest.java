@@ -78,7 +78,9 @@ class AiServiceTest {
         when(chatClientBuilder.defaultAdvisors(any(org.springframework.ai.chat.client.advisor.api.Advisor[].class))).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
         
-        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher, repoMapPackerService, gitService);
+        ProjectAnalysisService projectAnalysisService = mock(ProjectAnalysisService.class);
+        when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
+        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher, repoMapPackerService, gitService, projectAnalysisService);
     }
 
     @Test

@@ -106,6 +106,68 @@ public class PromptService {
         return sb.toString();
     }
 
+        public java.util.List<String> listContextFiles() {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return java.util.Collections.emptyList();
+        }
+        Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
+        if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
+            return java.util.Collections.emptyList();
+        }
+        try (Stream<Path> stream = Files.list(contextDir)) {
+            return stream.filter(Files::isRegularFile)
+                         .filter(p -> p.getFileName().toString().endsWith(".md"))
+                         .map(p -> p.getFileName().toString())
+                         .sorted()
+                         .toList();
+        } catch (IOException e) {
+            log.error("Failed to list context files: {}", e.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    public String readContextFile(String filename) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return "";
+        }
+        Path file = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR).resolve(filename);
+        if (Files.exists(file)) {
+            try {
+                return Files.readString(file, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                log.error("Failed to read context file {}: {}", filename, e.getMessage());
+            }
+        }
+        return "";
+    }
+
+    public void saveContextFile(String filename, String content) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            throw new IllegalStateException("No active project");
+        }
+        Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
+        try {
+            Files.createDirectories(contextDir);
+            Files.writeString(contextDir.resolve(filename), content, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("Failed to save context file {}: {}", filename, e.getMessage());
+            throw new RuntimeException("Failed to save context file", e);
+        }
+    }
+
+    public void deleteContextFile(String filename) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return;
+        }
+        Path file = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR).resolve(filename);
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            log.error("Failed to delete context file {}: {}", filename, e.getMessage());
+            throw new RuntimeException("Failed to delete context file", e);
+        }
+    }
+
     private String loadMarkdownFromClasspath(String directory, String excludeFile) {
         StringBuilder sb = new StringBuilder();
         try {

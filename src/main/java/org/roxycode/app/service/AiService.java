@@ -46,6 +46,7 @@ public class AiService {
     private final ApplicationEventPublisher eventPublisher;
     private final RepoMapPackerService repoMapPackerService;
     private final GitService gitService;
+    private final ProjectAnalysisService projectAnalysisService;
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
                      PromptService promptService,
@@ -53,7 +54,8 @@ public class AiService {
                      WorkflowService workflowService, ChatMemory chatMemory,
                      ApplicationEventPublisher eventPublisher,
                      RepoMapPackerService repoMapPackerService,
-                     GitService gitService) {
+                     GitService gitService,
+                     ProjectAnalysisService projectAnalysisService) {
         this.settingsService = settingsService;
         this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
@@ -63,6 +65,7 @@ public class AiService {
         this.eventPublisher = eventPublisher;
         this.repoMapPackerService = repoMapPackerService;
         this.gitService = gitService;
+        this.projectAnalysisService = projectAnalysisService;
         this.chatClient = chatClientBuilder
                 .defaultTools(jexlTool)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
@@ -129,6 +132,7 @@ public class AiService {
 
         // --- DYNAMIC CONTEXT (Session/Turn specific) ---
         systemPrompt.append("\n\n## SESSION CONTEXT\n");
+        systemPrompt.append("DOMINANT LANGUAGE: You are operating in a ").append(projectAnalysisService.getDominantLanguage()).append(" codebase.\n");
         systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append(" (").append(currentPhase.getDisplayName()).append(")\n");
         systemPrompt.append("CURRENT ROLE: ").append(currentRole.getTitle()).append("\n");
         systemPrompt.append(currentRole.getSystemPromptPrefix()).append("\n\n");
