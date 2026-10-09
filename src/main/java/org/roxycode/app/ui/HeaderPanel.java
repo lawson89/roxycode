@@ -8,7 +8,6 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanManagerService;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -32,7 +31,6 @@ public class HeaderPanel extends JPanel {
     private final JLabel projectLabel;
     private final JLabel branchLabel;
     private final JLabel modelLabel;
-    private final JProgressBar progressBar;
     
     // Workflow components
     private final JLabel planLabel;
@@ -41,7 +39,7 @@ public class HeaderPanel extends JPanel {
 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, 
                        WorkflowService workflowService, PlanManagerService planManagerService,
-                       TurnEventBridge turnEventBridge, Consumer<String> navigationAction) {
+                       Consumer<String> navigationAction) {
         this.projectService = projectService;
         this.gitService = gitService;
         this.workflowService = workflowService;
@@ -76,7 +74,7 @@ public class HeaderPanel extends JPanel {
 
         add(leftPanel, "left");
 
-                // --- CENTER SECTION: Workflow Info ---
+        // --- CENTER SECTION: Workflow Info ---
         JPanel workflowPanel = new JPanel(new MigLayout("insets 0, gapy 2", "[center]", "[]0[]"));
         workflowPanel.setOpaque(false);
 
@@ -87,31 +85,22 @@ public class HeaderPanel extends JPanel {
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", "center"));
         progressTracker.setOpaque(false);
 
-                WorkflowPhase[] phases = WorkflowPhase.values();
+        WorkflowPhase[] phases = WorkflowPhase.values();
         for (WorkflowPhase phase : phases) {
             indicators.add(new PhaseIndicator(phase));
         }
-                workflowPanel.add(progressTracker, "center, hidemode 3");
+        workflowPanel.add(progressTracker, "center, hidemode 3");
         add(workflowPanel, "center");
 
         // --- RIGHT SECTION: Model & Utils ---
-        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]15[]15[]", "center"));
+        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]", "center"));
         rightPanel.setOpaque(false);
 
         modelLabel = new JLabel();
         modelLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
 
-        progressBar = new JProgressBar();
-        progressBar.setIndeterminate(true);
-        progressBar.setVisible(false);
-
-        JPanel modelPanel = new JPanel(new MigLayout("insets 0", "[]", "[]0[]"));
-        modelPanel.setOpaque(false);
-                modelPanel.add(modelLabel, "wrap");
-        modelPanel.add(progressBar, "growx, h 4!");
-
-        rightPanel.add(modelPanel);
+        rightPanel.add(modelLabel);
         add(rightPanel, "right");
 
         // Listeners
@@ -137,17 +126,6 @@ public class HeaderPanel extends JPanel {
 
         workflowService.addPhaseListener(this::updateActivePhase);
         planManagerService.addListener((plan) -> updateActivePhase(workflowService.getCurrentPhase()));
-        
-                turnEventBridge.addUserMessageListener(event -> SwingUtilities.invokeLater(() -> {
-            progressBar.setVisible(true);
-            revalidate();
-            repaint();
-        }));
-        turnEventBridge.addCompleteListener(event -> SwingUtilities.invokeLater(() -> {
-            progressBar.setVisible(false);
-            revalidate();
-            repaint();
-        }));
 
         // Initialize workflow display
         updateActivePhase(workflowService.getCurrentPhase());
@@ -162,7 +140,7 @@ public class HeaderPanel extends JPanel {
             planLabel.setVisible(false);
         }
 
-                        progressTracker.removeAll();
+        progressTracker.removeAll();
         java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
         for (PhaseIndicator indicator : indicators) {
             indicator.setActive(indicator.phase == currentPhase);
@@ -227,13 +205,13 @@ public class HeaderPanel extends JPanel {
         }
     }
 
-        private static class PhaseIndicator extends JPanel {
+    private static class PhaseIndicator extends JPanel {
         private final WorkflowPhase phase;
         private final JLabel textLabel;
         private boolean isActive;
         private boolean isCompleted;
 
-                public PhaseIndicator(WorkflowPhase phase) {
+        public PhaseIndicator(WorkflowPhase phase) {
             this.phase = phase;
             setLayout(new MigLayout("insets 2 8 2 8", "[]", "center"));
             setOpaque(false);
@@ -254,7 +232,7 @@ public class HeaderPanel extends JPanel {
             updateStyle();
         }
 
-                private void updateStyle() {
+        private void updateStyle() {
             if (isActive) {
                 setOpaque(true);
                 putClientProperty(FlatClientProperties.STYLE, "arc: 12");

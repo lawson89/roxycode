@@ -114,7 +114,7 @@ public class MainFrame extends JFrame {
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
 
-        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService, planManagerService, turnEventBridge, this::showCard);
+        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService, planManagerService, this::showCard);
 
         StatusPanel statusBar = new StatusPanel(envService, chatMemory);
 
@@ -127,8 +127,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService, workflowService, jexlServiceRegistry, gitService, projectAnalysisService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
-        contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
-        contentArea.add(new PromptPanel(promptService, settingsService), "PROMPT");
+                contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
         contentArea.add(new BuildConfigPanel(buildToolService, settingsService, projectService), "BUILD_CONFIG");
         contentArea.add(new ContextManagerPanel(promptService), "CONTEXT_MGR");
 

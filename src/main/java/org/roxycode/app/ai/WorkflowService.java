@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
 
@@ -30,21 +31,21 @@ public class WorkflowService {
     }
 
     @AgentDoc("Routes the workflow to the specified phase according to strict transition rules.")
-    public String routeToPhase(String phaseName) {
+    public Map<String, String> routeToPhase(String phaseName) {
         WorkflowPhase nextPhase;
         try {
             nextPhase = WorkflowPhase.valueOf(phaseName.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT, VERIFICATION.";
+            return Map.of("error", "Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT, VERIFICATION.");
         }
         if (nextPhase == currentPhase) {
-            return "Already in phase: " + nextPhase;
+            return Map.of("message", "Already in phase: " + nextPhase);
         }
 
         // Handle backward transitions (except to EXPLORE which is always gated)
                 if (nextPhase.ordinal() < currentPhase.ordinal() && nextPhase != WorkflowPhase.EXPLORE) {
             setCurrentPhase(nextPhase);
-            throw new YieldTurnException("Routed back to phase: " + nextPhase);
+            return Map.of("message", "Routed back to phase: " + nextPhase);
         }
 
         // Any transition to EXPLORE from another phase is gated as "Task Completion" or "Reset"
@@ -58,38 +59,38 @@ public class WorkflowService {
         if (currentPhase == WorkflowPhase.EXPLORE) {
                         if (nextPhase == WorkflowPhase.PLANNING) {
                 setCurrentPhase(nextPhase);
-                throw new YieldTurnException("Advanced to phase: " + nextPhase);
+                return Map.of("message", "Advanced to phase: " + nextPhase);
             }
-            return "Error: Cannot transition from EXPLORE to " + nextPhase + ". You must go to PLANNING first.";
+            return Map.of("error", "Cannot transition from EXPLORE to " + nextPhase + ". You must go to PLANNING first.");
         }
         
         if (currentPhase == WorkflowPhase.PLANNING) {
             if (nextPhase == WorkflowPhase.DEVELOPMENT) {
                 if (planManager.getCurrentPlan() == null) {
-                    return "Error: Cannot advance to DEVELOPMENT. Implementation Plan is missing. Call planManagerService.submitPlan() first.";
+                    return Map.of("error", "Cannot advance to DEVELOPMENT. Implementation Plan is missing. Call planManagerService.submitPlan() first.");
                 }
                 requestPhaseTransition(nextPhase);
                 String summary = formatPlanSummary(planManager.getCurrentPlan());
                 String message = "**Transition from " + currentPhase.getDisplayName() + " to DEVELOPMENT requested. Awaiting approval.**";
                 throw new YieldTurnException("{\"summary\": \"" + StringEscapeUtils.escapeJson(summary) + "\", \"message\": \"" + StringEscapeUtils.escapeJson(message) + "\"}");
             }
-            return "Error: Cannot transition from PLANNING to " + nextPhase + ".";
+            return Map.of("error", "Cannot transition from PLANNING to " + nextPhase + ".");
         }
         
                 if (currentPhase == WorkflowPhase.DEVELOPMENT) {
             if (nextPhase == WorkflowPhase.VERIFICATION) {
                 setCurrentPhase(nextPhase);
-                throw new YieldTurnException("Advanced to phase: " + nextPhase);
+                return Map.of("message", "Advanced to phase: " + nextPhase);
             }
-            return "Error: Cannot transition from DEVELOPMENT to " + nextPhase + ". You must go to VERIFICATION next.";
+            return Map.of("error", "Cannot transition from DEVELOPMENT to " + nextPhase + ". You must go to VERIFICATION next.");
         }
         
         if (currentPhase == WorkflowPhase.VERIFICATION) {
             // Forward transitions from VERIFICATION are not allowed
-            return "Error: Cannot transition from VERIFICATION to " + nextPhase + ".";
+            return Map.of("error", "Cannot transition from VERIFICATION to " + nextPhase + ".");
         }
 
-        return "Error: Transition from " + currentPhase + " to " + nextPhase + " is not allowed.";
+        return Map.of("error", "Transition from " + currentPhase + " to " + nextPhase + " is not allowed.");
     }
 
     public WorkflowPhase getCurrentPhase() { return currentPhase; }

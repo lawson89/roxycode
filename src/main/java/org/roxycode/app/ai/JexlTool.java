@@ -13,6 +13,8 @@ import org.apache.commons.text.StringEscapeUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * A tool for executing Jexl scripts. This tool has access to services registered in the JexlServiceRegistry.
@@ -48,31 +50,46 @@ public class JexlTool {
     @Tool(description = "Executes a Jexl script and returns the result as a string. Useful for calculations and logic.")
     public String executeJexl(String script) {
         log.info("Executing JEXL script: {}", script);
+        ObjectMapper mapper = new ObjectMapper();
+        
+        // Prevent further execution if a transition is already pending
+        Object workflow = registry.getServices().get("workflowService");
+        if (workflow instanceof WorkflowService && ((WorkflowService) workflow).getPendingPhase() != null) {
+            return "{\"error\": \"A phase transition is already pending. Please wait for the user to approve or reject the transition before performing more actions.\"}";
+        }
+
         JexlScript jexlScript;
         try {
             jexlScript = jexl.createScript(script);
         } catch (Exception e) {
             log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
-            return "Syntax Error (Script not executed): " + e.getMessage();
+            return "{\"error\": \"Syntax Error (Script not executed): " + StringEscapeUtils.escapeJson(e.getMessage()) + "\"}";
         }
 
-                try {
+        try {
             JexlContext context = new MapContext(registry.getServices());
             Object result = jexlScript.execute(context);
+            
+            fireEvent(new JexlExecutionEvent(script, result, true, null));
+
+            if (result instanceof Map) {
+                return mapper.writeValueAsString(result);
+            }
+
             String output = result == null ? "null" : result.toString();
             if (output.trim().isEmpty()) {
                 output = "<empty result>";
             }
-            fireEvent(new JexlExecutionEvent(script, result, true, null));
-                                                return "{\"result\": \"" + StringEscapeUtils.escapeJson(output) + "\"}";
+            return mapper.writeValueAsString(Map.of("result", output));
         } catch (Exception e) {
             // Check if this is a YieldTurnException wrapping or direct
             Throwable current = e;
             while (current != null) {
                 if (current instanceof YieldTurnException) {
-                    throw (YieldTurnException) current;
+                    // YieldTurnException message is already a JSON string
+                    return current.getMessage();
                 }
-                if (current.getCause() == current) break;
+                if (current.getCause() == current || current.getCause() == null) break;
                 current = current.getCause();
             }
 
@@ -86,7 +103,11 @@ public class JexlTool {
                 error = cause.toString();
             }
             fireEvent(new JexlExecutionEvent(script, null, false, error));
-                                                return "{\"error\": \"" + StringEscapeUtils.escapeJson(error) + "\"}";
+            try {
+                return mapper.writeValueAsString(Map.of("error", error));
+            } catch (Exception ex) {
+                return "{\"error\": \"Internal Error during error serialization\"}";
+            }
         }
     }
 

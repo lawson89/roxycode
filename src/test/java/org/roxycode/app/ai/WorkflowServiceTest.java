@@ -103,7 +103,8 @@ class WorkflowServiceTest {
 
         @Test
     void testExploreToPlanning() {
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING"));
+        java.util.Map<String, String> result = service.routeToPhase("PLANNING");
+        assertTrue(result.get("message").contains("Advanced to phase: PLANNING"));
         assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
@@ -117,8 +118,8 @@ class WorkflowServiceTest {
 
     @Test
     void testExploreToDevelopmentBlocked() {
-        String result = service.routeToPhase("DEVELOPMENT");
-        assertTrue(result.contains("Error: Cannot transition from EXPLORE to DEVELOPMENT"));
+        java.util.Map<String, String> result = service.routeToPhase("DEVELOPMENT");
+        assertTrue(result.get("error").contains("Cannot transition from EXPLORE to DEVELOPMENT"));
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
     }
 
@@ -138,22 +139,24 @@ class WorkflowServiceTest {
         service.setCurrentPhase(WorkflowPhase.PLANNING);
         when(planManager.getCurrentPlan()).thenReturn(null);
         
-        String result = service.routeToPhase("DEVELOPMENT");
-        assertTrue(result.contains("Implementation Plan is missing"));
+        java.util.Map<String, String> result = service.routeToPhase("DEVELOPMENT");
+        assertTrue(result.get("error").contains("Implementation Plan is missing"));
         assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
         @Test
     void testDevelopmentToVerificationFree() {
         service.setCurrentPhase(WorkflowPhase.DEVELOPMENT);
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("VERIFICATION"));
+        java.util.Map<String, String> result = service.routeToPhase("VERIFICATION");
+        assertTrue(result.get("message").contains("Advanced to phase: VERIFICATION"));
         assertEquals(WorkflowPhase.VERIFICATION, service.getCurrentPhase());
     }
 
         @Test
     void testVerificationToDevelopmentFree() {
         service.setCurrentPhase(WorkflowPhase.VERIFICATION);
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT"));
+        java.util.Map<String, String> result = service.routeToPhase("DEVELOPMENT");
+        assertTrue(result.get("message").contains("Routed back to phase: DEVELOPMENT"));
         assertEquals(WorkflowPhase.DEVELOPMENT, service.getCurrentPhase());
     }
 
@@ -172,11 +175,11 @@ class WorkflowServiceTest {
     @Test
     void testIllegalTransitions() {
         // EXPLORE -> VERIFICATION
-        assertTrue(service.routeToPhase("VERIFICATION").contains("Error"));
+        assertTrue(service.routeToPhase("VERIFICATION").get("error").contains("Cannot transition from EXPLORE to VERIFICATION"));
         
-        // PLANNING -> VERIFICATION
+                // PLANNING -> VERIFICATION
         service.setCurrentPhase(WorkflowPhase.PLANNING);
-        assertTrue(service.routeToPhase("VERIFICATION").contains("Error"));
+        assertTrue(service.routeToPhase("VERIFICATION").get("error").contains("Cannot transition from PLANNING to VERIFICATION"));
     }
 
     @Test

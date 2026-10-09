@@ -87,35 +87,26 @@ public class AiService {
             String conversationId = "default";
             String content;
             try {
-                content = buildPrompt(message, systemPromptText, images)
+                                content = buildPrompt(message, systemPromptText, images)
                         .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                         .call()
                         .content();
-            } catch (Exception e) {
-                org.roxycode.app.ai.YieldTurnException yieldEx = null;
-                Throwable current = e;
-                while (current != null) {
-                    if (current instanceof org.roxycode.app.ai.YieldTurnException) {
-                        yieldEx = (org.roxycode.app.ai.YieldTurnException) current;
-                        break;
-                    }
-                    if (current.getCause() == current) break;
-                    current = current.getCause();
-                }
-
-                if (yieldEx != null) {
-                    content = yieldEx.getMessage();
+                
+                // If the LLM parroted a yield JSON, format it for the user
+                if (content != null && content.trim().startsWith("{") && content.contains("\"message\"")) {
                     try {
                         JsonNode node = new ObjectMapper().readTree(content);
                         if (node.has("summary") && node.has("message")) {
                             content = node.get("summary").asText() + "\n\n" + node.get("message").asText();
-                        } else if (node.has("summary")) {
-                            content = node.get("summary").asText();
+                        } else if (node.has("message")) {
+                            content = node.get("message").asText();
                         }
-                    } catch (Exception jsonEx) {
-                        // Fallback to raw message
+                    } catch (Exception e) {
+                        // Not valid JSON or different structure, keep as is
                     }
-                } else if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
+                }
+                        } catch (Exception e) {
+                if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
                     content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
                 } else {
                     eventPublisher.publishEvent(new AgentTurnCompleteEvent("Roxy", turnCount.get(), "Error: " + e.getMessage()));

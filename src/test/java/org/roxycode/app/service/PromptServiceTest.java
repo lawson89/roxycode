@@ -20,27 +20,14 @@ class PromptServiceTest {
 
     @BeforeEach
     void setUp() {
-        promptService = new PromptService() {
-            @Override
-            protected java.nio.file.Path getOverridePath() {
-                return tempDir.resolve("core_workflow.md");
-            }
-        };
+        promptService = new PromptService();
     }
 
     @Test
-    void testSaveAndLoadPrompt() {
-        String content = "test prompt content";
-        promptService.saveCoreWorkflowPrompt(content);
-        assertEquals(content, promptService.loadCoreWorkflowPrompt());
-    }
-
-    @Test
-    void testResetPrompt() {
-        String content = "test prompt content";
-        promptService.saveCoreWorkflowPrompt(content);
-        promptService.resetCoreWorkflowPrompt();
-        assertNotEquals(content, promptService.loadCoreWorkflowPrompt());
+    void testLoadCoreWorkflowPrompt() {
+        String prompt = promptService.loadCoreWorkflowPrompt();
+        assertNotNull(prompt);
+        assertTrue(prompt.contains("ROXY CORE WORKFLOW PROTOCOL"));
     }
 
     @Test
