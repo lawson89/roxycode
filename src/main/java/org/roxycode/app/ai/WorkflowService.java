@@ -33,14 +33,14 @@ public class WorkflowService {
 
     @AgentDoc("Requests a single-step transition to an adjacent phase with a descriptive reason.")
     public String routeToPhase(
-            @AgentDoc("The target phase: EXPLORE, PLANNING, or DEVELOPMENT.") String phaseName,
+            @AgentDoc("The target phase: EXPLORE, PLAN, or DEVELOP.") String phaseName,
             @AgentDoc("The detailed reason for requesting this transition.") String reason) {
 
         WorkflowPhase nextPhase;
         try {
             nextPhase = WorkflowPhase.valueOf(phaseName.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT.";
+            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLAN, DEVELOP.";
         }
 
         if (nextPhase == currentPhase) {
@@ -57,10 +57,21 @@ public class WorkflowService {
                     + ". Only single-step transitions to adjacent phases are allowed.";
         }
 
-        // Check prerequisites for specific transitions
-        if (currentPhase == WorkflowPhase.PLANNING && nextPhase == WorkflowPhase.DEVELOPMENT) {
+                // Check prerequisites for specific transitions
+        if (currentPhase == WorkflowPhase.PLAN && nextPhase == WorkflowPhase.DEVELOP) {
             if (planManager.getCurrentPlan() == null) {
-                return "Error: Cannot advance to DEVELOPMENT. Implementation Plan is missing. Call planManagerService.submitPlan() first.";
+                return "Error: Cannot advance to DEVELOP. Implementation Plan is missing. Call planManagerService.submitPlan() first.";
+            }
+        }
+
+        if (currentPhase == WorkflowPhase.DEVELOP && nextPhase == WorkflowPhase.EXPLORE) {
+            org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
+            if (plan == null) {
+                return "Error: Cannot complete DEVELOP phase. No active implementation plan found.";
+            }
+            boolean allDone = plan.technicalSteps().stream().allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);
+            if (!allDone) {
+                return "Error: Cannot complete DEVELOP phase. Some technical steps are not yet marked as completed. Please finish the implementation and verification steps.";
             }
         }
 
@@ -89,11 +100,11 @@ public class WorkflowService {
     private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
         switch (current) {
             case EXPLORE:
-                return next == WorkflowPhase.PLANNING;
-            case PLANNING:
-                return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.DEVELOPMENT;
-            case DEVELOPMENT:
-                return next == WorkflowPhase.PLANNING || next == WorkflowPhase.EXPLORE;
+                return next == WorkflowPhase.PLAN;
+            case PLAN:
+                return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.DEVELOP;
+            case DEVELOP:
+                return next == WorkflowPhase.PLAN || next == WorkflowPhase.EXPLORE;
             default:
                 return false;
         }

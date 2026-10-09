@@ -35,10 +35,10 @@ class WorkflowServiceTest {
         service.approveTransition(); // No pending phase, nothing happens
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
 
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
-        assertEquals(WorkflowPhase.PLANNING, service.getPendingPhase());
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
+        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
         service.approveTransition();
-        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
     }
 
     @Test
@@ -49,9 +49,9 @@ class WorkflowServiceTest {
         assertEquals(WorkflowPhase.EXPLORE, observed.get());
 
         // Forcing phase change for listener test
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
         service.approveTransition();
-        assertEquals(WorkflowPhase.PLANNING, observed.get());
+        assertEquals(WorkflowPhase.PLAN, observed.get());
     }
 
     @Test
@@ -64,21 +64,21 @@ class WorkflowServiceTest {
             requestedReason.set(reason);
         });
         
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Testing transition"));
-        assertEquals(WorkflowPhase.PLANNING, service.getPendingPhase());
-        assertEquals(WorkflowPhase.PLANNING, requestedPhase.get());
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Testing transition"));
+        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
+        assertEquals(WorkflowPhase.PLAN, requestedPhase.get());
         assertEquals("Testing transition", requestedReason.get());
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
         
         service.approveTransition();
-        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         assertNull(service.getPendingPhase());
     }
 
     @Test
     void testRejectTransition() {
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
-        assertEquals(WorkflowPhase.PLANNING, service.getPendingPhase());
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
+        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
         
         service.rejectTransition();
         assertNull(service.getPendingPhase());
@@ -89,20 +89,20 @@ class WorkflowServiceTest {
     void testVisitedPhasesTracking() {
         assertTrue(service.getVisitedPhases().contains(WorkflowPhase.EXPLORE));
         
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
         service.approveTransition();
         
         Set<WorkflowPhase> visited = service.getVisitedPhases();
         assertTrue(visited.contains(WorkflowPhase.EXPLORE));
-        assertTrue(visited.contains(WorkflowPhase.PLANNING));
-        assertFalse(visited.contains(WorkflowPhase.DEVELOPMENT));
+        assertTrue(visited.contains(WorkflowPhase.PLAN));
+        assertFalse(visited.contains(WorkflowPhase.DEVELOP));
     }
 
     @Test
     void testResetWorkflowHistory() {
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
         service.approveTransition();
-        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.PLANNING));
+        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.PLAN));
         
         service.resetWorkflow();
         assertEquals(1, service.getVisitedPhases().size());
@@ -110,75 +110,97 @@ class WorkflowServiceTest {
     }
 
     @Test
-    void testExploreToPlanning() {
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
-        assertEquals(WorkflowPhase.PLANNING, service.getPendingPhase());
+    void testExploreToPlan() {
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
+        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
     }
 
     @Test
-    void testPlanningToExploreGated() {
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
+    void testPlanToExploreGated() {
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
         service.approveTransition();
         
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Reason"));
         assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
-        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
     }
 
     @Test
-    void testExploreToDevelopmentBlocked() {
-        String result = service.routeToPhase("DEVELOPMENT", "Reason");
+    void testExploreToDevelopBlocked() {
+        String result = service.routeToPhase("DEVELOP", "Reason");
         assertTrue(result.contains("Only single-step transitions to adjacent phases are allowed"));
         assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
     }
 
     @Test
-    void testPlanningToDevelopmentGated() {
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
+    void testPlanToDevelopGated() {
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
         service.approveTransition();
         
         when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
         
-        YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT", "Reason"));
+        YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOP", "Reason"));
         assertTrue(ex.getMessage().contains("Title"));
-        assertEquals(WorkflowPhase.DEVELOPMENT, service.getPendingPhase());
-        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
+        assertEquals(WorkflowPhase.DEVELOP, service.getPendingPhase());
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
     }
 
     @Test
-    void testPlanningToDevelopmentMissingPlan() {
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
+    void testPlanToDevelopMissingPlan() {
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
         service.approveTransition();
         
         when(planManager.getCurrentPlan()).thenReturn(null);
         
-        String result = service.routeToPhase("DEVELOPMENT", "Reason");
+        String result = service.routeToPhase("DEVELOP", "Reason");
         assertTrue(result.contains("Implementation Plan is missing"));
-        assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+    }
+
+        @Test
+    void testDevelopToExploreBlockedByIncompleteSteps() {
+        // Move to DEVELOP
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
+        service.approveTransition();
+        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of(), 
+            List.of(new ImplementationPlan.TechStep("Step 1", false)));
+        when(planManager.getCurrentPlan()).thenReturn(plan);
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOP", "Reason"));
+        service.approveTransition();
+        
+        // Attempt to complete DEVELOP
+        String result = service.routeToPhase("EXPLORE", "Finished");
+        assertTrue(result.contains("Some technical steps are not yet marked as completed"));
+        assertEquals(WorkflowPhase.DEVELOP, service.getCurrentPhase());
     }
 
     @Test
-    void testDevelopmentToExploreGated() {
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
+    void testDevelopToExploreAllowedWhenStepsComplete() {
+        // Move to DEVELOP
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
         service.approveTransition();
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT", "Reason"));
+        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of(), 
+            List.of(new ImplementationPlan.TechStep("Step 1", true)));
+        when(planManager.getCurrentPlan()).thenReturn(plan);
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOP", "Reason"));
         service.approveTransition();
         
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Reason"));
+        // Attempt to complete DEVELOP
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Finished"));
         assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
     }
 
+
     @Test
     void testIllegalTransitions() {
-        // EXPLORE -> DEVELOPMENT
-        assertTrue(service.routeToPhase("DEVELOPMENT", "Reason").contains("Only single-step transitions to adjacent phases are allowed"));
+        // EXPLORE -> DEVELOP
+        assertTrue(service.routeToPhase("DEVELOP", "Reason").contains("Only single-step transitions to adjacent phases are allowed"));
         
-        // DEVELOPMENT -> EXPLORE (via routeToPhase)
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
+        // DEVELOP -> EXPLORE (via routeToPhase)
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Reason"));
         service.approveTransition();
         when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT", "Reason"));
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOP", "Reason"));
         service.approveTransition();
 
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Reason"));

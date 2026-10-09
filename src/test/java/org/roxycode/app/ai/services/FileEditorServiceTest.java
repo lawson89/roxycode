@@ -35,7 +35,7 @@ class FileEditorServiceTest {
         fileEditorService = new FileEditorService(projectService, workflowService, eventPublisher);
 
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOPMENT);
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOP);
     }
 
     @Test
@@ -53,7 +53,7 @@ class FileEditorServiceTest {
 
     @Test
     void testWriteFileWrongPhaseThrowsException() {
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLANNING);
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
         assertThrows(IllegalStateException.class, () -> 
             fileEditorService.writeFile("test.txt", "content")

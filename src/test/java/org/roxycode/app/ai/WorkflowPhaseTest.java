@@ -8,12 +8,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class WorkflowPhaseTest {
     @Test
     void testPhaseProperties() {
-        assertEquals(AgentRole.LEAD_ARCHITECT, WorkflowPhase.PLANNING.getRole());
-        assertEquals("Planning", WorkflowPhase.PLANNING.getDisplayName());
-        assertEquals(Codicons.LIGHTBULB, WorkflowPhase.PLANNING.getIcon());
+        assertEquals(AgentRole.LEAD_ARCHITECT, WorkflowPhase.PLAN.getRole());
+        assertEquals("Plan", WorkflowPhase.PLAN.getDisplayName());
+        assertEquals(Codicons.LIGHTBULB, WorkflowPhase.PLAN.getIcon());
 
-        assertEquals(AgentRole.SENIOR_DEVELOPER, WorkflowPhase.DEVELOPMENT.getRole());
-        assertEquals("Development", WorkflowPhase.DEVELOPMENT.getDisplayName());
-        assertEquals(Codicons.CODE, WorkflowPhase.DEVELOPMENT.getIcon());
+        assertEquals(AgentRole.SENIOR_DEVELOPER, WorkflowPhase.DEVELOP.getRole());
+        assertEquals("Develop", WorkflowPhase.DEVELOP.getDisplayName());
+        assertEquals(Codicons.CODE, WorkflowPhase.DEVELOP.getIcon());
     }
 }

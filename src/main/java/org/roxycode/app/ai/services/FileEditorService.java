@@ -162,8 +162,8 @@ public class FileEditorService {
     }
 
     private void checkPhase() {
-        if (workflowService.getCurrentPhase() != WorkflowPhase.DEVELOPMENT) {
-            throw new IllegalStateException("Mutation methods are only allowed in the DEVELOPMENT phase. Current phase: " + workflowService.getCurrentPhase());
+        if (workflowService.getCurrentPhase() != WorkflowPhase.DEVELOP) {
+            throw new IllegalStateException("Mutation methods are only allowed in the DEVELOP phase. Current phase: " + workflowService.getCurrentPhase());
         }
     }
 

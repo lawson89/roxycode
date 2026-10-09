@@ -91,7 +91,7 @@ class AiServiceTest {
     void testChatUsesConfiguredModelAndDynamicPrompt() {
         settings.setGeminiModel("test-model-123");
         when(jexlServiceRegistry.getDocumentation(any())).thenReturn("JEXL DOCS");
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOPMENT);
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOP);
         when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
         when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
         when(promptService.loadAllPrompts()).thenReturn(" ALL PROMPTS");
@@ -122,7 +122,7 @@ class AiServiceTest {
         assertTrue(capturedPrompt.contains("ALL PROMPTS"));
         assertTrue(capturedPrompt.contains("ALL DOCS"));
         assertTrue(capturedPrompt.contains("CUSTOM RULES"));
-        assertTrue(capturedPrompt.contains("CURRENT PHASE: DEVELOPMENT"));
+        assertTrue(capturedPrompt.contains("CURRENT PHASE: DEVELOP"));
         assertTrue(capturedPrompt.contains("Senior Developer"));
         assertTrue(capturedPrompt.contains("JEXL DOCS"));
         assertTrue(capturedPrompt.contains("JEXL CONTEXT"));
