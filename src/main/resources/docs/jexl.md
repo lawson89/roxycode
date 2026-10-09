@@ -146,23 +146,6 @@ planManagerService.submitTechnicalSpec(techSpec);
 ## ⚡️ Efficiency: Power Turns & Batching
 
 
-### `workflowService`
-- `getCurrentPhase()`: Returns the current `WorkflowPhase` enum.
-- `routeToPhase(phaseName)`: Requests or performs a transition to a new phase. **This is a terminating call; it will immediately end the JEXL script execution and yield the turn.**
-- `resetWorkflow()`: Resets the workflow to the initial `EXPLORE` phase.
-
-
-Minimize tool-call overhead by batching logic. Use JEXL's multi-statement support to perform complex operations in a single turn.
-
-### RULE: Single-Step Phase Transitions
-You can only transition to adjacent neighboring phases one step at a time. Multi-phase jumps (e.g. EXPLORE → DEVELOPMENT or PLANNING → VERIFICATION) are forbidden.
-
-#### Valid Transitions:
-- **From EXPLORE:** `routeToPhase('PLANNING', 'Requirements gathered. Proceeding to create implementation plan.')`
-- **From PLANNING:** `routeToPhase('DEVELOPMENT', 'Plan submitted. Ready to implement changes.')` or `routeToPhase('EXPLORE', 'Need further clarification on user requirements.')`
-- **From DEVELOPMENT:** `routeToPhase('VERIFICATION', 'All edits finished. Proceeding to build, test, and code review.')` or `routeToPhase('PLANNING', 'Encountered architectural blocker. Need to revise technical steps.')`
-- **From VERIFICATION:** `routeToPhase('EXPLORE', 'Code review and tests passed. Completing task.')` or `routeToPhase('DEVELOPMENT', 'Build failures/defects found in code review. Returning for fixes.')`
-
 ### Pattern: Search and Read
 Find a pattern and read the matching files immediately.
 ```javascript

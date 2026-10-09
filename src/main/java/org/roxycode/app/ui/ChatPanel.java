@@ -270,6 +270,11 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
                 String path = current.getDisplayName() + " → " + requested.getDisplayName();
                 transitionLabel.setText(path);
                 approveButton.setText("Approve");
+                
+                // FIX: Ensure HIL buttons are enabled as soon as the transition is requested
+                approveButton.setEnabled(true);
+                rejectButton.setEnabled(true);
+                
                 inlineActionPanel.setVisible(true);
                 outputArea.appendMessage("system", "Roxy requested a transition: **" + path + "**.\n\n**Reason:** " + reason);
             } else {
@@ -417,43 +422,35 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         currentWorker.execute();
     }
 
-            @Override
+                @Override
     public void onJexlExecuted(JexlExecutionEvent event) {
         SwingUtilities.invokeLater(() -> {
             String toolName = "";
-            StringBuilder logContent = new StringBuilder();
-            logContent.append(JexlToHtmlConverter.convert(event.script()));
-                        if (!event.success()) {
-                logContent.append("<div class='tool-error'><b>Error:</b> ")
-                          .append(StringEscapeUtils.escapeHtml4(event.error()))
-                          .append("</div>");
-            }
-
-            outputArea.appendToolLog(toolName, logContent.toString());
+            String output = JexlToHtmlConverter.convert(event.script());
+            outputArea.appendToolLog(toolName, output);
         });
     }
 
-
-            private void setLoading(boolean loading) {
-        // Reorder enablement and focus to prevent jump to 'Reset Session' button
+    private void setLoading(boolean loading) {
         if (loading) {
-                        stopButton.setEnabled(true);
+            stopButton.setEnabled(true);
             SwingUtilities.invokeLater(() -> stopButton.requestFocusInWindow());
             
             sendButton.setEnabled(false);
             inputArea.setEnabled(false);
-            approveButton.setEnabled(false);
-            rejectButton.setEnabled(false);
+            
+            // FIX: Only disable HIL buttons if no transition is currently pending
+            boolean hasPending = workflowService.getPendingPhase() != null;
+            approveButton.setEnabled(hasPending);
+            rejectButton.setEnabled(hasPending);
         } else {
             sendButton.setEnabled(true);
             inputArea.setEnabled(true);
             approveButton.setEnabled(true);
             rejectButton.setEnabled(true);
-            
-                        stopButton.setEnabled(false);
+            stopButton.setEnabled(false);
             SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow());
         }
-        
         sendButton.setText(loading ? "Sending..." : "Send");
     }
 
