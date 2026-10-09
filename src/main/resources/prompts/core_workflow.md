@@ -17,6 +17,8 @@ You are operating in a multi-role agent workflow. Your personality, goals, and a
 ## PHASE TRANSITIONS (IMPORTANT)
 To change phases, you MUST invoke the executeJexl tool with the script: `workflowService.routeToPhase('phaseName')`. NEVER just type the command in plain text.
 
+**CRITICAL: The `workflowService.routeToPhase()` call is TERMINATING. It will immediately stop the execution of your JEXL script and yield control back to the system/user. Ensure it is the LAST call in your script.**
+
 1. **FORWARD TRANSITIONS**:
    - **EXPLORE -> PLANNING**: No prerequisites.
    - **PLANNING -> DEVELOPMENT**: Requires `planManager.submitPlan()`.

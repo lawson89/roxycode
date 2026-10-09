@@ -42,9 +42,9 @@ public class WorkflowService {
         }
 
         // Handle backward transitions (except to EXPLORE which is always gated)
-        if (nextPhase.ordinal() < currentPhase.ordinal() && nextPhase != WorkflowPhase.EXPLORE) {
+                if (nextPhase.ordinal() < currentPhase.ordinal() && nextPhase != WorkflowPhase.EXPLORE) {
             setCurrentPhase(nextPhase);
-            return "Routed back to phase: " + nextPhase;
+            throw new YieldTurnException("Routed back to phase: " + nextPhase);
         }
 
         // Any transition to EXPLORE from another phase is gated as "Task Completion" or "Reset"
@@ -56,9 +56,9 @@ public class WorkflowService {
         }
 
         if (currentPhase == WorkflowPhase.EXPLORE) {
-            if (nextPhase == WorkflowPhase.PLANNING) {
+                        if (nextPhase == WorkflowPhase.PLANNING) {
                 setCurrentPhase(nextPhase);
-                return "Advanced to phase: " + nextPhase;
+                throw new YieldTurnException("Advanced to phase: " + nextPhase);
             }
             return "Error: Cannot transition from EXPLORE to " + nextPhase + ". You must go to PLANNING first.";
         }
@@ -76,10 +76,10 @@ public class WorkflowService {
             return "Error: Cannot transition from PLANNING to " + nextPhase + ".";
         }
         
-        if (currentPhase == WorkflowPhase.DEVELOPMENT) {
+                if (currentPhase == WorkflowPhase.DEVELOPMENT) {
             if (nextPhase == WorkflowPhase.VERIFICATION) {
                 setCurrentPhase(nextPhase);
-                return "Advanced to phase: " + nextPhase;
+                throw new YieldTurnException("Advanced to phase: " + nextPhase);
             }
             return "Error: Cannot transition from DEVELOPMENT to " + nextPhase + ". You must go to VERIFICATION next.";
         }

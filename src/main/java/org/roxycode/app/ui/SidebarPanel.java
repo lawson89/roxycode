@@ -38,8 +38,8 @@ public class SidebarPanel extends JPanel {
         add(createNavButton("Plan", "PLAN", Codicons.LIST_ORDERED));
         add(createNavButton("Git Changes", "GIT", Codicons.DIFF));
         add(createSectionHeader("CONTEXT"), "gaptop 15");
-        add(createNavButton("Context", "CONTEXT_MGR", Codicons.FILE));
-        add(createNavButton("Codebase Cache", "CACHE", Codicons.DATABASE));
+        add(createNavButton("Project Context", "CONTEXT_MGR", Codicons.FILE));
+        add(createNavButton("Implicit Cache", "CACHE", Codicons.DATABASE));
         add(createNavButton("API", "API", Codicons.CODE));
         add(createNavButton("Prompt", "PROMPT", Codicons.BOOK));
 

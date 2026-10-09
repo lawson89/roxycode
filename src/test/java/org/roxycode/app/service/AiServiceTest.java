@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.AgentRole;
 import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
@@ -59,6 +60,8 @@ class AiServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private ExploreManager exploreManager;
 
     @Mock
     private RepoMapPackerService repoMapPackerService;
@@ -78,9 +81,9 @@ class AiServiceTest {
         when(chatClientBuilder.defaultAdvisors(any(org.springframework.ai.chat.client.advisor.api.Advisor[].class))).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
         
-        ProjectAnalysisService projectAnalysisService = mock(ProjectAnalysisService.class);
+                ProjectAnalysisService projectAnalysisService = mock(ProjectAnalysisService.class);
         when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
-        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher, repoMapPackerService, gitService, projectAnalysisService);
+        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher, repoMapPackerService, gitService, projectAnalysisService, exploreManager);
     }
 
     @Test

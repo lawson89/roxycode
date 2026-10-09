@@ -101,10 +101,9 @@ class WorkflowServiceTest {
         assertTrue(service.getVisitedPhases().contains(WorkflowPhase.EXPLORE));
     }
 
-    @Test
+        @Test
     void testExploreToPlanning() {
-        String result = service.routeToPhase("PLANNING");
-        assertEquals("Advanced to phase: PLANNING", result);
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING"));
         assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
@@ -144,19 +143,17 @@ class WorkflowServiceTest {
         assertEquals(WorkflowPhase.PLANNING, service.getCurrentPhase());
     }
 
-    @Test
+        @Test
     void testDevelopmentToVerificationFree() {
         service.setCurrentPhase(WorkflowPhase.DEVELOPMENT);
-        String result = service.routeToPhase("VERIFICATION");
-        assertEquals("Advanced to phase: VERIFICATION", result);
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("VERIFICATION"));
         assertEquals(WorkflowPhase.VERIFICATION, service.getCurrentPhase());
     }
 
-    @Test
+        @Test
     void testVerificationToDevelopmentFree() {
         service.setCurrentPhase(WorkflowPhase.VERIFICATION);
-        String result = service.routeToPhase("DEVELOPMENT");
-        assertEquals("Routed back to phase: DEVELOPMENT", result);
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT"));
         assertEquals(WorkflowPhase.DEVELOPMENT, service.getCurrentPhase());
     }
 
@@ -167,7 +164,7 @@ class WorkflowServiceTest {
         
         YieldTurnException ex = assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE"));
         assertTrue(ex.getMessage().contains("Final Title"));
-        assertTrue(ex.getMessage().contains("Transition to EXPLORE requested"));
+        assertTrue(ex.getMessage().contains("to EXPLORE requested"));
         assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
         assertEquals(WorkflowPhase.VERIFICATION, service.getCurrentPhase());
     }

@@ -148,7 +148,7 @@ planManagerService.submitTechnicalSpec(techSpec);
 
 ### `workflowService`
 - `getCurrentPhase()`: Returns the current `WorkflowPhase` enum.
-- `routeToPhase(phaseName)`: Requests or performs a transition to a new phase.
+- `routeToPhase(phaseName)`: Requests or performs a transition to a new phase. **This is a terminating call; it will immediately end the JEXL script execution and yield the turn.**
 - `resetWorkflow()`: Resets the workflow to the initial `EXPLORE` phase.
 
 

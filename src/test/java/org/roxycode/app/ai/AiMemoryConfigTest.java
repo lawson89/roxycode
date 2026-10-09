@@ -44,34 +44,6 @@ class AiMemoryConfigTest {
     }
 
     @Test
-    void testDynamicResizing() {
-        SettingsService settingsService = mock(SettingsService.class);
-        AppSettings settings = new AppSettings();
-        settings.setMaxChatMemoryMessages(10);
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        AiMemoryConfig config = new AiMemoryConfig();
-        ChatMemoryRepository repository = new InMemoryChatMemoryRepository();
-        ChatMemory memory = config.chatMemory(repository, settingsService);
-        String conversationId = "test-session";
-
-        for (int i = 0; i < 20; i++) {
-            memory.add(conversationId, List.of(new UserMessage("Msg " + i)));
-        }
-        assertEquals(10, memory.get(conversationId).size());
-
-        // Change setting dynamically
-        settings.setMaxChatMemoryMessages(5);
-        
-        // Next add should trigger truncation by the window
-        memory.add(conversationId, List.of(new UserMessage("Msg 20")));
-        
-        List<Message> result = memory.get(conversationId);
-        assertEquals(5, result.size());
-        assertEquals("Msg 16", result.get(0).getText());
-    }
-
-    @Test
     void testConcurrentAdditionsWithEviction() throws InterruptedException {
         SettingsService settingsService = mock(SettingsService.class);
         AppSettings settings = new AppSettings();

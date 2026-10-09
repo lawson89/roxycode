@@ -9,6 +9,13 @@ import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.service.ProjectAnalysisService;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.AgentRole;
+
 import org.roxycode.app.service.SettingsService;
 
 import javax.swing.*;
@@ -21,6 +28,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CodebaseCachePanelTest {
 
+    @Mock private WorkflowService workflowService;
+    @Mock private JexlServiceRegistry jexlServiceRegistry;
+    @Mock private GitService gitService;
+    @Mock private ProjectAnalysisService projectAnalysisService;
+
     @Mock private ProjectService projectService;
     @Mock private SettingsService settingsService;
     private org.roxycode.app.service.PromptService promptService;
@@ -30,12 +42,13 @@ class CodebaseCachePanelTest {
 
     private CodebaseCachePanel panel;
 
-    @BeforeEach
+        @BeforeEach
     void setUp() {
         when(metaService.loadMeta()).thenReturn(Optional.empty());
         when(metaService.loadRepoCache()).thenReturn(Optional.empty());
         
-        panel = new CodebaseCachePanel(projectService, settingsService, packerService, metaService, geminiCacheService, promptService);
+        
+        panel = new CodebaseCachePanel(projectService, settingsService, packerService, metaService, geminiCacheService, promptService, workflowService, jexlServiceRegistry, gitService, projectAnalysisService);
     }
 
     @Test

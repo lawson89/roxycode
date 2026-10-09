@@ -7,6 +7,12 @@ import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.ProjectAnalysisService;
+import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.AgentRole;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +27,10 @@ public class CodebaseCachePanel extends JPanel {
     private final RepoMapPackerService packerService;
     private final org.roxycode.app.service.PromptService promptService;
     private final GeminiCacheService geminiCacheService;
+    private final WorkflowService workflowService;
+    private final JexlServiceRegistry jexlServiceRegistry;
+    private final GitService gitService;
+    private final ProjectAnalysisService projectAnalysisService;
 
     private final JLabel statusLabel = new JLabel("Status: Unknown");
     private final JProgressBar progressBar = new JProgressBar(0, 100);
@@ -28,15 +38,22 @@ public class CodebaseCachePanel extends JPanel {
     
     private final JTextArea repoMapArea = new JTextArea();
     private final JTextArea stableContextArea = new JTextArea();
+    private final JTextArea sessionContextArea = new JTextArea();
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public CodebaseCachePanel(ProjectService projectService, SettingsService settingsService,
                                 RepoMapPackerService packerService, ProjectCacheMetaService metaService,
-                                GeminiCacheService geminiCacheService, org.roxycode.app.service.PromptService promptService) {
+                                GeminiCacheService geminiCacheService, org.roxycode.app.service.PromptService promptService,
+                                WorkflowService workflowService, JexlServiceRegistry jexlServiceRegistry,
+                                GitService gitService, ProjectAnalysisService projectAnalysisService) {
         this.packerService = packerService;
         this.metaService = metaService;
         this.promptService = promptService;
         this.geminiCacheService = geminiCacheService;
+        this.workflowService = workflowService;
+        this.jexlServiceRegistry = jexlServiceRegistry;
+        this.gitService = gitService;
+        this.projectAnalysisService = projectAnalysisService;
 
         initComponents();
         refreshStatus();
@@ -45,7 +62,7 @@ public class CodebaseCachePanel extends JPanel {
     private void initComponents() {
         setLayout(new MigLayout("fill, insets 20", "[grow]", "[]20[]10[grow]"));
 
-        JLabel title = new JLabel("Implicit Context Cache (Repo Map)");
+        JLabel title = new JLabel("Implicit Cache (Repo Map)");
         title.setFont(new Font("SansSerif", Font.BOLD, 18));
         add(title, "wrap");
 
@@ -63,10 +80,13 @@ public class CodebaseCachePanel extends JPanel {
         repoMapArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         stableContextArea.setEditable(false);
         stableContextArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        sessionContextArea.setEditable(false);
+        sessionContextArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Repo Map (Dynamic)", new JScrollPane(repoMapArea));
         tabbedPane.addTab("Prompts & Docs (Stable)", new JScrollPane(stableContextArea));
+        tabbedPane.addTab("Session Context (Dynamic)", new JScrollPane(sessionContextArea));
         
         add(tabbedPane, "grow, push");
 
@@ -76,10 +96,9 @@ public class CodebaseCachePanel extends JPanel {
         progressBar.setVisible(false);
     }
 
-        @Override
+    @Override
     public void updateUI() {
         super.updateUI();
-        // Check for null because updateUI() is called during constructor via initComponents()
         if (repoMapArea != null) {
             updateTheme();
         }
@@ -92,6 +111,9 @@ public class CodebaseCachePanel extends JPanel {
         stableContextArea.setBackground(UIManager.getColor("TextArea.background"));
         stableContextArea.setForeground(UIManager.getColor("TextArea.foreground"));
         stableContextArea.setCaretColor(UIManager.getColor("TextArea.caretForeground"));
+        sessionContextArea.setBackground(UIManager.getColor("TextArea.background"));
+        sessionContextArea.setForeground(UIManager.getColor("TextArea.foreground"));
+        sessionContextArea.setCaretColor(UIManager.getColor("TextArea.caretForeground"));
     }
 
     private void refreshStatus() {
@@ -107,6 +129,7 @@ public class CodebaseCachePanel extends JPanel {
             
             repoMapArea.setText(packed.orElse("Content not found on disk."));
             updateStableContext();
+            updateSessionContext();
             repoMapArea.setCaretPosition(0);
         } else {
             statusLabel.setText("Status: No implicit cache found.");
@@ -120,7 +143,7 @@ public class CodebaseCachePanel extends JPanel {
         }
     }
 
-        private String getStableContextString() {
+    private String getStableContextString() {
         StringBuilder sb = new StringBuilder();
         sb.append("# Stable Context Artifacts\n\n");
         sb.append("## Core Workflow Prompt\n").append(promptService.loadCoreWorkflowPrompt()).append("\n\n");
@@ -137,6 +160,33 @@ public class CodebaseCachePanel extends JPanel {
     private void updateStableContext() {
         stableContextArea.setText(getStableContextString());
         stableContextArea.setCaretPosition(0);
+    }
+
+    private String getSessionContextString() {
+        StringBuilder sb = new StringBuilder();
+        WorkflowPhase currentPhase = workflowService.getCurrentPhase();
+        AgentRole currentRole = currentPhase.getRole();
+
+        sb.append("## SESSION CONTEXT\n");
+        sb.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage()).append("\n");
+        sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
+        sb.append("CURRENT ROLE: ").append(currentRole.getTitle()).append("\n");
+        sb.append(currentRole.getSystemPromptPrefix()).append("\n\n");
+        
+        sb.append("You have access to the following JEXL tools:\n")
+          .append(jexlServiceRegistry.getDocumentation(currentRole));
+        
+        String gitStatus = gitService.getStatus();
+        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
+            sb.append("\n\n## GIT STATUS\n").append(gitStatus);
+        }
+        
+        return sb.toString();
+    }
+
+    private void updateSessionContext() {
+        sessionContextArea.setText(getSessionContextString());
+        sessionContextArea.setCaretPosition(0);
     }
 
     private void runPack() {

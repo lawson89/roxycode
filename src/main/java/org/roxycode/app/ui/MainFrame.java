@@ -9,11 +9,12 @@ import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SystemToolService;
+import org.roxycode.app.service.ProjectAnalysisService;
+
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.ai.WorkflowService;
 import org.springframework.ai.chat.memory.ChatMemory;
-import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;
 import java.awt.*;
 
@@ -26,6 +27,8 @@ public class MainFrame extends JFrame {
     private final AiService aiService;
     private final SystemToolService toolService;
     private final ProjectService projectService;
+    private final ProjectAnalysisService projectAnalysisService;
+
     private final GitService gitService;
     private final EnvironmentService envService;
     private final JexlServiceRegistry jexlServiceRegistry;
@@ -42,19 +45,20 @@ public class MainFrame extends JFrame {
     private final GenericBuildToolService buildToolService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
-    
+
     private GitChangesPanel gitChangesPanel;
 
-    public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService, 
-                    ProjectService projectService, GitService gitService, EnvironmentService envService,
-                    JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService, 
-                    PlanManagerService planManagerService, org.roxycode.app.ai.JexlTool jexlTool,
-                    org.roxycode.app.events.TurnEventBridge turnEventBridge,
-                    org.roxycode.app.ai.services.cache.RepoMapPackerService packerService,
-                    org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
-                    org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService,
-                    org.roxycode.app.service.PromptService promptService,
-                    GenericBuildToolService buildToolService, ChatMemory chatMemory) {
+        public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService,
+            ProjectService projectService, GitService gitService, EnvironmentService envService,
+            JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService,
+            PlanManagerService planManagerService, org.roxycode.app.ai.JexlTool jexlTool,
+            org.roxycode.app.events.TurnEventBridge turnEventBridge,
+            org.roxycode.app.ai.services.cache.RepoMapPackerService packerService,
+            org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
+            org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService,
+            org.roxycode.app.service.PromptService promptService,
+            GenericBuildToolService buildToolService, ChatMemory chatMemory,
+            ProjectAnalysisService projectAnalysisService) {
         this.settingsService = settingsService;
         this.aiService = aiService;
         this.toolService = toolService;
@@ -71,6 +75,8 @@ public class MainFrame extends JFrame {
         this.cacheMetaService = cacheMetaService;
         this.geminiCacheService = geminiCacheService;
         this.promptService = promptService;
+        this.projectAnalysisService = projectAnalysisService;
+
         this.buildToolService = buildToolService;
         this.chatMemory = chatMemory;
         setupLaf();
@@ -107,8 +113,8 @@ public class MainFrame extends JFrame {
 
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
-        
-                HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService, planManagerService, turnEventBridge, this::showCard);
+
+        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService, planManagerService, turnEventBridge, this::showCard);
 
         StatusPanel statusBar = new StatusPanel(envService, chatMemory);
 
@@ -118,7 +124,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService), "PLAN");
         contentArea.add(gitChangesPanel, "GIT");
-        contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService), "CACHE");
+        contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService, workflowService, jexlServiceRegistry, gitService, projectAnalysisService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
         contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
@@ -133,14 +139,14 @@ public class MainFrame extends JFrame {
         add(sidebar, "growy");
         add(workspace, "grow");
     }
-    
+
     private void showCard(String cardName) {
         cardLayout.show(contentArea, cardName);
         if ("GIT".equals(cardName) && gitChangesPanel != null) {
             gitChangesPanel.refresh();
         }
     }
-    
+
     private JPanel createPlaceholderPanel(String text) {
         JPanel p = new JPanel(new MigLayout("fill", "[center]", "[center]"));
         p.add(new JLabel(text));

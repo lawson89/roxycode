@@ -54,8 +54,6 @@
             <artifactId>commons-text</artifactId>
             <version>1.15.0</version>
         </dependency>
-
-
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-google-genai</artifactId>
@@ -86,21 +84,21 @@
         <dependency>
             <groupId>org.kordamp.ikonli</groupId>
             <artifactId>ikonli-swing</artifactId>
-            <version>12.3.1</version>
+            <version>12.4.0</version>
         </dependency>
 
         <!-- FontAwesome 5 Icon Pack -->
         <dependency>
             <groupId>org.kordamp.ikonli</groupId>
             <artifactId>ikonli-fontawesome5-pack</artifactId>
-            <version>12.3.1</version>
+            <version>12.4.0</version>
         </dependency>
 
         <!-- Codicons Icon Pack -->
         <dependency>
             <groupId>org.kordamp.ikonli</groupId>
             <artifactId>ikonli-codicons-pack</artifactId>
-            <version>12.3.1</version>
+            <version>12.4.0</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
@@ -109,7 +107,7 @@
         <dependency>
             <groupId>com.miglayout</groupId>
             <artifactId>miglayout-swing</artifactId>
-            <version>11.4.2</version>
+            <version>11.4.3</version>
         </dependency>
 
         <dependency>
@@ -125,7 +123,7 @@
         <dependency>
             <groupId>com.fifesoft</groupId>
             <artifactId>rsyntaxtextarea</artifactId>
-            <version>3.5.3</version>
+            <version>4.0.1</version>
         </dependency>
 
 
