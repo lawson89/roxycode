@@ -158,25 +158,30 @@ class WorkflowServiceTest {
     }
 
     @Test
-    void testDevelopmentToVerificationGated() {
+    void testDevelopmentToExploreGated() {
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
         service.approveTransition();
         when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT", "Reason"));
         service.approveTransition();
         
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("VERIFICATION", "Reason"));
-        assertEquals(WorkflowPhase.VERIFICATION, service.getPendingPhase());
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Reason"));
+        assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
     }
 
     @Test
     void testIllegalTransitions() {
-        // EXPLORE -> VERIFICATION
-        assertTrue(service.routeToPhase("VERIFICATION", "Reason").contains("Only single-step transitions to adjacent phases are allowed"));
+        // EXPLORE -> DEVELOPMENT
+        assertTrue(service.routeToPhase("DEVELOPMENT", "Reason").contains("Only single-step transitions to adjacent phases are allowed"));
         
-        // PLANNING -> VERIFICATION
+        // DEVELOPMENT -> EXPLORE (via routeToPhase)
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLANNING", "Reason"));
         service.approveTransition();
-        assertTrue(service.routeToPhase("VERIFICATION", "Reason").contains("Only single-step transitions to adjacent phases are allowed"));
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("Title", "Goal", List.of(), List.of()));
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("DEVELOPMENT", "Reason"));
+        service.approveTransition();
+
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Reason"));
+        assertEquals(WorkflowPhase.EXPLORE, service.getPendingPhase());
     }
 }

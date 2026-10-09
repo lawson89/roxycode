@@ -20,8 +20,7 @@ public class PromptService {
     private static final String CLASSPATH_PROMPT = "prompts/core_workflow.md";
     private static final String JEXL_DOC_PATH = "docs/jexl.md";
     private static final String EXPLORE_PROMPT_PATH = "prompts/explore_phase.md";
-    private static final String VERIFICATION_PROMPT_PATH = "prompts/verification_phase.md";
-    private static final String CONTEXT_DIR = ".roxycode/context";
+        private static final String CONTEXT_DIR = ".roxycode/context";
 
     private final ProjectService projectService;
 
@@ -58,18 +57,8 @@ public class PromptService {
         }
     }
 
-    public String loadVerificationPrompt() {
-        try {
-            Resource resource = new ClassPathResource(VERIFICATION_PROMPT_PATH);
-            return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("Failed to load VERIFICATION prompt from classpath: {}", e.getMessage());
-            return "";
-        }
-    }
-
     public String loadAllPrompts() {
-        return loadMarkdownFromClasspath("prompts", "core_workflow.md", "explore_phase.md", "verification_phase.md");
+        return loadMarkdownFromClasspath("prompts", "core_workflow.md", "explore_phase.md");
     }
 
     public String loadAllDocs() {

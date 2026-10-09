@@ -21,8 +21,11 @@ class PlanManagerServiceTest {
         ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), List.of(new ImplementationPlan.TechStep("Step 1", false)));
         String res = service.submitPlan(plan);
         
-        assertEquals("Implementation plan submitted successfully.", res);
-        assertEquals(plan, service.getCurrentPlan());
+        assertEquals("Implementation plan submitted successfully with mandatory verification checklist items.", res);
+        assertNotNull(service.getCurrentPlan());
+        assertEquals("Title", service.getCurrentPlan().title());
+        // Step 1 + Code compiles + Unit tests pass = 3
+        assertEquals(3, service.getCurrentPlan().technicalSteps().size());
         assertEquals(1, notifications.get());
     }
 
@@ -35,7 +38,8 @@ class PlanManagerServiceTest {
         service.submitPlan("Title", "Goal", reqs, steps);
         
         assertEquals(2, service.getCurrentPlan().requirements().size());
-        assertEquals(1, service.getCurrentPlan().technicalSteps().size());
+        // Step 1 + Code compiles + Unit tests pass = 3
+        assertEquals(3, service.getCurrentPlan().technicalSteps().size());
         assertEquals("Req 1", service.getCurrentPlan().requirements().get(0));
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
     }
@@ -48,6 +52,7 @@ class PlanManagerServiceTest {
         service.submitPlan("Title", "Goal", List.of("Req 1"), List.of("Step 1"));
         assertNotNull(service.getCurrentPlan());
         assertEquals("Title", service.getCurrentPlan().title());
+        assertEquals(3, service.getCurrentPlan().technicalSteps().size());
         
         // Map arguments
         service.clearSpecs();
@@ -61,6 +66,7 @@ class PlanManagerServiceTest {
         );
         service.submitPlan(planMap);
         assertEquals("Map Title", service.getCurrentPlan().title());
+        assertEquals(3, service.getCurrentPlan().technicalSteps().size());
     }
 
     @Test
@@ -68,6 +74,8 @@ class PlanManagerServiceTest {
         PlanManagerService service = new PlanManagerService();
         service.submitPlan("Title", "Goal", List.of(), List.of("Step 1", "Step 2"));
         
+        // Step 1, Step 2, Code compiles, Unit tests pass = 4
+        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
         
         service.markStepCompleted(0);

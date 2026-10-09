@@ -135,8 +135,6 @@ public class AiService {
         // Phase-specific prompt injection
         if (currentPhase == WorkflowPhase.EXPLORE) {
             systemPrompt.append("\n\n").append(exploreManager.generateSystemPrompt());
-        } else if (currentPhase == WorkflowPhase.VERIFICATION) {
-            systemPrompt.append("\n\n").append(promptService.loadVerificationPrompt());
         }
         
         EditorResult repoMap = repoMapPackerService.generateRepoMap();

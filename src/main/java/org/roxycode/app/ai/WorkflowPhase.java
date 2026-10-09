@@ -6,8 +6,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 public enum WorkflowPhase {
     EXPLORE(AgentRole.TECHNICAL_MENTOR, "Explore", Codicons.SEARCH),
     PLANNING(AgentRole.LEAD_ARCHITECT, "Planning", Codicons.LIGHTBULB),
-    DEVELOPMENT(AgentRole.SENIOR_DEVELOPER, "Development", Codicons.CODE),
-    VERIFICATION(AgentRole.TECHNICAL_MENTOR, "Verification", Codicons.BEAKER);
+    DEVELOPMENT(AgentRole.SENIOR_DEVELOPER, "Development", Codicons.CODE);
 
     private final AgentRole role;
     private final String displayName;

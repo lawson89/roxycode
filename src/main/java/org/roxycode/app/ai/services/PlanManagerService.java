@@ -4,6 +4,7 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.model.ImplementationPlan;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -42,9 +43,30 @@ public class PlanManagerService {
     @AgentDoc("Submits an implementation plan for the project.")
     public String submitPlan(
             @AgentDoc("The implementation plan to submit.") ImplementationPlan plan) {
-        this.currentPlan = plan;
+        if (plan == null) {
+            return "Error: Plan cannot be null.";
+        }
+
+        List<ImplementationPlan.TechStep> steps = new ArrayList<>(plan.technicalSteps());
+        
+        // Check and auto-append mandatory compile step
+        boolean hasCompile = steps.stream()
+                .anyMatch(s -> s.description().toLowerCase().contains("compile"));
+        if (!hasCompile) {
+            steps.add(new ImplementationPlan.TechStep("Code compiles successfully", false));
+        }
+
+        // Check and auto-append mandatory test step
+        boolean hasTests = steps.stream()
+                .anyMatch(s -> s.description().toLowerCase().contains("unit test") 
+                            || s.description().toLowerCase().contains("tests pass"));
+        if (!hasTests) {
+            steps.add(new ImplementationPlan.TechStep("Unit tests pass", false));
+        }
+
+        this.currentPlan = new ImplementationPlan(plan.title(), plan.goal(), plan.requirements(), steps);
         notifyListeners();
-        return "Implementation plan submitted successfully.";
+        return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
     /**

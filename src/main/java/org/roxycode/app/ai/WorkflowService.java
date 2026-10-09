@@ -33,14 +33,14 @@ public class WorkflowService {
 
     @AgentDoc("Requests a single-step transition to an adjacent phase with a descriptive reason.")
     public String routeToPhase(
-            @AgentDoc("The target phase: EXPLORE, PLANNING, DEVELOPMENT, or VERIFICATION.") String phaseName,
+            @AgentDoc("The target phase: EXPLORE, PLANNING, or DEVELOPMENT.") String phaseName,
             @AgentDoc("The detailed reason for requesting this transition.") String reason) {
 
         WorkflowPhase nextPhase;
         try {
             nextPhase = WorkflowPhase.valueOf(phaseName.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT, VERIFICATION.";
+            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT.";
         }
 
         if (nextPhase == currentPhase) {
@@ -74,7 +74,7 @@ public class WorkflowService {
                 + "**Reason:** " + reason;
 
         // Yield execution turn immediately for user approval
-        String json = String.format("{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
+                String json = String.format("{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
                 StringEscapeUtils.escapeJson(summary),
                 StringEscapeUtils.escapeJson(message),
                 StringEscapeUtils.escapeJson(reason));
@@ -93,9 +93,7 @@ public class WorkflowService {
             case PLANNING:
                 return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.DEVELOPMENT;
             case DEVELOPMENT:
-                return next == WorkflowPhase.PLANNING || next == WorkflowPhase.VERIFICATION;
-            case VERIFICATION:
-                return next == WorkflowPhase.DEVELOPMENT || next == WorkflowPhase.EXPLORE;
+                return next == WorkflowPhase.PLANNING || next == WorkflowPhase.EXPLORE;
             default:
                 return false;
         }
