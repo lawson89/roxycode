@@ -57,6 +57,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final JButton rejectButton;
     private final JButton resetSessionButton;
     private final JPanel inlineActionPanel;
+    private final JLabel transitionLabel;
     private final JLabel turnLabel;
     private final JScrollPane outputScrollPane;
     private SwingWorker<String, Void> currentWorker;
@@ -96,7 +97,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         if (accentColor == null) accentColor = UIManager.getColor("Label.foreground");
         if (accentColor == null) accentColor = Color.GRAY;
 
-        JLabel transitionLabel = new JLabel("Workflow Transition", FontIcon.of(Codicons.ROCKET, 16, accentColor), SwingConstants.LEFT);
+        transitionLabel = new JLabel("Workflow Transition", FontIcon.of(Codicons.ROCKET, 16, accentColor), SwingConstants.LEFT);
         transitionLabel.setFont(transitionLabel.getFont().deriveFont(Font.BOLD));
         transitionLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Component.accentColor");
 
@@ -260,9 +261,11 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested) {
         SwingUtilities.invokeLater(() -> {
             if (requested != null) {
-                approveButton.setText("Approve " + requested.getDisplayName());
+                String path = current.getDisplayName() + " → " + requested.getDisplayName();
+                transitionLabel.setText(path);
+                approveButton.setText("Approve");
                 inlineActionPanel.setVisible(true);
-                outputArea.appendMessage("system", "Roxy requested a transition to **" + requested.getDisplayName() + "**. Please approve or reject below.");
+                outputArea.appendMessage("system", "Roxy requested a transition: **" + path + "**. Please approve or reject below.");
             } else {
                 inlineActionPanel.setVisible(false);
             }
@@ -273,7 +276,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         WorkflowPhase requested = workflowService.getPendingPhase();
         if (requested != null) {
             workflowService.approveTransition();
-            outputArea.appendMessage("system", "Phase transition to **" + requested.getDisplayName() + "** approved.");
+            outputArea.appendMessage("system", "Transition to **" + requested.getDisplayName() + "** approved.");
             if (requested == WorkflowPhase.EXPLORE) {
                 outputArea.appendMessage("system", "Task complete. We are back in Explore mode. Please enter a new question or task.");
             } else {
@@ -286,7 +289,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         WorkflowPhase requested = workflowService.getPendingPhase();
         if (requested != null) {
             workflowService.rejectTransition();
-            outputArea.appendMessage("system", "Phase transition to **" + requested.getDisplayName() + "** rejected.");
+            outputArea.appendMessage("system", "Transition to **" + requested.getDisplayName() + "** rejected.");
             triggerTurn("I have rejected the transition to " + requested.getDisplayName() + ". Let's discuss what needs to be fixed or adjusted.");
         }
     }

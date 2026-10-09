@@ -58,7 +58,7 @@ public class SettingsPanel extends JPanel {
         loadModels();
         add(modelCombo, "wrap");
 
-        add(new JLabel("Gemini API Key:"));
+        add(new JLabel("Gemini API Key (*):"));
         geminiApiKeyField = new JPasswordField(20);
         geminiApiKeyField.setText(settingsService.getSettings().getGeminiApiKey());
         add(geminiApiKeyField, "wrap");
@@ -68,7 +68,7 @@ public class SettingsPanel extends JPanel {
             settingsService.getSettings().getMaxAgentToolTurns(), 1, 50, 1));
         add(maxAgentToolTurnsSpinner, "wrap");
 
-        add(new JLabel("Max Chat History Messages:"));
+        add(new JLabel("Max Chat History Messages (*):"));
         maxMessagesSpinner = new JSpinner(new SpinnerNumberModel(
             settingsService.getSettings().getMaxChatMemoryMessages(), 1, 500, 5));
         add(maxMessagesSpinner, "wrap");
@@ -77,11 +77,12 @@ public class SettingsPanel extends JPanel {
         saveButton.addActionListener(e -> saveSettings());
         add(saveButton, "span, split 2, gaptop 20");
 
-        statusLabel = new JLabel("");
+        statusLabel = new JLabel("(*) Restart required for marked settings");
+        statusLabel.setFont(statusLabel.getFont().deriveFont(11f));
         statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Actions.Green");
         add(statusLabel, "gapleft 10");
 
-        statusTimer = new Timer(3000, e -> {
+                statusTimer = new Timer(3000, e -> {
             statusLabel.setText("");
         });
         statusTimer.setRepeats(false);
@@ -125,9 +126,9 @@ public class SettingsPanel extends JPanel {
         settingsService.getSettings().setMaxChatMemoryMessages((Integer) maxMessagesSpinner.getValue());
         settingsService.saveSettings();
         if (selectedModel != null) {
-            statusLabel.setText("Active model switched to: " + selectedModel.name());
+            statusLabel.setText("Model switched to: " + selectedModel.name() + ". Restart required for some changes.");
         } else {
-            statusLabel.setText("Settings saved!");
+            statusLabel.setText("Settings saved. Restart required for some changes.");
         }
         statusTimer.restart();
     }

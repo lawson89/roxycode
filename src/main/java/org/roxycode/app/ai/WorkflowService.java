@@ -51,7 +51,7 @@ public class WorkflowService {
         if (nextPhase == WorkflowPhase.EXPLORE) {
             requestPhaseTransition(nextPhase);
             String summary = formatPlanSummary(planManager.getCurrentPlan());
-            String message = "**Transition to EXPLORE requested (Task Completion/Reset). Awaiting human sign-off.**";
+            String message = "**Transition from " + currentPhase.getDisplayName() + " to EXPLORE requested. Awaiting approval.**";
             throw new YieldTurnException("{\"summary\": \"" + StringEscapeUtils.escapeJson(summary) + "\", \"message\": \"" + StringEscapeUtils.escapeJson(message) + "\"}");
         }
 
@@ -70,7 +70,7 @@ public class WorkflowService {
                 }
                 requestPhaseTransition(nextPhase);
                 String summary = formatPlanSummary(planManager.getCurrentPlan());
-                String message = "**Transition to DEVELOPMENT requested. Awaiting human approval.**";
+                String message = "**Transition from " + currentPhase.getDisplayName() + " to DEVELOPMENT requested. Awaiting approval.**";
                 throw new YieldTurnException("{\"summary\": \"" + StringEscapeUtils.escapeJson(summary) + "\", \"message\": \"" + StringEscapeUtils.escapeJson(message) + "\"}");
             }
             return "Error: Cannot transition from PLANNING to " + nextPhase + ".";

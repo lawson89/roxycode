@@ -7,6 +7,7 @@ import org.roxycode.app.ai.JexlExecutionListener;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.events.AgentTurnEvent;
@@ -44,15 +45,17 @@ public class AiService {
     private final RepoMapPackerService repoMapPackerService;
     private final GitService gitService;
     private final ProjectAnalysisService projectAnalysisService;
+    private final ExploreManager exploreManager;
 
-    public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
+        public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
                      PromptService promptService,
                      JexlServiceRegistry jexlServiceRegistry, JexlTool jexlTool,
                      WorkflowService workflowService, ChatMemory chatMemory,
                      ApplicationEventPublisher eventPublisher,
                      RepoMapPackerService repoMapPackerService,
                      GitService gitService,
-                     ProjectAnalysisService projectAnalysisService) {
+                     ProjectAnalysisService projectAnalysisService,
+                     ExploreManager exploreManager) {
         this.settingsService = settingsService;
         this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
@@ -63,6 +66,7 @@ public class AiService {
         this.repoMapPackerService = repoMapPackerService;
         this.gitService = gitService;
         this.projectAnalysisService = projectAnalysisService;
+        this.exploreManager = exploreManager;
         this.chatClient = chatClientBuilder
                 .defaultTools(jexlTool)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
@@ -132,10 +136,17 @@ public class AiService {
         AgentRole currentRole = currentPhase.getRole();
         
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
-        systemPrompt.append(promptService.loadAllPrompts());
+                systemPrompt.append(promptService.loadAllPrompts());
         systemPrompt.append("\n\n## JEXL CONTEXT\n").append(promptService.loadJexlContext()).append("\n\n");
         systemPrompt.append(promptService.loadAllDocs());
         systemPrompt.append(promptService.loadProjectContext());
+
+        // Phase-specific prompt injection
+        if (currentPhase == WorkflowPhase.EXPLORE) {
+            systemPrompt.append("\n\n").append(exploreManager.generateSystemPrompt());
+        } else if (currentPhase == WorkflowPhase.VERIFICATION) {
+            systemPrompt.append("\n\n").append(promptService.loadVerificationPrompt());
+        }
         
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
         if (repoMap.success()) systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.content()).append("\n");
