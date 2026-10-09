@@ -252,9 +252,15 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
+        private WorkflowPhase lastReportedPhase;
+
     private void onPhaseChanged(WorkflowPhase phase) {
         SwingUtilities.invokeLater(() -> {
             inlineActionPanel.setVisible(false);
+            if (lastReportedPhase != phase) {
+                outputArea.appendMessage("system", "Workflow Phase changed to: **" + phase.getDisplayName() + "**");
+                lastReportedPhase = phase;
+            }
         });
     }
 

@@ -217,7 +217,7 @@ public class HeaderPanel extends JPanel {
             setOpaque(false);
             
             textLabel = new JLabel(phase.getDisplayName());
-            textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -2");
+            textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
 
             add(textLabel);
         }

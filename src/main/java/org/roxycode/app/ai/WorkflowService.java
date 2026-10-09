@@ -77,8 +77,15 @@ public class WorkflowService {
             return Map.of("error", "Cannot transition from PLANNING to " + nextPhase + ".");
         }
         
-                if (currentPhase == WorkflowPhase.DEVELOPMENT) {
+                        if (currentPhase == WorkflowPhase.DEVELOPMENT) {
             if (nextPhase == WorkflowPhase.VERIFICATION) {
+                org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
+                if (plan != null && !plan.technicalSteps().isEmpty()) {
+                    boolean allDone = plan.technicalSteps().stream().allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);
+                    if (!allDone) {
+                        return Map.of("error", "Cannot transition to VERIFICATION. Not all technical implementation steps are completed. Use planManagerService.markStepCompleted(index) to update progress.");
+                    }
+                }
                 setCurrentPhase(nextPhase);
                 return Map.of("message", "Advanced to phase: " + nextPhase);
             }
@@ -148,7 +155,7 @@ public class WorkflowService {
     private void notifyPhaseListeners() { for (Consumer<WorkflowPhase> listener : phaseListeners) listener.accept(currentPhase); }
     private void notifyRequestListeners() { for (TransitionRequestListener listener : requestListeners) listener.onTransitionRequested(currentPhase, pendingPhase); }
 
-    private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
+        private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
         if (plan == null) return "";
         StringBuilder sb = new StringBuilder();
         sb.append("PLAN SUMMARY:\n\n### 🤖 ").append(plan.title()).append("\n");
@@ -156,7 +163,10 @@ public class WorkflowService {
         sb.append("#### 📋 Requirements\n");
         for (String req : plan.requirements()) sb.append("* ").append(req).append("\n");
         sb.append("\n#### 🛠️ Technical Steps\n");
-        for (String step : plan.technicalSteps()) sb.append("* ").append(step).append("\n");
+        for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
+            String status = step.completed() ? "[x]" : "[ ]";
+            sb.append("* ").append(status).append(" ").append(step.description()).append("\n");
+        }
         return sb.toString();
     }
 }

@@ -18,7 +18,7 @@ class PlanManagerServiceTest {
         
         service.addListener((plan) -> notifications.incrementAndGet());
         
-        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), List.of("Step 1"));
+        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), List.of(new ImplementationPlan.TechStep("Step 1", false)));
         String res = service.submitPlan(plan);
         
         assertEquals("Implementation plan submitted successfully.", res);
@@ -37,6 +37,7 @@ class PlanManagerServiceTest {
         assertEquals(2, service.getCurrentPlan().requirements().size());
         assertEquals(1, service.getCurrentPlan().technicalSteps().size());
         assertEquals("Req 1", service.getCurrentPlan().requirements().get(0));
+        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
     }
 
     @Test
@@ -60,5 +61,20 @@ class PlanManagerServiceTest {
         );
         service.submitPlan(planMap);
         assertEquals("Map Title", service.getCurrentPlan().title());
+    }
+
+    @Test
+    void testMarkStepStatus() {
+        PlanManagerService service = new PlanManagerService();
+        service.submitPlan("Title", "Goal", List.of(), List.of("Step 1", "Step 2"));
+        
+        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
+        
+        service.markStepCompleted(0);
+        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
+        assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
+        
+        service.markStepIncomplete(0);
+        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
     }
 }

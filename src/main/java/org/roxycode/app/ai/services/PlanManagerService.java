@@ -7,6 +7,7 @@ import org.roxycode.app.model.ImplementationPlan;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing project plans and specifications.
@@ -60,7 +61,14 @@ public class PlanManagerService {
             @AgentDoc("The high-level goal.") String goal,
             @AgentDoc("List of functional requirements.") Object requirements,
             @AgentDoc("List of technical implementation steps.") Object technicalSteps) {
-        return submitPlan(new ImplementationPlan(title, goal, extractStringList(requirements), extractStringList(technicalSteps)));
+        List<String> rawRequirements = extractStringList(requirements);
+        List<String> rawTechSteps = extractStringList(technicalSteps);
+        
+        List<ImplementationPlan.TechStep> steps = rawTechSteps.stream()
+                .map(s -> new ImplementationPlan.TechStep(s, false))
+                .collect(Collectors.toList());
+                
+        return submitPlan(new ImplementationPlan(title, goal, rawRequirements, steps));
     }
 
     /**
@@ -75,8 +83,42 @@ public class PlanManagerService {
         String title = (String) planMap.getOrDefault("title", "");
         String goal = (String) planMap.getOrDefault("goal", "");
         List<String> requirements = extractStringList(planMap.get("requirements"));
-        List<String> technicalSteps = extractStringList(planMap.get("technicalSteps"));
-        return submitPlan(new ImplementationPlan(title, goal, requirements, technicalSteps));
+        List<String> rawTechSteps = extractStringList(planMap.get("technicalSteps"));
+        
+        List<ImplementationPlan.TechStep> steps = rawTechSteps.stream()
+                .map(s -> new ImplementationPlan.TechStep(s, false))
+                .collect(Collectors.toList());
+                
+        return submitPlan(new ImplementationPlan(title, goal, requirements, steps));
+    }
+
+    /**
+     * Marks a technical implementation step as completed.
+     * @param index the index of the step (0-based)
+     */
+    @AgentDoc("Marks a technical implementation step as completed.")
+    public void markStepCompleted(@AgentDoc("The index of the step (0-based).") int index) {
+        updateStepStatus(index, true);
+    }
+
+    /**
+     * Marks a technical implementation step as incomplete.
+     * @param index the index of the step (0-based)
+     */
+    @AgentDoc("Marks a technical implementation step as incomplete.")
+    public void markStepIncomplete(@AgentDoc("The index of the step (0-based).") int index) {
+        updateStepStatus(index, false);
+    }
+
+    private void updateStepStatus(int index, boolean completed) {
+        if (currentPlan == null || index < 0 || index >= currentPlan.technicalSteps().size()) {
+            return;
+        }
+        java.util.List<ImplementationPlan.TechStep> steps = new java.util.ArrayList<>(currentPlan.technicalSteps());
+        ImplementationPlan.TechStep step = steps.get(index);
+        steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
+        currentPlan = new ImplementationPlan(currentPlan.title(), currentPlan.goal(), currentPlan.requirements(), steps);
+        notifyListeners();
     }
 
     /**
@@ -95,28 +137,34 @@ public class PlanManagerService {
         notifyListeners();
     }
 
-    @SuppressWarnings("unchecked")
-    private List<String> extractStringList(Object obj) {
+        private List<String> extractStringList(Object obj) {
         if (obj == null) {
             return List.of();
         }
+        List<String> result = new java.util.ArrayList<>();
         if (obj instanceof List) {
-            return (List<String>) obj;
-        }
-        if (obj instanceof String[]) {
-            return List.of((String[]) obj);
-        }
-        if (obj instanceof Object[]) {
-            Object[] arr = (Object[]) obj;
-            List<String> list = new java.util.ArrayList<>();
-            for (Object o : arr) {
-                if (o != null) {
-                    list.add(o.toString());
-                }
+            for (Object item : (List<?>) obj) {
+                result.add(extractString(item));
             }
-            return list;
+        } else if (obj instanceof Object[]) {
+            for (Object item : (Object[]) obj) {
+                result.add(extractString(item));
+            }
+        } else {
+            result.add(extractString(obj));
         }
-        return List.of(obj.toString());
+        return result;
+    }
+
+    private String extractString(Object item) {
+        if (item == null) return "";
+        if (item instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) item;
+            Object desc = map.get("description");
+            if (desc == null) desc = map.get("text");
+            return desc != null ? desc.toString() : item.toString();
+        }
+        return item.toString();
     }
 
     private void notifyListeners() {
