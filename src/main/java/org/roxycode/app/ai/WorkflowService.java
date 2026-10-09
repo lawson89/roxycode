@@ -1,20 +1,18 @@
 package org.roxycode.app.ai;
 
-import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.services.PlanManagerService;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
 
 @AgentService(value = "workflowService", roles = {"*"})
 @AgentDoc("Manages the current phase of the development workflow and handles single-step phase transitions.")
 public class WorkflowService {
+
     private final PlanManagerService planManager;
     private WorkflowPhase currentPhase = WorkflowPhase.EXPLORE;
     private final Set<WorkflowPhase> visitedPhases = new HashSet<>(Collections.singletonList(WorkflowPhase.EXPLORE));
@@ -25,6 +23,7 @@ public class WorkflowService {
     private final List<TransitionRequestListener> requestListeners = new ArrayList<>();
 
     public interface TransitionRequestListener {
+
         void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason);
     }
 
@@ -54,8 +53,8 @@ public class WorkflowService {
 
         // Enforce strict single-step adjacent transitions
         if (!isAdjacent(currentPhase, nextPhase)) {
-            return "Error: Cannot jump from " + currentPhase + " to " + nextPhase + 
-                   ". Only single-step transitions to adjacent phases are allowed.";
+            return "Error: Cannot jump from " + currentPhase + " to " + nextPhase
+                    + ". Only single-step transitions to adjacent phases are allowed.";
         }
 
         // Check prerequisites for specific transitions
@@ -71,34 +70,48 @@ public class WorkflowService {
         notifyRequestListeners();
 
         String summary = formatPlanSummary(planManager.getCurrentPlan());
-        String message = "**Transition Request (" + currentPhase.getDisplayName() + " → " + nextPhase.getDisplayName() + ")**\n\n" +
-                         "**Reason:** " + reason;
+        String message = "**Transition Request (" + currentPhase.getDisplayName() + " → " + nextPhase.getDisplayName() + ")**\n\n"
+                + "**Reason:** " + reason;
 
         // Yield execution turn immediately for user approval
         String json = String.format("{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
                 StringEscapeUtils.escapeJson(summary),
                 StringEscapeUtils.escapeJson(message),
                 StringEscapeUtils.escapeJson(reason));
-        
+
         throw new YieldTurnException(json);
     }
 
     /**
-     * Helper to verify if two phases are adjacent in the single-step state machine.
+     * Helper to verify if two phases are adjacent in the single-step state
+     * machine.
      */
     private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
         switch (current) {
-            case EXPLORE: return next == WorkflowPhase.PLANNING;
-            case PLANNING: return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.DEVELOPMENT;
-            case DEVELOPMENT: return next == WorkflowPhase.PLANNING || next == WorkflowPhase.VERIFICATION;
-            case VERIFICATION: return next == WorkflowPhase.DEVELOPMENT || next == WorkflowPhase.EXPLORE;
-            default: return false;
+            case EXPLORE:
+                return next == WorkflowPhase.PLANNING;
+            case PLANNING:
+                return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.DEVELOPMENT;
+            case DEVELOPMENT:
+                return next == WorkflowPhase.PLANNING || next == WorkflowPhase.VERIFICATION;
+            case VERIFICATION:
+                return next == WorkflowPhase.DEVELOPMENT || next == WorkflowPhase.EXPLORE;
+            default:
+                return false;
         }
     }
 
-    public WorkflowPhase getCurrentPhase() { return currentPhase; }
-    public WorkflowPhase getPendingPhase() { return pendingPhase; }
-    public String getPendingReason() { return pendingReason; }
+    public WorkflowPhase getCurrentPhase() {
+        return currentPhase;
+    }
+
+    public WorkflowPhase getPendingPhase() {
+        return pendingPhase;
+    }
+
+    public String getPendingReason() {
+        return pendingReason;
+    }
 
     public void approveTransition() {
         if (pendingPhase != null) {
@@ -116,7 +129,9 @@ public class WorkflowService {
         notifyRequestListeners();
     }
 
-    public Set<WorkflowPhase> getVisitedPhases() { return Collections.unmodifiableSet(visitedPhases); }
+    public Set<WorkflowPhase> getVisitedPhases() {
+        return Collections.unmodifiableSet(visitedPhases);
+    }
 
     public void resetWorkflow() {
         this.pendingPhase = null;
@@ -134,10 +149,14 @@ public class WorkflowService {
         listener.accept(currentPhase);
     }
 
-    public void addTransitionRequestListener(TransitionRequestListener listener) { requestListeners.add(listener); }
+    public void addTransitionRequestListener(TransitionRequestListener listener) {
+        requestListeners.add(listener);
+    }
 
     private void notifyPhaseListeners() {
-        for (Consumer<WorkflowPhase> listener : phaseListeners) listener.accept(currentPhase);
+        for (Consumer<WorkflowPhase> listener : phaseListeners) {
+            listener.accept(currentPhase);
+        }
     }
 
     private void notifyRequestListeners() {
@@ -147,11 +166,13 @@ public class WorkflowService {
     }
 
     private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
-        if (plan == null) return "";
+        if (plan == null) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder();
         sb.append("PLAN SUMMARY:\n\n### ").append(plan.title().trim()).append("\n");
         sb.append("**Goal:** ").append(plan.goal().replaceAll("\s+", " ").trim()).append("\n\n");
-        
+
         if (!plan.requirements().isEmpty()) {
             sb.append("#### Requirements\n");
             for (String req : plan.requirements()) {
@@ -159,7 +180,7 @@ public class WorkflowService {
             }
             sb.append("\n");
         }
-        
+
         if (!plan.technicalSteps().isEmpty()) {
             sb.append("#### Technical Steps\n");
             for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {

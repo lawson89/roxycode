@@ -38,7 +38,7 @@ public class SettingsPanel extends JPanel {
 
     public SettingsPanel(SettingsService settingsService) {
         this.settingsService = settingsService;
-        setLayout(new MigLayout("fillx, insets 20", "[right][fill, grow]", "[]20[]"));
+        setLayout(new MigLayout("fillx, insets 20", "[left][fill, grow]", "[]20[]"));
         setOpaque(true);
 
         JLabel title = new JLabel("Settings");
