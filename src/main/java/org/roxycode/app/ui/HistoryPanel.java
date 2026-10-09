@@ -95,9 +95,15 @@ public class HistoryPanel extends JPanel implements JexlExecutionListener {
         table.getColumnModel().getColumn(4).setPreferredWidth(80);
         table.getColumnModel().getColumn(4).setMaxWidth(100);
 
-        add(new JScrollPane(table), BorderLayout.CENTER);
+                add(new JScrollPane(table), BorderLayout.CENTER);
 
         // Event listeners
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentShown(java.awt.event.ComponentEvent e) {
+                refresh();
+            }
+        });
         turnEventBridge.addUserMessageListener(event -> refresh());
         turnEventBridge.addCompleteListener(event -> refresh());
         jexlTool.addListener(this);

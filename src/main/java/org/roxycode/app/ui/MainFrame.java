@@ -108,9 +108,9 @@ public class MainFrame extends JFrame {
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
         
-        HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService, planManagerService, turnEventBridge, this::showCard);
+                HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService, planManagerService, turnEventBridge, this::showCard);
 
-        StatusPanel statusBar = new StatusPanel(envService);
+        StatusPanel statusBar = new StatusPanel(envService, chatMemory);
 
         // Content Area Panels
         gitChangesPanel = new GitChangesPanel(gitService);

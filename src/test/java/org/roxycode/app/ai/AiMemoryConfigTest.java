@@ -1,8 +1,11 @@
 package org.roxycode.app.ai;
 
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 
@@ -13,13 +16,71 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
 
 class AiMemoryConfigTest {
 
     @Test
-    void testConcurrentAdditions() throws InterruptedException {
+    void testSlidingWindowEviction() {
+        SettingsService settingsService = mock(SettingsService.class);
+        AppSettings settings = new AppSettings();
+        settings.setMaxChatMemoryMessages(50);
+        when(settingsService.getSettings()).thenReturn(settings);
+
         AiMemoryConfig config = new AiMemoryConfig();
-        ChatMemory memory = config.chatMemory();
+        ChatMemoryRepository repository = new InMemoryChatMemoryRepository();
+        ChatMemory memory = config.chatMemory(repository, settingsService);
+        String conversationId = "test-session";
+
+        // Add 100 messages
+        for (int i = 0; i < 100; i++) {
+            memory.add(conversationId, List.of(new UserMessage("Msg " + i)));
+        }
+
+        List<Message> result = memory.get(conversationId);
+        assertEquals(50, result.size(), "Should only contain the last 50 messages");
+        assertEquals("Msg 50", result.get(0).getText(), "First message in window should be Msg 50");
+        assertEquals("Msg 99", result.get(49).getText(), "Last message in window should be Msg 99");
+    }
+
+    @Test
+    void testDynamicResizing() {
+        SettingsService settingsService = mock(SettingsService.class);
+        AppSettings settings = new AppSettings();
+        settings.setMaxChatMemoryMessages(10);
+        when(settingsService.getSettings()).thenReturn(settings);
+
+        AiMemoryConfig config = new AiMemoryConfig();
+        ChatMemoryRepository repository = new InMemoryChatMemoryRepository();
+        ChatMemory memory = config.chatMemory(repository, settingsService);
+        String conversationId = "test-session";
+
+        for (int i = 0; i < 20; i++) {
+            memory.add(conversationId, List.of(new UserMessage("Msg " + i)));
+        }
+        assertEquals(10, memory.get(conversationId).size());
+
+        // Change setting dynamically
+        settings.setMaxChatMemoryMessages(5);
+        
+        // Next add should trigger truncation by the window
+        memory.add(conversationId, List.of(new UserMessage("Msg 20")));
+        
+        List<Message> result = memory.get(conversationId);
+        assertEquals(5, result.size());
+        assertEquals("Msg 16", result.get(0).getText());
+    }
+
+    @Test
+    void testConcurrentAdditionsWithEviction() throws InterruptedException {
+        SettingsService settingsService = mock(SettingsService.class);
+        AppSettings settings = new AppSettings();
+        settings.setMaxChatMemoryMessages(50);
+        when(settingsService.getSettings()).thenReturn(settings);
+
+        AiMemoryConfig config = new AiMemoryConfig();
+        ChatMemoryRepository repository = new InMemoryChatMemoryRepository();
+        ChatMemory memory = config.chatMemory(repository, settingsService);
         String conversationId = "test-session";
         int numThreads = 10;
         int messagesPerThread = 100;
@@ -44,6 +105,6 @@ class AiMemoryConfigTest {
         executor.shutdown();
 
         List<Message> result = memory.get(conversationId);
-        assertEquals(numThreads * messagesPerThread, result.size(), "Should contain all messages from all threads");
+        assertEquals(50, result.size(), "Should only contain 50 messages despite 1,000 additions");
     }
 }

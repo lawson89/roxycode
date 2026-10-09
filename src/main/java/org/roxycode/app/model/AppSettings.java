@@ -9,6 +9,7 @@ public class AppSettings {
     private String currentProjectPath = "";
     private String geminiModel = "gemini-1.5-flash";
     private int maxAgentToolTurns = 5;
+    private int maxChatMemoryMessages = 50;
 
     public AppSettings() {}
 
@@ -58,5 +59,21 @@ public class AppSettings {
      */
     public void setMaxAgentToolTurns(int maxAgentToolTurns) {
         this.maxAgentToolTurns = maxAgentToolTurns;
+    }
+
+    /**
+     * Gets the maximum number of messages to keep in chat history.
+     * @return the max messages
+     */
+    public int getMaxChatMemoryMessages() {
+        return maxChatMemoryMessages;
+    }
+
+    /**
+     * Sets the maximum number of messages to keep in chat history.
+     * @param maxChatMemoryMessages the max messages to set
+     */
+    public void setMaxChatMemoryMessages(int maxChatMemoryMessages) {
+        this.maxChatMemoryMessages = maxChatMemoryMessages;
     }
 }

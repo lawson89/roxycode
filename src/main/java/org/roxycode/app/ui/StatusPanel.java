@@ -11,11 +11,14 @@ import java.awt.*;
  */
 public class StatusPanel extends JPanel {
     private final EnvironmentService envService;
+    private final org.springframework.ai.chat.memory.ChatMemory chatMemory;
     private final JLabel memLabel;
+    private final JLabel msgLabel;
 
-    public StatusPanel(EnvironmentService envService) {
+    public StatusPanel(EnvironmentService envService, org.springframework.ai.chat.memory.ChatMemory chatMemory) {
         this.envService = envService;
-        setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push []", "center"));
+        this.chatMemory = chatMemory;
+        setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] 20 [] push []", "center"));
         
         // Use theme-aware styling
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
@@ -32,10 +35,15 @@ public class StatusPanel extends JPanel {
         
         memLabel = new JLabel();
         memLabel.setFont(osLabel.getFont());
+
+        msgLabel = new JLabel();
+        msgLabel.setFont(osLabel.getFont());
+        
         updateStats();
 
         add(osLabel);
         add(javaLabel);
+        add(msgLabel);
         add(memLabel);
 
         // Update memory usage every 5 seconds
@@ -45,5 +53,9 @@ public class StatusPanel extends JPanel {
 
     private void updateStats() {
         memLabel.setText("Mem: " + envService.getMemoryUsageMb() + "/" + envService.getTotalMemoryMb() + "MB");
+        
+        java.util.List<org.springframework.ai.chat.messages.Message> messages = chatMemory.get("default");
+        int count = (messages != null) ? messages.size() : 0;
+        msgLabel.setText("Messages: " + count);
     }
 }

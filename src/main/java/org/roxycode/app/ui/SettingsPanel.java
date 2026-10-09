@@ -29,6 +29,7 @@ public class SettingsPanel extends JPanel {
     private final SettingsService settingsService;
     private final JComboBox<String> themeCombo;
     private final JComboBox<GeminiModelConfig> modelCombo;
+    private final JSpinner maxMessagesSpinner;
     private final JPasswordField geminiApiKeyField;
     private final JSpinner maxAgentToolTurnsSpinner;
     private final JButton saveButton;
@@ -62,10 +63,15 @@ public class SettingsPanel extends JPanel {
         geminiApiKeyField.setText(settingsService.getSettings().getGeminiApiKey());
         add(geminiApiKeyField, "wrap");
 
-        add(new JLabel("Max Agent Tool Turns:"));
+                add(new JLabel("Max Agent Tool Turns:"));
         maxAgentToolTurnsSpinner = new JSpinner(new SpinnerNumberModel(
             settingsService.getSettings().getMaxAgentToolTurns(), 1, 50, 1));
         add(maxAgentToolTurnsSpinner, "wrap");
+
+        add(new JLabel("Max Chat History Messages:"));
+        maxMessagesSpinner = new JSpinner(new SpinnerNumberModel(
+            settingsService.getSettings().getMaxChatMemoryMessages(), 1, 500, 5));
+        add(maxMessagesSpinner, "wrap");
 
         saveButton = new JButton("Save Settings");
         saveButton.addActionListener(e -> saveSettings());
@@ -115,7 +121,8 @@ public class SettingsPanel extends JPanel {
         if (selectedModel != null) {
             settingsService.getSettings().setGeminiModel(selectedModel.apiName());
         }
-        settingsService.getSettings().setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
+                settingsService.getSettings().setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
+        settingsService.getSettings().setMaxChatMemoryMessages((Integer) maxMessagesSpinner.getValue());
         settingsService.saveSettings();
         if (selectedModel != null) {
             statusLabel.setText("Active model switched to: " + selectedModel.name());

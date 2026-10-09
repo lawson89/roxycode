@@ -12,4 +12,12 @@ public class AppSettingsTest {
         settings.setMaxAgentToolTurns(10);
         assertEquals(10, settings.getMaxAgentToolTurns());
     }
+
+    @Test
+    void testMaxChatMemoryMessages() {
+        AppSettings settings = new AppSettings();
+        assertEquals(50, settings.getMaxChatMemoryMessages());
+        settings.setMaxChatMemoryMessages(100);
+        assertEquals(100, settings.getMaxChatMemoryMessages());
+    }
 }
