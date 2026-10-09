@@ -47,7 +47,7 @@ public class PlanPanel extends JPanel {
         SwingHtmlUtils.applyTheme(displayArea, 15);
     }
 
-    private void updateDisplay(ImplementationPlan plan) {
+        private void updateDisplay(ImplementationPlan plan) {
         StringBuilder html = new StringBuilder("<html><body>");
 
         if (plan == null) {
@@ -64,14 +64,20 @@ public class PlanPanel extends JPanel {
             }
             html.append("</ul>");
 
-                        html.append("<h3>Technical Steps:</h3><table border='0' cellpadding='2' cellspacing='0'>");
+            html.append("<h3>Technical Steps:</h3><table border='0' cellpadding='4' cellspacing='0'>");
             int index = 0;
             for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                String checkbox = step.completed() ? "<font color='#4CAF50'><b>[x]</b></font>" : "<font color='#888888'>[ ]</font>";
+                String checkbox = step.completed() 
+                    ? "<font color='#28a745'><b>[x]</b></font>" 
+                    : "<font color='#888888'>[ ]</font>";
+                String textStyle = step.completed() 
+                    ? "style='text-decoration: line-through; color: #888888;'" 
+                    : "";
+
                 html.append("<tr>");
-                html.append("<td valign='top' style='font-family: monospace; color: #888888;'>").append(index).append(".&nbsp;</td>");
-                html.append("<td valign='top' style='font-family: monospace;'>").append(checkbox).append("&nbsp;</td>");
-                html.append("<td>").append(SwingHtmlUtils.escapeHtml(step.description())).append("</td>");
+                html.append("<td valign='top' style='font-family: monospace; color: #888888;'>").append(index).append(".</td>");
+                html.append("<td valign='top' style='font-family: monospace;'>").append(checkbox).append("</td>");
+                html.append("<td ").append(textStyle).append(">").append(SwingHtmlUtils.escapeHtml(step.description())).append("</td>");
                 html.append("</tr>");
                 index++;
             }

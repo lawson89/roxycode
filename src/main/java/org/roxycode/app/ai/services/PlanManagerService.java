@@ -40,7 +40,7 @@ public class PlanManagerService {
      * @param plan the implementation plan to submit
      * @return a success message
      */
-    @AgentDoc("Submits an implementation plan for the project.")
+        @AgentDoc("Submits an implementation plan for the project.")
     public String submitPlan(
             @AgentDoc("The implementation plan to submit.") ImplementationPlan plan) {
         if (plan == null) {
@@ -49,19 +49,26 @@ public class PlanManagerService {
 
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(plan.technicalSteps());
         
-        // Check and auto-append mandatory compile step
+        // 1. Auto-append mandatory compile step
         boolean hasCompile = steps.stream()
                 .anyMatch(s -> s.description().toLowerCase().contains("compile"));
         if (!hasCompile) {
             steps.add(new ImplementationPlan.TechStep("Code compiles successfully", false));
         }
 
-        // Check and auto-append mandatory test step
+        // 2. Auto-append mandatory test step
         boolean hasTests = steps.stream()
                 .anyMatch(s -> s.description().toLowerCase().contains("unit test") 
                             || s.description().toLowerCase().contains("tests pass"));
         if (!hasTests) {
             steps.add(new ImplementationPlan.TechStep("Unit tests pass", false));
+        }
+
+        // 3. Auto-append mandatory code review step
+        boolean hasReview = steps.stream()
+                .anyMatch(s -> s.description().toLowerCase().contains("code review"));
+        if (!hasReview) {
+            steps.add(new ImplementationPlan.TechStep("Automated code review passes", false));
         }
 
         this.currentPlan = new ImplementationPlan(plan.title(), plan.goal(), plan.requirements(), steps);

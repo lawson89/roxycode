@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PlanManagerServiceTest {
 
-    @Test
+        @Test
     void testSubmitPlanAndNotifyListeners() {
         PlanManagerService service = new PlanManagerService();
         AtomicInteger notifications = new AtomicInteger(0);
@@ -24,8 +24,8 @@ class PlanManagerServiceTest {
         assertEquals("Implementation plan submitted successfully with mandatory verification checklist items.", res);
         assertNotNull(service.getCurrentPlan());
         assertEquals("Title", service.getCurrentPlan().title());
-        // Step 1 + Code compiles + Unit tests pass = 3
-        assertEquals(3, service.getCurrentPlan().technicalSteps().size());
+        // Step 1 + Code compiles + Unit tests pass + Code Review = 4
+        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
         assertEquals(1, notifications.get());
     }
 
@@ -38,8 +38,8 @@ class PlanManagerServiceTest {
         service.submitPlan("Title", "Goal", reqs, steps);
         
         assertEquals(2, service.getCurrentPlan().requirements().size());
-        // Step 1 + Code compiles + Unit tests pass = 3
-        assertEquals(3, service.getCurrentPlan().technicalSteps().size());
+        // Step 1 + Code compiles + Unit tests pass + Code Review = 4
+        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
         assertEquals("Req 1", service.getCurrentPlan().requirements().get(0));
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
     }
@@ -52,7 +52,7 @@ class PlanManagerServiceTest {
         service.submitPlan("Title", "Goal", List.of("Req 1"), List.of("Step 1"));
         assertNotNull(service.getCurrentPlan());
         assertEquals("Title", service.getCurrentPlan().title());
-        assertEquals(3, service.getCurrentPlan().technicalSteps().size());
+        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
         
         // Map arguments
         service.clearSpecs();
@@ -66,7 +66,7 @@ class PlanManagerServiceTest {
         );
         service.submitPlan(planMap);
         assertEquals("Map Title", service.getCurrentPlan().title());
-        assertEquals(3, service.getCurrentPlan().technicalSteps().size());
+        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
     }
 
     @Test
@@ -74,8 +74,8 @@ class PlanManagerServiceTest {
         PlanManagerService service = new PlanManagerService();
         service.submitPlan("Title", "Goal", List.of(), List.of("Step 1", "Step 2"));
         
-        // Step 1, Step 2, Code compiles, Unit tests pass = 4
-        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
+        // Step 1, Step 2, Code compiles, Unit tests pass, Code Review = 5
+        assertEquals(5, service.getCurrentPlan().technicalSteps().size());
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
         
         service.markStepCompleted(0);

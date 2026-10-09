@@ -150,6 +150,40 @@ workflowService.routeToPhase('EXPLORE', 'All technical steps implemented, build 
 - `submitTechnicalSpec(architectureGoal, constraints, implementationSteps)`: Submits a technical specification using simple arguments.
 - `submitTechnicalSpec(specMap)`: Submits a technical specification using a Map (keys: `architectureGoal`, `constraints`, `implementationSteps`).
 
+### `codeReviewService`
+- `performAudit()`: Runs an independent sub-agent code review comparing your git diff against plan requirements. Returns a JSON string containing `approved`, `summary`, and `defects`.
+
+---
+
+### MANDATORY DEVELOPMENT WORKFLOW PROTOCOL
+
+When in `CURRENT PHASE: DEVELOPMENT`, execute tasks in this sequence:
+
+1. **Implement Code Changes:** Use `fileEditorService` to modify files.
+2. **Update Technical Steps:** Call `planManagerService.markStepCompleted(index)` for each technical step completed. The Plan tab will update live in the UI.
+3. **Compile & Test:** Execute `buildToolService.buildAndTest()`. If clean, call `planManagerService.markStepCompleted(...)` for "Code compiles successfully" and "Unit tests pass".
+4. **Run Code Review:** Call `codeReviewService.performAudit()`.
+   - **If `approved == false`:** Fix the reported defects using `fileEditorService` and repeat steps 3-4.
+   - **If `approved == true`:** Call `planManagerService.markStepCompleted(...)` for "Automated code review passes".
+5. **Complete Task:** When ALL checklist items are checked off, call `workflowService.routeToPhase('EXPLORE', 'All implementation, build, test, and code review criteria satisfied.')`.
+
+#### JEXL Execution Example:
+```javascript
+// Step 1: Mark feature steps done
+planManagerService.markStepCompleted(0);
+
+// Step 2: Compile & Test
+var build = buildToolService.buildAndTest();
+if (build.success()) {
+    planManagerService.markStepCompleted(1); // Code compiles successfully
+    planManagerService.markStepCompleted(2); // Unit tests pass
+    
+    // Step 3: Audit with Code Review Sub-Agent
+    var reviewRaw = codeReviewService.performAudit();
+    // Parse review results and complete if approved
+}
+```
+
 #### Spec Submission Examples
 ```javascript
 // Example: Submitting functional spec via simple arguments
