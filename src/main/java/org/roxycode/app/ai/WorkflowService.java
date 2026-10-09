@@ -13,135 +13,119 @@ import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
 
 @AgentService(value = "workflowService", roles = {"*"})
-@AgentDoc("Manages the current phase of the development workflow and handles phase transition requests.")
+@AgentDoc("Manages the current phase of the development workflow and handles single-step phase transitions.")
 public class WorkflowService {
     private final PlanManagerService planManager;
-
-    public WorkflowService(PlanManagerService planManager) {
-        this.planManager = planManager;
-    }
     private WorkflowPhase currentPhase = WorkflowPhase.EXPLORE;
     private final Set<WorkflowPhase> visitedPhases = new HashSet<>(Collections.singletonList(WorkflowPhase.EXPLORE));
     private WorkflowPhase pendingPhase;
+    private String pendingReason;
+
     private final List<Consumer<WorkflowPhase>> phaseListeners = new ArrayList<>();
     private final List<TransitionRequestListener> requestListeners = new ArrayList<>();
 
     public interface TransitionRequestListener {
-        void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested);
+        void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason);
     }
 
-    @AgentDoc("Routes the workflow to the specified phase according to strict transition rules.")
-    public Map<String, String> routeToPhase(String phaseName) {
+    public WorkflowService(PlanManagerService planManager) {
+        this.planManager = planManager;
+    }
+
+    @AgentDoc("Requests a single-step transition to an adjacent phase with a descriptive reason.")
+    public String routeToPhase(
+            @AgentDoc("The target phase: EXPLORE, PLANNING, DEVELOPMENT, or VERIFICATION.") String phaseName,
+            @AgentDoc("The detailed reason for requesting this transition.") String reason) {
+
         WorkflowPhase nextPhase;
         try {
             nextPhase = WorkflowPhase.valueOf(phaseName.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return Map.of("error", "Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT, VERIFICATION.");
+            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLANNING, DEVELOPMENT, VERIFICATION.";
         }
+
         if (nextPhase == currentPhase) {
-            return Map.of("message", "Already in phase: " + nextPhase);
+            return "Already in phase: " + nextPhase;
         }
 
-        // Handle backward transitions (except to EXPLORE which is always gated)
-                if (nextPhase.ordinal() < currentPhase.ordinal() && nextPhase != WorkflowPhase.EXPLORE) {
-            setCurrentPhase(nextPhase);
-            return Map.of("message", "Routed back to phase: " + nextPhase);
+        if (reason == null || reason.isBlank()) {
+            return "Error: You must provide a descriptive 'reason' for requesting a phase transition.";
         }
 
-        // Any transition to EXPLORE from another phase is gated as "Task Completion" or "Reset"
-        if (nextPhase == WorkflowPhase.EXPLORE) {
-            requestPhaseTransition(nextPhase);
-            String summary = formatPlanSummary(planManager.getCurrentPlan());
-            String message = "**Transition from " + currentPhase.getDisplayName() + " to EXPLORE requested. Awaiting approval.**";
-            throw new YieldTurnException("{\"summary\": \"" + StringEscapeUtils.escapeJson(summary) + "\", \"message\": \"" + StringEscapeUtils.escapeJson(message) + "\"}");
+        // Enforce strict single-step adjacent transitions
+        if (!isAdjacent(currentPhase, nextPhase)) {
+            return "Error: Cannot jump from " + currentPhase + " to " + nextPhase + 
+                   ". Only single-step transitions to adjacent phases are allowed.";
         }
 
-        if (currentPhase == WorkflowPhase.EXPLORE) {
-                        if (nextPhase == WorkflowPhase.PLANNING) {
-                setCurrentPhase(nextPhase);
-                return Map.of("message", "Advanced to phase: " + nextPhase);
+        // Check prerequisites for specific transitions
+        if (currentPhase == WorkflowPhase.PLANNING && nextPhase == WorkflowPhase.DEVELOPMENT) {
+            if (planManager.getCurrentPlan() == null) {
+                return "Error: Cannot advance to DEVELOPMENT. Implementation Plan is missing. Call planManagerService.submitPlan() first.";
             }
-            return Map.of("error", "Cannot transition from EXPLORE to " + nextPhase + ". You must go to PLANNING first.");
-        }
-        
-        if (currentPhase == WorkflowPhase.PLANNING) {
-            if (nextPhase == WorkflowPhase.DEVELOPMENT) {
-                if (planManager.getCurrentPlan() == null) {
-                    return Map.of("error", "Cannot advance to DEVELOPMENT. Implementation Plan is missing. Call planManagerService.submitPlan() first.");
-                }
-                requestPhaseTransition(nextPhase);
-                String summary = formatPlanSummary(planManager.getCurrentPlan());
-                String message = "**Transition from " + currentPhase.getDisplayName() + " to DEVELOPMENT requested. Awaiting approval.**";
-                throw new YieldTurnException("{\"summary\": \"" + StringEscapeUtils.escapeJson(summary) + "\", \"message\": \"" + StringEscapeUtils.escapeJson(message) + "\"}");
-            }
-            return Map.of("error", "Cannot transition from PLANNING to " + nextPhase + ".");
-        }
-        
-                        if (currentPhase == WorkflowPhase.DEVELOPMENT) {
-            if (nextPhase == WorkflowPhase.VERIFICATION) {
-                org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
-                if (plan != null && !plan.technicalSteps().isEmpty()) {
-                    boolean allDone = plan.technicalSteps().stream().allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);
-                    if (!allDone) {
-                        return Map.of("error", "Cannot transition to VERIFICATION. Not all technical implementation steps are completed. Use planManagerService.markStepCompleted(index) to update progress.");
-                    }
-                }
-                setCurrentPhase(nextPhase);
-                return Map.of("message", "Advanced to phase: " + nextPhase);
-            }
-            return Map.of("error", "Cannot transition from DEVELOPMENT to " + nextPhase + ". You must go to VERIFICATION next.");
-        }
-        
-        if (currentPhase == WorkflowPhase.VERIFICATION) {
-            // Forward transitions from VERIFICATION are not allowed
-            return Map.of("error", "Cannot transition from VERIFICATION to " + nextPhase + ".");
         }
 
-        return Map.of("error", "Transition from " + currentPhase + " to " + nextPhase + " is not allowed.");
+        // Set pending state and notify listeners
+        this.pendingPhase = nextPhase;
+        this.pendingReason = reason;
+        notifyRequestListeners();
+
+        String summary = formatPlanSummary(planManager.getCurrentPlan());
+        String message = "**Transition Request (" + currentPhase.getDisplayName() + " → " + nextPhase.getDisplayName() + ")**\n\n" +
+                         "**Reason:** " + reason;
+
+        // Yield execution turn immediately for user approval
+        String json = String.format("{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
+                StringEscapeUtils.escapeJson(summary),
+                StringEscapeUtils.escapeJson(message),
+                StringEscapeUtils.escapeJson(reason));
+        
+        throw new YieldTurnException(json);
+    }
+
+    /**
+     * Helper to verify if two phases are adjacent in the single-step state machine.
+     */
+    private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
+        switch (current) {
+            case EXPLORE: return next == WorkflowPhase.PLANNING;
+            case PLANNING: return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.DEVELOPMENT;
+            case DEVELOPMENT: return next == WorkflowPhase.PLANNING || next == WorkflowPhase.VERIFICATION;
+            case VERIFICATION: return next == WorkflowPhase.DEVELOPMENT || next == WorkflowPhase.EXPLORE;
+            default: return false;
+        }
     }
 
     public WorkflowPhase getCurrentPhase() { return currentPhase; }
     public WorkflowPhase getPendingPhase() { return pendingPhase; }
+    public String getPendingReason() { return pendingReason; }
 
-    void setCurrentPhase(WorkflowPhase phase) {
-        if (phase != null && this.currentPhase != phase) {
-            this.currentPhase = phase;
-            this.visitedPhases.add(phase);
+    public void approveTransition() {
+        if (pendingPhase != null) {
+            this.currentPhase = pendingPhase;
+            this.visitedPhases.add(pendingPhase);
             this.pendingPhase = null;
+            this.pendingReason = null;
             notifyPhaseListeners();
         }
     }
 
+    public void rejectTransition() {
+        this.pendingPhase = null;
+        this.pendingReason = null;
+        notifyRequestListeners();
+    }
+
     public Set<WorkflowPhase> getVisitedPhases() { return Collections.unmodifiableSet(visitedPhases); }
 
-    @AgentDoc("Resets the entire workflow to the EXPLORE phase, clearing all specifications and history.")
     public void resetWorkflow() {
         this.pendingPhase = null;
+        this.pendingReason = null;
         this.currentPhase = WorkflowPhase.EXPLORE;
         this.visitedPhases.clear();
         this.visitedPhases.add(WorkflowPhase.EXPLORE);
         this.planManager.clearSpecs();
         notifyPhaseListeners();
-        notifyRequestListeners();
-    }
-
-    void requestPhaseTransition(WorkflowPhase nextPhase) {
-        if (nextPhase != null && nextPhase != currentPhase) {
-            this.pendingPhase = nextPhase;
-            notifyRequestListeners();
-        }
-    }
-
-    void requestPhaseByName(String phaseName) {
-        try { requestPhaseTransition(WorkflowPhase.valueOf(phaseName.toUpperCase())); } catch (IllegalArgumentException e) {}
-    }
-
-    public void approveTransition() {
-        if (pendingPhase != null) setCurrentPhase(pendingPhase);
-    }
-
-    public void rejectTransition() {
-        this.pendingPhase = null;
         notifyRequestListeners();
     }
 
@@ -152,20 +136,35 @@ public class WorkflowService {
 
     public void addTransitionRequestListener(TransitionRequestListener listener) { requestListeners.add(listener); }
 
-    private void notifyPhaseListeners() { for (Consumer<WorkflowPhase> listener : phaseListeners) listener.accept(currentPhase); }
-    private void notifyRequestListeners() { for (TransitionRequestListener listener : requestListeners) listener.onTransitionRequested(currentPhase, pendingPhase); }
+    private void notifyPhaseListeners() {
+        for (Consumer<WorkflowPhase> listener : phaseListeners) listener.accept(currentPhase);
+    }
 
-        private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
+    private void notifyRequestListeners() {
+        for (TransitionRequestListener listener : requestListeners) {
+            listener.onTransitionRequested(currentPhase, pendingPhase, pendingReason);
+        }
+    }
+
+    private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
         if (plan == null) return "";
         StringBuilder sb = new StringBuilder();
-        sb.append("PLAN SUMMARY:\n\n### 🤖 ").append(plan.title()).append("\n");
-        sb.append("**Goal:** ").append(plan.goal()).append("\n\n");
-        sb.append("#### 📋 Requirements\n");
-        for (String req : plan.requirements()) sb.append("* ").append(req).append("\n");
-        sb.append("\n#### 🛠️ Technical Steps\n");
-        for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
-            String status = step.completed() ? "[x]" : "[ ]";
-            sb.append("* ").append(status).append(" ").append(step.description()).append("\n");
+        sb.append("PLAN SUMMARY:\n\n### ").append(plan.title().trim()).append("\n");
+        sb.append("**Goal:** ").append(plan.goal().replaceAll("\s+", " ").trim()).append("\n\n");
+        
+        if (!plan.requirements().isEmpty()) {
+            sb.append("#### Requirements\n");
+            for (String req : plan.requirements()) {
+                sb.append("* ").append(req.replaceAll("\s+", " ").trim()).append("\n");
+            }
+            sb.append("\n");
+        }
+        
+        if (!plan.technicalSteps().isEmpty()) {
+            sb.append("#### Technical Steps\n");
+            for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
+                sb.append("* ").append(step.description().replaceAll("\s+", " ").trim()).append("\n");
+            }
         }
         return sb.toString();
     }

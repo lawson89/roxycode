@@ -264,14 +264,14 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
-    private void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested) {
+        private void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason) {
         SwingUtilities.invokeLater(() -> {
             if (requested != null) {
                 String path = current.getDisplayName() + " → " + requested.getDisplayName();
                 transitionLabel.setText(path);
                 approveButton.setText("Approve");
                 inlineActionPanel.setVisible(true);
-                outputArea.appendMessage("system", "Roxy requested a transition: **" + path + "**. Please approve or reject below.");
+                outputArea.appendMessage("system", "Roxy requested a transition: **" + path + "**.\n\n**Reason:** " + reason);
             } else {
                 inlineActionPanel.setVisible(false);
             }
