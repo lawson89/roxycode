@@ -35,7 +35,7 @@ class FileEditorServiceTest {
         fileEditorService = new FileEditorService(projectService, workflowService, eventPublisher);
 
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.DEVELOP);
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
     }
 
     @Test

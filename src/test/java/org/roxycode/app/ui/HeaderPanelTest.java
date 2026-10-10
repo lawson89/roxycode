@@ -110,4 +110,15 @@ class HeaderPanelTest {
         
         assertNotNull(openButton, "Open Project icon button should be present with correct tooltip");
     }
+
+    @Test
+    void testHeaderLayoutInsets() {
+        SettingsService ss = createSettingsService();
+        ProjectService ps = createProjectService(ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
+        
+        net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
+        Object constraints = layout.getLayoutConstraints();
+        assertTrue(constraints.toString().contains("insets 5 20 5 20"), "Layout insets should be adjusted for new header height");
+    }
 }

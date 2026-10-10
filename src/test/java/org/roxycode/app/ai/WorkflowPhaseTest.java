@@ -11,9 +11,16 @@ class WorkflowPhaseTest {
         assertEquals(AgentRole.LEAD_ARCHITECT, WorkflowPhase.PLAN.getRole());
         assertEquals("Plan", WorkflowPhase.PLAN.getDisplayName());
         assertEquals(Codicons.LIGHTBULB, WorkflowPhase.PLAN.getIcon());
+        assertEquals(WorkflowMode.CHANGE, WorkflowPhase.PLAN.getMode());
 
-        assertEquals(AgentRole.SENIOR_DEVELOPER, WorkflowPhase.DEVELOP.getRole());
-        assertEquals("Develop", WorkflowPhase.DEVELOP.getDisplayName());
-        assertEquals(Codicons.CODE, WorkflowPhase.DEVELOP.getIcon());
+        assertEquals(AgentRole.SENIOR_DEVELOPER, WorkflowPhase.CODE.getRole());
+        assertEquals("Code", WorkflowPhase.CODE.getDisplayName());
+        assertEquals(Codicons.CODE, WorkflowPhase.CODE.getIcon());
+        assertEquals(WorkflowMode.CHANGE, WorkflowPhase.CODE.getMode());
+
+        assertEquals(AgentRole.TECHNICAL_MENTOR, WorkflowPhase.EXPLORE.getRole());
+        assertEquals("Explore", WorkflowPhase.EXPLORE.getDisplayName());
+        assertEquals(Codicons.SEARCH, WorkflowPhase.EXPLORE.getIcon());
+        assertEquals(WorkflowMode.EXPLORE, WorkflowPhase.EXPLORE.getMode());
     }
 }

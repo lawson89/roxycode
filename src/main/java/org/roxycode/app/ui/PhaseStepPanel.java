@@ -4,9 +4,8 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.ai.WorkflowMode;
 import org.roxycode.app.model.ImplementationPlan;
-import org.kordamp.ikonli.swing.FontIcon;
-import org.kordamp.ikonli.codicons.Codicons;
 import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;
 import java.awt.*;
@@ -18,7 +17,7 @@ import java.util.List;
  */
 public class PhaseStepPanel extends JPanel {
 
-    private final List<PhaseIndicator> indicators = new ArrayList<>();
+    private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
     private JLabel modeBadge;
     private JPanel progressTracker;
     private final WorkflowService workflowService;
@@ -42,7 +41,8 @@ public class PhaseStepPanel extends JPanel {
         planLabel = new JLabel();
         planLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
         add(planLabel, "hidemode 3");
-                // Mode Badge for EXPLORE
+
+        // Mode Badge for EXPLORE
         modeBadge = new JLabel("Explore");
         modeBadge.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         modeBadge.setOpaque(false);
@@ -50,10 +50,11 @@ public class PhaseStepPanel extends JPanel {
 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 10", "[]", "center"));
         progressTracker.setOpaque(false);
+        add(progressTracker, "hidemode 3");
 
-                WorkflowPhase[] phases = WorkflowPhase.values();
+        WorkflowPhase[] phases = WorkflowPhase.values();
         for (WorkflowPhase phase : phases) {
-            indicators.add(new PhaseIndicator(phase));
+            indicators.add(new WorkflowPhaseIndicator(phase, "font: -1"));
         }
     }
 
@@ -68,61 +69,26 @@ public class PhaseStepPanel extends JPanel {
         }
     }
 
-            private void updateActivePhase(WorkflowPhase currentPhase) {
+    private void updateActivePhase(WorkflowPhase currentPhase) {
         if (modeBadge != null) modeBadge.setVisible(false);
         updatePlanDisplay(currentPhase);
 
         progressTracker.removeAll();
-        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
-        for (PhaseIndicator indicator : indicators) {
-            indicator.setActive(indicator.phase == currentPhase);
-            indicator.setCompleted(visited.contains(indicator.phase));
-            progressTracker.add(indicator);
+        if (currentPhase.getMode() == WorkflowMode.CHANGE) {
+            java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
+            for (WorkflowPhaseIndicator indicator : indicators) {
+                if (indicator.getPhase().getMode() == WorkflowMode.CHANGE) {
+                    indicator.setActive(indicator.getPhase() == currentPhase);
+                    indicator.setCompleted(visited.contains(indicator.getPhase()));
+                    progressTracker.add(indicator);
+                }
+            }
+            progressTracker.setVisible(true);
+        } else {
+            progressTracker.setVisible(false);
+            if (modeBadge != null) modeBadge.setVisible(true);
         }
         revalidate();
         repaint();
-    }
-
-        private static class PhaseIndicator extends JPanel {
-        private final WorkflowPhase phase;
-        private final JLabel textLabel;
-        private boolean isActive;
-        private boolean isCompleted;
-
-                public PhaseIndicator(WorkflowPhase phase) {
-            this.phase = phase;
-            setLayout(new MigLayout("insets 2 10 2 10", "[]", "center"));
-            setOpaque(false);
-            
-            textLabel = new JLabel(phase.getDisplayName());
-            textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-
-            add(textLabel);
-        }
-
-        public void setActive(boolean active) {
-            this.isActive = active;
-            updateStyle();
-        }
-
-        public void setCompleted(boolean completed) {
-            this.isCompleted = completed; 
-            updateStyle();
-        }
-
-                private void updateStyle() {
-            if (isActive) {
-                setOpaque(true);
-                putClientProperty(FlatClientProperties.STYLE, "arc: 12");
-                setBackground(UIManager.getColor("Component.accentColor"));
-                textLabel.setForeground(UIManager.getColor("Component.accentForeground"));
-            } else {
-                setOpaque(false);
-                putClientProperty(FlatClientProperties.STYLE, "arc: 0");
-                Color foreground = UIManager.getColor("Label.foreground");
-                Color disabledForeground = UIManager.getColor("Label.disabledForeground");
-                textLabel.setForeground(isCompleted ? foreground : disabledForeground);
-            }
-        }
     }
 }

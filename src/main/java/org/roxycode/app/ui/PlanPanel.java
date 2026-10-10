@@ -1,6 +1,8 @@
 package org.roxycode.app.ui;
 
 import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.model.ImplementationPlan;
 
 import javax.swing.*;
@@ -12,10 +14,12 @@ import java.awt.*;
 public class PlanPanel extends JPanel {
 
     private final PlanManagerService planManagerService;
+    private final WorkflowService workflowService;
     private final JEditorPane displayArea;
 
-    public PlanPanel(PlanManagerService planManagerService) {
+    public PlanPanel(PlanManagerService planManagerService, WorkflowService workflowService) {
         this.planManagerService = planManagerService;
+        this.workflowService = workflowService;
         this.setLayout(new BorderLayout());
 
         displayArea = new JEditorPane();
@@ -28,9 +32,10 @@ public class PlanPanel extends JPanel {
         scrollPane.setBorder(null);
         this.add(scrollPane, BorderLayout.CENTER);
 
-        SwingHtmlUtils.installTextContextMenu(displayArea);
+                                SwingHtmlUtils.installTextContextMenu(displayArea);
         updateTheme();
         planManagerService.addListener(this::updateDisplay);
+        workflowService.addPhaseListener(phase -> updateDisplay(planManagerService.getCurrentPlan()));
         updateDisplay(planManagerService.getCurrentPlan());
     }
 
@@ -47,14 +52,22 @@ public class PlanPanel extends JPanel {
         SwingHtmlUtils.applyTheme(displayArea, 15);
     }
 
-        private void updateDisplay(ImplementationPlan plan) {
+    private void updateDisplay(ImplementationPlan plan) {
         StringBuilder html = new StringBuilder("<html><body>");
 
         if (plan == null) {
             html.append("<h3>No implementation plan submitted yet.</h3>");
             html.append("<p>The AI will submit a plan as it progresses through the project.</p>");
         } else {
-            html.append("<h2 class='spec-technical-header'>Implementation Plan</h2>");
+            boolean isPaused = workflowService.getCurrentPhase() == WorkflowPhase.EXPLORE;
+            String statusBadge = isPaused 
+                ? "<span style='color: #ff9800; font-weight: bold;'> [PAUSED]</span>" 
+                : "<span style='color: #28a745; font-weight: bold;'> [ACTIVE]</span>";
+
+            html.append("<h2 class='spec-technical-header'>Implementation Plan").append(statusBadge).append("</h2>");
+            if (isPaused) {
+                html.append("<p style='color: #888888; font-style: italic;'>Current mode is set to EXPLORE. Switch to CHANGE mode to resume execution.</p>");
+            }
             html.append("<b>Title:</b> ").append(SwingHtmlUtils.escapeHtml(plan.title())).append("<br>");
             html.append("<b>Goal:</b> ").append(SwingHtmlUtils.escapeHtml(plan.goal())).append("<br>");
             

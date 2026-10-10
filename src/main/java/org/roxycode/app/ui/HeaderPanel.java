@@ -6,6 +6,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.WorkflowMode;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.model.ImplementationPlan;
@@ -35,7 +36,10 @@ public class HeaderPanel extends JPanel {
     // Workflow components
     private final JLabel planLabel;
     private final JPanel progressTracker;
-    private final List<PhaseIndicator> indicators = new ArrayList<>();
+    private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
+
+    private final JToggleButton exploreModeBtn;
+    private final JToggleButton changeModeBtn;
 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, 
                        WorkflowService workflowService, PlanManagerService planManagerService,
@@ -46,7 +50,7 @@ public class HeaderPanel extends JPanel {
         this.planManagerService = planManagerService;
         
         // 3-column layout: Left (Project), Center (Workflow), Right (Utils)
-        setLayout(new MigLayout("insets 10 20 10 20, fillx", "[left][center, grow][right]", "center"));
+        setLayout(new MigLayout("insets 5 20 5 20, fillx", "[left][center, grow][right]", "center"));
         
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
@@ -75,21 +79,44 @@ public class HeaderPanel extends JPanel {
         add(leftPanel, "left");
 
         // --- CENTER SECTION: Workflow Info ---
-        JPanel workflowPanel = new JPanel(new MigLayout("insets 0, gapy 2", "[center]", "[]0[]"));
+        JPanel workflowPanel = new JPanel(new MigLayout("insets 0, gapy 0", "[center]", "[]0[]0[]"));
         workflowPanel.setOpaque(false);
 
         planLabel = new JLabel();
-        planLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
+        planLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
         workflowPanel.add(planLabel, "center, wrap, hidemode 3");
+
+        exploreModeBtn = new JToggleButton("Explore", FontIcon.of(Codicons.SEARCH, 14));
+        changeModeBtn = new JToggleButton("Change", FontIcon.of(Codicons.TOOLS, 14));
+
+        exploreModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
+        changeModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
+        
+        exploreModeBtn.putClientProperty(FlatClientProperties.STYLE, "selectedBackground: $Component.accentColor; selectedForeground: $Component.accentForeground");
+        changeModeBtn.putClientProperty(FlatClientProperties.STYLE, "selectedBackground: $Component.accentColor; selectedForeground: $Component.accentForeground");
+
+        ButtonGroup modeGroup = new ButtonGroup();
+        modeGroup.add(exploreModeBtn);
+        modeGroup.add(changeModeBtn);
+
+        JPanel togglePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        togglePanel.setOpaque(false);
+        togglePanel.add(exploreModeBtn);
+        togglePanel.add(changeModeBtn);
+
+        exploreModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowMode.EXPLORE));
+        changeModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowMode.CHANGE));
+
+        workflowPanel.add(togglePanel, "center, wrap");
 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", "center"));
         progressTracker.setOpaque(false);
 
         WorkflowPhase[] phases = WorkflowPhase.values();
         for (WorkflowPhase phase : phases) {
-            indicators.add(new PhaseIndicator(phase));
+            indicators.add(new WorkflowPhaseIndicator(phase, "font: bold -1"));
         }
-        workflowPanel.add(progressTracker, "center, hidemode 3");
+        workflowPanel.add(progressTracker, "center, hidemode 3, gaptop 2");
         add(workflowPanel, "center");
 
         // --- RIGHT SECTION: Model & Utils ---
@@ -133,19 +160,28 @@ public class HeaderPanel extends JPanel {
 
     private void updateActivePhase(WorkflowPhase currentPhase) {
         ImplementationPlan plan = planManagerService.getCurrentPlan();
-        if (currentPhase != WorkflowPhase.EXPLORE && plan != null && plan.title() != null && !plan.title().isBlank()) {
+        if (currentPhase.getMode() == WorkflowMode.CHANGE && plan != null && plan.title() != null && !plan.title().isBlank()) {
             planLabel.setText(plan.title().toUpperCase());
             planLabel.setVisible(true);
         } else {
             planLabel.setVisible(false);
         }
 
+        if (currentPhase.getMode() == WorkflowMode.EXPLORE) {
+            exploreModeBtn.setSelected(true);
+            progressTracker.setVisible(false);
+        } else {
+            changeModeBtn.setSelected(true);
+            progressTracker.setVisible(true);
+        }
+
         progressTracker.removeAll();
-        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
-        for (PhaseIndicator indicator : indicators) {
-            indicator.setActive(indicator.phase == currentPhase);
-            indicator.setCompleted(visited.contains(indicator.phase));
-            progressTracker.add(indicator);
+        for (WorkflowPhaseIndicator indicator : indicators) {
+            if (indicator.getPhase().getMode() == WorkflowMode.CHANGE) {
+                indicator.setActive(indicator.getPhase() == currentPhase);
+                indicator.setCompleted(workflowService.getVisitedPhases().contains(indicator.getPhase()));
+                progressTracker.add(indicator);
+            }
         }
         revalidate();
         repaint();
@@ -202,49 +238,6 @@ public class HeaderPanel extends JPanel {
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
             projectService.setCurrentProjectRoot(file.toPath());
-        }
-    }
-
-    private static class PhaseIndicator extends JPanel {
-        private final WorkflowPhase phase;
-        private final JLabel textLabel;
-        private boolean isActive;
-        private boolean isCompleted;
-
-        public PhaseIndicator(WorkflowPhase phase) {
-            this.phase = phase;
-            setLayout(new MigLayout("insets 2 8 2 8", "[]", "center"));
-            setOpaque(false);
-            
-            textLabel = new JLabel(phase.getDisplayName());
-            textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
-
-            add(textLabel);
-        }
-
-        public void setActive(boolean active) {
-            this.isActive = active;
-            updateStyle();
-        }
-
-        public void setCompleted(boolean completed) {
-            this.isCompleted = completed; 
-            updateStyle();
-        }
-
-        private void updateStyle() {
-            if (isActive) {
-                setOpaque(true);
-                putClientProperty(FlatClientProperties.STYLE, "arc: 12");
-                setBackground(UIManager.getColor("Component.accentColor"));
-                textLabel.setForeground(UIManager.getColor("Component.accentForeground"));
-            } else {
-                setOpaque(false);
-                putClientProperty(FlatClientProperties.STYLE, "arc: 0");
-                Color foreground = UIManager.getColor("Label.foreground");
-                Color disabledForeground = UIManager.getColor("Label.disabledForeground");
-                textLabel.setForeground(isCompleted ? foreground : disabledForeground);
-            }
         }
     }
 }

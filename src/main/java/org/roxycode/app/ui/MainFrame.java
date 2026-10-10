@@ -122,7 +122,7 @@ public class MainFrame extends JFrame {
         gitChangesPanel = new GitChangesPanel(gitService);
         contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge, chatMemory), "CHAT");
         contentArea.add(new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService), "HISTORY");
-        contentArea.add(new PlanPanel(planManagerService), "PLAN");
+        contentArea.add(new PlanPanel(planManagerService, workflowService), "PLAN");
         contentArea.add(gitChangesPanel, "GIT");
         contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService, workflowService, jexlServiceRegistry, gitService, projectAnalysisService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
@@ -131,7 +131,7 @@ public class MainFrame extends JFrame {
         contentArea.add(new BuildConfigPanel(buildToolService, settingsService, projectService), "BUILD_CONFIG");
         contentArea.add(new ContextManagerPanel(promptService), "CONTEXT_MGR");
 
-        workspace.add(header, "h 60!, wrap");
+        workspace.add(header, "h 80!, wrap");
         workspace.add(contentArea, "grow, wrap");
         workspace.add(statusBar, "h 30!");
 
