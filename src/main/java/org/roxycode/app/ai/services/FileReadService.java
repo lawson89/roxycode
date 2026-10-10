@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 /**
  * Service providing read-only file access to AI agents.
  */
-@AgentService(value = "fileReadService", roles = {"*"})
+@AgentService(value = "fileReadService", phases = {"*"})
 @AgentDoc("Provides read-only access to files within the current project.")
 public class FileReadService {
 

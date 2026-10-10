@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AgentServiceTest {
 
-    @AgentService(value = "testService", roles = {"RESEARCH", "ANALYST"})
+    @AgentService(value = "testService", phases = {"EXPLORE", "PLAN"})
     private static class MockService {}
 
     @AgentService("defaultService")
@@ -16,7 +16,7 @@ class AgentServiceTest {
         AgentService annotation = MockService.class.getAnnotation(AgentService.class);
         assertNotNull(annotation);
         assertEquals("testService", annotation.value());
-        assertArrayEquals(new String[]{"RESEARCH", "ANALYST"}, annotation.roles());
+        assertArrayEquals(new String[]{"EXPLORE", "PLAN"}, annotation.phases());
     }
 
     @Test
@@ -24,10 +24,10 @@ class AgentServiceTest {
         AgentService annotation = DefaultService.class.getAnnotation(AgentService.class);
         assertNotNull(annotation);
         assertEquals("defaultService", annotation.value());
-        assertEquals(0, annotation.roles().length);
+        assertEquals(0, annotation.phases().length);
     }
 
-    @AgentService(value = "wildcardService", roles = {"*"})
+    @AgentService(value = "wildcardService", phases = {"*"})
     private static class WildcardService {}
 
     @Test
@@ -35,6 +35,6 @@ class AgentServiceTest {
         AgentService annotation = WildcardService.class.getAnnotation(AgentService.class);
         assertNotNull(annotation);
         assertEquals("wildcardService", annotation.value());
-        assertArrayEquals(new String[]{"*"}, annotation.roles());
+        assertArrayEquals(new String[]{"*"}, annotation.phases());
     }
 }

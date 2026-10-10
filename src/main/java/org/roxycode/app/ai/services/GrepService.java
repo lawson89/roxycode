@@ -18,7 +18,7 @@ import java.util.List;
  * Service for searching text in the codebase using RipGrep.
  */
 @Service
-@AgentService(value = "grepService", roles = {"*"})
+@AgentService(value = "grepService", phases = {"*"})
 @AgentDoc("Provides powerful text searching capabilities using RipGrep, respecting .gitignore and project boundaries.")
 public class GrepService {
     private static final Logger log = LoggerFactory.getLogger(GrepService.class);

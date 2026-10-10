@@ -1,6 +1,5 @@
 package org.roxycode.app.service;
 
-import org.roxycode.app.ai.AgentRole;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.JexlExecutionListener;
@@ -10,6 +9,7 @@ import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.AgentRole;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.springframework.ai.chat.client.ChatClient;
@@ -47,7 +47,7 @@ public class AiService {
     private final ProjectAnalysisService projectAnalysisService;
     private final ExploreManager exploreManager;
 
-        public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
+    public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
                      PromptService promptService,
                      JexlServiceRegistry jexlServiceRegistry, JexlTool jexlTool,
                      WorkflowService workflowService, ChatMemory chatMemory,
@@ -87,7 +87,7 @@ public class AiService {
             String conversationId = "default";
             String content;
             try {
-                                content = buildPrompt(message, systemPromptText, images)
+                content = buildPrompt(message, systemPromptText, images)
                         .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                         .call()
                         .content();
@@ -105,7 +105,7 @@ public class AiService {
                         // Not valid JSON or different structure, keep as is
                     }
                 }
-                        } catch (Exception e) {
+            } catch (Exception e) {
                 if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
                     content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
                 } else {
@@ -124,10 +124,9 @@ public class AiService {
     private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText, List<byte[]> images) {
         String activeModel = settingsService.getSettings().getGeminiModel();
         WorkflowPhase currentPhase = workflowService.getCurrentPhase();
-        AgentRole currentRole = currentPhase.getRole();
         
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
-                systemPrompt.append(promptService.loadAllPrompts());
+        systemPrompt.append(promptService.loadAllPrompts());
         systemPrompt.append("\n\n## JEXL CONTEXT\n").append(promptService.loadJexlContext()).append("\n\n");
         systemPrompt.append(promptService.loadAllDocs());
         systemPrompt.append(promptService.loadProjectContext());
@@ -143,9 +142,11 @@ public class AiService {
         systemPrompt.append("\n\n## SESSION CONTEXT\n");
         systemPrompt.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage()).append("\n");
         systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
-        systemPrompt.append("CURRENT ROLE: ").append(currentRole.getTitle()).append("\n");
-        systemPrompt.append(currentRole.getSystemPromptPrefix()).append("\n\n");
-        systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlServiceRegistry.getDocumentation(currentRole));
+
+        AgentRole role = currentPhase.getRole();
+        String persona = String.format("You are the %s. %s", role.getTitle(), role.getDescription());
+        systemPrompt.append(persona).append("\n\n");
+        systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlServiceRegistry.getDocumentation(currentPhase));
         
         String gitStatus = gitService.getStatus();
         if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) systemPrompt.append("## GIT STATUS\n").append(gitStatus).append("\n\n");

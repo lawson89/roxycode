@@ -23,32 +23,36 @@ public class JexlServiceRegistry {
         return Collections.unmodifiableMap(services);
     }
 
-    public String getDocumentation(org.roxycode.app.ai.AgentRole currentRole) {
-        String cacheKey = currentRole != null ? currentRole.name() : "NULL_ROLE";
-        
-        return docCache.computeIfAbsent(cacheKey, key -> {
-            java.util.List<Object> allowedServices = new java.util.ArrayList<>();
-            for (Object service : services.values()) {
-                AgentService ann = service.getClass().getAnnotation(AgentService.class);
-                if (ann != null) {
-                    String[] roles = ann.roles();
-                    
-                    if (roles.length == 0) {
-                        allowedServices.add(service);
-                        continue;
-                    }
+    public Map<String, Object> getServices(WorkflowPhase phase) {
+        Map<String, Object> filtered = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : services.entrySet()) {
+            AgentService ann = entry.getValue().getClass().getAnnotation(AgentService.class);
+            if (ann != null) {
+                String[] phases = ann.phases();
+                if (phases.length == 0) {
+                    filtered.put(entry.getKey(), entry.getValue());
+                    continue;
+                }
 
-                    java.util.List<String> roleList = java.util.Arrays.asList(roles);
-                    boolean allowed = currentRole == null 
-                            || roleList.contains("*") 
-                            || roleList.contains(currentRole.name());
+                List<String> phaseList = Arrays.asList(phases);
+                boolean allowed = phase == null 
+                        || phaseList.contains("*") 
+                        || phaseList.contains(phase.name());
 
-                    if (allowed) {
-                        allowedServices.add(service);
-                    }
+                if (allowed) {
+                    filtered.put(entry.getKey(), entry.getValue());
                 }
             }
-            return docGenerator.generateDoc(allowedServices);
+        }
+        return filtered;
+    }
+
+    public String getDocumentation(WorkflowPhase currentPhase) {
+        String cacheKey = currentPhase != null ? currentPhase.name() : "NULL_PHASE";
+        
+        return docCache.computeIfAbsent(cacheKey, key -> {
+            Map<String, Object> filtered = getServices(currentPhase);
+            return docGenerator.generateDoc(new ArrayList<>(filtered.values()));
         });
     }
 }

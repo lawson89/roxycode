@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanManagerService;
@@ -36,7 +37,7 @@ class HeaderPanelTest {
     }
 
     private WorkflowService createWorkflowService() {
-        return new WorkflowService(mock(PlanManagerService.class));
+        return new WorkflowService(mock(PlanManagerService.class), mock(EnvironmentService.class));
     }
 
     @Test
@@ -59,7 +60,7 @@ class HeaderPanelTest {
                 break;
             }
         }
-        assertFalse(searchFieldFound, "Search field should be removed from HeaderPanel");
+        assertFalse(searchFieldFound);
     }
 
     @Test
@@ -67,9 +68,7 @@ class HeaderPanelTest {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
-        
         boolean settingsFound = false;
-        
         for (Component comp : header.getComponents()) {
             if (comp instanceof JPanel) {
                 JPanel panel = (JPanel) comp;
@@ -80,7 +79,7 @@ class HeaderPanelTest {
                 }
             }
         }
-        assertFalse(settingsFound, "Settings button should be removed");
+        assertFalse(settingsFound);
     }
 
     @Test
@@ -88,10 +87,7 @@ class HeaderPanelTest {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
-        
         JButton openButton = null;
-        
-        // Find in nested panels
         for (Component comp : header.getComponents()) {
             if (comp instanceof JPanel) {
                 JPanel p1 = (JPanel) comp;
@@ -107,8 +103,7 @@ class HeaderPanelTest {
                 }
             }
         }
-        
-        assertNotNull(openButton, "Open Project icon button should be present with correct tooltip");
+        assertNotNull(openButton);
     }
 
     @Test
@@ -116,9 +111,8 @@ class HeaderPanelTest {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
-        
         net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
         Object constraints = layout.getLayoutConstraints();
-        assertTrue(constraints.toString().contains("insets 5 20 5 20"), "Layout insets should be adjusted for new header height");
+        assertTrue(constraints.toString().contains("insets 5 20 5 20"));
     }
 }

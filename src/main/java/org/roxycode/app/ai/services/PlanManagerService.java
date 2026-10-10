@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 /**
  * Service for managing project plans and specifications.
  */
-@AgentService(value = "planManagerService", roles = {"*"})
+@AgentService(value = "planManagerService", phases = {"*"})
 @AgentDoc("Service for managing project plans and specifications.")
 public class PlanManagerService {
 
@@ -40,7 +40,7 @@ public class PlanManagerService {
      * @param plan the implementation plan to submit
      * @return a success message
      */
-        @AgentDoc("Submits an implementation plan for the project.")
+    @AgentDoc("Submits an implementation plan for the project.")
     public String submitPlan(
             @AgentDoc("The implementation plan to submit.") ImplementationPlan plan) {
         if (plan == null) {
@@ -71,18 +71,22 @@ public class PlanManagerService {
             steps.add(new ImplementationPlan.TechStep("Automated code review passes", false));
         }
 
-        this.currentPlan = new ImplementationPlan(plan.title(), plan.goal(), plan.requirements(), steps);
+        this.currentPlan = new ImplementationPlan(
+            plan.title(), 
+            plan.goal(), 
+            plan.requirements(), 
+            steps,
+            plan.userApproved(),
+            plan.approvalTimestamp(),
+            plan.approvedBy(),
+            plan.completedOn()
+        );
         notifyListeners();
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
     /**
      * Submits an implementation plan for the project via simple arguments.
-     * @param title the title of the project
-     * @param goal the high-level goal
-     * @param requirements list of functional requirements
-     * @param technicalSteps list of technical implementation steps
-     * @return a success message
      */
     @AgentDoc("Submits an implementation plan for the project via simple arguments.")
     public String submitPlan(
@@ -97,13 +101,11 @@ public class PlanManagerService {
                 .map(s -> new ImplementationPlan.TechStep(s, false))
                 .collect(Collectors.toList());
                 
-        return submitPlan(new ImplementationPlan(title, goal, rawRequirements, steps));
+        return submitPlan(new ImplementationPlan(title, goal, rawRequirements, steps, false, null, null, null));
     }
 
     /**
      * Submits an implementation plan for the project via a Map.
-     * @param planMap Map containing title, goal, requirements, and technicalSteps
-     * @return a success message
      */
     @SuppressWarnings("unchecked")
     @AgentDoc("Submits an implementation plan for the project via a Map.")
@@ -118,12 +120,49 @@ public class PlanManagerService {
                 .map(s -> new ImplementationPlan.TechStep(s, false))
                 .collect(Collectors.toList());
                 
-        return submitPlan(new ImplementationPlan(title, goal, requirements, steps));
+        return submitPlan(new ImplementationPlan(title, goal, requirements, steps, false, null, null, null));
+    }
+
+    /**
+     * Approves the current plan.
+     */
+    @AgentDoc("Approves the current implementation plan.")
+    public void approvePlan(String user, String timestamp) {
+        if (currentPlan == null) return;
+        currentPlan = new ImplementationPlan(
+            currentPlan.title(),
+            currentPlan.goal(),
+            currentPlan.requirements(),
+            currentPlan.technicalSteps(),
+            true,
+            timestamp,
+            user,
+            currentPlan.completedOn()
+        );
+        notifyListeners();
+    }
+
+    /**
+     * Marks the current plan as completed.
+     */
+    @AgentDoc("Marks the current implementation plan as completed.")
+    public void completePlan(String timestamp) {
+        if (currentPlan == null) return;
+        currentPlan = new ImplementationPlan(
+            currentPlan.title(),
+            currentPlan.goal(),
+            currentPlan.requirements(),
+            currentPlan.technicalSteps(),
+            currentPlan.userApproved(),
+            currentPlan.approvalTimestamp(),
+            currentPlan.approvedBy(),
+            timestamp
+        );
+        notifyListeners();
     }
 
     /**
      * Marks a technical implementation step as completed.
-     * @param index the index of the step (0-based)
      */
     @AgentDoc("Marks a technical implementation step as completed.")
     public void markStepCompleted(@AgentDoc("The index of the step (0-based).") int index) {
@@ -132,7 +171,6 @@ public class PlanManagerService {
 
     /**
      * Marks a technical implementation step as incomplete.
-     * @param index the index of the step (0-based)
      */
     @AgentDoc("Marks a technical implementation step as incomplete.")
     public void markStepIncomplete(@AgentDoc("The index of the step (0-based).") int index) {
@@ -143,16 +181,24 @@ public class PlanManagerService {
         if (currentPlan == null || index < 0 || index >= currentPlan.technicalSteps().size()) {
             return;
         }
-        java.util.List<ImplementationPlan.TechStep> steps = new java.util.ArrayList<>(currentPlan.technicalSteps());
+        List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
         ImplementationPlan.TechStep step = steps.get(index);
         steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
-        currentPlan = new ImplementationPlan(currentPlan.title(), currentPlan.goal(), currentPlan.requirements(), steps);
+        currentPlan = new ImplementationPlan(
+            currentPlan.title(), 
+            currentPlan.goal(), 
+            currentPlan.requirements(), 
+            steps,
+            currentPlan.userApproved(),
+            currentPlan.approvalTimestamp(),
+            currentPlan.approvedBy(),
+            currentPlan.completedOn()
+        );
         notifyListeners();
     }
 
     /**
      * Gets the current implementation plan.
-     * @return the implementation plan, or null if none submitted
      */
     public ImplementationPlan getCurrentPlan() {
         return currentPlan;
@@ -161,16 +207,21 @@ public class PlanManagerService {
     /**
      * Clears the existing plan.
      */
-    public void clearSpecs() {
+    @AgentDoc("Clears the current implementation plan.")
+    public void clearPlan() {
         this.currentPlan = null;
         notifyListeners();
     }
 
-        private List<String> extractStringList(Object obj) {
+    public void clearSpecs() {
+        clearPlan();
+    }
+
+    private List<String> extractStringList(Object obj) {
         if (obj == null) {
             return List.of();
         }
-        List<String> result = new java.util.ArrayList<>();
+        List<String> result = new ArrayList<>();
         if (obj instanceof List) {
             for (Object item : (List<?>) obj) {
                 result.add(extractString(item));

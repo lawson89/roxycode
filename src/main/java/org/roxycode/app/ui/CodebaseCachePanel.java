@@ -12,7 +12,7 @@ import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.AgentRole;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -165,16 +165,14 @@ public class CodebaseCachePanel extends JPanel {
     private String getSessionContextString() {
         StringBuilder sb = new StringBuilder();
         WorkflowPhase currentPhase = workflowService.getCurrentPhase();
-        AgentRole currentRole = currentPhase.getRole();
+        
 
         sb.append("## SESSION CONTEXT\n");
         sb.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage()).append("\n");
         sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
-        sb.append("CURRENT ROLE: ").append(currentRole.getTitle()).append("\n");
-        sb.append(currentRole.getSystemPromptPrefix()).append("\n\n");
         
         sb.append("You have access to the following JEXL tools:\n")
-          .append(jexlServiceRegistry.getDocumentation(currentRole));
+          .append(jexlServiceRegistry.getDocumentation(currentPhase));
         
         String gitStatus = gitService.getStatus();
         if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {

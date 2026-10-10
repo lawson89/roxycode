@@ -6,7 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.roxycode.app.ai.AgentRole;
+
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.JexlTool;

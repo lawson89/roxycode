@@ -8,7 +8,7 @@ class ImplementationPlanTest {
     @Test
     void testImplementationPlan() {
         ImplementationPlan.TechStep step = new ImplementationPlan.TechStep("Step 1", false);
-        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), List.of(step));
+        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), List.of(step), false, null, null, null);
         assertEquals("Title", plan.title());
         assertEquals("Goal", plan.goal());
         assertEquals(1, plan.requirements().size());

@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 
 @Service
-@AgentService(value = "codeReviewService", roles = {"SENIOR_DEVELOPER", "TECHNICAL_MENTOR"})
+@AgentService(value = "codeReviewService", phases = {"CODE", "EXPLORE"})
 @AgentDoc("Executes an independent sub-agent review to audit git changes against implementation requirements.")
 public class CodeReviewService {
 

@@ -8,12 +8,16 @@ public record ImplementationPlan(
     String title,
     String goal,
     List<String> requirements,
-    List<TechStep> technicalSteps
+    List<TechStep> technicalSteps,
+    boolean userApproved,
+    String approvalTimestamp,
+    String approvedBy,
+    String completedOn
 ) {
     public record TechStep(String description, boolean completed) {}
 
     public ImplementationPlan {
-        requirements = List.copyOf(requirements);
-        technicalSteps = List.copyOf(technicalSteps);
+        requirements = requirements != null ? List.copyOf(requirements) : List.of();
+        technicalSteps = technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
     }
 }

@@ -11,78 +11,46 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PlanManagerServiceTest {
 
-        @Test
+    @Test
     void testSubmitPlanAndNotifyListeners() {
         PlanManagerService service = new PlanManagerService();
         AtomicInteger notifications = new AtomicInteger(0);
         
         service.addListener((plan) -> notifications.incrementAndGet());
         
-        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), List.of(new ImplementationPlan.TechStep("Step 1", false)));
+        ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), 
+            List.of(new ImplementationPlan.TechStep("Step 1", false)), false, null, null, null);
         String res = service.submitPlan(plan);
         
         assertEquals("Implementation plan submitted successfully with mandatory verification checklist items.", res);
         assertNotNull(service.getCurrentPlan());
         assertEquals("Title", service.getCurrentPlan().title());
-        // Step 1 + Code compiles + Unit tests pass + Code Review = 4
         assertEquals(4, service.getCurrentPlan().technicalSteps().size());
         assertEquals(1, notifications.get());
     }
 
     @Test
-    void testSubmitPlanWithArrays() {
+    void testApproveAndCompletePlan() {
         PlanManagerService service = new PlanManagerService();
+        service.submitPlan("Title", "Goal", List.of(), List.of("Step 1"));
         
-        String[] reqs = {"Req 1", "Req 2"};
-        String[] steps = {"Step 1"};
-        service.submitPlan("Title", "Goal", reqs, steps);
+        assertFalse(service.getCurrentPlan().userApproved());
         
-        assertEquals(2, service.getCurrentPlan().requirements().size());
-        // Step 1 + Code compiles + Unit tests pass + Code Review = 4
-        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
-        assertEquals("Req 1", service.getCurrentPlan().requirements().get(0));
-        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
+        service.approvePlan("user1", "2023-01-01");
+        assertTrue(service.getCurrentPlan().userApproved());
+        assertEquals("user1", service.getCurrentPlan().approvedBy());
+        
+        service.completePlan("2023-01-02");
+        assertEquals("2023-01-02", service.getCurrentPlan().completedOn());
     }
 
     @Test
-    void testOverloadedSubmitPlan() {
+    void testClearPlan() {
         PlanManagerService service = new PlanManagerService();
-        
-        // Simple arguments
-        service.submitPlan("Title", "Goal", List.of("Req 1"), List.of("Step 1"));
+        service.submitPlan("T", "G", List.of(), List.of("S"));
         assertNotNull(service.getCurrentPlan());
-        assertEquals("Title", service.getCurrentPlan().title());
-        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
         
-        // Map arguments
-        service.clearSpecs();
+        service.clearPlan();
         assertNull(service.getCurrentPlan());
-        
-        Map<String, Object> planMap = Map.of(
-            "title", "Map Title",
-            "goal", "Map Goal",
-            "requirements", List.of("Req A"),
-            "technicalSteps", List.of("Step A")
-        );
-        service.submitPlan(planMap);
-        assertEquals("Map Title", service.getCurrentPlan().title());
-        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
-    }
-
-    @Test
-    void testMarkStepStatus() {
-        PlanManagerService service = new PlanManagerService();
-        service.submitPlan("Title", "Goal", List.of(), List.of("Step 1", "Step 2"));
-        
-        // Step 1, Step 2, Code compiles, Unit tests pass, Code Review = 5
-        assertEquals(5, service.getCurrentPlan().technicalSteps().size());
-        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
-        
-        service.markStepCompleted(0);
-        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
-        assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
-        
-        service.markStepIncomplete(0);
-        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
     }
 }

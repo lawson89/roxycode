@@ -6,7 +6,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.WorkflowMode;
+
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.model.ImplementationPlan;
@@ -38,8 +38,7 @@ public class HeaderPanel extends JPanel {
     private final JPanel progressTracker;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
 
-    private final JToggleButton exploreModeBtn;
-    private final JToggleButton changeModeBtn;
+    private final JToggleButton planModeBtn;
 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, 
                        WorkflowService workflowService, PlanManagerService planManagerService,
@@ -86,26 +85,16 @@ public class HeaderPanel extends JPanel {
         planLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
         workflowPanel.add(planLabel, "center, wrap, hidemode 3");
 
-        exploreModeBtn = new JToggleButton("Explore", FontIcon.of(Codicons.SEARCH, 14));
-        changeModeBtn = new JToggleButton("Change", FontIcon.of(Codicons.TOOLS, 14));
+                planModeBtn = new JToggleButton(WorkflowPhase.PLAN.getDisplayName(), FontIcon.of(WorkflowPhase.PLAN.getIcon(), 14));
 
-        exploreModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
-        changeModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
-        
-        exploreModeBtn.putClientProperty(FlatClientProperties.STYLE, "selectedBackground: $Component.accentColor; selectedForeground: $Component.accentForeground");
-        changeModeBtn.putClientProperty(FlatClientProperties.STYLE, "selectedBackground: $Component.accentColor; selectedForeground: $Component.accentForeground");
-
-        ButtonGroup modeGroup = new ButtonGroup();
-        modeGroup.add(exploreModeBtn);
-        modeGroup.add(changeModeBtn);
+        planModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
+        planModeBtn.putClientProperty(FlatClientProperties.STYLE, "selectedBackground: $Component.accentColor; selectedForeground: $Component.accentForeground");
 
         JPanel togglePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         togglePanel.setOpaque(false);
-        togglePanel.add(exploreModeBtn);
-        togglePanel.add(changeModeBtn);
+        togglePanel.add(planModeBtn);
 
-        exploreModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowMode.EXPLORE));
-        changeModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowMode.CHANGE));
+        planModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowPhase.PLAN));
 
         workflowPanel.add(togglePanel, "center, wrap");
 
@@ -160,28 +149,22 @@ public class HeaderPanel extends JPanel {
 
     private void updateActivePhase(WorkflowPhase currentPhase) {
         ImplementationPlan plan = planManagerService.getCurrentPlan();
-        if (currentPhase.getMode() == WorkflowMode.CHANGE && plan != null && plan.title() != null && !plan.title().isBlank()) {
+        if (currentPhase != WorkflowPhase.EXPLORE && plan != null && plan.title() != null && !plan.title().isBlank()) {
             planLabel.setText(plan.title().toUpperCase());
             planLabel.setVisible(true);
         } else {
             planLabel.setVisible(false);
         }
 
-        if (currentPhase.getMode() == WorkflowMode.EXPLORE) {
-            exploreModeBtn.setSelected(true);
-            progressTracker.setVisible(false);
-        } else {
-            changeModeBtn.setSelected(true);
-            progressTracker.setVisible(true);
-        }
+        planModeBtn.setSelected(currentPhase == WorkflowPhase.PLAN);
+        progressTracker.setVisible(currentPhase != WorkflowPhase.EXPLORE);
 
         progressTracker.removeAll();
         for (WorkflowPhaseIndicator indicator : indicators) {
-            if (indicator.getPhase().getMode() == WorkflowMode.CHANGE) {
-                indicator.setActive(indicator.getPhase() == currentPhase);
-                indicator.setCompleted(workflowService.getVisitedPhases().contains(indicator.getPhase()));
-                progressTracker.add(indicator);
-            }
+            if (indicator.getPhase() == WorkflowPhase.EXPLORE) continue;
+            indicator.setActive(indicator.getPhase() == currentPhase);
+            indicator.setCompleted(workflowService.getVisitedPhases().contains(indicator.getPhase()));
+            progressTracker.add(indicator);
         }
         revalidate();
         repaint();

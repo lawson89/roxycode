@@ -1,6 +1,7 @@
 package org.roxycode.app.ai;
 
 import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.service.EnvironmentService;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
@@ -9,13 +10,14 @@ import java.util.List;
 import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
 
-@AgentService(value = "workflowService", roles = {"*"})
+@AgentService(value = "workflowService", phases = {"*"})
 @AgentDoc("Manages the current phase of the development workflow and handles single-step phase transitions.")
 public class WorkflowService {
 
     private final PlanManagerService planManager;
-    private WorkflowPhase currentPhase = WorkflowPhase.EXPLORE;
-    private final Set<WorkflowPhase> visitedPhases = new HashSet<>(Collections.singletonList(WorkflowPhase.EXPLORE));
+    private final EnvironmentService environmentService;
+    private WorkflowPhase currentPhase = WorkflowPhase.PLAN;
+    private final Set<WorkflowPhase> visitedPhases = new HashSet<>(Collections.singletonList(WorkflowPhase.PLAN));
     private WorkflowPhase pendingPhase;
     private String pendingReason;
 
@@ -26,19 +28,22 @@ public class WorkflowService {
         void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason);
     }
 
-    public WorkflowService(PlanManagerService planManager) {
+    public WorkflowService(PlanManagerService planManager, EnvironmentService environmentService) {
         this.planManager = planManager;
+        this.environmentService = environmentService;
+        this.planManager.addListener(this::handlePlanUpdate);
     }
 
-    public WorkflowMode getCurrentMode() {
-        return currentPhase.getMode();
+    private void handlePlanUpdate(org.roxycode.app.model.ImplementationPlan plan) {
+        // Enforce HITL approval for CODE completion. Auto-transition removed.
     }
 
     /**
-     * Handles manual user mode switches from the UI header toggle.
+     * Handles manual user phase switches from the UI header toggle.
+     * Restricted to switching between EXPLORE and PLAN.
      */
-    public void switchMode(WorkflowMode targetMode) {
-        if (targetMode == getCurrentMode()) {
+    public void switchMode(WorkflowPhase targetPhase) {
+        if (targetPhase == currentPhase) {
             if (this.pendingPhase != null) {
                 this.pendingPhase = null;
                 this.pendingReason = null;
@@ -47,24 +52,14 @@ public class WorkflowService {
             return;
         }
 
-                if (targetMode == WorkflowMode.EXPLORE) {
-            // Pause active plan and switch to read-only EXPLORE phase
-            this.currentPhase = WorkflowPhase.EXPLORE;
-        } else if (targetMode == WorkflowMode.CHANGE) {
-            // If a plan was already submitted, resume execution in CODE phase
-            if (planManager.getCurrentPlan() != null) {
-                this.visitedPhases.add(WorkflowPhase.PLAN);
-                this.currentPhase = WorkflowPhase.CODE;
-            } else {
-                this.currentPhase = WorkflowPhase.PLAN;
-            }
+        if (targetPhase == WorkflowPhase.EXPLORE || targetPhase == WorkflowPhase.PLAN) {
+             this.currentPhase = targetPhase;
+             this.visitedPhases.add(this.currentPhase);
+             this.pendingPhase = null;
+             this.pendingReason = null;
+             notifyPhaseListeners();
+             notifyRequestListeners();
         }
-
-        this.visitedPhases.add(this.currentPhase);
-        this.pendingPhase = null;
-        this.pendingReason = null;
-        notifyPhaseListeners();
-        notifyRequestListeners();
     }
 
     @AgentDoc("Requests a single-step transition to an adjacent phase with a descriptive reason.")
@@ -72,7 +67,7 @@ public class WorkflowService {
             @AgentDoc("The target phase: EXPLORE, PLAN, or CODE.") String phaseName,
             @AgentDoc("The detailed reason for requesting this transition.") String reason) {
 
-                WorkflowPhase nextPhase;
+        WorkflowPhase nextPhase;
         String normalizedName = phaseName.toUpperCase();
         if ("DEVELOP".equals(normalizedName)) {
             normalizedName = "CODE";
@@ -105,17 +100,16 @@ public class WorkflowService {
             }
         }
 
-                if (currentPhase == WorkflowPhase.CODE && (nextPhase == WorkflowPhase.PLAN || nextPhase == WorkflowPhase.EXPLORE)) {
+        if (currentPhase == WorkflowPhase.CODE && (nextPhase == WorkflowPhase.PLAN || nextPhase == WorkflowPhase.EXPLORE)) {
             org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
-            if (plan == null) {
-                return "Error: Cannot transition to PLAN. No active implementation plan found.";
-            }
-            boolean allDone = plan.technicalSteps().stream().allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);
-            if (!allDone) {
-                String lowReason = reason.toLowerCase();
-                boolean isBlocker = lowReason.contains("block") || lowReason.contains("revise") || lowReason.contains("issue") || lowReason.contains("fix") || lowReason.contains("problem");
-                if (!isBlocker) {
-                    return "Error: Cannot complete phase. Some technical steps are incomplete. If you are blocked, please clarify in the reason.";
+            if (plan != null) {
+                boolean allDone = plan.technicalSteps().stream().allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);
+                if (!allDone) {
+                    String lowReason = reason.toLowerCase();
+                    boolean isBlocker = lowReason.contains("block") || lowReason.contains("revise") || lowReason.contains("issue") || lowReason.contains("fix") || lowReason.contains("problem");
+                    if (!isBlocker) {
+                        return "Error: Cannot complete phase. Some technical steps are incomplete. If you are blocked, please clarify in the reason.";
+                    }
                 }
             }
         }
@@ -126,11 +120,11 @@ public class WorkflowService {
         notifyRequestListeners();
 
         String summary = formatPlanSummary(planManager.getCurrentPlan());
-        String message = "**Transition Request (" + currentPhase.getDisplayName() + " → " + nextPhase.getDisplayName() + ")**\n\n"
+        String message = "**Transition Request (" + currentPhase.getDisplayName() + " → " + nextPhase.getDisplayName() + ")**\\n\\n"
                 + "**Reason:** " + reason;
 
         // Yield execution turn immediately for user approval
-        String json = String.format("{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
+        String json = String.format("{\\\"summary\\\": \\\"%s\\\", \\\"message\\\": \\\"%s\\\", \\\"reason\\\": \\\"%s\\\"}",
                 StringEscapeUtils.escapeJson(summary),
                 StringEscapeUtils.escapeJson(message),
                 StringEscapeUtils.escapeJson(reason));
@@ -138,17 +132,13 @@ public class WorkflowService {
         throw new YieldTurnException(json);
     }
 
-    /**
-     * Helper to verify if two phases are adjacent in the single-step state
-     * machine.
-     */
     private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
         switch (current) {
             case EXPLORE:
                 return next == WorkflowPhase.PLAN;
             case PLAN:
                 return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.CODE;
-                        case CODE:
+            case CODE:
                 return next == WorkflowPhase.PLAN || next == WorkflowPhase.EXPLORE;
             default:
                 return false;
@@ -169,6 +159,26 @@ public class WorkflowService {
 
     public void approveTransition() {
         if (pendingPhase != null) {
+            String timestamp = java.time.OffsetDateTime.now().toString();
+            String user = environmentService.getCurrentUser();
+
+            // Plan Approval Metadata
+            if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE) {
+                planManager.approvePlan(user, timestamp);
+            }
+            
+            // Phase Completion Metadata
+            if (currentPhase == WorkflowPhase.CODE && pendingPhase == WorkflowPhase.PLAN) {
+                org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
+                if (plan != null) {
+                    boolean allDone = plan.technicalSteps().stream().allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);
+                    if (allDone && !plan.technicalSteps().isEmpty()) {
+                        planManager.completePlan(timestamp);
+                        planManager.clearPlan();
+                    }
+                }
+            }
+
             this.currentPhase = pendingPhase;
             this.visitedPhases.add(pendingPhase);
             this.pendingPhase = null;
@@ -190,10 +200,10 @@ public class WorkflowService {
     public void resetWorkflow() {
         this.pendingPhase = null;
         this.pendingReason = null;
-        this.currentPhase = WorkflowPhase.EXPLORE;
+        this.currentPhase = WorkflowPhase.PLAN;
         this.visitedPhases.clear();
-        this.visitedPhases.add(WorkflowPhase.EXPLORE);
-        this.planManager.clearSpecs();
+        this.visitedPhases.add(WorkflowPhase.PLAN);
+        this.planManager.clearPlan();
         notifyPhaseListeners();
         notifyRequestListeners();
     }
@@ -224,21 +234,21 @@ public class WorkflowService {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("PLAN SUMMARY:\n\n### ").append(plan.title().trim()).append("\n");
-        sb.append("**Goal:** ").append(plan.goal().replaceAll("\s+", " ").trim()).append("\n\n");
+        sb.append("PLAN SUMMARY:\\\\n\\\\n### ").append(plan.title().trim()).append("\\\\n");
+        sb.append("**Goal:** ").append(plan.goal().replaceAll("\\\\s+", " ").trim()).append("\\\\n\\\\n");
 
         if (!plan.requirements().isEmpty()) {
-            sb.append("#### Requirements\n");
+            sb.append("#### Requirements\\\\n");
             for (String req : plan.requirements()) {
-                sb.append("* ").append(req.replaceAll("\s+", " ").trim()).append("\n");
+                sb.append("* ").append(req.replaceAll("\\\\s+", " ").trim()).append("\\\\n");
             }
-            sb.append("\n");
+            sb.append("\\\\n");
         }
 
         if (!plan.technicalSteps().isEmpty()) {
-            sb.append("#### Technical Steps\n");
+            sb.append("#### Technical Steps\\\\n");
             for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                sb.append(step.completed() ? "* [x] " : "* [ ] ").append(step.description().replaceAll("\\s+", " ").trim()).append("\n");
+                sb.append(step.completed() ? "* [x] " : "* [ ] ").append(step.description().replaceAll("\\\\s+", " ").trim()).append("\\\\n");
             }
         }
         return sb.toString();

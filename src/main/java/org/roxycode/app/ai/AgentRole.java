@@ -1,23 +1,9 @@
 package org.roxycode.app.ai;
 
 public enum AgentRole {
-
-    PRODUCT_OWNER(
-            "Product Owner",
-            "Defines the 'what' and 'why' by gathering functional requirements."
-    ),
-    LEAD_ARCHITECT(
-            "Lead Architect",
-            "Defines the 'how' by creating technical specifications and implementation plans."
-    ),
-    SENIOR_DEVELOPER(
-            "Senior Developer",
-            "Executes the plan by writing clean, tested, and production-grade code."
-    ),
-    TECHNICAL_MENTOR(
-            "Technical Mentor",
-            "Provides technical guidance and ensures adherence to best practices."
-    );
+    TECHNICAL_MENTOR("Technical Mentor", "Expert guide for codebase exploration and conceptual understanding."),
+    LEAD_ARCHITECT("Lead Architect", "Focuses on requirements, system design, and implementation planning."),
+    SENIOR_DEVELOPER("Senior Developer", "Responsible for writing high-quality, tested code according to the plan.");
 
     private final String title;
     private final String description;
@@ -33,13 +19,5 @@ public enum AgentRole {
 
     public String getDescription() {
         return description;
-    }
-
-    /**
-     * Helper method to generate the standard system prompt prefix for each
-     * role.
-     */
-    public String getSystemPromptPrefix() {
-        return String.format("You are the %s. %s", this.title, this.description);
     }
 }

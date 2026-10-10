@@ -1,22 +1,16 @@
 package org.roxycode.app.ai.services;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.AgentDoc;
-import org.roxycode.app.ai.AgentRole;
 import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.PromptService;
+import org.roxycode.app.service.SettingsService;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-
 /**
- * Service for the Technical Mentor role during the EXPLORE phase.
- * Provides system prompt generation for stateless exploration.
+ * Manages system prompts and context for the EXPLORE phase.
  */
 @Service
-@AgentService(value = "exploreManager", roles = {"TECHNICAL_MENTOR"})
-@AgentDoc("Manages the EXPLORE phase and provides system prompts for technical exploration.")
+@AgentService(value = "exploreManager", phases = {"EXPLORE"})
 public class ExploreManager {
 
     private final SettingsService settingsService;
@@ -27,14 +21,12 @@ public class ExploreManager {
         this.promptService = promptService;
     }
 
-    @AgentDoc("Generates the system prompt for the Technical Mentor during the EXPLORE phase.")
+    /**
+     * Generates the system prompt for exploration.
+     */
     public String generateSystemPrompt() {
-        int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
-        String template = promptService.loadExplorePrompt();
-        
-        Map<String, Object> values = Map.of("maxTurns", maxTurns);
-        String substituted = StringSubstitutor.replace(template, values);
-        
-        return AgentRole.TECHNICAL_MENTOR.getSystemPromptPrefix() + substituted;
+        String prompt = promptService.loadExplorePrompt();
+        String substituted = prompt.replace("{{MAX_TURNS}}", String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
+        return "You are the Technical Mentor. Provides technical guidance and ensures adherence to best practices." + substituted;
     }
 }

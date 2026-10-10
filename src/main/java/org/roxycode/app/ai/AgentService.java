@@ -21,10 +21,10 @@ public @interface AgentService {
     String value();
 
     /**
-     * The roles allowed to access this service.
-     * Defaults to an empty array, meaning no roles are allowed.
-     * Use "*" as a wildcard to allow access to all agent roles.
-     * @return the allowed roles
+     * The phases allowed to access this service.
+     * Defaults to an empty array, meaning no phases are allowed.
+     * Use "*" as a wildcard to allow access to all agent phases.
+     * @return the allowed phases
      */
-    String[] roles() default {};
+    String[] phases() default {};
 }

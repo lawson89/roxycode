@@ -4,7 +4,7 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanManagerService;
-import org.roxycode.app.ai.WorkflowMode;
+
 import org.roxycode.app.model.ImplementationPlan;
 import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;
@@ -18,7 +18,7 @@ import java.util.List;
 public class PhaseStepPanel extends JPanel {
 
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
-    private JLabel modeBadge;
+
     private JPanel progressTracker;
     private final WorkflowService workflowService;
     private final PlanManagerService planManagerService;
@@ -42,11 +42,7 @@ public class PhaseStepPanel extends JPanel {
         planLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
         add(planLabel, "hidemode 3");
 
-        // Mode Badge for EXPLORE
-        modeBadge = new JLabel("Explore");
-        modeBadge.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
-        modeBadge.setOpaque(false);
-        add(modeBadge, "hidemode 3");
+
 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 10", "[]", "center"));
         progressTracker.setOpaque(false);
@@ -70,24 +66,17 @@ public class PhaseStepPanel extends JPanel {
     }
 
     private void updateActivePhase(WorkflowPhase currentPhase) {
-        if (modeBadge != null) modeBadge.setVisible(false);
         updatePlanDisplay(currentPhase);
 
         progressTracker.removeAll();
-        if (currentPhase.getMode() == WorkflowMode.CHANGE) {
-            java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
-            for (WorkflowPhaseIndicator indicator : indicators) {
-                if (indicator.getPhase().getMode() == WorkflowMode.CHANGE) {
-                    indicator.setActive(indicator.getPhase() == currentPhase);
-                    indicator.setCompleted(visited.contains(indicator.getPhase()));
-                    progressTracker.add(indicator);
-                }
-            }
-            progressTracker.setVisible(true);
-        } else {
-            progressTracker.setVisible(false);
-            if (modeBadge != null) modeBadge.setVisible(true);
+        java.util.Set<WorkflowPhase> visited = workflowService.getVisitedPhases();
+        for (WorkflowPhaseIndicator indicator : indicators) {
+            if (indicator.getPhase() == WorkflowPhase.EXPLORE) continue;
+            indicator.setActive(indicator.getPhase() == currentPhase);
+            indicator.setCompleted(visited.contains(indicator.getPhase()));
+            progressTracker.add(indicator);
         }
+        progressTracker.setVisible(currentPhase != WorkflowPhase.EXPLORE);
         revalidate();
         repaint();
     }

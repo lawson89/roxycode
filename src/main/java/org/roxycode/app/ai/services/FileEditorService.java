@@ -20,7 +20,7 @@ import java.util.List;
 /**
  * Service providing safe file editing capabilities within the project sandbox.
  */
-@AgentService(value = "fileEditorService", roles = {"SENIOR_DEVELOPER"})
+@AgentService(value = "fileEditorService", phases = {"CODE"})
 @AgentDoc("Provides safe, ergonomic file editing capabilities for the AI agent with phase protection and security sandboxing.")
 public class FileEditorService {
 

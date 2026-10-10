@@ -14,7 +14,7 @@ import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.service.ProjectAnalysisService;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.AgentRole;
+
 
 import org.roxycode.app.service.SettingsService;
 
