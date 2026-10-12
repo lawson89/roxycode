@@ -6,7 +6,6 @@ import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.ai.JexlExecutionEvent;
 import org.roxycode.app.ai.JexlExecutionListener;
 import org.roxycode.app.ai.JexlTool;
-import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
@@ -44,7 +43,6 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
 
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
     private final AiService aiService;
-    private final ExploreManager exploreManager;
     private final JexlTool jexlTool;
     private final WorkflowService workflowService;
     private final TurnEventBridge turnEventBridge;
@@ -65,10 +63,9 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final List<BufferedImage> pendingImages = new ArrayList<>();
     private final JPanel attachmentPanel;
 
-    public ChatPanel(AiService aiService, ExploreManager exploreManager, JexlTool jexlTool, 
+    public ChatPanel(AiService aiService, JexlTool jexlTool, 
                      WorkflowService workflowService, TurnEventBridge turnEventBridge, ChatMemory chatMemory) {
         this.aiService = aiService;
-        this.exploreManager = exploreManager;
         this.jexlTool = jexlTool;
         this.workflowService = workflowService;
         this.turnEventBridge = turnEventBridge;
@@ -400,11 +397,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             @Override
             protected String doInBackground() {
                 try {
-                    String systemPrompt = null;
-                    if (workflowService.getCurrentPhase() == WorkflowPhase.EXPLORE) {
-                        systemPrompt = exploreManager.generateSystemPrompt();
-                    }
-                    return aiService.chat(text, systemPrompt, imageBytes);
+                    return aiService.chat(text, null, imageBytes);
                 } catch (Exception ex) {
                     log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
                     return "Error: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());

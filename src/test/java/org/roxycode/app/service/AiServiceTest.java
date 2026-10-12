@@ -8,7 +8,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.roxycode.app.ai.JexlServiceRegistry;
-import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
@@ -60,8 +59,6 @@ class AiServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
-    @Mock
-    private ExploreManager exploreManager;
 
     @Mock
     private RepoMapPackerService repoMapPackerService;
@@ -83,7 +80,7 @@ class AiServiceTest {
         
                 ProjectAnalysisService projectAnalysisService = mock(ProjectAnalysisService.class);
         when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
-        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher, repoMapPackerService, gitService, projectAnalysisService, exploreManager);
+        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlServiceRegistry, jexlTool, workflowService, chatMemory, eventPublisher, repoMapPackerService, gitService, projectAnalysisService);
     }
 
     @Test
@@ -216,6 +213,7 @@ class AiServiceTest {
         when(requestSpec.call()).thenThrow(new RuntimeException("MAX_TOOL_TURNS_EXCEEDED"));
         
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
+        when(promptService.generateExploreSystemPrompt()).thenReturn("EXPLORE PROMPT");
         
         settings.setMaxAgentToolTurns(3);
         

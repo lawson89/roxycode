@@ -11,9 +11,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
+import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Lazy;
 
-@AgentService(value = "workflowService", phases = {"*"})
-@AgentDoc("Manages the current phase of the development workflow and handles single-step phase transitions.")
+@Service
 public class WorkflowService {
 
     private final PlanManagerService planManager;
@@ -31,7 +32,7 @@ public class WorkflowService {
         void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason);
     }
 
-    public WorkflowService(PlanManagerService planManager, EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
+    public WorkflowService(@Lazy PlanManagerService planManager, EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
         this.planManager = planManager;
         this.environmentService = environmentService;
         this.eventPublisher = eventPublisher;
@@ -66,10 +67,7 @@ public class WorkflowService {
         }
     }
 
-    @AgentDoc("Requests a single-step transition to an adjacent phase with a descriptive reason.")
-    public String routeToPhase(
-            @AgentDoc("The target phase: EXPLORE, PLAN, CODE, or REVIEW.") String phaseName,
-            @AgentDoc("The detailed reason for requesting this transition.") String reason) {
+    public String routeToPhase(String phaseName, String reason) {
 
         WorkflowPhase nextPhase;
         String normalizedName = phaseName.toUpperCase();
@@ -100,7 +98,7 @@ public class WorkflowService {
         // Check prerequisites for specific transitions
         if (currentPhase == WorkflowPhase.PLAN && nextPhase == WorkflowPhase.CODE) {
             if (planManager.getCurrentPlan() == null) {
-                return "Error: Cannot advance to CODE. Implementation Plan is missing. Call planManagerService.submitPlan() first.";
+                return "Error: Cannot advance to CODE. Implementation Plan is missing. Call planService.submitPlan() first.";
             }
         }
 
@@ -143,20 +141,23 @@ public class WorkflowService {
             case EXPLORE:
                 return next == WorkflowPhase.PLAN;
             case PLAN:
-                return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.CODE;
-            case CODE:
-                return next == WorkflowPhase.REVIEW || next == WorkflowPhase.PLAN || next == WorkflowPhase.EXPLORE;
-            case REVIEW:
                 return next == WorkflowPhase.CODE;
+            case CODE:
+                return next == WorkflowPhase.REVIEW || next == WorkflowPhase.PLAN;
+            case REVIEW:
+                return next == WorkflowPhase.CODE || next == WorkflowPhase.PLAN;
             default:
                 return false;
         }
     }
 
     private boolean isAutonomous(WorkflowPhase from, WorkflowPhase to) {
-        if (from == WorkflowPhase.CODE && to == WorkflowPhase.REVIEW) return true;
-        if (from == WorkflowPhase.CODE && to == WorkflowPhase.PLAN) return true;
-        if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.CODE) return true;
+        if (from == WorkflowPhase.CODE && to == WorkflowPhase.REVIEW) {
+            return true;
+        }
+        if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.CODE) {
+            return true;
+        }
         return false;
     }
 
@@ -186,7 +187,7 @@ public class WorkflowService {
             }
             
             // Phase Completion Metadata
-            if (currentPhase == WorkflowPhase.CODE && pendingPhase == WorkflowPhase.PLAN) {
+            if (currentPhase == WorkflowPhase.REVIEW && pendingPhase == WorkflowPhase.PLAN) {
                 org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
                 if (plan != null) {
                     boolean allDone = plan.technicalSteps().stream().allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);

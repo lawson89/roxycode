@@ -2,7 +2,6 @@ package org.roxycode.app.ui;
 
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.JexlTool;
-import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.events.TurnEventBridge;
@@ -17,13 +16,12 @@ public class ChatPanelStopButtonTest {
     @Test
     public void testStopButtonEnablement() {
         AiService aiService = mock(AiService.class);
-        ExploreManager exploreManager = mock(ExploreManager.class);
         JexlTool jexlTool = mock(JexlTool.class);
                 WorkflowService workflowService = mock(WorkflowService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel chatPanel = new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge, chatMemory);
+        ChatPanel chatPanel = new ChatPanel(aiService, jexlTool, workflowService, turnEventBridge, chatMemory);
         JButton stopButton = chatPanel.getStopButton();
         JButton sendButton = chatPanel.getSendButton();
         JTextArea inputArea = chatPanel.getInputArea();

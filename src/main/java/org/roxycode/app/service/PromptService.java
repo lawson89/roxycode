@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.roxycode.app.service.SettingsService;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -26,14 +27,17 @@ public class PromptService {
         private static final String CONTEXT_DIR = ".roxycode/context";
 
     private final ProjectService projectService;
+    private final SettingsService settingsService;
 
     public PromptService() {
         this.projectService = null;
+        this.settingsService = null;
     }
 
     @Autowired
-    public PromptService(ProjectService projectService) {
+    public PromptService(ProjectService projectService, SettingsService settingsService) {
         this.projectService = projectService;
+        this.settingsService = settingsService;
     }
 
     public String loadCoreWorkflowPrompt() {
@@ -188,6 +192,16 @@ public class PromptService {
             log.error("Failed to delete context file {}: {}", filename, e.getMessage());
             throw new RuntimeException("Failed to delete context file", e);
         }
+    }
+
+    
+
+    public String generateExploreSystemPrompt() {
+        String prompt = loadExplorePrompt();
+        if (settingsService != null) {
+            return prompt.replace("${maxTurns}", String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
+        }
+        return prompt;
     }
 
     private String loadMarkdownFromClasspath(String directory, String... excludeFiles) {

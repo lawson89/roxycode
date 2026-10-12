@@ -19,7 +19,7 @@ public class JexlToHtmlConverter {
         // Services
         "gitService", "genericBuildToolService", "buildToolService", "planService", "exportService",
         "textEditorService", "fileReadService", "fileEditorService", "workflowService", "planManager",
-        "exploreManager", "grepService", "geminiCacheService", "repoMapPackerService",
+        "grepService", "geminiCacheService", "repoMapPackerService",
         "projectService", "settingsService", "promptService", "toolService", "envService",
         // Java API Keywords & Types
         "public", "private", "protected", "interface", "class", "record", "void", "enum",

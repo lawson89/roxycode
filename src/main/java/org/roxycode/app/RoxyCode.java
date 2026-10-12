@@ -2,7 +2,6 @@ package org.roxycode.app;
 
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.ai.WorkflowService;
 import org.slf4j.Logger;
@@ -64,7 +63,6 @@ public class RoxyCode {
             GitService gitService = context.getBean(GitService.class);
             EnvironmentService envService = context.getBean(EnvironmentService.class);
             JexlServiceRegistry jexlServiceRegistry = context.getBean(JexlServiceRegistry.class);
-            ExploreManager exploreManager = context.getBean(ExploreManager.class);
             WorkflowService workflowService = context.getBean(WorkflowService.class);
             PlanManagerService planManagerService = context.getBean(PlanManagerService.class);
             org.roxycode.app.ai.JexlTool jexlTool = context.getBean(org.roxycode.app.ai.JexlTool.class);
@@ -79,7 +77,7 @@ public class RoxyCode {
 
             
                         MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService, 
-                    jexlServiceRegistry, exploreManager, workflowService, planManagerService, jexlTool, turnEventBridge,
+                    jexlServiceRegistry, workflowService, planManagerService, jexlTool, turnEventBridge,
                     packerService, cacheMetaService, geminiCacheService, promptService, buildToolService, chatMemory, projectAnalysisService);
             frame.setVisible(true);
         });

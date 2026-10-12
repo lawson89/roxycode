@@ -19,6 +19,6 @@ public class JexlDocumentationTest {
         Path path = Paths.get("src/main/resources/docs/jexl.md");
         String content = Files.readString(path);
         assertTrue(content.contains("FORBIDDEN: Arbitrary Java Class Instantiation"));
-        assertTrue(content.contains("buildToolService.buildAndTest()"));
+        assertTrue(content.contains("genericBuildToolService.runTests()"));
     }
 }

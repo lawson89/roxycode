@@ -20,7 +20,7 @@ class PromptServiceTest {
 
     @BeforeEach
     void setUp() {
-        promptService = new PromptService();
+        promptService = new PromptService(null, null);
     }
 
     @Test
@@ -84,7 +84,7 @@ class PromptServiceTest {
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
 
-        PromptService serviceWithProject = new PromptService(projectService);
+        PromptService serviceWithProject = new PromptService(projectService, null);
         // Case 1: no .roxycode/context directory
         assertEquals("", serviceWithProject.loadProjectContext());
 
@@ -106,5 +106,21 @@ class PromptServiceTest {
         int idxA = context.indexOf("a_rules.md");
         int idxB = context.indexOf("b_architecture.md");
         assertTrue(idxA < idxB, "Context files should be sorted alphabetically");
+    }
+
+
+    @Test
+    void testGenerateExploreSystemPrompt() {
+        SettingsService settingsService = mock(SettingsService.class);
+        org.roxycode.app.model.AppSettings settings = new org.roxycode.app.model.AppSettings();
+        settings.setMaxAgentToolTurns(42);
+        when(settingsService.getSettings()).thenReturn(settings);
+
+        PromptService serviceWithSettings = new PromptService(null, settingsService);
+        String prompt = serviceWithSettings.generateExploreSystemPrompt();
+
+        assertNotNull(prompt);
+        assertTrue(prompt.contains("42"));
+        assertFalse(prompt.contains("${maxTurns}"));
     }
 }

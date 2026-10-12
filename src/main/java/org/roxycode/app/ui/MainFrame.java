@@ -4,7 +4,6 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
-import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
@@ -32,7 +31,6 @@ public class MainFrame extends JFrame {
     private final GitService gitService;
     private final EnvironmentService envService;
     private final JexlServiceRegistry jexlServiceRegistry;
-    private final ExploreManager exploreManager;
     private final WorkflowService workflowService;
     private final PlanManagerService planManagerService;
     private final org.roxycode.app.ai.JexlTool jexlTool;
@@ -50,7 +48,7 @@ public class MainFrame extends JFrame {
 
         public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService,
             ProjectService projectService, GitService gitService, EnvironmentService envService,
-            JexlServiceRegistry jexlServiceRegistry, ExploreManager exploreManager, WorkflowService workflowService,
+            JexlServiceRegistry jexlServiceRegistry, WorkflowService workflowService,
             PlanManagerService planManagerService, org.roxycode.app.ai.JexlTool jexlTool,
             org.roxycode.app.events.TurnEventBridge turnEventBridge,
             org.roxycode.app.ai.services.cache.RepoMapPackerService packerService,
@@ -66,7 +64,6 @@ public class MainFrame extends JFrame {
         this.gitService = gitService;
         this.envService = envService;
         this.jexlServiceRegistry = jexlServiceRegistry;
-        this.exploreManager = exploreManager;
         this.workflowService = workflowService;
         this.planManagerService = planManagerService;
         this.jexlTool = jexlTool;
@@ -120,7 +117,7 @@ public class MainFrame extends JFrame {
 
         // Content Area Panels
         gitChangesPanel = new GitChangesPanel(gitService);
-        contentArea.add(new ChatPanel(aiService, exploreManager, jexlTool, workflowService, turnEventBridge, chatMemory), "CHAT");
+        contentArea.add(new ChatPanel(aiService, jexlTool, workflowService, turnEventBridge, chatMemory), "CHAT");
         contentArea.add(new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService), "HISTORY");
         contentArea.add(new PlanPanel(planManagerService, workflowService), "PLAN");
         contentArea.add(gitChangesPanel, "GIT");

@@ -7,3 +7,30 @@ Key Instructions:
 5. Source Attribution: Always cite file paths and line numbers for snippets or technical facts.
 6. Conciseness: Be objective and concise. Avoid unnecessary preamble.
 7. Focus: Provide technical insights, architectural overviews, or clarify logic as requested.
+
+---
+
+## ⚡️ Efficiency: Power Turns & Batching
+
+Minimize tool-call overhead by batching logic while maintaining plan integrity.
+
+### Pattern: Search and Read
+Find a pattern and read the matching files immediately.
+```javascript
+var grepResult = textEditorService.grep('class AuthService', 'src', '*.java');
+var results = [...];
+if (grepResult.success()) {
+    results.add(textEditorService.readFile('src/main/java/org/roxycode/app/AuthService.java', false));
+}
+results;
+```
+
+### Pattern: Multi-File Inspection
+```javascript
+var config = textEditorService.readFile('pom.xml', false);
+var main = textEditorService.readFile('src/main/java/org/roxycode/app/RoxyCode.java', false);
+{ "pom": config.content(), "main": main.content() };
+```
+
+### CRITICAL INSTRUCTION: Batch Reading
+When you need to read multiple files, you **MUST** batch them into a single JEXL execution. Use `textEditorService.readFiles(false, ['path1', 'path2'])` for maximum efficiency.

@@ -64,23 +64,21 @@ class WorkflowServiceTest {
     void testCodeCompletionAndClear() {
         setupCodePhase();
         
-        // Request PLAN (completion) - This is now autonomous!
-        String result = service.routeToPhase("PLAN", "Done");
-        assertTrue(result.contains("Autonomous transition"), "Expected autonomous but got: " + result);
+        // Request PLAN (completion) - This now requires approval
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Done"));
         
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        verify(planManager).addHandoffLogEntry(anyString());
-        verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
+        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
+        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
     }
 
     @Test
     void testBlockedTransitionNoClear() {
         setupCodePhase();
         
-        // Request PLAN - This is autonomous, so it proceeds regardless of incomplete steps in the new logic
-        String result = service.routeToPhase("PLAN", "Moving on");
-        assertTrue(result.contains("Autonomous transition"), "Expected autonomous but got: " + result);
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+        // Request PLAN - Now requires approval
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Moving on"));
+        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
+        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
     }
 
     @Test
@@ -94,5 +92,57 @@ class WorkflowServiceTest {
         
         verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
         verify(planManager).addHandoffLogEntry(anyString());
+    }
+
+    @Test
+    void testReviewToExploreFails() {
+        setupCodePhase();
+        service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
+        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
+
+        // REVIEW -> EXPLORE should be invalid
+        String result = service.routeToPhase("EXPLORE", "Jump");
+        assertTrue(result.contains("Error: Cannot jump from REVIEW to EXPLORE"));
+    }
+    @Test
+    void testReviewCompletionAndClear() {
+        setupCodePhase();
+        service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
+        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
+
+        ImplementationPlan plan = mock(ImplementationPlan.class);
+        when(plan.title()).thenReturn("Title");
+        when(plan.goal()).thenReturn("Goal");
+        when(plan.requirements()).thenReturn(List.of());
+        ImplementationPlan.TechStep step = new ImplementationPlan.TechStep("Desc", true);
+        when(plan.technicalSteps()).thenReturn(List.of(step));
+        when(planManager.getCurrentPlan()).thenReturn(plan);
+
+        // Request PLAN from REVIEW
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Finalizing"));
+        
+        when(envService.getCurrentUser()).thenReturn("user");
+        service.approveTransition();
+
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+        verify(planManager).completePlan(anyString());
+        verify(planManager).clearPlan();
+    }
+
+    @Test
+    void testPlanToExploreFails() {
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+        String result = service.routeToPhase("EXPLORE", "Let's discover");
+        assertTrue(result.contains("Error: Cannot jump from PLAN to EXPLORE"));
+    }
+
+
+    @Test
+    void testCodeToExploreInvalid() {
+        setupCodePhase();
+
+        // CODE -> EXPLORE should be invalid
+        String result = service.routeToPhase("EXPLORE", "Jump");
+        assertTrue(result.contains("Error: Cannot jump from CODE to EXPLORE"));
     }
 }

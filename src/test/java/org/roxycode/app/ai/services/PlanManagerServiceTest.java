@@ -1,19 +1,34 @@
 package org.roxycode.app.ai.services;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.model.ImplementationPlan;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 class PlanManagerServiceTest {
+
+    @Mock
+    private WorkflowService workflowService;
+
+    private PlanManagerService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new PlanManagerService(workflowService);
+    }
 
     @Test
     void testSubmitPlanAndNotifyListeners() {
-        PlanManagerService service = new PlanManagerService();
         AtomicInteger notifications = new AtomicInteger(0);
         
         service.addListener((plan) -> notifications.incrementAndGet());
@@ -31,7 +46,6 @@ class PlanManagerServiceTest {
 
     @Test
     void testApproveAndCompletePlan() {
-        PlanManagerService service = new PlanManagerService();
         service.submitPlan("Title", "Goal", List.of(), List.of("Step 1"));
         
         assertFalse(service.getCurrentPlan().userApproved());
@@ -46,11 +60,27 @@ class PlanManagerServiceTest {
 
     @Test
     void testClearPlan() {
-        PlanManagerService service = new PlanManagerService();
         service.submitPlan("T", "G", List.of(), List.of("S"));
         assertNotNull(service.getCurrentPlan());
         
         service.clearPlan();
         assertNull(service.getCurrentPlan());
+    }
+
+    @Test
+    void testSemanticWorkflowMethods() {
+        String reason = "Ready to build";
+        
+        service.requestDevelopment(reason);
+        verify(workflowService).routeToPhase("CODE", reason);
+        
+        service.requestReview(reason);
+        verify(workflowService).routeToPhase("REVIEW", reason);
+        
+        service.requestFixes(reason);
+        verify(workflowService, times(2)).routeToPhase("CODE", reason);
+        
+        service.requestCompletion(reason);
+        verify(workflowService).routeToPhase("PLAN", reason);
     }
 }

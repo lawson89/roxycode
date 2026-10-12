@@ -2,6 +2,8 @@ package org.roxycode.app.ai.services;
 
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.springframework.context.annotation.Lazy;
+import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.model.ImplementationPlan;
 
 import java.util.ArrayList;
@@ -13,11 +15,12 @@ import java.util.stream.Collectors;
 /**
  * Service for managing project plans and specifications.
  */
-@AgentService(value = "planManagerService", phases = {"*"})
+@AgentService(value = "planService", phases = {"*"})
 @AgentDoc("Service for managing project plans and specifications.")
 public class PlanManagerService {
 
     private ImplementationPlan currentPlan;
+    private final WorkflowService workflowService;
     private final List<PlanUpdateListener> listeners = new CopyOnWriteArrayList<>();
 
     /**
@@ -25,6 +28,10 @@ public class PlanManagerService {
      */
     public interface PlanUpdateListener {
         void onPlanUpdated(ImplementationPlan plan);
+    }
+
+    public PlanManagerService(@Lazy WorkflowService workflowService) {
+        this.workflowService = workflowService;
     }
 
     /**
@@ -88,14 +95,15 @@ public class PlanManagerService {
     }
 
     /**
-     * Submits an implementation plan for the project via simple arguments.
+     * Submits a project plan covering both functional and technical specifications via positional arguments.
      */
-    @AgentDoc("Submits an implementation plan for the project via simple arguments.")
+    @AgentDoc(value = "Submits a project plan covering both functional and technical specifications via positional arguments.", 
+              examples = "planService.submitPlan('Auth Service', 'Implement JWT', ['Login', 'Logout'], ['Create entity', 'Setup filter'])")
     public String submitPlan(
             @AgentDoc("The title of the project.") String title,
             @AgentDoc("The high-level goal.") String goal,
-            @AgentDoc("List of functional requirements.") Object requirements,
-            @AgentDoc("List of technical implementation steps.") Object technicalSteps) {
+            @AgentDoc("List of functional requirements (String array or list).") Object requirements,
+            @AgentDoc("List of technical implementation steps (String array or list).") Object technicalSteps) {
         List<String> rawRequirements = extractStringList(requirements);
         List<String> rawTechSteps = extractStringList(technicalSteps);
         
@@ -107,10 +115,11 @@ public class PlanManagerService {
     }
 
     /**
-     * Submits an implementation plan for the project via a Map.
+     * Submits a project plan covering both functional and technical specifications via a Map literal.
      */
     @SuppressWarnings("unchecked")
-    @AgentDoc("Submits an implementation plan for the project via a Map.")
+    @AgentDoc(value = "Submits a project plan covering both functional and technical specifications via a Map literal.", 
+              examples = "planService.submitPlan({'title': 'Auth Service', 'goal': 'Implement JWT', 'requirements': ['Login', 'Logout'], 'technicalSteps': ['Create entity', 'Setup filter']})")
     public String submitPlan(
             @AgentDoc("Map containing title, goal, requirements, and technicalSteps.") Map<String, Object> planMap) {
         String title = (String) planMap.getOrDefault("title", "");
@@ -168,10 +177,11 @@ public class PlanManagerService {
     }
 
     /**
-     * Marks a technical implementation step as completed.
+     * Marks a specific technical implementation step as completed using its 0-based index.
      */
-    @AgentDoc("Marks a technical implementation step as completed.")
-    public void markStepCompleted(@AgentDoc("The index of the step (0-based).") int index) {
+    @AgentDoc(value = "Marks a specific technical implementation step as completed using its 0-based index.", 
+              examples = "planService.markStepCompleted(0)")
+    public void markStepCompleted(@AgentDoc("The index of the step (0-based). index must be valid for the current plan.") int index) {
         updateStepStatus(index, true);
     }
 
@@ -225,6 +235,38 @@ public class PlanManagerService {
         clearPlan();
     }
 
+    /**
+     * Transitions the workflow to the development (CODE) phase.
+     */
+    @AgentDoc("Requests transition to the development (CODE) phase.")
+    public String requestDevelopment(String reason) {
+        return workflowService.routeToPhase("CODE", reason);
+    }
+
+    /**
+     * Transitions the workflow to the review phase.
+     */
+    @AgentDoc("Requests transition to the review phase.")
+    public String requestReview(String reason) {
+        return workflowService.routeToPhase("REVIEW", reason);
+    }
+
+    /**
+     * Transitions the workflow back to development (CODE) to address fixes.
+     */
+    @AgentDoc("Requests transition back to development to address fixes.")
+    public String requestFixes(String reason) {
+        return workflowService.routeToPhase("CODE", reason);
+    }
+
+    /**
+     * Signals completion of the current cycle and returns to planning.
+     */
+    @AgentDoc("Signals completion of the current cycle and returns to planning.")
+    public String requestCompletion(String reason) {
+        return workflowService.routeToPhase("PLAN", reason);
+    }
+
     private List<String> extractStringList(Object obj) {
         if (obj == null) {
             return List.of();
@@ -262,10 +304,10 @@ public class PlanManagerService {
     }
 
     /**
-     * Adds an entry to the handoff log.
-     * @param entry the log entry to add
+     * Adds a high-level summary entry to the handoff log for final project delivery or status tracking.
      */
-    @AgentDoc("Adds an entry to the handoff log.")
+    @AgentDoc(value = "Adds a high-level summary entry to the handoff log for final project delivery or status tracking.", 
+              examples = "planService.addHandoffLogEntry('Project ready for deployment: all tests passed.')")
     public void addHandoffLogEntry(String entry) {
         if (currentPlan == null) return;
         List<String> logs = new ArrayList<>(currentPlan.handoffLog());

@@ -62,3 +62,34 @@ Use `planService` methods for all lifecycle management. Deprecated methods like 
 - `completeStep(text)`: Mark a step as verified and finished.
 - `validateReadyForApproval()`: Checks if the ANALYST is ready to request user review.
 - `validateReadyForCompletion()`: Checks if the CODER has fulfilled the plan.
+- `requestDevelopment(reason)`: Transition from PLAN to CODE.
+- `requestReview(reason)`: Transition from CODE to REVIEW.
+- `requestFixes(reason)`: Transition from REVIEW back to CODE.
+- `requestCompletion(reason)`: Complete the plan and return to PLAN phase.
+
+---
+
+## 🛠 MANDATORY DEVELOP WORKFLOW PROTOCOL
+
+When in **CODER (Act Mode)**, execute tasks in this sequence:
+
+1. **Implement Code Changes:** Use `textEditorService` to modify files as per the blueprint.
+2. **Batch Verification:** Compile and test immediately after changes using `genericBuildToolService.compile()` and `genericBuildToolService.runTests()` (or `runSingleTest()`).
+3. **Update Progress:** Call `planService.completeStep(text)` for each verified step.
+4. **No Regression:** Ensure the project remains in a clean state (compiles and tests pass) after each step.
+5. **Completion Validation:** When all steps in `implementationProgress` are true, you **must** call `planService.validateReadyForCompletion()`. If it returns `READY`, finish your turn to trigger the completion request.
+
+### JEXL Execution Example:
+```javascript
+// Implement change
+textEditorService.replaceBlock('src/Main.java', oldBlock, newBlock);
+
+// Verify change
+var build = genericBuildToolService.compile();
+if (build.success()) {
+    var tests = genericBuildToolService.runTests();
+    if (tests.success()) {
+        planService.completeStep('Implement logic in Main.java');
+    }
+}
+```

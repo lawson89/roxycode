@@ -6,7 +6,6 @@ import org.roxycode.app.ai.JexlExecutionListener;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
-import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 
@@ -46,7 +45,6 @@ public class AiService {
     private final RepoMapPackerService repoMapPackerService;
     private final GitService gitService;
     private final ProjectAnalysisService projectAnalysisService;
-    private final ExploreManager exploreManager;
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
                      PromptService promptService,
@@ -55,8 +53,7 @@ public class AiService {
                      ApplicationEventPublisher eventPublisher,
                      RepoMapPackerService repoMapPackerService,
                      GitService gitService,
-                     ProjectAnalysisService projectAnalysisService,
-                     ExploreManager exploreManager) {
+                     ProjectAnalysisService projectAnalysisService) {
         this.settingsService = settingsService;
         this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
@@ -67,7 +64,6 @@ public class AiService {
         this.repoMapPackerService = repoMapPackerService;
         this.gitService = gitService;
         this.projectAnalysisService = projectAnalysisService;
-        this.exploreManager = exploreManager;
         this.chatClient = chatClientBuilder
                 .defaultTools(jexlTool)
                 .defaultAdvisors(
@@ -137,7 +133,7 @@ public class AiService {
 
         // Phase-specific prompt injection
         if (currentPhase == WorkflowPhase.EXPLORE) {
-            systemPrompt.append("\n\n").append(exploreManager.generateSystemPrompt());
+            systemPrompt.append("\n\n").append(promptService.generateExploreSystemPrompt());
         }
         if (currentPhase == WorkflowPhase.REVIEW) {
             systemPrompt.append("\n\n").append(promptService.loadReviewPrompt());
