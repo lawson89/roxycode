@@ -1,5 +1,5 @@
 package org.roxycode.app.ui;
-
+ 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.service.ProjectService;
@@ -11,36 +11,34 @@ import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import static org.mockito.Mockito.mock;
 import static org.junit.jupiter.api.Assertions.*;
-
+ 
 import java.awt.Component;
+import java.awt.Container;
 import java.nio.file.Path;
-import javax.swing.JTextField;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JButton;
-
+import javax.swing.*;
+ 
 class HeaderPanelTest {
     @TempDir
     Path tempDir;
-
+ 
     private SettingsService createSettingsService() {
         SettingsService settingsService = new SettingsService();
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
         return settingsService;
     }
-
+ 
     private ProjectService createProjectService(SettingsService ss) {
         return new ProjectService(ss);
     }
-
+ 
     private GitService createGitService(ProjectService ps) {
         return new GitService(ps);
     }
-
+ 
     private WorkflowService createWorkflowService() {
         return new WorkflowService(mock(PlanService.class), mock(EnvironmentService.class), mock(ApplicationEventPublisher.class));
     }
-
+ 
     @Test
     void testHeaderPanelInstantiation() {
         SettingsService ss = createSettingsService();
@@ -48,65 +46,37 @@ class HeaderPanelTest {
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
         assertNotNull(header);
     }
-
+ 
     @Test
-    void testSearchFieldIsRemoved() {
+    void testModeTogglesAreRemoved() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
-        boolean searchFieldFound = false;
-        for (Component comp : header.getComponents()) {
-            if (comp instanceof JTextField) {
-                searchFieldFound = true;
-                break;
-            }
-        }
-        assertFalse(searchFieldFound);
+        
+        Component toggle = findComponent(header, JToggleButton.class, c -> true);
+        assertNull(toggle, "Mode toggle buttons should be removed from HeaderPanel");
     }
-
+ 
     @Test
-    void testUtilityIconsAreRemoved() {
+    void testMentorBadgeIsPresent() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
-        boolean settingsFound = false;
-        for (Component comp : header.getComponents()) {
-            if (comp instanceof JPanel) {
-                JPanel panel = (JPanel) comp;
-                for (Component sub : panel.getComponents()) {
-                    if (sub instanceof JButton && "Settings".equals(((JButton) sub).getToolTipText())) {
-                        settingsFound = true;
-                    }
-                }
-            }
-        }
-        assertFalse(settingsFound);
+        
+        JLabel badge = (JLabel) findComponent(header, JLabel.class, c -> "READ-ONLY MENTOR MODE".equals(((JLabel)c).getText()));
+        assertNotNull(badge, "Mentor badge should be present in HeaderPanel");
     }
-
+ 
     @Test
     void testOpenButtonIsPresent() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
-        JButton openButton = null;
-        for (Component comp : header.getComponents()) {
-            if (comp instanceof JPanel) {
-                JPanel p1 = (JPanel) comp;
-                for (Component c1 : p1.getComponents()) {
-                    if (c1 instanceof JPanel) {
-                        JPanel p2 = (JPanel) c1;
-                        for (Component c2 : p2.getComponents()) {
-                            if (c2 instanceof JButton && "Open Project".equals(((JButton) c2).getToolTipText())) {
-                                openButton = (JButton) c2;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        
+        JButton openButton = (JButton) findComponent(header, JButton.class, c -> "Open Project".equals(((JButton)c).getToolTipText()));
         assertNotNull(openButton);
     }
-
+ 
     @Test
     void testHeaderLayoutInsets() {
         SettingsService ss = createSettingsService();
@@ -115,5 +85,18 @@ class HeaderPanelTest {
         net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
         Object constraints = layout.getLayoutConstraints();
         assertTrue(constraints.toString().contains("insets 5 20 5 20"));
+    }
+ 
+    private Component findComponent(Container container, Class<?> clazz, java.util.function.Predicate<Component> predicate) {
+        for (Component comp : container.getComponents()) {
+            if (clazz.isInstance(comp) && predicate.test(comp)) {
+                return comp;
+            }
+            if (comp instanceof Container) {
+                Component found = findComponent((Container) comp, clazz, predicate);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 }

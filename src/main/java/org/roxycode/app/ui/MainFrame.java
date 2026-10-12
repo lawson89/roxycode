@@ -1,5 +1,5 @@
 package org.roxycode.app.ui;
-
+ 
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.services.GitService;
@@ -9,25 +9,25 @@ import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.service.ProjectAnalysisService;
-
+ 
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.ai.WorkflowService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import javax.swing.*;
 import java.awt.*;
-
+ 
 /**
  * Main application window for RoxyCode.
  */
 public class MainFrame extends JFrame {
-
+ 
     private final SettingsService settingsService;
     private final AiService aiService;
     private final SystemToolService toolService;
     private final ProjectService projectService;
     private final ProjectAnalysisService projectAnalysisService;
-
+ 
     private final GitService gitService;
     private final EnvironmentService envService;
     private final JexlServiceRegistry jexlServiceRegistry;
@@ -43,9 +43,9 @@ public class MainFrame extends JFrame {
     private final GenericBuildToolService buildToolService;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
-
+ 
     private GitChangesPanel gitChangesPanel;
-
+ 
         public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService,
             ProjectService projectService, GitService gitService, EnvironmentService envService,
             JexlServiceRegistry jexlServiceRegistry, WorkflowService workflowService,
@@ -73,7 +73,7 @@ public class MainFrame extends JFrame {
         this.geminiCacheService = geminiCacheService;
         this.promptService = promptService;
         this.projectAnalysisService = projectAnalysisService;
-
+ 
         this.buildToolService = buildToolService;
         this.chatMemory = chatMemory;
         setupLaf();
@@ -81,17 +81,17 @@ public class MainFrame extends JFrame {
         initComponents();
         projectService.addProjectListener(path -> updateTitle());
     }
-
+ 
     private void setupLaf() {
         SettingsPanel.applyTheme(settingsService.getSettings().getTheme());
     }
-
+ 
     private void setupWindow() {
         updateTitle();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1100, 800);
         setLocationRelativeTo(null);
-
+ 
         try {
             java.net.URL iconUrl = getClass().getResource("/static/images/roxy.png");
             if (iconUrl != null) {
@@ -101,20 +101,20 @@ public class MainFrame extends JFrame {
             // Ignore icon loading errors
         }
     }
-
+ 
     private void initComponents() {
         setLayout(new MigLayout("fill, insets 0", "[200!]0[fill, grow]", "[fill, grow]"));
-
+ 
         // Sidebar
-        SidebarPanel sidebar = new SidebarPanel(settingsService, this::showCard);
-
+        SidebarPanel sidebar = new SidebarPanel(settingsService, workflowService, this::showCard);
+ 
         // Main Workspace
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
-
+ 
         HeaderPanel header = new HeaderPanel(projectService, gitService, settingsService, workflowService, planManagerService, this::showCard);
-
+ 
         StatusPanel statusBar = new StatusPanel(envService, chatMemory);
-
+ 
         // Content Area Panels
         gitChangesPanel = new GitChangesPanel(gitService);
         contentArea.add(new ChatPanel(aiService, jexlTool, workflowService, turnEventBridge, chatMemory), "CHAT");
@@ -124,31 +124,31 @@ public class MainFrame extends JFrame {
         contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService, workflowService, jexlServiceRegistry, gitService, projectAnalysisService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
-                contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
+        contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
         contentArea.add(new BuildConfigPanel(buildToolService, settingsService, projectService), "BUILD_CONFIG");
         contentArea.add(new ContextManagerPanel(promptService), "CONTEXT_MGR");
-
+ 
         workspace.add(header, "h 80!, wrap");
         workspace.add(contentArea, "grow, wrap");
         workspace.add(statusBar, "h 30!");
-
+ 
         add(sidebar, "growy");
         add(workspace, "grow");
     }
-
+ 
     private void showCard(String cardName) {
         cardLayout.show(contentArea, cardName);
         if ("GIT".equals(cardName) && gitChangesPanel != null) {
             gitChangesPanel.refresh();
         }
     }
-
+ 
     private JPanel createPlaceholderPanel(String text) {
         JPanel p = new JPanel(new MigLayout("fill", "[center]", "[center]"));
         p.add(new JLabel(text));
         return p;
     }
-
+ 
     private void updateTitle() {
         setTitle("RoxyCode - [" + projectService.getProjectName() + "]");
     }

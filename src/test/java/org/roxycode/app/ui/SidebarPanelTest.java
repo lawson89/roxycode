@@ -1,48 +1,57 @@
 package org.roxycode.app.ui;
-
+ 
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.service.EnvironmentService;
+import org.springframework.context.ApplicationEventPublisher;
 import javax.swing.*;
 import java.awt.*;
 import java.nio.file.Path;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
-
+import static org.mockito.Mockito.mock;
+ 
 class SidebarPanelTest {
     @TempDir
     Path tempDir;
-
+ 
+    private WorkflowService createWorkflowService() {
+        return new WorkflowService(mock(PlanService.class), mock(EnvironmentService.class), mock(ApplicationEventPublisher.class));
+    }
+ 
     @Test
     void testSidebarPanelInstantiation() {
         SettingsService settingsService = new SettingsService();
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
         
-        SidebarPanel sidebar = new SidebarPanel(settingsService, card -> {});
+        SidebarPanel sidebar = new SidebarPanel(settingsService, createWorkflowService(), card -> {});
         assertNotNull(sidebar);
     }
-
+ 
     @Test
     void testSidebarStructure() {
         SettingsService settingsService = new SettingsService();
         settingsService.setSettingsPathOverride(tempDir.resolve("settings_structure.toml"));
         
-        SidebarPanel sidebar = new SidebarPanel(settingsService, card -> {});
+        SidebarPanel sidebar = new SidebarPanel(settingsService, createWorkflowService(), card -> {});
         
         Component[] components = sidebar.getComponents();
         
-                // Expected: 1 UserProfile, 3 Headers, 10 NavButtons = 14
+        // Expected: 1 UserProfile, 3 Headers, 10 NavButtons = 14
         assertEquals(14, components.length, "Sidebar should have exactly 14 components");
-
+ 
         int headerCount = 0;
         int buttonCount = 0;
         int profileCount = 0;
-
+ 
         for (Component c : components) {
             if (c instanceof JLabel) headerCount++;
             if (c instanceof JButton) buttonCount++;
             if (c instanceof UserProfileComponent) profileCount++;
         }
-
+ 
         assertEquals(1, profileCount, "Should have 1 user profile");
         assertEquals(3, headerCount, "Should have 3 headers (MAIN, CONTEXT, CONFIG)");
         assertEquals(10, buttonCount, "Should have 10 navigation buttons");

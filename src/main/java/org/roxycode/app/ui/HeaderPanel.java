@@ -1,25 +1,25 @@
 package org.roxycode.app.ui;
-
+ 
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-
+ 
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
-
+ 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-
+ 
 /**
  * Header panel containing application controls and project selection.
  */
@@ -36,11 +36,9 @@ public class HeaderPanel extends JPanel {
     // Workflow components
     private final JLabel planLabel;
     private final JPanel progressTracker;
+    private final JLabel mentorBadge;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
-
-    private final JToggleButton exploreModeBtn;
-    private final JToggleButton planModeBtn;
-
+ 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, 
                        WorkflowService workflowService, PlanService planManagerService,
                        Consumer<String> navigationAction) {
@@ -54,11 +52,11 @@ public class HeaderPanel extends JPanel {
         
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
-
+ 
         // --- LEFT SECTION: Project Info ---
         JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]", "[]0[]"));
         leftPanel.setOpaque(false);
-
+ 
         JPanel namePanel = new JPanel(new MigLayout("insets 0", "[]5[]", "center"));
         namePanel.setOpaque(false);
         
@@ -70,63 +68,53 @@ public class HeaderPanel extends JPanel {
         namePanel.add(openButton);
         
         leftPanel.add(namePanel, "wrap");
-
+ 
         branchLabel = new JLabel();
         branchLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateBranchLabel();
         leftPanel.add(branchLabel, "gapleft 2");
-
+ 
         add(leftPanel, "left");
-
+ 
         // --- CENTER SECTION: Workflow Info ---
         JPanel workflowPanel = new JPanel(new MigLayout("insets 0, gapy 0", "[center]", "[]0[]0[]"));
         workflowPanel.setOpaque(false);
-
+ 
         planLabel = new JLabel();
         planLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
         workflowPanel.add(planLabel, "center, wrap, hidemode 3");
-
-        exploreModeBtn = new JToggleButton(WorkflowPhase.EXPLORE.getDisplayName(), FontIcon.of(WorkflowPhase.EXPLORE.getIcon(), 14));
-        planModeBtn = new JToggleButton("Change", FontIcon.of(WorkflowPhase.PLAN.getIcon(), 14));
-
-        exploreModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
-        planModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
-        
-        ButtonGroup group = new ButtonGroup();
-        group.add(exploreModeBtn);
-        group.add(planModeBtn);
-
-        JPanel togglePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        togglePanel.setOpaque(false);
-        togglePanel.add(exploreModeBtn);
-        togglePanel.add(planModeBtn);
-
-        exploreModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowPhase.EXPLORE));
-        planModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowPhase.PLAN));
-
-        workflowPanel.add(togglePanel, "center, wrap");
-
+ 
+        mentorBadge = new JLabel("READ-ONLY MENTOR MODE", FontIcon.of(Codicons.EYE, 14), SwingConstants.CENTER);
+        mentorBadge.putClientProperty(FlatClientProperties.STYLE, 
+            "font: bold -2; " +
+            "foreground: $Label.disabledForeground; " +
+            "background: darken($Panel.background, 5%); " +
+            "arc: 12");
+        mentorBadge.setOpaque(true);
+        mentorBadge.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+        workflowPanel.add(mentorBadge, "center, wrap, hidemode 3");
+ 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", "center"));
         progressTracker.setOpaque(false);
-
+ 
         WorkflowPhase[] phases = WorkflowPhase.values();
         for (WorkflowPhase phase : phases) {
             indicators.add(new WorkflowPhaseIndicator(phase, "font: bold -1"));
         }
         workflowPanel.add(progressTracker, "center, hidemode 3, gaptop 2");
         add(workflowPanel, "center");
-
+ 
         // --- RIGHT SECTION: Model & Utils ---
         JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]", "center"));
         rightPanel.setOpaque(false);
-
+ 
         modelLabel = new JLabel();
         modelLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
-
+ 
         rightPanel.add(modelLabel);
         add(rightPanel, "right");
-
+ 
         // Listeners
         projectService.addProjectListener(newRoot -> {
             projectLabel.setText(projectService.getProjectName());
@@ -143,18 +131,18 @@ public class HeaderPanel extends JPanel {
         } else {
             projectLabel.setToolTipText("No project selected");
         }
-
+ 
         settingsService.addSettingsListener(settings -> {
             updateModelDisplay(settings.getGeminiModel());
         });
-
+ 
         workflowService.addPhaseListener(this::updateActivePhase);
         planManagerService.addListener((plan) -> updateActivePhase(workflowService.getCurrentPhase()));
-
+ 
         // Initialize workflow display
         updateActivePhase(workflowService.getCurrentPhase());
     }
-
+ 
     private void updateActivePhase(WorkflowPhase currentPhase) {
         ImplementationPlan plan = planManagerService.getCurrentPlan();
         if (currentPhase != WorkflowPhase.EXPLORE && plan != null && plan.title() != null && !plan.title().isBlank()) {
@@ -163,16 +151,10 @@ public class HeaderPanel extends JPanel {
         } else {
             planLabel.setVisible(false);
         }
-
-        exploreModeBtn.setSelected(currentPhase == WorkflowPhase.EXPLORE);
-        planModeBtn.setSelected(currentPhase == WorkflowPhase.PLAN || currentPhase == WorkflowPhase.CODE || currentPhase == WorkflowPhase.REVIEW);
-        
-        // Buttons enabled only if current phase is EXPLORE or PLAN
-        exploreModeBtn.setEnabled(true);
-        planModeBtn.setEnabled(true);
-
+ 
+        mentorBadge.setVisible(currentPhase == WorkflowPhase.EXPLORE);
         progressTracker.setVisible(currentPhase != WorkflowPhase.EXPLORE);
-
+ 
         progressTracker.removeAll();
         for (WorkflowPhaseIndicator indicator : indicators) {
             if (indicator.getPhase() == WorkflowPhase.EXPLORE) continue;
@@ -183,7 +165,7 @@ public class HeaderPanel extends JPanel {
         revalidate();
         repaint();
     }
-
+ 
     private JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
         JButton button = new JButton(FontIcon.of(icon, 16, UIManager.getColor("Label.foreground")));
         button.setToolTipText(tooltip);
@@ -205,7 +187,7 @@ public class HeaderPanel extends JPanel {
         
         return button;
     }
-
+ 
     private void updateBranchLabel() {
         String branch = gitService.getCurrentBranch();
         if (branch != null && !branch.isEmpty() && !branch.startsWith("Error") && !branch.equals("Not a git repository")) {
@@ -218,12 +200,12 @@ public class HeaderPanel extends JPanel {
             branchLabel.setVisible(false);
         }
     }
-
+ 
     private void updateModelDisplay(String modelName) {
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 16, UIManager.getColor("Label.disabledForeground")));
         modelLabel.setText(modelName != null ? modelName : "No model selected");
     }
-
+ 
     private void chooseProject() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
