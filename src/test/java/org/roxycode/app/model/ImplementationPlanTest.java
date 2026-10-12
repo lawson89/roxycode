@@ -22,9 +22,12 @@ class ImplementationPlanTest {
 
     @Test
     void testImmutabilityAndSafety() {
+        ImplementationPlan.LogEntry reviewEntry = new ImplementationPlan.LogEntry("now", "user", "Review 1");
+        ImplementationPlan.LogEntry handoffEntry = new ImplementationPlan.LogEntry("now", "user", "Handoff 1");
+        
         ImplementationPlan plan = new ImplementationPlan(
             "Title", "Goal", null, null, false, null, null, null, 
-            List.of("Review 1"), List.of("Handoff 1")
+            List.of(reviewEntry), List.of(handoffEntry)
         );
         assertNotNull(plan.requirements());
         assertNotNull(plan.technicalSteps());
@@ -32,6 +35,7 @@ class ImplementationPlanTest {
         assertEquals(1, plan.handoffLog().size());
         
         // Ensure immutability
-        assertThrows(UnsupportedOperationException.class, () -> plan.codeReviewLog().add("fail"));
+        ImplementationPlan.LogEntry failEntry = new ImplementationPlan.LogEntry("now", "user", "fail");
+        assertThrows(UnsupportedOperationException.class, () -> plan.codeReviewLog().add(failEntry));
     }
 }

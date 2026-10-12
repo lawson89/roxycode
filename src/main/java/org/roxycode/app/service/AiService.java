@@ -1,38 +1,39 @@
 package org.roxycode.app.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.roxycode.app.ai.JexlExecutionListener;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
-import org.roxycode.app.ai.JexlExecutionListener;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
-import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
-
-import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.roxycode.app.events.AgentTurnEvent;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.util.MimeTypeUtils;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Service;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.util.MimeTypeUtils;
 
 @Service
 public class AiService {
-    public String chat(String message) { return chat(message, null, null); }
-    public String chat(String message, List<byte[]> images) { return chat(message, null, images); }
+
+    public String chat(String message) {
+        return chat(message, null, null);
+    }
+
+    public String chat(String message, List<byte[]> images) {
+        return chat(message, null, images);
+    }
 
     private final ChatClient chatClient;
     private final SettingsService settingsService;
@@ -46,14 +47,14 @@ public class AiService {
     private final GitService gitService;
     private final ProjectAnalysisService projectAnalysisService;
 
-    public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, 
-                     PromptService promptService,
-                     JexlServiceRegistry jexlServiceRegistry, JexlTool jexlTool,
-                     WorkflowService workflowService, ChatMemory chatMemory,
-                     ApplicationEventPublisher eventPublisher,
-                     RepoMapPackerService repoMapPackerService,
-                     GitService gitService,
-                     ProjectAnalysisService projectAnalysisService) {
+    public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService,
+            PromptService promptService,
+            JexlServiceRegistry jexlServiceRegistry, JexlTool jexlTool,
+            WorkflowService workflowService, ChatMemory chatMemory,
+            ApplicationEventPublisher eventPublisher,
+            RepoMapPackerService repoMapPackerService,
+            GitService gitService,
+            ProjectAnalysisService projectAnalysisService) {
         this.settingsService = settingsService;
         this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
@@ -79,9 +80,11 @@ public class AiService {
         JexlExecutionListener turnListener = event -> {
             int turn = turnCount.incrementAndGet();
             eventPublisher.publishEvent(new AgentTurnEvent("Roxy", turn, workflowService.getCurrentPhase().name()));
-            if (turn > maxTurns) throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED");
+            if (turn > maxTurns) {
+                throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED");
+            }
         };
-        
+
         jexlTool.addListener(turnListener);
         try {
             String conversationId = "default";
@@ -91,7 +94,7 @@ public class AiService {
                         .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                         .call()
                         .content();
-                
+
                 // If the LLM parroted a yield JSON, format it for the user
                 if (content != null && content.trim().startsWith("{") && content.contains("\"message\"")) {
                     try {
@@ -113,7 +116,7 @@ public class AiService {
                     throw e;
                 }
             }
-            
+
             eventPublisher.publishEvent(new AgentTurnCompleteEvent("Roxy", turnCount.get(), content));
             return content;
         } finally {
@@ -124,7 +127,7 @@ public class AiService {
     private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText, List<byte[]> images) {
         String activeModel = settingsService.getSettings().getGeminiModel();
         WorkflowPhase currentPhase = workflowService.getCurrentPhase();
-        
+
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
         systemPrompt.append(promptService.loadAllPrompts());
         systemPrompt.append("\n\n## JEXL CONTEXT\n").append(promptService.loadJexlContext()).append("\n\n");
@@ -144,9 +147,11 @@ public class AiService {
         if (currentPhase == WorkflowPhase.CODE) {
             systemPrompt.append("\n\n").append(promptService.loadCodePrompt());
         }
-        
+
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
-        if (repoMap.isSuccess()) systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.getContent()).append("\n");
+        if (repoMap.success()) {
+            systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.content()).append("\n");
+        }
 
         systemPrompt.append("\n\n## SESSION CONTEXT\n");
         systemPrompt.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage()).append("\n");
@@ -155,16 +160,24 @@ public class AiService {
         String persona = String.format("You are the %s. %s", currentPhase.getPersonaTitle(), currentPhase.getDescription());
         systemPrompt.append(persona).append("\n\n");
         systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlServiceRegistry.getDocumentation(currentPhase));
-        
+
         String gitStatus = gitService.getStatus();
-        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) systemPrompt.append("## GIT STATUS\n").append(gitStatus).append("\n\n");
-        if (systemPromptText != null) systemPrompt.append("## ADDITIONAL INSTRUCTIONS\n").append(systemPromptText).append("\n\n");
-        
+        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
+            systemPrompt.append("## GIT STATUS\n").append(gitStatus).append("\n\n");
+        }
+        if (systemPromptText != null) {
+            systemPrompt.append("## ADDITIONAL INSTRUCTIONS\n").append(systemPromptText).append("\n\n");
+        }
+
         return chatClient.prompt()
                 .system(systemPrompt.toString())
                 .user(u -> {
                     u.text(message);
-                    if (images != null) for (byte[] img : images) u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(img));
+                    if (images != null) {
+                        for (byte[] img : images) {
+                            u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(img));
+                        }
+                    }
                 })
                 .options(GoogleGenAiChatOptions.builder().model(activeModel));
     }

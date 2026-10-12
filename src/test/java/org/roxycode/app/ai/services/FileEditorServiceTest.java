@@ -43,8 +43,9 @@ class FileEditorServiceTest {
         String relativePath = "test.txt";
         String content = "Hello World";
 
-        fileEditorService.writeFile(relativePath, content);
+        EditorResult result = fileEditorService.writeFile(relativePath, content);
 
+        assertTrue(result.success());
         Path filePath = tempDir.resolve(relativePath);
         assertTrue(Files.exists(filePath));
         assertEquals(content, Files.readString(filePath));
@@ -52,12 +53,13 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testWriteFileWrongPhaseThrowsException() {
+    void testWriteFileWrongPhaseReturnsFailure() {
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
-        assertThrows(IllegalStateException.class, () -> 
-            fileEditorService.writeFile("test.txt", "content")
-        );
+        EditorResult result = fileEditorService.writeFile("test.txt", "content");
+        
+        assertFalse(result.success());
+        assertTrue(result.errorHint().contains("CODE phase"));
     }
 
     @Test
@@ -65,8 +67,9 @@ class FileEditorServiceTest {
         Path filePath = tempDir.resolve("test.java");
         Files.writeString(filePath, "public class Test {\n // TODO\n }");
 
-        fileEditorService.replaceBlock("test.java", "// TODO", "// Done");
+        EditorResult result = fileEditorService.replaceBlock("test.java", "// TODO", "// Done");
 
+        assertTrue(result.success());
         String content = Files.readString(filePath);
         assertTrue(content.contains("// Done"));
         assertFalse(content.contains("// TODO"));
@@ -79,20 +82,35 @@ class FileEditorServiceTest {
         Files.writeString(filePath, "public    void   myMethod() { }");
 
         // Should match despite different whitespace in target block
-        fileEditorService.replaceBlock("test.java", "public void myMethod", "private int newMethod");
+        EditorResult result = fileEditorService.replaceBlock("test.java", "public void myMethod", "private int newMethod");
 
+        assertTrue(result.success());
         String content = Files.readString(filePath);
         assertEquals("private int newMethod() { }", content);
     }
 
     @Test
-    void testReplaceBlockNotUniqueThrowsException() throws IOException {
+    void testReplaceBlockWithNewlinesAndTabs() throws IOException {
+        Path filePath = tempDir.resolve("test_whitespace.java");
+        Files.writeString(filePath, "public\nvoid\tmyMethod() { }");
+
+        // Should match despite newlines and tabs
+        EditorResult result = fileEditorService.replaceBlock("test_whitespace.java", "public void myMethod", "private int newMethod");
+
+        assertTrue(result.success());
+        String content = Files.readString(filePath);
+        assertEquals("private int newMethod() { }", content);
+    }
+
+    @Test
+    void testReplaceBlockNotUniqueReturnsFailure() throws IOException {
         Path filePath = tempDir.resolve("test.java");
         Files.writeString(filePath, "// TODO\n // TODO");
 
-        assertThrows(IllegalArgumentException.class, () -> 
-            fileEditorService.replaceBlock("test.java", "// TODO", "// Done")
-        );
+        EditorResult result = fileEditorService.replaceBlock("test.java", "// TODO", "// Done");
+        
+        assertFalse(result.success());
+        assertTrue(result.errorHint().contains("not unique"));
     }
 
     @Test
@@ -100,8 +118,9 @@ class FileEditorServiceTest {
         Path filePath = tempDir.resolve("test.txt");
         Files.write(filePath, List.of("Line 1", "Line 2", "Line 3", "Line 4"));
 
-        fileEditorService.replaceLines("test.txt", 2, 3, "New Content");
+        EditorResult result = fileEditorService.replaceLines("test.txt", 2, 3, "New Content");
 
+        assertTrue(result.success());
         List<String> lines = Files.readAllLines(filePath);
         assertEquals(3, lines.size());
         assertEquals("Line 1", lines.get(0));
@@ -115,8 +134,9 @@ class FileEditorServiceTest {
         Path filePath = tempDir.resolve("test.txt");
         Files.write(filePath, List.of("Line 1", "Line 3"));
 
-        fileEditorService.insertAtLine("test.txt", 2, "Line 2");
+        EditorResult result = fileEditorService.insertAtLine("test.txt", 2, "Line 2");
 
+        assertTrue(result.success());
         List<String> lines = Files.readAllLines(filePath);
         assertEquals(3, lines.size());
         assertEquals("Line 2", lines.get(1));
@@ -124,9 +144,10 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testPathTraversalThrowsSecurityException() {
-        assertThrows(SecurityException.class, () -> 
-            fileEditorService.writeFile("../outside.txt", "content")
-        );
+    void testPathTraversalReturnsFailure() {
+        EditorResult result = fileEditorService.writeFile("../outside.txt", "content");
+        
+        assertFalse(result.success());
+        assertTrue(result.errorHint().contains("Path traversal"));
     }
 }

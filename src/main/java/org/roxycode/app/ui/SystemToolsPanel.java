@@ -2,6 +2,8 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService;
 
@@ -76,16 +78,26 @@ public class SystemToolsPanel extends JPanel {
         }));
     }
 
-    private static class StatusCellRenderer extends DefaultTableCellRenderer {
+        private static class StatusCellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-            if ("Detected".equals(value)) {
-                c.setForeground(new Color(40, 167, 69));
+            super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            
+            String status = String.valueOf(value);
+            if ("Detected".equals(status)) {
+                Color successColor = new Color(40, 167, 69);
+                setForeground(successColor);
+                setIcon(FontIcon.of(Codicons.CHECK, 16, successColor));
             } else {
-                c.setForeground(new Color(220, 53, 69));
+                Color errorColor = new Color(220, 53, 69);
+                setForeground(errorColor);
+                setIcon(FontIcon.of(Codicons.ERROR, 16, errorColor));
             }
-            return c;
+            
+            setHorizontalTextPosition(SwingConstants.RIGHT);
+            setIconTextGap(8);
+            
+            return this;
         }
     }
 

@@ -2,7 +2,7 @@ package org.roxycode.app.ai;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import org.roxycode.app.ai.services.FileEditorService;
+import org.springframework.core.annotation.AnnotationUtils;
 
 /**
  * Registry for JEXL-exposed services.
@@ -13,7 +13,7 @@ public class JexlServiceRegistry {
     private final Map<String, String> docCache = new ConcurrentHashMap<>();
 
     public void register(Object service) {
-        AgentService ann = service.getClass().getAnnotation(AgentService.class);
+        AgentService ann = AnnotationUtils.findAnnotation(service.getClass(), AgentService.class);
         if (ann != null) {
             services.put(ann.value(), service);
             docCache.clear();
@@ -28,17 +28,9 @@ public class JexlServiceRegistry {
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : services.entrySet()) {
             Object service = entry.getValue();
-            Class<?> clazz = service.getClass();
-            AgentService ann = clazz.getAnnotation(AgentService.class);
+            AgentService ann = AnnotationUtils.findAnnotation(service.getClass(), AgentService.class);
             
             if (ann != null) {
-                // Hard gate: FileEditorService (and any other mutation service) is restricted to CODE phase
-                if (service instanceof FileEditorService) {
-                    if (phase != WorkflowPhase.CODE) {
-                        continue;
-                    }
-                }
-
                 String[] phases = ann.phases();
                 if (phases.length == 0) {
                     filtered.put(entry.getKey(), service);

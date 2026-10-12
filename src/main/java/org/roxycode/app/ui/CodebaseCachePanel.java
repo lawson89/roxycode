@@ -203,11 +203,11 @@ public class CodebaseCachePanel extends JPanel {
             protected void done() {
                 try {
                     var result = get();
-                    if (result.isSuccess()) {
+                    if (result.success()) {
                         statusLabel.setText("Repo Map updated successfully.");
                         refreshStatus();
                     } else {
-                        statusLabel.setText("Failed: " + result.getErrorHint());
+                        statusLabel.setText("Failed: " + result.errorHint());
                     }
                 } catch (Exception e) {
                     log.error("Repo map generation failed", e);

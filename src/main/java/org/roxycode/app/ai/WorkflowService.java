@@ -106,8 +106,15 @@ public class WorkflowService {
         if (isAutonomous(currentPhase, nextPhase)) {
             WorkflowPhase oldPhase = currentPhase;
             String timestamp = java.time.OffsetDateTime.now().toString();
-            String logEntry = String.format("[%s] %s -> %s: %s", timestamp, oldPhase, nextPhase, reason);
-            planManager.addHandoffLogEntry(logEntry);
+            String user = "System";
+            String message = String.format("%s -> %s: %s", oldPhase, nextPhase, reason);
+            planManager.addHandoffLogEntry(timestamp, user, message);
+            if ((oldPhase == WorkflowPhase.CODE && nextPhase == WorkflowPhase.REVIEW) ||
+                (oldPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE)) {
+                planManager.addCodeReviewLogEntry(timestamp, user, message);
+            }
+            
+
             
             this.currentPhase = nextPhase;
             this.visitedPhases.add(nextPhase);
@@ -177,9 +184,10 @@ public class WorkflowService {
         if (pendingPhase != null) {
             String timestamp = java.time.OffsetDateTime.now().toString();
             String user = environmentService.getCurrentUser();
+            String message = String.format("%s -> %s (User Approved): %s", currentPhase, pendingPhase, pendingReason);
+            planManager.addHandoffLogEntry(timestamp, user, message);
             
-            String logEntry = String.format("[%s] %s -> %s (User Approved): %s", timestamp, currentPhase, pendingPhase, pendingReason);
-            planManager.addHandoffLogEntry(logEntry);
+
 
             // Plan Approval Metadata
             if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE) {

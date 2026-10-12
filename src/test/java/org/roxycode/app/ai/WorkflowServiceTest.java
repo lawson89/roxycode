@@ -33,7 +33,7 @@ class WorkflowServiceTest {
     }
 
     private void setupCodePhase() {
-        ImplementationPlan plan = new ImplementationPlan("T", "G", List.of(), List.of(), true, "now", "user", null, null, List.of());
+        ImplementationPlan plan = new ImplementationPlan("T", "G", List.of(), List.of(), true, "now", "user", null, List.of(), List.of());
         lenient().when(planManager.getCurrentPlan()).thenReturn(plan);
         service.switchMode(WorkflowPhase.PLAN);
         try { service.routeToPhase("CODE", "Reason"); } catch (YieldTurnException e) {}
@@ -48,7 +48,7 @@ class WorkflowServiceTest {
     void testPhaseManagement() {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), false, null, null, null, null, List.of()));
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), false, null, null, null, List.of(), List.of()));
         
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("CODE", "Reason"));
         assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
@@ -91,7 +91,7 @@ class WorkflowServiceTest {
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
         
         verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
-        verify(planManager).addHandoffLogEntry(anyString());
+        verify(planManager).addHandoffLogEntry(anyString(), anyString(), anyString());
     }
 
     @Test

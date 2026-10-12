@@ -52,6 +52,32 @@ public class PlanPanel extends JPanel {
         SwingHtmlUtils.applyTheme(displayArea, 15);
     }
 
+    private String renderLogTable(String title, java.util.List<ImplementationPlan.LogEntry> logs) {
+        if (logs == null || logs.isEmpty()) return "";
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("<h3>").append(title).append(":</h3>");
+        sb.append("<table width='100%' border='0' cellpadding='2' cellspacing='0'>");
+        sb.append("<tr bgcolor='#2d2d2d'>");
+        sb.append("<td width='25%' align='left'><b><font size='2' color='#888888'>Timestamp</font></b></td>");
+        sb.append("<td width='15%' align='left'><b><font size='2' color='#888888'>User</font></b></td>");
+        sb.append("<td width='60%' align='left'><b><font size='2' color='#888888'>Message</font></b></td>");
+        sb.append("</tr>");
+        
+        for (ImplementationPlan.LogEntry entry : logs) {
+            String ts = entry.timestamp();
+            if (ts.length() > 19) ts = ts.substring(0, 19).replace('T', ' ');
+            
+            sb.append("<tr>");
+            sb.append("<td valign='top'><font size='2' color='#888888'>").append(SwingHtmlUtils.escapeHtml(ts)).append("</font></td>");
+            sb.append("<td valign='top'><font size='2' color='#569cd6'>").append(SwingHtmlUtils.escapeHtml(entry.user())).append("</font></td>");
+            sb.append("<td valign='top'><font size='3'>").append(SwingHtmlUtils.escapeHtml(entry.message())).append("</font></td>");
+            sb.append("</tr>");
+        }
+        sb.append("</table>");
+        return sb.toString();
+    }
+
     private void updateDisplay(ImplementationPlan plan) {
         StringBuilder html = new StringBuilder("<html><body>");
 
@@ -96,21 +122,8 @@ public class PlanPanel extends JPanel {
             }
             html.append("</table>");
 
-            if (plan.codeReviewLog() != null && !plan.codeReviewLog().isEmpty()) {
-                html.append("<h3>Code Review Log:</h3><ul>");
-                for (String logEntry : plan.codeReviewLog()) {
-                    html.append("<li>").append(SwingHtmlUtils.escapeHtml(logEntry)).append("</li>");
-                }
-                html.append("</ul>");
-            }
-
-            if (plan.handoffLog() != null && !plan.handoffLog().isEmpty()) {
-                html.append("<h3>Handoff Log:</h3><ul>");
-                for (String logEntry : plan.handoffLog()) {
-                    html.append("<li>").append(SwingHtmlUtils.escapeHtml(logEntry)).append("</li>");
-                }
-                html.append("</ul>");
-            }
+            html.append(renderLogTable("Code Review Log", plan.codeReviewLog()));
+            html.append(renderLogTable("Handoff Log", plan.handoffLog()));
         }
 
         html.append("</body></html>");

@@ -13,10 +13,13 @@ public record ImplementationPlan(
     String approvalTimestamp,
     String approvedBy,
     String completedOn,
-    List<String> codeReviewLog,
-    List<String> handoffLog
+    List<LogEntry> codeReviewLog,
+    List<LogEntry> handoffLog
 ) {
     public record TechStep(String description, boolean completed) {}
+    
+    @AgentDoc("A structured log entry for the implementation history.")
+    public record LogEntry(String timestamp, String user, String message) {}
 
     public ImplementationPlan {
         requirements = requirements != null ? List.copyOf(requirements) : List.of();

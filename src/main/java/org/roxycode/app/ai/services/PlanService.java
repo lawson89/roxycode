@@ -301,21 +301,50 @@ public class PlanService {
         return item.toString();
     }
 
-        private void notifyListeners() {
+    private void notifyListeners() {
         for (PlanUpdateListener listener : listeners) {
             listener.onPlanUpdated(currentPlan);
         }
     }
 
     /**
-     * Adds a high-level summary entry to the handoff log for final project delivery or status tracking.
+     * Adds an entry to the code review log.
      */
-    @AgentDoc(value = "Adds a high-level summary entry to the handoff log for final project delivery or status tracking.",
-              examples = "planService.addHandoffLogEntry('Updated the README with new instructions.')")
-    public void addHandoffLogEntry(String entry) {
+    public void addCodeReviewLogEntry(String timestamp, String user, String message) {
         if (currentPlan == null) return;
-        List<String> logs = new ArrayList<>(currentPlan.handoffLog());
-        logs.add(entry);
+        List<ImplementationPlan.LogEntry> logs = new ArrayList<>(currentPlan.codeReviewLog());
+        logs.add(new ImplementationPlan.LogEntry(timestamp, user, message));
+        currentPlan = new ImplementationPlan(
+            currentPlan.title(),
+            currentPlan.goal(),
+            currentPlan.requirements(),
+            currentPlan.technicalSteps(),
+            currentPlan.userApproved(),
+            currentPlan.approvalTimestamp(),
+            currentPlan.approvedBy(),
+            currentPlan.completedOn(),
+            logs,
+            currentPlan.handoffLog()
+        );
+        notifyListeners();
+    }
+
+    /**
+     * Adds an entry to the code review log.
+     */
+    @AgentDoc(value = "Adds an entry to the code review log.",
+              examples = "planService.addCodeReviewLogEntry('Found a bug in auth logic.')")
+    public void addCodeReviewLogEntry(String entry) {
+        addCodeReviewLogEntry(java.time.OffsetDateTime.now().toString(), "System", entry);
+    }
+
+    /**
+     * Adds an entry to the handoff log.
+     */
+    public void addHandoffLogEntry(String timestamp, String user, String message) {
+        if (currentPlan == null) return;
+        List<ImplementationPlan.LogEntry> logs = new ArrayList<>(currentPlan.handoffLog());
+        logs.add(new ImplementationPlan.LogEntry(timestamp, user, message));
         currentPlan = new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),
@@ -331,5 +360,12 @@ public class PlanService {
         notifyListeners();
     }
 
-
+    /**
+     * Adds an entry to the handoff log.
+     */
+    @AgentDoc(value = "Adds a high-level summary entry to the handoff log.",
+              examples = "planService.addHandoffLogEntry('Updated the README.')")
+    public void addHandoffLogEntry(String entry) {
+        addHandoffLogEntry(java.time.OffsetDateTime.now().toString(), "System", entry);
+    }
 }
