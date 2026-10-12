@@ -95,6 +95,22 @@ public class PlanPanel extends JPanel {
                 index++;
             }
             html.append("</table>");
+
+            if (plan.codeReviewLog() != null && !plan.codeReviewLog().isEmpty()) {
+                html.append("<h3>Code Review Log:</h3><ul>");
+                for (String logEntry : plan.codeReviewLog()) {
+                    html.append("<li>").append(SwingHtmlUtils.escapeHtml(logEntry)).append("</li>");
+                }
+                html.append("</ul>");
+            }
+
+            if (plan.handoffLog() != null && !plan.handoffLog().isEmpty()) {
+                html.append("<h3>Handoff Log:</h3><ul>");
+                for (String logEntry : plan.handoffLog()) {
+                    html.append("<li>").append(SwingHtmlUtils.escapeHtml(logEntry)).append("</li>");
+                }
+                html.append("</ul>");
+            }
         }
 
         html.append("</body></html>");

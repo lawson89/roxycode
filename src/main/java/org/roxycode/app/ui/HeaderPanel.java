@@ -165,7 +165,7 @@ public class HeaderPanel extends JPanel {
         }
 
         exploreModeBtn.setSelected(currentPhase == WorkflowPhase.EXPLORE);
-        planModeBtn.setSelected(currentPhase == WorkflowPhase.PLAN || currentPhase == WorkflowPhase.CODE);
+        planModeBtn.setSelected(currentPhase == WorkflowPhase.PLAN || currentPhase == WorkflowPhase.CODE || currentPhase == WorkflowPhase.REVIEW);
         
         // Buttons enabled only if current phase is EXPLORE or PLAN
         exploreModeBtn.setEnabled(true);
