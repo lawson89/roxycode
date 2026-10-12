@@ -27,7 +27,7 @@ class PromptServiceTest {
     void testLoadCoreWorkflowPrompt() {
         String prompt = promptService.loadCoreWorkflowPrompt();
         assertNotNull(prompt);
-        assertTrue(prompt.contains("ROXY CORE WORKFLOW PROTOCOL"));
+        assertTrue(prompt.contains("ColinxCode Workflow Protocol"));
     }
 
     @Test
@@ -60,6 +60,22 @@ class PromptServiceTest {
         String prompt = promptService.loadExplorePrompt();
         assertNotNull(prompt);
         assertTrue(prompt.contains("EXPLORE phase"));
+    }
+
+    @Test
+    void testLoadPlanPrompt() {
+        String prompt = promptService.loadPlanPrompt();
+        assertNotNull(prompt);
+        assertTrue(prompt.contains("ANALYST"));
+        assertTrue(prompt.contains("PLANNING"));
+    }
+
+    @Test
+    void testLoadCodePrompt() {
+        String prompt = promptService.loadCodePrompt();
+        assertNotNull(prompt);
+        assertTrue(prompt.contains("CODER"));
+        assertTrue(prompt.contains("ACTING"));
     }
 
     @Test

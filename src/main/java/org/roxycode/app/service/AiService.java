@@ -142,6 +142,12 @@ public class AiService {
         if (currentPhase == WorkflowPhase.REVIEW) {
             systemPrompt.append("\n\n").append(promptService.loadReviewPrompt());
         }
+        if (currentPhase == WorkflowPhase.PLAN) {
+            systemPrompt.append("\n\n").append(promptService.loadPlanPrompt());
+        }
+        if (currentPhase == WorkflowPhase.CODE) {
+            systemPrompt.append("\n\n").append(promptService.loadCodePrompt());
+        }
         
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
         if (repoMap.success()) systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.content()).append("\n");

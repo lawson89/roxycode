@@ -96,6 +96,7 @@ class AiServiceTest {
         when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
         when(promptService.loadAllPrompts()).thenReturn(" ALL PROMPTS");
         when(promptService.loadAllDocs()).thenReturn(" ALL DOCS");
+        when(promptService.loadCodePrompt()).thenReturn(" CODE PHASE PROMPT");
         when(promptService.loadProjectContext()).thenReturn("\n\n## Project Context: rules.md\nCUSTOM RULES");
         
         when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
@@ -128,6 +129,7 @@ class AiServiceTest {
         assertTrue(capturedPrompt.contains("JEXL CONTEXT"));
         assertTrue(capturedPrompt.contains("REPO MAP CONTENT"));
         assertTrue(capturedPrompt.contains("GIT STATUS OUTPUT"));
+        assertTrue(capturedPrompt.contains("CODE PHASE PROMPT"));
         
         verify(requestSpec).options(any());
     }
@@ -166,6 +168,31 @@ class AiServiceTest {
         
         assertTrue(capturedPrompt.contains("REVIEW PHASE PROMPT"));
         assertTrue(capturedPrompt.contains("CURRENT PHASE: REVIEW"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testChatInjectsPlanPromptInPlanPhase() {
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE");
+        when(promptService.loadJexlContext()).thenReturn("JEXL");
+        when(promptService.loadAllPrompts()).thenReturn(" ALL");
+        when(promptService.loadAllDocs()).thenReturn(" DOCS");
+        when(promptService.loadProjectContext()).thenReturn("");
+        when(promptService.loadPlanPrompt()).thenReturn("PLAN PHASE PROMPT");
+        when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "", null));
+        when(gitService.getStatus()).thenReturn("");
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.content()).thenReturn("Res");
+        aiService.chat("Hello");
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).system(systemPromptCaptor.capture());
+        assertTrue(systemPromptCaptor.getValue().contains("PLAN PHASE PROMPT"));
     }
 
     @Test

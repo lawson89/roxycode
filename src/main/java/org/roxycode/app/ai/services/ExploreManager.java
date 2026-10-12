@@ -26,7 +26,6 @@ public class ExploreManager {
      */
     public String generateSystemPrompt() {
         String prompt = promptService.loadExplorePrompt();
-        String substituted = prompt.replace("{{MAX_TURNS}}", String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
-        return "You are the Technical Mentor. Provides technical guidance and ensures adherence to best practices." + substituted;
+        return prompt.replace("${maxTurns}", String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
     }
 }

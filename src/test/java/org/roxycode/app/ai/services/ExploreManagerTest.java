@@ -31,7 +31,7 @@ public class ExploreManagerTest {
         when(settingsService.getSettings()).thenReturn(settings);
         when(settings.getMaxAgentToolTurns()).thenReturn(10);
                 when(promptService.loadExplorePrompt()).thenReturn("""
-                EXPLORE phase Read-Only Tool Efficiency & Batching {{MAX_TURNS}} Source Attribution
+                You are the Technical Mentor. EXPLORE phase Read-Only Tool Efficiency & Batching ${maxTurns} Source Attribution
                 """);
         exploreManager = new ExploreManager(settingsService, promptService);
     }
