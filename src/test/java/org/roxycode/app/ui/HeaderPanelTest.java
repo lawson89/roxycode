@@ -8,7 +8,7 @@ import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.ai.services.PlanService;
 import static org.mockito.Mockito.mock;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -38,14 +38,14 @@ class HeaderPanelTest {
     }
 
     private WorkflowService createWorkflowService() {
-        return new WorkflowService(mock(PlanManagerService.class), mock(EnvironmentService.class), mock(ApplicationEventPublisher.class));
+        return new WorkflowService(mock(PlanService.class), mock(EnvironmentService.class), mock(ApplicationEventPublisher.class));
     }
 
     @Test
     void testHeaderPanelInstantiation() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
         assertNotNull(header);
     }
 
@@ -53,7 +53,7 @@ class HeaderPanelTest {
     void testSearchFieldIsRemoved() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
         boolean searchFieldFound = false;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JTextField) {
@@ -68,7 +68,7 @@ class HeaderPanelTest {
     void testUtilityIconsAreRemoved() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
         boolean settingsFound = false;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JPanel) {
@@ -87,7 +87,7 @@ class HeaderPanelTest {
     void testOpenButtonIsPresent() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
         JButton openButton = null;
         for (Component comp : header.getComponents()) {
             if (comp instanceof JPanel) {
@@ -111,7 +111,7 @@ class HeaderPanelTest {
     void testHeaderLayoutInsets() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanManagerService.class), name -> {});
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, createWorkflowService(), mock(PlanService.class), name -> {});
         net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
         Object constraints = layout.getLayoutConstraints();
         assertTrue(constraints.toString().contains("insets 5 20 5 20"));

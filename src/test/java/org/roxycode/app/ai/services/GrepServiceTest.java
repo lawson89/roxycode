@@ -32,9 +32,9 @@ class GrepServiceTest {
         EditorResult result = grepService.grep("class Hello", "src", "*.java");
         
         // Basic check: if it succeeded, content should be correct.
-        if (result.success()) {
-            assertTrue(result.content().contains("Hello.java"));
-            assertTrue(result.content().contains("class Hello"));
+        if (result.isSuccess()) {
+            assertTrue(result.getContent().contains("Hello.java"));
+            assertTrue(result.getContent().contains("class Hello"));
         }
     }
 
@@ -58,7 +58,7 @@ class GrepServiceTest {
         GrepService grepService = new GrepService(projectService);
         EditorResult result = grepService.grep("pattern", "src", null);
         
-        assertFalse(result.success());
-        assertEquals("No active project", result.errorHint());
+        assertFalse(result.isSuccess());
+        assertEquals("No active project", result.getErrorHint());
     }
 }

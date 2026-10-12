@@ -36,8 +36,34 @@ public class GrepService {
      * @param filePattern optional glob pattern for files (e.g., "*.java")
      * @return the search results in an EditorResult
      */
+    /**
+     * Searches for a regex pattern in the project files using RipGrep.
+     */
+    @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.",
+              examples = "grepService.grep('TODO')")
+    public EditorResult grep(String pattern) {
+        return grep(pattern, ".", null);
+    }
+
+    /**
+     * Searches for a regex pattern in the project files using RipGrep.
+     */
+    @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.",
+              examples = "grepService.grep('class GrepService', 'src')")
+    public EditorResult grep(String pattern, String relativePath) {
+        return grep(pattern, relativePath, null);
+    }
+
+    /**
+     * Searches for a regex pattern in the project files using RipGrep.
+     *
+     * @param pattern the regex pattern to search for
+     * @param relativePath the starting path relative to the project root
+     * @param filePattern optional glob pattern for files (e.g., "*.java")
+     * @return the search results in an EditorResult
+     */
     @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", 
-              examples = {"grepService.grep('class GrepService', 'src', '*.java')"})
+              examples = "grepService.grep('import', 'src', '*.java')")
     public EditorResult grep(String pattern, String relativePath, String filePattern) {
         if (!projectService.hasActiveProject()) {
             return new EditorResult(false, "", "No active project");
@@ -92,10 +118,21 @@ public class GrepService {
 
     /**
      * Lists files in the project using RipGrep, respecting .gitignore.
+     */
+    @AgentDoc(value = "Lists files in the project root using RipGrep, respecting .gitignore.",
+              examples = "grepService.listFiles()")
+    public List<String> listFiles() {
+        return listFiles(".");
+    }
+
+    /**
+     * Lists files in the project using RipGrep, respecting .gitignore.
      *
      * @param relativePath the starting path relative to the project root (null or empty for root)
      * @return a list of file paths relative to the project root
      */
+    @AgentDoc(value = "Lists files in a specific directory using RipGrep, respecting .gitignore.",
+              examples = "grepService.listFiles('src/main')")
     public List<String> listFiles(String relativePath) {
         if (!projectService.hasActiveProject()) {
             return new ArrayList<>();

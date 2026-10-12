@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  */
 @AgentService(value = "planService", phases = {"*"})
 @AgentDoc("Service for managing project plans and specifications.")
-public class PlanManagerService {
+public class PlanService {
 
     private ImplementationPlan currentPlan;
     private final WorkflowService workflowService;
@@ -30,7 +30,7 @@ public class PlanManagerService {
         void onPlanUpdated(ImplementationPlan plan);
     }
 
-    public PlanManagerService(@Lazy WorkflowService workflowService) {
+    public PlanService(@Lazy WorkflowService workflowService) {
         this.workflowService = workflowService;
     }
 
@@ -47,7 +47,6 @@ public class PlanManagerService {
      * @param plan the implementation plan to submit
      * @return a success message
      */
-    @AgentDoc("Submits an implementation plan for the project.")
     public String submitPlan(
             @AgentDoc("The implementation plan to submit.") ImplementationPlan plan) {
         if (plan == null) {
@@ -188,7 +187,8 @@ public class PlanManagerService {
     /**
      * Marks a technical implementation step as incomplete.
      */
-    @AgentDoc("Marks a technical implementation step as incomplete.")
+    @AgentDoc(value = "Marks a technical implementation step as incomplete.",
+              examples = "planService.markStepIncomplete(0)")
     public void markStepIncomplete(@AgentDoc("The index of the step (0-based).") int index) {
         updateStepStatus(index, false);
     }
@@ -238,7 +238,8 @@ public class PlanManagerService {
     /**
      * Transitions the workflow to the development (CODE) phase.
      */
-    @AgentDoc("Requests transition to the development (CODE) phase.")
+    @AgentDoc(value = "Requests transition to the development (CODE) phase.",
+              examples = "planService.requestDevelopment('Ready to start coding.')")
     public String requestDevelopment(String reason) {
         return workflowService.routeToPhase("CODE", reason);
     }
@@ -246,7 +247,8 @@ public class PlanManagerService {
     /**
      * Transitions the workflow to the review phase.
      */
-    @AgentDoc("Requests transition to the review phase.")
+    @AgentDoc(value = "Requests transition to the review phase.",
+              examples = "planService.requestReview('Feature implemented, needs review.')")
     public String requestReview(String reason) {
         return workflowService.routeToPhase("REVIEW", reason);
     }
@@ -254,7 +256,8 @@ public class PlanManagerService {
     /**
      * Transitions the workflow back to development (CODE) to address fixes.
      */
-    @AgentDoc("Requests transition back to development to address fixes.")
+    @AgentDoc(value = "Requests transition back to development to address fixes.",
+              examples = "planService.requestFixes('Found a bug in auth logic.')")
     public String requestFixes(String reason) {
         return workflowService.routeToPhase("CODE", reason);
     }
@@ -262,7 +265,8 @@ public class PlanManagerService {
     /**
      * Signals completion of the current cycle and returns to planning.
      */
-    @AgentDoc("Signals completion of the current cycle and returns to planning.")
+    @AgentDoc(value = "Signals completion of the current cycle and returns to planning.",
+              examples = "planService.requestCompletion('All steps verified, project ready.')")
     public String requestCompletion(String reason) {
         return workflowService.routeToPhase("PLAN", reason);
     }
@@ -306,8 +310,8 @@ public class PlanManagerService {
     /**
      * Adds a high-level summary entry to the handoff log for final project delivery or status tracking.
      */
-    @AgentDoc(value = "Adds a high-level summary entry to the handoff log for final project delivery or status tracking.", 
-              examples = "planService.addHandoffLogEntry('Project ready for deployment: all tests passed.')")
+    @AgentDoc(value = "Adds a high-level summary entry to the handoff log for final project delivery or status tracking.",
+              examples = "planService.addHandoffLogEntry('Updated the README with new instructions.')")
     public void addHandoffLogEntry(String entry) {
         if (currentPlan == null) return;
         List<String> logs = new ArrayList<>(currentPlan.handoffLog());

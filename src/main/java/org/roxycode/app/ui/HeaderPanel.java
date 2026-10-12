@@ -8,7 +8,7 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 
 import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -27,7 +27,7 @@ public class HeaderPanel extends JPanel {
     private final ProjectService projectService;
     private final GitService gitService;
     private final WorkflowService workflowService;
-    private final PlanManagerService planManagerService;
+    private final PlanService planManagerService;
     
     private final JLabel projectLabel;
     private final JLabel branchLabel;
@@ -42,7 +42,7 @@ public class HeaderPanel extends JPanel {
     private final JToggleButton planModeBtn;
 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, 
-                       WorkflowService workflowService, PlanManagerService planManagerService,
+                       WorkflowService workflowService, PlanService planManagerService,
                        Consumer<String> navigationAction) {
         this.projectService = projectService;
         this.gitService = gitService;

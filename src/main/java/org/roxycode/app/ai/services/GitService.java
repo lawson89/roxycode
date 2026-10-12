@@ -28,27 +28,38 @@ public class GitService {
         this.projectService = projectService;
     }
 
-    @AgentDoc("Returns the name of the current Git branch.")
+    @AgentDoc(value = "Returns the name of the current Git branch.",
+              examples = "gitService.getCurrentBranch()")
     public String getCurrentBranch() {
         return executeGitCommand("rev-parse", "--abbrev-ref", "HEAD");
     }
 
-    @AgentDoc("Returns the git status (porcelain).")
+    @AgentDoc(value = "Returns the git status (porcelain).",
+              examples = "gitService.getStatus()")
     public String getStatus() {
         return executeGitCommand("status", "--porcelain");
     }
 
-    @AgentDoc("Returns the git diff for unstaged changes.")
+    @AgentDoc(value = "Returns the git diff for unstaged changes.",
+              examples = "gitService.getDiff()")
     public String getDiff() {
         return executeGitCommand("diff");
     }
 
-    @AgentDoc("Returns the git log.")
+    @AgentDoc(value = "Returns the git log (last 10 commits).",
+              examples = "gitService.getLog()")
+    public String getLog() {
+        return getLog(10);
+    }
+
+    @AgentDoc(value = "Returns the git log.",
+              examples = "gitService.getLog(5)")
     public String getLog(int limit) {
         return executeGitCommand("log", "-" + limit, "--oneline");
     }
 
-    @AgentDoc("Shows details for a specific commit.")
+    @AgentDoc(value = "Shows details for a specific commit.",
+              examples = "gitService.showCommit('abcd123')")
     public String showCommit(String hash) {
         return executeGitCommand("show", hash);
     }

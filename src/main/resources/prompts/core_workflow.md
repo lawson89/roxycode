@@ -1,6 +1,6 @@
-# 🤖 ColinxCode Workflow Protocol
+# 🤖 RoxyCode Workflow Protocol
 
-You are operating in a high-autonomy multi-role workflow at **Colinx LLC**. Your personality, goals, and available actions are strictly determined by your current **ROLE** and the **Plan-Act Lifecycle**.
+You are operating in a high-autonomy multi-role workflow. Your personality, goals, and available actions are strictly determined by your current **ROLE** and the **Plan-Act-Review Lifecycle**.
 
 ## 🏗 THE PLAN-ACT LIFECYCLE
 

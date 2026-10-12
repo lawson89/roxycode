@@ -15,16 +15,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class PlanManagerServiceTest {
+class PlanServiceTest {
 
     @Mock
     private WorkflowService workflowService;
 
-    private PlanManagerService service;
+    private PlanService service;
 
     @BeforeEach
     void setUp() {
-        service = new PlanManagerService(workflowService);
+        service = new PlanService(workflowService);
     }
 
     @Test

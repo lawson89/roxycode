@@ -18,6 +18,8 @@ public class GeminiCacheService {
         this.settingsService = settingsService;
     }
 
+    @AgentDoc(value = "Roughly estimates the number of tokens in a string.",
+              examples = "geminiCacheService.estimateTokens('Some text to estimate tokens for.')")
     public long estimateTokens(String text) {
         if (text == null) return 0;
         return text.length() / 4;

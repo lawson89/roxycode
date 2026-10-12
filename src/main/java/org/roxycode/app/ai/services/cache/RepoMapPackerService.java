@@ -72,7 +72,8 @@ public class RepoMapPackerService {
      * 
      * @return EditorResult containing the packed repo map.
      */
-    @AgentDoc("Generates the repo map string and saves it to the implicit cache.")
+    @AgentDoc(value = "Generates a comprehensive repo map of the codebase for exploration purposes.",
+              examples = "repoMapPackerService.generateRepoMap()")
     public EditorResult generateRepoMap() {
         if (!projectService.hasActiveProject()) {
             return new EditorResult(false, "", "No active project");

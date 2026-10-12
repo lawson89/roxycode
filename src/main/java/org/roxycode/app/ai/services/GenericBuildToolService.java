@@ -46,17 +46,20 @@ public class GenericBuildToolService {
         }
     }
 
-    @AgentDoc("Cleans the project using the configured clean command")
+    @AgentDoc(value = "Cleans the project using the configured clean command",
+              examples = "buildToolService.clean()")
     public BuildResult clean() {
         return runCommand("clean");
     }
 
-    @AgentDoc("Compiles the project using the configured compile command")
+    @AgentDoc(value = "Compiles the project using the configured compile command",
+              examples = "buildToolService.compile()")
     public BuildResult compile() {
         return runCommand("compile");
     }
 
-    @AgentDoc("Checks if a generic build configuration exists (.roxycode/build.toml)")
+    @AgentDoc(value = "Checks if a generic build configuration exists (.roxycode/build.toml)",
+              examples = "buildToolService.detect()")
     public boolean detect() {
         if (!projectService.hasActiveProject()) {
             return false;
@@ -64,12 +67,20 @@ public class GenericBuildToolService {
         return Files.exists(projectService.getCurrentProjectRoot().resolve(CONFIG_PATH));
     }
 
-    @AgentDoc("Runs all tests using the configured test command")
+    @AgentDoc(value = "Alias for runTests(). Runs all tests using the configured test command.",
+              examples = "buildToolService.test()")
+    public BuildResult test() {
+        return runTests();
+    }
+
+    @AgentDoc(value = "Runs all tests using the configured test command",
+              examples = "buildToolService.runTests()")
     public BuildResult runTests() {
         return runCommand("run_all");
     }
 
-    @AgentDoc("Runs a single test using the configured run_single command. {testName} is replaced with the argument.")
+    @AgentDoc(value = "Runs a single test using the configured run_single command. {testName} is replaced with the argument.",
+              examples = "buildToolService.runSingleTest('com.example.TestClass')")
     public BuildResult runSingleTest(String testName) {
         return runCommand("run_single", Map.of("testName", testName));
     }
@@ -78,21 +89,22 @@ public class GenericBuildToolService {
         return runCommand(commandKey, Map.of());
     }
 
-    @AgentDoc("Compiles the project and, if successful, runs all tests. Use this for the Verification phase.")
+    @AgentDoc(value = "Compiles the project and, if successful, runs all tests. Use this for the Verification phase.",
+              examples = "buildToolService.buildAndTest()")
     public BuildResult buildAndTest() {
         BuildResult compileResult = compile();
-        if (!compileResult.success()) {
+        if (!compileResult.isSuccess()) {
             return compileResult; // Fast fail if compilation breaks
         }
         BuildResult testResult = runTests();
         // Combine outputs for the LLM
         return new BuildResult(
-            testResult.success(),
-            testResult.exitCode(),
-            "COMPILE OUTPUT:\n" + compileResult.output() + "\n\nTEST OUTPUT:\n" + testResult.output(),
-            testResult.errors(),
-            testResult.failedTests(),
-            testResult.log()
+            testResult.isSuccess(),
+            testResult.getExitCode(),
+            "COMPILE OUTPUT:\n" + compileResult.getOutput() + "\n\nTEST OUTPUT:\n" + testResult.getOutput(),
+            testResult.getErrors(),
+            testResult.getFailedTests(),
+            testResult.getLog()
         );
     }
 

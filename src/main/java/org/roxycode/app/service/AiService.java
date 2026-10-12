@@ -146,7 +146,7 @@ public class AiService {
         }
         
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
-        if (repoMap.success()) systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.content()).append("\n");
+        if (repoMap.isSuccess()) systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.getContent()).append("\n");
 
         systemPrompt.append("\n\n## SESSION CONTEXT\n");
         systemPrompt.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage()).append("\n");

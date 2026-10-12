@@ -43,8 +43,8 @@ class RepoMapPackerServiceTest {
     void testNoActiveProject() {
         when(projectService.hasActiveProject()).thenReturn(false);
         EditorResult result = service.generateRepoMap();
-        assertFalse(result.success());
-        assertEquals("No active project", result.errorHint());
+        assertFalse(result.isSuccess());
+        assertEquals("No active project", result.getErrorHint());
     }
 
     @Test
@@ -57,9 +57,9 @@ class RepoMapPackerServiceTest {
         when(grepService.listFiles(null)).thenReturn(List.of("test.txt"));
 
         EditorResult result = service.generateRepoMap();
-        assertTrue(result.success());
-                assertTrue(result.content().contains("# Repo Map Snapshot"));
-        assertTrue(result.content().contains("## Project Tree"));
+        assertTrue(result.isSuccess());
+                assertTrue(result.getContent().contains("# Repo Map Snapshot"));
+        assertTrue(result.getContent().contains("## Project Tree"));
     }
 
     @Test
@@ -78,8 +78,8 @@ class RepoMapPackerServiceTest {
         when(grepService.listFiles(null)).thenReturn(List.of("test.txt", "test.bin"));
 
         EditorResult result = service.generateRepoMap();
-        assertTrue(result.success());
-        assertTrue(result.content().contains("test.txt"));
-        assertFalse(result.content().contains("test.bin"), "Binary file should be excluded");
+        assertTrue(result.isSuccess());
+        assertTrue(result.getContent().contains("test.txt"));
+        assertFalse(result.getContent().contains("test.bin"), "Binary file should be excluded");
     }
 }

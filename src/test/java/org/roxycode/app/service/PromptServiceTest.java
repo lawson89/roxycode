@@ -27,7 +27,7 @@ class PromptServiceTest {
     void testLoadCoreWorkflowPrompt() {
         String prompt = promptService.loadCoreWorkflowPrompt();
         assertNotNull(prompt);
-        assertTrue(prompt.contains("ColinxCode Workflow Protocol"));
+        assertTrue(prompt.contains("RoxyCode Workflow Protocol"));
     }
 
     @Test

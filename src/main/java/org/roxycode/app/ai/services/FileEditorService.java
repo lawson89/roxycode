@@ -44,7 +44,8 @@ public class FileEditorService {
      * @param content the content to write
      * @throws IOException if an I/O error occurs
      */
-    @AgentDoc(value = "Writes content to a file, overwriting it if it exists.", examples = {"fileEditorService.writeFile('path', 'content')"})
+    @AgentDoc(value = "Writes content to a file, overwriting it if it exists.",
+              examples = "fileEditorService.writeFile('src/main/resources/config.properties', 'key=value')")
     public void writeFile(String relativePath, String content) throws IOException {
         checkPhase();
         Path path = resolvePath(relativePath);
@@ -63,7 +64,8 @@ public class FileEditorService {
      * @throws IOException if an I/O error occurs
      * @throws IllegalArgumentException if the target block is not found or not unique
      */
-    @AgentDoc(value = "Replaces a unique block of text with new content.", examples = {"fileEditorService.replaceBlock('path', 'target', 'replacement')"})
+    @AgentDoc(value = "Replaces a unique block of text with new content.",
+              examples = "fileEditorService.replaceBlock('src/Main.java', '// TODO: implement', 'System.out.println(\\'Hello\\');')")
     public void replaceBlock(String relativePath, String targetBlock, String replacementBlock) throws IOException {
         checkPhase();
         Path path = resolvePath(relativePath);
@@ -106,7 +108,8 @@ public class FileEditorService {
      * @param replacementText the new content for the range
      * @throws IOException if an I/O error occurs
      */
-    @AgentDoc(value = "Replaces a range of lines with new content using 1-based indexing.", examples = {"fileEditorService.replaceLines('path', 1, 5, 'new text')"})
+    @AgentDoc(value = "Replaces a range of lines with new content using 1-based indexing.",
+              examples = "fileEditorService.replaceLines('pom.xml', 10, 15, '    <dependencies>\\n        ...\\n    </dependencies>')")
     public void replaceLines(String relativePath, int startLine, int endLine, String replacementText) throws IOException {
         checkPhase();
         Path path = resolvePath(relativePath);
@@ -143,7 +146,8 @@ public class FileEditorService {
      * @param content the content to insert
      * @throws IOException if an I/O error occurs
      */
-    @AgentDoc(value = "Inserts content at a specific line number using 1-based indexing.", examples = {"fileEditorService.insertAtLine('path', 5, 'content')"})
+    @AgentDoc(value = "Inserts content at a specific line number using 1-based indexing.",
+              examples = "fileEditorService.insertAtLine('src/Main.java', 5, 'import java.util.List;')")
     public void insertAtLine(String relativePath, int lineNumber, String content) throws IOException {
         checkPhase();
         Path path = resolvePath(relativePath);

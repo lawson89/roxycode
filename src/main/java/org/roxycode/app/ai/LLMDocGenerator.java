@@ -6,13 +6,14 @@ import java.util.stream.Collectors;
 
 /**
  * Generates LLM-friendly documentation for JEXL-exposed services.
+ * Uses pseudo-TypeScript syntax for better compatibility with LLM reasoning.
  */
 public class LLMDocGenerator {
 
     public String generateDoc(Collection<Object> services) {
         StringBuilder sb = new StringBuilder();
         sb.append("### JEXL API Documentation\n\n");
-        sb.append("```java\n");
+        sb.append("```typescript\n");
         sb.append("/**\n");
         sb.append(" * ⚠️ INTEROP WARNING: These services return Java objects in Apache Commons JEXL.\n");
         sb.append(" * Always return objects as the last expression of your script to inspect them.\n");
@@ -44,7 +45,7 @@ public class LLMDocGenerator {
         if (!extraTypes.isEmpty()) {
             sb.append("// --- Supporting Types ---\n\n");
             for (Class<?> type : extraTypes) {
-                generateTypeSchema(type, sb);
+                generateTypeSchema(type, sb, extraTypes);
                 sb.append("\n");
             }
         }
@@ -54,8 +55,7 @@ public class LLMDocGenerator {
     }
 
     private void generateClassStub(Class<?> clazz, StringBuilder sb, Set<Class<?>> extraTypes) {
-        String typeName = clazz.isInterface() ? "interface" : "class";
-        sb.append("public ").append(typeName).append(" ").append(clazz.getSimpleName()).append(" {\n");
+        sb.append("interface ").append(clazz.getSimpleName()).append(" {\n");
         
         Method[] methods = clazz.getDeclaredMethods();
         Arrays.sort(methods, Comparator.comparing(Method::getName));
@@ -64,6 +64,7 @@ public class LLMDocGenerator {
             if (!Modifier.isPublic(m.getModifiers())) continue;
             
             AgentDoc doc = m.getAnnotation(AgentDoc.class);
+            if (doc == null) continue;
             if (doc != null) {
                 sb.append("    /**\n");
                 sb.append("     * ").append(doc.value()).append("\n");
@@ -73,15 +74,14 @@ public class LLMDocGenerator {
                 sb.append("     */\n");
             }
             
-            sb.append("    ").append(getTypeName(m.getReturnType(), extraTypes))
-              .append(" ").append(m.getName()).append("(");
+            sb.append("    ").append(m.getName()).append("(");
             
             Parameter[] params = m.getParameters();
             for (int i = 0; i < params.length; i++) {
-                sb.append(getTypeName(params[i].getType(), extraTypes)).append(" ").append(params[i].getName());
+                sb.append(params[i].getName()).append(": ").append(getTypeName(params[i].getType(), extraTypes));
                 if (i < params.length - 1) sb.append(", ");
             }
-            sb.append(");\n\n");
+            sb.append("): ").append(getTypeName(m.getReturnType(), extraTypes)).append(";\n\n");
         }
         sb.append("}\n");
     }
@@ -90,8 +90,16 @@ public class LLMDocGenerator {
         if (type.isArray()) {
             return getTypeName(type.getComponentType(), extraTypes) + "[]";
         }
+        if (type == void.class || type == Void.class) return "void";
+        if (type == String.class) return "string";
+        if (type == boolean.class || type == Boolean.class) return "boolean";
+        if (type == int.class || type == Integer.class || 
+            type == long.class || type == Long.class || 
+            type == double.class || type == Double.class || 
+            type == float.class || type == Float.class) return "number";
+        
         String name = type.getSimpleName();
-        if (type.isPrimitive() || type.getName().startsWith("java.lang") || type.getName().startsWith("java.util")) {
+        if (type.getName().startsWith("java.lang") || type.getName().startsWith("java.util")) {
             return name;
         }
         if (type.getName().startsWith("org.roxycode.app")) {
@@ -101,26 +109,46 @@ public class LLMDocGenerator {
         return name;
     }
 
-    private void generateTypeSchema(Class<?> type, StringBuilder sb) {
+    private void generateTypeSchema(Class<?> type, StringBuilder sb, Set<Class<?>> extraTypes) {
         if (type.isEnum()) {
-            sb.append("public enum ").append(type.getSimpleName()).append(" {\n");
+            sb.append("enum ").append(type.getSimpleName()).append(" {\n");
             sb.append("    ").append(Arrays.stream(type.getEnumConstants())
               .map(Object::toString)
               .collect(Collectors.joining(", ")))
               .append("\n}\n");
         } else if (type.isRecord()) {
-            sb.append("public record ").append(type.getSimpleName()).append("(\n");
+            sb.append("interface ").append(type.getSimpleName()).append(" {\n");
             RecordComponent[] components = type.getRecordComponents();
             for (int i = 0; i < components.length; i++) {
-                sb.append("    ").append(components[i].getType().getSimpleName()).append(" ").append(components[i].getName());
-                if (i < components.length - 1) sb.append(",\n");
+                sb.append("    ").append(components[i].getName()).append(": ")
+                  .append(getTypeName(components[i].getType(), extraTypes)).append(";\n");
             }
-            sb.append("\n) {}\n");
+            sb.append("}\n");
         } else {
-            sb.append("public class ").append(type.getSimpleName()).append(" {\n");
+            sb.append("interface ").append(type.getSimpleName()).append(" {\n");
             for (Field f : type.getDeclaredFields()) {
                 if (Modifier.isPublic(f.getModifiers())) {
-                    sb.append("    public ").append(f.getType().getSimpleName()).append(" ").append(f.getName()).append(";\n");
+                    sb.append("    ").append(f.getName()).append(": ")
+                      .append(getTypeName(f.getType(), extraTypes)).append(";\n");
+                }
+            }
+            for (Method m : type.getDeclaredMethods()) {
+                if (Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers())) {
+                    String name = m.getName();
+                    if (m.getParameterCount() == 0 && m.getReturnType() != void.class) {
+                        String propName = null;
+                        if (name.startsWith("get") && name.length() > 3) {
+                            propName = Character.toLowerCase(name.charAt(3)) + name.substring(4);
+                        } else if (name.startsWith("is") && name.length() > 2 && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
+                            propName = Character.toLowerCase(name.charAt(2)) + name.substring(3);
+                        } else if (name.startsWith("has") && name.length() > 3 && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
+                            propName = Character.toLowerCase(name.charAt(3)) + name.substring(4);
+                        }
+                        if (propName != null) {
+                            sb.append("    ").append(propName).append(": ")
+                              .append(getTypeName(m.getReturnType(), extraTypes)).append(";\n");
+                        }
+                    }
                 }
             }
             sb.append("}\n");

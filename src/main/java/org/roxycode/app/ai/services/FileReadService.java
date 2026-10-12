@@ -28,13 +28,15 @@ public class FileReadService {
         this.projectService = projectService;
     }
 
-    @AgentDoc("Checks if a file or directory exists at the given path relative to the project root.")
+    @AgentDoc(value = "Checks if a file or directory exists at the given path relative to the project root.",
+              examples = "fileReadService.fileExists('src/main/java/Main.java')")
     public boolean fileExists(String relativePath) {
         Path path = resolvePath(relativePath);
         return Files.exists(path);
     }
 
-    @AgentDoc("Reads the content of a file at the given path relative to the project root.")
+    @AgentDoc(value = "Reads the content of a file at the given path relative to the project root.",
+              examples = "fileReadService.readFile('pom.xml')")
     public String readFile(String relativePath) {
         Path path = resolvePath(relativePath);
         if (!Files.isRegularFile(path)) {
@@ -48,7 +50,14 @@ public class FileReadService {
         }
     }
 
-    @AgentDoc("Lists the contents of a directory at the given path relative to the project root.")
+    @AgentDoc(value = "Lists the contents of the project root directory.",
+              examples = "fileReadService.listDirectory()")
+    public List<String> listDirectory() {
+        return listDirectory(".");
+    }
+
+    @AgentDoc(value = "Lists the contents of a directory at the given path relative to the project root.",
+              examples = "fileReadService.listDirectory('src')")
     public List<String> listDirectory(String relativePath) {
         Path path = resolvePath(relativePath);
         if (!Files.isDirectory(path)) {

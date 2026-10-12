@@ -66,7 +66,7 @@ class GenericBuildToolServiceTest {
         Files.writeString(tempDir.resolve(".roxycode/build.toml"), "[test]\nrun_single = \"echo {testName}\"");
         
         BuildResult result = buildToolService.runSingleTest("MyTest");
-        assertTrue(result.log().contains("MyTest"));
+        assertTrue(result.getLog().contains("MyTest"));
     }
     
     @Test
@@ -77,8 +77,8 @@ class GenericBuildToolServiceTest {
             "[parse]\nerror_regex = '(?m)^\\[ERROR\\] (.*)$'");
             
         BuildResult result = buildToolService.compile();
-        assertEquals(1, result.errors().size());
-        assertEquals("Compilation failed", result.errors().get(0));
+        assertEquals(1, result.getErrors().size());
+        assertEquals("Compilation failed", result.getErrors().get(0));
     }
     @Test
     void testEnvironmentVariables() throws IOException {
@@ -90,7 +90,7 @@ class GenericBuildToolServiceTest {
             "TEST_VAR = \"hello-env\"");
         
         BuildResult result = buildToolService.compile();
-        assertTrue(result.success());
+        assertTrue(result.isSuccess());
     }
 
 }

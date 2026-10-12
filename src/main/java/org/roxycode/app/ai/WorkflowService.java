@@ -1,6 +1,6 @@
 package org.roxycode.app.ai;
 
-import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Lazy;
 @Service
 public class WorkflowService {
 
-    private final PlanManagerService planManager;
+    private final PlanService planManager;
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
     private WorkflowPhase currentPhase = WorkflowPhase.PLAN;
@@ -32,7 +32,7 @@ public class WorkflowService {
         void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason);
     }
 
-    public WorkflowService(@Lazy PlanManagerService planManager, EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
+    public WorkflowService(@Lazy PlanService planManager, EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
         this.planManager = planManager;
         this.environmentService = environmentService;
         this.eventPublisher = eventPublisher;

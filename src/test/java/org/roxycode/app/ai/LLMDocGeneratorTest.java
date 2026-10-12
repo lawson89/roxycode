@@ -14,10 +14,30 @@ class LLMDocGeneratorTest {
         String doc = generator.generateDoc(List.of(service));
         
         assertTrue(doc.contains("### JEXL API Documentation"));
+        assertTrue(doc.contains("```typescript"));
         assertTrue(doc.contains("// Global variable exposed in JEXL: mockService"));
-        assertTrue(doc.contains("public class MockAgentService"));
-        assertTrue(doc.contains("doSomething"));
+        assertTrue(doc.contains("interface MockAgentService"));
+        assertTrue(doc.contains("doSomething(input: string): string;"));
         assertTrue(doc.contains("This is a mock service"));
+    }
+
+    @Test
+    void testSupportingTypes() {
+        LLMDocGenerator generator = new LLMDocGenerator();
+        ServiceWithTypes service = new ServiceWithTypes();
+        
+        String doc = generator.generateDoc(List.of(service));
+        
+        assertTrue(doc.contains("interface ServiceWithTypes"));
+        assertTrue(doc.contains("getDetails(): Details;"));
+        assertTrue(doc.contains("getStatus(): Status;"));
+        
+        assertTrue(doc.contains("enum Status {"));
+        assertTrue(doc.contains("ACTIVE, INACTIVE"));
+        
+        assertTrue(doc.contains("interface Details {"));
+        assertTrue(doc.contains("id: number;"));
+        assertTrue(doc.contains("name: string;"));
     }
 
     @AgentService("mockService")
@@ -28,4 +48,15 @@ class LLMDocGeneratorTest {
             return input;
         }
     }
+
+    @AgentService("typedService")
+    public static class ServiceWithTypes {
+        @AgentDoc("Get details")
+        public Details getDetails() { return null; }
+        @AgentDoc("Get status")
+        public Status getStatus() { return null; }
+    }
+
+    public enum Status { ACTIVE, INACTIVE }
+    public record Details(int id, String name) {}
 }

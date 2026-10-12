@@ -3,7 +3,7 @@ package org.roxycode.app.ui;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.ai.services.PlanService;
 
 import org.roxycode.app.model.ImplementationPlan;
 import com.formdev.flatlaf.FlatClientProperties;
@@ -21,10 +21,10 @@ public class PhaseStepPanel extends JPanel {
 
     private JPanel progressTracker;
     private final WorkflowService workflowService;
-    private final PlanManagerService planManagerService;
+    private final PlanService planManagerService;
     private JLabel planLabel;
 
-    public PhaseStepPanel(WorkflowService workflowService, PlanManagerService planManagerService) {
+    public PhaseStepPanel(WorkflowService workflowService, PlanService planManagerService) {
         this.planManagerService = planManagerService;
         this.workflowService = workflowService;
         setLayout(new MigLayout("insets 0, gapx 10", "[]", "center"));

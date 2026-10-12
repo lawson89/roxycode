@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 class WorkflowServiceTest {
 
     @Mock
-    private PlanManagerService planManager;
+    private PlanService planManager;
     @Mock
     private EnvironmentService envService;
     @Mock

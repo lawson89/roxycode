@@ -1,6 +1,6 @@
 package org.roxycode.app.ui;
 
-import org.roxycode.app.ai.services.PlanManagerService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.model.ImplementationPlan;
@@ -13,11 +13,11 @@ import java.awt.*;
  */
 public class PlanPanel extends JPanel {
 
-    private final PlanManagerService planManagerService;
+    private final PlanService planManagerService;
     private final WorkflowService workflowService;
     private final JEditorPane displayArea;
 
-    public PlanPanel(PlanManagerService planManagerService, WorkflowService workflowService) {
+    public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {
         this.planManagerService = planManagerService;
         this.workflowService = workflowService;
         this.setLayout(new BorderLayout());
