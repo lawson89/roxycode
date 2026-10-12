@@ -12,12 +12,16 @@ public record ImplementationPlan(
     boolean userApproved,
     String approvalTimestamp,
     String approvedBy,
-    String completedOn
+    String completedOn,
+    List<String> codeReviewLog,
+    List<String> handoffLog
 ) {
     public record TechStep(String description, boolean completed) {}
 
     public ImplementationPlan {
         requirements = requirements != null ? List.copyOf(requirements) : List.of();
         technicalSteps = technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
+        codeReviewLog = codeReviewLog != null ? List.copyOf(codeReviewLog) : List.of();
+        handoffLog = handoffLog != null ? List.copyOf(handoffLog) : List.of();
     }
 }

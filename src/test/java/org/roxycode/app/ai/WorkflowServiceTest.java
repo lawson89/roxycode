@@ -33,7 +33,7 @@ class WorkflowServiceTest {
     void testPhaseManagement() {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), false, null, null, null));
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), false, null, null, null, null, null));
         
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("CODE", "Reason"));
         assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
@@ -48,7 +48,7 @@ class WorkflowServiceTest {
     @Test
     void testCodeCompletionAndClear() {
         // Setup in CODE phase
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), true, "t1", "u1", null));
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), true, "t1", "u1", null, null, null));
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("CODE", "Reason"));
         when(envService.getCurrentUser()).thenReturn("u1");
         service.approveTransition();
@@ -56,7 +56,7 @@ class WorkflowServiceTest {
 
         // Request transition back to PLAN (Completion)
         ImplementationPlan completedPlan = new ImplementationPlan("T", "G", List.of(), 
-            List.of(new ImplementationPlan.TechStep("S1", true)), true, "t1", "u1", null);
+            List.of(new ImplementationPlan.TechStep("S1", true)), true, "t1", "u1", null, null, null);
         when(planManager.getCurrentPlan()).thenReturn(completedPlan);
         
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Done"));
@@ -70,14 +70,14 @@ class WorkflowServiceTest {
     @Test
     void testBlockedTransitionNoClear() {
         // Setup in CODE phase
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), true, "t1", "u1", null));
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), true, "t1", "u1", null, null, null));
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("CODE", "Reason"));
         when(envService.getCurrentUser()).thenReturn("u1");
         service.approveTransition();
 
         // Request transition back to PLAN (Blocked)
         ImplementationPlan incompletePlan = new ImplementationPlan("T", "G", List.of(), 
-            List.of(new ImplementationPlan.TechStep("S1", false)), true, "t1", "u1", null);
+            List.of(new ImplementationPlan.TechStep("S1", false)), true, "t1", "u1", null, null, null);
         when(planManager.getCurrentPlan()).thenReturn(incompletePlan);
         
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Blocked by bug"));

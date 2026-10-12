@@ -79,7 +79,9 @@ public class PlanManagerService {
             plan.userApproved(),
             plan.approvalTimestamp(),
             plan.approvedBy(),
-            plan.completedOn()
+            plan.completedOn(),
+            plan.codeReviewLog(),
+            plan.handoffLog()
         );
         notifyListeners();
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
@@ -101,7 +103,7 @@ public class PlanManagerService {
                 .map(s -> new ImplementationPlan.TechStep(s, false))
                 .collect(Collectors.toList());
                 
-        return submitPlan(new ImplementationPlan(title, goal, rawRequirements, steps, false, null, null, null));
+        return submitPlan(new ImplementationPlan(title, goal, rawRequirements, steps, false, null, null, null, null, null));
     }
 
     /**
@@ -120,7 +122,7 @@ public class PlanManagerService {
                 .map(s -> new ImplementationPlan.TechStep(s, false))
                 .collect(Collectors.toList());
                 
-        return submitPlan(new ImplementationPlan(title, goal, requirements, steps, false, null, null, null));
+        return submitPlan(new ImplementationPlan(title, goal, requirements, steps, false, null, null, null, null, null));
     }
 
     /**
@@ -137,7 +139,9 @@ public class PlanManagerService {
             true,
             timestamp,
             user,
-            currentPlan.completedOn()
+            currentPlan.completedOn(),
+            currentPlan.codeReviewLog(),
+            currentPlan.handoffLog()
         );
         notifyListeners();
     }
@@ -156,7 +160,9 @@ public class PlanManagerService {
             currentPlan.userApproved(),
             currentPlan.approvalTimestamp(),
             currentPlan.approvedBy(),
-            timestamp
+            timestamp,
+            currentPlan.codeReviewLog(),
+            currentPlan.handoffLog()
         );
         notifyListeners();
     }
@@ -192,7 +198,9 @@ public class PlanManagerService {
             currentPlan.userApproved(),
             currentPlan.approvalTimestamp(),
             currentPlan.approvedBy(),
-            currentPlan.completedOn()
+            currentPlan.completedOn(),
+            currentPlan.codeReviewLog(),
+            currentPlan.handoffLog()
         );
         notifyListeners();
     }

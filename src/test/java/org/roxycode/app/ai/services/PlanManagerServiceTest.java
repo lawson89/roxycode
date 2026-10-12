@@ -19,7 +19,7 @@ class PlanManagerServiceTest {
         service.addListener((plan) -> notifications.incrementAndGet());
         
         ImplementationPlan plan = new ImplementationPlan("Title", "Goal", List.of("Req 1"), 
-            List.of(new ImplementationPlan.TechStep("Step 1", false)), false, null, null, null);
+            List.of(new ImplementationPlan.TechStep("Step 1", false)), false, null, null, null, null, null);
         String res = service.submitPlan(plan);
         
         assertEquals("Implementation plan submitted successfully with mandatory verification checklist items.", res);
