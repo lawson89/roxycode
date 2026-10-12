@@ -30,6 +30,34 @@ class PromptServiceTest {
         assertTrue(prompt.contains("RoxyCode Workflow Protocol"));
     }
 
+    /**
+     * Verifies that the core workflow prompt documents RoxyCode's 4 phases and actual services,
+     * while excluding references to external orchestrator APIs.
+     */
+    @Test
+    void testCoreWorkflowPromptReflectsRoxyCodePhasesAndServices() {
+        String prompt = promptService.loadCoreWorkflowPrompt();
+        assertNotNull(prompt);
+        assertTrue(prompt.contains("EXPLORE (Technical Mentor)"));
+        assertTrue(prompt.contains("PLAN (Lead Architect)"));
+        assertTrue(prompt.contains("CODE (Senior Developer)"));
+        assertTrue(prompt.contains("REVIEW (Code Reviewer)"));
+        assertTrue(prompt.contains("requestDevelopment"));
+        assertTrue(prompt.contains("requestReview"));
+        assertTrue(prompt.contains("requestFixes"));
+        assertTrue(prompt.contains("requestCompletion"));
+        assertTrue(prompt.contains("buildToolService"));
+        assertTrue(prompt.contains("fileEditorService"));
+        assertTrue(prompt.contains("fileReadService"));
+        assertTrue(prompt.contains("grepService"));
+        assertTrue(prompt.contains("gitService"));
+        assertTrue(prompt.contains("planService"));
+        assertFalse(prompt.contains("textEditorService"));
+        assertFalse(prompt.contains("createPlan("));
+        assertFalse(prompt.contains("completeStep("));
+        assertFalse(prompt.contains("validateReadyForApproval"));
+    }
+
     @Test
     void testLoadAllPrompts() {
         String allPrompts = promptService.loadAllPrompts();
