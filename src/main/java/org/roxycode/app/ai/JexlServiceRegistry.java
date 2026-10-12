@@ -2,6 +2,7 @@ package org.roxycode.app.ai;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import org.roxycode.app.ai.services.FileEditorService;
 
 /**
  * Registry for JEXL-exposed services.
@@ -26,11 +27,21 @@ public class JexlServiceRegistry {
     public Map<String, Object> getServices(WorkflowPhase phase) {
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : services.entrySet()) {
-            AgentService ann = entry.getValue().getClass().getAnnotation(AgentService.class);
+            Object service = entry.getValue();
+            Class<?> clazz = service.getClass();
+            AgentService ann = clazz.getAnnotation(AgentService.class);
+            
             if (ann != null) {
+                // Hard gate: FileEditorService (and any other mutation service) is restricted to CODE phase
+                if (service instanceof FileEditorService) {
+                    if (phase != WorkflowPhase.CODE) {
+                        continue;
+                    }
+                }
+
                 String[] phases = ann.phases();
                 if (phases.length == 0) {
-                    filtered.put(entry.getKey(), entry.getValue());
+                    filtered.put(entry.getKey(), service);
                     continue;
                 }
 
@@ -40,7 +51,7 @@ public class JexlServiceRegistry {
                         || phaseList.contains(phase.name());
 
                 if (allowed) {
-                    filtered.put(entry.getKey(), entry.getValue());
+                    filtered.put(entry.getKey(), service);
                 }
             }
         }

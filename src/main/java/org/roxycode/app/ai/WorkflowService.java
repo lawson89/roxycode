@@ -124,7 +124,7 @@ public class WorkflowService {
                 + "**Reason:** " + reason;
 
         // Yield execution turn immediately for user approval
-        String json = String.format("{\\\"summary\\\": \\\"%s\\\", \\\"message\\\": \\\"%s\\\", \\\"reason\\\": \\\"%s\\\"}",
+        String json = String.format("{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
                 StringEscapeUtils.escapeJson(summary),
                 StringEscapeUtils.escapeJson(message),
                 StringEscapeUtils.escapeJson(reason));
@@ -234,21 +234,21 @@ public class WorkflowService {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("PLAN SUMMARY:\\\\n\\\\n### ").append(plan.title().trim()).append("\\\\n");
-        sb.append("**Goal:** ").append(plan.goal().replaceAll("\\\\s+", " ").trim()).append("\\\\n\\\\n");
+        sb.append("PLAN SUMMARY:\\n\\n### ").append(plan.title().trim()).append("\\n");
+        sb.append("**Goal:** ").append(plan.goal().replaceAll("\\s+", " ").trim()).append("\\n\\n");
 
         if (!plan.requirements().isEmpty()) {
-            sb.append("#### Requirements\\\\n");
+            sb.append("#### Requirements\\n");
             for (String req : plan.requirements()) {
-                sb.append("* ").append(req.replaceAll("\\\\s+", " ").trim()).append("\\\\n");
+                sb.append("* ").append(req.replaceAll("\\s+", " ").trim()).append("\\n");
             }
-            sb.append("\\\\n");
+            sb.append("\\n");
         }
 
         if (!plan.technicalSteps().isEmpty()) {
-            sb.append("#### Technical Steps\\\\n");
+            sb.append("#### Technical Steps\\n");
             for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                sb.append(step.completed() ? "* [x] " : "* [ ] ").append(step.description().replaceAll("\\\\s+", " ").trim()).append("\\\\n");
+                sb.append(step.completed() ? "* [x] " : "* [ ] ").append(step.description().replaceAll("\\s+", " ").trim()).append("\\n");
             }
         }
         return sb.toString();

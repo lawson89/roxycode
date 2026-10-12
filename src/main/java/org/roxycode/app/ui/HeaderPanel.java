@@ -38,6 +38,7 @@ public class HeaderPanel extends JPanel {
     private final JPanel progressTracker;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
 
+    private final JToggleButton exploreModeBtn;
     private final JToggleButton planModeBtn;
 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService, 
@@ -85,15 +86,22 @@ public class HeaderPanel extends JPanel {
         planLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
         workflowPanel.add(planLabel, "center, wrap, hidemode 3");
 
-                planModeBtn = new JToggleButton(WorkflowPhase.PLAN.getDisplayName(), FontIcon.of(WorkflowPhase.PLAN.getIcon(), 14));
+        exploreModeBtn = new JToggleButton(WorkflowPhase.EXPLORE.getDisplayName(), FontIcon.of(WorkflowPhase.EXPLORE.getIcon(), 14));
+        planModeBtn = new JToggleButton("Change", FontIcon.of(WorkflowPhase.PLAN.getIcon(), 14));
 
+        exploreModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
         planModeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, "segmentedCapsule");
-        planModeBtn.putClientProperty(FlatClientProperties.STYLE, "selectedBackground: $Component.accentColor; selectedForeground: $Component.accentForeground");
+        
+        ButtonGroup group = new ButtonGroup();
+        group.add(exploreModeBtn);
+        group.add(planModeBtn);
 
         JPanel togglePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         togglePanel.setOpaque(false);
+        togglePanel.add(exploreModeBtn);
         togglePanel.add(planModeBtn);
 
+        exploreModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowPhase.EXPLORE));
         planModeBtn.addActionListener(e -> workflowService.switchMode(WorkflowPhase.PLAN));
 
         workflowPanel.add(togglePanel, "center, wrap");
@@ -156,7 +164,13 @@ public class HeaderPanel extends JPanel {
             planLabel.setVisible(false);
         }
 
-        planModeBtn.setSelected(currentPhase == WorkflowPhase.PLAN);
+        exploreModeBtn.setSelected(currentPhase == WorkflowPhase.EXPLORE);
+        planModeBtn.setSelected(currentPhase == WorkflowPhase.PLAN || currentPhase == WorkflowPhase.CODE);
+        
+        // Buttons enabled only if current phase is EXPLORE or PLAN
+        exploreModeBtn.setEnabled(true);
+        planModeBtn.setEnabled(true);
+
         progressTracker.setVisible(currentPhase != WorkflowPhase.EXPLORE);
 
         progressTracker.removeAll();

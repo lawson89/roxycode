@@ -1,7 +1,9 @@
 package org.roxycode.app.ai;
 
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.FileEditorService;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class JexlServiceRegistryTest {
 
@@ -26,5 +28,19 @@ class JexlServiceRegistryTest {
         assertNotSame(doc1, doc3);
         assertFalse(doc3.contains("service1"));
         assertTrue(doc3.contains("service2"));
+    }
+
+    @Test
+    void testFileEditorServiceFiltering() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        FileEditorService editor = mock(FileEditorService.class);
+        registry.register(editor);
+
+        // Note: FileEditorService has @AgentService("textEditorService")
+        // It should be available in CODE but not in PLAN/EXPLORE
+
+        assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(editor));
+        assertFalse(registry.getServices(WorkflowPhase.PLAN).containsValue(editor));
+        assertFalse(registry.getServices(WorkflowPhase.EXPLORE).containsValue(editor));
     }
 }

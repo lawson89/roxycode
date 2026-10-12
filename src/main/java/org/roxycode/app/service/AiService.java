@@ -9,7 +9,7 @@ import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ai.services.ExploreManager;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.AgentRole;
+
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.springframework.ai.chat.client.ChatClient;
@@ -143,8 +143,7 @@ public class AiService {
         systemPrompt.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage()).append("\n");
         systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
 
-        AgentRole role = currentPhase.getRole();
-        String persona = String.format("You are the %s. %s", role.getTitle(), role.getDescription());
+        String persona = String.format("You are the %s. %s", currentPhase.getPersonaTitle(), currentPhase.getDescription());
         systemPrompt.append(persona).append("\n\n");
         systemPrompt.append("You have access to the following JEXL tools:\n").append(jexlServiceRegistry.getDocumentation(currentPhase));
         

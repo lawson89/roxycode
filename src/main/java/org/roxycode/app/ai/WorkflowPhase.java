@@ -4,29 +4,35 @@ import org.kordamp.ikonli.codicons.Codicons;
 
 @AgentDoc("Defines the current phase of the development workflow.")
 public enum WorkflowPhase {
-    EXPLORE("Explore", Codicons.SEARCH, AgentRole.TECHNICAL_MENTOR),
-    PLAN("Plan", Codicons.LIST_ORDERED, AgentRole.LEAD_ARCHITECT),
-    CODE("Code", Codicons.CODE, AgentRole.SENIOR_DEVELOPER);
+    EXPLORE("Explore", "Technical Mentor", Codicons.SEARCH, "Your focus is codebase discovery and context gathering."),
+    PLAN("Plan", "Lead Architect", Codicons.LIST_ORDERED, "Your focus is architectural specification and technical planning."),
+    CODE("Code", "Senior Developer", Codicons.CODE, "Your focus is high-quality implementation and testing.");
 
     private final String displayName;
+    private final String personaTitle;
     private final Codicons icon;
-    private final AgentRole role;
+    private final String description;
 
-    WorkflowPhase(String displayName, Codicons icon, AgentRole role) {
+    WorkflowPhase(String displayName, String personaTitle, Codicons icon, String description) {
         this.displayName = displayName;
+        this.personaTitle = personaTitle;
         this.icon = icon;
-        this.role = role;
+        this.description = description;
     }
 
     public String getDisplayName() {
         return displayName;
     }
 
+    public String getPersonaTitle() {
+        return personaTitle;
+    }
+
     public Codicons getIcon() {
         return icon;
     }
 
-    public AgentRole getRole() {
-        return role;
+    public String getDescription() {
+        return description;
     }
 }
