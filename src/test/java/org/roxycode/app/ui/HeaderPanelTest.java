@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.service.ProjectService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.ai.services.GitService;
@@ -37,7 +38,7 @@ class HeaderPanelTest {
     }
 
     private WorkflowService createWorkflowService() {
-        return new WorkflowService(mock(PlanManagerService.class), mock(EnvironmentService.class));
+        return new WorkflowService(mock(PlanManagerService.class), mock(EnvironmentService.class), mock(ApplicationEventPublisher.class));
     }
 
     @Test

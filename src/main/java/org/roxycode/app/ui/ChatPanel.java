@@ -13,6 +13,7 @@ import org.roxycode.app.ai.WorkflowService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.AgentTurnEvent;
+import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.ui.ThoughtPanel;
 import org.roxycode.app.ui.JexlToHtmlConverter;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -79,6 +80,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         attachmentPanel.setVisible(false);
 
         turnEventBridge.addTurnListener(this::onAgentTurn);
+        turnEventBridge.addAutonomousTransitionListener(this::onAutonomousTransition);
         turnEventBridge.addCompleteListener(event -> setLoading(false));
 
         setLayout(new BorderLayout());
@@ -222,6 +224,14 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
                     undoManager.redo();
                 }
             }
+        });
+    }
+
+    
+    private void onAutonomousTransition(AutonomousTransitionEvent event) {
+        SwingUtilities.invokeLater(() -> {
+            outputArea.appendMessage("system", "Autonomous transition detected: **" + event.from() + " → " + event.to() + "**. Reason: " + event.reason());
+            triggerTurn("Phase changed to " + event.to() + ". Please proceed with the tasks in the new phase.");
         });
     }
 

@@ -13,6 +13,7 @@ public class TurnEventBridge {
     private final List<Consumer<AgentTurnEvent>> turnListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<AgentTurnCompleteEvent>> completeListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<UserMessageEvent>> userMessageListeners = new CopyOnWriteArrayList<>();
+    private final List<Consumer<AutonomousTransitionEvent>> autonomousTransitionListeners = new CopyOnWriteArrayList<>();
 
     public TurnEventBridge(ApplicationEventPublisher publisher) {
         this.publisher = publisher;
@@ -21,6 +22,7 @@ public class TurnEventBridge {
     public void addTurnListener(Consumer<AgentTurnEvent> listener) { turnListeners.add(listener); }
     public void addCompleteListener(Consumer<AgentTurnCompleteEvent> listener) { completeListeners.add(listener); }
     public void addUserMessageListener(Consumer<UserMessageEvent> listener) { userMessageListeners.add(listener); }
+    public void addAutonomousTransitionListener(Consumer<AutonomousTransitionEvent> listener) { autonomousTransitionListeners.add(listener); }
 
     public void publishUserMessage(String user, String message) {
         publisher.publishEvent(new UserMessageEvent(user, message));
@@ -39,5 +41,10 @@ public class TurnEventBridge {
     @EventListener
     public void handleUserMessage(UserMessageEvent event) {
         userMessageListeners.forEach(l -> l.accept(event));
+    }
+
+    @EventListener
+    public void handleAutonomousTransition(AutonomousTransitionEvent event) {
+        autonomousTransitionListeners.forEach(l -> l.accept(event));
     }
 }

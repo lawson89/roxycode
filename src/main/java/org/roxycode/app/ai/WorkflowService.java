@@ -2,6 +2,8 @@ package org.roxycode.app.ai;
 
 import org.roxycode.app.ai.services.PlanManagerService;
 import org.roxycode.app.service.EnvironmentService;
+import org.roxycode.app.events.AutonomousTransitionEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
@@ -16,6 +18,7 @@ public class WorkflowService {
 
     private final PlanManagerService planManager;
     private final EnvironmentService environmentService;
+    private final ApplicationEventPublisher eventPublisher;
     private WorkflowPhase currentPhase = WorkflowPhase.PLAN;
     private final Set<WorkflowPhase> visitedPhases = new HashSet<>(Collections.singletonList(WorkflowPhase.PLAN));
     private WorkflowPhase pendingPhase;
@@ -28,9 +31,10 @@ public class WorkflowService {
         void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason);
     }
 
-    public WorkflowService(PlanManagerService planManager, EnvironmentService environmentService) {
+    public WorkflowService(PlanManagerService planManager, EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
         this.planManager = planManager;
         this.environmentService = environmentService;
+        this.eventPublisher = eventPublisher;
         this.planManager.addListener(this::handlePlanUpdate);
     }
 
@@ -64,7 +68,7 @@ public class WorkflowService {
 
     @AgentDoc("Requests a single-step transition to an adjacent phase with a descriptive reason.")
     public String routeToPhase(
-            @AgentDoc("The target phase: EXPLORE, PLAN, or CODE.") String phaseName,
+            @AgentDoc("The target phase: EXPLORE, PLAN, CODE, or REVIEW.") String phaseName,
             @AgentDoc("The detailed reason for requesting this transition.") String reason) {
 
         WorkflowPhase nextPhase;
@@ -76,7 +80,7 @@ public class WorkflowService {
         try {
             nextPhase = WorkflowPhase.valueOf(normalizedName);
         } catch (IllegalArgumentException e) {
-            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLAN, CODE.";
+            return "Error: Invalid phase name: " + phaseName + ". Valid phases are: EXPLORE, PLAN, CODE, REVIEW.";
         }
 
         if (nextPhase == currentPhase) {
@@ -100,18 +104,20 @@ public class WorkflowService {
             }
         }
 
-        if (currentPhase == WorkflowPhase.CODE && (nextPhase == WorkflowPhase.PLAN || nextPhase == WorkflowPhase.EXPLORE)) {
-            org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
-            if (plan != null) {
-                boolean allDone = plan.technicalSteps().stream().allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);
-                if (!allDone) {
-                    String lowReason = reason.toLowerCase();
-                    boolean isBlocker = lowReason.contains("block") || lowReason.contains("revise") || lowReason.contains("issue") || lowReason.contains("fix") || lowReason.contains("problem");
-                    if (!isBlocker) {
-                        return "Error: Cannot complete phase. Some technical steps are incomplete. If you are blocked, please clarify in the reason.";
-                    }
-                }
-            }
+        // Autonomous transition logic
+        if (isAutonomous(currentPhase, nextPhase)) {
+            WorkflowPhase oldPhase = currentPhase;
+            String timestamp = java.time.OffsetDateTime.now().toString();
+            String logEntry = String.format("[%s] %s -> %s: %s", timestamp, oldPhase, nextPhase, reason);
+            planManager.addHandoffLogEntry(logEntry);
+            
+            this.currentPhase = nextPhase;
+            this.visitedPhases.add(nextPhase);
+            notifyPhaseListeners();
+            
+            eventPublisher.publishEvent(new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
+            
+            return String.format("Autonomous transition from %s to %s successful. Reason: %s", oldPhase, nextPhase, reason);
         }
 
         // Set pending state and notify listeners
@@ -120,7 +126,7 @@ public class WorkflowService {
         notifyRequestListeners();
 
         String summary = formatPlanSummary(planManager.getCurrentPlan());
-        String message = "**Transition Request (" + currentPhase.getDisplayName() + " → " + nextPhase.getDisplayName() + ")**\\n\\n"
+        String message = "**Transition Request (" + currentPhase.getDisplayName() + " → " + nextPhase.getDisplayName() + ")**\n\n"
                 + "**Reason:** " + reason;
 
         // Yield execution turn immediately for user approval
@@ -139,10 +145,19 @@ public class WorkflowService {
             case PLAN:
                 return next == WorkflowPhase.EXPLORE || next == WorkflowPhase.CODE;
             case CODE:
-                return next == WorkflowPhase.PLAN || next == WorkflowPhase.EXPLORE;
+                return next == WorkflowPhase.REVIEW || next == WorkflowPhase.PLAN || next == WorkflowPhase.EXPLORE;
+            case REVIEW:
+                return next == WorkflowPhase.CODE;
             default:
                 return false;
         }
+    }
+
+    private boolean isAutonomous(WorkflowPhase from, WorkflowPhase to) {
+        if (from == WorkflowPhase.CODE && to == WorkflowPhase.REVIEW) return true;
+        if (from == WorkflowPhase.CODE && to == WorkflowPhase.PLAN) return true;
+        if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.CODE) return true;
+        return false;
     }
 
     public WorkflowPhase getCurrentPhase() {
@@ -161,6 +176,9 @@ public class WorkflowService {
         if (pendingPhase != null) {
             String timestamp = java.time.OffsetDateTime.now().toString();
             String user = environmentService.getCurrentUser();
+            
+            String logEntry = String.format("[%s] %s -> %s (User Approved): %s", timestamp, currentPhase, pendingPhase, pendingReason);
+            planManager.addHandoffLogEntry(logEntry);
 
             // Plan Approval Metadata
             if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE) {
@@ -235,12 +253,12 @@ public class WorkflowService {
         }
         StringBuilder sb = new StringBuilder();
         sb.append("PLAN SUMMARY:\\n\\n### ").append(plan.title().trim()).append("\\n");
-        sb.append("**Goal:** ").append(plan.goal().replaceAll("\\s+", " ").trim()).append("\\n\\n");
+        sb.append("**Goal:** ").append(plan.goal().replaceAll("\\\\s+", " ").trim()).append("\\n\\n");
 
         if (!plan.requirements().isEmpty()) {
             sb.append("#### Requirements\\n");
             for (String req : plan.requirements()) {
-                sb.append("* ").append(req.replaceAll("\\s+", " ").trim()).append("\\n");
+                sb.append("* ").append(req.replaceAll("\\\\s+", " ").trim()).append("\\n");
             }
             sb.append("\\n");
         }
@@ -248,7 +266,7 @@ public class WorkflowService {
         if (!plan.technicalSteps().isEmpty()) {
             sb.append("#### Technical Steps\\n");
             for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                sb.append(step.completed() ? "* [x] " : "* [ ] ").append(step.description().replaceAll("\\s+", " ").trim()).append("\\n");
+                sb.append(step.completed() ? "* [x] " : "* [ ] ").append(step.description().replaceAll("\\\\s+", " ").trim()).append("\\n");
             }
         }
         return sb.toString();

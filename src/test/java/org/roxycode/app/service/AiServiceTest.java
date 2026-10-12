@@ -132,6 +132,42 @@ class AiServiceTest {
         verify(requestSpec).options(any());
     }
 
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testChatInjectsReviewPromptInReviewPhase() {
+        settings.setGeminiModel("test-model-123");
+        when(jexlServiceRegistry.getDocumentation(any())).thenReturn("JEXL DOCS");
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
+        when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
+        when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
+        when(promptService.loadAllPrompts()).thenReturn(" ALL PROMPTS");
+        when(promptService.loadAllDocs()).thenReturn(" ALL DOCS");
+        when(promptService.loadProjectContext()).thenReturn("");
+        when(promptService.loadReviewPrompt()).thenReturn("REVIEW PHASE PROMPT");
+        
+        when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP", null));
+        when(gitService.getStatus()).thenReturn("");
+
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
+        
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.content()).thenReturn("Response");
+        
+        aiService.chat("Hello");
+
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).system(systemPromptCaptor.capture());
+        String capturedPrompt = systemPromptCaptor.getValue();
+        
+        assertTrue(capturedPrompt.contains("REVIEW PHASE PROMPT"));
+        assertTrue(capturedPrompt.contains("CURRENT PHASE: REVIEW"));
+    }
+
     @Test
     void testChatHandlesTurnLimitExceeded() {
         when(chatClient.prompt()).thenReturn(requestSpec);

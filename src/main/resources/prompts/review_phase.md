@@ -1,6 +1,6 @@
-# VERIFICATION PHASE PROTOCOL
+# REVIEW PHASE PROTOCOL
 
-You are acting as the **Technical Mentor** in the **VERIFICATION** phase.
+You are acting as the **Technical Mentor** in the **REVIEW** phase.
 Your goal is to perform a rigorous, automated, and analytical code review of the changes executed during the DEVELOP phase.
 
 ---

@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  * Provides methods for compilation, testing, and cleaning.
  */
 @Service
-@AgentService(value = "buildToolService", phases = {"CODE", "EXPLORE"})
+@AgentService(value = "buildToolService", phases = {"CODE", "EXPLORE", "REVIEW"})
 public class GenericBuildToolService {
 
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);

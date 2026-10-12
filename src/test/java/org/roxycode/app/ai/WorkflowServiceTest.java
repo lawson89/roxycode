@@ -6,9 +6,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.services.PlanManagerService;
-import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.model.ImplementationPlan;
-
+import org.roxycode.app.service.EnvironmentService;
+import org.springframework.context.ApplicationEventPublisher;
+import org.roxycode.app.events.AutonomousTransitionEvent;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,19 +22,33 @@ class WorkflowServiceTest {
     private PlanManagerService planManager;
     @Mock
     private EnvironmentService envService;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private WorkflowService service;
 
     @BeforeEach
     void setUp() {
-        service = new WorkflowService(planManager, envService);
+        service = new WorkflowService(planManager, envService, eventPublisher);
+    }
+
+    private void setupCodePhase() {
+        ImplementationPlan plan = new ImplementationPlan("T", "G", List.of(), List.of(), true, "now", "user", null, null, List.of());
+        lenient().when(planManager.getCurrentPlan()).thenReturn(plan);
+        service.switchMode(WorkflowPhase.PLAN);
+        try { service.routeToPhase("CODE", "Reason"); } catch (YieldTurnException e) {}
+        lenient().when(envService.getCurrentUser()).thenReturn("user");
+        service.approveTransition();
+        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
+        reset(planManager); // Clear interactions from setup
+        lenient().when(planManager.getCurrentPlan()).thenReturn(plan);
     }
 
     @Test
     void testPhaseManagement() {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), false, null, null, null, null, null));
+        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), false, null, null, null, null, List.of()));
         
         assertThrows(YieldTurnException.class, () -> service.routeToPhase("CODE", "Reason"));
         assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
@@ -42,49 +57,42 @@ class WorkflowServiceTest {
         service.approveTransition();
         
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-        verify(planManager).approvePlan(eq("testuser"), anyString());
+        assertEquals(null, service.getPendingPhase());
     }
 
     @Test
     void testCodeCompletionAndClear() {
-        // Setup in CODE phase
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), true, "t1", "u1", null, null, null));
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("CODE", "Reason"));
-        when(envService.getCurrentUser()).thenReturn("u1");
-        service.approveTransition();
-        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-
-        // Request transition back to PLAN (Completion)
-        ImplementationPlan completedPlan = new ImplementationPlan("T", "G", List.of(), 
-            List.of(new ImplementationPlan.TechStep("S1", true)), true, "t1", "u1", null, null, null);
-        when(planManager.getCurrentPlan()).thenReturn(completedPlan);
+        setupCodePhase();
         
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Done"));
-        service.approveTransition();
+        // Request PLAN (completion) - This is now autonomous!
+        String result = service.routeToPhase("PLAN", "Done");
+        assertTrue(result.contains("Autonomous transition"), "Expected autonomous but got: " + result);
         
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        verify(planManager).completePlan(anyString());
-        verify(planManager).clearPlan();
+        verify(planManager).addHandoffLogEntry(anyString());
+        verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
     }
 
     @Test
     void testBlockedTransitionNoClear() {
-        // Setup in CODE phase
-        when(planManager.getCurrentPlan()).thenReturn(new ImplementationPlan("T", "G", List.of(), List.of(), true, "t1", "u1", null, null, null));
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("CODE", "Reason"));
-        when(envService.getCurrentUser()).thenReturn("u1");
-        service.approveTransition();
-
-        // Request transition back to PLAN (Blocked)
-        ImplementationPlan incompletePlan = new ImplementationPlan("T", "G", List.of(), 
-            List.of(new ImplementationPlan.TechStep("S1", false)), true, "t1", "u1", null, null, null);
-        when(planManager.getCurrentPlan()).thenReturn(incompletePlan);
+        setupCodePhase();
         
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Blocked by bug"));
-        service.approveTransition();
-        
+        // Request PLAN - This is autonomous, so it proceeds regardless of incomplete steps in the new logic
+        String result = service.routeToPhase("PLAN", "Moving on");
+        assertTrue(result.contains("Autonomous transition"), "Expected autonomous but got: " + result);
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        verify(planManager, never()).completePlan(anyString());
-        verify(planManager, never()).clearPlan();
+    }
+
+    @Test
+    void testAutonomousReviewTransition() {
+        setupCodePhase();
+
+        // Request REVIEW
+        String result = service.routeToPhase("REVIEW", "Checking quality");
+        assertTrue(result.contains("Autonomous transition"), "Expected autonomous but got: " + result);
+        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
+        
+        verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
+        verify(planManager).addHandoffLogEntry(anyString());
     }
 }

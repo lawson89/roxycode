@@ -15,6 +15,7 @@ import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -69,7 +70,10 @@ public class AiService {
         this.exploreManager = exploreManager;
         this.chatClient = chatClientBuilder
                 .defaultTools(jexlTool)
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultAdvisors(
+                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        ToolCallingAdvisor.builder().build()
+                )
                 .build();
     }
 
@@ -134,6 +138,9 @@ public class AiService {
         // Phase-specific prompt injection
         if (currentPhase == WorkflowPhase.EXPLORE) {
             systemPrompt.append("\n\n").append(exploreManager.generateSystemPrompt());
+        }
+        if (currentPhase == WorkflowPhase.REVIEW) {
+            systemPrompt.append("\n\n").append(promptService.loadReviewPrompt());
         }
         
         EditorResult repoMap = repoMapPackerService.generateRepoMap();

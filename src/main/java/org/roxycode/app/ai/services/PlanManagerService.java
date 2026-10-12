@@ -255,9 +255,35 @@ public class PlanManagerService {
         return item.toString();
     }
 
-    private void notifyListeners() {
+        private void notifyListeners() {
         for (PlanUpdateListener listener : listeners) {
             listener.onPlanUpdated(currentPlan);
         }
     }
+
+    /**
+     * Adds an entry to the handoff log.
+     * @param entry the log entry to add
+     */
+    @AgentDoc("Adds an entry to the handoff log.")
+    public void addHandoffLogEntry(String entry) {
+        if (currentPlan == null) return;
+        List<String> logs = new ArrayList<>(currentPlan.handoffLog());
+        logs.add(entry);
+        currentPlan = new ImplementationPlan(
+            currentPlan.title(),
+            currentPlan.goal(),
+            currentPlan.requirements(),
+            currentPlan.technicalSteps(),
+            currentPlan.userApproved(),
+            currentPlan.approvalTimestamp(),
+            currentPlan.approvedBy(),
+            currentPlan.completedOn(),
+            currentPlan.codeReviewLog(),
+            logs
+        );
+        notifyListeners();
+    }
+
+
 }
