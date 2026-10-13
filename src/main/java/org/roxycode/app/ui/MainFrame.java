@@ -9,6 +9,7 @@ import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.service.ProjectAnalysisService;
+import org.roxycode.app.ai.WorkflowPhase;
  
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.EnvironmentService;
@@ -33,7 +34,6 @@ public class MainFrame extends JFrame {
     private final JexlServiceRegistry jexlServiceRegistry;
     private final WorkflowService workflowService;
     private final PlanService planManagerService;
-    private final org.roxycode.app.ai.JexlTool jexlTool;
     private final org.roxycode.app.events.TurnEventBridge turnEventBridge;
     private final org.roxycode.app.ai.services.cache.RepoMapPackerService packerService;
     private final org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
@@ -46,10 +46,10 @@ public class MainFrame extends JFrame {
  
     private GitChangesPanel gitChangesPanel;
  
-        public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService,
+    public MainFrame(SettingsService settingsService, AiService aiService, SystemToolService toolService,
             ProjectService projectService, GitService gitService, EnvironmentService envService,
             JexlServiceRegistry jexlServiceRegistry, WorkflowService workflowService,
-            PlanService planManagerService, org.roxycode.app.ai.JexlTool jexlTool,
+            PlanService planManagerService,
             org.roxycode.app.events.TurnEventBridge turnEventBridge,
             org.roxycode.app.ai.services.cache.RepoMapPackerService packerService,
             org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
@@ -66,7 +66,6 @@ public class MainFrame extends JFrame {
         this.jexlServiceRegistry = jexlServiceRegistry;
         this.workflowService = workflowService;
         this.planManagerService = planManagerService;
-        this.jexlTool = jexlTool;
         this.turnEventBridge = turnEventBridge;
         this.packerService = packerService;
         this.cacheMetaService = cacheMetaService;
@@ -79,7 +78,11 @@ public class MainFrame extends JFrame {
         setupLaf();
         setupWindow();
         initComponents();
-        projectService.addProjectListener(path -> updateTitle());
+        projectService.addProjectListener(path -> {
+            updateTitle();
+            chatMemory.clear("qa:default");
+            chatMemory.clear("task:default");
+        });
     }
  
     private void setupLaf() {
@@ -89,7 +92,7 @@ public class MainFrame extends JFrame {
     private void setupWindow() {
         updateTitle();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1100, 800);
+        setSize(1200, 900);
         setLocationRelativeTo(null);
  
         try {
@@ -115,12 +118,22 @@ public class MainFrame extends JFrame {
  
         StatusPanel statusBar = new StatusPanel(envService, chatMemory);
  
-        // Content Area Panels
+        // QA Workspace (Explore)
+        JTabbedPane qaTabs = new JTabbedPane();
+        qaTabs.addTab("Chat", new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "qa", WorkflowPhase.EXPLORE, false));
+        qaTabs.addTab("History", new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "qa"));
+        
+        // Task Workspace (Plan/Code/Review)
+        JTabbedPane taskTabs = new JTabbedPane();
+        taskTabs.addTab("Chat", new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "task", null, true));
+        taskTabs.addTab("Plan", new PlanPanel(planManagerService, workflowService));
         gitChangesPanel = new GitChangesPanel(gitService);
-        contentArea.add(new ChatPanel(aiService, jexlTool, workflowService, turnEventBridge, chatMemory), "CHAT");
-        contentArea.add(new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService), "HISTORY");
-        contentArea.add(new PlanPanel(planManagerService, workflowService), "PLAN");
-        contentArea.add(gitChangesPanel, "GIT");
+        taskTabs.addTab("Git", gitChangesPanel);
+        taskTabs.addTab("History", new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "task"));
+
+        // Content Area Panels
+        contentArea.add(qaTabs, "QA_VIEW");
+        contentArea.add(taskTabs, "TASK_VIEW");
         contentArea.add(new CodebaseCachePanel(projectService, settingsService, packerService, cacheMetaService, geminiCacheService, promptService, workflowService, jexlServiceRegistry, gitService, projectAnalysisService), "CACHE");
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
         contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
@@ -134,11 +147,14 @@ public class MainFrame extends JFrame {
  
         add(sidebar, "growy");
         add(workspace, "grow");
+        
+        // Default to QA View
+        showCard("QA_VIEW");
     }
  
     private void showCard(String cardName) {
         cardLayout.show(contentArea, cardName);
-        if ("GIT".equals(cardName) && gitChangesPanel != null) {
+        if ("TASK_VIEW".equals(cardName) && gitChangesPanel != null) {
             gitChangesPanel.refresh();
         }
     }

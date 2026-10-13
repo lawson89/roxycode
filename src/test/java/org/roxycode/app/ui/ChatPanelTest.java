@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.events.TurnEventBridge;
@@ -14,22 +13,20 @@ import java.awt.Component;
 
 public class ChatPanelTest {
 
-        @Test
+    @Test
     public void testChatPanelInitialization() {
         AiService aiService = mock(AiService.class);
-        JexlTool jexlTool = mock(JexlTool.class);
         WorkflowService workflowService = mock(WorkflowService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         
-        ChatPanel chatPanel = new ChatPanel(aiService, jexlTool, workflowService, turnEventBridge, chatMemory);
+        ChatPanel chatPanel = new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "test", null, true);
         assertNotNull(chatPanel.getOutputArea(), "Output area should be initialized");
         assertNotNull(chatPanel.getInputArea(), "Input area should be initialized");
         assertTrue(chatPanel.getInputArea() instanceof JTextArea, "Input area should be a JTextArea");
         assertNotNull(chatPanel.getSendButton(), "Send button should be initialized");
         assertNotNull(chatPanel.getStopButton(), "Stop button should be initialized");
         assertEquals("Send", chatPanel.getSendButton().getText());
-        // Note: stopButton might not have text depending on FontIcon usage
         assertFalse(chatPanel.getOutputArea().isEditable(), "Output area should not be editable");
 
         boolean hasSplitPane = false;
@@ -42,15 +39,14 @@ public class ChatPanelTest {
         assertTrue(hasSplitPane, "ChatPanel should contain a JSplitPane");
     }
 
-        @Test
+    @Test
     public void testContextMenuListeners() {
         AiService aiService = mock(AiService.class);
-        JexlTool jexlTool = mock(JexlTool.class);
         WorkflowService workflowService = mock(WorkflowService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         
-        ChatPanel chatPanel = new ChatPanel(aiService, jexlTool, workflowService, turnEventBridge, chatMemory);
+        ChatPanel chatPanel = new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "test", null, true);
         assertTrue(chatPanel.getInputArea().getMouseListeners().length > 0, "Input area should have mouse listeners for context menu");
         assertTrue(chatPanel.getOutputArea().getMouseListeners().length > 0, "Output area should have mouse listeners for context menu");
     }

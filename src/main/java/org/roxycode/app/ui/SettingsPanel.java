@@ -133,8 +133,11 @@ public class SettingsPanel extends JPanel {
         statusTimer.restart();
     }
 
-    public static void applyTheme(String themeName) {
+            public static void applyTheme(String themeName) {
         try {
+            UIManager.put("TabbedPane.tabType", "card");
+            UIManager.put("TabbedPane.showTabSeparators", true);
+
             switch (themeName) {
                 case "FlatLaf Light" -> UIManager.setLookAndFeel(new FlatLightLaf());
                 case "FlatLaf Dark" -> UIManager.setLookAndFeel(new FlatDarkLaf());

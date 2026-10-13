@@ -13,8 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 import org.roxycode.app.ai.WorkflowPhase;
 import static org.mockito.Mockito.*;
-
-import static org.mockito.Mockito.mock;
+import java.util.function.Consumer;
  
 class SidebarPanelTest {
     @TempDir
@@ -42,8 +41,8 @@ class SidebarPanelTest {
         
         Component[] components = sidebar.getComponents();
         
-        // Expected: 1 UserProfile, 3 Headers, 11 NavButtons = 15
-        assertEquals(15, components.length, "Sidebar should have exactly 15 components");
+        // Expected: 1 UserProfile, 3 Headers, 8 NavButtons = 12
+        assertEquals(12, components.length, "Sidebar should have exactly 12 components");
  
         int headerCount = 0;
         int buttonCount = 0;
@@ -56,19 +55,21 @@ class SidebarPanelTest {
         }
  
         assertEquals(1, profileCount, "Should have 1 user profile");
-        assertEquals(3, headerCount, "Should have 3 headers (MAIN, CONTEXT, CONFIG)");
-        assertEquals(11, buttonCount, "Should have 11 navigation buttons");
+        assertEquals(3, headerCount, "Should have 3 headers (WORKSPACES, CONTEXT, CONFIG)");
+        assertEquals(8, buttonCount, "Should have 8 navigation buttons");
     }
-
+ 
     @Test
-    void testPhaseSwitching() {
+    @SuppressWarnings("unchecked")
+    void testSidebarNavigation() {
         SettingsService settingsService = new SettingsService();
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings_phase.toml"));
+        settingsService.setSettingsPathOverride(tempDir.resolve("settings_nav.toml"));
         
         WorkflowService workflowService = mock(WorkflowService.class);
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
+        Consumer<String> navAction = mock(Consumer.class);
         
-        SidebarPanel sidebar = new SidebarPanel(settingsService, workflowService, card -> {});
+        SidebarPanel sidebar = new SidebarPanel(settingsService, workflowService, navAction);
         
         JButton qaBtn = null;
         JButton taskBtn = null;
@@ -83,19 +84,10 @@ class SidebarPanelTest {
         assertNotNull(qaBtn, "QA Button should be found");
         assertNotNull(taskBtn, "Task Button should be found");
         
-        // Click QA Button
         qaBtn.doClick();
-        verify(workflowService, atLeastOnce()).switchMode(WorkflowPhase.EXPLORE);
+        verify(navAction).accept("QA_VIEW");
         
-        // Reset mock to clear previous interactions if needed, or just check specific transition
-        // Click Task Button (while in EXPLORE)
         taskBtn.doClick();
-        verify(workflowService).switchMode(WorkflowPhase.PLAN);
-        
-        // Click Task Button (while NOT in EXPLORE)
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
-        taskBtn.doClick();
-        // verify that switchMode(PLAN) was only called once (the first time)
-        verify(workflowService, times(1)).switchMode(WorkflowPhase.PLAN);
+        verify(navAction).accept("TASK_VIEW");
     }
 }

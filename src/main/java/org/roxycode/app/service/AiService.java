@@ -14,6 +14,7 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
+import org.roxycode.app.events.ToolExecutionEvent;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
@@ -28,11 +29,11 @@ import org.springframework.util.MimeTypeUtils;
 public class AiService {
 
     public String chat(String message) {
-        return chat(message, null, null);
+        return chat("default", workflowService.getCurrentPhase(), message, null, null);
     }
 
     public String chat(String message, List<byte[]> images) {
-        return chat(message, null, images);
+        return chat("default", workflowService.getCurrentPhase(), message, null, images);
     }
 
     private final ChatClient chatClient;
@@ -40,7 +41,6 @@ public class AiService {
     private final PromptService promptService;
     private final JexlServiceRegistry jexlServiceRegistry;
     private final WorkflowService workflowService;
-    private final JexlTool jexlTool;
     private final ChatMemory chatMemory;
     private final ApplicationEventPublisher eventPublisher;
     private final RepoMapPackerService repoMapPackerService;
@@ -49,7 +49,7 @@ public class AiService {
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService,
             PromptService promptService,
-            JexlServiceRegistry jexlServiceRegistry, JexlTool jexlTool,
+            JexlServiceRegistry jexlServiceRegistry,
             WorkflowService workflowService, ChatMemory chatMemory,
             ApplicationEventPublisher eventPublisher,
             RepoMapPackerService repoMapPackerService,
@@ -59,14 +59,12 @@ public class AiService {
         this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
         this.workflowService = workflowService;
-        this.jexlTool = jexlTool;
         this.chatMemory = chatMemory;
         this.eventPublisher = eventPublisher;
         this.repoMapPackerService = repoMapPackerService;
         this.gitService = gitService;
         this.projectAnalysisService = projectAnalysisService;
         this.chatClient = chatClientBuilder
-                .defaultTools(jexlTool)
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         ToolCallingAdvisor.builder().build()
@@ -74,28 +72,28 @@ public class AiService {
                 .build();
     }
 
-    public String chat(String message, String systemPromptText, List<byte[]> images) {
+    public String chat(String conversationId, WorkflowPhase phase, String message, String systemPromptText, List<byte[]> images) {
+        JexlTool ephemeralJexlTool = new JexlTool(jexlServiceRegistry);
         AtomicInteger turnCount = new AtomicInteger(0);
         int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
-        JexlExecutionListener turnListener = event -> {
+        
+        ephemeralJexlTool.addListener(event -> {
             int turn = turnCount.incrementAndGet();
-            eventPublisher.publishEvent(new AgentTurnEvent("Roxy", turn, workflowService.getCurrentPhase().name()));
+            eventPublisher.publishEvent(new AgentTurnEvent(conversationId, "Roxy", turn, phase.name()));
+            eventPublisher.publishEvent(new ToolExecutionEvent(conversationId, event.script(), event.result(), event.success(), event.error()));
             if (turn > maxTurns) {
                 throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED");
             }
-        };
+        });
 
-        jexlTool.addListener(turnListener);
         try {
-            String conversationId = "default";
             String content;
             try {
-                content = buildPrompt(message, systemPromptText, images)
+                content = buildPrompt(phase, message, systemPromptText, images, ephemeralJexlTool)
                         .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                         .call()
                         .content();
 
-                // If the LLM parroted a yield JSON, format it for the user
                 if (content != null && content.trim().startsWith("{") && content.contains("\"message\"")) {
                     try {
                         JsonNode node = new ObjectMapper().readTree(content);
@@ -105,28 +103,28 @@ public class AiService {
                             content = node.get("message").asText();
                         }
                     } catch (Exception e) {
-                        // Not valid JSON or different structure, keep as is
+                        // Not valid JSON
                     }
                 }
             } catch (Exception e) {
                 if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
                     content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
                 } else {
-                    eventPublisher.publishEvent(new AgentTurnCompleteEvent("Roxy", turnCount.get(), "Error: " + e.getMessage()));
+                    eventPublisher.publishEvent(new AgentTurnCompleteEvent(conversationId, "Roxy", turnCount.get(), "Error: " + e.getMessage()));
                     throw e;
                 }
             }
 
-            eventPublisher.publishEvent(new AgentTurnCompleteEvent("Roxy", turnCount.get(), content));
+            eventPublisher.publishEvent(new AgentTurnCompleteEvent(conversationId, "Roxy", turnCount.get(), content));
             return content;
         } finally {
-            jexlTool.removeListener(turnListener);
+            // Ephemeral tool, no cleanup needed
         }
     }
 
-    private ChatClient.ChatClientRequestSpec buildPrompt(String message, String systemPromptText, List<byte[]> images) {
+    private ChatClient.ChatClientRequestSpec buildPrompt(WorkflowPhase phase, String message, String systemPromptText, List<byte[]> images, JexlTool tools) {
         String activeModel = settingsService.getSettings().getGeminiModel();
-        WorkflowPhase currentPhase = workflowService.getCurrentPhase();
+        WorkflowPhase currentPhase = (phase != null) ? phase : workflowService.getCurrentPhase();
 
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
         systemPrompt.append(promptService.loadAllPrompts());
@@ -134,7 +132,6 @@ public class AiService {
         systemPrompt.append(promptService.loadAllDocs());
         systemPrompt.append(promptService.loadProjectContext());
 
-        // Phase-specific prompt injection
         if (currentPhase == WorkflowPhase.EXPLORE) {
             systemPrompt.append("\n\n").append(promptService.generateExploreSystemPrompt());
         }
@@ -170,15 +167,16 @@ public class AiService {
         }
 
         return chatClient.prompt()
+                .tools(tools)
                 .system(systemPrompt.toString())
                 .user(u -> {
                     u.text(message);
                     if (images != null) {
                         for (byte[] img : images) {
-                            u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(img));
+                            u.media(org.springframework.util.MimeTypeUtils.IMAGE_PNG, new org.springframework.core.io.ByteArrayResource(img));
                         }
                     }
                 })
-                .options(GoogleGenAiChatOptions.builder().model(activeModel));
+                .options(org.springframework.ai.google.genai.GoogleGenAiChatOptions.builder().model(activeModel));
     }
 }

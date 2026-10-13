@@ -95,15 +95,16 @@ class WorkflowServiceTest {
     }
 
     @Test
-    void testReviewToExploreFails() {
+    void testExploreDecoupling() {
         setupCodePhase();
-        service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
-        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
-
-        // REVIEW -> EXPLORE should be invalid
-        String result = service.routeToPhase("EXPLORE", "Jump");
-        assertTrue(result.contains("Error: Cannot jump from REVIEW to EXPLORE"));
+        // Any phase to EXPLORE should now yield for approval because it's adjacent but not autonomous
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Jump"));
+        
+        service.resetWorkflow();
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+        assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Let's discover"));
     }
+
     @Test
     void testReviewCompletionAndClear() {
         setupCodePhase();
@@ -127,22 +128,5 @@ class WorkflowServiceTest {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         verify(planManager).completePlan(anyString());
         verify(planManager).clearPlan();
-    }
-
-    @Test
-    void testPlanToExploreFails() {
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        String result = service.routeToPhase("EXPLORE", "Let's discover");
-        assertTrue(result.contains("Error: Cannot jump from PLAN to EXPLORE"));
-    }
-
-
-    @Test
-    void testCodeToExploreInvalid() {
-        setupCodePhase();
-
-        // CODE -> EXPLORE should be invalid
-        String result = service.routeToPhase("EXPLORE", "Jump");
-        assertTrue(result.contains("Error: Cannot jump from CODE to EXPLORE"));
     }
 }

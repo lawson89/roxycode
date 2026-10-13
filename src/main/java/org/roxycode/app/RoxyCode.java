@@ -65,7 +65,6 @@ public class RoxyCode {
             JexlServiceRegistry jexlServiceRegistry = context.getBean(JexlServiceRegistry.class);
             WorkflowService workflowService = context.getBean(WorkflowService.class);
             PlanService planManagerService = context.getBean(PlanService.class);
-            org.roxycode.app.ai.JexlTool jexlTool = context.getBean(org.roxycode.app.ai.JexlTool.class);
             org.roxycode.app.events.TurnEventBridge turnEventBridge = context.getBean(org.roxycode.app.events.TurnEventBridge.class);
             org.roxycode.app.ai.services.cache.RepoMapPackerService packerService = context.getBean(org.roxycode.app.ai.services.cache.RepoMapPackerService.class);
             org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService = context.getBean(org.roxycode.app.ai.services.cache.ProjectCacheMetaService.class);
@@ -77,7 +76,7 @@ public class RoxyCode {
 
             
                         MainFrame frame = new MainFrame(settingsService, aiService, toolService, projectService, gitService, envService, 
-                    jexlServiceRegistry, workflowService, planManagerService, jexlTool, turnEventBridge,
+                    jexlServiceRegistry, workflowService, planManagerService, turnEventBridge,
                     packerService, cacheMetaService, geminiCacheService, promptService, buildToolService, chatMemory, projectAnalysisService);
             frame.setVisible(true);
         });

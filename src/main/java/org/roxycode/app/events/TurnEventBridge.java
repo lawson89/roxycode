@@ -13,19 +13,55 @@ public class TurnEventBridge {
     private final List<Consumer<AgentTurnEvent>> turnListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<AgentTurnCompleteEvent>> completeListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<UserMessageEvent>> userMessageListeners = new CopyOnWriteArrayList<>();
+    private final List<Consumer<ToolExecutionEvent>> toolExecutionListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<AutonomousTransitionEvent>> autonomousTransitionListeners = new CopyOnWriteArrayList<>();
 
     public TurnEventBridge(ApplicationEventPublisher publisher) {
         this.publisher = publisher;
     }
 
-    public void addTurnListener(Consumer<AgentTurnEvent> listener) { turnListeners.add(listener); }
-    public void addCompleteListener(Consumer<AgentTurnCompleteEvent> listener) { completeListeners.add(listener); }
-    public void addUserMessageListener(Consumer<UserMessageEvent> listener) { userMessageListeners.add(listener); }
-    public void addAutonomousTransitionListener(Consumer<AutonomousTransitionEvent> listener) { autonomousTransitionListeners.add(listener); }
+    public void addTurnListener(String conversationId, Consumer<AgentTurnEvent> listener) {
+        turnListeners.add(event -> {
+            if (event.conversationId().equals(conversationId)) {
+                listener.accept(event);
+            }
+        });
+    }
 
-    public void publishUserMessage(String user, String message) {
-        publisher.publishEvent(new UserMessageEvent(user, message));
+    public void addCompleteListener(String conversationId, Consumer<AgentTurnCompleteEvent> listener) {
+        completeListeners.add(event -> {
+            if (event.conversationId().equals(conversationId)) {
+                listener.accept(event);
+            }
+        });
+    }
+
+    public void addUserMessageListener(String conversationId, Consumer<UserMessageEvent> listener) {
+        userMessageListeners.add(event -> {
+            if (event.conversationId().equals(conversationId)) {
+                listener.accept(event);
+            }
+        });
+    }
+
+    public void addToolExecutionListener(String conversationId, Consumer<ToolExecutionEvent> listener) {
+        toolExecutionListeners.add(event -> {
+            if (event.conversationId().equals(conversationId)) {
+                listener.accept(event);
+            }
+        });
+    }
+
+    public void addAutonomousTransitionListener(Consumer<AutonomousTransitionEvent> listener) {
+        autonomousTransitionListeners.add(listener);
+    }
+
+    public void publishUserMessage(String conversationId, String user, String message) {
+        publisher.publishEvent(new UserMessageEvent(conversationId, user, message));
+    }
+
+    public void publishToolExecution(String conversationId, String script, Object result, boolean success, String error) {
+        publisher.publishEvent(new ToolExecutionEvent(conversationId, script, result, success, error));
     }
 
     @EventListener
@@ -41,6 +77,11 @@ public class TurnEventBridge {
     @EventListener
     public void handleUserMessage(UserMessageEvent event) {
         userMessageListeners.forEach(l -> l.accept(event));
+    }
+
+    @EventListener
+    public void handleToolExecution(ToolExecutionEvent event) {
+        toolExecutionListeners.forEach(l -> l.accept(event));
     }
 
     @EventListener

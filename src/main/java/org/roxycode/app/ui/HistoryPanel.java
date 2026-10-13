@@ -1,14 +1,10 @@
 package org.roxycode.app.ui;
 
-import org.roxycode.app.ai.JexlExecutionEvent;
-import org.roxycode.app.ai.JexlExecutionListener;
-import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.AbstractMessage;
 import org.springframework.ai.chat.messages.MessageType;
 
 import javax.swing.*;
@@ -21,16 +17,18 @@ import java.util.List;
 /**
  * Panel for displaying a persistent history of all AI interactions and tool executions.
  */
-public class HistoryPanel extends JPanel implements JexlExecutionListener {
+public class HistoryPanel extends JPanel {
     private final ChatMemory chatMemory;
     private final GeminiCacheService geminiCacheService;
     private final HistoryTableModel tableModel;
     private final JTable table;
     private final JLabel statsLabel;
+    private final String sessionPrefix;
 
-    public HistoryPanel(TurnEventBridge turnEventBridge, JexlTool jexlTool, ChatMemory chatMemory, GeminiCacheService geminiCacheService) {
+    public HistoryPanel(TurnEventBridge turnEventBridge, ChatMemory chatMemory, GeminiCacheService geminiCacheService, String sessionPrefix) {
         this.chatMemory = chatMemory;
         this.geminiCacheService = geminiCacheService;
+        this.sessionPrefix = sessionPrefix;
         this.tableModel = new HistoryTableModel();
         this.table = new JTable(tableModel);
         
@@ -95,7 +93,7 @@ public class HistoryPanel extends JPanel implements JexlExecutionListener {
         table.getColumnModel().getColumn(4).setPreferredWidth(80);
         table.getColumnModel().getColumn(4).setMaxWidth(100);
 
-                add(new JScrollPane(table), BorderLayout.CENTER);
+        add(new JScrollPane(table), BorderLayout.CENTER);
 
         // Event listeners
         addComponentListener(new java.awt.event.ComponentAdapter() {
@@ -104,16 +102,16 @@ public class HistoryPanel extends JPanel implements JexlExecutionListener {
                 refresh();
             }
         });
-        turnEventBridge.addUserMessageListener(event -> refresh());
-        turnEventBridge.addCompleteListener(event -> refresh());
-        jexlTool.addListener(this);
+        turnEventBridge.addUserMessageListener(sessionPrefix + ":default", event -> refresh());
+        turnEventBridge.addCompleteListener(sessionPrefix + ":default", event -> refresh());
+        turnEventBridge.addToolExecutionListener(sessionPrefix + ":default", event -> refresh());
         
         refresh();
     }
 
     public void refresh() {
         SwingUtilities.invokeLater(() -> {
-            List<Message> messages = chatMemory.get("default");
+            List<Message> messages = chatMemory.get(sessionPrefix + ":default");
             if (messages == null) {
                 messages = new ArrayList<>();
             }
@@ -148,10 +146,7 @@ public class HistoryPanel extends JPanel implements JexlExecutionListener {
         dialog.setVisible(true);
     }
 
-    @Override
-    public void onJexlExecuted(JexlExecutionEvent event) {
-        refresh();
-    }
+
 
     private class HistoryTableModel extends AbstractTableModel {
         private final String[] columns = {"#", "Role", "Tokens", "Preview", "Action"};

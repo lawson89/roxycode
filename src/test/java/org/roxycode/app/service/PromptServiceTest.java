@@ -96,6 +96,7 @@ class PromptServiceTest {
         assertNotNull(prompt);
         assertTrue(prompt.contains("ANALYST"));
         assertTrue(prompt.contains("PLANNING"));
+        assertTrue(prompt.contains("Requirements Gathering & Clarification"));
     }
 
     @Test

@@ -24,11 +24,6 @@ public class AiConfig {
     }
 
     @Bean
-    public JexlTool jexlTool(JexlServiceRegistry registry) {
-        return new JexlTool(registry);
-    }
-
-    @Bean
     public JexlServiceRegistry jexlServiceRegistry(ApplicationContext context) {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         Map<String, Object> beans = context.getBeansWithAnnotation(AgentService.class);

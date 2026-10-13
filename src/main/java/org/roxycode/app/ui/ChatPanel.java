@@ -3,9 +3,6 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.text.StringEscapeUtils;
-import org.roxycode.app.ai.JexlExecutionEvent;
-import org.roxycode.app.ai.JexlExecutionListener;
-import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
@@ -39,11 +36,10 @@ import java.awt.event.ActionEvent;
 /**
  * Panel for the chat interface, including output display and user input area.
  */
-public class ChatPanel extends JPanel implements JexlExecutionListener {
+public class ChatPanel extends JPanel {
 
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
     private final AiService aiService;
-    private final JexlTool jexlTool;
     private final WorkflowService workflowService;
     private final TurnEventBridge turnEventBridge;
     private final ChatMemory chatMemory;
@@ -63,36 +59,44 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private final List<BufferedImage> pendingImages = new ArrayList<>();
     private final JPanel attachmentPanel;
 
-    public ChatPanel(AiService aiService, JexlTool jexlTool, 
-                     WorkflowService workflowService, TurnEventBridge turnEventBridge, ChatMemory chatMemory) {
+    private final String sessionPrefix;
+    private final WorkflowPhase lockedPhase;
+    private final boolean isTaskMode;
+
+    public ChatPanel(AiService aiService, 
+                     WorkflowService workflowService, TurnEventBridge turnEventBridge, ChatMemory chatMemory,
+                     String sessionPrefix, WorkflowPhase lockedPhase, boolean isTaskMode) {
         this.aiService = aiService;
-        this.jexlTool = jexlTool;
         this.workflowService = workflowService;
         this.turnEventBridge = turnEventBridge;
         this.chatMemory = chatMemory;
-        this.jexlTool.addListener(this);
+        this.sessionPrefix = sessionPrefix;
+        this.lockedPhase = lockedPhase;
+        this.isTaskMode = isTaskMode;
         
+
         attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         attachmentPanel.setOpaque(false);
         attachmentPanel.setVisible(false);
 
-        turnEventBridge.addTurnListener(this::onAgentTurn);
+        turnEventBridge.addTurnListener(getConversationId(), this::onAgentTurn);
         turnEventBridge.addAutonomousTransitionListener(this::onAutonomousTransition);
-        turnEventBridge.addCompleteListener(event -> setLoading(false));
+        turnEventBridge.addToolExecutionListener(getConversationId(), this::onToolExecution);
+        turnEventBridge.addCompleteListener(getConversationId(), event -> setLoading(false));
 
         setLayout(new BorderLayout());
 
         // Output section
         outputArea = new MarkdownPane();
 
-                        // Create inline action panel (Decision Bar)
+        // Create inline action panel (Decision Bar)
         inlineActionPanel = new JPanel(new MigLayout("insets 10 20 10 20, gap 15", "", "center"));
         inlineActionPanel.putClientProperty(FlatClientProperties.STYLE, 
             "background: darken($TextPane.background, 3%); " +
             "border: 1,0,0,0,$Component.borderColor");
         inlineActionPanel.setVisible(false);
 
-                Color accentColor = UIManager.getColor("Component.accentColor");
+        Color accentColor = UIManager.getColor("Component.accentColor");
         if (accentColor == null) accentColor = UIManager.getColor("Label.foreground");
         if (accentColor == null) accentColor = Color.GRAY;
 
@@ -117,12 +121,15 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         JPanel scrollContent = new JPanel(new BorderLayout());
         scrollContent.putClientProperty(FlatClientProperties.STYLE, "background: $TextPane.background");
         scrollContent.add(outputArea, BorderLayout.CENTER);
-        scrollContent.add(inlineActionPanel, BorderLayout.SOUTH);
+        
+        if (isTaskMode) {
+            scrollContent.add(inlineActionPanel, BorderLayout.SOUTH);
+        }
 
         outputScrollPane = new JScrollPane(scrollContent);
         outputScrollPane.setBorder(BorderFactory.createTitledBorder("Roxy"));
 
-        // Autoscroll to bottom when content changes (messages or action panel visibility)
+        // Autoscroll to bottom
         scrollContent.addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
@@ -192,6 +199,10 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         setupKeyboardShortcuts();
     }
 
+    private String getConversationId() {
+        return sessionPrefix + ":default";
+    }
+
     private void setupUndoRedo() {
         UndoManager undoManager = new UndoManager();
         inputArea.getDocument().addUndoableEditListener(e -> undoManager.addEdit(e.getEdit()));
@@ -224,8 +235,8 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
-    
     private void onAutonomousTransition(AutonomousTransitionEvent event) {
+        if (!isTaskMode) return;
         SwingUtilities.invokeLater(() -> {
             outputArea.appendMessage("system", "Autonomous transition detected: **" + event.from() + " → " + event.to() + "**. Reason: " + event.reason());
             triggerTurn("Phase changed to " + event.to() + ". Please proceed with the tasks in the new phase.");
@@ -259,26 +270,26 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         });
     }
 
-        private WorkflowPhase lastReportedPhase;
+    private WorkflowPhase lastReportedPhase;
 
     private void onPhaseChanged(WorkflowPhase phase) {
         SwingUtilities.invokeLater(() -> {
-            inlineActionPanel.setVisible(false);
-                        lastReportedPhase = phase;
+            if (isTaskMode) {
+                inlineActionPanel.setVisible(false);
+            }
+            lastReportedPhase = phase;
         });
     }
 
-        private void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason) {
+    private void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason) {
+        if (!isTaskMode) return;
         SwingUtilities.invokeLater(() -> {
             if (requested != null) {
                 String path = current.getDisplayName() + " → " + requested.getDisplayName();
                 transitionLabel.setText(path);
                 approveButton.setText("Approve");
-                
-                // FIX: Ensure HIL buttons are enabled as soon as the transition is requested
                 approveButton.setEnabled(true);
                 rejectButton.setEnabled(true);
-                
                 inlineActionPanel.setVisible(true);
                 outputArea.appendMessage("system", "Roxy requested a transition: **" + path + "**.\n\n**Reason:** " + reason);
             } else {
@@ -312,10 +323,12 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     private void resetSession() {
         int result = JOptionPane.showConfirmDialog(this, "Reset session? This cancels active tasks and clears chat history.", "Reset", JOptionPane.YES_NO_OPTION);
         if (result == JOptionPane.YES_OPTION) {
-            workflowService.resetWorkflow();
-            chatMemory.clear("default");
+            if (isTaskMode) {
+                workflowService.resetWorkflow();
+            }
+            chatMemory.clear(getConversationId());
             outputArea.clear();
-            outputArea.appendMessage("system", "Session reset to Explore phase.");
+            outputArea.appendMessage("system", "Session reset.");
         }
     }
 
@@ -323,7 +336,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         String text = inputArea.getText().trim();
         if (text.isEmpty()) return;
 
-        turnEventBridge.publishUserMessage("user", text);
+        turnEventBridge.publishUserMessage(getConversationId(), "user", text);
         outputArea.appendMessage("user", text);
         inputArea.setText("");
         triggerTurn(text);
@@ -342,12 +355,10 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
 
         pendingImages.add(bimage);
 
-        // Create a 64x64 thumbnail
         Image thumbnail = bimage.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
         JLabel thumbLabel = new JLabel(new ImageIcon(thumbnail));
         thumbLabel.setBorder(BorderFactory.createLineBorder(UIManager.getColor("Component.borderColor")));
 
-        // Wrap in a panel with a close button
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setOpaque(false);
         wrapper.add(thumbLabel, BorderLayout.CENTER);
@@ -388,7 +399,6 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             }
         }
 
-        // Clear UI state
         pendingImages.clear();
         attachmentPanel.removeAll();
         attachmentPanel.setVisible(false);
@@ -397,7 +407,8 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             @Override
             protected String doInBackground() {
                 try {
-                    return aiService.chat(text, null, imageBytes);
+                    WorkflowPhase phase = (lockedPhase != null) ? lockedPhase : workflowService.getCurrentPhase();
+                    return aiService.chat(getConversationId(), phase, text, null, imageBytes);
                 } catch (Exception ex) {
                     log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
                     return "Error: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
@@ -422,8 +433,7 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         currentWorker.execute();
     }
 
-                @Override
-    public void onJexlExecuted(JexlExecutionEvent event) {
+    private void onToolExecution(org.roxycode.app.events.ToolExecutionEvent event) {
         SwingUtilities.invokeLater(() -> {
             String toolName = "";
             String output = JexlToHtmlConverter.convert(event.script());
@@ -435,19 +445,20 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
         if (loading) {
             stopButton.setEnabled(true);
             SwingUtilities.invokeLater(() -> stopButton.requestFocusInWindow());
-            
             sendButton.setEnabled(false);
             inputArea.setEnabled(false);
-            
-            // FIX: Only disable HIL buttons if no transition is currently pending
-            boolean hasPending = workflowService.getPendingPhase() != null;
-            approveButton.setEnabled(hasPending);
-            rejectButton.setEnabled(hasPending);
+            if (isTaskMode) {
+                boolean hasPending = workflowService.getPendingPhase() != null;
+                approveButton.setEnabled(hasPending);
+                rejectButton.setEnabled(hasPending);
+            }
         } else {
             sendButton.setEnabled(true);
             inputArea.setEnabled(true);
-            approveButton.setEnabled(true);
-            rejectButton.setEnabled(true);
+            if (isTaskMode) {
+                approveButton.setEnabled(true);
+                rejectButton.setEnabled(true);
+            }
             stopButton.setEnabled(false);
             SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow());
         }
@@ -455,12 +466,14 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
     }
 
     public MarkdownPane getOutputArea() { return outputArea; }
-    
+    public JTextArea getInputArea() { return inputArea; }
+    public JButton getSendButton() { return sendButton; }
+    public JButton getStopButton() { return stopButton; }
+
     private void setupKeyboardShortcuts() {
         InputMap im = inputArea.getInputMap(JComponent.WHEN_FOCUSED);
         ActionMap am = inputArea.getActionMap();
 
-        // Enter sends the message
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "send-message");
         am.put("send-message", new AbstractAction() {
             @Override
@@ -469,7 +482,6 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             }
         });
 
-        // Shift+Enter inserts a newline
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "insert-newline");
         am.put("insert-newline", new AbstractAction() {
             @Override
@@ -478,7 +490,6 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             }
         });
 
-        // Intercept Paste
         Action defaultPaste = inputArea.getActionMap().get(DefaultEditorKit.pasteAction);
         inputArea.getActionMap().put(DefaultEditorKit.pasteAction, new AbstractAction() {
             @Override
@@ -497,18 +508,4 @@ public class ChatPanel extends JPanel implements JexlExecutionListener {
             }
         });
     }
-
-    @Override
-    public void addNotify() {
-        super.addNotify();
-        JRootPane rootPane = SwingUtilities.getRootPane(this);
-        if (rootPane != null) {
-            rootPane.setDefaultButton(sendButton);
-        }
-    }
-
-
-    public JTextArea getInputArea() { return inputArea; }
-    public JButton getSendButton() { return sendButton; }
-    public JButton getStopButton() { return stopButton; }
 }

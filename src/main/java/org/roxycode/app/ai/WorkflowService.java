@@ -45,7 +45,8 @@ public class WorkflowService {
 
     /**
      * Handles manual user phase switches from the UI header toggle.
-     * Restricted to switching between EXPLORE and PLAN.
+     * EXPLORE is decoupled and can be entered/exited freely.
+     * PLAN is the gateway for task workflows.
      */
     public void switchMode(WorkflowPhase targetPhase) {
         if (targetPhase == currentPhase) {
@@ -89,7 +90,7 @@ public class WorkflowService {
             return "Error: You must provide a descriptive 'reason' for requesting a phase transition.";
         }
 
-        // Enforce strict single-step adjacent transitions
+        // Enforce strict single-step adjacent transitions for task flow
         if (!isAdjacent(currentPhase, nextPhase)) {
             return "Error: Cannot jump from " + currentPhase + " to " + nextPhase
                     + ". Only single-step transitions to adjacent phases are allowed.";
@@ -113,8 +114,6 @@ public class WorkflowService {
                 (oldPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE)) {
                 planManager.addCodeReviewLogEntry(timestamp, user, message);
             }
-            
-
             
             this.currentPhase = nextPhase;
             this.visitedPhases.add(nextPhase);
@@ -144,9 +143,11 @@ public class WorkflowService {
     }
 
     private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
+        // EXPLORE is decoupled from linear task flow
+        if (next == WorkflowPhase.EXPLORE) return true;
+        if (current == WorkflowPhase.EXPLORE) return next == WorkflowPhase.PLAN;
+
         switch (current) {
-            case EXPLORE:
-                return next == WorkflowPhase.PLAN;
             case PLAN:
                 return next == WorkflowPhase.CODE;
             case CODE:
@@ -187,8 +188,6 @@ public class WorkflowService {
             String message = String.format("%s -> %s (User Approved): %s", currentPhase, pendingPhase, pendingReason);
             planManager.addHandoffLogEntry(timestamp, user, message);
             
-
-
             // Plan Approval Metadata
             if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE) {
                 planManager.approvePlan(user, timestamp);
@@ -261,21 +260,21 @@ public class WorkflowService {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("PLAN SUMMARY:\\n\\n### ").append(plan.title().trim()).append("\\n");
-        sb.append("**Goal:** ").append(plan.goal().replaceAll("\\\\s+", " ").trim()).append("\\n\\n");
+        sb.append("PLAN SUMMARY:\n\n### ").append(plan.title().trim()).append("\n");
+        sb.append("**Goal:** ").append(plan.goal().replaceAll("\\s+", " ").trim()).append("\n\n");
 
         if (!plan.requirements().isEmpty()) {
-            sb.append("#### Requirements\\n");
+            sb.append("#### Requirements\n");
             for (String req : plan.requirements()) {
-                sb.append("* ").append(req.replaceAll("\\\\s+", " ").trim()).append("\\n");
+                sb.append("* ").append(req.replaceAll("\\s+", " ").trim()).append("\n");
             }
-            sb.append("\\n");
+            sb.append("\n");
         }
 
         if (!plan.technicalSteps().isEmpty()) {
-            sb.append("#### Technical Steps\\n");
+            sb.append("#### Technical Steps\n");
             for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                sb.append(step.completed() ? "* [x] " : "* [ ] ").append(step.description().replaceAll("\\\\s+", " ").trim()).append("\\n");
+                sb.append(step.completed() ? "* [x] " : "* [ ] ").append(step.description().replaceAll("\\s+", " ").trim()).append("\n");
             }
         }
         return sb.toString();

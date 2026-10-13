@@ -31,29 +31,19 @@ public class SidebarPanel extends JPanel {
     }
  
     private void initComponents() {
-        setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]5[]2[]2[]2[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
+        setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]5[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
         
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
  
         add(new UserProfileComponent("RoxyCode", System.getProperty("user.name")));
  
-        add(createSectionHeader("MAIN"), "gaptop 10");
+        add(createSectionHeader("WORKSPACES"), "gaptop 10");
         
-        NavButton qaBtn = createNavButton("Codebase Q&A", "CHAT", Codicons.COMMENT_DISCUSSION, e -> 
-            navigateToChat(WorkflowPhase.EXPLORE, (NavButton)e.getSource()));
+        NavButton qaBtn = createNavButton("Codebase Q&A", "QA_VIEW", Codicons.COMMENT_DISCUSSION);
         add(qaBtn);
         
-        NavButton taskBtn = createNavButton("Active Task", "CHAT", Codicons.ROCKET, e -> {
-            WorkflowPhase target = workflowService.getCurrentPhase() == WorkflowPhase.EXPLORE ? 
-                WorkflowPhase.PLAN : workflowService.getCurrentPhase();
-            navigateToChat(target, (NavButton)e.getSource());
-        });
+        NavButton taskBtn = createNavButton("Active Task", "TASK_VIEW", Codicons.ROCKET);
         add(taskBtn);
-
-        add(createNavButton("Project Plan", "PLAN", Codicons.LIST_ORDERED));
- 
-        add(createNavButton("History", "HISTORY", Codicons.HISTORY));
-        add(createNavButton("Git Changes", "GIT", Codicons.DIFF));
         
         add(createSectionHeader("CONTEXT"), "gaptop 15");
         add(createNavButton("Project Context", "CONTEXT_MGR", Codicons.FILE));
@@ -91,7 +81,7 @@ public class SidebarPanel extends JPanel {
     private NavButton createNavButton(String text, String cardName, Codicons iconCode) {
         return createNavButton(text, cardName, iconCode, null);
     }
-
+ 
     private NavButton createNavButton(String text, String cardName, Codicons iconCode, ActionListener customListener) {
         FontIcon icon = FontIcon.of(iconCode, 16);
         NavButton btn = new NavButton(text, icon);
@@ -106,10 +96,4 @@ public class SidebarPanel extends JPanel {
         navButtons.add(btn);
         return btn;
     }
-    private void navigateToChat(WorkflowPhase targetPhase, NavButton btn) {
-        workflowService.switchMode(targetPhase);
-        updateSelection(btn);
-        navigationAction.accept("CHAT");
-    }
-
 }

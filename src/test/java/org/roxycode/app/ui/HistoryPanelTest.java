@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.UserMessageEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
@@ -17,16 +16,15 @@ public class HistoryPanelTest {
     @Test
     public void testHistoryPanelInitialization() {
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
-        JexlTool jexlTool = mock(JexlTool.class);
-
+        
         ChatMemory chatMemory = mock(ChatMemory.class);
         GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
-        HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, jexlTool, chatMemory, geminiCacheService);
+        HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "test");
         
         // Verify listeners registered
-        verify(turnEventBridge).addUserMessageListener(any());
-        verify(turnEventBridge).addCompleteListener(any());
-        verify(jexlTool).addListener(historyPanel);
+        verify(turnEventBridge).addUserMessageListener(anyString(), any());
+        verify(turnEventBridge).addCompleteListener(anyString(), any());
+        verify(turnEventBridge).addToolExecutionListener(anyString(), any());
 
         // Verify layout
         boolean hasScrollPane = false;
