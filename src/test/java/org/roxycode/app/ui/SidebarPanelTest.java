@@ -31,7 +31,7 @@ class SidebarPanelTest {
     SettingsService settingsService = new SettingsService();
     settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
-    SidebarPanel sidebar = new SidebarPanel(settingsService, createWorkflowService(), card -> {});
+    SidebarPanel sidebar = new SidebarPanel(createWorkflowService(), card -> {});
     assertNotNull(sidebar);
   }
 
@@ -40,7 +40,7 @@ class SidebarPanelTest {
     SettingsService settingsService = new SettingsService();
     settingsService.setSettingsPathOverride(tempDir.resolve("settings_structure.toml"));
 
-    SidebarPanel sidebar = new SidebarPanel(settingsService, createWorkflowService(), card -> {});
+    SidebarPanel sidebar = new SidebarPanel(createWorkflowService(), card -> {});
 
     Component[] components = sidebar.getComponents();
 
@@ -72,7 +72,7 @@ class SidebarPanelTest {
     when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
     Consumer<String> navAction = mock(Consumer.class);
 
-    SidebarPanel sidebar = new SidebarPanel(settingsService, workflowService, navAction);
+    SidebarPanel sidebar = new SidebarPanel(workflowService, navAction);
 
     JButton qaBtn = null;
     JButton taskBtn = null;

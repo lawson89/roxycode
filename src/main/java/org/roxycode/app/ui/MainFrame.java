@@ -18,7 +18,7 @@ import org.roxycode.app.service.SystemToolService;
 import org.springframework.ai.chat.memory.ChatMemory;
 
 /** Main application window for RoxyCode. */
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class MainFrame extends JFrame {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MainFrame.class);
   private static final long serialVersionUID = 1L;
@@ -117,7 +117,7 @@ public final class MainFrame extends JFrame {
     setLayout(new MigLayout("fill, insets 0", "[200!]0[fill, grow]", "[fill, grow]"));
 
     // Sidebar
-    SidebarPanel sidebar = new SidebarPanel(settingsService, workflowService, this::showCard);
+    SidebarPanel sidebar = new SidebarPanel(workflowService, this::showCard);
 
     // Main Workspace
     JPanel workspace =
@@ -165,8 +165,6 @@ public final class MainFrame extends JFrame {
     contentArea.add(taskTabs, "TASK_VIEW");
     contentArea.add(
         new CodebaseCachePanel(
-            projectService,
-            settingsService,
             packerService,
             cacheMetaService,
             geminiCacheService,
@@ -199,12 +197,6 @@ public final class MainFrame extends JFrame {
     if ("TASK_VIEW".equals(cardName) && gitChangesPanel != null) {
       gitChangesPanel.refresh();
     }
-  }
-
-  private JPanel createPlaceholderPanel(String text) {
-    JPanel p = new JPanel(new MigLayout("fill", "[center]", "[center]"));
-    p.add(new JLabel(text));
-    return p;
   }
 
   private void updateTitle() {

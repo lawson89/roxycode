@@ -1,6 +1,7 @@
 package org.roxycode.app.ai.services.cache;
 
 /** Callback interface for reporting progress of long-running operations. */
+@FunctionalInterface
 public interface ProgressCallback {
   /**
    * Called when progress is made.

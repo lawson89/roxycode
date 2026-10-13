@@ -16,13 +16,13 @@ import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+
 public final class BuildConfigPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
-  private final GenericBuildToolService buildToolService;
-  private final SettingsService settingsService;
-  private final ProjectService projectService;
+  private final transient GenericBuildToolService buildToolService;
+  private final transient SettingsService settingsService;
+  private final transient ProjectService projectService;
   private final RSyntaxTextArea textArea;
   private final JButton saveButton;
   private final JLabel statusLabel;
@@ -100,7 +100,7 @@ public final class BuildConfigPanel extends JPanel {
     String themeName = settingsService.getSettings().getTheme();
     boolean isDark =
         themeName.toLowerCase(Locale.ROOT).contains("dark")
-            || themeName.equalsIgnoreCase("Darcula");
+            || "Darcula".equalsIgnoreCase(themeName);
     String themePath =
         isDark
             ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"

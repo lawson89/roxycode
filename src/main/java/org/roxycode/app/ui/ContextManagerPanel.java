@@ -10,13 +10,12 @@ import org.roxycode.app.service.PromptService;
 
 @SuppressWarnings({
   "PMD.ConstructorCallsOverridableMethod",
-  "PMD.NonSerializableClass",
   "PMD.NullAssignment"
 })
 public final class ContextManagerPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
-  private final PromptService promptService;
+  private final transient PromptService promptService;
   private final JList<String> fileList;
   private final DefaultListModel<String> listModel;
   private final RSyntaxTextArea textArea;

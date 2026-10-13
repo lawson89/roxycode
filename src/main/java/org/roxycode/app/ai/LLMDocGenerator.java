@@ -10,12 +10,8 @@ import java.util.stream.Collectors;
  */
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class LLMDocGenerator {
-  private static final String DOC_START = "/**\n";
   private static final String DOC_END = " */\n";
   private static final String DOC_LINE_START = " * ";
-  private static final String OPEN_BRACE_NEWLINE = " {\n";
-  private static final String INDENT = "    ";
-  private static final String INTERFACE_PREFIX = "interface ";
 
   public String generateDoc(Collection<Object> services) {
     StringBuilder sb = new StringBuilder();
@@ -85,11 +81,15 @@ public class LLMDocGenerator {
       sb.append("    ").append(m.getName()).append("(");
 
       Parameter[] params = m.getParameters();
-      for (int i = 0; i < params.length; i++) {
-        sb.append(params[i].getName())
+      boolean first = true;
+      for (Parameter p : params) {
+        if (!first) {
+          sb.append(", ");
+        }
+        sb.append(p.getName())
             .append(": ")
-            .append(getTypeName(params[i].getType(), extraTypes));
-        if (i < params.length - 1) sb.append(", ");
+            .append(getTypeName(p.getType(), extraTypes));
+        first = false;
       }
       sb.append("): ").append(getTypeName(m.getReturnType(), extraTypes)).append(";\n\n");
     }
@@ -134,12 +134,11 @@ public class LLMDocGenerator {
           .append("\n}\n");
     } else if (type.isRecord()) {
       sb.append("interface ").append(type.getSimpleName()).append(" {\n");
-      RecordComponent[] components = type.getRecordComponents();
-      for (int i = 0; i < components.length; i++) {
+      for (RecordComponent comp : type.getRecordComponents()) {
         sb.append("    ")
-            .append(components[i].getName())
+            .append(comp.getName())
             .append(": ")
-            .append(getTypeName(components[i].getType(), extraTypes))
+            .append(getTypeName(comp.getType(), extraTypes))
             .append(";\n");
       }
       sb.append("}\n");

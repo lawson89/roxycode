@@ -8,12 +8,12 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
 
 /** UI panel for displaying the current project plan and specifications. */
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class PlanPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
-  private final PlanService planManagerService;
-  private final WorkflowService workflowService;
+  private final transient PlanService planManagerService;
+  private final transient WorkflowService workflowService;
   private final JEditorPane displayArea;
 
   public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {

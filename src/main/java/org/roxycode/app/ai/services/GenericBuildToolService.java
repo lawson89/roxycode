@@ -3,6 +3,7 @@ package org.roxycode.app.ai.services;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -174,7 +175,7 @@ public class GenericBuildToolService {
         if (is != null) {
           Files.copy(is, configPath);
         } else {
-          Files.writeString(configPath, "[build]\ncompile = \"echo 'No build command'\"");
+          Files.writeString(configPath, "[build]\ncompile = \"echo 'No build command'\"", StandardCharsets.UTF_8);
         }
       }
     } catch (IOException e) {
@@ -213,11 +214,11 @@ public class GenericBuildToolService {
   }
 
   private String getCommand(Map<String, Object> config, String key) {
-    if (key.equals("compile") || key.equals("clean")) {
+    if ("compile".equals(key) || "clean".equals(key)) {
       Map<String, Object> build = (Map<String, Object>) config.get("build");
       return build != null ? (String) build.get(key) : null;
     }
-    if (key.equals("run_all") || key.equals("run_single")) {
+    if ("run_all".equals(key) || "run_single".equals(key)) {
       Map<String, Object> test = (Map<String, Object>) config.get("test");
       return test != null ? (String) test.get(key) : null;
     }
@@ -298,10 +299,14 @@ public class GenericBuildToolService {
 
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new CancellationException("Process execution interrupted");
+      CancellationException ce = new CancellationException("Process execution interrupted");
+      ce.initCause(e);
+      throw ce;
     } catch (Exception e) {
       log.error("Process execution failed", e);
-      errors.add(e.getMessage());
+      StringWriter sw = new StringWriter();
+      e.printStackTrace(new PrintWriter(sw));
+      errors.add(sw.toString());
     }
 
     String fullOutput = output.toString();

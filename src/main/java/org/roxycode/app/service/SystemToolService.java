@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class SystemToolService {
   private static final Logger log = LoggerFactory.getLogger(SystemToolService.class);
+  private static final String JAVA = "Java";
 
   public CompletableFuture<List<SystemTool>> detectTools() {
     return CompletableFuture.supplyAsync(
@@ -29,7 +30,7 @@ public class SystemToolService {
                   "Required for code navigation and symbol extraction."));
           tools.add(
               detectTool(
-                  "Java", "java", "-version", "The runtime environment for this application."));
+                  JAVA, "java", "-version", "The runtime environment for this application."));
           return tools;
         });
   }
@@ -42,7 +43,7 @@ public class SystemToolService {
       Process process = pb.start();
       StringBuilder output = new StringBuilder();
       try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+          new BufferedReader(new InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
         String line = reader.readLine();
         while (line != null) {
           output.append(line).append("\n");
@@ -66,7 +67,7 @@ public class SystemToolService {
   private String parseVersion(String output, String toolName) {
     if (output == null || output.isEmpty()) return "Unknown";
     String fullOutput = output.trim();
-    if (toolName.equals("Java")) {
+    if (JAVA.equals(toolName)) {
       return fullOutput.contains("version")
           ? fullOutput.substring(fullOutput.indexOf("version"))
           : fullOutput;

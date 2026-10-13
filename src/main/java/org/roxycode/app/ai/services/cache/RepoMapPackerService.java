@@ -43,7 +43,7 @@ public class RepoMapPackerService {
 
   private String cachedMap = null;
   private boolean needsUpdate = true;
-  private List<String> excludePatterns = new ArrayList<>();
+  private List<String> excludePatterns;
 
   public RepoMapPackerService(
       ProjectService projectService,
@@ -106,7 +106,7 @@ public class RepoMapPackerService {
         if (size < RAW_CONTENT_THRESHOLD) {
           sb.append(Files.readString(filePath));
         } else {
-          String skeleton = getSkeleton(filePath, root);
+          String skeleton = getSkeleton(filePath);
           if (skeleton == null || skeleton.isBlank()) {
             sb.append("[Full content omitted due to size - no skeleton available]\n");
           } else {
@@ -128,7 +128,7 @@ public class RepoMapPackerService {
     return new EditorResult(true, cachedMap, null);
   }
 
-  private String getSkeleton(Path filePath, Path root) {
+  private String getSkeleton(Path filePath) {
     try {
       Process process =
           new ProcessBuilder(
@@ -141,7 +141,7 @@ public class RepoMapPackerService {
               .start();
       List<Tag> tags = new ArrayList<>();
       try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+          new BufferedReader(new InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
         String line = reader.readLine();
         while (line != null) {
           try {

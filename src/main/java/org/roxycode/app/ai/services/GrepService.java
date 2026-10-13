@@ -3,6 +3,7 @@ package org.roxycode.app.ai.services;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,7 +87,7 @@ public class GrepService {
 
       StringBuilder output = new StringBuilder();
       try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+          new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
         String line = reader.readLine();
         while (line != null) {
           output.append(line).append("\n");
@@ -110,7 +111,9 @@ public class GrepService {
       return new EditorResult(false, "", "Error executing RipGrep: " + e.getMessage());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new CancellationException("RipGrep interrupted");
+      CancellationException ce = new CancellationException("RipGrep interrupted");
+      ce.initCause(e);
+      throw ce;
     }
   }
 
@@ -152,7 +155,7 @@ public class GrepService {
       Process process = pb.start();
 
       try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+          new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
         String line = reader.readLine();
         while (line != null) {
           files.add(line);
@@ -164,7 +167,9 @@ public class GrepService {
       log.error("Failed to list files using RipGrep: {}", e.getMessage());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new CancellationException("RipGrep interrupted");
+      CancellationException ce = new CancellationException("RipGrep interrupted");
+      ce.initCause(e);
+      throw ce;
     }
     return files;
   }

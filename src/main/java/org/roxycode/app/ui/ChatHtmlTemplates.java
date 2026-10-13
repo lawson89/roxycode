@@ -6,18 +6,22 @@ import org.apache.commons.text.StringSubstitutor;
 /** Native Java text block templates for chat HTML rendering conforming to Swing HTML 3.2. */
 public class ChatHtmlTemplates {
 
+  private static final String ROLE_AI = "ai";
+  private static final String ROLE_USER = "user";
+  private static final String ROLE_SYSTEM = "system";
+
   public static String renderChatEntry(String role, String content, String timestamp) {
     String entryClass = role + "-entry";
     String accentClass = role + "-accent";
 
     String indicator = "&nbsp;";
-    if (role.equals("ai")) {
+    if ("ai".equals(role)) {
       indicator =
           "<span style='font-family: monospace; color: #888888; font-size: 10px;'>ROXY /\\_/\\</span>";
-    } else if (role.equals("user")) {
+    } else if ("user".equals(role)) {
       indicator =
           "<span style='font-family: monospace; color: #888888; font-size: 10px;'>USER</span>";
-    } else if (role.equals("system")) {
+    } else if ("system".equals(role)) {
       indicator =
           "<span style='font-family: monospace; color: #888888; font-size: 10px;'>SYSTEM</span>";
     }

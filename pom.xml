@@ -145,8 +145,7 @@
                     <!-- Prints the specific errors in the console output -->
                     <printFailingErrors>true</printFailingErrors>
                     <rulesets>
-                        <!-- Use default rulesets or point to a custom ruleset.xml -->
-                        <ruleset>/category/java/errorprone.xml</ruleset>
+                        <ruleset>${project.basedir}/.roxycode/pmd-rules.xml</ruleset>
                     </rulesets>
                 </configuration>
                 <executions>

@@ -12,11 +12,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Component displaying user profile information in the sidebar. */
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class UserProfileComponent extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final Logger log = LoggerFactory.getLogger(UserProfileComponent.class);
-  private Image avatarImage;
+  private transient Image avatarImage;
 
   /**
    * Creates a new UserProfileComponent.

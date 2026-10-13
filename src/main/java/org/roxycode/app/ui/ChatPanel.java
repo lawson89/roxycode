@@ -33,12 +33,10 @@ import org.springframework.ai.chat.memory.ChatMemory;
 @SuppressWarnings({
   "PMD.AvoidDuplicateLiterals",
   "PMD.ConstructorCallsOverridableMethod",
-  "PMD.NonSerializableClass",
   "PMD.NullAssignment"
 })
 public final class ChatPanel extends JPanel {
   private static final long serialVersionUID = 1L;
-  private static final String ROLE_SYSTEM = "system";
 
   private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
   private final AiService aiService;
@@ -325,15 +323,12 @@ public final class ChatPanel extends JPanel {
         });
   }
 
-  private WorkflowPhase lastReportedPhase;
-
   private void onPhaseChanged(WorkflowPhase phase) {
     SwingUtilities.invokeLater(
         () -> {
           if (isTaskMode) {
             inlineActionPanel.setVisible(false);
           }
-          lastReportedPhase = phase;
         });
   }
 
@@ -410,6 +405,7 @@ public final class ChatPanel extends JPanel {
     }
   }
 
+  @SuppressWarnings("PMD.UnusedFormalParameter")
   private void sendMessage(ActionEvent e) {
     String text = inputArea.getText().trim();
     if (text.isEmpty()) return;

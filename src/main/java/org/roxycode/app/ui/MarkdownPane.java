@@ -17,11 +17,11 @@ import javax.swing.*;
  * A JTextPane that renders Markdown messages using native Java templates. Supports streaming
  * updates by re-rendering the message history.
  */
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class MarkdownPane extends JTextPane {
   private static final long serialVersionUID = 1L;
-  private final Parser parser;
-  private final HtmlRenderer renderer;
+  private final transient Parser parser;
+  private final transient HtmlRenderer renderer;
   private final List<Message> messages = new ArrayList<>();
   private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
 

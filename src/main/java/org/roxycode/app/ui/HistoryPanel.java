@@ -17,13 +17,12 @@ import org.springframework.ai.chat.messages.MessageType;
 /** Panel for displaying a persistent history of all AI interactions and tool executions. */
 @SuppressWarnings({
   "PMD.AvoidDuplicateLiterals",
-  "PMD.ConstructorCallsOverridableMethod",
-  "PMD.NonSerializableClass"
+  "PMD.ConstructorCallsOverridableMethod"
 })
 public final class HistoryPanel extends JPanel {
   private static final long serialVersionUID = 1L;
-  private final ChatMemory chatMemory;
-  private final GeminiCacheService geminiCacheService;
+  private final transient ChatMemory chatMemory;
+  private final transient GeminiCacheService geminiCacheService;
   private final HistoryTableModel tableModel;
   private final JTable table;
   private final JLabel statsLabel;

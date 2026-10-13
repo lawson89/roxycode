@@ -3,6 +3,7 @@ package org.roxycode.app.ai.services;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -79,7 +80,7 @@ public class GitService {
 
       StringBuilder output = new StringBuilder();
       try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+          new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
         String line = reader.readLine();
         while (line != null) {
           output.append(line).append("\n");
@@ -108,7 +109,9 @@ public class GitService {
       return "Error executing git command: " + e.getMessage();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new CancellationException("Git command interrupted");
+      CancellationException ce = new CancellationException("Git command interrupted");
+      ce.initCause(e);
+      throw ce;
     }
   }
 }

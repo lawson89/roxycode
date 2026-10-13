@@ -7,11 +7,11 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.service.EnvironmentService;
 
 /** Bottom status bar with system info. */
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class StatusPanel extends JPanel {
   private static final long serialVersionUID = 1L;
-  private final EnvironmentService envService;
-  private final org.springframework.ai.chat.memory.ChatMemory chatMemory;
+  private final transient EnvironmentService envService;
+  private final transient org.springframework.ai.chat.memory.ChatMemory chatMemory;
   private final JLabel memLabel;
   private final JLabel msgLabel;
 

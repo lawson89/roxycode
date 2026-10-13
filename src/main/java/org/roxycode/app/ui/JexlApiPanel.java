@@ -5,10 +5,10 @@ import javax.swing.*;
 import org.roxycode.app.ai.JexlServiceRegistry;
 
 /** Dedicated panel for viewing JEXL API documentation with syntax highlighting. */
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class JexlApiPanel extends JPanel {
   private static final long serialVersionUID = 1L;
-  private final JexlServiceRegistry registry;
+  private final transient JexlServiceRegistry registry;
   private final JTextPane textPane;
 
   public JexlApiPanel(JexlServiceRegistry registry) {

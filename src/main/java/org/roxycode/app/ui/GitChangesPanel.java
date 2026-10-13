@@ -11,11 +11,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Panel showing current git status and diff. */
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class GitChangesPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final Logger log = LoggerFactory.getLogger(GitChangesPanel.class);
-  private final GitService gitService;
+  private final transient GitService gitService;
   private final JTextArea statusArea;
   private final JTextPane diffArea;
   private String currentDiffHtml = "";

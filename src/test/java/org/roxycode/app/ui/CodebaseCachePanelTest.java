@@ -45,8 +45,6 @@ class CodebaseCachePanelTest {
 
     panel =
         new CodebaseCachePanel(
-            projectService,
-            settingsService,
             packerService,
             metaService,
             geminiCacheService,

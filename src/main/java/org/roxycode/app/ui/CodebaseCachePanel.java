@@ -19,18 +19,18 @@ import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class CodebaseCachePanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
-  private final ProjectCacheMetaService metaService;
-  private final RepoMapPackerService packerService;
-  private final org.roxycode.app.service.PromptService promptService;
-  private final GeminiCacheService geminiCacheService;
-  private final WorkflowService workflowService;
-  private final JexlServiceRegistry jexlServiceRegistry;
-  private final GitService gitService;
-  private final ProjectAnalysisService projectAnalysisService;
+  private final transient ProjectCacheMetaService metaService;
+  private final transient RepoMapPackerService packerService;
+  private final transient org.roxycode.app.service.PromptService promptService;
+  private final transient GeminiCacheService geminiCacheService;
+  private final transient WorkflowService workflowService;
+  private final transient JexlServiceRegistry jexlServiceRegistry;
+  private final transient GitService gitService;
+  private final transient ProjectAnalysisService projectAnalysisService;
 
   private final JLabel statusLabel = new JLabel("Status: Unknown");
   private final JProgressBar progressBar = new JProgressBar(0, 100);
@@ -43,8 +43,6 @@ public final class CodebaseCachePanel extends JPanel {
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
   public CodebaseCachePanel(
-      ProjectService projectService,
-      SettingsService settingsService,
       RepoMapPackerService packerService,
       ProjectCacheMetaService metaService,
       GeminiCacheService geminiCacheService,

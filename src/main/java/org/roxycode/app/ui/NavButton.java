@@ -7,7 +7,7 @@ import javax.swing.*;
 import org.kordamp.ikonli.swing.FontIcon;
 
 /** Styled navigation button for the sidebar. */
-@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class NavButton extends JButton {
   private static final long serialVersionUID = 1L;
 

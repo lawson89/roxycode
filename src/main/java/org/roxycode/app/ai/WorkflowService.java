@@ -2,7 +2,7 @@ package org.roxycode.app.ai;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -25,14 +25,14 @@ public class WorkflowService {
   private final EnvironmentService environmentService;
   private final ApplicationEventPublisher eventPublisher;
   private WorkflowPhase currentPhase = WorkflowPhase.PLAN;
-  private final Set<WorkflowPhase> visitedPhases =
-      new HashSet<>(Collections.singletonList(WorkflowPhase.PLAN));
+  private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.PLAN);
   private WorkflowPhase pendingPhase;
   private String pendingReason;
 
   private final List<Consumer<WorkflowPhase>> phaseListeners = new ArrayList<>();
   private final List<TransitionRequestListener> requestListeners = new ArrayList<>();
 
+  @FunctionalInterface
   public interface TransitionRequestListener {
     void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason);
   }
@@ -44,10 +44,10 @@ public class WorkflowService {
     this.planManager = planManager;
     this.environmentService = environmentService;
     this.eventPublisher = eventPublisher;
-    this.planManager.addListener(this::handlePlanUpdate);
+    this.planManager.addListener(plan -> handlePlanUpdate());
   }
 
-  private void handlePlanUpdate(org.roxycode.app.model.ImplementationPlan plan) {
+  private void handlePlanUpdate() {
     // Enforce HITL approval for CODE completion. Auto-transition removed.
   }
 

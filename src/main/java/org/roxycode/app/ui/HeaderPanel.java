@@ -20,18 +20,14 @@ import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 
 /** Header panel containing application controls and project selection. */
-@SuppressWarnings({
-  "PMD.AvoidDuplicateLiterals",
-  "PMD.ConstructorCallsOverridableMethod",
-  "PMD.NonSerializableClass"
-})
+
 public final class HeaderPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final String LAYOUT_CENTER = "center";
-  private final ProjectService projectService;
-  private final GitService gitService;
-  private final WorkflowService workflowService;
-  private final PlanService planManagerService;
+  private final transient ProjectService projectService;
+  private final transient GitService gitService;
+  private final transient WorkflowService workflowService;
+  private final transient PlanService planManagerService;
 
   private final JLabel projectLabel;
   private final JLabel branchLabel;
@@ -56,7 +52,7 @@ public final class HeaderPanel extends JPanel {
     this.planManagerService = planManagerService;
 
     // 3-column layout: Left (Project), Center (Workflow), Right (Utils)
-    setLayout(new MigLayout("insets 5 20 5 20, fillx", "[left][center, grow][right]", "center"));
+    setLayout(new MigLayout("insets 5 20 5 20, fillx", "[left][" + LAYOUT_CENTER + ", grow][right]", LAYOUT_CENTER));
 
     putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
     setBorder(
@@ -88,13 +84,13 @@ public final class HeaderPanel extends JPanel {
     add(leftPanel, "left");
 
     // --- CENTER SECTION: Workflow Info ---
-    JPanel workflowPanel = new JPanel(new MigLayout("insets 0, gapy 0", "[center]", "[]0[]0[]"));
+    JPanel workflowPanel = new JPanel(new MigLayout("insets 0, gapy 0", "[" + LAYOUT_CENTER + "]", "[]0[]0[]"));
     workflowPanel.setOpaque(false);
 
     planLabel = new JLabel();
     planLabel.putClientProperty(
         FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
-    workflowPanel.add(planLabel, "center, wrap, hidemode 3");
+    workflowPanel.add(planLabel, LAYOUT_CENTER + ", wrap, hidemode 3");
 
     mentorBadge =
         new JLabel("READ-ONLY MENTOR MODE", FontIcon.of(Codicons.EYE, 14), SwingConstants.CENTER);
@@ -106,20 +102,20 @@ public final class HeaderPanel extends JPanel {
             + "arc: 12");
     mentorBadge.setOpaque(true);
     mentorBadge.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
-    workflowPanel.add(mentorBadge, "center, wrap, hidemode 3");
+    workflowPanel.add(mentorBadge, LAYOUT_CENTER + ", wrap, hidemode 3");
 
-    progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", "center"));
+    progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", LAYOUT_CENTER));
     progressTracker.setOpaque(false);
 
     WorkflowPhase[] phases = WorkflowPhase.values();
     for (WorkflowPhase phase : phases) {
       indicators.add(new WorkflowPhaseIndicator(phase, "font: bold -1"));
     }
-    workflowPanel.add(progressTracker, "center, hidemode 3, gaptop 2");
-    add(workflowPanel, "center");
+    workflowPanel.add(progressTracker, LAYOUT_CENTER + ", hidemode 3, gaptop 2");
+    add(workflowPanel, LAYOUT_CENTER);
 
     // --- RIGHT SECTION: Model & Utils ---
-    JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]", "center"));
+    JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]", LAYOUT_CENTER));
     rightPanel.setOpaque(false);
 
     modelLabel = new JLabel();
@@ -199,11 +195,13 @@ public final class HeaderPanel extends JPanel {
 
     button.addMouseListener(
         new java.awt.event.MouseAdapter() {
+          @Override
           public void mouseEntered(java.awt.event.MouseEvent e) {
             button.setContentAreaFilled(true);
             button.setBackground(UIManager.getColor("Button.hoverBackground"));
           }
 
+          @Override
           public void mouseExited(java.awt.event.MouseEvent e) {
             button.setContentAreaFilled(false);
           }
@@ -217,7 +215,7 @@ public final class HeaderPanel extends JPanel {
     if (branch != null
         && !branch.isEmpty()
         && !branch.startsWith("Error")
-        && !branch.equals("Not a git repository")) {
+        && !"Not a git repository".equals(branch)) {
       branchLabel.setIcon(
           FontIcon.of(Codicons.SOURCE_CONTROL, 14, UIManager.getColor("Label.disabledForeground")));
       branchLabel.setText(branch);

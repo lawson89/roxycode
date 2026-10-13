@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Lazy;
     value = "planService",
     phases = {"*"})
 @AgentDoc("Service for managing project plans and specifications.")
-@SuppressWarnings("PMD.NullAssignment")
+
 public class PlanService {
 
   private ImplementationPlan currentPlan;
@@ -25,6 +25,7 @@ public class PlanService {
   private final List<PlanUpdateListener> listeners = new CopyOnWriteArrayList<>();
 
   /** Listener for plan updates. */
+  @FunctionalInterface
   public interface PlanUpdateListener {
     void onPlanUpdated(ImplementationPlan plan);
   }
@@ -238,6 +239,7 @@ public class PlanService {
   }
 
   /** Clears the existing plan. */
+  @SuppressWarnings("PMD.NullAssignment")
   @AgentDoc("Clears the current implementation plan.")
   public void clearPlan() {
     this.currentPlan = null;

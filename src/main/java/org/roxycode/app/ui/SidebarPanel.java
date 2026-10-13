@@ -17,21 +17,17 @@ import org.roxycode.app.service.SettingsService;
 /** Sidebar panel containing user profile and navigation. */
 @SuppressWarnings({
   "PMD.ConstructorCallsOverridableMethod",
-  "PMD.NonSerializableClass",
   "PMD.CompareObjectsWithEquals"
 })
 public final class SidebarPanel extends JPanel {
   private static final long serialVersionUID = 1L;
-  private final SettingsService settingsService;
-  private final WorkflowService workflowService;
+  private final transient WorkflowService workflowService;
   private final Consumer<String> navigationAction;
   private final List<NavButton> navButtons = new ArrayList<>();
 
   public SidebarPanel(
-      SettingsService settingsService,
       WorkflowService workflowService,
       Consumer<String> navigationAction) {
-    this.settingsService = settingsService;
     this.workflowService = workflowService;
     this.navigationAction = navigationAction;
     initComponents();
