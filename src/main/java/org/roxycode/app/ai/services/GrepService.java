@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 
 /**
  * Service for searching text in the codebase using RipGrep.
@@ -28,14 +29,6 @@ public class GrepService {
         this.projectService = projectService;
     }
 
-    /**
-     * Searches for a regex pattern in the project files.
-     *
-     * @param pattern the regex pattern to search for
-     * @param relativePath the starting path relative to the project root
-     * @param filePattern optional glob pattern for files (e.g., "*.java")
-     * @return the search results in an EditorResult
-     */
     /**
      * Searches for a regex pattern in the project files using RipGrep.
      */
@@ -110,9 +103,12 @@ public class GrepService {
             }
 
             return new EditorResult(true, output.toString().trim(), null);
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             log.error("Exception executing RipGrep: {}", e.getMessage(), e);
             return new EditorResult(false, "", "Error executing RipGrep: " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("RipGrep interrupted");
         }
     }
 
@@ -160,8 +156,11 @@ public class GrepService {
                 }
             }
             process.waitFor();
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             log.error("Failed to list files using RipGrep: {}", e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("RipGrep interrupted");
         }
         return files;
     }

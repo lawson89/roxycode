@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 
 /**
  * Service for read-only Git operations.
@@ -98,9 +99,12 @@ public class GitService {
             }
 
             return output.toString().trim();
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             log.error("Exception executing git command {}: {}", String.join(" ", args), e.getMessage(), e);
             return "Error executing git command: " + e.getMessage();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("Git command interrupted");
         }
     }
 }

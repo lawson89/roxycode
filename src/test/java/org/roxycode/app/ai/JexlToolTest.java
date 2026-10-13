@@ -3,6 +3,7 @@ package org.roxycode.app.ai;
 import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.junit.jupiter.api.Assertions.*;
+import java.util.concurrent.CancellationException;
 
 public class JexlToolTest {
 
@@ -57,5 +58,17 @@ public class JexlToolTest {
         JexlTool tool = new JexlTool(registry);
         String result = tool.executeJexl("if (");
         assertTrue(result.contains("Syntax Error"));
+    }
+
+    @Test
+    public void testExecuteJexlInterrupted() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry);
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(CancellationException.class, () -> tool.executeJexl("1 + 1"));
+        } finally {
+            Thread.interrupted(); // Clear flag
+        }
     }
 }

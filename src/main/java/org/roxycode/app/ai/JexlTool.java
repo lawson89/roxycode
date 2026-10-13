@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.CancellationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -49,6 +50,9 @@ public class JexlTool {
      */
     @Tool(description = "Executes a Jexl script and returns the result as a string. Useful for calculations and logic.")
     public String executeJexl(String script) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Execution interrupted before start");
+        }
         log.info("Executing JEXL script: {}", script);
         ObjectMapper mapper = new ObjectMapper();
         
@@ -90,6 +94,12 @@ public class JexlTool {
                 if (current instanceof YieldTurnException) {
                     // YieldTurnException message is already a JSON string
                     return current.getMessage();
+                }
+                if (current instanceof InterruptedException || current instanceof CancellationException) {
+                    if (current instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                    throw new RuntimeException(current);
                 }
                 if (current.getCause() == current || current.getCause() == null) break;
                 current = current.getCause();

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -131,6 +132,8 @@ public class GenericBuildToolService {
 
             Map<String, String> env = getEnv(config);
             return execute(command, env, errorRegex, testFailureRegex);
+        } catch (CancellationException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to run build command: {}", commandKey, e);
             return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of(), e.getMessage());
@@ -264,6 +267,9 @@ public class GenericBuildToolService {
                 errors.add("Command timed out after 10 minutes");
             }
 
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("Process execution interrupted");
         } catch (Exception e) {
             log.error("Process execution failed", e);
             errors.add(e.getMessage());
