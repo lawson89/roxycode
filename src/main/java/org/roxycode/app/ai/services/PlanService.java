@@ -270,6 +270,15 @@ public class PlanService {
     public String requestCompletion(String reason) {
         return workflowService.routeToPhase("PLAN", reason);
     }
+    /**
+     * Transitions the workflow back to planning (PLAN) to address technical blockers.
+     */
+    @AgentDoc(value = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.",
+              examples = "planService.requestPlanRevision('Blocked by missing API, need to update the architecture.')")
+    public String requestPlanRevision(String reason) {
+        return workflowService.routeToPhase("PLAN", reason);
+    }
+
 
     private List<String> extractStringList(Object obj) {
         if (obj == null) {

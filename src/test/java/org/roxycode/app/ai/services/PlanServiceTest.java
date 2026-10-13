@@ -83,4 +83,11 @@ class PlanServiceTest {
         service.requestCompletion(reason);
         verify(workflowService).routeToPhase("PLAN", reason);
     }
+
+    @Test
+    void testRequestPlanRevision() {
+        String reason = "Technical blocker";
+        service.requestPlanRevision(reason);
+        verify(workflowService, times(1)).routeToPhase("PLAN", reason);
+    }
 }
