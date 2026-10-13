@@ -8,6 +8,7 @@ import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.WorkflowPhase;
 import javax.swing.*;
+import java.awt.event.ActionListener;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,7 @@ public class SidebarPanel extends JPanel {
     }
  
     private void initComponents() {
-        setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]5[]2[]2[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
+        setLayout(new MigLayout("wrap, fillx, insets 15", "[fill, grow]", "[]20[]5[]2[]2[]2[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
         
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
  
@@ -38,19 +39,18 @@ public class SidebarPanel extends JPanel {
  
         add(createSectionHeader("MAIN"), "gaptop 10");
         
-        NavButton qaBtn = createNavButton("Codebase Q&A", "CHAT", Codicons.COMMENT_DISCUSSION);
-        qaBtn.addActionListener(e -> workflowService.switchMode(WorkflowPhase.EXPLORE));
+        NavButton qaBtn = createNavButton("Codebase Q&A", "CHAT", Codicons.COMMENT_DISCUSSION, e -> 
+            navigateToChat(WorkflowPhase.EXPLORE, (NavButton)e.getSource()));
         add(qaBtn);
         
-        NavButton taskBtn = createNavButton("Active Task", "CHAT", Codicons.ROCKET);
-        taskBtn.addActionListener(e -> {
-            if (workflowService.getCurrentPhase() == WorkflowPhase.EXPLORE) {
-                workflowService.switchMode(WorkflowPhase.PLAN);
-            } else {
-                navigationAction.accept("CHAT");
-            }
+        NavButton taskBtn = createNavButton("Active Task", "CHAT", Codicons.ROCKET, e -> {
+            WorkflowPhase target = workflowService.getCurrentPhase() == WorkflowPhase.EXPLORE ? 
+                WorkflowPhase.PLAN : workflowService.getCurrentPhase();
+            navigateToChat(target, (NavButton)e.getSource());
         });
         add(taskBtn);
+
+        add(createNavButton("Project Plan", "PLAN", Codicons.LIST_ORDERED));
  
         add(createNavButton("History", "HISTORY", Codicons.HISTORY));
         add(createNavButton("Git Changes", "GIT", Codicons.DIFF));
@@ -89,13 +89,27 @@ public class SidebarPanel extends JPanel {
     }
  
     private NavButton createNavButton(String text, String cardName, Codicons iconCode) {
+        return createNavButton(text, cardName, iconCode, null);
+    }
+
+    private NavButton createNavButton(String text, String cardName, Codicons iconCode, ActionListener customListener) {
         FontIcon icon = FontIcon.of(iconCode, 16);
         NavButton btn = new NavButton(text, icon);
-        btn.addActionListener(e -> {
-            updateSelection(btn);
-            navigationAction.accept(cardName);
-        });
+        if (customListener != null) {
+            btn.addActionListener(customListener);
+        } else {
+            btn.addActionListener(e -> {
+                updateSelection(btn);
+                navigationAction.accept(cardName);
+            });
+        }
         navButtons.add(btn);
         return btn;
     }
+    private void navigateToChat(WorkflowPhase targetPhase, NavButton btn) {
+        workflowService.switchMode(targetPhase);
+        updateSelection(btn);
+        navigationAction.accept("CHAT");
+    }
+
 }
