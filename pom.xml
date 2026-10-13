@@ -135,6 +135,29 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+                <version>3.28.0</version> <!-- Check for the latest version -->
+                <configuration>
+                    <!-- Fails the build if PMD finds any errors -->
+                    <failOnViolation>true</failOnViolation>
+                    <!-- Prints the specific errors in the console output -->
+                    <printFailingErrors>true</printFailingErrors>
+                    <rulesets>
+                        <!-- Use default rulesets or point to a custom ruleset.xml -->
+                        <ruleset>/category/java/errorprone.xml</ruleset>
+                    </rulesets>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 

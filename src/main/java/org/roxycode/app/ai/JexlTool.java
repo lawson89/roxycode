@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.CancellationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Objects;
 
 /**
  * A tool for executing Jexl scripts. This tool has access to services registered in the JexlServiceRegistry.
@@ -101,13 +102,13 @@ public class JexlTool {
                     }
                     throw new RuntimeException(current);
                 }
-                if (current.getCause() == current || current.getCause() == null) break;
+                if (Objects.equals(current.getCause(), current) || current.getCause() == null) break;
                 current = current.getCause();
             }
 
             log.error("Error executing JEXL script: {}", e.getMessage(), e);
             Throwable cause = e;
-            while (cause.getCause() != null && cause.getCause() != cause) {
+            while (cause.getCause() != null && !Objects.equals(cause.getCause(), cause)) {
                 cause = cause.getCause();
             }
             String error = cause.getMessage();

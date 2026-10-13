@@ -15,7 +15,9 @@ import java.net.URL;
 /**
  * Component displaying user profile information in the sidebar.
  */
-public class UserProfileComponent extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class UserProfileComponent extends JPanel {
+    private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(UserProfileComponent.class);
     private Image avatarImage;
 

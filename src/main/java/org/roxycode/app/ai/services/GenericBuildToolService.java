@@ -22,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Locale;
 
 /**
  * Service for interacting with arbitrary build tools via .roxycode/build.toml.
@@ -227,7 +228,7 @@ public class GenericBuildToolService {
 
         try {
             ProcessBuilder pb;
-            if (System.getProperty("os.name").toLowerCase().contains("win")) {
+            if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")) {
                 pb = new ProcessBuilder("cmd.exe", "/c", command);
             } else {
                 pb = new ProcessBuilder("sh", "-c", command);
@@ -245,9 +246,10 @@ public class GenericBuildToolService {
             // Asynchronously read the output to prevent blocking the timeout logic
             CompletableFuture<Void> readerFuture = CompletableFuture.runAsync(() -> {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
+                    String line = reader.readLine();
+                    while (line != null) {
                         output.append(line).append("\n");
+                        line = reader.readLine();
                     }
                 } catch (IOException e) {
                     log.error("Error reading process output", e);

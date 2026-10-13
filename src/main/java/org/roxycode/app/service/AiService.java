@@ -26,11 +26,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.MimeTypeUtils;
 
 @Service
+@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class AiService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AiService.class);
+    private static final String NEWLINE_DOUBLE = "\n\n";
+    private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
+    private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
+    private static final String HEADER_SESSION_CONTEXT = "\n\n## SESSION CONTEXT\n";
+    private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
+    private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
+    private static final String FIELD_MESSAGE = "message";
 
     public String chat(String message) {
         return chat("default", workflowService.getCurrentPhase(), message, null, null);
     }
+
+    private static final String MSG_FIELD = "message";
 
     public String chat(String message, List<byte[]> images) {
         return chat("default", workflowService.getCurrentPhase(), message, null, images);
@@ -103,7 +114,7 @@ public class AiService {
                             content = node.get("message").asText();
                         }
                     } catch (Exception e) {
-                        // Not valid JSON
+                        log.trace("Response is not valid JSON, using raw content");
                     }
                 }
             } catch (Exception e) {
@@ -128,7 +139,7 @@ public class AiService {
 
         StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
         systemPrompt.append(promptService.loadAllPrompts());
-        systemPrompt.append("\n\n## JEXL CONTEXT\n").append(promptService.loadJexlContext()).append("\n\n");
+        systemPrompt.append(HEADER_JEXL_CONTEXT).append(promptService.loadJexlContext()).append(NEWLINE_DOUBLE);
         systemPrompt.append(promptService.loadAllDocs());
         systemPrompt.append(promptService.loadProjectContext());
 
@@ -147,10 +158,10 @@ public class AiService {
 
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
         if (repoMap.success()) {
-            systemPrompt.append("\n\n## REPOSITORY MAP\n").append(repoMap.content()).append("\n");
+            systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
         }
 
-        systemPrompt.append("\n\n## SESSION CONTEXT\n");
+        systemPrompt.append(HEADER_SESSION_CONTEXT);
         systemPrompt.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage()).append("\n");
         systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
 
@@ -160,10 +171,10 @@ public class AiService {
 
         String gitStatus = gitService.getStatus();
         if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
-            systemPrompt.append("## GIT STATUS\n").append(gitStatus).append("\n\n");
+            systemPrompt.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
         }
         if (systemPromptText != null) {
-            systemPrompt.append("## ADDITIONAL INSTRUCTIONS\n").append(systemPromptText).append("\n\n");
+            systemPrompt.append(HEADER_ADDITIONAL_INSTRUCTIONS).append(systemPromptText).append(NEWLINE_DOUBLE);
         }
 
         return chatClient.prompt()

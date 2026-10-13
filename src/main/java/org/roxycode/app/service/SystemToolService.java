@@ -12,7 +12,6 @@ import java.util.concurrent.CompletableFuture;
 
 @Service
 public class SystemToolService {
-
     private static final Logger log = LoggerFactory.getLogger(SystemToolService.class);
 
     public CompletableFuture<List<SystemTool>> detectTools() {
@@ -31,15 +30,14 @@ public class SystemToolService {
             ProcessBuilder pb = new ProcessBuilder(command, versionArg);
             pb.redirectErrorStream(true);
             Process process = pb.start();
-            
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append(" ");
+                String line = reader.readLine();
+                while (line != null) {
+                    output.append(line).append("\n");
+                    line = reader.readLine();
                 }
             }
-            
             int exitCode = process.waitFor();
             if (exitCode == 0) {
                 String version = parseVersion(output.toString(), name);
@@ -56,8 +54,6 @@ public class SystemToolService {
 
     private String parseVersion(String output, String toolName) {
         if (output == null || output.isEmpty()) return "Unknown";
-        String firstLine = output.split(" ")[0].trim();
-        // Handle cases where the first word isn't the version
         String fullOutput = output.trim();
         if (toolName.equals("Java")) {
             return fullOutput.contains("version") ? fullOutput.substring(fullOutput.indexOf("version")) : fullOutput;

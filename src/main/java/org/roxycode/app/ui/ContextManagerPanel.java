@@ -9,7 +9,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.List;
 
-public class ContextManagerPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass", "PMD.NullAssignment"})
+public final class ContextManagerPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
 
     private final PromptService promptService;
     private final JList<String> fileList;

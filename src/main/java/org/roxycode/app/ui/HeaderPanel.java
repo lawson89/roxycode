@@ -14,6 +14,7 @@ import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
  
 import javax.swing.*;
+import java.util.Locale;
 import java.awt.*;
 import java.io.File;
 import java.util.ArrayList;
@@ -23,7 +24,10 @@ import java.util.function.Consumer;
 /**
  * Header panel containing application controls and project selection.
  */
-public class HeaderPanel extends JPanel {
+@SuppressWarnings({"PMD.AvoidDuplicateLiterals", "PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class HeaderPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
+    private static final String LAYOUT_CENTER = "center";
     private final ProjectService projectService;
     private final GitService gitService;
     private final WorkflowService workflowService;
@@ -146,7 +150,7 @@ public class HeaderPanel extends JPanel {
     private void updateActivePhase(WorkflowPhase currentPhase) {
         ImplementationPlan plan = planManagerService.getCurrentPlan();
         if (currentPhase != WorkflowPhase.EXPLORE && plan != null && plan.title() != null && !plan.title().isBlank()) {
-            planLabel.setText(plan.title().toUpperCase());
+            planLabel.setText(plan.title().toUpperCase(Locale.ROOT));
             planLabel.setVisible(true);
         } else {
             planLabel.setVisible(false);

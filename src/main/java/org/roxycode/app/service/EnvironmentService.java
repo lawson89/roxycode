@@ -3,6 +3,7 @@ package org.roxycode.app.service;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.springframework.stereotype.Service;
+import java.util.Locale;
 
 import java.awt.Color;
 import javax.swing.UIManager;
@@ -38,7 +39,7 @@ public class EnvironmentService {
     }
 
     public FontIcon getOsIcon() {
-        String os = getOsName().toLowerCase();
+        String os = getOsName().toLowerCase(Locale.ROOT);
         Codicons icon;
         if (os.contains("win")) {
             icon = Codicons.WINDOW;

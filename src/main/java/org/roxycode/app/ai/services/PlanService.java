@@ -7,6 +7,7 @@ import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.model.ImplementationPlan;
 
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
  */
 @AgentService(value = "planService", phases = {"*"})
 @AgentDoc("Service for managing project plans and specifications.")
+@SuppressWarnings("PMD.NullAssignment")
 public class PlanService {
 
     private ImplementationPlan currentPlan;
@@ -57,22 +59,22 @@ public class PlanService {
         
         // 1. Auto-append mandatory compile step
         boolean hasCompile = steps.stream()
-                .anyMatch(s -> s.description().toLowerCase().contains("compile"));
+                .anyMatch(s -> s.description().toLowerCase(Locale.ROOT).contains("compile"));
         if (!hasCompile) {
             steps.add(new ImplementationPlan.TechStep("Code compiles successfully", false));
         }
 
         // 2. Auto-append mandatory test step
         boolean hasTests = steps.stream()
-                .anyMatch(s -> s.description().toLowerCase().contains("unit test") 
-                            || s.description().toLowerCase().contains("tests pass"));
+                .anyMatch(s -> s.description().toLowerCase(Locale.ROOT).contains("unit test") 
+                            || s.description().toLowerCase(Locale.ROOT).contains("tests pass"));
         if (!hasTests) {
             steps.add(new ImplementationPlan.TechStep("Unit tests pass", false));
         }
 
         // 3. Auto-append mandatory code review step
         boolean hasReview = steps.stream()
-                .anyMatch(s -> s.description().toLowerCase().contains("code review"));
+                .anyMatch(s -> s.description().toLowerCase(Locale.ROOT).contains("code review"));
         if (!hasReview) {
             steps.add(new ImplementationPlan.TechStep("Automated code review passes", false));
         }

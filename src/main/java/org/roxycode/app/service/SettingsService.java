@@ -18,6 +18,7 @@ import java.util.function.Consumer;
  * Service for managing application settings.
  */
 @Service
+@SuppressWarnings("PMD.NullAssignment")
 public class SettingsService {
     private static final Logger log = LoggerFactory.getLogger(SettingsService.class);
     private static final String SETTINGS_DIR = ".roxycode";

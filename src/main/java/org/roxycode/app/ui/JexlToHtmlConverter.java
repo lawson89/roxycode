@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
  * Utility class to convert JEXL and programming script text to syntax-highlighted HTML.
  * Optimized for display in MarkdownPane and MarkdownViewer using CSS classes.
  */
+@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class JexlToHtmlConverter {
 
     private static final String[] KEYWORDS = {

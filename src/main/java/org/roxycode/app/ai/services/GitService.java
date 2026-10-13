@@ -82,9 +82,10 @@ public class GitService {
 
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
+                String line = reader.readLine();
+                while (line != null) {
                     output.append(line).append("\n");
+                    line = reader.readLine();
                 }
             }
 

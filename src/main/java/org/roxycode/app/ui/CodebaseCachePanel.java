@@ -21,7 +21,9 @@ import java.awt.*;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
-public class CodebaseCachePanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class CodebaseCachePanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
     private final ProjectCacheMetaService metaService;
     private final RepoMapPackerService packerService;

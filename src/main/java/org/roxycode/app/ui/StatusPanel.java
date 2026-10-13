@@ -9,7 +9,9 @@ import java.awt.*;
 /**
  * Bottom status bar with system info.
  */
-public class StatusPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class StatusPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private final EnvironmentService envService;
     private final org.springframework.ai.chat.memory.ChatMemory chatMemory;
     private final JLabel memLabel;

@@ -12,7 +12,9 @@ import java.util.Arrays;
 /**
  * A reusable component for viewing Markdown content with theme-aware styling.
  */
-public class MarkdownViewer extends JTextPane {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class MarkdownViewer extends JTextPane {
+    private static final long serialVersionUID = 1L;
     private final Parser parser;
     private final HtmlRenderer renderer;
     private String currentMarkdown = "";

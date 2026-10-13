@@ -12,10 +12,14 @@ import java.util.List;
 import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.stereotype.Service;
+import java.util.Locale;
 import org.springframework.context.annotation.Lazy;
 
 @Service
+@SuppressWarnings("PMD.NullAssignment")
 public class WorkflowService {
+    private static final String PHASE_DEVELOP = "DEVELOP";
+    private static final String PHASE_CODE = "CODE";
 
     private final PlanService planManager;
     private final EnvironmentService environmentService;
@@ -71,9 +75,9 @@ public class WorkflowService {
     public String routeToPhase(String phaseName, String reason) {
 
         WorkflowPhase nextPhase;
-        String normalizedName = phaseName.toUpperCase();
-        if ("DEVELOP".equals(normalizedName)) {
-            normalizedName = "CODE";
+        String normalizedName = phaseName.toUpperCase(Locale.ROOT);
+        if (PHASE_DEVELOP.equals(normalizedName)) {
+            normalizedName = PHASE_CODE;
         }
         
         try {

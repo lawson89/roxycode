@@ -21,7 +21,10 @@ import java.awt.*;
 /**
  * Main application window for RoxyCode.
  */
-public class MainFrame extends JFrame {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class MainFrame extends JFrame {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MainFrame.class);
+    private static final long serialVersionUID = 1L;
  
     private final SettingsService settingsService;
     private final AiService aiService;
@@ -101,7 +104,7 @@ public class MainFrame extends JFrame {
                 setIconImage(new ImageIcon(iconUrl).getImage());
             }
         } catch (Exception e) {
-            // Ignore icon loading errors
+            if (log.isTraceEnabled()) log.trace("Failed to load icon: {}", e.getMessage());
         }
     }
  

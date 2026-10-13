@@ -13,10 +13,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import java.util.Locale;
 import java.awt.*;
 import java.io.IOException;
 
-public class BuildConfigPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class BuildConfigPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
     private final GenericBuildToolService buildToolService;
     private final SettingsService settingsService;
@@ -92,7 +95,7 @@ public class BuildConfigPanel extends JPanel {
 
     private void updateTextAreaTheme() {
         String themeName = settingsService.getSettings().getTheme();
-        boolean isDark = themeName.toLowerCase().contains("dark") || themeName.equalsIgnoreCase("Darcula");
+        boolean isDark = themeName.toLowerCase(Locale.ROOT).contains("dark") || themeName.equalsIgnoreCase("Darcula");
         String themePath = isDark ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml" : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
         try {
             Theme theme = Theme.load(getClass().getResourceAsStream(themePath));

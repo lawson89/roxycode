@@ -87,14 +87,16 @@ public class GrepService {
 
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
+                String line = reader.readLine();
+                while (line != null) {
                     output.append(line).append("\n");
+                    line = reader.readLine();
                 }
             }
 
             int exitCode = process.waitFor();
-            if (exitCode == 1) {
+            final int exitCodeNoMatches = 1;
+            if (exitCode == exitCodeNoMatches) {
                 return new EditorResult(true, "", null);
             } else if (exitCode != 0) {
                 String error = output.toString().trim();
@@ -150,9 +152,10 @@ public class GrepService {
             Process process = pb.start();
 
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
+                String line = reader.readLine();
+                while (line != null) {
                     files.add(line);
+                    line = reader.readLine();
                 }
             }
             process.waitFor();

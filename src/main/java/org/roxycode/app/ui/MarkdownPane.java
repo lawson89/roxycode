@@ -9,6 +9,7 @@ import com.vladsch.flexmark.util.data.MutableDataSet;
 import javax.swing.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -17,7 +18,9 @@ import java.util.List;
  * A JTextPane that renders Markdown messages using native Java templates.
  * Supports streaming updates by re-rendering the message history.
  */
-public class MarkdownPane extends JTextPane {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class MarkdownPane extends JTextPane {
+    private static final long serialVersionUID = 1L;
     private final Parser parser;
     private final HtmlRenderer renderer;
     private final List<Message> messages = new ArrayList<>();
@@ -74,7 +77,7 @@ public class MarkdownPane extends JTextPane {
                 } else {
                                         String renderedMarkdown = renderer.render(parser.parse(msg.content().toString()));
                     String highlightedHtml = JexlToHtmlConverter.highlightCodeBlocks(renderedMarkdown);
-                    fullHtml.append(ChatHtmlTemplates.renderChatEntry(msg.role().toLowerCase(), highlightedHtml, msg.timestamp()));
+                    fullHtml.append(ChatHtmlTemplates.renderChatEntry(msg.role().toLowerCase(Locale.ROOT), highlightedHtml, msg.timestamp()));
                 }
             } catch (Exception e) {
                 fullHtml.append("<div>Error rendering message</div>");

@@ -17,7 +17,9 @@ import java.util.function.Consumer;
 /**
  * Sidebar panel containing user profile and navigation.
  */
-public class SidebarPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass", "PMD.CompareObjectsWithEquals"})
+public final class SidebarPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private final SettingsService settingsService;
     private final WorkflowService workflowService;
     private final Consumer<String> navigationAction;

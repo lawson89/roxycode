@@ -12,7 +12,9 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 
-public class SystemToolsPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class SystemToolsPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
 
     private final SystemToolService toolService;
     final DefaultTableModel tableModel;
@@ -79,12 +81,14 @@ public class SystemToolsPanel extends JPanel {
     }
 
         private static class StatusCellRenderer extends DefaultTableCellRenderer {
+        private static final long serialVersionUID = 1L;
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
             
             String status = String.valueOf(value);
-            if ("Detected".equals(status)) {
+            final String statusDetected = "Detected";
+            if (statusDetected.equals(status)) {
                 Color successColor = new Color(40, 167, 69);
                 setForeground(successColor);
                 setIcon(FontIcon.of(Codicons.CHECK, 16, successColor));

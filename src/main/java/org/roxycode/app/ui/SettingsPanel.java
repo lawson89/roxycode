@@ -24,7 +24,10 @@ import java.util.List;
 /**
  * Panel for application settings.
  */
-public class SettingsPanel extends JPanel {
+@SuppressWarnings({"PMD.AvoidDuplicateLiterals", "PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class SettingsPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
+    private static final String LAYOUT_WRAP = "wrap";
     private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
     private final SettingsService settingsService;
     private final JComboBox<String> themeCombo;

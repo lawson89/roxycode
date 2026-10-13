@@ -10,7 +10,9 @@ import java.awt.*;
 /**
  * Collapsible panel for displaying reasoning tokens from the AI model.
  */
-public class ThoughtPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class ThoughtPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private final JTextArea textArea;
     private final JButton toggleButton;
     private final JScrollPane scrollPane;

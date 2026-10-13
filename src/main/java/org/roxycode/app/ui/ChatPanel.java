@@ -36,7 +36,10 @@ import java.awt.event.ActionEvent;
 /**
  * Panel for the chat interface, including output display and user input area.
  */
-public class ChatPanel extends JPanel {
+@SuppressWarnings({"PMD.AvoidDuplicateLiterals", "PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass", "PMD.NullAssignment"})
+public final class ChatPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
+    private static final String ROLE_SYSTEM = "system";
 
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
     private final AiService aiService;

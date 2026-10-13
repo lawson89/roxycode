@@ -9,7 +9,9 @@ import java.awt.*;
 /**
  * Styled navigation button for the sidebar.
  */
-public class NavButton extends JButton {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class NavButton extends JButton {
+    private static final long serialVersionUID = 1L;
     public NavButton(String text, Icon icon) {
         super(text, icon);
         setHorizontalAlignment(SwingConstants.LEFT);

@@ -8,6 +8,7 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
 import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;
+import java.util.Locale;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +16,9 @@ import java.util.List;
 /**
  * A UI component that visualizes the workflow phases and tracks current progress.
  */
-public class PhaseStepPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class PhaseStepPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
 
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
 
@@ -60,7 +63,7 @@ public class PhaseStepPanel extends JPanel {
         if (currentPhase == WorkflowPhase.EXPLORE || plan == null || plan.title() == null || plan.title().isBlank()) {
             planLabel.setVisible(false);
         } else {
-            planLabel.setText(plan.title().toUpperCase());
+            planLabel.setText(plan.title().toUpperCase(Locale.ROOT));
             planLabel.setVisible(true);
         }
     }

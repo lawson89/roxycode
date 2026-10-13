@@ -51,9 +51,11 @@ public class RoxyCode {
             System.setProperty("spring.ai.google.genai.chat.options.model", "gemini-1.5-flash");
         }
 
+        @SuppressWarnings("PMD.CloseResource")
         ConfigurableApplicationContext context = new SpringApplicationBuilder(RoxyCode.class)
                 .headless(false)
                 .run(args);
+        Runtime.getRuntime().addShutdownHook(new Thread(context::close));
 
         SwingUtilities.invokeLater(() -> {
             SettingsService settingsService = context.getBean(SettingsService.class);

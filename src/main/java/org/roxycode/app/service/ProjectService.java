@@ -14,6 +14,7 @@ import java.util.function.Consumer;
  */
 @Service
 @AgentDoc("Manages the current active project root directory and handles its persistence.")
+@SuppressWarnings("PMD.NullAssignment")
 public class ProjectService {
     private final SettingsService settingsService;
     private final List<Consumer<Path>> projectListeners = new ArrayList<>();

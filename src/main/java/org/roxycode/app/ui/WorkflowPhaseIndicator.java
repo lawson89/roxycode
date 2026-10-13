@@ -12,7 +12,9 @@ import java.awt.*;
 /**
  * Shared UI component for workflow phase indicators with safe color fallbacks.
  */
-public class WorkflowPhaseIndicator extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class WorkflowPhaseIndicator extends JPanel {
+    private static final long serialVersionUID = 1L;
     private final WorkflowPhase phase;
     private final JLabel textLabel;
     private final JLabel iconLabel;

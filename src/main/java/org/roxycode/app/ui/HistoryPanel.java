@@ -9,6 +9,7 @@ import org.springframework.ai.chat.messages.MessageType;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
+import java.util.Locale;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.util.ArrayList;
@@ -17,7 +18,9 @@ import java.util.List;
 /**
  * Panel for displaying a persistent history of all AI interactions and tool executions.
  */
-public class HistoryPanel extends JPanel {
+@SuppressWarnings({"PMD.AvoidDuplicateLiterals", "PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class HistoryPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private final ChatMemory chatMemory;
     private final GeminiCacheService geminiCacheService;
     private final HistoryTableModel tableModel;
@@ -149,6 +152,7 @@ public class HistoryPanel extends JPanel {
 
 
     private class HistoryTableModel extends AbstractTableModel {
+        private static final long serialVersionUID = 1L;
         private final String[] columns = {"#", "Role", "Tokens", "Preview", "Action"};
         private List<Message> messages = new ArrayList<>();
 
@@ -192,14 +196,15 @@ public class HistoryPanel extends JPanel {
                     if (msg.getMessageType() == MessageType.TOOL) {
                         return "tool-response";
                     }
-                    return msg.getMessageType().name().toLowerCase();
+                    return msg.getMessageType().name().toLowerCase(Locale.ROOT);
                 case 2: return geminiCacheService.estimateTokens(msg.getText());
                 case 3: 
                     String content = msg.getText();
                     if (content == null) return "";
                     content = content.replace('\n', ' ').replace('\r', ' ');
-                    if (content.length() > 100) {
-                        return content.substring(0, 97) + "...";
+                    final int maxPreviewLength = 100;
+                    if (content.length() > maxPreviewLength) {
+                        return content.substring(0, maxPreviewLength - 3) + "...";
                     }
                     return content;
                 case 4: return "View";

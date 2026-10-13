@@ -67,44 +67,34 @@ public class RepoMapPackerService {
         log.debug("Repo map invalidated due to file change: {}", event.path());
     }
 
-    /**
-     * Generates a packed representation of the codebase.
-     * 
-     * @return EditorResult containing the packed repo map.
-     */
-    @AgentDoc(value = "Generates a comprehensive repo map of the codebase for exploration purposes.",
-              examples = "repoMapPackerService.generateRepoMap()")
     public EditorResult generateRepoMap() {
         if (!projectService.hasActiveProject()) {
             return new EditorResult(false, "", "No active project");
         }
 
         if (!needsUpdate && cachedMap != null) {
-            log.debug("Returning cached repo map.");
             return new EditorResult(true, cachedMap, null);
         }
 
         Path root = projectService.getCurrentProjectRoot();
-                List<String> files = grepService.listFiles(null);
+        List<String> files = grepService.listFiles(null);
         files = files.stream()
             .filter(f -> excludePatterns.stream().noneMatch(p -> f.startsWith(p)))
             .filter(f -> !isBinaryFile(root.resolve(f)))
             .toList();
-        
+
         StringBuilder sb = new StringBuilder();
         sb.append("# Repo Map Snapshot\n\n");
         sb.append("## Project Tree\n\n```\n");
         sb.append(FileTreeFormatter.format(files));
         sb.append("\n```\n\n");
-        
+
         for (String relPath : files) {
             Path filePath = root.resolve(relPath);
             if (!Files.isRegularFile(filePath)) {
                 continue;
             }
-
             sb.append("--- ").append(relPath).append(" ---\n");
-            
             try {
                 long size = Files.size(filePath);
                 if (size < RAW_CONTENT_THRESHOLD) {
@@ -125,53 +115,35 @@ public class RepoMapPackerService {
 
         this.cachedMap = sb.toString();
         this.needsUpdate = false;
-        
         long tokens = geminiCacheService.estimateTokens(cachedMap);
-        log.info("Generated repo map. Length: {}, Estimated tokens: {}", cachedMap.length(), tokens);
-        
-        // Save to disk for persistence and UI display
         metaService.saveRepoCache(cachedMap);
-        metaService.saveMeta(new ProjectCacheMeta(
-            projectService.getProjectName(),
-            LocalDateTime.now(),
-            tokens
-        ));
-        
+        metaService.saveMeta(new ProjectCacheMeta(projectService.getProjectName(), LocalDateTime.now(), tokens));
         return new EditorResult(true, cachedMap, null);
     }
 
     private String getSkeleton(Path filePath, Path root) {
         try {
-            Process process = new ProcessBuilder("ctags", "-f", "-", "--output-format=json", "--fields=+n", filePath.toAbsolutePath().toString())
-                    .start();
-            
+            Process process = new ProcessBuilder("ctags", "-f", "-", "--output-format=json", "--fields=+n", filePath.toAbsolutePath().toString()).start();
             List<Tag> tags = new ArrayList<>();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
+                String line = reader.readLine();
+                while (line != null) {
                     try {
                         JsonNode node = objectMapper.readTree(line);
                         JsonNode nameNode = node.get("name");
                         JsonNode lineNode = node.get("line");
                         if (nameNode != null && lineNode != null) {
-                            tags.add(new Tag(
-                                nameNode.asText(),
-                                lineNode.asInt()
-                            ));
+                            tags.add(new Tag(nameNode.asText(), lineNode.asInt()));
                         }
                     } catch (Exception e) {
-                        // Skip unparseable lines
+                        log.trace("Skip unparseable line: {}", line);
                     }
+                    line = reader.readLine();
                 }
             }
             process.waitFor();
-
-            if (tags.isEmpty()) {
-                return null;
-            }
-
+            if (tags.isEmpty()) return null;
             tags.sort(Comparator.comparingInt(t -> t.line));
-
             List<String> lines = Files.readAllLines(filePath);
             StringBuilder skeleton = new StringBuilder();
             int lastLine = -1;
@@ -182,25 +154,20 @@ public class RepoMapPackerService {
                 }
             }
             return skeleton.toString();
-
         } catch (Exception e) {
             log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
             return null;
         }
     }
 
-    
     private boolean isBinaryFile(Path path) {
         try {
-            // Check for NUL bytes in the first 1024 bytes
             if (Files.exists(path)) {
                 try (java.io.InputStream is = Files.newInputStream(path)) {
                     byte[] buffer = new byte[1024];
                     int bytesRead = is.read(buffer);
                     for (int i = 0; i < bytesRead; i++) {
-                        if (buffer[i] == 0) {
-                            return true;
-                        }
+                        if (buffer[i] == 0) return true;
                     }
                 }
             }
@@ -209,6 +176,5 @@ public class RepoMapPackerService {
         }
         return false;
     }
-
     private record Tag(String name, int line) {}
 }

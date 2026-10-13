@@ -14,7 +14,9 @@ import java.awt.*;
 /**
  * Panel showing current git status and diff.
  */
-public class GitChangesPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class GitChangesPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(GitChangesPanel.class);
     private final GitService gitService;
     private final JTextArea statusArea;

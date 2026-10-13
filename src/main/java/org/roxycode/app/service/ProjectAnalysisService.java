@@ -2,6 +2,7 @@ package org.roxycode.app.service;
 
 import org.roxycode.app.ai.services.GrepService;
 import org.springframework.stereotype.Service;
+import java.util.Locale;
 
 import java.util.HashMap;
 import java.util.List;
@@ -30,7 +31,7 @@ public class ProjectAnalysisService {
             
             // Ensure the dot is actually an extension and not a hidden file without an extension (like .gitignore)
             if (lastDot > lastSlash + 1 && lastDot < filePath.length() - 1) {
-                String ext = filePath.substring(lastDot).toLowerCase();
+                String ext = filePath.substring(lastDot).toLowerCase(Locale.ROOT);
                 extensionCounts.put(ext, extensionCounts.getOrDefault(ext, 0) + 1);
             }
         }

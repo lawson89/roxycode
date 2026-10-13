@@ -2,13 +2,21 @@ package org.roxycode.app.ai;
 
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
  * Generates LLM-friendly documentation for JEXL-exposed services.
  * Uses pseudo-TypeScript syntax for better compatibility with LLM reasoning.
  */
+@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class LLMDocGenerator {
+    private static final String DOC_START = "/**\n";
+    private static final String DOC_END = " */\n";
+    private static final String DOC_LINE_START = " * ";
+    private static final String OPEN_BRACE_NEWLINE = " {\n";
+    private static final String INDENT = "    ";
+    private static final String INTERFACE_PREFIX = "interface ";
 
     public String generateDoc(Collection<Object> services) {
         StringBuilder sb = new StringBuilder();
@@ -18,7 +26,7 @@ public class LLMDocGenerator {
         sb.append(" * ⚠️ INTEROP WARNING: These services return Java objects in Apache Commons JEXL.\n");
         sb.append(" * Always return objects as the last expression of your script to inspect them.\n");
         sb.append(" * Note: Code must be written in Apache Commons JEXL 3 syntax.\n");
-        sb.append(" */\n\n");
+        sb.append(DOC_END).append("\n");
 
         Set<Class<?>> extraTypes = new LinkedHashSet<>();
 
@@ -30,11 +38,11 @@ public class LLMDocGenerator {
             AgentDoc agentDoc = clazz.getAnnotation(AgentDoc.class);
             if (agentDoc != null) {
                 sb.append("/**\n");
-                sb.append(" * ").append(agentDoc.value()).append("\n");
+                sb.append(DOC_LINE_START).append(agentDoc.value()).append("\n");
                 for (String note : agentDoc.notes()) {
-                    sb.append(" * Note: ").append(note).append("\n");
+                    sb.append(DOC_LINE_START).append("Note: ").append(note).append("\n");
                 }
-                sb.append(" */\n");
+                sb.append(DOC_END);
             }
             
             sb.append("// Global variable exposed in JEXL: ").append(agentService.value()).append("\n");
@@ -138,11 +146,11 @@ public class LLMDocGenerator {
                     if (m.getParameterCount() == 0 && m.getReturnType() != void.class) {
                         String propName = null;
                         if (name.startsWith("get") && name.length() > 3) {
-                            propName = Character.toLowerCase(name.charAt(3)) + name.substring(4);
+                            propName = decapitalize(name, 3);
                         } else if (name.startsWith("is") && name.length() > 2 && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
-                            propName = Character.toLowerCase(name.charAt(2)) + name.substring(3);
+                            propName = decapitalize(name, 2);
                         } else if (name.startsWith("has") && name.length() > 3 && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
-                            propName = Character.toLowerCase(name.charAt(3)) + name.substring(4);
+                            propName = decapitalize(name, 3);
                         }
                         if (propName != null) {
                             sb.append("    ").append(propName).append(": ")
@@ -153,5 +161,9 @@ public class LLMDocGenerator {
             }
             sb.append("}\n");
         }
+    }
+
+    private String decapitalize(String name, int offset) {
+        return Character.toLowerCase(name.charAt(offset)) + name.substring(offset + 1);
     }
 }

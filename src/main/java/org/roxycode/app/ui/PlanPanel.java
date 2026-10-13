@@ -11,7 +11,9 @@ import java.awt.*;
 /**
  * UI panel for displaying the current project plan and specifications.
  */
-public class PlanPanel extends JPanel {
+@SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+public final class PlanPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
 
     private final PlanService planManagerService;
     private final WorkflowService workflowService;
@@ -66,7 +68,8 @@ public class PlanPanel extends JPanel {
         
         for (ImplementationPlan.LogEntry entry : logs) {
             String ts = entry.timestamp();
-            if (ts.length() > 19) ts = ts.substring(0, 19).replace('T', ' ');
+            final int timestampLength = 19;
+            if (ts.length() > timestampLength) ts = ts.substring(0, timestampLength).replace('T', ' ');
             
             sb.append("<tr>");
             sb.append("<td valign='top'><font size='2' color='#888888'>").append(SwingHtmlUtils.escapeHtml(ts)).append("</font></td>");
