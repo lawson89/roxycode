@@ -1,7 +1,7 @@
 package org.roxycode.app.model;
 
-import org.roxycode.app.ai.AgentDoc;
 import java.util.List;
+import org.roxycode.app.ai.AgentDoc;
 
 @AgentDoc("Immutable structure for the project implementation plan.")
 public record ImplementationPlan(
@@ -14,17 +14,16 @@ public record ImplementationPlan(
     String approvedBy,
     String completedOn,
     List<LogEntry> codeReviewLog,
-    List<LogEntry> handoffLog
-) {
-    public record TechStep(String description, boolean completed) {}
-    
-    @AgentDoc("A structured log entry for the implementation history.")
-    public record LogEntry(String timestamp, String user, String message) {}
+    List<LogEntry> handoffLog) {
+  public record TechStep(String description, boolean completed) {}
 
-    public ImplementationPlan {
-        requirements = requirements != null ? List.copyOf(requirements) : List.of();
-        technicalSteps = technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
-        codeReviewLog = codeReviewLog != null ? List.copyOf(codeReviewLog) : List.of();
-        handoffLog = handoffLog != null ? List.copyOf(handoffLog) : List.of();
-    }
+  @AgentDoc("A structured log entry for the implementation history.")
+  public record LogEntry(String timestamp, String user, String message) {}
+
+  public ImplementationPlan {
+    requirements = requirements != null ? List.copyOf(requirements) : List.of();
+    technicalSteps = technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
+    codeReviewLog = codeReviewLog != null ? List.copyOf(codeReviewLog) : List.of();
+    handoffLog = handoffLog != null ? List.copyOf(handoffLog) : List.of();
+  }
 }

@@ -1,6 +1,20 @@
 package org.roxycode.app.ai.services;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
@@ -9,321 +23,334 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.Locale;
-
 /**
- * Service for interacting with arbitrary build tools via .roxycode/build.toml.
- * Provides methods for compilation, testing, and cleaning.
+ * Service for interacting with arbitrary build tools via .roxycode/build.toml. Provides methods for
+ * compilation, testing, and cleaning.
  */
 @Service
-@AgentService(value = "buildToolService", phases = {"CODE", "EXPLORE", "REVIEW"})
+@AgentService(
+    value = "buildToolService",
+    phases = {"CODE", "EXPLORE", "REVIEW"})
 public class GenericBuildToolService {
 
-    private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
-    private static final String CONFIG_PATH = ".roxycode/build.toml";
+  private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
+  private static final String CONFIG_PATH = ".roxycode/build.toml";
 
-    private final ProjectService projectService;
-    private final TomlMapper tomlMapper;
+  private final ProjectService projectService;
+  private final TomlMapper tomlMapper;
 
-    @Autowired
-    public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper) {
-        this.projectService = projectService;
-        this.tomlMapper = tomlMapper;
-        this.projectService.addProjectListener(path -> ensureConfig());
-        if (this.projectService.hasActiveProject()) {
-            ensureConfig();
-        }
+  @Autowired
+  public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper) {
+    this.projectService = projectService;
+    this.tomlMapper = tomlMapper;
+    this.projectService.addProjectListener(path -> ensureConfig());
+    if (this.projectService.hasActiveProject()) {
+      ensureConfig();
+    }
+  }
+
+  @AgentDoc(
+      value = "Cleans the project using the configured clean command",
+      examples = "buildToolService.clean()")
+  public BuildResult clean() {
+    return runCommand("clean");
+  }
+
+  @AgentDoc(
+      value = "Compiles the project using the configured compile command",
+      examples = "buildToolService.compile()")
+  public BuildResult compile() {
+    return runCommand("compile");
+  }
+
+  @AgentDoc(
+      value = "Checks if a generic build configuration exists (.roxycode/build.toml)",
+      examples = "buildToolService.detect()")
+  public boolean detect() {
+    if (!projectService.hasActiveProject()) {
+      return false;
+    }
+    return Files.exists(projectService.getCurrentProjectRoot().resolve(CONFIG_PATH));
+  }
+
+  @AgentDoc(
+      value = "Alias for runTests(). Runs all tests using the configured test command.",
+      examples = "buildToolService.test()")
+  public BuildResult test() {
+    return runTests();
+  }
+
+  @AgentDoc(
+      value = "Runs all tests using the configured test command",
+      examples = "buildToolService.runTests()")
+  public BuildResult runTests() {
+    return runCommand("run_all");
+  }
+
+  @AgentDoc(
+      value =
+          "Runs a single test using the configured run_single command. {testName} is replaced with the argument.",
+      examples = "buildToolService.runSingleTest('com.example.TestClass')")
+  public BuildResult runSingleTest(String testName) {
+    return runCommand("run_single", Map.of("testName", testName));
+  }
+
+  private BuildResult runCommand(String commandKey) {
+    return runCommand(commandKey, Map.of());
+  }
+
+  @AgentDoc(
+      value =
+          "Compiles the project and, if successful, runs all tests. Use this for the Verification phase.",
+      examples = "buildToolService.buildAndTest()")
+  public BuildResult buildAndTest() {
+    BuildResult compileResult = compile();
+    if (!compileResult.isSuccess()) {
+      return compileResult; // Fast fail if compilation breaks
+    }
+    BuildResult testResult = runTests();
+    // Combine outputs for the LLM
+    return new BuildResult(
+        testResult.isSuccess(),
+        testResult.getExitCode(),
+        "COMPILE OUTPUT:\n"
+            + compileResult.getOutput()
+            + "\n\nTEST OUTPUT:\n"
+            + testResult.getOutput(),
+        testResult.getErrors(),
+        testResult.getFailedTests(),
+        testResult.getLog());
+  }
+
+  private BuildResult runCommand(String commandKey, Map<String, String> placeholders) {
+    if (!projectService.hasActiveProject()) {
+      return new BuildResult(
+          false, -1, "", List.of("No active project"), List.of(), "No active project");
     }
 
-    @AgentDoc(value = "Cleans the project using the configured clean command",
-              examples = "buildToolService.clean()")
-    public BuildResult clean() {
-        return runCommand("clean");
-    }
+    ensureConfig();
 
-    @AgentDoc(value = "Compiles the project using the configured compile command",
-              examples = "buildToolService.compile()")
-    public BuildResult compile() {
-        return runCommand("compile");
-    }
-
-    @AgentDoc(value = "Checks if a generic build configuration exists (.roxycode/build.toml)",
-              examples = "buildToolService.detect()")
-    public boolean detect() {
-        if (!projectService.hasActiveProject()) {
-            return false;
-        }
-        return Files.exists(projectService.getCurrentProjectRoot().resolve(CONFIG_PATH));
-    }
-
-    @AgentDoc(value = "Alias for runTests(). Runs all tests using the configured test command.",
-              examples = "buildToolService.test()")
-    public BuildResult test() {
-        return runTests();
-    }
-
-    @AgentDoc(value = "Runs all tests using the configured test command",
-              examples = "buildToolService.runTests()")
-    public BuildResult runTests() {
-        return runCommand("run_all");
-    }
-
-    @AgentDoc(value = "Runs a single test using the configured run_single command. {testName} is replaced with the argument.",
-              examples = "buildToolService.runSingleTest('com.example.TestClass')")
-    public BuildResult runSingleTest(String testName) {
-        return runCommand("run_single", Map.of("testName", testName));
-    }
-
-    private BuildResult runCommand(String commandKey) {
-        return runCommand(commandKey, Map.of());
-    }
-
-    @AgentDoc(value = "Compiles the project and, if successful, runs all tests. Use this for the Verification phase.",
-              examples = "buildToolService.buildAndTest()")
-    public BuildResult buildAndTest() {
-        BuildResult compileResult = compile();
-        if (!compileResult.isSuccess()) {
-            return compileResult; // Fast fail if compilation breaks
-        }
-        BuildResult testResult = runTests();
-        // Combine outputs for the LLM
+    try {
+      Map<String, Object> config = loadConfig();
+      String command = getCommand(config, commandKey);
+      if (command == null || command.isBlank()) {
         return new BuildResult(
-            testResult.isSuccess(),
-            testResult.getExitCode(),
-            "COMPILE OUTPUT:\n" + compileResult.getOutput() + "\n\nTEST OUTPUT:\n" + testResult.getOutput(),
-            testResult.getErrors(),
-            testResult.getFailedTests(),
-            testResult.getLog()
-        );
+            false,
+            -1,
+            "",
+            List.of("Command not configured: " + commandKey),
+            List.of(),
+            "Command not configured");
+      }
+
+      for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+        command = command.replace("{" + entry.getKey() + "}", entry.getValue());
+      }
+
+      String errorRegex = getParseRegex(config, "error_regex");
+      String testFailureRegex = getParseRegex(config, "test_failure_regex");
+
+      Map<String, String> env = getEnv(config);
+      return execute(command, env, errorRegex, testFailureRegex);
+    } catch (CancellationException e) {
+      throw e;
+    } catch (Exception e) {
+      log.error("Failed to run build command: {}", commandKey, e);
+      return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of(), e.getMessage());
+    }
+  }
+
+  private void ensureConfig() {
+    Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
+    if (Files.exists(configPath)) {
+      return;
     }
 
-    private BuildResult runCommand(String commandKey, Map<String, String> placeholders) {
-        if (!projectService.hasActiveProject()) {
-            return new BuildResult(false, -1, "", List.of("No active project"), List.of(), "No active project");
+    try {
+      Files.createDirectories(configPath.getParent());
+      String templateName = detectTemplate();
+      try (InputStream is =
+          getClass().getResourceAsStream("/templates/build/" + templateName + ".toml")) {
+        if (is != null) {
+          Files.copy(is, configPath);
+        } else {
+          Files.writeString(configPath, "[build]\ncompile = \"echo 'No build command'\"");
         }
-
-        ensureConfig();
-
-        try {
-            Map<String, Object> config = loadConfig();
-            String command = getCommand(config, commandKey);
-            if (command == null || command.isBlank()) {
-                return new BuildResult(false, -1, "", List.of("Command not configured: " + commandKey), List.of(), "Command not configured");
-            }
-
-            for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-                command = command.replace("{" + entry.getKey() + "}", entry.getValue());
-            }
-
-            String errorRegex = getParseRegex(config, "error_regex");
-            String testFailureRegex = getParseRegex(config, "test_failure_regex");
-
-            Map<String, String> env = getEnv(config);
-            return execute(command, env, errorRegex, testFailureRegex);
-        } catch (CancellationException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to run build command: {}", commandKey, e);
-            return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of(), e.getMessage());
-        }
+      }
+    } catch (IOException e) {
+      log.error("Failed to initialize build config", e);
     }
+  }
 
-    private void ensureConfig() {
-        Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
-        if (Files.exists(configPath)) {
-            return;
-        }
-
-        try {
-            Files.createDirectories(configPath.getParent());
-            String templateName = detectTemplate();
-            try (InputStream is = getClass().getResourceAsStream("/templates/build/" + templateName + ".toml")) {
-                if (is != null) {
-                    Files.copy(is, configPath);
-                } else {
-                    Files.writeString(configPath, "[build]\ncompile = \"echo 'No build command'\"");
-                }
-            }
-        } catch (IOException e) {
-            log.error("Failed to initialize build config", e);
-        }
+  private String detectTemplate() {
+    Path root = projectService.getCurrentProjectRoot();
+    if (Files.exists(root.resolve("pom.xml"))) {
+      return "maven";
     }
-
-    private String detectTemplate() {
-        Path root = projectService.getCurrentProjectRoot();
-        if (Files.exists(root.resolve("pom.xml"))) {
-            return "maven";
-        }
-        if (Files.exists(root.resolve("build.gradle")) || Files.exists(root.resolve("build.gradle.kts"))) {
-            return "gradle";
-        }
-        if (Files.exists(root.resolve("package.json"))) {
-            return "npm";
-        }
-        if (Files.exists(root.resolve("requirements.txt")) || Files.exists(root.resolve("pyproject.toml"))) {
-            return "python";
-        }
-        if (Files.exists(root.resolve("go.mod")) || Files.exists(root.resolve("main.go"))) {
-            return "go";
-        }
-        if (Files.exists(root.resolve("CMakeLists.txt"))) {
-            return "cmake";
-        }
-        return "default";
+    if (Files.exists(root.resolve("build.gradle"))
+        || Files.exists(root.resolve("build.gradle.kts"))) {
+      return "gradle";
     }
-
-    private Map<String, Object> loadConfig() throws IOException {
-        Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
-        return tomlMapper.readValue(configPath.toFile(), Map.class);
+    if (Files.exists(root.resolve("package.json"))) {
+      return "npm";
     }
-
-    private String getCommand(Map<String, Object> config, String key) {
-        if (key.equals("compile") || key.equals("clean")) {
-            Map<String, Object> build = (Map<String, Object>) config.get("build");
-            return build != null ? (String) build.get(key) : null;
-        }
-        if (key.equals("run_all") || key.equals("run_single")) {
-            Map<String, Object> test = (Map<String, Object>) config.get("test");
-            return test != null ? (String) test.get(key) : null;
-        }
-        return null;
+    if (Files.exists(root.resolve("requirements.txt"))
+        || Files.exists(root.resolve("pyproject.toml"))) {
+      return "python";
     }
-
-    private String getParseRegex(Map<String, Object> config, String key) {
-        Map<String, Object> parse = (Map<String, Object>) config.get("parse");
-        return parse != null ? (String) parse.get(key) : null;
+    if (Files.exists(root.resolve("go.mod")) || Files.exists(root.resolve("main.go"))) {
+      return "go";
     }
-
-    private Map<String, String> getEnv(Map<String, Object> config) {
-        Map<String, Object> envObj = (Map<String, Object>) config.get("env");
-        if (envObj == null) {
-            return Map.of();
-        }
-        Map<String, String> env = new HashMap<>();
-        for (Map.Entry<String, Object> entry : envObj.entrySet()) {
-            env.put(entry.getKey(), String.valueOf(entry.getValue()));
-        }
-        return env;
+    if (Files.exists(root.resolve("CMakeLists.txt"))) {
+      return "cmake";
     }
+    return "default";
+  }
 
-    private BuildResult execute(String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
-        log.info("Executing build command: {}", command);
-                StringBuffer output = new StringBuffer();
-        List<String> errors = new ArrayList<>();
-        List<String> failedTests = new ArrayList<>();
-        int exitCode = -1;
+  private Map<String, Object> loadConfig() throws IOException {
+    Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
+    return tomlMapper.readValue(configPath.toFile(), Map.class);
+  }
 
-        try {
-            ProcessBuilder pb;
-            if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")) {
-                pb = new ProcessBuilder("cmd.exe", "/c", command);
-            } else {
-                pb = new ProcessBuilder("sh", "-c", command);
-            }
+  private String getCommand(Map<String, Object> config, String key) {
+    if (key.equals("compile") || key.equals("clean")) {
+      Map<String, Object> build = (Map<String, Object>) config.get("build");
+      return build != null ? (String) build.get(key) : null;
+    }
+    if (key.equals("run_all") || key.equals("run_single")) {
+      Map<String, Object> test = (Map<String, Object>) config.get("test");
+      return test != null ? (String) test.get(key) : null;
+    }
+    return null;
+  }
 
-            if (env != null && !env.isEmpty()) {
-                pb.environment().putAll(env);
-            }
+  private String getParseRegex(Map<String, Object> config, String key) {
+    Map<String, Object> parse = (Map<String, Object>) config.get("parse");
+    return parse != null ? (String) parse.get(key) : null;
+  }
 
-            pb.directory(projectService.getCurrentProjectRoot().toFile());
-            pb.redirectErrorStream(true);
+  private Map<String, String> getEnv(Map<String, Object> config) {
+    Map<String, Object> envObj = (Map<String, Object>) config.get("env");
+    if (envObj == null) {
+      return Map.of();
+    }
+    Map<String, String> env = new HashMap<>();
+    for (Map.Entry<String, Object> entry : envObj.entrySet()) {
+      env.put(entry.getKey(), String.valueOf(entry.getValue()));
+    }
+    return env;
+  }
 
-            Process process = pb.start();
+  private BuildResult execute(
+      String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
+    log.info("Executing build command: {}", command);
+    StringBuffer output = new StringBuffer();
+    List<String> errors = new ArrayList<>();
+    List<String> failedTests = new ArrayList<>();
+    int exitCode = -1;
 
-            // Asynchronously read the output to prevent blocking the timeout logic
-            CompletableFuture<Void> readerFuture = CompletableFuture.runAsync(() -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                    String line = reader.readLine();
-                    while (line != null) {
-                        output.append(line).append("\n");
-                        line = reader.readLine();
-                    }
+    try {
+      ProcessBuilder pb;
+      if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")) {
+        pb = new ProcessBuilder("cmd.exe", "/c", command);
+      } else {
+        pb = new ProcessBuilder("sh", "-c", command);
+      }
+
+      if (env != null && !env.isEmpty()) {
+        pb.environment().putAll(env);
+      }
+
+      pb.directory(projectService.getCurrentProjectRoot().toFile());
+      pb.redirectErrorStream(true);
+
+      Process process = pb.start();
+
+      // Asynchronously read the output to prevent blocking the timeout logic
+      CompletableFuture<Void> readerFuture =
+          CompletableFuture.runAsync(
+              () -> {
+                try (BufferedReader reader =
+                    new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                  String line = reader.readLine();
+                  while (line != null) {
+                    output.append(line).append("\n");
+                    line = reader.readLine();
+                  }
                 } catch (IOException e) {
-                    log.error("Error reading process output", e);
+                  log.error("Error reading process output", e);
                 }
-            });
+              });
 
-            if (process.waitFor(10, TimeUnit.MINUTES)) {
-                exitCode = process.exitValue();
-                // Ensure the reader has finished processing the stream
-                try {
-                    readerFuture.get(5, TimeUnit.SECONDS);
-                } catch (Exception e) {
-                    log.warn("Output reader did not complete within 5 seconds of process exit", e);
-                }
-            } else {
-                process.destroyForcibly();
-                errors.add("Command timed out after 10 minutes");
-            }
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new CancellationException("Process execution interrupted");
+      if (process.waitFor(10, TimeUnit.MINUTES)) {
+        exitCode = process.exitValue();
+        // Ensure the reader has finished processing the stream
+        try {
+          readerFuture.get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.error("Process execution failed", e);
-            errors.add(e.getMessage());
+          log.warn("Output reader did not complete within 5 seconds of process exit", e);
         }
+      } else {
+        process.destroyForcibly();
+        errors.add("Command timed out after 10 minutes");
+      }
 
-        String fullOutput = output.toString();
-
-        if (errorRegex != null && !errorRegex.isBlank()) {
-            try {
-                Pattern p = Pattern.compile(errorRegex);
-                Matcher m = p.matcher(fullOutput);
-                while (m.find()) {
-                    errors.add(m.group(m.groupCount() > 0 ? 1 : 0));
-                }
-            } catch (Exception e) {
-                log.error("Failed to parse errors with regex: {}", errorRegex, e);
-            }
-        }
-
-        if (testFailureRegex != null && !testFailureRegex.isBlank()) {
-            try {
-                Pattern p = Pattern.compile(testFailureRegex);
-                Matcher m = p.matcher(fullOutput);
-                while (m.find()) {
-                    failedTests.add(m.group(m.groupCount() > 0 ? 1 : 0));
-                }
-            } catch (Exception e) {
-                log.error("Failed to parse test failures with regex: {}", testFailureRegex, e);
-            }
-        }
-
-        boolean success = exitCode == 0 && errors.isEmpty();
-        return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new CancellationException("Process execution interrupted");
+    } catch (Exception e) {
+      log.error("Process execution failed", e);
+      errors.add(e.getMessage());
     }
 
-    public String getConfigContent() throws IOException {
-        if (!projectService.hasActiveProject()) {
-            return "";
+    String fullOutput = output.toString();
+
+    if (errorRegex != null && !errorRegex.isBlank()) {
+      try {
+        Pattern p = Pattern.compile(errorRegex);
+        Matcher m = p.matcher(fullOutput);
+        while (m.find()) {
+          errors.add(m.group(m.groupCount() > 0 ? 1 : 0));
         }
-        Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
-        if (!Files.exists(configPath)) {
-            ensureConfig();
-        }
-        return Files.readString(configPath, StandardCharsets.UTF_8);
+      } catch (Exception e) {
+        log.error("Failed to parse errors with regex: {}", errorRegex, e);
+      }
     }
 
-    public void saveConfigContent(String content) throws IOException {
-        if (!projectService.hasActiveProject()) {
-            return;
+    if (testFailureRegex != null && !testFailureRegex.isBlank()) {
+      try {
+        Pattern p = Pattern.compile(testFailureRegex);
+        Matcher m = p.matcher(fullOutput);
+        while (m.find()) {
+          failedTests.add(m.group(m.groupCount() > 0 ? 1 : 0));
         }
-        Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
-        Files.createDirectories(configPath.getParent());
-        Files.writeString(configPath, content, StandardCharsets.UTF_8);
+      } catch (Exception e) {
+        log.error("Failed to parse test failures with regex: {}", testFailureRegex, e);
+      }
     }
+
+    boolean success = exitCode == 0 && errors.isEmpty();
+    return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
+  }
+
+  public String getConfigContent() throws IOException {
+    if (!projectService.hasActiveProject()) {
+      return "";
+    }
+    Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
+    if (!Files.exists(configPath)) {
+      ensureConfig();
+    }
+    return Files.readString(configPath, StandardCharsets.UTF_8);
+  }
+
+  public void saveConfigContent(String content) throws IOException {
+    if (!projectService.hasActiveProject()) {
+      return;
+    }
+    Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
+    Files.createDirectories(configPath.getParent());
+    Files.writeString(configPath, content, StandardCharsets.UTF_8);
+  }
 }

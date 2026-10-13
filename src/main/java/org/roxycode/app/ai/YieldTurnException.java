@@ -5,8 +5,9 @@ package org.roxycode.app.ai;
  * The message typically contains content (like a proposal or plan) to be displayed to the user.
  */
 public class YieldTurnException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-    public YieldTurnException(String message) {
-        super(message);
-    }
+  private static final long serialVersionUID = 1L;
+
+  public YieldTurnException(String message) {
+    super(message);
+  }
 }

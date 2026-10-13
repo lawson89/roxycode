@@ -1,30 +1,31 @@
 package org.roxycode.app.ai;
 
-import org.springframework.stereotype.Service;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import org.springframework.stereotype.Service;
 
 /**
- * Annotation to mark Spring services for exposure to the AI Agent via JEXL.
- * This annotation is meta-annotated with {@link Service} to ensure Spring bean discovery.
+ * Annotation to mark Spring services for exposure to the AI Agent via JEXL. This annotation is
+ * meta-annotated with {@link Service} to ensure Spring bean discovery.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Service
 public @interface AgentService {
-    /**
-     * The name of the variable as it will be exposed in the JEXL context.
-     * @return the JEXL variable name
-     */
-    String value();
+  /**
+   * The name of the variable as it will be exposed in the JEXL context.
+   *
+   * @return the JEXL variable name
+   */
+  String value();
 
-    /**
-     * The phases allowed to access this service.
-     * Defaults to an empty array, meaning no phases are allowed.
-     * Use "*" as a wildcard to allow access to all agent phases.
-     * @return the allowed phases
-     */
-    String[] phases() default {};
+  /**
+   * The phases allowed to access this service. Defaults to an empty array, meaning no phases are
+   * allowed. Use "*" as a wildcard to allow access to all agent phases.
+   *
+   * @return the allowed phases
+   */
+  String[] phases() default {};
 }

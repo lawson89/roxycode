@@ -1,6 +1,10 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import java.awt.*;
+import java.io.IOException;
+import java.util.Locale;
+import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
@@ -12,96 +16,100 @@ import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.swing.*;
-import java.util.Locale;
-import java.awt.*;
-import java.io.IOException;
-
 @SuppressWarnings({"PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
 public final class BuildConfigPanel extends JPanel {
-    private static final long serialVersionUID = 1L;
-    private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
-    private final GenericBuildToolService buildToolService;
-    private final SettingsService settingsService;
-    private final ProjectService projectService;
-    private final RSyntaxTextArea textArea;
-    private final JButton saveButton;
-    private final JLabel statusLabel;
-    private final Timer statusTimer;
+  private static final long serialVersionUID = 1L;
+  private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
+  private final GenericBuildToolService buildToolService;
+  private final SettingsService settingsService;
+  private final ProjectService projectService;
+  private final RSyntaxTextArea textArea;
+  private final JButton saveButton;
+  private final JLabel statusLabel;
+  private final Timer statusTimer;
 
-    public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService, ProjectService projectService) {
-        this.buildToolService = buildToolService;
-        this.settingsService = settingsService;
-        this.projectService = projectService;
-        setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow][]"));
-        setOpaque(true);
+  public BuildConfigPanel(
+      GenericBuildToolService buildToolService,
+      SettingsService settingsService,
+      ProjectService projectService) {
+    this.buildToolService = buildToolService;
+    this.settingsService = settingsService;
+    this.projectService = projectService;
+    setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow][]"));
+    setOpaque(true);
 
-        JLabel title = new JLabel("Build Configuration (agents/colinxcode.toml)");
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
-        add(title, "wrap, gapbottom 15");
+    JLabel title = new JLabel("Build Configuration (agents/colinxcode.toml)");
+    title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
+    add(title, "wrap, gapbottom 15");
 
-        textArea = new RSyntaxTextArea();
-        // Using PROPERTIES as a safe fallback if TOML is not available in the library version
-        textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_INI);
-        textArea.setCodeFoldingEnabled(true);
-        textArea.setAntiAliasingEnabled(true);
-        updateTextAreaTheme();
+    textArea = new RSyntaxTextArea();
+    // Using PROPERTIES as a safe fallback if TOML is not available in the library version
+    textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_INI);
+    textArea.setCodeFoldingEnabled(true);
+    textArea.setAntiAliasingEnabled(true);
+    updateTextAreaTheme();
 
-        RTextScrollPane scrollPane = new RTextScrollPane(textArea);
-        add(scrollPane, "grow, wrap");
+    RTextScrollPane scrollPane = new RTextScrollPane(textArea);
+    add(scrollPane, "grow, wrap");
 
-        JPanel buttonPanel = new JPanel(new MigLayout("insets 0", "[]10push[]"));
-        buttonPanel.setOpaque(false);
+    JPanel buttonPanel = new JPanel(new MigLayout("insets 0", "[]10push[]"));
+    buttonPanel.setOpaque(false);
 
-        saveButton = new JButton("Save Changes");
-        saveButton.addActionListener(e -> saveConfig());
-        buttonPanel.add(saveButton);
+    saveButton = new JButton("Save Changes");
+    saveButton.addActionListener(e -> saveConfig());
+    buttonPanel.add(saveButton);
 
-        statusLabel = new JLabel("");
-        statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Actions.Green");
-        buttonPanel.add(statusLabel);
+    statusLabel = new JLabel("");
+    statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Actions.Green");
+    buttonPanel.add(statusLabel);
 
-        add(buttonPanel, "growx, gaptop 15");
+    add(buttonPanel, "growx, gaptop 15");
 
-        statusTimer = new Timer(3000, e -> statusLabel.setText(""));
-        statusTimer.setRepeats(false);
+    statusTimer = new Timer(3000, e -> statusLabel.setText(""));
+    statusTimer.setRepeats(false);
 
-        loadConfig();
+    loadConfig();
 
-        settingsService.addSettingsListener(settings -> updateTextAreaTheme());
-        projectService.addProjectListener(path -> loadConfig());
+    settingsService.addSettingsListener(settings -> updateTextAreaTheme());
+    projectService.addProjectListener(path -> loadConfig());
+  }
+
+  private void loadConfig() {
+    try {
+      textArea.setText(buildToolService.getConfigContent());
+      textArea.setCaretPosition(0);
+    } catch (IOException e) {
+      log.error("Failed to load build config", e);
+      textArea.setText("# Error loading config: " + e.getMessage());
     }
+  }
 
-    private void loadConfig() {
-        try {
-            textArea.setText(buildToolService.getConfigContent());
-            textArea.setCaretPosition(0);
-        } catch (IOException e) {
-            log.error("Failed to load build config", e);
-            textArea.setText("# Error loading config: " + e.getMessage());
-        }
+  private void saveConfig() {
+    try {
+      buildToolService.saveConfigContent(textArea.getText());
+      statusLabel.setText("Configuration saved successfully!");
+      statusTimer.restart();
+    } catch (Exception e) {
+      log.error("Failed to save build config: {}", e.getMessage());
+      JOptionPane.showMessageDialog(
+          this, "Error saving config: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
     }
+  }
 
-    private void saveConfig() {
-        try {
-            buildToolService.saveConfigContent(textArea.getText());
-            statusLabel.setText("Configuration saved successfully!");
-            statusTimer.restart();
-        } catch (Exception e) {
-            log.error("Failed to save build config: {}", e.getMessage());
-            JOptionPane.showMessageDialog(this, "Error saving config: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
+  private void updateTextAreaTheme() {
+    String themeName = settingsService.getSettings().getTheme();
+    boolean isDark =
+        themeName.toLowerCase(Locale.ROOT).contains("dark")
+            || themeName.equalsIgnoreCase("Darcula");
+    String themePath =
+        isDark
+            ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
+            : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
+    try {
+      Theme theme = Theme.load(getClass().getResourceAsStream(themePath));
+      theme.apply(textArea);
+    } catch (IOException ioe) {
+      log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
     }
-
-    private void updateTextAreaTheme() {
-        String themeName = settingsService.getSettings().getTheme();
-        boolean isDark = themeName.toLowerCase(Locale.ROOT).contains("dark") || themeName.equalsIgnoreCase("Darcula");
-        String themePath = isDark ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml" : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
-        try {
-            Theme theme = Theme.load(getClass().getResourceAsStream(themePath));
-            theme.apply(textArea);
-        } catch (IOException ioe) {
-            log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
-        }
-    }
+  }
 }

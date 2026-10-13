@@ -1,5 +1,12 @@
 package org.roxycode.app.ui;
 
+import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import javax.swing.*;
+import javax.swing.table.AbstractTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
 import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -7,209 +14,237 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 
-import javax.swing.*;
-import javax.swing.table.AbstractTableModel;
-import java.util.Locale;
-import javax.swing.table.DefaultTableCellRenderer;
-import java.awt.*;
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * Panel for displaying a persistent history of all AI interactions and tool executions.
- */
-@SuppressWarnings({"PMD.AvoidDuplicateLiterals", "PMD.ConstructorCallsOverridableMethod", "PMD.NonSerializableClass"})
+/** Panel for displaying a persistent history of all AI interactions and tool executions. */
+@SuppressWarnings({
+  "PMD.AvoidDuplicateLiterals",
+  "PMD.ConstructorCallsOverridableMethod",
+  "PMD.NonSerializableClass"
+})
 public final class HistoryPanel extends JPanel {
-    private static final long serialVersionUID = 1L;
-    private final ChatMemory chatMemory;
-    private final GeminiCacheService geminiCacheService;
-    private final HistoryTableModel tableModel;
-    private final JTable table;
-    private final JLabel statsLabel;
-    private final String sessionPrefix;
+  private static final long serialVersionUID = 1L;
+  private final ChatMemory chatMemory;
+  private final GeminiCacheService geminiCacheService;
+  private final HistoryTableModel tableModel;
+  private final JTable table;
+  private final JLabel statsLabel;
+  private final String sessionPrefix;
 
-    public HistoryPanel(TurnEventBridge turnEventBridge, ChatMemory chatMemory, GeminiCacheService geminiCacheService, String sessionPrefix) {
-        this.chatMemory = chatMemory;
-        this.geminiCacheService = geminiCacheService;
-        this.sessionPrefix = sessionPrefix;
-        this.tableModel = new HistoryTableModel();
-        this.table = new JTable(tableModel);
-        
-        setLayout(new BorderLayout());
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+  public HistoryPanel(
+      TurnEventBridge turnEventBridge,
+      ChatMemory chatMemory,
+      GeminiCacheService geminiCacheService,
+      String sessionPrefix) {
+    this.chatMemory = chatMemory;
+    this.geminiCacheService = geminiCacheService;
+    this.sessionPrefix = sessionPrefix;
+    this.tableModel = new HistoryTableModel();
+    this.table = new JTable(tableModel);
 
-        // Header
-        JPanel header = new JPanel(new BorderLayout());
-        statsLabel = new JLabel("0 Messages | 0 Tokens");
-        JButton refreshButton = new JButton("Refresh");
-        refreshButton.addActionListener(e -> refresh());
-        
-        header.add(statsLabel, BorderLayout.WEST);
-        header.add(refreshButton, BorderLayout.EAST);
-        header.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
-        add(header, BorderLayout.NORTH);
+    setLayout(new BorderLayout());
+    setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Table setup
-        table.setRowHeight(35);
-        table.getTableHeader().setReorderingAllowed(false);
-        
-        // Custom cell renderer for preview to handle snippets
-        table.getColumnModel().getColumn(3).setCellRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+    // Header
+    JPanel header = new JPanel(new BorderLayout());
+    statsLabel = new JLabel("0 Messages | 0 Tokens");
+    JButton refreshButton = new JButton("Refresh");
+    refreshButton.addActionListener(e -> refresh());
+
+    header.add(statsLabel, BorderLayout.WEST);
+    header.add(refreshButton, BorderLayout.EAST);
+    header.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+    add(header, BorderLayout.NORTH);
+
+    // Table setup
+    table.setRowHeight(35);
+    table.getTableHeader().setReorderingAllowed(false);
+
+    // Custom cell renderer for preview to handle snippets
+    table
+        .getColumnModel()
+        .getColumn(3)
+        .setCellRenderer(
+            new DefaultTableCellRenderer() {
+              @Override
+              public Component getTableCellRendererComponent(
+                  JTable table,
+                  Object value,
+                  boolean isSelected,
+                  boolean hasFocus,
+                  int row,
+                  int column) {
+                super.getTableCellRendererComponent(
+                    table, value, isSelected, hasFocus, row, column);
                 setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
                 return this;
-            }
-        });
+              }
+            });
 
-        // View Button column
-        table.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
-            private final JButton button = new JButton("View");
-            {
+    // View Button column
+    table
+        .getColumnModel()
+        .getColumn(4)
+        .setCellRenderer(
+            new DefaultTableCellRenderer() {
+              private final JButton button = new JButton("View");
+
+              {
                 button.putClientProperty("JButton.buttonType", "roundRect");
-            }
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+              }
+
+              @Override
+              public Component getTableCellRendererComponent(
+                  JTable table,
+                  Object value,
+                  boolean isSelected,
+                  boolean hasFocus,
+                  int row,
+                  int column) {
                 return button;
+              }
+            });
+
+    table.addMouseListener(
+        new java.awt.event.MouseAdapter() {
+          @Override
+          public void mouseClicked(java.awt.event.MouseEvent e) {
+            int row = table.rowAtPoint(e.getPoint());
+            int col = table.columnAtPoint(e.getPoint());
+            if (row >= 0 && col == 4) {
+              showDetail(row);
             }
+          }
         });
 
-        table.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                int row = table.rowAtPoint(e.getPoint());
-                int col = table.columnAtPoint(e.getPoint());
-                if (row >= 0 && col == 4) {
-                    showDetail(row);
-                }
-            }
+    // Column widths
+    table.getColumnModel().getColumn(0).setPreferredWidth(50);
+    table.getColumnModel().getColumn(0).setMaxWidth(50);
+    table.getColumnModel().getColumn(1).setPreferredWidth(120);
+    table.getColumnModel().getColumn(1).setMaxWidth(150);
+    table.getColumnModel().getColumn(2).setPreferredWidth(80);
+    table.getColumnModel().getColumn(2).setMaxWidth(100);
+    table.getColumnModel().getColumn(4).setPreferredWidth(80);
+    table.getColumnModel().getColumn(4).setMaxWidth(100);
+
+    add(new JScrollPane(table), BorderLayout.CENTER);
+
+    // Event listeners
+    addComponentListener(
+        new java.awt.event.ComponentAdapter() {
+          @Override
+          public void componentShown(java.awt.event.ComponentEvent e) {
+            refresh();
+          }
         });
+    turnEventBridge.addUserMessageListener(sessionPrefix + ":default", event -> refresh());
+    turnEventBridge.addCompleteListener(sessionPrefix + ":default", event -> refresh());
+    turnEventBridge.addToolExecutionListener(sessionPrefix + ":default", event -> refresh());
 
-        // Column widths
-        table.getColumnModel().getColumn(0).setPreferredWidth(50);
-        table.getColumnModel().getColumn(0).setMaxWidth(50);
-        table.getColumnModel().getColumn(1).setPreferredWidth(120);
-        table.getColumnModel().getColumn(1).setMaxWidth(150);
-        table.getColumnModel().getColumn(2).setPreferredWidth(80);
-        table.getColumnModel().getColumn(2).setMaxWidth(100);
-        table.getColumnModel().getColumn(4).setPreferredWidth(80);
-        table.getColumnModel().getColumn(4).setMaxWidth(100);
+    refresh();
+  }
 
-        add(new JScrollPane(table), BorderLayout.CENTER);
+  public void refresh() {
+    SwingUtilities.invokeLater(
+        () -> {
+          List<Message> messages = chatMemory.get(sessionPrefix + ":default");
+          if (messages == null) {
+            messages = new ArrayList<>();
+          }
+          tableModel.setMessages(messages);
 
-        // Event listeners
-        addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentShown(java.awt.event.ComponentEvent e) {
-                refresh();
-            }
+          long totalTokens = 0;
+          for (Message m : messages) {
+            totalTokens += geminiCacheService.estimateTokens(m.getText());
+          }
+          statsLabel.setText(
+              messages.size() + " Messages | " + totalTokens + " Tokens (Estimated)");
         });
-        turnEventBridge.addUserMessageListener(sessionPrefix + ":default", event -> refresh());
-        turnEventBridge.addCompleteListener(sessionPrefix + ":default", event -> refresh());
-        turnEventBridge.addToolExecutionListener(sessionPrefix + ":default", event -> refresh());
-        
-        refresh();
+  }
+
+  private void showDetail(int row) {
+    Message msg = tableModel.getMessageAt(row);
+    JDialog dialog =
+        new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Message Detail", true);
+    dialog.setSize(800, 600);
+    dialog.setLocationRelativeTo(this);
+    dialog.setLayout(new BorderLayout());
+
+    MarkdownViewer viewer = new MarkdownViewer();
+    viewer.setContent(msg.getText());
+
+    dialog.add(new JScrollPane(viewer), BorderLayout.CENTER);
+
+    JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    JButton close = new JButton("Close");
+    close.addActionListener(e -> dialog.dispose());
+    bottom.add(close);
+    dialog.add(bottom, BorderLayout.SOUTH);
+
+    dialog.setVisible(true);
+  }
+
+  private class HistoryTableModel extends AbstractTableModel {
+    private static final long serialVersionUID = 1L;
+    private final String[] columns = {"#", "Role", "Tokens", "Preview", "Action"};
+    private List<Message> messages = new ArrayList<>();
+
+    public void setMessages(List<Message> messages) {
+      this.messages = messages;
+      fireTableDataChanged();
     }
 
-    public void refresh() {
-        SwingUtilities.invokeLater(() -> {
-            List<Message> messages = chatMemory.get(sessionPrefix + ":default");
-            if (messages == null) {
-                messages = new ArrayList<>();
+    public Message getMessageAt(int row) {
+      return messages.get(row);
+    }
+
+    @Override
+    public int getRowCount() {
+      return messages.size();
+    }
+
+    @Override
+    public int getColumnCount() {
+      return columns.length;
+    }
+
+    @Override
+    public String getColumnName(int column) {
+      return columns[column];
+    }
+
+    @Override
+    public Object getValueAt(int rowIndex, int columnIndex) {
+      Message msg = messages.get(rowIndex);
+      switch (columnIndex) {
+        case 0:
+          return rowIndex + 1;
+        case 1:
+          if (msg.getMessageType() == MessageType.ASSISTANT) {
+            AssistantMessage am = (AssistantMessage) msg;
+            if (am.getToolCalls() != null && !am.getToolCalls().isEmpty()) {
+              return "tool-call";
             }
-            tableModel.setMessages(messages);
-            
-            long totalTokens = 0;
-            for (Message m : messages) {
-                totalTokens += geminiCacheService.estimateTokens(m.getText());
-            }
-            statsLabel.setText(messages.size() + " Messages | " + totalTokens + " Tokens (Estimated)");
-        });
+            return "assistant";
+          }
+          if (msg.getMessageType() == MessageType.TOOL) {
+            return "tool-response";
+          }
+          return msg.getMessageType().name().toLowerCase(Locale.ROOT);
+        case 2:
+          return geminiCacheService.estimateTokens(msg.getText());
+        case 3:
+          String content = msg.getText();
+          if (content == null) return "";
+          content = content.replace('\n', ' ').replace('\r', ' ');
+          final int maxPreviewLength = 100;
+          if (content.length() > maxPreviewLength) {
+            return content.substring(0, maxPreviewLength - 3) + "...";
+          }
+          return content;
+        case 4:
+          return "View";
+        default:
+          return null;
+      }
     }
-
-    private void showDetail(int row) {
-        Message msg = tableModel.getMessageAt(row);
-        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Message Detail", true);
-        dialog.setSize(800, 600);
-        dialog.setLocationRelativeTo(this);
-        dialog.setLayout(new BorderLayout());
-        
-        MarkdownViewer viewer = new MarkdownViewer();
-        viewer.setContent(msg.getText());
-        
-        dialog.add(new JScrollPane(viewer), BorderLayout.CENTER);
-        
-        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton close = new JButton("Close");
-        close.addActionListener(e -> dialog.dispose());
-        bottom.add(close);
-        dialog.add(bottom, BorderLayout.SOUTH);
-        
-        dialog.setVisible(true);
-    }
-
-
-
-    private class HistoryTableModel extends AbstractTableModel {
-        private static final long serialVersionUID = 1L;
-        private final String[] columns = {"#", "Role", "Tokens", "Preview", "Action"};
-        private List<Message> messages = new ArrayList<>();
-
-        public void setMessages(List<Message> messages) {
-            this.messages = messages;
-            fireTableDataChanged();
-        }
-
-        public Message getMessageAt(int row) {
-            return messages.get(row);
-        }
-
-        @Override
-        public int getRowCount() {
-            return messages.size();
-        }
-
-        @Override
-        public int getColumnCount() {
-            return columns.length;
-        }
-
-        @Override
-        public String getColumnName(int column) {
-            return columns[column];
-        }
-
-        @Override
-        public Object getValueAt(int rowIndex, int columnIndex) {
-            Message msg = messages.get(rowIndex);
-            switch (columnIndex) {
-                case 0: return rowIndex + 1;
-                case 1: 
-                    if (msg.getMessageType() == MessageType.ASSISTANT) {
-                        AssistantMessage am = (AssistantMessage) msg;
-                        if (am.getToolCalls() != null && !am.getToolCalls().isEmpty()) {
-                            return "tool-call";
-                        }
-                        return "assistant";
-                    }
-                    if (msg.getMessageType() == MessageType.TOOL) {
-                        return "tool-response";
-                    }
-                    return msg.getMessageType().name().toLowerCase(Locale.ROOT);
-                case 2: return geminiCacheService.estimateTokens(msg.getText());
-                case 3: 
-                    String content = msg.getText();
-                    if (content == null) return "";
-                    content = content.replace('\n', ' ').replace('\r', ' ');
-                    final int maxPreviewLength = 100;
-                    if (content.length() > maxPreviewLength) {
-                        return content.substring(0, maxPreviewLength - 3) + "...";
-                    }
-                    return content;
-                case 4: return "View";
-                default: return null;
-            }
-        }
-    }
+  }
 }

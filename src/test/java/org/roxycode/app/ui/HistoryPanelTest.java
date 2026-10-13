@@ -1,39 +1,39 @@
 package org.roxycode.app.ui;
 
-import org.junit.jupiter.api.Test;
-import org.roxycode.app.events.TurnEventBridge;
-import org.roxycode.app.events.UserMessageEvent;
-import org.roxycode.app.events.AgentTurnCompleteEvent;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-import javax.swing.JScrollPane;
+
 import java.awt.Component;
+import javax.swing.JScrollPane;
+import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.cache.GeminiCacheService;
+import org.roxycode.app.events.TurnEventBridge;
+import org.springframework.ai.chat.memory.ChatMemory;
 
 public class HistoryPanelTest {
 
-    @Test
-    public void testHistoryPanelInitialization() {
-        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
-        
-        ChatMemory chatMemory = mock(ChatMemory.class);
-        GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
-        HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "test");
-        
-        // Verify listeners registered
-        verify(turnEventBridge).addUserMessageListener(anyString(), any());
-        verify(turnEventBridge).addCompleteListener(anyString(), any());
-        verify(turnEventBridge).addToolExecutionListener(anyString(), any());
+  @Test
+  public void testHistoryPanelInitialization() {
+    TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
 
-        // Verify layout
-        boolean hasScrollPane = false;
-        for (Component comp : historyPanel.getComponents()) {
-            if (comp instanceof JScrollPane) {
-                hasScrollPane = true;
-                break;
-            }
-        }
-        assertTrue(hasScrollPane, "HistoryPanel should contain a JScrollPane");
+    ChatMemory chatMemory = mock(ChatMemory.class);
+    GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
+    HistoryPanel historyPanel =
+        new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "test");
+
+    // Verify listeners registered
+    verify(turnEventBridge).addUserMessageListener(anyString(), any());
+    verify(turnEventBridge).addCompleteListener(anyString(), any());
+    verify(turnEventBridge).addToolExecutionListener(anyString(), any());
+
+    // Verify layout
+    boolean hasScrollPane = false;
+    for (Component comp : historyPanel.getComponents()) {
+      if (comp instanceof JScrollPane) {
+        hasScrollPane = true;
+        break;
+      }
     }
+    assertTrue(hasScrollPane, "HistoryPanel should contain a JScrollPane");
+  }
 }
