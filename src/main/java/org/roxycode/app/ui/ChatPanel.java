@@ -305,6 +305,8 @@ public class ChatPanel extends JPanel {
             outputArea.appendMessage("system", "Transition to **" + requested.getDisplayName() + "** approved.");
             if (requested == WorkflowPhase.EXPLORE) {
                 outputArea.appendMessage("system", "Task complete. We are back in Explore mode. Please enter a new question or task.");
+            } else if (requested == WorkflowPhase.PLAN) {
+                outputArea.appendMessage("system", "Task complete. What is the next feature you would like to work on?");
             } else {
                 triggerTurn("I approve the transition to " + requested.getDisplayName() + ". Please proceed with the next phase.");
             }
