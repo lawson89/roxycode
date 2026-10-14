@@ -57,4 +57,25 @@ public class ChatPanelTest {
         chatPanel.getOutputArea().getMouseListeners().length > 0,
         "Output area should have mouse listeners for context menu");
   }
+
+  @Test
+  public void testSendMessageWithNullEventDoesNotThrowNPE() {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "test", null, true);
+
+    // Simulate keyboard shortcut which previously passed null
+    javax.swing.Action sendMessageAction = chatPanel.getInputArea().getActionMap().get("send-message");
+    assertNotNull(sendMessageAction, "send-message action should exist");
+
+    // Setting some text so it doesn't return early
+    chatPanel.getInputArea().setText("Hello");
+
+    // This should not throw NPE
+    assertDoesNotThrow(() -> sendMessageAction.actionPerformed(null));
+  }
 }

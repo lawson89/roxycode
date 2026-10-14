@@ -404,7 +404,9 @@ public final class ChatPanel extends JPanel {
   }
 
   private void sendMessage(ActionEvent e) {
-    log.debug("Send message triggered by: {}", e.getActionCommand());
+    if (e != null) {
+      log.debug("Send message triggered by: {}", e.getActionCommand());
+    }
     String text = inputArea.getText().trim();
     if (text.isEmpty()) return;
 
@@ -572,7 +574,7 @@ public final class ChatPanel extends JPanel {
         new AbstractAction() {
           @Override
           public void actionPerformed(ActionEvent e) {
-            sendMessage(null);
+            sendMessage(e);
           }
         });
 
