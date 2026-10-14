@@ -22,6 +22,15 @@ public final class MainFrame extends JFrame {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MainFrame.class);
   private static final long serialVersionUID = 1L;
 
+  private static final String QA_VIEW = "QA_VIEW";
+  private static final String TASK_VIEW = "TASK_VIEW";
+  private static final String CACHE_VIEW = "CACHE";
+  private static final String API_VIEW = "API";
+  private static final String TOOLS_VIEW = "TOOLS";
+  private static final String SETTINGS_VIEW = "SETTINGS";
+  private static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
+  private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
+
   private final transient SettingsService settingsService;
   private final transient AiService aiService;
   private final transient SystemToolService toolService;
@@ -43,8 +52,11 @@ public final class MainFrame extends JFrame {
   private final CardLayout cardLayout = new CardLayout();
   private final JPanel contentArea = new JPanel(cardLayout);
 
-  private GitChangesPanel gitChangesPanel;
+    private GitChangesPanel gitChangesPanel;
   private ChatPanel qaChatPanel;
+  private ChatPanel taskChatPanel;
+  private JTabbedPane qaTabs;
+  private JTabbedPane taskTabs;
   private HeaderPanel header;
 
   public MainFrame(
@@ -106,10 +118,10 @@ public final class MainFrame extends JFrame {
 
     addWindowListener(
         new java.awt.event.WindowAdapter() {
-          @Override
+                    @Override
           public void windowOpened(java.awt.event.WindowEvent e) {
             if (qaChatPanel != null) {
-              qaChatPanel.getInputArea().requestFocusInWindow();
+              qaChatPanel.focusInput();
             }
           }
         });
@@ -145,8 +157,8 @@ public final class MainFrame extends JFrame {
 
         StatusPanel statusBar = new StatusPanel(envService, chatMemory);
 
-    // QA Workspace (Explore)
-    JTabbedPane qaTabs = new JTabbedPane();
+        // QA Workspace (Explore)
+    this.qaTabs = new JTabbedPane();
     this.qaChatPanel =
         new ChatPanel(
             aiService,
@@ -159,21 +171,33 @@ public final class MainFrame extends JFrame {
     qaTabs.addTab("Chat", qaChatPanel);
     qaTabs.addTab(
         "History", new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "qa"));
+    qaTabs.addChangeListener(
+        e -> {
+          if (qaChatPanel.equals(qaTabs.getSelectedComponent())) {
+            SwingUtilities.invokeLater(qaChatPanel::focusInput);
+          }
+        });
 
     // Task Workspace (Plan/Code/Review)
-    JTabbedPane taskTabs = new JTabbedPane();
-    taskTabs.addTab(
-        "Chat",
-        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "task", null, true));
+    this.taskTabs = new JTabbedPane();
+    this.taskChatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "task", null, true);
+    taskTabs.addTab("Chat", taskChatPanel);
     taskTabs.addTab("Plan", new PlanPanel(planManagerService, workflowService));
     gitChangesPanel = new GitChangesPanel(gitService);
     taskTabs.addTab("Git", gitChangesPanel);
     taskTabs.addTab(
         "History", new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "task"));
+    taskTabs.addChangeListener(
+        e -> {
+          if (taskChatPanel.equals(taskTabs.getSelectedComponent())) {
+            SwingUtilities.invokeLater(taskChatPanel::focusInput);
+          }
+        });
 
     // Content Area Panels
-    contentArea.add(qaTabs, "QA_VIEW");
-    contentArea.add(taskTabs, "TASK_VIEW");
+    contentArea.add(qaTabs, QA_VIEW);
+    contentArea.add(taskTabs, TASK_VIEW);
     contentArea.add(
         new CodebaseCachePanel(
             packerService,
@@ -184,13 +208,13 @@ public final class MainFrame extends JFrame {
             jexlServiceRegistry,
             gitService,
             projectAnalysisService),
-        "CACHE");
-    contentArea.add(new JexlApiPanel(jexlServiceRegistry), "API");
-    contentArea.add(new SystemToolsPanel(toolService), "TOOLS");
-    contentArea.add(new SettingsPanel(settingsService), "SETTINGS");
+        CACHE_VIEW);
+    contentArea.add(new JexlApiPanel(jexlServiceRegistry), API_VIEW);
+    contentArea.add(new SystemToolsPanel(toolService), TOOLS_VIEW);
+    contentArea.add(new SettingsPanel(settingsService), SETTINGS_VIEW);
     contentArea.add(
-        new BuildConfigPanel(buildToolService, settingsService, projectService), "BUILD_CONFIG");
-    contentArea.add(new ContextManagerPanel(promptService), "CONTEXT_MGR");
+        new BuildConfigPanel(buildToolService, settingsService, projectService), BUILD_CONFIG_VIEW);
+    contentArea.add(new ContextManagerPanel(promptService), CONTEXT_MGR_VIEW);
 
     workspace.add(header, "h 80!, wrap");
     workspace.add(contentArea, "grow, wrap");
@@ -200,16 +224,29 @@ public final class MainFrame extends JFrame {
     add(workspace, "grow");
 
     // Default to QA View
-    showCard("QA_VIEW");
+    showCard(QA_VIEW);
   }
 
   private void showCard(String cardName) {
     cardLayout.show(contentArea, cardName);
     if (header != null) {
-      header.setMentorMode("QA_VIEW".equals(cardName));
+      header.setMentorMode(QA_VIEW.equals(cardName));
     }
-    if ("TASK_VIEW".equals(cardName) && gitChangesPanel != null) {
-      gitChangesPanel.refresh();
+    if (QA_VIEW.equals(cardName) && qaChatPanel != null) {
+      if (qaTabs != null) {
+        qaTabs.setSelectedComponent(qaChatPanel);
+      }
+      SwingUtilities.invokeLater(qaChatPanel::focusInput);
+    } else if (TASK_VIEW.equals(cardName)) {
+      if (gitChangesPanel != null) {
+        gitChangesPanel.refresh();
+      }
+      if (taskChatPanel != null) {
+        if (taskTabs != null) {
+          taskTabs.setSelectedComponent(taskChatPanel);
+        }
+        SwingUtilities.invokeLater(taskChatPanel::focusInput);
+      }
     }
   }
 

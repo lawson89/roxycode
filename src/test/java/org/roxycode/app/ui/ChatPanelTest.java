@@ -159,8 +159,31 @@ public class ChatPanelTest {
 
     assertTrue(aiResponseIndex >= 0, "AI response should be rendered");
     assertTrue(transitionMsgIndex >= 0, "Transition request message should be rendered");
-    assertTrue(
+        assertTrue(
         aiResponseIndex < transitionMsgIndex,
         "AI response should appear before the transition request prompt");
+  }
+
+  @Test
+  public void testFocusInputSetsCaretToEnd() {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "test", null, true);
+
+    chatPanel.getInputArea().setText("Existing text in input");
+    chatPanel.getInputArea().setCaretPosition(0);
+    assertEquals(0, chatPanel.getInputArea().getCaretPosition());
+
+    chatPanel.focusInput();
+
+    assertEquals(
+        "Existing text in input".length(),
+        chatPanel.getInputArea().getCaretPosition(),
+        "Caret should be moved to the end of the text");
   }
 }

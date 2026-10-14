@@ -89,8 +89,54 @@ class MentorModeIntegrationTest {
         
         assertFalse((Boolean) mentorModeField.get(header));
 
-        // Switch back to QA_VIEW
+                // Switch back to QA_VIEW
         showCardMethod.invoke(mainFrame, "QA_VIEW");
         assertTrue((Boolean) mentorModeField.get(header));
+    }
+
+    @Test
+    void testShowCardFocusesInputAndSetsCaretToEnd() throws Exception {
+        java.lang.reflect.Field qaChatField = MainFrame.class.getDeclaredField("qaChatPanel");
+        qaChatField.setAccessible(true);
+        ChatPanel qaChatPanel = (ChatPanel) qaChatField.get(mainFrame);
+
+        java.lang.reflect.Field taskChatField = MainFrame.class.getDeclaredField("taskChatPanel");
+        taskChatField.setAccessible(true);
+        ChatPanel taskChatPanel = (ChatPanel) taskChatField.get(mainFrame);
+
+        java.lang.reflect.Field taskTabsField = MainFrame.class.getDeclaredField("taskTabs");
+        taskTabsField.setAccessible(true);
+        JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
+
+        qaChatPanel.getInputArea().setText("QA draft message");
+        qaChatPanel.getInputArea().setCaretPosition(0);
+
+        taskChatPanel.getInputArea().setText("Task draft message");
+        taskChatPanel.getInputArea().setCaretPosition(0);
+
+        // Select another tab in taskTabs (e.g., Plan tab at index 1)
+        taskTabs.setSelectedIndex(1);
+
+        java.lang.reflect.Method showCardMethod = MainFrame.class.getDeclaredMethod("showCard", String.class);
+        showCardMethod.setAccessible(true);
+
+        // Switch to TASK_VIEW
+        showCardMethod.invoke(mainFrame, "TASK_VIEW");
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertEquals(taskChatPanel, taskTabs.getSelectedComponent(), "Chat tab should be selected in TASK_VIEW");
+        assertEquals(
+            "Task draft message".length(),
+            taskChatPanel.getInputArea().getCaretPosition(),
+            "Task input caret should be at the end of the text");
+
+        // Switch back to QA_VIEW
+        showCardMethod.invoke(mainFrame, "QA_VIEW");
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertEquals(
+            "QA draft message".length(),
+            qaChatPanel.getInputArea().getCaretPosition(),
+            "QA input caret should be at the end of the text");
     }
 }

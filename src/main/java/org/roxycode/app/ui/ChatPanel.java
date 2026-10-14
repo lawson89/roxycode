@@ -611,8 +611,13 @@ public final class ChatPanel extends JPanel {
     return sendButton;
   }
 
-  public JButton getStopButton() {
+    public JButton getStopButton() {
     return stopButton;
+  }
+
+  public void focusInput() {
+    inputArea.requestFocusInWindow();
+    inputArea.setCaretPosition(inputArea.getDocument().getLength());
   }
 
   private void setupKeyboardShortcuts() {
