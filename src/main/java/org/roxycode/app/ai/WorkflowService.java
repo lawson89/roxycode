@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AutonomousTransitionEvent;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
@@ -54,6 +55,7 @@ public class WorkflowService {
   /**
    * Handles manual user phase switches from the UI header toggle. EXPLORE is decoupled and can be
    * entered/exited freely. PLAN is the gateway for task workflows.
+   * @param targetPhase Phase moving to
    */
   public void switchMode(WorkflowPhase targetPhase) {
     if (targetPhase == currentPhase) {
@@ -126,6 +128,7 @@ public class WorkflowService {
           || (oldPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE)) {
         planManager.addCodeReviewLogEntry(timestamp, user, message);
       }
+      handleCompletionMetadata(oldPhase, nextPhase, timestamp);
 
       this.currentPhase = nextPhase;
       this.visitedPhases.add(nextPhase);
@@ -189,7 +192,25 @@ public class WorkflowService {
     if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.CODE) {
       return true;
     }
+    if (from == WorkflowPhase.CODE && to == WorkflowPhase.PLAN) {
+      return true;
+    }
     return false;
+  }
+
+  private void handleCompletionMetadata(WorkflowPhase from, WorkflowPhase to, String timestamp) {
+    if ((from == WorkflowPhase.CODE || from == WorkflowPhase.REVIEW) && to == WorkflowPhase.PLAN) {
+      ImplementationPlan plan = planManager.getCurrentPlan();
+      if (plan != null) {
+        boolean allDone =
+            plan.technicalSteps().stream()
+                .allMatch(ImplementationPlan.TechStep::completed);
+        if (allDone && !plan.technicalSteps().isEmpty()) {
+          planManager.completePlan(timestamp);
+          planManager.clearPlan();
+        }
+      }
+    }
   }
 
   public WorkflowPhase getCurrentPhase() {
@@ -218,18 +239,7 @@ public class WorkflowService {
       }
 
       // Phase Completion Metadata
-      if (currentPhase == WorkflowPhase.REVIEW && pendingPhase == WorkflowPhase.PLAN) {
-        org.roxycode.app.model.ImplementationPlan plan = planManager.getCurrentPlan();
-        if (plan != null) {
-          boolean allDone =
-              plan.technicalSteps().stream()
-                  .allMatch(org.roxycode.app.model.ImplementationPlan.TechStep::completed);
-          if (allDone && !plan.technicalSteps().isEmpty()) {
-            planManager.completePlan(timestamp);
-            planManager.clearPlan();
-          }
-        }
-      }
+      handleCompletionMetadata(currentPhase, pendingPhase, timestamp);
 
       this.currentPhase = pendingPhase;
       this.visitedPhases.add(pendingPhase);

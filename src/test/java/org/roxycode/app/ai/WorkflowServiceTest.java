@@ -69,21 +69,23 @@ class WorkflowServiceTest {
   void testCodeCompletionAndClear() {
     setupCodePhase();
 
-    // Request PLAN (completion) - This now requires approval
-    assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Done"));
+    // Request PLAN (completion) - This is now autonomous
+    String result = service.routeToPhase("PLAN", "Done");
+    assertTrue(result.contains("Autonomous transition"));
 
-    assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-    assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
+    assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+    assertNull(service.getPendingPhase());
   }
 
   @Test
   void testBlockedTransitionNoClear() {
     setupCodePhase();
 
-    // Request PLAN - Now requires approval
-    assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Moving on"));
-    assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-    assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
+    // Request PLAN - This is now autonomous
+    String result = service.routeToPhase("PLAN", "Moving on");
+    assertTrue(result.contains("Autonomous transition"));
+    assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+    assertNull(service.getPendingPhase());
   }
 
   @Test
@@ -116,18 +118,17 @@ class WorkflowServiceTest {
     service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
     assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
-    ImplementationPlan plan = mock(ImplementationPlan.class);
-    when(plan.title()).thenReturn("Title");
-    when(plan.goal()).thenReturn("Goal");
-    when(plan.requirements()).thenReturn(List.of());
     ImplementationPlan.TechStep step = new ImplementationPlan.TechStep("Desc", true);
-    when(plan.technicalSteps()).thenReturn(List.of(step));
+    ImplementationPlan plan =
+        new ImplementationPlan(
+            "Title", "Goal", List.of(), List.of(step), true, "now", "user", null, List.of(), List.of());
     when(planManager.getCurrentPlan()).thenReturn(plan);
 
-    // Request PLAN from REVIEW
+    // Request PLAN from REVIEW - Requires HITL Approval
     assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Finalizing"));
+    assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
-    when(envService.getCurrentUser()).thenReturn("user");
+    when(envService.getCurrentUser()).thenReturn("testuser");
     service.approveTransition();
 
     assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());

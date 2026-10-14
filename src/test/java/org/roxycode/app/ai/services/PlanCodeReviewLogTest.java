@@ -65,7 +65,12 @@ class PlanCodeReviewLogTest {
       fail(e);
     }
 
-    String result = workflowService.routeToPhase("REVIEW", "Ready for review");
+    try {
+      workflowService.routeToPhase("REVIEW", "Ready for review");
+    } catch (org.roxycode.app.ai.YieldTurnException e) {
+      // Expected
+    }
+    workflowService.approveTransition();
 
     ImplementationPlan reviewPlan = planService.getCurrentPlan();
     assertNotNull(reviewPlan);
