@@ -10,22 +10,18 @@ import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.service.SettingsService;
 
 /** Sidebar panel containing user profile and navigation. */
 
 public final class SidebarPanel extends JPanel {
   private static final long serialVersionUID = 1L;
-  private final transient WorkflowService workflowService;
   private final Consumer<String> navigationAction;
   private final List<NavButton> navButtons = new ArrayList<>();
 
   public SidebarPanel(
       WorkflowService workflowService,
       Consumer<String> navigationAction) {
-    this.workflowService = workflowService;
     this.navigationAction = navigationAction;
     initComponents();
   }
