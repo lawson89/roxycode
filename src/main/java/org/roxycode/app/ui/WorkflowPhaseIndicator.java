@@ -9,7 +9,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 
 /** Shared UI component for workflow phase indicators with safe color fallbacks. */
-@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
+
 public final class WorkflowPhaseIndicator extends JPanel {
   private static final long serialVersionUID = 1L;
   private final WorkflowPhase phase;

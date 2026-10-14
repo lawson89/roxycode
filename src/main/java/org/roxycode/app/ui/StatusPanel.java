@@ -7,7 +7,7 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.service.EnvironmentService;
 
 /** Bottom status bar with system info. */
-@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
+
 public final class StatusPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private final transient EnvironmentService envService;

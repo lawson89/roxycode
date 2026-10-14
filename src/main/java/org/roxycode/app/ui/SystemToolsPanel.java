@@ -11,7 +11,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService;
 
-@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
+
 public final class SystemToolsPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 

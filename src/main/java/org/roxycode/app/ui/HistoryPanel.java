@@ -15,12 +15,10 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 
 /** Panel for displaying a persistent history of all AI interactions and tool executions. */
-@SuppressWarnings({
-  "PMD.AvoidDuplicateLiterals",
-  "PMD.ConstructorCallsOverridableMethod"
-})
+
 public final class HistoryPanel extends JPanel {
   private static final long serialVersionUID = 1L;
+  private static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
   private final transient ChatMemory chatMemory;
   private final transient GeminiCacheService geminiCacheService;
   private final HistoryTableModel tableModel;
@@ -134,9 +132,12 @@ public final class HistoryPanel extends JPanel {
             refresh();
           }
         });
-    turnEventBridge.addUserMessageListener(sessionPrefix + ":default", event -> refresh());
-    turnEventBridge.addCompleteListener(sessionPrefix + ":default", event -> refresh());
-    turnEventBridge.addToolExecutionListener(sessionPrefix + ":default", event -> refresh());
+    turnEventBridge.addUserMessageListener(
+        sessionPrefix + DEFAULT_CONVERSATION_SUFFIX, event -> refresh());
+    turnEventBridge.addCompleteListener(
+        sessionPrefix + DEFAULT_CONVERSATION_SUFFIX, event -> refresh());
+    turnEventBridge.addToolExecutionListener(
+        sessionPrefix + DEFAULT_CONVERSATION_SUFFIX, event -> refresh());
 
     refresh();
   }
@@ -144,7 +145,7 @@ public final class HistoryPanel extends JPanel {
   public void refresh() {
     SwingUtilities.invokeLater(
         () -> {
-          List<Message> messages = chatMemory.get(sessionPrefix + ":default");
+          List<Message> messages = chatMemory.get(sessionPrefix + DEFAULT_CONVERSATION_SUFFIX);
           if (messages == null) {
             messages = new ArrayList<>();
           }

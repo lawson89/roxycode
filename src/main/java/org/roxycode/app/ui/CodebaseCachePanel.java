@@ -19,7 +19,6 @@ import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class CodebaseCachePanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
@@ -39,7 +38,7 @@ public final class CodebaseCachePanel extends JPanel {
   private final JTextArea repoMapArea = new JTextArea();
   private final JTextArea stableContextArea = new JTextArea();
   private final JTextArea sessionContextArea = new JTextArea();
-  private final DateTimeFormatter dateFormatter =
+  private static final DateTimeFormatter DATE_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
   public CodebaseCachePanel(
@@ -131,7 +130,7 @@ public final class CodebaseCachePanel extends JPanel {
       String status =
           String.format(
               "Status: Last updated on %s | Stable: %,d | Repo Map: %,d | Total: %,d",
-              m.lastUpdated().format(dateFormatter),
+              m.lastUpdated().format(DATE_FORMATTER),
               stableTokens,
               m.estimatedTokens(),
               stableTokens + m.estimatedTokens());

@@ -15,13 +15,13 @@ public class ChatHtmlTemplates {
     String accentClass = role + "-accent";
 
     String indicator = "&nbsp;";
-    if ("ai".equals(role)) {
+    if (ROLE_AI.equals(role)) {
       indicator =
           "<span style='font-family: monospace; color: #888888; font-size: 10px;'>ROXY /\\_/\\</span>";
-    } else if ("user".equals(role)) {
+    } else if (ROLE_USER.equals(role)) {
       indicator =
           "<span style='font-family: monospace; color: #888888; font-size: 10px;'>USER</span>";
-    } else if ("system".equals(role)) {
+    } else if (ROLE_SYSTEM.equals(role)) {
       indicator =
           "<span style='font-family: monospace; color: #888888; font-size: 10px;'>SYSTEM</span>";
     }

@@ -15,10 +15,7 @@ import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.service.SettingsService;
 
 /** Sidebar panel containing user profile and navigation. */
-@SuppressWarnings({
-  "PMD.ConstructorCallsOverridableMethod",
-  "PMD.CompareObjectsWithEquals"
-})
+
 public final class SidebarPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private final transient WorkflowService workflowService;
@@ -75,7 +72,7 @@ public final class SidebarPanel extends JPanel {
 
   private void updateSelection(NavButton selectedBtn) {
     for (NavButton btn : navButtons) {
-      btn.setSelected(btn == selectedBtn);
+      btn.setSelected(btn.equals(selectedBtn));
     }
   }
 

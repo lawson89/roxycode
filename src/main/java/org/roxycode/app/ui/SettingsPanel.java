@@ -20,14 +20,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Panel for application settings. */
-@SuppressWarnings({
-  "PMD.AvoidDuplicateLiterals",
-  "PMD.ConstructorCallsOverridableMethod"
-})
+
 public final class SettingsPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
   private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
+  private static final String MIG_WRAP = "wrap";
   private final transient SettingsService settingsService;
   private final JComboBox<String> themeCombo;
   private final JComboBox<GeminiModelConfig> modelCombo;
@@ -45,7 +43,7 @@ public final class SettingsPanel extends JPanel {
 
     JLabel title = new JLabel("Settings");
     title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
-    add(title, "span, gapbottom 15, wrap");
+    add(title, "span, gapbottom 15, " + MIG_WRAP);
 
     add(new JLabel("Theme:"));
     themeCombo =
@@ -55,30 +53,30 @@ public final class SettingsPanel extends JPanel {
             });
     themeCombo.setSelectedItem(settingsService.getSettings().getTheme());
     themeCombo.addActionListener(e -> updateTheme());
-    add(themeCombo, "wrap");
+    add(themeCombo, MIG_WRAP);
 
     add(new JLabel("Gemini Model:"));
     modelCombo = new JComboBox<>();
     loadModels();
-    add(modelCombo, "wrap");
+    add(modelCombo, MIG_WRAP);
 
     add(new JLabel("Gemini API Key (*):"));
     geminiApiKeyField = new JPasswordField(20);
     geminiApiKeyField.setText(settingsService.getSettings().getGeminiApiKey());
-    add(geminiApiKeyField, "wrap");
+    add(geminiApiKeyField, MIG_WRAP);
 
     add(new JLabel("Max Agent Tool Turns:"));
     maxAgentToolTurnsSpinner =
         new JSpinner(
             new SpinnerNumberModel(settingsService.getSettings().getMaxAgentToolTurns(), 1, 50, 1));
-    add(maxAgentToolTurnsSpinner, "wrap");
+    add(maxAgentToolTurnsSpinner, MIG_WRAP);
 
     add(new JLabel("Max Chat History Messages (*):"));
     maxMessagesSpinner =
         new JSpinner(
             new SpinnerNumberModel(
                 settingsService.getSettings().getMaxChatMemoryMessages(), 1, 500, 5));
-    add(maxMessagesSpinner, "wrap");
+    add(maxMessagesSpinner, MIG_WRAP);
 
     saveButton = new JButton("Save Settings");
     saveButton.addActionListener(e -> saveSettings());

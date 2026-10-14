@@ -30,19 +30,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 
 /** Panel for the chat interface, including output display and user input area. */
-@SuppressWarnings({
-  "PMD.AvoidDuplicateLiterals",
-  "PMD.ConstructorCallsOverridableMethod",
-  "PMD.NullAssignment"
-})
+
 public final class ChatPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
   private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
-  private final AiService aiService;
-  private final WorkflowService workflowService;
-  private final TurnEventBridge turnEventBridge;
-  private final ChatMemory chatMemory;
+  private static final String ROLE_SYSTEM = "system";
+  private final transient AiService aiService;
+  private final transient WorkflowService workflowService;
+  private final transient TurnEventBridge turnEventBridge;
+  private final transient ChatMemory chatMemory;
   private final MarkdownPane outputArea;
   private final ThoughtPanel thoughtPanel;
   private final JTextArea inputArea;
@@ -274,7 +271,7 @@ public final class ChatPanel extends JPanel {
     SwingUtilities.invokeLater(
         () -> {
           outputArea.appendMessage(
-              "system",
+              ROLE_SYSTEM,
               "Autonomous transition detected: **"
                   + event.from()
                   + " → "
@@ -324,6 +321,7 @@ public final class ChatPanel extends JPanel {
   }
 
   private void onPhaseChanged(WorkflowPhase phase) {
+    log.debug("Phase changed to: {}", phase);
     SwingUtilities.invokeLater(
         () -> {
           if (isTaskMode) {
@@ -345,7 +343,7 @@ public final class ChatPanel extends JPanel {
             rejectButton.setEnabled(true);
             inlineActionPanel.setVisible(true);
             outputArea.appendMessage(
-                "system",
+                ROLE_SYSTEM,
                 "Roxy requested a transition: **" + path + "**.\n\n**Reason:** " + reason);
           } else {
             inlineActionPanel.setVisible(false);
@@ -358,14 +356,14 @@ public final class ChatPanel extends JPanel {
     if (requested != null) {
       workflowService.approveTransition();
       outputArea.appendMessage(
-          "system", "Transition to **" + requested.getDisplayName() + "** approved.");
+          ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** approved.");
       if (requested == WorkflowPhase.EXPLORE) {
         outputArea.appendMessage(
-            "system",
+            ROLE_SYSTEM,
             "Task complete. We are back in Explore mode. Please enter a new question or task.");
       } else if (requested == WorkflowPhase.PLAN) {
         outputArea.appendMessage(
-            "system", "Task complete. What is the next feature you would like to work on?");
+            ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
       } else {
         triggerTurn(
             "I approve the transition to "
@@ -380,7 +378,7 @@ public final class ChatPanel extends JPanel {
     if (requested != null) {
       workflowService.rejectTransition();
       outputArea.appendMessage(
-          "system", "Transition to **" + requested.getDisplayName() + "** rejected.");
+          ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
       triggerTurn(
           "I have rejected the transition to "
               + requested.getDisplayName()
@@ -401,12 +399,12 @@ public final class ChatPanel extends JPanel {
       }
       chatMemory.clear(getConversationId());
       outputArea.clear();
-      outputArea.appendMessage("system", "Session reset.");
+      outputArea.appendMessage(ROLE_SYSTEM, "Session reset.");
     }
   }
 
-  @SuppressWarnings("PMD.UnusedFormalParameter")
   private void sendMessage(ActionEvent e) {
+    log.debug("Send message triggered by: {}", e.getActionCommand());
     String text = inputArea.getText().trim();
     if (text.isEmpty()) return;
 
@@ -502,12 +500,12 @@ public final class ChatPanel extends JPanel {
               String response = get();
               outputArea.appendMessage("ai", response);
             } catch (java.util.concurrent.CancellationException ce) {
-              outputArea.appendMessage("system", "_Request cancelled by user._");
+              outputArea.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
             } catch (Exception ex) {
               log.error("Failed to retrieve AI response: {}", ex.getMessage(), ex);
               outputArea.appendMessage("ai", "_Error communicating with AI._");
             } finally {
-              currentWorker = null;
+              currentWorker = null; // NOPMD
               setLoading(false);
             }
           }

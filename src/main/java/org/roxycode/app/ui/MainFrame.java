@@ -18,29 +18,28 @@ import org.roxycode.app.service.SystemToolService;
 import org.springframework.ai.chat.memory.ChatMemory;
 
 /** Main application window for RoxyCode. */
-@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public final class MainFrame extends JFrame {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MainFrame.class);
   private static final long serialVersionUID = 1L;
 
-  private final SettingsService settingsService;
-  private final AiService aiService;
-  private final SystemToolService toolService;
-  private final ProjectService projectService;
-  private final ProjectAnalysisService projectAnalysisService;
+  private final transient SettingsService settingsService;
+  private final transient AiService aiService;
+  private final transient SystemToolService toolService;
+  private final transient ProjectService projectService;
+  private final transient ProjectAnalysisService projectAnalysisService;
 
-  private final GitService gitService;
-  private final EnvironmentService envService;
-  private final JexlServiceRegistry jexlServiceRegistry;
-  private final WorkflowService workflowService;
-  private final PlanService planManagerService;
-  private final org.roxycode.app.events.TurnEventBridge turnEventBridge;
-  private final org.roxycode.app.ai.services.cache.RepoMapPackerService packerService;
-  private final org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
-  private final org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService;
-  private final ChatMemory chatMemory;
-  private final org.roxycode.app.service.PromptService promptService;
-  private final GenericBuildToolService buildToolService;
+  private final transient GitService gitService;
+  private final transient EnvironmentService envService;
+  private final transient JexlServiceRegistry jexlServiceRegistry;
+  private final transient WorkflowService workflowService;
+  private final transient PlanService planManagerService;
+  private final transient org.roxycode.app.events.TurnEventBridge turnEventBridge;
+  private final transient org.roxycode.app.ai.services.cache.RepoMapPackerService packerService;
+  private final transient org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
+  private final transient org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService;
+  private final transient ChatMemory chatMemory;
+  private final transient org.roxycode.app.service.PromptService promptService;
+  private final transient GenericBuildToolService buildToolService;
   private final CardLayout cardLayout = new CardLayout();
   private final JPanel contentArea = new JPanel(cardLayout);
 

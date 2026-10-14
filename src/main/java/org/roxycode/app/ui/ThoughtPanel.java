@@ -7,7 +7,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 
 /** Collapsible panel for displaying reasoning tokens from the AI model. */
-@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
+
 public final class ThoughtPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private final JTextArea textArea;

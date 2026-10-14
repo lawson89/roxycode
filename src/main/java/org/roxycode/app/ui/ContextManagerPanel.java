@@ -8,10 +8,7 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.roxycode.app.service.PromptService;
 
-@SuppressWarnings({
-  "PMD.ConstructorCallsOverridableMethod",
-  "PMD.NullAssignment"
-})
+
 public final class ContextManagerPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
@@ -22,7 +19,7 @@ public final class ContextManagerPanel extends JPanel {
   private final JButton btnNew;
   private final JButton btnDelete;
   private final JButton btnSave;
-  private String currentFile = null;
+  private String currentFile;
 
   public ContextManagerPanel(PromptService promptService) {
     this.promptService = promptService;
@@ -84,7 +81,7 @@ public final class ContextManagerPanel extends JPanel {
               btnDelete.setEnabled(true);
               btnSave.setEnabled(true);
             } else {
-              currentFile = null;
+              currentFile = null; //NOPMD
               textArea.setText("");
               btnDelete.setEnabled(false);
               btnSave.setEnabled(false);
@@ -113,14 +110,15 @@ public final class ContextManagerPanel extends JPanel {
     btnDelete.addActionListener(
         e -> {
           if (currentFile != null) {
+            String filename = currentFile;
             int ans =
                 JOptionPane.showConfirmDialog(
                     this,
-                    "Delete " + currentFile + "?",
+                    "Delete " + filename + "?",
                     "Confirm Delete",
                     JOptionPane.YES_NO_OPTION);
             if (ans == JOptionPane.YES_OPTION) {
-              promptService.deleteContextFile(currentFile);
+              promptService.deleteContextFile(filename);
               refreshFileList();
             }
           }

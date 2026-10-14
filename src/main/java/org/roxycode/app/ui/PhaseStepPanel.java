@@ -13,7 +13,7 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
 
 /** A UI component that visualizes the workflow phases and tracks current progress. */
-@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
+
 public final class PhaseStepPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 

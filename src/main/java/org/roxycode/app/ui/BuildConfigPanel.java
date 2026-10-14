@@ -22,7 +22,6 @@ public final class BuildConfigPanel extends JPanel {
   private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
   private final transient GenericBuildToolService buildToolService;
   private final transient SettingsService settingsService;
-  private final transient ProjectService projectService;
   private final RSyntaxTextArea textArea;
   private final JButton saveButton;
   private final JLabel statusLabel;
@@ -34,7 +33,6 @@ public final class BuildConfigPanel extends JPanel {
       ProjectService projectService) {
     this.buildToolService = buildToolService;
     this.settingsService = settingsService;
-    this.projectService = projectService;
     setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow][]"));
     setOpaque(true);
 
