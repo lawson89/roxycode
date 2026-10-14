@@ -59,15 +59,7 @@ public final class SidebarPanel extends JPanel {
     add(createNavButton("Build Config", "BUILD_CONFIG", Codicons.PACKAGE));
     add(createNavButton("Settings", "SETTINGS", Codicons.SETTINGS_GEAR));
 
-    // Listen for phase changes to sync selection
-    workflowService.addPhaseListener(
-        phase -> {
-          if (phase == WorkflowPhase.EXPLORE) {
-            updateSelection(qaBtn);
-          } else {
-            updateSelection(taskBtn);
-          }
-        });
+
   }
 
   private void updateSelection(NavButton selectedBtn) {

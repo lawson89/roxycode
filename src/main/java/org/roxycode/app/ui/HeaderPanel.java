@@ -32,6 +32,8 @@ public final class HeaderPanel extends JPanel {
   private final JLabel projectLabel;
   private final JLabel branchLabel;
   private final JLabel modelLabel;
+  private final JLabel mentorModeLabel;
+  private boolean mentorMode = false;
 
   // Workflow components
   private final JLabel planLabel;
@@ -94,6 +96,14 @@ public final class HeaderPanel extends JPanel {
     progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", LAYOUT_CENTER));
     progressTracker.setOpaque(false);
 
+    mentorModeLabel = new JLabel("READ-ONLY MENTOR MODE");
+    mentorModeLabel.putClientProperty(
+        FlatClientProperties.STYLE, "font: bold -1; foreground: $Label.disabledForeground");
+    mentorModeLabel.setIcon(
+        FontIcon.of(Codicons.SEARCH, 16, UIManager.getColor("Label.disabledForeground")));
+    mentorModeLabel.setVisible(false);
+    workflowPanel.add(mentorModeLabel, LAYOUT_CENTER + ", hidemode 3");
+
     WorkflowPhase[] phases = WorkflowPhase.values();
     for (WorkflowPhase phase : phases) {
       indicators.add(new WorkflowPhaseIndicator(phase, "font: bold -1"));
@@ -145,6 +155,16 @@ public final class HeaderPanel extends JPanel {
   }
 
   private void updateActivePhase(WorkflowPhase currentPhase) {
+    if (mentorMode) {
+      planLabel.setVisible(false);
+      progressTracker.setVisible(false);
+      mentorModeLabel.setVisible(true);
+      return;
+    }
+
+    mentorModeLabel.setVisible(false);
+    progressTracker.setVisible(true);
+
     ImplementationPlan plan = planManagerService.getCurrentPlan();
     if (plan != null
         && plan.title() != null
@@ -164,6 +184,11 @@ public final class HeaderPanel extends JPanel {
     }
     revalidate();
     repaint();
+  }
+
+  public void setMentorMode(boolean mentorMode) {
+    this.mentorMode = mentorMode;
+    updateActivePhase(workflowService.getCurrentPhase());
   }
 
   private JButton createIconButton(

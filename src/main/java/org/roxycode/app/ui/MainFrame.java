@@ -45,6 +45,7 @@ public final class MainFrame extends JFrame {
 
   private GitChangesPanel gitChangesPanel;
   private ChatPanel qaChatPanel;
+  private HeaderPanel header;
 
   public MainFrame(
       SettingsService settingsService,
@@ -133,7 +134,7 @@ public final class MainFrame extends JFrame {
     JPanel workspace =
         new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
 
-    HeaderPanel header =
+    header =
         new HeaderPanel(
             projectService,
             gitService,
@@ -204,6 +205,9 @@ public final class MainFrame extends JFrame {
 
   private void showCard(String cardName) {
     cardLayout.show(contentArea, cardName);
+    if (header != null) {
+      header.setMentorMode("QA_VIEW".equals(cardName));
+    }
     if ("TASK_VIEW".equals(cardName) && gitChangesPanel != null) {
       gitChangesPanel.refresh();
     }
