@@ -10,7 +10,7 @@ public class JexlToolNotificationTest {
   @Test
   public void testListenerNotification() {
     JexlServiceRegistry registry = new JexlServiceRegistry();
-    JexlTool tool = new JexlTool(registry);
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
     AtomicBoolean called = new AtomicBoolean(false);
 
     tool.addListener(

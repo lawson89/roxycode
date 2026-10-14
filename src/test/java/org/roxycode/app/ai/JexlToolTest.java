@@ -19,7 +19,7 @@ public class JexlToolTest {
     JexlServiceRegistry registry = new JexlServiceRegistry();
     registry.register(new TestService());
 
-    JexlTool tool = new JexlTool(registry);
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
 
     String varCheck = tool.executeJexl("testService");
     // result is a JSON string representing the service or its result
@@ -31,7 +31,7 @@ public class JexlToolTest {
   @Test
   public void testExecuteJexlSuccess() {
     JexlServiceRegistry registry = new JexlServiceRegistry();
-    JexlTool tool = new JexlTool(registry);
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
     String result = tool.executeJexl("1 + 1");
     assertTrue(result.contains("\"result\":\"2\""));
   }
@@ -39,7 +39,7 @@ public class JexlToolTest {
   @Test
   public void testExecuteJexlWithVariable() {
     JexlServiceRegistry registry = new JexlServiceRegistry();
-    JexlTool tool = new JexlTool(registry);
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
     String result = tool.executeJexl("var x = 10; x * 2");
     assertTrue(result.contains("\"result\":\"20\""));
   }
@@ -47,7 +47,7 @@ public class JexlToolTest {
   @Test
   public void testExecuteJexlNull() {
     JexlServiceRegistry registry = new JexlServiceRegistry();
-    JexlTool tool = new JexlTool(registry);
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
     String result = tool.executeJexl("null");
     assertTrue(result.contains("\"result\":\"null\""));
   }
@@ -55,7 +55,7 @@ public class JexlToolTest {
   @Test
   public void testExecuteJexlError() {
     JexlServiceRegistry registry = new JexlServiceRegistry();
-    JexlTool tool = new JexlTool(registry);
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
     String result = tool.executeJexl("if (");
     assertTrue(result.contains("Syntax Error"));
   }
@@ -63,7 +63,7 @@ public class JexlToolTest {
   @Test
   public void testExecuteJexlInterrupted() {
     JexlServiceRegistry registry = new JexlServiceRegistry();
-    JexlTool tool = new JexlTool(registry);
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
     Thread.currentThread().interrupt();
     try {
       assertThrows(CancellationException.class, () -> tool.executeJexl("1 + 1"));

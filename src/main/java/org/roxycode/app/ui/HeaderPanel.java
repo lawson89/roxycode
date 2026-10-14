@@ -36,7 +36,6 @@ public final class HeaderPanel extends JPanel {
   // Workflow components
   private final JLabel planLabel;
   private final JPanel progressTracker;
-  private final JLabel mentorBadge;
   private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
 
   public HeaderPanel(
@@ -91,18 +90,6 @@ public final class HeaderPanel extends JPanel {
     planLabel.putClientProperty(
         FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
     workflowPanel.add(planLabel, LAYOUT_CENTER + ", wrap, hidemode 3");
-
-    mentorBadge =
-        new JLabel("READ-ONLY MENTOR MODE", FontIcon.of(Codicons.EYE, 14), SwingConstants.CENTER);
-    mentorBadge.putClientProperty(
-        FlatClientProperties.STYLE,
-        "font: bold -2; "
-            + "foreground: $Label.disabledForeground; "
-            + "background: darken($Panel.background, 5%); "
-            + "arc: 12");
-    mentorBadge.setOpaque(true);
-    mentorBadge.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
-    workflowPanel.add(mentorBadge, LAYOUT_CENTER + ", wrap, hidemode 3");
 
     progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", LAYOUT_CENTER));
     progressTracker.setOpaque(false);
@@ -159,8 +146,7 @@ public final class HeaderPanel extends JPanel {
 
   private void updateActivePhase(WorkflowPhase currentPhase) {
     ImplementationPlan plan = planManagerService.getCurrentPlan();
-    if (currentPhase != WorkflowPhase.EXPLORE
-        && plan != null
+    if (plan != null
         && plan.title() != null
         && !plan.title().isBlank()) {
       planLabel.setText(plan.title().toUpperCase(Locale.ROOT));
@@ -168,9 +154,6 @@ public final class HeaderPanel extends JPanel {
     } else {
       planLabel.setVisible(false);
     }
-
-    mentorBadge.setVisible(currentPhase == WorkflowPhase.EXPLORE);
-    progressTracker.setVisible(currentPhase != WorkflowPhase.EXPLORE);
 
     progressTracker.removeAll();
     for (WorkflowPhaseIndicator indicator : indicators) {

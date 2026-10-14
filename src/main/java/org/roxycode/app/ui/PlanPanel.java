@@ -2,7 +2,6 @@ package org.roxycode.app.ui;
 
 import java.awt.*;
 import javax.swing.*;
-import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
@@ -13,12 +12,10 @@ public final class PlanPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
   private final transient PlanService planManagerService;
-  private final transient WorkflowService workflowService;
   private final JEditorPane displayArea;
 
   public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {
     this.planManagerService = planManagerService;
-    this.workflowService = workflowService;
     this.setLayout(new BorderLayout());
 
     displayArea = new JEditorPane();
@@ -94,19 +91,8 @@ public final class PlanPanel extends JPanel {
       html.append("<h3>No implementation plan submitted yet.</h3>");
       html.append("<p>The AI will submit a plan as it progresses through the project.</p>");
     } else {
-      boolean isPaused = workflowService.getCurrentPhase() == WorkflowPhase.EXPLORE;
-      String statusBadge =
-          isPaused
-              ? "<span style='color: #ff9800; font-weight: bold;'> [PAUSED]</span>"
-              : "<span style='color: #28a745; font-weight: bold;'> [ACTIVE]</span>";
-
-      html.append("<h2 class='spec-technical-header'>Implementation Plan")
-          .append(statusBadge)
-          .append("</h2>");
-      if (isPaused) {
-        html.append(
-            "<p style='color: #888888; font-style: italic;'>Current mode is set to EXPLORE. Switch to CHANGE mode to resume execution.</p>");
-      }
+      html.append("<h2 class='spec-technical-header'>Implementation Plan</h2>");
+      
       html.append("<b>Title:</b> ").append(SwingHtmlUtils.escapeHtml(plan.title())).append("<br>");
       html.append("<b>Goal:</b> ").append(SwingHtmlUtils.escapeHtml(plan.goal())).append("<br>");
 

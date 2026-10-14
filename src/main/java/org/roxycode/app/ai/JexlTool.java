@@ -26,11 +26,13 @@ public class JexlTool {
   private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
   private final JexlEngine jexl;
   private final JexlServiceRegistry registry;
+  private final WorkflowPhase phase;
   private final List<JexlExecutionListener> listeners = new ArrayList<>();
 
-  public JexlTool(JexlServiceRegistry registry) {
+  public JexlTool(JexlServiceRegistry registry, WorkflowPhase phase) {
     this.jexl = new JexlBuilder().permissions(JexlPermissions.UNRESTRICTED).create();
     this.registry = registry;
+    this.phase = phase;
   }
 
   public void addListener(JexlExecutionListener listener) {
@@ -57,13 +59,13 @@ public class JexlTool {
     log.info("Executing JEXL script: {}", script);
     ObjectMapper mapper = new ObjectMapper();
 
-    WorkflowService workflowService =
-        (WorkflowService) registry.getServices().get("workflowService");
-    WorkflowPhase currentPhase = workflowService != null ? workflowService.getCurrentPhase() : null;
-
-    // Prevent further execution if a transition is already pending
-    if (workflowService != null && workflowService.getPendingPhase() != null) {
-      return "{\"error\": \"A phase transition is already pending. Please wait for the user to approve or reject the transition before performing more actions.\"}";
+    // Prevent further execution if a transition is already pending in the Task lifecycle
+    if (phase != WorkflowPhase.EXPLORE) {
+      WorkflowService workflowService =
+          (WorkflowService) registry.getServices().get("workflowService");
+      if (workflowService != null && workflowService.getPendingPhase() != null) {
+        return "{\\\"error\\\": \\\"A phase transition is already pending. Please wait for the user to approve or reject the transition before performing more actions.\\\"}";
+      }
     }
 
     JexlScript jexlScript;
@@ -71,13 +73,13 @@ public class JexlTool {
       jexlScript = jexl.createScript(script);
     } catch (Exception e) {
       log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
-      return "{\"error\": \"Syntax Error (Script not executed): "
+      return "{\\\"error\\\": \\\"Syntax Error (Script not executed): "
           + StringEscapeUtils.escapeJson(e.getMessage())
-          + "\"}";
+          + "\\\"}";
     }
 
     try {
-      JexlContext context = new MapContext(registry.getServices(currentPhase));
+      JexlContext context = new MapContext(registry.getServices(phase));
       Object result = jexlScript.execute(context);
 
       fireEvent(new JexlExecutionEvent(script, result, true, null));
@@ -122,7 +124,7 @@ public class JexlTool {
       try {
         return mapper.writeValueAsString(Map.of("error", error));
       } catch (Exception ex) {
-        return "{\"error\": \"Internal Error during error serialization\"}";
+        return "{\\\"error\\\": \\\"Internal Error during error serialization\\\"}";
       }
     }
   }

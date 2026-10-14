@@ -74,26 +74,6 @@ class HeaderPanelTest {
   }
 
   @Test
-  void testMentorBadgeIsPresent() {
-    SettingsService ss = createSettingsService();
-    ProjectService ps = createProjectService(ss);
-    HeaderPanel header =
-        new HeaderPanel(
-            ps,
-            createGitService(ps),
-            ss,
-            createWorkflowService(),
-            mock(PlanService.class),
-            name -> {});
-
-    JLabel badge =
-        (JLabel)
-            findComponent(
-                header, JLabel.class, c -> "READ-ONLY MENTOR MODE".equals(((JLabel) c).getText()));
-    assertNotNull(badge, "Mentor badge should be present in HeaderPanel");
-  }
-
-  @Test
   void testOpenButtonIsPresent() {
     SettingsService ss = createSettingsService();
     ProjectService ps = createProjectService(ss);

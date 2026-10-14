@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Lazy;
 /** Service for managing project plans and specifications. */
 @AgentService(
     value = "planService",
-    phases = {"*"})
+    phases = {"PLAN", "CODE", "REVIEW"})
 @AgentDoc("Service for managing project plans and specifications.")
 
 public class PlanService {

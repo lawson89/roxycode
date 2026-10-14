@@ -77,7 +77,7 @@ public final class PhaseStepPanel extends JPanel {
       indicator.setCompleted(visited.contains(indicator.getPhase()));
       progressTracker.add(indicator);
     }
-    progressTracker.setVisible(currentPhase != WorkflowPhase.EXPLORE);
+    
     revalidate();
     repaint();
   }

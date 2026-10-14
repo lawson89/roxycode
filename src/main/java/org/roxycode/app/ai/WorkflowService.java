@@ -24,8 +24,8 @@ public class WorkflowService {
   private final PlanService planManager;
   private final EnvironmentService environmentService;
   private final ApplicationEventPublisher eventPublisher;
-  private WorkflowPhase currentPhase = WorkflowPhase.EXPLORE;
-  private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.EXPLORE);
+  private WorkflowPhase currentPhase = WorkflowPhase.PLAN;
+  private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.PLAN);
   private WorkflowPhase pendingPhase;
   private String pendingReason;
 
@@ -65,7 +65,7 @@ public class WorkflowService {
       return;
     }
 
-    if (targetPhase == WorkflowPhase.EXPLORE || targetPhase == WorkflowPhase.PLAN) {
+    if (targetPhase == WorkflowPhase.PLAN) {
       this.currentPhase = targetPhase;
       this.visitedPhases.add(this.currentPhase);
       this.pendingPhase = null;
@@ -88,7 +88,7 @@ public class WorkflowService {
     } catch (IllegalArgumentException e) {
       return "Error: Invalid phase name: "
           + phaseName
-          + ". Valid phases are: EXPLORE, PLAN, CODE, REVIEW.";
+          + ". Valid phases are: PLAN, CODE, REVIEW.";
     }
 
     if (nextPhase == currentPhase) {
@@ -166,8 +166,9 @@ public class WorkflowService {
 
   private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
     // EXPLORE is decoupled from linear task flow
-    if (next == WorkflowPhase.EXPLORE) return true;
-    if (current == WorkflowPhase.EXPLORE) return next == WorkflowPhase.PLAN;
+    if (next == WorkflowPhase.EXPLORE || current == WorkflowPhase.EXPLORE) {
+      return false;
+    }
 
     switch (current) {
       case PLAN:
@@ -251,9 +252,9 @@ public class WorkflowService {
   public void resetWorkflow() {
         this.pendingPhase = null;
     this.pendingReason = null;
-    this.currentPhase = WorkflowPhase.EXPLORE;
+    this.currentPhase = WorkflowPhase.PLAN;
     this.visitedPhases.clear();
-    this.visitedPhases.add(WorkflowPhase.EXPLORE);
+    this.visitedPhases.add(WorkflowPhase.PLAN);
     this.planManager.clearPlan();
     notifyPhaseListeners();
     notifyRequestListeners();

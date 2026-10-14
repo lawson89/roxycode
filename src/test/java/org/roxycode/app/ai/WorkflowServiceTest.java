@@ -29,12 +29,12 @@ class WorkflowServiceTest {
     service = new WorkflowService(planManager, envService, eventPublisher);
   }
 
-    private void setupCodePhase() {
+  private void setupCodePhase() {
     ImplementationPlan plan =
         new ImplementationPlan(
             "T", "G", List.of(), List.of(), true, "now", "user", null, List.of(), List.of());
     lenient().when(planManager.getCurrentPlan()).thenReturn(plan);
-    service.switchMode(WorkflowPhase.PLAN);
+    // service.switchMode(WorkflowPhase.PLAN); // Initial is PLAN now
     try {
       service.routeToPhase("CODE", "Reason");
     } catch (YieldTurnException e) {
@@ -48,7 +48,6 @@ class WorkflowServiceTest {
 
   @Test
   void testPhaseManagement() {
-    service.switchMode(WorkflowPhase.PLAN);
     assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
     when(planManager.getCurrentPlan())
@@ -97,20 +96,18 @@ class WorkflowServiceTest {
     assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
     verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
-        verify(planManager).addHandoffLogEntry(anyString(), anyString(), anyString());
+    verify(planManager).addHandoffLogEntry(anyString(), anyString(), anyString());
   }
 
   @Test
   void testExploreDecoupling() {
     setupCodePhase();
-    // Any phase to EXPLORE should now yield for approval because it's adjacent but not autonomous
-    assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Jump"));
+    // Transition to EXPLORE should fail now because it's decoupled
+    String result = service.routeToPhase("EXPLORE", "Jump");
+    assertTrue(result.contains("Error: Cannot jump from CODE to EXPLORE"));
 
     service.resetWorkflow();
-    assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
-    // Already in EXPLORE, so it shouldn't throw YieldTurnException if we call routeToPhase for same phase?
-    // Actually routeToPhase returns a message if already in phase.
-    assertEquals("Already in phase: EXPLORE", service.routeToPhase("EXPLORE", "Let's discover"));
+    assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
   }
 
   @Test

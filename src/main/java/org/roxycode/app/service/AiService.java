@@ -88,7 +88,7 @@ public class AiService {
       String message,
       String systemPromptText,
       List<byte[]> images) {
-    JexlTool ephemeralJexlTool = new JexlTool(jexlServiceRegistry);
+    JexlTool ephemeralJexlTool = new JexlTool(jexlServiceRegistry, phase);
     AtomicInteger turnCount = new AtomicInteger(0);
     int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
 
