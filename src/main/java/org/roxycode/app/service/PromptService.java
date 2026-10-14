@@ -5,6 +5,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
+import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,18 +30,129 @@ public class PromptService {
   private static final String CODE_PROMPT_PATH = "prompts/code_phase.md";
   private static final String CONTEXT_DIR = ".roxycode/context";
 
+  private static final String NEWLINE_DOUBLE = "\n\n";
+  private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
+  private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
+  private static final String HEADER_SESSION_CONTEXT = "\n\n## SESSION CONTEXT\n";
+  private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
+  private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
+
   private final ProjectService projectService;
   private final SettingsService settingsService;
+  private final WorkflowService workflowService;
+  private final JexlServiceRegistry jexlServiceRegistry;
+  private final GitService gitService;
+  private final ProjectAnalysisService projectAnalysisService;
+  private final RepoMapPackerService repoMapPackerService;
 
   public PromptService() {
-    this.projectService = null;
-    this.settingsService = null;
+    this(null, null, null, null, null, null, null);
+  }
+
+  public PromptService(ProjectService projectService, SettingsService settingsService) {
+    this(projectService, settingsService, null, null, null, null, null);
   }
 
   @Autowired
-  public PromptService(ProjectService projectService, SettingsService settingsService) {
+  public PromptService(
+      ProjectService projectService,
+      SettingsService settingsService,
+      WorkflowService workflowService,
+      JexlServiceRegistry jexlServiceRegistry,
+      GitService gitService,
+      ProjectAnalysisService projectAnalysisService,
+      RepoMapPackerService repoMapPackerService) {
     this.projectService = projectService;
     this.settingsService = settingsService;
+    this.workflowService = workflowService;
+    this.jexlServiceRegistry = jexlServiceRegistry;
+    this.gitService = gitService;
+    this.projectAnalysisService = projectAnalysisService;
+    this.repoMapPackerService = repoMapPackerService;
+  }
+
+  public String getStableContext() {
+    StringBuilder sb = new StringBuilder(loadCoreWorkflowPrompt());
+    sb.append(loadAllPrompts());
+    sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
+    sb.append(loadAllDocs());
+    sb.append(loadProjectContext());
+    return sb.toString();
+  }
+
+  public String getSessionContext() {
+    WorkflowPhase phase =
+        workflowService != null ? workflowService.getCurrentPhase() : WorkflowPhase.EXPLORE;
+    return getSessionContext(phase);
+  }
+
+  public String getSessionContext(WorkflowPhase phase) {
+    WorkflowPhase currentPhase =
+        phase != null
+            ? phase
+            : (workflowService != null ? workflowService.getCurrentPhase() : WorkflowPhase.EXPLORE);
+
+    StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
+    if (projectAnalysisService != null) {
+      sb.append("DOMINANT LANGUAGE: ")
+          .append(projectAnalysisService.getDominantLanguage())
+          .append("\n");
+    }
+    sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
+
+    String persona =
+        String.format(
+            "You are the %s. %s", currentPhase.getPersonaTitle(), currentPhase.getDescription());
+    sb.append(persona).append(NEWLINE_DOUBLE);
+    if (jexlServiceRegistry != null) {
+      sb.append("You have access to the following JEXL tools:\n")
+          .append(jexlServiceRegistry.getDocumentation(currentPhase));
+    }
+
+    if (gitService != null) {
+      String gitStatus = gitService.getStatus();
+      if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
+        sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
+      }
+    }
+    return sb.toString();
+  }
+
+  public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
+    WorkflowPhase currentPhase =
+        phase != null
+            ? phase
+            : (workflowService != null ? workflowService.getCurrentPhase() : WorkflowPhase.EXPLORE);
+
+    StringBuilder systemPrompt = new StringBuilder(getStableContext());
+
+    if (currentPhase == WorkflowPhase.EXPLORE) {
+      systemPrompt.append(NEWLINE_DOUBLE).append(generateExploreSystemPrompt());
+    } else if (currentPhase == WorkflowPhase.REVIEW) {
+      systemPrompt.append(NEWLINE_DOUBLE).append(loadReviewPrompt());
+    } else if (currentPhase == WorkflowPhase.PLAN) {
+      systemPrompt.append(NEWLINE_DOUBLE).append(loadPlanPrompt());
+    } else if (currentPhase == WorkflowPhase.CODE) {
+      systemPrompt.append(NEWLINE_DOUBLE).append(loadCodePrompt());
+    }
+
+    if (repoMapPackerService != null) {
+      EditorResult repoMap = repoMapPackerService.generateRepoMap();
+      if (repoMap != null && repoMap.success()) {
+        systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
+      }
+    }
+
+    systemPrompt.append(getSessionContext(currentPhase));
+
+    if (additionalInstructions != null) {
+      systemPrompt
+          .append(HEADER_ADDITIONAL_INSTRUCTIONS)
+          .append(additionalInstructions)
+          .append(NEWLINE_DOUBLE);
+    }
+
+    return systemPrompt.toString();
   }
 
   public String loadCoreWorkflowPrompt() {

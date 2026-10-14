@@ -10,9 +10,6 @@ import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.YieldTurnException;
-import org.roxycode.app.ai.services.EditorResult;
-import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
@@ -27,15 +24,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
-@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class AiService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AiService.class);
   private static final String NEWLINE_DOUBLE = "\n\n";
-  private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
-  private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
-  private static final String HEADER_SESSION_CONTEXT = "\n\n## SESSION CONTEXT\n";
-  private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
-  private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
   private static final String FIELD_MESSAGE = "message";
   private static final String MAX_TURNS_EXCEEDED = "MAX_TOOL_TURNS_EXCEEDED";
 
@@ -54,9 +45,6 @@ public class AiService {
   private final WorkflowService workflowService;
   private final ChatMemory chatMemory;
   private final ApplicationEventPublisher eventPublisher;
-  private final RepoMapPackerService repoMapPackerService;
-  private final GitService gitService;
-  private final ProjectAnalysisService projectAnalysisService;
 
   public AiService(
       ChatClient.Builder chatClientBuilder,
@@ -65,19 +53,13 @@ public class AiService {
       JexlServiceRegistry jexlServiceRegistry,
       WorkflowService workflowService,
       ChatMemory chatMemory,
-      ApplicationEventPublisher eventPublisher,
-      RepoMapPackerService repoMapPackerService,
-      GitService gitService,
-      ProjectAnalysisService projectAnalysisService) {
+      ApplicationEventPublisher eventPublisher) {
     this.settingsService = settingsService;
     this.promptService = promptService;
     this.jexlServiceRegistry = jexlServiceRegistry;
     this.workflowService = workflowService;
     this.chatMemory = chatMemory;
     this.eventPublisher = eventPublisher;
-    this.repoMapPackerService = repoMapPackerService;
-    this.gitService = gitService;
-    this.projectAnalysisService = projectAnalysisService;
     this.chatClient =
         chatClientBuilder
             .defaultAdvisors(
@@ -206,64 +188,12 @@ public class AiService {
       JexlTool tools) {
     String activeModel = settingsService.getSettings().getGeminiModel();
     WorkflowPhase currentPhase = (phase != null) ? phase : workflowService.getCurrentPhase();
-
-    StringBuilder systemPrompt = new StringBuilder(promptService.loadCoreWorkflowPrompt());
-    systemPrompt.append(promptService.loadAllPrompts());
-    systemPrompt
-        .append(HEADER_JEXL_CONTEXT)
-        .append(promptService.loadJexlContext())
-        .append(NEWLINE_DOUBLE);
-    systemPrompt.append(promptService.loadAllDocs());
-    systemPrompt.append(promptService.loadProjectContext());
-
-    if (currentPhase == WorkflowPhase.EXPLORE) {
-      systemPrompt.append("\n\n").append(promptService.generateExploreSystemPrompt());
-    }
-    if (currentPhase == WorkflowPhase.REVIEW) {
-      systemPrompt.append("\n\n").append(promptService.loadReviewPrompt());
-    }
-    if (currentPhase == WorkflowPhase.PLAN) {
-      systemPrompt.append("\n\n").append(promptService.loadPlanPrompt());
-    }
-    if (currentPhase == WorkflowPhase.CODE) {
-      systemPrompt.append("\n\n").append(promptService.loadCodePrompt());
-    }
-
-    EditorResult repoMap = repoMapPackerService.generateRepoMap();
-    if (repoMap.success()) {
-      systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
-    }
-
-    systemPrompt.append(HEADER_SESSION_CONTEXT);
-    systemPrompt
-        .append("DOMINANT LANGUAGE: ")
-        .append(projectAnalysisService.getDominantLanguage())
-        .append("\n");
-    systemPrompt.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
-
-    String persona =
-        String.format(
-            "You are the %s. %s", currentPhase.getPersonaTitle(), currentPhase.getDescription());
-    systemPrompt.append(persona).append("\n\n");
-    systemPrompt
-        .append("You have access to the following JEXL tools:\n")
-        .append(jexlServiceRegistry.getDocumentation(currentPhase));
-
-    String gitStatus = gitService.getStatus();
-    if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
-      systemPrompt.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
-    }
-    if (systemPromptText != null) {
-      systemPrompt
-          .append(HEADER_ADDITIONAL_INSTRUCTIONS)
-          .append(systemPromptText)
-          .append(NEWLINE_DOUBLE);
-    }
+    String systemPrompt = promptService.buildSystemPrompt(currentPhase, systemPromptText);
 
     return chatClient
         .prompt()
         .tools(tools)
-        .system(systemPrompt.toString())
+        .system(systemPrompt)
         .user(
             u -> {
               u.text(message);

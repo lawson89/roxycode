@@ -11,7 +11,6 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
-import org.roxycode.app.service.ProjectAnalysisService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
@@ -35,7 +34,6 @@ public final class MainFrame extends JFrame {
   private final transient AiService aiService;
   private final transient SystemToolService toolService;
   private final transient ProjectService projectService;
-  private final transient ProjectAnalysisService projectAnalysisService;
 
   private final transient GitService gitService;
   private final transient EnvironmentService envService;
@@ -52,7 +50,7 @@ public final class MainFrame extends JFrame {
   private final CardLayout cardLayout = new CardLayout();
   private final JPanel contentArea = new JPanel(cardLayout);
 
-    private GitChangesPanel gitChangesPanel;
+  private GitChangesPanel gitChangesPanel;
   private ChatPanel qaChatPanel;
   private ChatPanel taskChatPanel;
   private JTabbedPane qaTabs;
@@ -75,8 +73,7 @@ public final class MainFrame extends JFrame {
       org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService,
       org.roxycode.app.service.PromptService promptService,
       GenericBuildToolService buildToolService,
-      ChatMemory chatMemory,
-      ProjectAnalysisService projectAnalysisService) {
+      ChatMemory chatMemory) {
     this.settingsService = settingsService;
     this.aiService = aiService;
     this.toolService = toolService;
@@ -91,7 +88,6 @@ public final class MainFrame extends JFrame {
     this.cacheMetaService = cacheMetaService;
     this.geminiCacheService = geminiCacheService;
     this.promptService = promptService;
-    this.projectAnalysisService = projectAnalysisService;
 
     this.buildToolService = buildToolService;
     this.chatMemory = chatMemory;
@@ -118,7 +114,7 @@ public final class MainFrame extends JFrame {
 
     addWindowListener(
         new java.awt.event.WindowAdapter() {
-                    @Override
+          @Override
           public void windowOpened(java.awt.event.WindowEvent e) {
             if (qaChatPanel != null) {
               qaChatPanel.focusInput();
@@ -155,9 +151,9 @@ public final class MainFrame extends JFrame {
             planManagerService,
             this::showCard);
 
-        StatusPanel statusBar = new StatusPanel(envService, chatMemory);
+    StatusPanel statusBar = new StatusPanel(envService, chatMemory);
 
-        // QA Workspace (Explore)
+    // QA Workspace (Explore)
     this.qaTabs = new JTabbedPane();
     this.qaChatPanel =
         new ChatPanel(
@@ -203,11 +199,7 @@ public final class MainFrame extends JFrame {
             packerService,
             cacheMetaService,
             geminiCacheService,
-            promptService,
-            workflowService,
-            jexlServiceRegistry,
-            gitService,
-            projectAnalysisService),
+            promptService),
         CACHE_VIEW);
     contentArea.add(new JexlApiPanel(jexlServiceRegistry), API_VIEW);
     contentArea.add(new SystemToolsPanel(toolService), TOOLS_VIEW);
@@ -220,7 +212,7 @@ public final class MainFrame extends JFrame {
     workspace.add(contentArea, "grow, wrap");
     workspace.add(statusBar, "h 30!");
 
-        add(sidebar, "growy");
+    add(sidebar, "growy");
     add(workspace, "grow");
 
     // Default to QA View

@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.awt.*;
 import javax.swing.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,16 +16,14 @@ import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
-import org.roxycode.app.service.ProjectAnalysisService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.PromptService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
-import org.roxycode.app.model.AppSettings;
 import org.springframework.ai.chat.memory.ChatMemory;
-import java.util.function.Consumer;
 
 class MentorModeIntegrationTest {
 
@@ -59,13 +56,12 @@ class MentorModeIntegrationTest {
         PromptService promptService = mock(PromptService.class);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
-        ProjectAnalysisService projectAnalysisService = mock(ProjectAnalysisService.class);
 
         mainFrame = new MainFrame(
             settingsService, aiService, toolService, projectService, gitService,
             envService, jexlServiceRegistry, workflowService, planService,
             turnEventBridge, packerService, cacheMetaService, geminiCacheService,
-            promptService, buildToolService, chatMemory, projectAnalysisService
+            promptService, buildToolService, chatMemory
         );
     }
 
@@ -89,7 +85,7 @@ class MentorModeIntegrationTest {
         
         assertFalse((Boolean) mentorModeField.get(header));
 
-                // Switch back to QA_VIEW
+        // Switch back to QA_VIEW
         showCardMethod.invoke(mainFrame, "QA_VIEW");
         assertTrue((Boolean) mentorModeField.get(header));
     }

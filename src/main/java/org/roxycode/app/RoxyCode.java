@@ -82,8 +82,6 @@ public class RoxyCode {
           GenericBuildToolService buildToolService = context.getBean(GenericBuildToolService.class);
           org.springframework.ai.chat.memory.ChatMemory chatMemory =
               context.getBean(org.springframework.ai.chat.memory.ChatMemory.class);
-          org.roxycode.app.service.ProjectAnalysisService projectAnalysisService =
-              context.getBean(org.roxycode.app.service.ProjectAnalysisService.class);
 
           MainFrame frame =
               new MainFrame(
@@ -102,8 +100,7 @@ public class RoxyCode {
                   geminiCacheService,
                   promptService,
                   buildToolService,
-                  chatMemory,
-                  projectAnalysisService);
+                  chatMemory);
           frame.setVisible(true);
         });
   }

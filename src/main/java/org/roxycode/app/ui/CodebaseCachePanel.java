@@ -5,17 +5,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
-import org.roxycode.app.ai.JexlServiceRegistry;
-import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.ProjectCacheMeta;
-import org.roxycode.app.service.ProjectAnalysisService;
-import org.roxycode.app.service.ProjectService;
-import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.PromptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,12 +18,8 @@ public final class CodebaseCachePanel extends JPanel {
   private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
   private final transient ProjectCacheMetaService metaService;
   private final transient RepoMapPackerService packerService;
-  private final transient org.roxycode.app.service.PromptService promptService;
+  private final transient PromptService promptService;
   private final transient GeminiCacheService geminiCacheService;
-  private final transient WorkflowService workflowService;
-  private final transient JexlServiceRegistry jexlServiceRegistry;
-  private final transient GitService gitService;
-  private final transient ProjectAnalysisService projectAnalysisService;
 
   private final JLabel statusLabel = new JLabel("Status: Unknown");
   private final JProgressBar progressBar = new JProgressBar(0, 100);
@@ -45,19 +35,11 @@ public final class CodebaseCachePanel extends JPanel {
       RepoMapPackerService packerService,
       ProjectCacheMetaService metaService,
       GeminiCacheService geminiCacheService,
-      org.roxycode.app.service.PromptService promptService,
-      WorkflowService workflowService,
-      JexlServiceRegistry jexlServiceRegistry,
-      GitService gitService,
-      ProjectAnalysisService projectAnalysisService) {
+      PromptService promptService) {
     this.packerService = packerService;
     this.metaService = metaService;
     this.promptService = promptService;
     this.geminiCacheService = geminiCacheService;
-    this.workflowService = workflowService;
-    this.jexlServiceRegistry = jexlServiceRegistry;
-    this.gitService = gitService;
-    this.projectAnalysisService = projectAnalysisService;
 
     initComponents();
     refreshStatus();
@@ -153,19 +135,7 @@ public final class CodebaseCachePanel extends JPanel {
   }
 
   private String getStableContextString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("# Stable Context Artifacts\n\n");
-    sb.append("## Core Workflow Prompt\n")
-        .append(promptService.loadCoreWorkflowPrompt())
-        .append("\n\n");
-    sb.append("## JEXL Context (jexl.md)\n").append(promptService.loadJexlContext()).append("\n\n");
-    sb.append("## Additional Prompts\n").append(promptService.loadAllPrompts()).append("\n\n");
-    sb.append("## Additional Docs\n").append(promptService.loadAllDocs());
-    String projectContext = promptService.loadProjectContext();
-    if (projectContext != null && !projectContext.isBlank()) {
-      sb.append("\n\n## Project Context Docs").append(projectContext);
-    }
-    return sb.toString();
+    return promptService != null ? promptService.getStableContext() : "";
   }
 
   private void updateStableContext() {
@@ -174,24 +144,7 @@ public final class CodebaseCachePanel extends JPanel {
   }
 
   private String getSessionContextString() {
-    StringBuilder sb = new StringBuilder();
-    WorkflowPhase currentPhase = workflowService.getCurrentPhase();
-
-    sb.append("## SESSION CONTEXT\n");
-    sb.append("DOMINANT LANGUAGE: ")
-        .append(projectAnalysisService.getDominantLanguage())
-        .append("\n");
-    sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
-
-    sb.append("You have access to the following JEXL tools:\n")
-        .append(jexlServiceRegistry.getDocumentation(currentPhase));
-
-    String gitStatus = gitService.getStatus();
-    if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
-      sb.append("\n\n## GIT STATUS\n").append(gitStatus);
-    }
-
-    return sb.toString();
+    return promptService != null ? promptService.getSessionContext().trim() : "";
   }
 
   private void updateSessionContext() {

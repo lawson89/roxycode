@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.nio.file.Path;
 import java.util.function.Consumer;
 import javax.swing.*;
@@ -36,7 +37,7 @@ class SidebarPanelTest {
   }
 
   @Test
-  void testSidebarStructure() {
+  void testSidebarStructureAndBranding() {
     SettingsService settingsService = new SettingsService();
     settingsService.setSettingsPathOverride(tempDir.resolve("settings_structure.toml"));
 
@@ -44,19 +45,50 @@ class SidebarPanelTest {
 
     Component[] components = sidebar.getComponents();
 
-        // Expected: 3 Headers, 8 NavButtons = 11
-    assertEquals(11, components.length, "Sidebar should have exactly 11 components");
+    // Expected: 1 BrandingPanel, 3 Headers, 8 NavButtons = 12
+    assertEquals(12, components.length, "Sidebar should have exactly 12 components");
 
     int headerCount = 0;
     int buttonCount = 0;
+    JPanel brandingPanel = null;
 
     for (Component c : components) {
       if (c instanceof JLabel) headerCount++;
       if (c instanceof JButton) buttonCount++;
+      if (c instanceof JPanel) brandingPanel = (JPanel) c;
     }
 
+    assertNotNull(brandingPanel, "Should have a branding header panel");
     assertEquals(3, headerCount, "Should have 3 headers (WORKSPACES, CONTEXT, CONFIG)");
     assertEquals(8, buttonCount, "Should have 8 navigation buttons");
+
+    boolean foundLogoPanel = false;
+    boolean foundTitleLabel = false;
+    int brandingLabels = 0;
+
+    for (Component c : brandingPanel.getComponents()) {
+      if (c instanceof JPanel) {
+        Dimension pref = c.getPreferredSize();
+        if (pref.width == 128 && pref.height == 128) {
+          foundLogoPanel = true;
+          c.setSize(128, 128);
+          BufferedImage img = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
+          Graphics2D g2 = img.createGraphics();
+          assertDoesNotThrow(() -> c.paintAll(g2));
+          g2.dispose();
+        }
+      } else if (c instanceof JLabel) {
+        brandingLabels++;
+        JLabel label = (JLabel) c;
+        if ("RoxyCode".equals(label.getText())) {
+          foundTitleLabel = true;
+        }
+      }
+    }
+
+    assertTrue(foundLogoPanel, "Should have a 128x128 logo panel in branding header");
+    assertTrue(foundTitleLabel, "Should have 'RoxyCode' title label in branding header");
+    assertEquals(1, brandingLabels, "Branding header should only contain the RoxyCode title label (no username)");
   }
 
   @Test
@@ -81,7 +113,7 @@ class SidebarPanelTest {
       }
     }
 
-        assertNotNull(qaBtn, "QA Button should be found");
+    assertNotNull(qaBtn, "QA Button should be found");
     assertNotNull(taskBtn, "Task Button should be found");
 
     assertTrue(qaBtn.isSelected(), "Codebase Q&A button should be selected on startup");

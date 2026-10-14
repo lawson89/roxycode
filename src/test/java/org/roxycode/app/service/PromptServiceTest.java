@@ -9,6 +9,12 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 
 class PromptServiceTest {
 
@@ -147,5 +153,60 @@ class PromptServiceTest {
     assertNotNull(prompt);
     assertTrue(prompt.contains("42"));
     assertFalse(prompt.contains("${maxTurns}"));
+  }
+
+  @Test
+  void testGetStableSessionAndSystemPrompt() throws IOException {
+    ProjectService projectService = mock(ProjectService.class);
+    when(projectService.hasActiveProject()).thenReturn(true);
+    when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    Path contextDir = tempDir.resolve(".roxycode/context");
+    Files.createDirectories(contextDir);
+    Files.writeString(contextDir.resolve("rules.md"), "CUSTOM RULES");
+
+    SettingsService settingsService = mock(SettingsService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+
+    JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
+    when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
+
+    GitService gitService = mock(GitService.class);
+    when(gitService.getStatus()).thenReturn("M file.java");
+
+    ProjectAnalysisService projectAnalysisService = mock(ProjectAnalysisService.class);
+    when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
+
+    RepoMapPackerService repoMapPackerService = mock(RepoMapPackerService.class);
+    when(repoMapPackerService.generateRepoMap())
+        .thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
+
+    PromptService fullPromptService =
+        new PromptService(
+            projectService,
+            settingsService,
+            workflowService,
+            jexlServiceRegistry,
+            gitService,
+            projectAnalysisService,
+            repoMapPackerService);
+
+    String stable = fullPromptService.getStableContext();
+    assertTrue(stable.contains("RoxyCode Workflow Protocol"));
+    assertTrue(stable.contains("## JEXL CONTEXT"));
+    assertTrue(stable.contains("CUSTOM RULES"));
+
+    String session = fullPromptService.getSessionContext();
+    assertTrue(session.contains("DOMINANT LANGUAGE: Java"));
+    assertTrue(session.contains("CURRENT PHASE: CODE"));
+    assertTrue(session.contains("Senior Developer"));
+    assertTrue(session.contains("JEXL DOCS"));
+    assertTrue(session.contains("M file.java"));
+
+    String fullSystemPrompt = fullPromptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS");
+    assertTrue(fullSystemPrompt.contains(stable));
+    assertTrue(fullSystemPrompt.contains("REPO MAP CONTENT"));
+    assertTrue(fullSystemPrompt.contains(session));
+    assertTrue(fullSystemPrompt.contains("EXTRA INSTRUCTIONS"));
   }
 }
