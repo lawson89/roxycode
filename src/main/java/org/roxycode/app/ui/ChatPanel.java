@@ -135,20 +135,12 @@ public final class ChatPanel extends JPanel {
     inlineActionPanel.add(approveButton);
     inlineActionPanel.add(rejectButton);
 
-    // Wrap text area and action panel together
-    JPanel scrollContent = new JPanel(new BorderLayout());
-    scrollContent.putClientProperty(FlatClientProperties.STYLE, "background: $TextPane.background");
-    scrollContent.add(outputArea, BorderLayout.CENTER);
-
-    if (isTaskMode) {
-      scrollContent.add(inlineActionPanel, BorderLayout.SOUTH);
-    }
-
-    outputScrollPane = new JScrollPane(scrollContent);
+        outputScrollPane = new JScrollPane(outputArea);
+    outputScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
     outputScrollPane.setBorder(BorderFactory.createTitledBorder("Roxy"));
 
     // Autoscroll to bottom
-    scrollContent.addComponentListener(
+    outputArea.addComponentListener(
         new java.awt.event.ComponentAdapter() {
           @Override
           public void componentResized(java.awt.event.ComponentEvent e) {
@@ -165,6 +157,9 @@ public final class ChatPanel extends JPanel {
     JPanel outputWrapper = new JPanel(new BorderLayout());
     outputWrapper.add(thoughtPanel, BorderLayout.NORTH);
     outputWrapper.add(outputScrollPane, BorderLayout.CENTER);
+    if (isTaskMode) {
+      outputWrapper.add(inlineActionPanel, BorderLayout.SOUTH);
+    }
 
     // Input section
     JPanel inputSection =

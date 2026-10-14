@@ -7,8 +7,14 @@ import java.awt.event.MouseEvent;
 import java.net.URL;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
+import javax.swing.text.Element;
 import javax.swing.text.JTextComponent;
+import javax.swing.text.View;
+import javax.swing.text.ViewFactory;
+import javax.swing.text.html.BlockView;
 import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.InlineView;
+import javax.swing.text.html.ParagraphView;
 import javax.swing.text.html.StyleSheet;
 
 /**
@@ -26,7 +32,16 @@ public final class SwingHtmlUtils {
    * @param marginPx the body margin in pixels
    */
   public static void applyTheme(JEditorPane textPane, int marginPx) {
-    HTMLEditorKit kit = new HTMLEditorKit();
+    HTMLEditorKit kit =
+        new HTMLEditorKit() {
+          private static final long serialVersionUID = 1L;
+          private final transient ViewFactory factory = new WrappingHtmlFactory();
+
+          @Override
+          public ViewFactory getViewFactory() {
+            return factory;
+          }
+        };
     StyleSheet sheet = new StyleSheet();
 
     boolean isDark = FlatLaf.isLafDark();
@@ -59,6 +74,38 @@ public final class SwingHtmlUtils {
 
     kit.setStyleSheet(sheet);
     textPane.setEditorKit(kit);
+  }
+
+  private static final class WrappingHtmlFactory extends HTMLEditorKit.HTMLFactory {
+    @Override
+    public View create(Element elem) {
+      View view = super.create(elem);
+      if (view instanceof InlineView) {
+        return new InlineView(elem) {
+          @Override
+          public float getMinimumSpan(int axis) {
+            return axis == View.X_AXIS ? 0 : super.getMinimumSpan(axis);
+          }
+        };
+      }
+      if (view instanceof ParagraphView) {
+        return new ParagraphView(elem) {
+          @Override
+          public float getMinimumSpan(int axis) {
+            return axis == View.X_AXIS ? 0 : super.getMinimumSpan(axis);
+          }
+        };
+      }
+      if (view instanceof BlockView blockView && !"body".equalsIgnoreCase(elem.getName())) {
+        return new BlockView(elem, blockView.getAxis()) {
+          @Override
+          public float getMinimumSpan(int axis) {
+            return axis == View.X_AXIS ? 0 : super.getMinimumSpan(axis);
+          }
+        };
+      }
+      return view;
+    }
   }
 
   /**

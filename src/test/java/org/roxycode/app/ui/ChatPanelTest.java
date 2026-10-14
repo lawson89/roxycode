@@ -179,11 +179,51 @@ public class ChatPanelTest {
     chatPanel.getInputArea().setCaretPosition(0);
     assertEquals(0, chatPanel.getInputArea().getCaretPosition());
 
-    chatPanel.focusInput();
+        chatPanel.focusInput();
 
     assertEquals(
         "Existing text in input".length(),
         chatPanel.getInputArea().getCaretPosition(),
         "Caret should be moved to the end of the text");
+  }
+
+  @Test
+  public void testOutputScrollPaneAndWrappingConfiguration() {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "test", null, true);
+
+    assertTrue(
+        chatPanel.getOutputArea().getScrollableTracksViewportWidth(),
+        "MarkdownPane should track viewport width");
+
+    javax.swing.JScrollPane scrollPane =
+        (javax.swing.JScrollPane)
+            javax.swing.SwingUtilities.getAncestorOfClass(
+                javax.swing.JScrollPane.class, chatPanel.getOutputArea());
+    assertNotNull(scrollPane, "Output area should be inside a JScrollPane");
+    assertSame(
+        chatPanel.getOutputArea(),
+        scrollPane.getViewport().getView(),
+        "Output area should be the direct viewport view of outputScrollPane");
+    assertEquals(
+        javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER,
+        scrollPane.getHorizontalScrollBarPolicy(),
+        "Horizontal scrollbar policy should be HORIZONTAL_SCROLLBAR_NEVER");
+
+    java.awt.Container outputWrapper = scrollPane.getParent();
+    assertNotNull(outputWrapper, "outputScrollPane should have an outputWrapper parent");
+    assertTrue(
+        outputWrapper.getLayout() instanceof java.awt.BorderLayout,
+        "outputWrapper should use BorderLayout");
+    java.awt.BorderLayout layout = (java.awt.BorderLayout) outputWrapper.getLayout();
+    assertNotNull(
+        layout.getLayoutComponent(java.awt.BorderLayout.SOUTH),
+        "inlineActionPanel should be attached at BorderLayout.SOUTH of outputWrapper in task mode");
   }
 }
