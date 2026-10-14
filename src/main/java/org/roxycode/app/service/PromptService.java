@@ -126,15 +126,11 @@ public class PromptService {
 
     StringBuilder systemPrompt = new StringBuilder(getStableContext());
 
-    if (currentPhase == WorkflowPhase.EXPLORE) {
-      systemPrompt.append(NEWLINE_DOUBLE).append(generateExploreSystemPrompt());
-    } else if (currentPhase == WorkflowPhase.REVIEW) {
-      systemPrompt.append(NEWLINE_DOUBLE).append(loadReviewPrompt());
-    } else if (currentPhase == WorkflowPhase.PLAN) {
-      systemPrompt.append(NEWLINE_DOUBLE).append(loadPlanPrompt());
-    } else if (currentPhase == WorkflowPhase.CODE) {
-      systemPrompt.append(NEWLINE_DOUBLE).append(loadCodePrompt());
-    }
+        String phasePrompt =
+        currentPhase == WorkflowPhase.EXPLORE
+            ? generateExploreSystemPrompt()
+            : loadPhasePrompt(currentPhase);
+    systemPrompt.append(NEWLINE_DOUBLE).append(phasePrompt);
 
     if (repoMapPackerService != null) {
       EditorResult repoMap = repoMapPackerService.generateRepoMap();
@@ -155,58 +151,39 @@ public class PromptService {
     return systemPrompt.toString();
   }
 
+    public String loadPhasePrompt(WorkflowPhase phase) {
+    String path =
+        switch (phase) {
+          case EXPLORE -> EXPLORE_PROMPT_PATH;
+          case PLAN -> PLAN_PROMPT_PATH;
+          case CODE -> CODE_PROMPT_PATH;
+          case REVIEW -> REVIEW_PROMPT_PATH;
+        };
+    return readClasspathResource(path);
+  }
+
   public String loadCoreWorkflowPrompt() {
-    return loadDefaultPrompt();
+    return readClasspathResource(CLASSPATH_PROMPT);
   }
 
   public String loadJexlContext() {
-    try {
-      Resource resource = new ClassPathResource(JEXL_DOC_PATH);
-      return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      log.error("Failed to load JEXL context from classpath: {}", e.getMessage());
-      return "";
-    }
+    return readClasspathResource(JEXL_DOC_PATH);
   }
 
   public String loadExplorePrompt() {
-    try {
-      Resource resource = new ClassPathResource(EXPLORE_PROMPT_PATH);
-      return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      log.error("Failed to load EXPLORE prompt from classpath: {}", e.getMessage());
-      return "";
-    }
+    return loadPhasePrompt(WorkflowPhase.EXPLORE);
   }
 
   public String loadReviewPrompt() {
-    try {
-      Resource resource = new ClassPathResource(REVIEW_PROMPT_PATH);
-      return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      log.error("Failed to load REVIEW prompt from classpath: {}", e.getMessage());
-      return "";
-    }
+    return loadPhasePrompt(WorkflowPhase.REVIEW);
   }
 
   public String loadPlanPrompt() {
-    try {
-      Resource resource = new ClassPathResource(PLAN_PROMPT_PATH);
-      return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      log.error("Failed to load PLAN prompt from classpath: {}", e.getMessage());
-      return "";
-    }
+    return loadPhasePrompt(WorkflowPhase.PLAN);
   }
 
   public String loadCodePrompt() {
-    try {
-      Resource resource = new ClassPathResource(CODE_PROMPT_PATH);
-      return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      log.error("Failed to load CODE prompt from classpath: {}", e.getMessage());
-      return "";
-    }
+    return loadPhasePrompt(WorkflowPhase.CODE);
   }
 
   public String loadAllPrompts() {
@@ -349,12 +326,12 @@ public class PromptService {
     return sb.toString();
   }
 
-  private String loadDefaultPrompt() {
+    private String readClasspathResource(String path) {
     try {
-      Resource resource = new ClassPathResource(CLASSPATH_PROMPT);
+      Resource resource = new ClassPathResource(path);
       return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
     } catch (IOException e) {
-      log.error("Failed to load default prompt from classpath: {}", e.getMessage());
+      log.error("Failed to load resource {} from classpath: {}", path, e.getMessage());
       return "";
     }
   }

@@ -102,12 +102,20 @@ class PromptServiceTest {
     assertTrue(prompt.contains("Requirements Gathering & Clarification"));
   }
 
-  @Test
+    @Test
   void testLoadCodePrompt() {
     String prompt = promptService.loadCodePrompt();
     assertNotNull(prompt);
     assertTrue(prompt.contains("CODER"));
     assertTrue(prompt.contains("ACTING"));
+  }
+
+  @Test
+  void testLoadPhasePrompt() {
+    assertEquals(promptService.loadExplorePrompt(), promptService.loadPhasePrompt(WorkflowPhase.EXPLORE));
+    assertEquals(promptService.loadPlanPrompt(), promptService.loadPhasePrompt(WorkflowPhase.PLAN));
+    assertEquals(promptService.loadCodePrompt(), promptService.loadPhasePrompt(WorkflowPhase.CODE));
+    assertEquals(promptService.loadReviewPrompt(), promptService.loadPhasePrompt(WorkflowPhase.REVIEW));
   }
 
   @Test
