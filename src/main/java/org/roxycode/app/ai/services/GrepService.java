@@ -1,15 +1,13 @@
 package org.roxycode.app.ai.services;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CancellationException;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.service.ProcessRunner;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,8 +60,10 @@ public class GrepService {
       return new EditorResult(false, "", "No active project");
     }
 
-    Path root = projectService.getCurrentProjectRoot();
+    Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
     Path searchDir = resolvePath(relativePath);
+    Path relSearchDir = root.relativize(searchDir);
+    String targetArg = relSearchDir.toString().isEmpty() ? "." : relSearchDir.toString();
 
     List<String> command = new ArrayList<>();
     command.add("rg");
@@ -77,43 +77,29 @@ public class GrepService {
     }
 
     command.add(pattern);
-    command.add(searchDir.toString());
+    command.add(targetArg);
 
     try {
-      ProcessBuilder pb = new ProcessBuilder(command);
-      pb.directory(root.toFile());
-      pb.redirectErrorStream(true);
-      Process process = pb.start();
-
-      StringBuilder output = new StringBuilder();
-      try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-        String line = reader.readLine();
-        while (line != null) {
-          output.append(line).append("\n");
-          line = reader.readLine();
-        }
+      ProcessResult result = ProcessRunner.run(command, root, true);
+      if (result.timedOut()) {
+        log.warn("RipGrep timed out for pattern: {}", pattern);
+        return new EditorResult(false, "", "RipGrep timed out");
       }
 
-      int exitCode = process.waitFor();
+      int exitCode = result.exitCode();
       final int exitCodeNoMatches = 1;
       if (exitCode == exitCodeNoMatches) {
         return new EditorResult(true, "", null);
       } else if (exitCode != 0) {
-        String error = output.toString().trim();
+        String error = result.output().trim();
         log.warn("RipGrep failed with exit code {}: {}", exitCode, error);
         return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + error);
       }
 
-      return new EditorResult(true, output.toString().trim(), null);
+      return new EditorResult(true, result.output().trim(), null);
     } catch (IOException e) {
       log.error("Exception executing RipGrep: {}", e.getMessage(), e);
       return new EditorResult(false, "", "Error executing RipGrep: " + e.getMessage());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      CancellationException ce = new CancellationException("RipGrep interrupted");
-      ce.initCause(e);
-      throw ce;
     }
   }
 
@@ -139,37 +125,39 @@ public class GrepService {
       return new ArrayList<>();
     }
 
-    Path root = projectService.getCurrentProjectRoot();
+    Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
     Path searchDir = resolvePath(relativePath);
+    Path relSearchDir = root.relativize(searchDir);
 
     List<String> command = new ArrayList<>();
     command.add("rg");
     command.add("--files");
     command.add("--color=never");
-    command.add(searchDir.toString());
+    if (!relSearchDir.toString().isEmpty()) {
+      command.add(relSearchDir.toString());
+    }
 
     List<String> files = new ArrayList<>();
     try {
-      ProcessBuilder pb = new ProcessBuilder(command);
-      pb.directory(root.toFile());
-      Process process = pb.start();
-
-      try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-        String line = reader.readLine();
-        while (line != null) {
-          files.add(line);
-          line = reader.readLine();
+      ProcessResult result = ProcessRunner.run(command, root, false);
+      if (result.timedOut()) {
+        log.warn("RipGrep listFiles timed out in {}", root);
+        return files;
+      }
+      String output = result.output();
+      if (output != null && !output.isEmpty()) {
+        for (String line : output.lines().toList()) {
+          if (!line.isBlank()) {
+            String normalized = line.replace((char) 92, '/');
+            if (normalized.startsWith("./")) {
+              normalized = normalized.substring(2);
+            }
+            files.add(normalized);
+          }
         }
       }
-      process.waitFor();
     } catch (IOException e) {
       log.error("Failed to list files using RipGrep: {}", e.getMessage());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      CancellationException ce = new CancellationException("RipGrep interrupted");
-      ce.initCause(e);
-      throw ce;
     }
     return files;
   }

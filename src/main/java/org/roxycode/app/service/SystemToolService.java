@@ -1,11 +1,11 @@
 package org.roxycode.app.service;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import org.roxycode.app.model.SystemTool;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -38,26 +38,16 @@ public class SystemToolService {
   private SystemTool detectTool(
       String name, String command, String versionArg, String description) {
     try {
-      ProcessBuilder pb = new ProcessBuilder(command, versionArg);
-      pb.redirectErrorStream(true);
-      Process process = pb.start();
-      StringBuilder output = new StringBuilder();
-      try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
-        String line = reader.readLine();
-        while (line != null) {
-          output.append(line).append("\n");
-          line = reader.readLine();
-        }
-      }
-      int exitCode = process.waitFor();
-      if (exitCode == 0) {
-        String version = parseVersion(output.toString(), name);
+      ProcessResult result = ProcessRunner.run(List.of(command, versionArg), null, true);
+      if (!result.timedOut() && result.exitCode() == 0) {
+        String version = parseVersion(result.output(), name);
         return new SystemTool(name, version, "Detected", description);
       } else {
-        log.warn("Tool {} detection failed with exit code {}", name, exitCode);
+        log.warn("Tool {} detection failed with exit code {}", name, result.exitCode());
         return new SystemTool(name, "Not found", "Missing", description);
       }
+    } catch (CancellationException e) {
+      throw e;
     } catch (Exception e) {
       log.error("Exception during tool {} detection: {}", name, e.getMessage());
       return new SystemTool(name, "Not found", "Missing", description);

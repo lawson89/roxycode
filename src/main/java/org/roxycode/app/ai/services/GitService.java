@@ -1,15 +1,14 @@
 package org.roxycode.app.ai.services;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CancellationException;
+import java.util.Map;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.service.ProcessRunner;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,24 +72,20 @@ public class GitService {
       command.add("git");
       command.addAll(Arrays.asList(args));
 
-      ProcessBuilder pb = new ProcessBuilder(command);
-      pb.directory(projectService.getCurrentProjectRoot().toFile());
-      pb.redirectErrorStream(true);
-      Process process = pb.start();
+      ProcessResult result =
+          ProcessRunner.run(
+              command,
+              projectService.getCurrentProjectRoot(),
+              Map.of("GIT_TERMINAL_PROMPT", "0"));
 
-      StringBuilder output = new StringBuilder();
-      try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-        String line = reader.readLine();
-        while (line != null) {
-          output.append(line).append("\n");
-          line = reader.readLine();
-        }
+      if (result.timedOut()) {
+        log.warn("Git command {} timed out", String.join(" ", args));
+        return "Error executing git command: Command timed out";
       }
 
-      int exitCode = process.waitFor();
+      int exitCode = result.exitCode();
+      String out = result.output();
       if (exitCode != 0) {
-        String out = output.toString();
         if (out.contains("not a git repository")) {
           return "Not a git repository";
         }
@@ -102,16 +97,11 @@ public class GitService {
         return "Error (" + exitCode + "): " + out.trim();
       }
 
-      return output.toString().trim();
+      return out.trim();
     } catch (IOException e) {
       log.error(
           "Exception executing git command {}: {}", String.join(" ", args), e.getMessage(), e);
       return "Error executing git command: " + e.getMessage();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      CancellationException ce = new CancellationException("Git command interrupted");
-      ce.initCause(e);
-      throw ce;
     }
   }
 }

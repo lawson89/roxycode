@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.service.ProjectService;
@@ -15,7 +16,7 @@ class GrepServiceTest {
   @TempDir Path tempDir;
 
   @Test
-  void testGrepSuccess() throws IOException {
+  void testGrepSuccessAndRelativePaths() throws IOException {
     ProjectService projectService = mock(ProjectService.class);
     when(projectService.hasActiveProject()).thenReturn(true);
     when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
@@ -26,13 +27,34 @@ class GrepServiceTest {
 
     GrepService grepService = new GrepService(projectService);
 
-    // We try to execute grep. If rg is missing, it will return failure but not throw exception.
     EditorResult result = grepService.grep("class Hello", "src", "*.java");
 
-    // Basic check: if it succeeded, content should be correct.
     if (result.success()) {
-      assertTrue(result.content().contains("Hello.java"));
+      assertTrue(result.content().contains("src/Hello.java") || result.content().contains("Hello.java"));
+      assertFalse(result.content().startsWith(tempDir.toAbsolutePath().toString()));
       assertTrue(result.content().contains("class Hello"));
+    }
+  }
+
+  @Test
+  void testListFilesReturnsProjectRelativePaths() throws IOException {
+    ProjectService projectService = mock(ProjectService.class);
+    when(projectService.hasActiveProject()).thenReturn(true);
+    when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+
+    Path promptsDir = tempDir.resolve("src/main/resources/prompts");
+    Files.createDirectories(promptsDir);
+    Files.writeString(promptsDir.resolve("core_workflow.md"), "# Workflow");
+
+    GrepService grepService = new GrepService(projectService);
+    List<String> files = grepService.listFiles(null);
+
+    if (!files.isEmpty()) {
+      assertTrue(files.contains("src/main/resources/prompts/core_workflow.md"));
+      for (String file : files) {
+        assertFalse(
+            Path.of(file).isAbsolute(), "Expected relative path but got absolute: " + file);
+      }
     }
   }
 

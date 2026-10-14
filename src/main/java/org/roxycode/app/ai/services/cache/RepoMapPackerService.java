@@ -2,20 +2,21 @@ package org.roxycode.app.ai.services.cache;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
+import org.roxycode.app.service.ProcessRunner;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,6 +114,8 @@ public class RepoMapPackerService {
             sb.append(skeleton);
           }
         }
+      } catch (CancellationException e) {
+        throw e;
       } catch (Exception e) {
         sb.append("[Error processing file: ").append(e.getMessage()).append("]\n");
       }
@@ -130,20 +133,27 @@ public class RepoMapPackerService {
 
   private String getSkeleton(Path filePath) {
     try {
-      Process process =
-          new ProcessBuilder(
-                  "ctags",
-                  "-f",
-                  "-",
-                  "--output-format=json",
-                  "--fields=+n",
-                  filePath.toAbsolutePath().toString())
-              .start();
+      List<String> command =
+          List.of(
+              "ctags",
+              "-f",
+              "-",
+              "--output-format=json",
+              "--fields=+n",
+              filePath.toAbsolutePath().toString());
+      ProcessResult result = ProcessRunner.run(command, null, false);
+      if (result.timedOut()) {
+        log.warn("Ctags timed out for {}", filePath);
+        return null;
+      }
+
       List<Tag> tags = new ArrayList<>();
-      try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
-        String line = reader.readLine();
-        while (line != null) {
+      String output = result.output();
+            if (output != null && !output.isEmpty()) {
+        for (String line : output.lines().toList()) {
+          if (line.isBlank()) {
+            continue;
+          }
           try {
             JsonNode node = objectMapper.readTree(line);
             JsonNode nameNode = node.get("name");
@@ -154,10 +164,8 @@ public class RepoMapPackerService {
           } catch (Exception e) {
             log.trace("Skip unparseable line: {}", line);
           }
-          line = reader.readLine();
         }
       }
-      process.waitFor();
       if (tags.isEmpty()) return null;
       tags.sort(Comparator.comparingInt(t -> t.line));
       List<String> lines = Files.readAllLines(filePath);
@@ -169,11 +177,13 @@ public class RepoMapPackerService {
               .append(tag.line)
               .append(": ")
               .append(lines.get(tag.line - 1).trim())
-              .append("\n");
+              .append('\n');
           lastLine = tag.line;
         }
       }
       return skeleton.toString();
+    } catch (CancellationException e) {
+      throw e;
     } catch (Exception e) {
       log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
       return null;

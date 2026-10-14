@@ -3,21 +3,21 @@ package org.roxycode.app.ai.services;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.service.ProcessRunner;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +36,7 @@ public class GenericBuildToolService {
 
   private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
   private static final String CONFIG_PATH = ".roxycode/build.toml";
+  private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
 
   private final ProjectService projectService;
   private final TomlMapper tomlMapper;
@@ -172,10 +173,13 @@ public class GenericBuildToolService {
       String templateName = detectTemplate();
       try (InputStream is =
           getClass().getResourceAsStream("/templates/build/" + templateName + ".toml")) {
-        if (is != null) {
+                if (is != null) {
           Files.copy(is, configPath);
         } else {
-          Files.writeString(configPath, "[build]\ncompile = \"echo 'No build command'\"", StandardCharsets.UTF_8);
+          Files.writeString(
+              configPath,
+              "[build]\ncompile = 'echo No build command'",
+              StandardCharsets.UTF_8);
         }
       }
     } catch (IOException e) {
@@ -245,71 +249,36 @@ public class GenericBuildToolService {
   private BuildResult execute(
       String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
     log.info("Executing build command: {}", command);
-    StringBuffer output = new StringBuffer();
     List<String> errors = new ArrayList<>();
     List<String> failedTests = new ArrayList<>();
     int exitCode = -1;
+    String fullOutput = "";
 
     try {
-      ProcessBuilder pb;
+      List<String> shellCommand;
       if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")) {
-        pb = new ProcessBuilder("cmd.exe", "/c", command);
+        shellCommand = List.of("cmd.exe", "/c", command);
       } else {
-        pb = new ProcessBuilder("sh", "-c", command);
+        shellCommand = List.of("sh", "-c", command);
       }
 
-      if (env != null && !env.isEmpty()) {
-        pb.environment().putAll(env);
-      }
+      ProcessResult result =
+          ProcessRunner.run(
+              shellCommand, projectService.getCurrentProjectRoot(), env, BUILD_TIMEOUT, true);
 
-      pb.directory(projectService.getCurrentProjectRoot().toFile());
-      pb.redirectErrorStream(true);
-
-      Process process = pb.start();
-
-      // Asynchronously read the output to prevent blocking the timeout logic
-      CompletableFuture<Void> readerFuture =
-          CompletableFuture.runAsync(
-              () -> {
-                try (BufferedReader reader =
-                    new BufferedReader(
-                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                  String line = reader.readLine();
-                  while (line != null) {
-                    output.append(line).append("\n");
-                    line = reader.readLine();
-                  }
-                } catch (IOException e) {
-                  log.error("Error reading process output", e);
-                }
-              });
-
-      if (process.waitFor(10, TimeUnit.MINUTES)) {
-        exitCode = process.exitValue();
-        // Ensure the reader has finished processing the stream
-        try {
-          readerFuture.get(5, TimeUnit.SECONDS);
-        } catch (Exception e) {
-          log.warn("Output reader did not complete within 5 seconds of process exit", e);
-        }
-      } else {
-        process.destroyForcibly();
+      fullOutput = result.output();
+      exitCode = result.exitCode();
+      if (result.timedOut()) {
         errors.add("Command timed out after 10 minutes");
       }
-
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      CancellationException ce = new CancellationException("Process execution interrupted");
-      ce.initCause(e);
-      throw ce;
+    } catch (CancellationException e) {
+      throw e;
     } catch (Exception e) {
       log.error("Process execution failed", e);
       StringWriter sw = new StringWriter();
       e.printStackTrace(new PrintWriter(sw));
       errors.add(sw.toString());
     }
-
-    String fullOutput = output.toString();
 
     if (errorRegex != null && !errorRegex.isBlank()) {
       try {
