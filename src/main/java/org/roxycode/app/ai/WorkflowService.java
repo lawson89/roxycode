@@ -24,8 +24,8 @@ public class WorkflowService {
   private final PlanService planManager;
   private final EnvironmentService environmentService;
   private final ApplicationEventPublisher eventPublisher;
-  private WorkflowPhase currentPhase = WorkflowPhase.PLAN;
-  private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.PLAN);
+  private WorkflowPhase currentPhase = WorkflowPhase.EXPLORE;
+  private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.EXPLORE);
   private WorkflowPhase pendingPhase;
   private String pendingReason;
 
@@ -249,11 +249,11 @@ public class WorkflowService {
   }
 
   public void resetWorkflow() {
-    this.pendingPhase = null;
+        this.pendingPhase = null;
     this.pendingReason = null;
-    this.currentPhase = WorkflowPhase.PLAN;
+    this.currentPhase = WorkflowPhase.EXPLORE;
     this.visitedPhases.clear();
-    this.visitedPhases.add(WorkflowPhase.PLAN);
+    this.visitedPhases.add(WorkflowPhase.EXPLORE);
     this.planManager.clearPlan();
     notifyPhaseListeners();
     notifyRequestListeners();

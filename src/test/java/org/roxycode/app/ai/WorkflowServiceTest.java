@@ -29,7 +29,7 @@ class WorkflowServiceTest {
     service = new WorkflowService(planManager, envService, eventPublisher);
   }
 
-  private void setupCodePhase() {
+    private void setupCodePhase() {
     ImplementationPlan plan =
         new ImplementationPlan(
             "T", "G", List.of(), List.of(), true, "now", "user", null, List.of(), List.of());
@@ -48,6 +48,7 @@ class WorkflowServiceTest {
 
   @Test
   void testPhaseManagement() {
+    service.switchMode(WorkflowPhase.PLAN);
     assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
     when(planManager.getCurrentPlan())
@@ -96,7 +97,7 @@ class WorkflowServiceTest {
     assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
     verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
-    verify(planManager).addHandoffLogEntry(anyString(), anyString(), anyString());
+        verify(planManager).addHandoffLogEntry(anyString(), anyString(), anyString());
   }
 
   @Test
@@ -106,8 +107,10 @@ class WorkflowServiceTest {
     assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Jump"));
 
     service.resetWorkflow();
-    assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-    assertThrows(YieldTurnException.class, () -> service.routeToPhase("EXPLORE", "Let's discover"));
+    assertEquals(WorkflowPhase.EXPLORE, service.getCurrentPhase());
+    // Already in EXPLORE, so it shouldn't throw YieldTurnException if we call routeToPhase for same phase?
+    // Actually routeToPhase returns a message if already in phase.
+    assertEquals("Already in phase: EXPLORE", service.routeToPhase("EXPLORE", "Let's discover"));
   }
 
   @Test

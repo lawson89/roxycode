@@ -44,6 +44,7 @@ public final class MainFrame extends JFrame {
   private final JPanel contentArea = new JPanel(cardLayout);
 
   private GitChangesPanel gitChangesPanel;
+  private ChatPanel qaChatPanel;
 
   public MainFrame(
       SettingsService settingsService,
@@ -102,6 +103,16 @@ public final class MainFrame extends JFrame {
     setSize(1200, 900);
     setLocationRelativeTo(null);
 
+    addWindowListener(
+        new java.awt.event.WindowAdapter() {
+          @Override
+          public void windowOpened(java.awt.event.WindowEvent e) {
+            if (qaChatPanel != null) {
+              qaChatPanel.getInputArea().requestFocusInWindow();
+            }
+          }
+        });
+
     try {
       java.net.URL iconUrl = getClass().getResource("/static/images/roxy.png");
       if (iconUrl != null) {
@@ -131,12 +142,11 @@ public final class MainFrame extends JFrame {
             planManagerService,
             this::showCard);
 
-    StatusPanel statusBar = new StatusPanel(envService, chatMemory);
+        StatusPanel statusBar = new StatusPanel(envService, chatMemory);
 
     // QA Workspace (Explore)
     JTabbedPane qaTabs = new JTabbedPane();
-    qaTabs.addTab(
-        "Chat",
+    this.qaChatPanel =
         new ChatPanel(
             aiService,
             workflowService,
@@ -144,7 +154,8 @@ public final class MainFrame extends JFrame {
             chatMemory,
             "qa",
             WorkflowPhase.EXPLORE,
-            false));
+            false);
+    qaTabs.addTab("Chat", qaChatPanel);
     qaTabs.addTab(
         "History", new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "qa"));
 
@@ -184,7 +195,7 @@ public final class MainFrame extends JFrame {
     workspace.add(contentArea, "grow, wrap");
     workspace.add(statusBar, "h 30!");
 
-    add(sidebar, "growy");
+        add(sidebar, "growy");
     add(workspace, "grow");
 
     // Default to QA View
