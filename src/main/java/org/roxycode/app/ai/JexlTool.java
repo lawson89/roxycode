@@ -12,7 +12,6 @@ import org.apache.commons.jexl3.JexlEngine;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.apache.commons.jexl3.introspection.JexlPermissions;
-import org.apache.commons.text.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -24,6 +23,7 @@ import org.springframework.ai.tool.annotation.Tool;
 public class JexlTool {
 
   private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
+  private static final String ERROR_KEY = "error";
   private final JexlEngine jexl;
   private final JexlServiceRegistry registry;
   private final WorkflowPhase phase;
@@ -64,7 +64,9 @@ public class JexlTool {
       WorkflowService workflowService =
           (WorkflowService) registry.getServices().get("workflowService");
       if (workflowService != null && workflowService.getPendingPhase() != null) {
-        return "{\\\"error\\\": \\\"A phase transition is already pending. Please wait for the user to approve or reject the transition before performing more actions.\\\"}";
+        return toJsonError(
+            mapper,
+            "A phase transition is already pending. Please wait for the user to approve or reject the transition before performing more actions.");
       }
     }
 
@@ -73,9 +75,7 @@ public class JexlTool {
       jexlScript = jexl.createScript(script);
     } catch (Exception e) {
       log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
-      return "{\\\"error\\\": \\\"Syntax Error (Script not executed): "
-          + StringEscapeUtils.escapeJson(e.getMessage())
-          + "\\\"}";
+      return toJsonError(mapper, "Syntax Error (Script not executed): " + e.getMessage());
     }
 
     try {
@@ -97,17 +97,27 @@ public class JexlTool {
       // Check if this is a YieldTurnException wrapping or direct
       Throwable current = e;
       while (current != null) {
-        if (current instanceof YieldTurnException) {
-          // YieldTurnException message is already a JSON string
-          return current.getMessage();
+        if (current instanceof YieldTurnException yieldEx) {
+          try {
+            fireEvent(new JexlExecutionEvent(script, yieldEx.getMessage(), true, null));
+          } catch (Exception ignored) {
+            // Preserve YieldTurnException even if turn limit listener throws
+          }
+          throw new YieldTurnException(yieldEx.getMessage(), e);
+        }
+        if (current.getMessage() != null
+            && current.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
+          throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED", e);
         }
         if (current instanceof InterruptedException || current instanceof CancellationException) {
           if (current instanceof InterruptedException) {
             Thread.currentThread().interrupt();
           }
-          throw new RuntimeException(current);
+          throw new RuntimeException(e);
         }
-        if (Objects.equals(current.getCause(), current) || current.getCause() == null) break;
+        if (Objects.equals(current.getCause(), current) || current.getCause() == null) {
+          break;
+        }
         current = current.getCause();
       }
 
@@ -121,11 +131,15 @@ public class JexlTool {
         error = cause.toString();
       }
       fireEvent(new JexlExecutionEvent(script, null, false, error));
-      try {
-        return mapper.writeValueAsString(Map.of("error", error));
-      } catch (Exception ex) {
-        return "{\\\"error\\\": \\\"Internal Error during error serialization\\\"}";
-      }
+      return toJsonError(mapper, error);
+    }
+  }
+
+  private String toJsonError(ObjectMapper mapper, String message) {
+    try {
+      return mapper.writeValueAsString(Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
+    } catch (Exception ex) {
+      return "{error: Internal Error during error serialization}";
     }
   }
 

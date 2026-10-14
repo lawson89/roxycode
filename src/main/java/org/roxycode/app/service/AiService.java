@@ -3,11 +3,13 @@ package org.roxycode.app.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
@@ -18,6 +20,9 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.tool.execution.DefaultToolExecutionExceptionProcessor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -32,12 +37,11 @@ public class AiService {
   private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
   private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
   private static final String FIELD_MESSAGE = "message";
+  private static final String MAX_TURNS_EXCEEDED = "MAX_TOOL_TURNS_EXCEEDED";
 
   public String chat(String message) {
     return chat("default", workflowService.getCurrentPhase(), message, null, null);
   }
-
-  private static final String MSG_FIELD = "message";
 
   public String chat(String message, List<byte[]> images) {
     return chat("default", workflowService.getCurrentPhase(), message, null, images);
@@ -78,7 +82,15 @@ public class AiService {
         chatClientBuilder
             .defaultAdvisors(
                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                ToolCallingAdvisor.builder().build())
+                ToolCallingAdvisor.builder()
+                    .toolCallingManager(
+                        ToolCallingManager.builder()
+                            .toolExecutionExceptionProcessor(
+                                DefaultToolExecutionExceptionProcessor.builder()
+                                    .alwaysThrow(true)
+                                    .build())
+                            .build())
+                    .build())
             .build();
   }
 
@@ -101,7 +113,7 @@ public class AiService {
               new ToolExecutionEvent(
                   conversationId, event.script(), event.result(), event.success(), event.error()));
           if (turn > maxTurns) {
-            throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED");
+            throw new RuntimeException(MAX_TURNS_EXCEEDED);
           }
         });
 
@@ -114,20 +126,15 @@ public class AiService {
                 .call()
                 .content();
 
-        if (content != null && content.trim().startsWith("{") && content.contains("\"message\"")) {
-          try {
-            JsonNode node = new ObjectMapper().readTree(content);
-            if (node.has("summary") && node.has("message")) {
-              content = node.get("summary").asText() + "\n\n" + node.get("message").asText();
-            } else if (node.has("message")) {
-              content = node.get("message").asText();
-            }
-          } catch (Exception e) {
-            log.trace("Response is not valid JSON, using raw content");
-          }
-        }
+        content = formatStructuredContent(content);
       } catch (Exception e) {
-        if (e.getMessage() != null && e.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
+        YieldTurnException yieldEx = findYieldTurnException(e);
+        if (yieldEx != null) {
+          content = formatStructuredContent(yieldEx.getMessage());
+          if (content != null && !content.isBlank()) {
+            chatMemory.add(conversationId, new AssistantMessage(content));
+          }
+        } else if (isMaxToolTurnsExceeded(e)) {
           content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
         } else {
           eventPublisher.publishEvent(
@@ -143,6 +150,52 @@ public class AiService {
     } finally {
       // Ephemeral tool, no cleanup needed
     }
+  }
+
+  private String formatStructuredContent(String raw) {
+    if (raw != null && raw.trim().startsWith("{") && raw.contains(FIELD_MESSAGE)) {
+      try {
+        JsonNode node = new ObjectMapper().readTree(raw);
+        if (node.has("summary")
+            && !node.get("summary").asText().isBlank()
+            && node.has(FIELD_MESSAGE)) {
+          return node.get("summary").asText() + NEWLINE_DOUBLE + node.get(FIELD_MESSAGE).asText();
+        } else if (node.has(FIELD_MESSAGE)) {
+          return node.get(FIELD_MESSAGE).asText();
+        }
+      } catch (Exception e) {
+        log.trace("Response is not valid JSON, using raw content");
+      }
+    }
+    return raw;
+  }
+
+  private static YieldTurnException findYieldTurnException(Throwable t) {
+    Throwable current = t;
+    while (current != null) {
+      if (current instanceof YieldTurnException yieldEx) {
+        return yieldEx;
+      }
+      if (Objects.equals(current.getCause(), current)) {
+        break;
+      }
+      current = current.getCause();
+    }
+    return null;
+  }
+
+  private static boolean isMaxToolTurnsExceeded(Throwable t) {
+    Throwable current = t;
+    while (current != null) {
+      if (current.getMessage() != null && current.getMessage().contains(MAX_TURNS_EXCEEDED)) {
+        return true;
+      }
+      if (Objects.equals(current.getCause(), current)) {
+        break;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 
   private ChatClient.ChatClientRequestSpec buildPrompt(

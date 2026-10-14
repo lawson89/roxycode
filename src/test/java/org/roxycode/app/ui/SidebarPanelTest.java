@@ -84,8 +84,11 @@ class SidebarPanelTest {
       }
     }
 
-    assertNotNull(qaBtn, "QA Button should be found");
+        assertNotNull(qaBtn, "QA Button should be found");
     assertNotNull(taskBtn, "Task Button should be found");
+
+    assertTrue(qaBtn.isSelected(), "Codebase Q&A button should be selected on startup");
+    assertFalse(taskBtn.isSelected(), "Active Task button should not be selected on startup");
 
     qaBtn.doClick();
     verify(navAction).accept("QA_VIEW");

@@ -52,7 +52,8 @@ public final class ChatPanel extends JPanel {
   private final JLabel transitionLabel;
   private final JLabel turnLabel;
   private final JScrollPane outputScrollPane;
-  private SwingWorker<String, Void> currentWorker;
+    private SwingWorker<String, Void> currentWorker;
+  private final List<Runnable> pendingPostTurnActions = new ArrayList<>();
   private final List<BufferedImage> pendingImages = new ArrayList<>();
   private final JPanel attachmentPanel;
 
@@ -83,7 +84,15 @@ public final class ChatPanel extends JPanel {
     turnEventBridge.addTurnListener(getConversationId(), this::onAgentTurn);
     turnEventBridge.addAutonomousTransitionListener(this::onAutonomousTransition);
     turnEventBridge.addToolExecutionListener(getConversationId(), this::onToolExecution);
-    turnEventBridge.addCompleteListener(getConversationId(), event -> setLoading(false));
+        turnEventBridge.addCompleteListener(
+        getConversationId(),
+        event ->
+            SwingUtilities.invokeLater(
+                () -> {
+                  if (currentWorker == null) {
+                    setLoading(false);
+                  }
+                }));
 
     setLayout(new BorderLayout());
 
@@ -266,9 +275,20 @@ public final class ChatPanel extends JPanel {
         });
   }
 
+    private void runAfterCurrentTurn(Runnable action) {
+    SwingUtilities.invokeLater(
+        () -> {
+          if (currentWorker != null) {
+            pendingPostTurnActions.add(action);
+          } else {
+            action.run();
+          }
+        });
+  }
+
   private void onAutonomousTransition(AutonomousTransitionEvent event) {
     if (!isTaskMode) return;
-    SwingUtilities.invokeLater(
+    runAfterCurrentTurn(
         () -> {
           outputArea.appendMessage(
               ROLE_SYSTEM,
@@ -343,21 +363,21 @@ public final class ChatPanel extends JPanel {
   private void onTransitionRequested(
       WorkflowPhase current, WorkflowPhase requested, String reason) {
     if (!isTaskMode) return;
-    SwingUtilities.invokeLater(
+    if (requested == null) {
+      SwingUtilities.invokeLater(() -> inlineActionPanel.setVisible(false));
+      return;
+    }
+    runAfterCurrentTurn(
         () -> {
-          if (requested != null) {
-            String path = current.getDisplayName() + " → " + requested.getDisplayName();
-            transitionLabel.setText(path);
-            approveButton.setText("Approve");
-            approveButton.setEnabled(true);
-            rejectButton.setEnabled(true);
-            inlineActionPanel.setVisible(true);
-            outputArea.appendMessage(
-                ROLE_SYSTEM,
-                "Roxy requested a transition: **" + path + "**.\n\n**Reason:** " + reason);
-          } else {
-            inlineActionPanel.setVisible(false);
-          }
+          String path = current.getDisplayName() + " → " + requested.getDisplayName();
+          transitionLabel.setText(path);
+          approveButton.setText("Approve");
+          approveButton.setEnabled(true);
+          rejectButton.setEnabled(true);
+          inlineActionPanel.setVisible(true);
+          outputArea.appendMessage(
+              ROLE_SYSTEM,
+              "Roxy requested a transition: **" + path + "**.\n\n**Reason:** " + reason);
         });
   }
 
@@ -403,7 +423,13 @@ public final class ChatPanel extends JPanel {
             "Reset session? This cancels active tasks and clears chat history.",
             "Reset",
             JOptionPane.YES_NO_OPTION);
-    if (result == JOptionPane.YES_OPTION) {
+        if (result == JOptionPane.YES_OPTION) {
+      pendingPostTurnActions.clear();
+      if (currentWorker != null) {
+        currentWorker.cancel(true);
+        currentWorker = null; // NOPMD
+        setLoading(false);
+      }
       if (isTaskMode) {
         workflowService.resetWorkflow();
       }
@@ -491,6 +517,10 @@ public final class ChatPanel extends JPanel {
     attachmentPanel.removeAll();
     attachmentPanel.setVisible(false);
 
+        if (currentWorker != null && !currentWorker.isDone()) {
+      currentWorker.cancel(true);
+    }
+
     currentWorker =
         new SwingWorker<>() {
           @Override
@@ -508,17 +538,28 @@ public final class ChatPanel extends JPanel {
 
           @Override
           protected void done() {
+            boolean cancelled = isCancelled();
             try {
               String response = get();
               outputArea.appendMessage("ai", response);
             } catch (java.util.concurrent.CancellationException ce) {
+              cancelled = true;
               outputArea.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
             } catch (Exception ex) {
               log.error("Failed to retrieve AI response: {}", ex.getMessage(), ex);
               outputArea.appendMessage("ai", "_Error communicating with AI._");
             } finally {
-              currentWorker = null; // NOPMD
-              setLoading(false);
+              if (currentWorker == this) {
+                currentWorker = null; // NOPMD
+                setLoading(false);
+              }
+              List<Runnable> actions = new ArrayList<>(pendingPostTurnActions);
+              pendingPostTurnActions.clear();
+              if (!cancelled) {
+                for (Runnable action : actions) {
+                  action.run();
+                }
+              }
             }
           }
         };

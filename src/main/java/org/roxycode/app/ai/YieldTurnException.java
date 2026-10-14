@@ -10,4 +10,8 @@ public class YieldTurnException extends RuntimeException {
   public YieldTurnException(String message) {
     super(message);
   }
+
+  public YieldTurnException(String message, Throwable cause) {
+    super(message, cause);
+  }
 }

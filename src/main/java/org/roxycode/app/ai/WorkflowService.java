@@ -134,14 +134,19 @@ public class WorkflowService {
       this.visitedPhases.add(nextPhase);
       notifyPhaseListeners();
 
-      eventPublisher.publishEvent(new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
+                  eventPublisher.publishEvent(new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
 
-      return String.format(
-          "Autonomous transition from %s to %s successful. Reason: %s",
-          oldPhase, nextPhase, reason);
+      String autoMessage =
+          String.format(
+              "Autonomous transition from %s to %s successful. Reason: %s",
+              oldPhase, nextPhase, reason);
+      String autoJson =
+          String.format(
+              "{\"message\": \"%s\", \"reason\": \"%s\"}",
+              StringEscapeUtils.escapeJson(autoMessage),
+              StringEscapeUtils.escapeJson(reason));
+      throw new YieldTurnException(autoJson);
     }
-
-    // Set pending state and notify listeners
     this.pendingPhase = nextPhase;
     this.pendingReason = reason;
     notifyRequestListeners();

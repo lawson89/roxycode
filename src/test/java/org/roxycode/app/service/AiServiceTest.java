@@ -198,8 +198,40 @@ class AiServiceTest {
 
     settings.setMaxAgentToolTurns(3);
 
-    String result = aiService.chat("Hello");
+        String result = aiService.chat("Hello");
 
     assertTrue(result.contains("Maximum tool turns (3) exceeded"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void testChatHandlesYieldTurnExceptionImmediately() {
+    when(chatClient.prompt()).thenReturn(requestSpec);
+    when(requestSpec.system(anyString())).thenReturn(requestSpec);
+    when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.tools(any())).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.options(any())).thenReturn(requestSpec);
+
+    when(promptService.loadCoreWorkflowPrompt()).thenReturn("CORE PROMPT");
+    when(promptService.loadJexlContext()).thenReturn("JEXL CONTEXT");
+    when(promptService.loadAllPrompts()).thenReturn(" ALL PROMPTS");
+    when(promptService.loadAllDocs()).thenReturn(" ALL DOCS");
+    when(promptService.loadProjectContext()).thenReturn("");
+    when(promptService.loadPlanPrompt()).thenReturn("PLAN PROMPT");
+    when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "", null));
+    when(gitService.getStatus()).thenReturn("");
+    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+
+    org.roxycode.app.ai.YieldTurnException yieldEx =
+        new org.roxycode.app.ai.YieldTurnException(
+            "{\"summary\":\"PLAN SUMMARY\",\"message\":\"Transition Request\"}");
+    when(requestSpec.call()).thenThrow(new RuntimeException(yieldEx));
+
+    String result = aiService.chat("Create plan");
+
+    assertTrue(result.contains("PLAN SUMMARY"));
+    assertTrue(result.contains("Transition Request"));
+    verify(chatMemory).add(eq("default"), any(org.springframework.ai.chat.messages.AssistantMessage.class));
   }
 }

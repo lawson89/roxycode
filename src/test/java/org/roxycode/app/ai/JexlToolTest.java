@@ -3,6 +3,7 @@ package org.roxycode.app.ai;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 public class JexlToolTest {
@@ -11,6 +12,10 @@ public class JexlToolTest {
   public static class TestService {
     public String hello(String name) {
       return "Hello, " + name;
+    }
+
+    public String requestTransition() {
+      throw new YieldTurnException("{\"message\":\"Yielded\"}");
     }
   }
 
@@ -22,10 +27,31 @@ public class JexlToolTest {
     JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
 
     String varCheck = tool.executeJexl("testService");
-    // result is a JSON string representing the service or its result
+    assertNotNull(varCheck);
 
     String result = tool.executeJexl("testService.hello('Roxy')");
     assertTrue(result.contains("Hello, Roxy"));
+  }
+
+  @Test
+  public void testExecuteJexlRethrowsYieldTurnExceptionAndNotifiesListeners() {
+    JexlServiceRegistry registry = new JexlServiceRegistry();
+    registry.register(new TestService());
+
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.PLAN);
+    AtomicBoolean listenerNotified = new AtomicBoolean(false);
+    tool.addListener(
+        event -> {
+          listenerNotified.set(true);
+          assertTrue(event.success());
+        });
+
+    YieldTurnException thrown =
+        assertThrows(
+            YieldTurnException.class, () -> tool.executeJexl("testService.requestTransition()"));
+    assertTrue(thrown.getMessage().contains("Yielded"));
+    assertNotNull(thrown.getCause(), "The original exception (cause) should be preserved");
+    assertTrue(listenerNotified.get(), "Execution listener should be notified before yielding");
   }
 
   @Test

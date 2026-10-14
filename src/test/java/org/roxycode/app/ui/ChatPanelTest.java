@@ -113,11 +113,54 @@ public class ChatPanelTest {
     Thread.sleep(300);
     verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
 
-    // Transition to REVIEW (should trigger turn)
+        // Transition to REVIEW (should trigger turn)
     turnEventBridge.handleAutonomousTransition(
         new AutonomousTransitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason"));
     Thread.sleep(600); // Give it more time for SwingWorker
 
     verify(aiService, atLeastOnce()).chat(anyString(), any(), anyString(), isNull(), any());
+  }
+
+  @Test
+  public void testTransitionRequestedDuringWorkerAppendsAfterAiResponse() throws Exception {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    org.mockito.ArgumentCaptor<WorkflowService.TransitionRequestListener> listenerCaptor =
+        org.mockito.ArgumentCaptor.forClass(WorkflowService.TransitionRequestListener.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "test", null, true);
+
+    verify(workflowService).addTransitionRequestListener(listenerCaptor.capture());
+    WorkflowService.TransitionRequestListener transitionListener = listenerCaptor.getValue();
+
+    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+    when(aiService.chat(anyString(), any(), anyString(), any(), any()))
+        .thenAnswer(
+            inv -> {
+              transitionListener.onTransitionRequested(
+                  WorkflowPhase.PLAN, WorkflowPhase.CODE, "Plan ready");
+              return "FINAL_PLAN_SUMMARY";
+            });
+
+    chatPanel.getInputArea().setText("Build feature");
+    chatPanel.getSendButton().doClick();
+
+    Thread.sleep(500);
+    javax.swing.SwingUtilities.invokeAndWait(() -> {});
+
+    String renderedHtml = chatPanel.getOutputArea().getText();
+    int aiResponseIndex = renderedHtml.indexOf("FINAL_PLAN_SUMMARY");
+    int transitionMsgIndex = renderedHtml.indexOf("Roxy requested a transition");
+
+    assertTrue(aiResponseIndex >= 0, "AI response should be rendered");
+    assertTrue(transitionMsgIndex >= 0, "Transition request message should be rendered");
+    assertTrue(
+        aiResponseIndex < transitionMsgIndex,
+        "AI response should appear before the transition request prompt");
   }
 }

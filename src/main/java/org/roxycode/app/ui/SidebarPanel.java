@@ -50,12 +50,12 @@ public final class SidebarPanel extends JPanel {
     add(createNavButton("Implicit Cache", "CACHE", Codicons.DATABASE));
     add(createNavButton("API", "API", Codicons.CODE));
 
-    add(createSectionHeader("CONFIG"), "gaptop 15");
+        add(createSectionHeader("CONFIG"), "gaptop 15");
     add(createNavButton("System Tools", "TOOLS", Codicons.TOOLS));
     add(createNavButton("Build Config", "BUILD_CONFIG", Codicons.PACKAGE));
     add(createNavButton("Settings", "SETTINGS", Codicons.SETTINGS_GEAR));
 
-
+    updateSelection(qaBtn);
   }
 
   private void updateSelection(NavButton selectedBtn) {
