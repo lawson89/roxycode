@@ -131,6 +131,19 @@ class FileEditorServiceTest {
     verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
   }
 
+    @Test
+  void testReplaceLinesMultiLineAndTrailingNewline() throws IOException {
+    Path filePath = tempDir.resolve("test.txt");
+    Files.write(filePath, List.of("Line 1", "Line 2", "Line 3", "Line 4"));
+
+    EditorResult result =
+        fileEditorService.replaceLines("test.txt", 2, 3, "Replaced 2\nReplaced 3\n");
+
+    assertTrue(result.success());
+    List<String> lines = Files.readAllLines(filePath);
+    assertEquals(List.of("Line 1", "Replaced 2", "Replaced 3", "Line 4"), lines);
+  }
+
   @Test
   void testInsertAtLineSuccess() throws IOException {
     Path filePath = tempDir.resolve("test.txt");
@@ -146,6 +159,52 @@ class FileEditorServiceTest {
   }
 
   @Test
+  void testInsertAtLineMultiLineAndTrailingNewline() throws IOException {
+    Path filePath = tempDir.resolve("test.txt");
+    Files.write(filePath, List.of("Line 1", "Line 4"));
+
+    EditorResult result =
+        fileEditorService.insertAtLine("test.txt", 2, "Line 2\r\nLine 3\n");
+
+    assertTrue(result.success());
+    List<String> lines = Files.readAllLines(filePath);
+    assertEquals(List.of("Line 1", "Line 2", "Line 3", "Line 4"), lines);
+  }
+
+    @Test
+  void testDeleteFileSuccess() throws IOException {
+    Path filePath = tempDir.resolve("to_delete.txt");
+    Files.writeString(filePath, "delete me");
+
+    EditorResult result = fileEditorService.deleteFile("to_delete.txt");
+
+    assertTrue(result.success());
+    assertFalse(Files.exists(filePath));
+    verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
+  }
+
+  @Test
+  void testDeleteFileNonExistentReturnsFailure() {
+    EditorResult result = fileEditorService.deleteFile("missing.txt");
+
+    assertFalse(result.success());
+    assertTrue(result.errorHint().contains("does not exist"));
+  }
+
+  @Test
+  void testDeleteFileWrongPhaseReturnsFailure() throws IOException {
+    Path filePath = tempDir.resolve("to_delete.txt");
+    Files.writeString(filePath, "delete me");
+    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+
+    EditorResult result = fileEditorService.deleteFile("to_delete.txt");
+
+    assertFalse(result.success());
+    assertTrue(result.errorHint().contains("CODE phase"));
+    assertTrue(Files.exists(filePath));
+  }
+
+      @Test
   void testPathTraversalReturnsFailure() {
     EditorResult result = fileEditorService.writeFile("../outside.txt", "content");
 

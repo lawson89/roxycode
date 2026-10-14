@@ -26,16 +26,14 @@ public final class SidebarPanel extends JPanel {
     initComponents();
   }
 
-  private void initComponents() {
+    private void initComponents() {
     setLayout(
         new MigLayout(
             "wrap, fillx, insets 15",
             "[fill, grow]",
-            "[]20[]5[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
+            "[]5[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
 
     putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
-
-    add(new UserProfileComponent("RoxyCode", System.getProperty("user.name")));
 
     add(createSectionHeader("WORKSPACES"), "gaptop 10");
 

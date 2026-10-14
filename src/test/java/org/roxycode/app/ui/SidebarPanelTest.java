@@ -44,20 +44,17 @@ class SidebarPanelTest {
 
     Component[] components = sidebar.getComponents();
 
-    // Expected: 1 UserProfile, 3 Headers, 8 NavButtons = 12
-    assertEquals(12, components.length, "Sidebar should have exactly 12 components");
+        // Expected: 3 Headers, 8 NavButtons = 11
+    assertEquals(11, components.length, "Sidebar should have exactly 11 components");
 
     int headerCount = 0;
     int buttonCount = 0;
-    int profileCount = 0;
 
     for (Component c : components) {
       if (c instanceof JLabel) headerCount++;
       if (c instanceof JButton) buttonCount++;
-      if (c instanceof UserProfileComponent) profileCount++;
     }
 
-    assertEquals(1, profileCount, "Should have 1 user profile");
     assertEquals(3, headerCount, "Should have 3 headers (WORKSPACES, CONTEXT, CONFIG)");
     assertEquals(8, buttonCount, "Should have 8 navigation buttons");
   }

@@ -59,17 +59,6 @@ public class JexlTool {
     log.info("Executing JEXL script: {}", script);
     ObjectMapper mapper = new ObjectMapper();
 
-    // Prevent further execution if a transition is already pending in the Task lifecycle
-    if (phase != WorkflowPhase.EXPLORE) {
-      WorkflowService workflowService =
-          (WorkflowService) registry.getServices().get("workflowService");
-      if (workflowService != null && workflowService.getPendingPhase() != null) {
-        return toJsonError(
-            mapper,
-            "A phase transition is already pending. Please wait for the user to approve or reject the transition before performing more actions.");
-      }
-    }
-
     JexlScript jexlScript;
     try {
       jexlScript = jexl.createScript(script);

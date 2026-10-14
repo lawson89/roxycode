@@ -158,8 +158,8 @@ public class FileEditorService {
         newLines.add(lines.get(i));
       }
 
-      // Add the replacement text
-      newLines.add(replacementText);
+            // Add the replacement text
+      newLines.addAll(splitLines(replacementText));
 
       // Add lines after the range
       for (int i = endLine; i < lines.size(); i++) {
@@ -206,8 +206,8 @@ public class FileEditorService {
         throw new IllegalArgumentException("Invalid line number: " + lineNumber);
       }
 
-      List<String> newLines = new ArrayList<>(lines);
-      newLines.add(lineNumber - 1, content);
+            List<String> newLines = new ArrayList<>(lines);
+      newLines.addAll(lineNumber - 1, splitLines(content));
 
       Files.write(path, newLines);
 
@@ -225,6 +225,49 @@ public class FileEditorService {
       log.error("Failed to insert at line in {}: {}", relativePath, e.getMessage());
       return new EditorResult(false, null, e.getMessage());
     }
+  }
+
+        /**
+   * Deletes a file at the given path relative to the project root.
+   *
+   * @param relativePath the path relative to the project root
+   * @return EditorResult indicating success or failure
+   */
+  @AgentDoc(
+      value = "Deletes a file at the given path relative to the project root.",
+      examples = "fileEditorService.deleteFile('src/main/java/OldClass.java')")
+  public EditorResult deleteFile(String relativePath) {
+    try {
+      checkPhase();
+      Path path = resolvePath(relativePath);
+      if (!Files.exists(path)) {
+        throw new IllegalArgumentException("File does not exist: " + relativePath);
+      }
+      if (Files.isDirectory(path)) {
+        throw new IllegalArgumentException("Cannot delete directory: " + relativePath);
+      }
+      Files.delete(path);
+      log.info("Deleted file: {} at {}", relativePath, path.toAbsolutePath());
+
+      eventPublisher.publishEvent(new FileChangedEvent(relativePath));
+      return new EditorResult(true, "File deleted successfully: " + relativePath, null);
+    } catch (Exception e) {
+      log.error("Failed to delete file {}: {}", relativePath, e.getMessage());
+      return new EditorResult(false, null, e.getMessage());
+    }
+  }
+
+  private List<String> splitLines(String text) {
+    String[] split = text.split("\\R", -1);
+    int length = split.length;
+    if (length > 1 && split[length - 1].isEmpty()) {
+      length--;
+    }
+    List<String> result = new ArrayList<>(length);
+    for (int i = 0; i < length; i++) {
+      result.add(split[i]);
+    }
+    return result;
   }
 
   private void checkPhase() {
