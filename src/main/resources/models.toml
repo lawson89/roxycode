@@ -1,4 +1,9 @@
 [[models]]
+apiName = "gemini-4-argon"
+name = "Gemini 4 Argon"
+description = "Google's flagship reasoning model, built for complex software engineering, deep mathematical and scientific problem solving, autonomous multi-step agents, and long decode up to 1M tokens."
+
+[[models]]
 apiName = "gemini-3.8-flash"
 name = "Gemini 3.8 Flash"
 description = "Google's most intelligent Flash-tier model, featuring tunable effort configurations and optimized for long-horizon software engineering, autonomous agents, and complex enterprise workflows."

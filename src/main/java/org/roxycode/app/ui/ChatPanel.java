@@ -278,10 +278,20 @@ public final class ChatPanel extends JPanel {
                   + event.to()
                   + "**. Reason: "
                   + event.reason());
-          triggerTurn(
-              "Phase changed to "
-                  + event.to()
-                  + ". Please proceed with the tasks in the new phase.");
+
+          if (event.to() == WorkflowPhase.EXPLORE) {
+            outputArea.appendMessage(
+                ROLE_SYSTEM,
+                "Task complete. We are back in Explore mode. Please enter a new question or task.");
+          } else if (event.to() == WorkflowPhase.PLAN) {
+            outputArea.appendMessage(
+                ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
+          } else {
+            triggerTurn(
+                "Phase changed to "
+                    + event.to()
+                    + ". Please proceed with the tasks in the new phase.");
+          }
         });
   }
 

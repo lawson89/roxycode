@@ -1,16 +1,20 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.awt.Component;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.AiService;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.context.ApplicationEventPublisher;
 
 public class ChatPanelTest {
 
@@ -18,7 +22,8 @@ public class ChatPanelTest {
   public void testChatPanelInitialization() {
     AiService aiService = mock(AiService.class);
     WorkflowService workflowService = mock(WorkflowService.class);
-    TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
     ChatMemory chatMemory = mock(ChatMemory.class);
 
     ChatPanel chatPanel =
@@ -45,7 +50,8 @@ public class ChatPanelTest {
   public void testContextMenuListeners() {
     AiService aiService = mock(AiService.class);
     WorkflowService workflowService = mock(WorkflowService.class);
-    TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
     ChatMemory chatMemory = mock(ChatMemory.class);
 
     ChatPanel chatPanel =
@@ -62,7 +68,8 @@ public class ChatPanelTest {
   public void testSendMessageWithNullEventDoesNotThrowNPE() {
     AiService aiService = mock(AiService.class);
     WorkflowService workflowService = mock(WorkflowService.class);
-    TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
     ChatMemory chatMemory = mock(ChatMemory.class);
 
     ChatPanel chatPanel =
@@ -77,5 +84,40 @@ public class ChatPanelTest {
 
     // This should not throw NPE
     assertDoesNotThrow(() -> sendMessageAction.actionPerformed(null));
+  }
+
+  @Test
+  public void testAutonomousTransitionSuppressesTurnForPlanAndExplore() throws Exception {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "test", null, true);
+
+    // Transition to PLAN
+    turnEventBridge.handleAutonomousTransition(
+        new AutonomousTransitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason"));
+
+    // Give SwingUtilities.invokeLater a moment to run
+    Thread.sleep(300);
+
+    // chat should NOT be called for PLAN
+    verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
+
+    // Transition to EXPLORE
+    turnEventBridge.handleAutonomousTransition(
+        new AutonomousTransitionEvent(WorkflowPhase.CODE, WorkflowPhase.EXPLORE, "Test reason"));
+    Thread.sleep(300);
+    verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
+
+    // Transition to REVIEW (should trigger turn)
+    turnEventBridge.handleAutonomousTransition(
+        new AutonomousTransitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason"));
+    Thread.sleep(600); // Give it more time for SwingWorker
+
+    verify(aiService, atLeastOnce()).chat(anyString(), any(), anyString(), isNull(), any());
   }
 }
