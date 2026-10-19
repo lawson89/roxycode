@@ -29,7 +29,7 @@ public final class GitChangesPanel extends JPanel {
   private final CardLayout statusCardLayout;
   private final JTextPane diffArea;
   private String currentDiffHtml = "";
-  private String selectedFilePath = null;
+  private String selectedFilePath = "";
   private boolean updatingSelection = false;
 
   public GitChangesPanel(GitService gitService) {
@@ -107,8 +107,8 @@ public final class GitChangesPanel extends JPanel {
           protected GitChangesResult doInBackground() {
             String status = gitService.getStatus();
             List<String> entries = parseStatusEntries(status);
-            String preservedPath = null;
-            if (targetFile != null && !targetFile.isBlank()) {
+            String preservedPath = "";
+            if (!targetFile.isBlank()) {
               for (String entry : entries) {
                 if (targetFile.equals(extractFilePathFromStatusLine(entry))) {
                   preservedPath = targetFile;
@@ -117,7 +117,7 @@ public final class GitChangesPanel extends JPanel {
               }
             }
             String diff =
-                preservedPath != null ? gitService.getDiff(preservedPath) : gitService.getDiff();
+                !preservedPath.isEmpty() ? gitService.getDiff(preservedPath) : gitService.getDiff();
             return new GitChangesResult(status, formatDiff(diff));
           }
 
@@ -125,6 +125,7 @@ public final class GitChangesPanel extends JPanel {
           protected void done() {
             try {
               GitChangesResult result = get();
+              boolean selectionUnchanged = targetFile.equals(selectedFilePath);
               String rawStatus = result.status() != null ? result.status() : "";
               statusArea.setText(rawStatus);
               statusArea.setCaretPosition(0);
@@ -139,27 +140,29 @@ public final class GitChangesPanel extends JPanel {
                   for (int i = 0; i < entries.size(); i++) {
                     String entry = entries.get(i);
                     fileListModel.addElement(entry);
-                    if (selectedFilePath != null
+                    if (!selectedFilePath.isEmpty()
                         && selectedFilePath.equals(extractFilePathFromStatusLine(entry))) {
                       restoreIndex = i + 1;
                     }
                   }
                   if (restoreIndex == 0) {
-                    selectedFilePath = null;
+                    selectedFilePath = "";
                   }
                   fileList.setSelectedIndex(restoreIndex);
                   statusCardLayout.show(statusCardPanel, CARD_LIST);
                 } else {
-                  selectedFilePath = null;
+                  selectedFilePath = "";
                   statusCardLayout.show(statusCardPanel, CARD_TEXT);
                 }
               } finally {
                 updatingSelection = false;
               }
 
-              currentDiffHtml = result.formattedDiff() != null ? result.formattedDiff() : "";
-              diffArea.setText(currentDiffHtml);
-              diffArea.setCaretPosition(0);
+              if (selectionUnchanged) {
+                currentDiffHtml = result.formattedDiff() != null ? result.formattedDiff() : "";
+                diffArea.setText(currentDiffHtml);
+                diffArea.setCaretPosition(0);
+              }
             } catch (Exception e) {
               log.error("Failed to refresh git changes", e);
             }
@@ -172,8 +175,8 @@ public final class GitChangesPanel extends JPanel {
   private void onFileSelectionChanged() {
     String selected = fileList.getSelectedValue();
     if (selected == null || ALL_CHANGES.equals(selected)) {
-      selectedFilePath = null;
-      loadDiffAsync(null);
+      selectedFilePath = "";
+      loadDiffAsync("");
     } else {
       String path = extractFilePathFromStatusLine(selected);
       selectedFilePath = path;
@@ -182,14 +185,13 @@ public final class GitChangesPanel extends JPanel {
   }
 
   SwingWorker<String, Void> loadDiffAsync(String filePath) {
+    final String targetPath = filePath != null ? filePath : "";
     SwingWorker<String, Void> worker =
         new SwingWorker<>() {
           @Override
           protected String doInBackground() {
             String diff =
-                (filePath == null || filePath.isBlank())
-                    ? gitService.getDiff()
-                    : gitService.getDiff(filePath);
+                targetPath.isBlank() ? gitService.getDiff() : gitService.getDiff(targetPath);
             return formatDiff(diff);
           }
 
@@ -197,9 +199,11 @@ public final class GitChangesPanel extends JPanel {
           protected void done() {
             try {
               String formatted = get();
-              currentDiffHtml = formatted != null ? formatted : "";
-              diffArea.setText(currentDiffHtml);
-              diffArea.setCaretPosition(0);
+              if (targetPath.equals(selectedFilePath)) {
+                currentDiffHtml = formatted != null ? formatted : "";
+                diffArea.setText(currentDiffHtml);
+                diffArea.setCaretPosition(0);
+              }
             } catch (Exception e) {
               log.error("Failed to load file diff", e);
             }
@@ -274,7 +278,7 @@ public final class GitChangesPanel extends JPanel {
     return sb.toString();
   }
 
-  @Override
+    @Override
   public void updateUI() {
     super.updateUI();
     if (statusArea != null) {
