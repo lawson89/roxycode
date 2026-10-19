@@ -25,10 +25,13 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.YieldTurnException;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
+import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -43,6 +46,8 @@ public final class ChatPanel extends JPanel {
   private final transient WorkflowService workflowService;
   private final transient TurnEventBridge turnEventBridge;
   private final transient ChatMemory chatMemory;
+  private final transient SettingsService settingsService;
+  private final transient PlanService planService;
   private final MarkdownPane outputArea;
   private final ThoughtPanel thoughtPanel;
   private final JTextArea inputArea;
@@ -61,6 +66,7 @@ public final class ChatPanel extends JPanel {
   private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
   private final List<BufferedImage> pendingImages = new ArrayList<>();
   private final JPanel attachmentPanel;
+  private int currentTurn = 0;
 
   private final String sessionPrefix;
   private final WorkflowPhase lockedPhase;
@@ -74,6 +80,28 @@ public final class ChatPanel extends JPanel {
       String sessionPrefix,
       WorkflowPhase lockedPhase,
       boolean isTaskMode) {
+    this(
+        aiService,
+        workflowService,
+        turnEventBridge,
+        chatMemory,
+        sessionPrefix,
+        lockedPhase,
+        isTaskMode,
+        null,
+        null);
+  }
+
+  public ChatPanel(
+      AiService aiService,
+      WorkflowService workflowService,
+      TurnEventBridge turnEventBridge,
+      ChatMemory chatMemory,
+      String sessionPrefix,
+      WorkflowPhase lockedPhase,
+      boolean isTaskMode,
+      SettingsService settingsService,
+      PlanService planService) {
     this.aiService = aiService;
     this.workflowService = workflowService;
     this.turnEventBridge = turnEventBridge;
@@ -81,6 +109,8 @@ public final class ChatPanel extends JPanel {
     this.sessionPrefix = sessionPrefix;
     this.lockedPhase = lockedPhase;
     this.isTaskMode = isTaskMode;
+    this.settingsService = settingsService;
+    this.planService = planService;
 
     attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
     attachmentPanel.setOpaque(false);
@@ -206,9 +236,10 @@ public final class ChatPanel extends JPanel {
         FlatClientProperties.STYLE, "arc: 999; foreground: $Label.disabledForeground");
     resetSessionButton.addActionListener(e -> resetSession());
 
-    turnLabel = new JLabel("Turns: 0");
+    turnLabel = new JLabel();
     turnLabel.putClientProperty(
         FlatClientProperties.STYLE, "font: $small.font; foreground: $Label.disabledForeground");
+    updateTurnLabel();
 
     JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[]"));
     buttonPanel.setOpaque(false);
@@ -227,14 +258,42 @@ public final class ChatPanel extends JPanel {
     add(splitPane, BorderLayout.CENTER);
 
     sendButton.addActionListener(this::sendMessage);
+    if (settingsService != null) {
+      settingsService.addSettingsListener(s -> SwingUtilities.invokeLater(this::updateTurnLabel));
+    }
     if (isTaskMode) {
       workflowService.addPhaseListener(this::onPhaseChanged);
       workflowService.addTransitionRequestListener(this::onTransitionRequested);
+      if (planService != null) {
+        planService.addListener(plan -> SwingUtilities.invokeLater(this::updateTurnLabel));
+      }
     }
 
     setupInputContextMenu();
     setupUndoRedo();
     setupKeyboardShortcuts();
+  }
+
+  private void updateTurnLabel() {
+    StringBuilder sb = new StringBuilder("Turns: ").append(currentTurn);
+    if (settingsService != null && settingsService.getSettings() != null) {
+      int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
+      sb.append(" / ").append(maxTurns);
+    }
+    if (isTaskMode && planService != null) {
+      ImplementationPlan plan = planService.getCurrentPlan();
+      if (plan != null && !plan.technicalSteps().isEmpty()) {
+        long completed =
+            plan.technicalSteps().stream().filter(ImplementationPlan.TechStep::completed).count();
+        int total = plan.technicalSteps().size();
+        sb.append(" | Plan: ").append(completed).append("/").append(total).append(" steps");
+      }
+    }
+    turnLabel.setText(sb.toString());
+  }
+
+  JLabel getTurnLabel() {
+    return turnLabel;
   }
 
   private String getConversationId() {
@@ -333,7 +392,8 @@ public final class ChatPanel extends JPanel {
     SwingUtilities.invokeLater(
         () -> {
           if (turnCancelled.get()) return;
-          turnLabel.setText("Turns: " + event.turnNumber());
+          currentTurn = event.turnNumber();
+          updateTurnLabel();
         });
   }
 
@@ -373,6 +433,7 @@ public final class ChatPanel extends JPanel {
             approveButton.setEnabled(false);
             rejectButton.setEnabled(false);
             inlineActionPanel.setVisible(false);
+            updateTurnLabel();
           }
         });
   }
@@ -399,7 +460,7 @@ public final class ChatPanel extends JPanel {
           approveButton.setEnabled(true);
           rejectButton.setEnabled(true);
           inlineActionPanel.setVisible(true);
-          outputArea.appendMessage(
+                    outputArea.appendMessage(
               ROLE_SYSTEM,
               "Roxy requested a transition: **" + path + "**.\n\n**Reason:** " + reason);
         });
@@ -417,7 +478,7 @@ public final class ChatPanel extends JPanel {
         outputArea.appendMessage(
             ROLE_SYSTEM,
             "Task complete. We are back in Explore mode. Please enter a new question or task.");
-            } else if (current == WorkflowPhase.REVIEW && requested == WorkflowPhase.PLAN) {
+      } else if (current == WorkflowPhase.REVIEW && requested == WorkflowPhase.PLAN) {
         chatMemory.clear(getConversationId());
         outputArea.appendMessage(
             ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
@@ -463,6 +524,8 @@ public final class ChatPanel extends JPanel {
       if (isTaskMode) {
         workflowService.resetWorkflow();
       }
+      currentTurn = 0;
+      updateTurnLabel();
       chatMemory.clear(getConversationId());
       outputArea.clear();
       outputArea.appendMessage(ROLE_SYSTEM, "Session reset.");
@@ -539,7 +602,8 @@ public final class ChatPanel extends JPanel {
 
     setLoading(true);
     thoughtPanel.clear();
-    turnLabel.setText("Turns: 0");
+    currentTurn = 0;
+    updateTurnLabel();
 
     List<byte[]> imageBytes = new ArrayList<>();
     for (BufferedImage bimg : pendingImages) {
@@ -706,7 +770,7 @@ public final class ChatPanel extends JPanel {
         });
 
     im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "insert-newline");
-    am.put(
+        am.put(
         "insert-newline",
         new AbstractAction() {
           @Override

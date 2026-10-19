@@ -176,7 +176,7 @@ public final class MainFrame extends JFrame {
     qaHeaderBar.add(mentorModeLabel, LAYOUT_CENTER);
 
     this.qaTabs = new JTabbedPane();
-    this.qaChatPanel =
+        this.qaChatPanel =
         new ChatPanel(
             aiService,
             workflowService,
@@ -184,7 +184,9 @@ public final class MainFrame extends JFrame {
             chatMemory,
             "qa",
             WorkflowPhase.EXPLORE,
-            false);
+            false,
+            settingsService,
+            planManagerService);
     qaTabs.addTab("Chat", qaChatPanel);
     qaTabs.addTab(
         "History", new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "qa"));
@@ -222,8 +224,17 @@ public final class MainFrame extends JFrame {
     updateActivePhase(workflowService.getCurrentPhase());
 
     this.taskTabs = new JTabbedPane();
-    this.taskChatPanel =
-        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "task", null, true);
+        this.taskChatPanel =
+        new ChatPanel(
+            aiService,
+            workflowService,
+            turnEventBridge,
+            chatMemory,
+            "task",
+            null,
+            true,
+            settingsService,
+            planManagerService);
     this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
     workflowService.addTransitionRequestListener(
         (current, requested, reason) ->

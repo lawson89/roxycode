@@ -97,6 +97,87 @@ class PlanPanelTest {
         "Description cell inline content should have 0 minimum X span to allow wrapping");
   }
 
+  @Test
+  void testBuildPlanMarkdownFormatsPlanAndHandoffLog() {
+    assertEquals("", PlanPanel.buildPlanMarkdown(null));
+
+    ImplementationPlan plan =
+        new ImplementationPlan(
+            "Visibility Feature",
+            "Improve visibility",
+            List.of("Show turns", "Export markdown"),
+            List.of(
+                new ImplementationPlan.TechStep("Update ChatPanel", true),
+                new ImplementationPlan.TechStep("Update PlanPanel", false)),
+            true,
+            "2026-04-06T12:00:00",
+            "user",
+            null,
+            List.of(
+                new ImplementationPlan.LogEntry(
+                    "2026-04-06T12:05:30.123",
+                    "Architect",
+                    "Created plan | verified\ndetails")));
+
+    String md = PlanPanel.buildPlanMarkdown(plan);
+
+    assertTrue(md.contains("# Implementation Plan: Visibility Feature"));
+    assertTrue(md.contains("**Goal:** Improve visibility"));
+    assertTrue(md.contains("## Requirements\n- Show turns\n- Export markdown"));
+    assertTrue(
+        md.contains(
+            "## Technical Steps\n- [x] 0. Update ChatPanel\n- [ ] 1. Update PlanPanel"));
+    assertTrue(md.contains("## Handoff Log"));
+    assertTrue(md.contains("| Timestamp | User | Message |"));
+    assertTrue(
+        md.contains(
+            "| 2026-04-06 12:05:30 | Architect | Created plan \\| verified details |"));
+  }
+
+  @Test
+  void testCopyMarkdownButtonStateAndAction() throws Exception {
+    PlanService planService = mock(PlanService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    org.mockito.ArgumentCaptor<PlanService.PlanUpdateListener> listenerCaptor =
+        org.mockito.ArgumentCaptor.forClass(PlanService.PlanUpdateListener.class);
+
+    when(planService.getCurrentPlan()).thenReturn(null);
+    PlanPanel panel = new PlanPanel(planService, workflowService);
+    verify(planService).addListener(listenerCaptor.capture());
+    SwingUtilities.invokeAndWait(() -> {});
+
+    assertFalse(
+        panel.getCopyMarkdownButton().isEnabled(),
+        "Copy button should be disabled when plan is null");
+
+    ImplementationPlan plan =
+        new ImplementationPlan(
+            "Test Plan",
+            "Test Goal",
+            List.of("Req 1"),
+            List.of(new ImplementationPlan.TechStep("Step 0", true)),
+            false,
+            null,
+            null,
+            null,
+            List.of());
+    when(planService.getCurrentPlan()).thenReturn(plan);
+    listenerCaptor.getValue().onPlanUpdated(plan);
+    SwingUtilities.invokeAndWait(() -> {});
+
+    assertTrue(
+        panel.getCopyMarkdownButton().isEnabled(),
+        "Copy button should be enabled when plan is present");
+    assertEquals("Copy Plan as Markdown", panel.getCopyMarkdownButton().getText());
+
+    panel.getCopyMarkdownButton().doClick();
+
+    assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
+    assertNotNull(panel.getLastCopiedMarkdown());
+    assertTrue(panel.getLastCopiedMarkdown().contains("# Implementation Plan: Test Plan"));
+    assertTrue(panel.getLastCopiedMarkdown().contains("- [x] 0. Step 0"));
+  }
+
   private boolean hasPositiveInlineMinSpan(Element elem, ViewFactory factory) {
     View view = factory.create(elem);
     if (view instanceof InlineView) {

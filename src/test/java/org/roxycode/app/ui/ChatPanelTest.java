@@ -380,9 +380,88 @@ public class ChatPanelTest {
         ChatPanel.class.getDeclaredMethod("setLoading", boolean.class);
     setLoadingMethod.setAccessible(true);
 
-    setLoadingMethod.invoke(chatPanel, true);
+        setLoadingMethod.invoke(chatPanel, true);
     setLoadingMethod.invoke(chatPanel, false);
 
     assertEquals(java.util.List.of(true, false), states);
+  }
+
+  @Test
+  public void testTurnLabelDisplaysMaxTurnsAndLivePlanStepProgress() throws Exception {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+    org.roxycode.app.service.SettingsService settingsService =
+        mock(org.roxycode.app.service.SettingsService.class);
+    org.roxycode.app.model.AppSettings appSettings = new org.roxycode.app.model.AppSettings();
+    appSettings.setMaxAgentToolTurns(5);
+    when(settingsService.getSettings()).thenReturn(appSettings);
+
+    org.roxycode.app.ai.services.PlanService planService =
+        mock(org.roxycode.app.ai.services.PlanService.class);
+    org.mockito.ArgumentCaptor<org.roxycode.app.ai.services.PlanService.PlanUpdateListener>
+        planListenerCaptor =
+            org.mockito.ArgumentCaptor.forClass(
+                org.roxycode.app.ai.services.PlanService.PlanUpdateListener.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(
+            aiService,
+            workflowService,
+            turnEventBridge,
+            chatMemory,
+            "task",
+            null,
+            true,
+            settingsService,
+            planService);
+
+    verify(planService).addListener(planListenerCaptor.capture());
+    assertEquals("Turns: 0 / 5", chatPanel.getTurnLabel().getText());
+
+    org.roxycode.app.model.ImplementationPlan plan =
+        new org.roxycode.app.model.ImplementationPlan(
+            "Feature X",
+            "Build Feature X",
+            java.util.List.of("Req 1"),
+            java.util.List.of(
+                new org.roxycode.app.model.ImplementationPlan.TechStep("Step 0", true),
+                new org.roxycode.app.model.ImplementationPlan.TechStep("Step 1", false),
+                new org.roxycode.app.model.ImplementationPlan.TechStep("Step 2", false)),
+            true,
+            null,
+            null,
+            null,
+            java.util.List.of());
+    when(planService.getCurrentPlan()).thenReturn(plan);
+
+    turnEventBridge.handleTurn(
+        new org.roxycode.app.events.AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
+    javax.swing.SwingUtilities.invokeAndWait(() -> {});
+
+    assertEquals("Turns: 2 / 5 | Plan: 1/3 steps", chatPanel.getTurnLabel().getText());
+
+    // Simulate step 1 completion via PlanUpdateListener callback
+    org.roxycode.app.model.ImplementationPlan updatedPlan =
+        new org.roxycode.app.model.ImplementationPlan(
+            "Feature X",
+            "Build Feature X",
+            java.util.List.of("Req 1"),
+            java.util.List.of(
+                new org.roxycode.app.model.ImplementationPlan.TechStep("Step 0", true),
+                new org.roxycode.app.model.ImplementationPlan.TechStep("Step 1", true),
+                new org.roxycode.app.model.ImplementationPlan.TechStep("Step 2", false)),
+            true,
+            null,
+            null,
+            null,
+            java.util.List.of());
+    when(planService.getCurrentPlan()).thenReturn(updatedPlan);
+    planListenerCaptor.getValue().onPlanUpdated(updatedPlan);
+    javax.swing.SwingUtilities.invokeAndWait(() -> {});
+
+    assertEquals("Turns: 2 / 5 | Plan: 2/3 steps", chatPanel.getTurnLabel().getText());
   }
 }

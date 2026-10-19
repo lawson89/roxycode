@@ -1,7 +1,10 @@
 package org.roxycode.app.ui;
 
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import javax.swing.*;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
@@ -9,13 +12,26 @@ import org.roxycode.app.model.ImplementationPlan;
 /** UI panel for displaying the current project plan and specifications. */
 public final class PlanPanel extends JPanel {
   private static final long serialVersionUID = 1L;
+  private static final int COPY_FEEDBACK_DELAY_MS = 1500;
+  private static final String COPY_BUTTON_TEXT = "Copy Plan as Markdown";
 
   private final transient PlanService planManagerService;
   private final JEditorPane displayArea;
+  private final JButton copyMarkdownButton;
+  private Timer copyFeedbackTimer;
+  private String lastCopiedMarkdown;
 
   public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {
     this.planManagerService = planManagerService;
     this.setLayout(new BorderLayout());
+
+    JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    toolbar.setOpaque(false);
+    copyMarkdownButton = new JButton(COPY_BUTTON_TEXT, FontIcon.of(Codicons.CLIPPY, 14));
+    copyMarkdownButton.setEnabled(false);
+    copyMarkdownButton.addActionListener(e -> copyPlanAsMarkdown());
+    toolbar.add(copyMarkdownButton);
+    this.add(toolbar, BorderLayout.NORTH);
 
     displayArea = new JEditorPane();
     displayArea.setEditable(false);
@@ -34,8 +50,47 @@ public final class PlanPanel extends JPanel {
     updateDisplay(planManagerService.getCurrentPlan());
   }
 
+  private void copyPlanAsMarkdown() {
+    ImplementationPlan plan = planManagerService.getCurrentPlan();
+    if (plan == null) {
+      return;
+    }
+    String markdown = buildPlanMarkdown(plan);
+    this.lastCopiedMarkdown = markdown;
+    try {
+      StringSelection selection = new StringSelection(markdown);
+      Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
+    } catch (Exception ignored) {
+      // Ignore clipboard access errors in headless or restricted environments
+    }
+
+    copyMarkdownButton.setText("Copied!");
+    copyMarkdownButton.setIcon(FontIcon.of(Codicons.CHECK, 14));
+
+    if (copyFeedbackTimer != null && copyFeedbackTimer.isRunning()) {
+      copyFeedbackTimer.stop();
+    }
+    copyFeedbackTimer =
+        new Timer(
+            COPY_FEEDBACK_DELAY_MS,
+            e -> {
+              copyMarkdownButton.setText(COPY_BUTTON_TEXT);
+              copyMarkdownButton.setIcon(FontIcon.of(Codicons.CLIPPY, 14));
+            });
+    copyFeedbackTimer.setRepeats(false);
+    copyFeedbackTimer.start();
+  }
+
   JEditorPane getDisplayArea() {
     return displayArea;
+  }
+
+  JButton getCopyMarkdownButton() {
+    return copyMarkdownButton;
+  }
+
+  String getLastCopiedMarkdown() {
+    return lastCopiedMarkdown;
   }
 
   @Override
@@ -53,11 +108,75 @@ public final class PlanPanel extends JPanel {
 
   private void updateDisplay(ImplementationPlan plan) {
     String html = buildPlanHtml(plan);
+    boolean hasPlan = plan != null;
+    if (copyMarkdownButton != null) {
+      copyMarkdownButton.setEnabled(hasPlan);
+    }
     SwingUtilities.invokeLater(
         () -> {
+          if (copyMarkdownButton != null) {
+            copyMarkdownButton.setEnabled(hasPlan);
+          }
           displayArea.setText(html);
           displayArea.setCaretPosition(0);
         });
+  }
+
+  static String buildPlanMarkdown(ImplementationPlan plan) {
+    if (plan == null) {
+      return "";
+    }
+    StringBuilder md = new StringBuilder();
+    md.append("# Implementation Plan: ")
+        .append(plan.title() != null ? plan.title() : "")
+        .append("\n\n");
+    md.append("**Goal:** ").append(plan.goal() != null ? plan.goal() : "").append("\n\n");
+
+    md.append("## Requirements\n");
+    for (String req : plan.requirements()) {
+      md.append("- ").append(req).append("\n");
+    }
+    md.append("\n");
+
+    md.append("## Technical Steps\n");
+    int index = 0;
+    for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
+      md.append(step.completed() ? "- [x] " : "- [ ] ")
+          .append(index)
+          .append(". ")
+          .append(step.description())
+          .append("\n");
+      index++;
+    }
+
+    if (plan.handoffLog() != null && !plan.handoffLog().isEmpty()) {
+      md.append("\n## Handoff Log\n");
+      md.append("| Timestamp | User | Message |\n");
+      md.append("| :--- | :--- | :--- |\n");
+      for (ImplementationPlan.LogEntry entry : plan.handoffLog()) {
+        String ts = entry.timestamp() != null ? entry.timestamp() : "";
+        final int timestampLength = 19;
+        if (ts.length() > timestampLength) {
+          ts = ts.substring(0, timestampLength).replace('T', ' ');
+        }
+        md.append("| ")
+            .append(escapeMarkdownTableCell(ts))
+            .append(" | ")
+            .append(escapeMarkdownTableCell(entry.user()))
+            .append(" | ")
+            .append(escapeMarkdownTableCell(entry.message()))
+            .append(" |\n");
+      }
+    }
+
+    return md.toString();
+  }
+
+  private static String escapeMarkdownTableCell(String value) {
+    if (value == null) {
+      return "";
+    }
+        return value.replace("|", "\\|").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
   }
 
   static String buildPlanHtml(ImplementationPlan plan) {
