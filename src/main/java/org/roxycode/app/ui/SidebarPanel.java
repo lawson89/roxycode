@@ -2,7 +2,6 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
-import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.URL;
@@ -14,7 +13,6 @@ import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.WorkflowService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,9 +22,10 @@ public final class SidebarPanel extends JPanel {
   private static final Logger log = LoggerFactory.getLogger(SidebarPanel.class);
   private final Consumer<String> navigationAction;
   private final List<NavButton> navButtons = new ArrayList<>();
+  private NavButton taskBtn;
   private transient Image logoImage;
 
-  public SidebarPanel(WorkflowService workflowService, Consumer<String> navigationAction) {
+  public SidebarPanel(Consumer<String> navigationAction) {
     this.navigationAction = navigationAction;
     initComponents();
   }
@@ -47,7 +46,7 @@ public final class SidebarPanel extends JPanel {
     NavButton qaBtn = createNavButton("Codebase Q&A", "QA_VIEW", Codicons.COMMENT_DISCUSSION);
     add(qaBtn);
 
-    NavButton taskBtn = createNavButton("Feature Request", "TASK_VIEW", Codicons.GIT_PULL_REQUEST);
+    taskBtn = createNavButton("Feature Request", "TASK_VIEW", Codicons.GIT_PULL_REQUEST);
     add(taskBtn);
 
     add(createSectionHeader("CONTEXT"), "gaptop 15");
@@ -148,6 +147,26 @@ public final class SidebarPanel extends JPanel {
     return brandingPanel;
   }
 
+  public void setTaskBusy(boolean busy) {
+    if (taskBtn != null) {
+      taskBtn.setBusy(busy);
+    }
+  }
+
+  public boolean isTaskBusy() {
+    return taskBtn != null && taskBtn.isBusy();
+  }
+
+  public void setTaskWaitingApproval(boolean waitingApproval) {
+    if (taskBtn != null) {
+      taskBtn.setWaitingApproval(waitingApproval);
+    }
+  }
+
+  public boolean isTaskWaitingApproval() {
+    return taskBtn != null && taskBtn.isWaitingApproval();
+  }
+
   private void updateSelection(NavButton selectedBtn) {
     for (NavButton btn : navButtons) {
       btn.setSelected(btn.equals(selectedBtn));
@@ -162,22 +181,13 @@ public final class SidebarPanel extends JPanel {
   }
 
   private NavButton createNavButton(String text, String cardName, Codicons iconCode) {
-    return createNavButton(text, cardName, iconCode, null);
-  }
-
-  private NavButton createNavButton(
-      String text, String cardName, Codicons iconCode, ActionListener customListener) {
     FontIcon icon = FontIcon.of(iconCode, 16);
     NavButton btn = new NavButton(text, icon);
-    if (customListener != null) {
-      btn.addActionListener(customListener);
-    } else {
-      btn.addActionListener(
-          e -> {
-            updateSelection(btn);
-            navigationAction.accept(cardName);
-          });
-    }
+    btn.addActionListener(
+        e -> {
+          updateSelection(btn);
+          navigationAction.accept(cardName);
+        });
     navButtons.add(btn);
     return btn;
   }

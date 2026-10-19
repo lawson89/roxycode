@@ -10,10 +10,13 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Header panel containing application controls and project selection. */
 public final class HeaderPanel extends JPanel {
   private static final long serialVersionUID = 1L;
+  private static final Logger log = LoggerFactory.getLogger(HeaderPanel.class);
   private static final String LAYOUT_CENTER = "center";
   private final transient ProjectService projectService;
   private final transient GitService gitService;
@@ -49,8 +52,9 @@ public final class HeaderPanel extends JPanel {
     branchLabel = new JLabel();
     branchLabel.putClientProperty(
         FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
-    updateBranchLabel();
+    branchLabel.setVisible(false);
     leftPanel.add(branchLabel);
+    updateBranchLabel();
 
     add(leftPanel, "left");
 
@@ -118,21 +122,48 @@ public final class HeaderPanel extends JPanel {
     return button;
   }
 
-  private void updateBranchLabel() {
-    String branch = gitService.getCurrentBranch();
-    if (branch != null
-        && !branch.isEmpty()
-        && !branch.startsWith("Error")
-        && !"Not a git repository".equals(branch)) {
-      branchLabel.setIcon(
-          FontIcon.of(Codicons.SOURCE_CONTROL, 14, UIManager.getColor("Label.disabledForeground")));
-      branchLabel.setText(branch);
-      branchLabel.setVisible(true);
-    } else {
-      branchLabel.setIcon(null);
-      branchLabel.setText("");
-      branchLabel.setVisible(false);
-    }
+  SwingWorker<String, Void> updateBranchLabel() {
+    SwingWorker<String, Void> worker =
+        new SwingWorker<>() {
+          @Override
+          protected String doInBackground() {
+            return gitService.getCurrentBranch();
+          }
+
+          @Override
+          protected void done() {
+            try {
+              String branch = get();
+              if (branch != null
+                  && !branch.isEmpty()
+                  && !branch.startsWith("Error")
+                  && !"Not a git repository".equals(branch)) {
+                branchLabel.setIcon(
+                    FontIcon.of(
+                        Codicons.SOURCE_CONTROL,
+                        14,
+                        UIManager.getColor("Label.disabledForeground")));
+                branchLabel.setText(branch);
+                branchLabel.setVisible(true);
+              } else {
+                branchLabel.setIcon(null);
+                branchLabel.setText("");
+                branchLabel.setVisible(false);
+              }
+            } catch (Exception e) {
+              log.error("Failed to fetch git branch", e);
+              branchLabel.setIcon(null);
+              branchLabel.setText("");
+              branchLabel.setVisible(false);
+            }
+          }
+        };
+    worker.execute();
+    return worker;
+  }
+
+  JLabel getBranchLabel() {
+    return branchLabel;
   }
 
   private void updateModelDisplay(String modelName) {

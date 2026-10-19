@@ -11,14 +11,20 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AiConfig {
 
+  public static final ObjectMapper SHARED_OBJECT_MAPPER =
+      (ObjectMapper) new ObjectMapper().findAndRegisterModules();
+
+  public static final TomlMapper SHARED_TOML_MAPPER =
+      (TomlMapper) new TomlMapper().findAndRegisterModules();
+
   @Bean
   public ObjectMapper objectMapper() {
-    return new ObjectMapper();
+    return SHARED_OBJECT_MAPPER;
   }
 
   @Bean
   public TomlMapper tomlMapper() {
-    return new TomlMapper();
+    return SHARED_TOML_MAPPER;
   }
 
   @Bean

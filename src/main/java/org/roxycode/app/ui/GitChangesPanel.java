@@ -99,18 +99,18 @@ public final class GitChangesPanel extends JPanel {
 
   public static String formatDiff(String diff) {
     if (diff == null || diff.isEmpty()) {
-      return "<pre style=\"font-family: monospace; font-size: 11px;\"></pre>";
+      return "<pre style='font-family: monospace; font-size: 11px;'></pre>";
     }
-    String[] lines = diff.split("\n");
+    String[] lines = diff.split("\\R");
     StringBuilder sb = new StringBuilder();
-    sb.append("<pre style=\"font-family: monospace; font-size: 11px;\">");
+    sb.append("<pre style='font-family: monospace; font-size: 11px;'>");
     for (int i = 0; i < lines.length; i++) {
       String line = lines[i];
       String escaped = SwingHtmlUtils.escapeHtml(line);
-      if (line.startsWith("+")) {
-        sb.append("<span style=\"color: #28a745;\">").append(escaped).append("</span>");
-      } else if (line.startsWith("-")) {
-        sb.append("<span style=\"color: #d73a49;\">").append(escaped).append("</span>");
+      if (line.startsWith("+") && !line.startsWith("+++")) {
+        sb.append("<span style='color: #28a745;'>").append(escaped).append("</span>");
+      } else if (line.startsWith("-") && !line.startsWith("---")) {
+        sb.append("<span style='color: #d73a49;'>").append(escaped).append("</span>");
       } else {
         sb.append(escaped);
       }

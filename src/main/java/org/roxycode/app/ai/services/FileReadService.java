@@ -32,7 +32,7 @@ public class FileReadService {
           "Checks if a file or directory exists at the given path relative to the project root.",
       examples = "fileReadService.fileExists('src/main/java/Main.java')")
   public boolean fileExists(String relativePath) {
-    Path path = resolvePath(relativePath);
+    Path path = projectService.resolvePath(relativePath);
     return Files.exists(path);
   }
 
@@ -40,7 +40,7 @@ public class FileReadService {
       value = "Reads the content of a file at the given path relative to the project root.",
       examples = "fileReadService.readFile('pom.xml')")
   public String readFile(String relativePath) {
-    Path path = resolvePath(relativePath);
+    Path path = projectService.resolvePath(relativePath);
     if (!Files.isRegularFile(path)) {
       return "Error: Path is not a regular file or does not exist.";
     }
@@ -63,7 +63,7 @@ public class FileReadService {
       value = "Lists the contents of a directory at the given path relative to the project root.",
       examples = "fileReadService.listDirectory('src')")
   public List<String> listDirectory(String relativePath) {
-    Path path = resolvePath(relativePath);
+    Path path = projectService.resolvePath(relativePath);
     if (!Files.isDirectory(path)) {
       return Collections.singletonList("Error: Path is not a directory or does not exist.");
     }
@@ -73,20 +73,5 @@ public class FileReadService {
       log.error("Failed to list directory {}: {}", relativePath, e.getMessage(), e);
       return Collections.singletonList("Error listing directory: " + e.getMessage());
     }
-  }
-
-  private Path resolvePath(String relativePath) {
-    Path projectRoot = projectService.getCurrentProjectRoot();
-    if (projectRoot == null) {
-      throw new IllegalStateException("Project root is not set.");
-    }
-
-    Path root = projectRoot.toAbsolutePath().normalize();
-    Path resolved = root.resolve(relativePath).toAbsolutePath().normalize();
-
-    if (!resolved.startsWith(root)) {
-      throw new SecurityException("Access denied: Path is outside project root.");
-    }
-    return resolved;
   }
 }

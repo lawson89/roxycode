@@ -44,4 +44,22 @@ class ProjectServiceTest {
 
     assertEquals(projectPath, notifiedPath.get());
   }
+
+  @Test
+  void testResolvePathWithinAndOutsideSandbox() {
+    SettingsService settingsService = new SettingsService();
+    settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
+
+    ProjectService projectService = new ProjectService(settingsService);
+    assertThrows(IllegalStateException.class, () -> projectService.resolvePath("file.txt"));
+
+    Path projectPath = tempDir.resolve("sandbox-project");
+    projectService.setCurrentProjectRoot(projectPath);
+
+    assertEquals(projectPath.toAbsolutePath().normalize(), projectService.resolvePath(null));
+    assertEquals(
+        projectPath.resolve("sub/file.txt").toAbsolutePath().normalize(),
+        projectService.resolvePath("sub/file.txt"));
+    assertThrows(SecurityException.class, () -> projectService.resolvePath("../escape.txt"));
+  }
 }

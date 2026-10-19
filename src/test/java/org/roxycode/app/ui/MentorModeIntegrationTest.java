@@ -83,13 +83,22 @@ class MentorModeIntegrationTest {
 
   @Test
   void testWorkspaceBarsLocatedInRespectiveViews() throws Exception {
-    java.lang.reflect.Field mentorLabelField = MainFrame.class.getDeclaredField("mentorModeLabel");
-    mentorLabelField.setAccessible(true);
-    JLabel mentorModeLabel = (JLabel) mentorLabelField.get(mainFrame);
+    java.lang.reflect.Field headerField = MainFrame.class.getDeclaredField("header");
+    headerField.setAccessible(true);
+    HeaderPanel header = (HeaderPanel) headerField.get(mainFrame);
+    JPanel workspace = (JPanel) header.getParent();
+    net.miginfocom.swing.MigLayout workspaceLayout =
+        (net.miginfocom.swing.MigLayout) workspace.getLayout();
+    assertEquals(
+        "h 36!, wrap",
+        workspaceLayout.getComponentConstraints(header),
+        "Main header bar should have a compact height constraint of h 36!");
 
     java.lang.reflect.Field qaTabsField = MainFrame.class.getDeclaredField("qaTabs");
     qaTabsField.setAccessible(true);
     JTabbedPane qaTabs = (JTabbedPane) qaTabsField.get(mainFrame);
+    JPanel qaHeaderBar = (JPanel) qaTabs.getParent().getComponent(0);
+    JLabel mentorModeLabel = (JLabel) qaHeaderBar.getComponent(0);
 
     java.lang.reflect.Field progressTrackerField =
         MainFrame.class.getDeclaredField("progressTracker");
@@ -201,5 +210,43 @@ class MentorModeIntegrationTest {
         "QA draft message".length(),
         qaChatPanel.getInputArea().getCaretPosition(),
         "QA input caret should be at the end of the text");
+  }
+
+  @Test
+  void testSidebarWaitingApprovalSyncedWithWorkflowService() throws Exception {
+    SidebarPanel sidebar = null;
+    for (java.awt.Component comp : mainFrame.getContentPane().getComponents()) {
+      if (comp instanceof SidebarPanel sp) {
+        sidebar = sp;
+        break;
+      }
+    }
+    assertNotNull(sidebar, "MainFrame should contain a SidebarPanel");
+    assertFalse(sidebar.isTaskWaitingApproval());
+
+    org.mockito.ArgumentCaptor<WorkflowService.TransitionRequestListener> requestCaptor =
+        org.mockito.ArgumentCaptor.forClass(WorkflowService.TransitionRequestListener.class);
+    verify(workflowService, atLeastOnce()).addTransitionRequestListener(requestCaptor.capture());
+
+    for (WorkflowService.TransitionRequestListener listener : requestCaptor.getAllValues()) {
+      listener.onTransitionRequested(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code");
+    }
+    SwingUtilities.invokeAndWait(() -> {});
+    assertTrue(
+        sidebar.isTaskWaitingApproval(),
+        "Sidebar should show waiting approval when transition is requested");
+
+    when(workflowService.getPendingPhase()).thenReturn(null);
+    org.mockito.ArgumentCaptor<java.util.function.Consumer<WorkflowPhase>> phaseCaptor =
+        org.mockito.ArgumentCaptor.forClass(java.util.function.Consumer.class);
+    verify(workflowService, atLeastOnce()).addPhaseListener(phaseCaptor.capture());
+
+    for (java.util.function.Consumer<WorkflowPhase> listener : phaseCaptor.getAllValues()) {
+      listener.accept(WorkflowPhase.CODE);
+    }
+    SwingUtilities.invokeAndWait(() -> {});
+    assertFalse(
+        sidebar.isTaskWaitingApproval(),
+        "Sidebar waiting approval should clear when pending phase is null on phase change");
   }
 }

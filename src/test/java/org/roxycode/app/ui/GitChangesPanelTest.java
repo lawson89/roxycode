@@ -12,36 +12,41 @@ class GitChangesPanelTest {
   @Test
   void testFormatDiffEmptyAndNull() {
     assertEquals(
-        "<pre style=\"font-family: monospace; font-size: 11px;\"></pre>",
+        "<pre style='font-family: monospace; font-size: 11px;'></pre>",
         GitChangesPanel.formatDiff(null));
     assertEquals(
-        "<pre style=\"font-family: monospace; font-size: 11px;\"></pre>",
+        "<pre style='font-family: monospace; font-size: 11px;'></pre>",
         GitChangesPanel.formatDiff(""));
   }
 
   @Test
-  void testFormatDiffHighlightsAdditionsAndDeletions() {
+  void testFormatDiffHighlightsAdditionsAndDeletionsAndExcludesHeadersAndCrlf() {
     String diff =
-        "--- a/App.java\n+++ b/App.java\n-old code <with tags>\n+new code <with tags>\n context";
+        "--- a/App.java\r\n+++ b/App.java\r\n-old code <with tags>\r\n+new code <with tags>\r\n context";
     String formatted = GitChangesPanel.formatDiff(diff);
 
-    assertTrue(formatted.startsWith("<pre style=\"font-family: monospace; font-size: 11px;\">"));
+    assertTrue(formatted.startsWith("<pre style='font-family: monospace; font-size: 11px;'>"));
     assertTrue(formatted.endsWith("</pre>"));
+    assertFalse(formatted.contains("\r"), "Formatted diff should not contain CR characters");
+
+    // File headers should NOT be wrapped in colored spans
+    assertTrue(formatted.contains("--- a/App.java"));
+    assertTrue(formatted.contains("+++ b/App.java"));
+    assertFalse(formatted.contains("<span style='color: #28a745;'>+++ b/App.java</span>"));
+    assertFalse(formatted.contains("<span style='color: #d73a49;'>--- a/App.java</span>"));
 
     // Additions wrapped in green
-    assertTrue(formatted.contains("<span style=\"color: #28a745;\">+++ b/App.java</span>"));
     assertTrue(
-        formatted.contains("<span style=\"color: #28a745;\">+new code &lt;with tags&gt;</span>"));
+        formatted.contains("<span style='color: #28a745;'>+new code &lt;with tags&gt;</span>"));
 
     // Deletions wrapped in red
-    assertTrue(formatted.contains("<span style=\"color: #d73a49;\">--- a/App.java</span>"));
     assertTrue(
-        formatted.contains("<span style=\"color: #d73a49;\">-old code &lt;with tags&gt;</span>"));
+        formatted.contains("<span style='color: #d73a49;'>-old code &lt;with tags&gt;</span>"));
 
     // Context line escaped and not wrapped in colored span
     assertTrue(formatted.contains(" context"));
-    assertFalse(formatted.contains("<span style=\"color: #28a745;\"> context</span>"));
-    assertFalse(formatted.contains("<span style=\"color: #d73a49;\"> context</span>"));
+    assertFalse(formatted.contains("<span style='color: #28a745;'> context</span>"));
+    assertFalse(formatted.contains("<span style='color: #d73a49;'> context</span>"));
   }
 
   @Test

@@ -70,11 +70,6 @@ public class TurnEventBridge {
     publisher.publishEvent(new UserMessageEvent(conversationId, user, message));
   }
 
-  public void publishToolExecution(
-      String conversationId, String script, Object result, boolean success, String error) {
-    publisher.publishEvent(new ToolExecutionEvent(conversationId, script, result, success, error));
-  }
-
   @EventListener
   public void handleTurn(AgentTurnEvent event) {
     turnListeners.forEach(l -> l.accept(event));

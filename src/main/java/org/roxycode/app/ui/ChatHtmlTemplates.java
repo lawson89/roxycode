@@ -16,8 +16,10 @@ public class ChatHtmlTemplates {
 
   public static String renderChatEntry(
       String role, String content, String timestamp, int messageIndex, boolean copied) {
-    String entryClass = role + "-entry";
-    String accentClass = role + "-accent";
+    String safeRole = SwingHtmlUtils.escapeHtml(role != null ? role : "");
+    String entryClass = safeRole + "-entry";
+    String accentClass = safeRole + "-accent";
+    String safeTimestamp = SwingHtmlUtils.escapeHtml(timestamp != null ? timestamp : "");
 
     String indicator = "&nbsp;";
     if (ROLE_AI.equals(role)) {
@@ -65,10 +67,10 @@ public class ChatHtmlTemplates {
         Map.of(
             "entryClass", entryClass,
             "accentClass", accentClass,
-            "timestamp", timestamp,
+            "timestamp", safeTimestamp,
             "indicator", indicator,
             "actionCell", actionCell,
-            "content", content);
+            "content", content != null ? content : "");
 
     return StringSubstitutor.replace(template, values);
   }
@@ -78,18 +80,19 @@ public class ChatHtmlTemplates {
   }
 
   public static String renderTimestamp(String timestamp) {
+    String safeTimestamp = SwingHtmlUtils.escapeHtml(timestamp != null ? timestamp : "");
     String template =
         """
             <div class="chat-timestamp">${timestamp}</div>
             """;
-    return StringSubstitutor.replace(template, Map.of("timestamp", timestamp));
+    return StringSubstitutor.replace(template, Map.of("timestamp", safeTimestamp));
   }
 
   public static String renderToolLog(String toolName, String output) {
     String header =
         (toolName == null || toolName.trim().isEmpty())
             ? ""
-            : "<div class='tool-header'>" + toolName + "</div>";
+            : "<div class='tool-header'>" + SwingHtmlUtils.escapeHtml(toolName) + "</div>";
     String template =
         """
             <table class="tool-call" width="100%" cellpadding="8" cellspacing="0" border="0">

@@ -58,6 +58,29 @@ public class ProjectService {
     return currentProjectRoot.getFileName().toString();
   }
 
+  /**
+   * Resolves a path relative to the active project root and validates that it stays within the
+   * project sandbox.
+   *
+   * @param relativePath the path relative to the project root (null defaults to ".")
+   * @return the normalized absolute path within the project root
+   * @throws IllegalStateException if no active project root is set
+   * @throws SecurityException if the resolved path escapes the project root
+   */
+  public Path resolvePath(String relativePath) {
+    Path projectRoot = getCurrentProjectRoot();
+    if (projectRoot == null) {
+      throw new IllegalStateException("Project root is not set.");
+    }
+    Path root = projectRoot.toAbsolutePath().normalize();
+    Path resolved =
+        root.resolve(relativePath != null ? relativePath : ".").toAbsolutePath().normalize();
+    if (!resolved.startsWith(root)) {
+      throw new SecurityException("Path traversal attempt detected: " + relativePath);
+    }
+    return resolved;
+  }
+
   public void addProjectListener(Consumer<Path> listener) {
     projectListeners.add(listener);
   }

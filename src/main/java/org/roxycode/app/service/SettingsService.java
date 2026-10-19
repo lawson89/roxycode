@@ -21,7 +21,17 @@ public class SettingsService {
   private static final String SETTINGS_DIR = ".roxycode";
   private static final String SETTINGS_FILE = "settings.toml";
 
-  private final TomlMapper mapper = new TomlMapper();
+  private final TomlMapper mapper;
+
+  public SettingsService() {
+    this(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public SettingsService(TomlMapper mapper) {
+    this.mapper = mapper != null ? mapper : org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER;
+  }
+
   private AppSettings settings;
   private Path settingsPathOverride;
   private final List<Consumer<AppSettings>> listeners = new ArrayList<>();

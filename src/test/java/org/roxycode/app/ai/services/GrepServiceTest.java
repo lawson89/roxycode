@@ -20,6 +20,7 @@ class GrepServiceTest {
     ProjectService projectService = mock(ProjectService.class);
     when(projectService.hasActiveProject()).thenReturn(true);
     when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
 
     Path src = tempDir.resolve("src");
     Files.createDirectories(src);
@@ -42,6 +43,7 @@ class GrepServiceTest {
     ProjectService projectService = mock(ProjectService.class);
     when(projectService.hasActiveProject()).thenReturn(true);
     when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
 
     Path promptsDir = tempDir.resolve("src/main/resources/prompts");
     Files.createDirectories(promptsDir);
@@ -63,6 +65,7 @@ class GrepServiceTest {
     ProjectService projectService = mock(ProjectService.class);
     when(projectService.hasActiveProject()).thenReturn(true);
     when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
 
     GrepService grepService = new GrepService(projectService);
     assertThrows(

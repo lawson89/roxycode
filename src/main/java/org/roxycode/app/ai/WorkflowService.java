@@ -52,32 +52,6 @@ public class WorkflowService {
     // Enforce HITL approval for CODE completion. Auto-transition removed.
   }
 
-  /**
-   * Handles manual user phase switches from the UI header toggle. EXPLORE is decoupled and can be
-   * entered/exited freely. PLAN is the gateway for task workflows.
-   *
-   * @param targetPhase Phase moving to
-   */
-  public void switchMode(WorkflowPhase targetPhase) {
-    if (targetPhase == currentPhase) {
-      if (this.pendingPhase != null) {
-        this.pendingPhase = null;
-        this.pendingReason = null;
-        notifyRequestListeners();
-      }
-      return;
-    }
-
-    if (targetPhase == WorkflowPhase.PLAN) {
-      this.currentPhase = targetPhase;
-      this.visitedPhases.add(this.currentPhase);
-      this.pendingPhase = null;
-      this.pendingReason = null;
-      notifyPhaseListeners();
-      notifyRequestListeners();
-    }
-  }
-
   public String routeToPhase(String phaseName, String reason) {
 
     WorkflowPhase nextPhase;
@@ -192,22 +166,15 @@ public class WorkflowService {
     if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.CODE) {
       return true;
     }
-    if (from == WorkflowPhase.CODE && to == WorkflowPhase.PLAN) {
-      return true;
-    }
     return false;
   }
 
   private void handleCompletionMetadata(WorkflowPhase from, WorkflowPhase to, String timestamp) {
-    if ((from == WorkflowPhase.CODE || from == WorkflowPhase.REVIEW) && to == WorkflowPhase.PLAN) {
+    if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.PLAN) {
       ImplementationPlan plan = planManager.getCurrentPlan();
       if (plan != null) {
-        boolean allDone =
-            plan.technicalSteps().stream().allMatch(ImplementationPlan.TechStep::completed);
-        if (allDone && !plan.technicalSteps().isEmpty()) {
-          planManager.completePlan(timestamp);
-          planManager.clearPlan();
-        }
+        planManager.completePlan(timestamp);
+        planManager.clearPlan();
       }
     }
   }

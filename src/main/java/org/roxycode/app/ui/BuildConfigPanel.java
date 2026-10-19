@@ -35,7 +35,7 @@ public final class BuildConfigPanel extends JPanel {
     setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow][]"));
     setOpaque(true);
 
-    JLabel title = new JLabel("Build Configuration (agents/colinxcode.toml)");
+    JLabel title = new JLabel("Build Configuration (.roxycode/build.toml)");
     title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
     add(title, "wrap, gapbottom 15");
 

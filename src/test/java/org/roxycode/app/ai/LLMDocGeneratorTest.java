@@ -1,5 +1,6 @@
 package org.roxycode.app.ai;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -41,6 +42,25 @@ class LLMDocGeneratorTest {
     assertTrue(doc.contains("name: string;"));
   }
 
+  @Test
+  void testTransitiveNestedSupportingTypesNoConcurrentModificationException() {
+    LLMDocGenerator generator = new LLMDocGenerator();
+    ServiceWithNestedTypes service = new ServiceWithNestedTypes();
+
+    String doc = assertDoesNotThrow(() -> generator.generateDoc(List.of(service)));
+
+    assertTrue(doc.contains("interface ServiceWithNestedTypes"));
+    assertTrue(doc.contains("getParent(): ParentRecord;"));
+    assertTrue(doc.contains("interface ParentRecord {"));
+    assertTrue(doc.contains("child: ChildRecord;"));
+    assertTrue(doc.contains("steps: NestedStep[];"));
+    assertTrue(doc.contains("interface ChildRecord {"));
+    assertTrue(doc.contains("status: Status;"));
+    assertTrue(doc.contains("interface NestedStep {"));
+    assertTrue(doc.contains("description: string;"));
+    assertTrue(doc.contains("enum Status {"));
+  }
+
   @AgentService("mockService")
   @AgentDoc("This is a mock service")
   public static class MockAgentService {
@@ -63,10 +83,24 @@ class LLMDocGeneratorTest {
     }
   }
 
+  @AgentService("nestedService")
+  public static class ServiceWithNestedTypes {
+    @AgentDoc("Get parent record")
+    public ParentRecord getParent() {
+      return null;
+    }
+  }
+
   public enum Status {
     ACTIVE,
     INACTIVE
   }
 
   public record Details(int id, String name) {}
+
+  public record ParentRecord(String title, ChildRecord child, NestedStep[] steps) {}
+
+  public record ChildRecord(String label, Status status) {}
+
+  public record NestedStep(String description, boolean completed) {}
 }

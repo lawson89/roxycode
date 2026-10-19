@@ -12,6 +12,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
@@ -53,6 +54,7 @@ public final class ChatPanel extends JPanel {
   private final JScrollPane outputScrollPane;
   private SwingWorker<String, Void> currentWorker;
   private final List<Runnable> pendingPostTurnActions = new ArrayList<>();
+  private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
   private final List<BufferedImage> pendingImages = new ArrayList<>();
   private final JPanel attachmentPanel;
 
@@ -81,7 +83,9 @@ public final class ChatPanel extends JPanel {
     attachmentPanel.setVisible(false);
 
     turnEventBridge.addTurnListener(getConversationId(), this::onAgentTurn);
-    turnEventBridge.addAutonomousTransitionListener(this::onAutonomousTransition);
+    if (isTaskMode) {
+      turnEventBridge.addAutonomousTransitionListener(this::onAutonomousTransition);
+    }
     turnEventBridge.addToolExecutionListener(getConversationId(), this::onToolExecution);
     turnEventBridge.addCompleteListener(
         getConversationId(),
@@ -120,11 +124,13 @@ public final class ChatPanel extends JPanel {
         FlatClientProperties.STYLE, "foreground: $Component.accentColor");
 
     approveButton = new JButton("Approve", FontIcon.of(Codicons.CHECK, 16));
+    approveButton.setEnabled(false);
     approveButton.putClientProperty(
         FlatClientProperties.STYLE, "background: $Actions.Green; foreground: #ffffff");
     approveButton.addActionListener(e -> approvePhase());
 
     rejectButton = new JButton("Reject", FontIcon.of(Codicons.CLOSE, 16));
+    rejectButton.setEnabled(false);
     rejectButton.putClientProperty(
         FlatClientProperties.STYLE, "background: $Actions.Red; foreground: #ffffff");
     rejectButton.addActionListener(e -> rejectPhase());
@@ -213,8 +219,10 @@ public final class ChatPanel extends JPanel {
     add(splitPane, BorderLayout.CENTER);
 
     sendButton.addActionListener(this::sendMessage);
-    workflowService.addPhaseListener(this::onPhaseChanged);
-    workflowService.addTransitionRequestListener(this::onTransitionRequested);
+    if (isTaskMode) {
+      workflowService.addPhaseListener(this::onPhaseChanged);
+      workflowService.addTransitionRequestListener(this::onTransitionRequested);
+    }
 
     setupInputContextMenu();
     setupUndoRedo();
@@ -349,6 +357,8 @@ public final class ChatPanel extends JPanel {
     SwingUtilities.invokeLater(
         () -> {
           if (isTaskMode) {
+            approveButton.setEnabled(false);
+            rejectButton.setEnabled(false);
             inlineActionPanel.setVisible(false);
           }
         });
@@ -358,7 +368,12 @@ public final class ChatPanel extends JPanel {
       WorkflowPhase current, WorkflowPhase requested, String reason) {
     if (!isTaskMode) return;
     if (requested == null) {
-      SwingUtilities.invokeLater(() -> inlineActionPanel.setVisible(false));
+      SwingUtilities.invokeLater(
+          () -> {
+            approveButton.setEnabled(false);
+            rejectButton.setEnabled(false);
+            inlineActionPanel.setVisible(false);
+          });
       return;
     }
     runAfterCurrentTurn(
@@ -376,6 +391,7 @@ public final class ChatPanel extends JPanel {
   }
 
   private void approvePhase() {
+    WorkflowPhase current = workflowService.getCurrentPhase();
     WorkflowPhase requested = workflowService.getPendingPhase();
     if (requested != null) {
       workflowService.approveTransition();
@@ -385,7 +401,7 @@ public final class ChatPanel extends JPanel {
         outputArea.appendMessage(
             ROLE_SYSTEM,
             "Task complete. We are back in Explore mode. Please enter a new question or task.");
-      } else if (requested == WorkflowPhase.PLAN) {
+      } else if (current == WorkflowPhase.REVIEW && requested == WorkflowPhase.PLAN) {
         outputArea.appendMessage(
             ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
       } else {
@@ -576,21 +592,30 @@ public final class ChatPanel extends JPanel {
       sendButton.setEnabled(false);
       inputArea.setEnabled(false);
       if (isTaskMode) {
-        boolean hasPending = workflowService.getPendingPhase() != null;
-        approveButton.setEnabled(hasPending);
-        rejectButton.setEnabled(hasPending);
+        approveButton.setEnabled(false);
+        rejectButton.setEnabled(false);
       }
     } else {
       sendButton.setEnabled(true);
       inputArea.setEnabled(true);
       if (isTaskMode) {
-        approveButton.setEnabled(true);
-        rejectButton.setEnabled(true);
+        boolean hasPending = workflowService.getPendingPhase() != null;
+        approveButton.setEnabled(hasPending);
+        rejectButton.setEnabled(hasPending);
       }
       stopButton.setEnabled(false);
       SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow());
     }
     sendButton.setText(loading ? "Sending..." : "Send");
+    for (Consumer<Boolean> listener : loadingListeners) {
+      listener.accept(loading);
+    }
+  }
+
+  public void addLoadingListener(Consumer<Boolean> listener) {
+    if (listener != null) {
+      loadingListeners.add(listener);
+    }
   }
 
   public MarkdownPane getOutputArea() {

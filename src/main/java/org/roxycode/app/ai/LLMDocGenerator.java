@@ -48,9 +48,18 @@ public class LLMDocGenerator {
 
     if (!extraTypes.isEmpty()) {
       sb.append("// --- Supporting Types ---\n\n");
-      for (Class<?> type : extraTypes) {
-        generateTypeSchema(type, sb, extraTypes);
+      Queue<Class<?>> queue = new ArrayDeque<>(extraTypes);
+      Set<Class<?>> visited = new HashSet<>(extraTypes);
+      while (!queue.isEmpty()) {
+        Class<?> type = queue.poll();
+        Set<Class<?>> discovered = new LinkedHashSet<>();
+        generateTypeSchema(type, sb, discovered);
         sb.append("\n");
+        for (Class<?> newType : discovered) {
+          if (visited.add(newType)) {
+            queue.add(newType);
+          }
+        }
       }
     }
 
@@ -69,15 +78,12 @@ public class LLMDocGenerator {
 
       AgentDoc doc = m.getAnnotation(AgentDoc.class);
       if (doc == null) continue;
-      if (doc != null) {
-        sb.append("    /**\n");
-        sb.append("     * ").append(doc.value()).append("\n");
-        for (String example : doc.examples()) {
-          sb.append("     * Example: ").append(example).append("\n");
-        }
-        sb.append("     */\n");
+      sb.append("    /**\n");
+      sb.append("     * ").append(doc.value()).append("\n");
+      for (String example : doc.examples()) {
+        sb.append("     * Example: ").append(example).append("\n");
       }
-
+      sb.append("     */\n");
       sb.append("    ").append(m.getName()).append("(");
 
       Parameter[] params = m.getParameters();

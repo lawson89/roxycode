@@ -52,7 +52,7 @@ public class FileEditorService {
   public EditorResult writeFile(String relativePath, String content) {
     try {
       checkPhase();
-      Path path = resolvePath(relativePath);
+      Path path = projectService.resolvePath(relativePath);
       Files.createDirectories(path.getParent());
       Files.writeString(path, content);
 
@@ -83,7 +83,7 @@ public class FileEditorService {
       String relativePath, String targetBlock, String replacementBlock) {
     try {
       checkPhase();
-      Path path = resolvePath(relativePath);
+      Path path = projectService.resolvePath(relativePath);
       String content = Files.readString(path);
 
       String[] parts = targetBlock.trim().split("\s+");
@@ -142,7 +142,7 @@ public class FileEditorService {
       String relativePath, int startLine, int endLine, String replacementText) {
     try {
       checkPhase();
-      Path path = resolvePath(relativePath);
+      Path path = projectService.resolvePath(relativePath);
       List<String> lines = Files.readAllLines(path);
 
       if (startLine < 1
@@ -199,7 +199,7 @@ public class FileEditorService {
   public EditorResult insertAtLine(String relativePath, int lineNumber, String content) {
     try {
       checkPhase();
-      Path path = resolvePath(relativePath);
+      Path path = projectService.resolvePath(relativePath);
       List<String> lines = Files.readAllLines(path);
 
       if (lineNumber < 1 || lineNumber > lines.size() + 1) {
@@ -239,7 +239,7 @@ public class FileEditorService {
   public EditorResult deleteFile(String relativePath) {
     try {
       checkPhase();
-      Path path = resolvePath(relativePath);
+      Path path = projectService.resolvePath(relativePath);
       if (!Files.exists(path)) {
         throw new IllegalArgumentException("File does not exist: " + relativePath);
       }
@@ -276,19 +276,5 @@ public class FileEditorService {
           "Mutation methods are only allowed in the CODE phase. Current phase: "
               + workflowService.getCurrentPhase());
     }
-  }
-
-  private Path resolvePath(String relativePath) {
-    Path root = projectService.getCurrentProjectRoot();
-    if (root == null) {
-      throw new IllegalStateException("No active project root set.");
-    }
-    root = root.toAbsolutePath().normalize();
-    Path file = root.resolve(relativePath).toAbsolutePath().normalize();
-
-    if (!file.startsWith(root)) {
-      throw new SecurityException("Path traversal attempt detected: " + relativePath);
-    }
-    return file;
   }
 }

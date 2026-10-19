@@ -86,4 +86,21 @@ class ChatHtmlTemplatesTest {
     assertFalse(result.contains("tool-header"));
     assertTrue(result.contains("jexl output"));
   }
+
+  @Test
+  void testHtmlEscapingInTemplates() {
+    String toolResult = ChatHtmlTemplates.renderToolLog("<script>alert(1)</script>", "output");
+    assertFalse(toolResult.contains("<script>"));
+    assertTrue(toolResult.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+
+    String entryResult =
+        ChatHtmlTemplates.renderChatEntry("user<bad>", "<p>Safe</p>", "12:00<img src=x>");
+    assertTrue(entryResult.contains("user&lt;bad&gt;-entry"));
+    assertTrue(entryResult.contains("12:00&lt;img src=x&gt;"));
+    assertFalse(entryResult.contains("<img src=x>"));
+
+    String tsResult = ChatHtmlTemplates.renderTimestamp("<b>time</b>");
+    assertTrue(tsResult.contains("&lt;b&gt;time&lt;/b&gt;"));
+    assertFalse(tsResult.contains("<b>time</b>"));
+  }
 }

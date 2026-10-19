@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.awt.Component;
 import java.awt.Container;
@@ -35,6 +36,28 @@ class HeaderPanelTest {
     ProjectService ps = createProjectService(ss);
     HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
     assertNotNull(header);
+  }
+
+  @Test
+  void testUpdateBranchLabelRunsAsyncOffEdt() throws Exception {
+    SettingsService ss = createSettingsService();
+    ProjectService ps = createProjectService(ss);
+    GitService gitService = mock(GitService.class);
+    when(gitService.getCurrentBranch()).thenReturn("feature/async-branch");
+
+    HeaderPanel header = new HeaderPanel(ps, gitService, ss);
+    header.updateBranchLabel().get();
+
+    for (int i = 0; i < 50; i++) {
+      SwingUtilities.invokeAndWait(() -> {});
+      if ("feature/async-branch".equals(header.getBranchLabel().getText())) {
+        break;
+      }
+      Thread.sleep(20);
+    }
+
+    assertEquals("feature/async-branch", header.getBranchLabel().getText());
+    assertTrue(header.getBranchLabel().isVisible());
   }
 
   @Test

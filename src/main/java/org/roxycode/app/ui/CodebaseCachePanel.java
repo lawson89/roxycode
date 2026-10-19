@@ -28,8 +28,16 @@ public final class CodebaseCachePanel extends JPanel {
   private final JTextArea repoMapArea = new JTextArea();
   private final JTextArea stableContextArea = new JTextArea();
   private final JTextArea sessionContextArea = new JTextArea();
+  private transient volatile SwingWorker<CacheStatusData, Void> activeRefreshWorker;
   private static final DateTimeFormatter DATE_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+  record CacheStatusData(
+      Optional<ProjectCacheMeta> meta,
+      Optional<String> packed,
+      String stableContext,
+      long stableTokens,
+      String sessionContext) {}
 
   public CodebaseCachePanel(
       RepoMapPackerService packerService,
@@ -102,54 +110,102 @@ public final class CodebaseCachePanel extends JPanel {
     sessionContextArea.setCaretColor(UIManager.getColor("TextArea.caretForeground"));
   }
 
-  private void refreshStatus() {
-    Optional<ProjectCacheMeta> meta = metaService.loadMeta();
-    Optional<String> packed = metaService.loadRepoCache();
+  SwingWorker<CacheStatusData, Void> refreshStatus() {
+    SwingWorker<CacheStatusData, Void> worker =
+        new SwingWorker<>() {
+          @Override
+          protected CacheStatusData doInBackground() {
+            Optional<ProjectCacheMeta> meta =
+                metaService != null ? metaService.loadMeta() : Optional.empty();
+            Optional<String> packed =
+                metaService != null ? metaService.loadRepoCache() : Optional.empty();
+            if (meta != null && meta.isPresent()) {
+              String stableContext = getStableContextString();
+              long stableTokens =
+                  geminiCacheService != null ? geminiCacheService.estimateTokens(stableContext) : 0;
+              String sessionContext = getSessionContextString();
+              return new CacheStatusData(meta, packed, stableContext, stableTokens, sessionContext);
+            }
+            return new CacheStatusData(
+                meta != null ? meta : Optional.empty(),
+                packed != null ? packed : Optional.empty(),
+                "",
+                0,
+                "");
+          }
 
-    if (meta.isPresent()) {
-      ProjectCacheMeta m = meta.get();
-      long stableTokens = geminiCacheService.estimateTokens(getStableContextString());
-      String status =
-          String.format(
-              "Status: Last updated on %s | Stable: %,d | Repo Map: %,d | Total: %,d",
-              m.lastUpdated().format(DATE_FORMATTER),
-              stableTokens,
-              m.estimatedTokens(),
-              stableTokens + m.estimatedTokens());
-      statusLabel.setText(status);
+          @Override
+          protected void done() {
+            if (this != activeRefreshWorker) {
+              return;
+            }
+            try {
+              CacheStatusData data = get();
+              if (data.meta().isPresent()) {
+                ProjectCacheMeta m = data.meta().get();
+                String status =
+                    String.format(
+                        "Status: Last updated on %s | Stable: %,d | Repo Map: %,d | Total: %,d",
+                        m.lastUpdated().format(DATE_FORMATTER),
+                        data.stableTokens(),
+                        m.estimatedTokens(),
+                        data.stableTokens() + m.estimatedTokens());
+                statusLabel.setText(status);
 
-      repoMapArea.setText(packed.orElse("Content not found on disk."));
-      updateStableContext();
-      updateSessionContext();
-      repoMapArea.setCaretPosition(0);
-    } else {
-      statusLabel.setText("Status: No implicit cache found.");
-      repoMapArea.setText("Repo Map will appear here after generation.");
+                repoMapArea.setText(data.packed().orElse("Content not found on disk."));
+                repoMapArea.setCaretPosition(0);
 
-      if (packed.isPresent()) {
-        statusLabel.setText("Status: Repo Map available locally.");
-        repoMapArea.setText(packed.get());
-        repoMapArea.setCaretPosition(0);
-      }
-    }
+                stableContextArea.setText(data.stableContext());
+                stableContextArea.setCaretPosition(0);
+
+                sessionContextArea.setText(data.sessionContext());
+                sessionContextArea.setCaretPosition(0);
+              } else {
+                statusLabel.setText("Status: No implicit cache found.");
+                repoMapArea.setText("Repo Map will appear here after generation.");
+
+                if (data.packed().isPresent()) {
+                  statusLabel.setText("Status: Repo Map available locally.");
+                  repoMapArea.setText(data.packed().get());
+                  repoMapArea.setCaretPosition(0);
+                }
+              }
+            } catch (Exception e) {
+              log.error("Failed to refresh codebase cache status", e);
+            }
+          }
+        };
+    activeRefreshWorker = worker;
+    worker.execute();
+    return worker;
   }
 
   private String getStableContextString() {
     return promptService != null ? promptService.getStableContext() : "";
   }
 
-  private void updateStableContext() {
-    stableContextArea.setText(getStableContextString());
-    stableContextArea.setCaretPosition(0);
-  }
-
   private String getSessionContextString() {
-    return promptService != null ? promptService.getSessionContext().trim() : "";
+    if (promptService == null) {
+      return "";
+    }
+    String session = promptService.getSessionContext();
+    return session != null ? session.trim() : "";
   }
 
-  private void updateSessionContext() {
-    sessionContextArea.setText(getSessionContextString());
-    sessionContextArea.setCaretPosition(0);
+  JLabel getStatusLabel() {
+    return statusLabel;
+  }
+
+  JTextArea getRepoMapArea() {
+    return repoMapArea;
+  }
+
+  JTextArea getStableContextArea() {
+    return stableContextArea;
+  }
+
+  JTextArea getSessionContextArea() {
+    return sessionContextArea;
   }
 
   private void runPack() {

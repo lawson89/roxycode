@@ -12,29 +12,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
-import org.springframework.context.ApplicationEventPublisher;
 
 class SidebarPanelTest {
   @TempDir Path tempDir;
-
-  private WorkflowService createWorkflowService() {
-    return new WorkflowService(
-        mock(PlanService.class),
-        mock(EnvironmentService.class),
-        mock(ApplicationEventPublisher.class));
-  }
 
   @Test
   void testSidebarPanelInstantiation() {
     SettingsService settingsService = new SettingsService();
     settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
-    SidebarPanel sidebar = new SidebarPanel(createWorkflowService(), card -> {});
+    SidebarPanel sidebar = new SidebarPanel(card -> {});
     assertNotNull(sidebar);
   }
 
@@ -43,7 +31,7 @@ class SidebarPanelTest {
     SettingsService settingsService = new SettingsService();
     settingsService.setSettingsPathOverride(tempDir.resolve("settings_structure.toml"));
 
-    SidebarPanel sidebar = new SidebarPanel(createWorkflowService(), card -> {});
+    SidebarPanel sidebar = new SidebarPanel(card -> {});
 
     Component[] components = sidebar.getComponents();
 
@@ -102,11 +90,9 @@ class SidebarPanelTest {
     SettingsService settingsService = new SettingsService();
     settingsService.setSettingsPathOverride(tempDir.resolve("settings_nav.toml"));
 
-    WorkflowService workflowService = mock(WorkflowService.class);
-    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
     Consumer<String> navAction = mock(Consumer.class);
 
-    SidebarPanel sidebar = new SidebarPanel(workflowService, navAction);
+    SidebarPanel sidebar = new SidebarPanel(navAction);
 
     JButton qaBtn = null;
     JButton taskBtn = null;
@@ -131,5 +117,25 @@ class SidebarPanelTest {
 
     taskBtn.doClick();
     verify(navAction).accept("TASK_VIEW");
+  }
+
+  @Test
+  void testSetTaskBusyAndWaitingApprovalUpdatesFeatureRequestButton() {
+    SidebarPanel sidebar = new SidebarPanel(card -> {});
+    assertFalse(sidebar.isTaskBusy());
+    assertFalse(sidebar.isTaskWaitingApproval());
+
+    sidebar.setTaskBusy(true);
+    assertTrue(sidebar.isTaskBusy());
+
+    sidebar.setTaskWaitingApproval(true);
+    assertTrue(sidebar.isTaskWaitingApproval());
+
+    sidebar.setTaskBusy(false);
+    assertFalse(sidebar.isTaskBusy());
+    assertTrue(sidebar.isTaskWaitingApproval());
+
+    sidebar.setTaskWaitingApproval(false);
+    assertFalse(sidebar.isTaskWaitingApproval());
   }
 }

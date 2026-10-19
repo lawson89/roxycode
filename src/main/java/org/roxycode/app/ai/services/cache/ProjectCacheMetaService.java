@@ -30,9 +30,13 @@ public class ProjectCacheMetaService {
   private final ObjectMapper mapper;
 
   public ProjectCacheMetaService(ProjectService projectService) {
+    this(projectService, org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public ProjectCacheMetaService(ProjectService projectService, TomlMapper tomlMapper) {
     this.projectService = projectService;
-    this.mapper = new TomlMapper();
-    this.mapper.findAndRegisterModules();
+    this.mapper = tomlMapper != null ? tomlMapper : org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER;
   }
 
   private void ensureTmpDir() {

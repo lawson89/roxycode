@@ -65,28 +65,67 @@ class WorkflowServiceTest {
   }
 
   @Test
-  void testCodeCompletionAndClear() {
+  void testCodeToPlanRequiresHitlAndPreservesPlanEvenWhenAllStepsDone() {
     setupCodePhase();
 
-    // Request PLAN (completion) - Autonomous transition yields turn
+    ImplementationPlan.TechStep doneStep = new ImplementationPlan.TechStep("Done step", true);
+    ImplementationPlan planWithAllDone =
+        new ImplementationPlan(
+            "Title", "Goal", List.of(), List.of(doneStep), true, "now", "user", null, List.of());
+    when(planManager.getCurrentPlan()).thenReturn(planWithAllDone);
+
+    // Request PLAN from CODE (plan revision) - Requires HITL approval
     YieldTurnException ex =
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Done"));
-    assertTrue(ex.getMessage().contains("Autonomous transition"));
+        assertThrows(
+            YieldTurnException.class,
+            () -> service.routeToPhase("PLAN", "Need architecture revision"));
+    assertTrue(ex.getMessage().contains("Transition Request"));
+    assertFalse(ex.getMessage().contains("Autonomous transition"));
+    assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
+    assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
+
+    when(envService.getCurrentUser()).thenReturn("testuser");
+    service.approveTransition();
 
     assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
     assertNull(service.getPendingPhase());
+    // Must NOT complete or clear the plan during a CODE -> PLAN revision
+    verify(planManager, never()).completePlan(anyString());
+    verify(planManager, never()).clearPlan();
   }
 
   @Test
-  void testBlockedTransitionNoClear() {
+  void testReviewToPlanCompletesAndClearsPlanEvenWithIncompleteSteps() {
     setupCodePhase();
+    assertThrows(
+        YieldTurnException.class,
+        () -> service.routeToPhase("REVIEW", "Checking quality")); // Autonomous
+    assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
-    // Request PLAN - Autonomous transition yields turn
-    YieldTurnException ex =
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Moving on"));
-    assertTrue(ex.getMessage().contains("Autonomous transition"));
+    ImplementationPlan.TechStep incompleteStep = new ImplementationPlan.TechStep("Step 1", false);
+    ImplementationPlan planWithIncompleteStep =
+        new ImplementationPlan(
+            "Title",
+            "Goal",
+            List.of(),
+            List.of(incompleteStep),
+            true,
+            "now",
+            "user",
+            null,
+            List.of());
+    when(planManager.getCurrentPlan()).thenReturn(planWithIncompleteStep);
+
+    // Request PLAN from REVIEW - Requires HITL Approval
+    assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Finalizing"));
+    assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
+
+    when(envService.getCurrentUser()).thenReturn("testuser");
+    service.approveTransition();
+
     assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-    assertNull(service.getPendingPhase());
+    verify(planManager).completePlan(anyString());
+    verify(planManager).clearPlan();
   }
 
   @Test

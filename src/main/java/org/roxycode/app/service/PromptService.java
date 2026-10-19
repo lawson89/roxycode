@@ -261,7 +261,7 @@ public class PromptService {
     if (projectService == null || !projectService.hasActiveProject()) {
       return "";
     }
-    Path file = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR).resolve(filename);
+    Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
     if (Files.exists(file)) {
       try {
         return Files.readString(file, StandardCharsets.UTF_8);
@@ -276,10 +276,10 @@ public class PromptService {
     if (projectService == null || !projectService.hasActiveProject()) {
       throw new IllegalStateException("No active project");
     }
-    Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
+    Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
     try {
-      Files.createDirectories(contextDir);
-      Files.writeString(contextDir.resolve(filename), content, StandardCharsets.UTF_8);
+      Files.createDirectories(file.getParent());
+      Files.writeString(file, content, StandardCharsets.UTF_8);
     } catch (IOException e) {
       log.error("Failed to save context file {}: {}", filename, e.getMessage());
       throw new RuntimeException("Failed to save context file", e);
@@ -290,7 +290,7 @@ public class PromptService {
     if (projectService == null || !projectService.hasActiveProject()) {
       return;
     }
-    Path file = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR).resolve(filename);
+    Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
     try {
       Files.deleteIfExists(file);
     } catch (IOException e) {

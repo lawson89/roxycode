@@ -97,7 +97,7 @@ public final class SettingsPanel extends JPanel {
 
   private void loadModels() {
     try {
-      TomlMapper mapper = new TomlMapper();
+      TomlMapper mapper = org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER;
       GeminiModels geminiModels =
           mapper.readValue(getClass().getResourceAsStream("/models.toml"), GeminiModels.class);
       List<GeminiModelConfig> modelList = geminiModels.models();

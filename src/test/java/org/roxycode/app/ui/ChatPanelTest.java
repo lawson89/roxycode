@@ -227,4 +227,158 @@ public class ChatPanelTest {
         layout.getLayoutComponent(java.awt.BorderLayout.SOUTH),
         "inlineActionPanel should be attached at BorderLayout.SOUTH of outputWrapper in task mode");
   }
+
+  @Test
+  public void testNonTaskChatPanelDoesNotRegisterWorkflowListeners() {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    ChatPanel qaChatPanel =
+        new ChatPanel(
+            aiService,
+            workflowService,
+            turnEventBridge,
+            chatMemory,
+            "qa",
+            WorkflowPhase.EXPLORE,
+            false);
+    assertNotNull(qaChatPanel);
+
+    verify(workflowService, never()).addPhaseListener(any());
+    verify(workflowService, never()).addTransitionRequestListener(any());
+    verify(turnEventBridge, never()).addAutonomousTransitionListener(any());
+  }
+
+  @Test
+  public void testApproveCodeToPlanTriggersTurnWhileReviewToPlanCompletesTask() throws Exception {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "task", null, true);
+
+    java.lang.reflect.Field approveBtnField = ChatPanel.class.getDeclaredField("approveButton");
+    approveBtnField.setAccessible(true);
+    javax.swing.JButton approveButton = (javax.swing.JButton) approveBtnField.get(chatPanel);
+
+    // Case 1: CODE -> PLAN (plan revision) should trigger next turn in PLAN
+    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+    when(workflowService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
+    doAnswer(
+            inv -> {
+              when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+              return null;
+            })
+        .when(workflowService)
+        .approveTransition();
+
+    approveButton.setEnabled(true);
+    approveButton.doClick();
+    Thread.sleep(400);
+    javax.swing.SwingUtilities.invokeAndWait(() -> {});
+
+    verify(aiService, atLeastOnce())
+        .chat(
+            eq("task:default"),
+            eq(WorkflowPhase.PLAN),
+            contains("I approve the transition to Plan"),
+            isNull(),
+            any());
+    assertFalse(chatPanel.getOutputArea().getText().contains("Task complete"));
+
+    // Case 2: REVIEW -> PLAN (completion) should show Task complete and not trigger a new AI turn
+    clearInvocations(aiService);
+    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
+    when(workflowService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
+
+    approveButton.setEnabled(true);
+    approveButton.doClick();
+    Thread.sleep(300);
+    javax.swing.SwingUtilities.invokeAndWait(() -> {});
+
+    verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
+    assertTrue(chatPanel.getOutputArea().getText().contains("Task complete"));
+  }
+
+  @Test
+  public void testSetLoadingRespectsPendingPhaseForApproveAndRejectButtons() throws Exception {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "task", null, true);
+
+    java.lang.reflect.Field approveBtnField = ChatPanel.class.getDeclaredField("approveButton");
+    approveBtnField.setAccessible(true);
+    javax.swing.JButton approveButton = (javax.swing.JButton) approveBtnField.get(chatPanel);
+
+    java.lang.reflect.Field rejectBtnField = ChatPanel.class.getDeclaredField("rejectButton");
+    rejectBtnField.setAccessible(true);
+    javax.swing.JButton rejectButton = (javax.swing.JButton) rejectBtnField.get(chatPanel);
+
+    java.lang.reflect.Method setLoadingMethod =
+        ChatPanel.class.getDeclaredMethod("setLoading", boolean.class);
+    setLoadingMethod.setAccessible(true);
+
+    // Initially disabled
+    assertFalse(approveButton.isEnabled(), "approveButton should be disabled initially");
+    assertFalse(rejectButton.isEnabled(), "rejectButton should be disabled initially");
+
+    // When loading=false and no pending phase, buttons remain disabled
+    when(workflowService.getPendingPhase()).thenReturn(null);
+    setLoadingMethod.invoke(chatPanel, false);
+    assertFalse(
+        approveButton.isEnabled(),
+        "approveButton should remain disabled when setLoading(false) and no pending phase");
+    assertFalse(
+        rejectButton.isEnabled(),
+        "rejectButton should remain disabled when setLoading(false) and no pending phase");
+
+    // When a pending phase exists and loading=true, buttons are disabled during loading
+    when(workflowService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+    setLoadingMethod.invoke(chatPanel, true);
+    assertFalse(approveButton.isEnabled(), "approveButton should be disabled during loading");
+    assertFalse(rejectButton.isEnabled(), "rejectButton should be disabled during loading");
+
+    // When loading=false and a pending phase exists, buttons become enabled
+    setLoadingMethod.invoke(chatPanel, false);
+    assertTrue(
+        approveButton.isEnabled(),
+        "approveButton should be enabled when setLoading(false) and pending phase exists");
+    assertTrue(
+        rejectButton.isEnabled(),
+        "rejectButton should be enabled when setLoading(false) and pending phase exists");
+  }
+
+  @Test
+  public void testLoadingListenerNotified() throws Exception {
+    AiService aiService = mock(AiService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+    ChatMemory chatMemory = mock(ChatMemory.class);
+
+    ChatPanel chatPanel =
+        new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "task", null, true);
+
+    java.util.List<Boolean> states = new java.util.ArrayList<>();
+    chatPanel.addLoadingListener(states::add);
+
+    java.lang.reflect.Method setLoadingMethod =
+        ChatPanel.class.getDeclaredMethod("setLoading", boolean.class);
+    setLoadingMethod.setAccessible(true);
+
+    setLoadingMethod.invoke(chatPanel, true);
+    setLoadingMethod.invoke(chatPanel, false);
+
+    assertEquals(java.util.List.of(true, false), states);
+  }
 }

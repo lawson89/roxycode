@@ -61,7 +61,7 @@ public class GrepService {
     }
 
     Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-    Path searchDir = resolvePath(relativePath);
+    Path searchDir = projectService.resolvePath(relativePath);
     Path relSearchDir = root.relativize(searchDir);
     String targetArg = relSearchDir.toString().isEmpty() ? "." : relSearchDir.toString();
 
@@ -126,7 +126,7 @@ public class GrepService {
     }
 
     Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-    Path searchDir = resolvePath(relativePath);
+    Path searchDir = projectService.resolvePath(relativePath);
     Path relSearchDir = root.relativize(searchDir);
 
     List<String> command = new ArrayList<>();
@@ -160,21 +160,5 @@ public class GrepService {
       log.error("Failed to list files using RipGrep: {}", e.getMessage());
     }
     return files;
-  }
-
-  private Path resolvePath(String relativePath) {
-    Path projectRoot = projectService.getCurrentProjectRoot();
-    if (projectRoot == null) {
-      throw new IllegalStateException("Project root is not set.");
-    }
-
-    Path root = projectRoot.toAbsolutePath().normalize();
-    Path resolved =
-        root.resolve(relativePath != null ? relativePath : ".").toAbsolutePath().normalize();
-
-    if (!resolved.startsWith(root)) {
-      throw new SecurityException("Access denied: Path is outside project root.");
-    }
-    return resolved;
   }
 }

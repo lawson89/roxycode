@@ -23,6 +23,7 @@ public class FileReadServiceTest {
   void setUp() {
     projectService = mock(ProjectService.class);
     when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
     fileReadService = new FileReadService(projectService);
   }
 

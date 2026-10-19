@@ -8,6 +8,7 @@ import java.awt.*;
 import javax.swing.*;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 
 class NavButtonTest {
@@ -55,5 +56,49 @@ class NavButtonTest {
     btn.setForeground(Color.BLUE);
     btn.setSelected(false);
     assertEquals(Color.BLUE, icon.getIconColor());
+  }
+
+  @Test
+  void testBusyAndWaitingApprovalStatusIconsAndPainting() {
+    NavButton btn = new NavButton("Feature Request", null);
+    btn.setSize(160, 32);
+
+    assertFalse(btn.isBusy());
+    assertFalse(btn.isWaitingApproval());
+    assertNull(btn.getStatusIcon());
+
+    // Busy shows hourglass
+    btn.setBusy(true);
+    assertTrue(btn.isBusy());
+    assertNotNull(btn.getStatusIcon());
+    assertEquals(FontAwesomeSolid.HOURGLASS_HALF, btn.getStatusIcon().getIkon());
+    assertEquals(13, btn.getStatusIcon().getIconSize());
+
+    // Busy takes precedence over waitingApproval
+    btn.setWaitingApproval(true);
+    assertTrue(btn.isWaitingApproval());
+    assertEquals(FontAwesomeSolid.HOURGLASS_HALF, btn.getStatusIcon().getIkon());
+
+    java.awt.image.BufferedImage img =
+        new java.awt.image.BufferedImage(160, 32, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+    Graphics2D g2 = img.createGraphics();
+    assertDoesNotThrow(() -> btn.paintComponent(g2));
+
+    // When busy clears while waitingApproval is true, shows question mark
+    btn.setBusy(false);
+    assertFalse(btn.isBusy());
+    assertTrue(btn.isWaitingApproval());
+    assertNotNull(btn.getStatusIcon());
+    assertEquals(Codicons.QUESTION, btn.getStatusIcon().getIkon());
+    assertEquals(14, btn.getStatusIcon().getIconSize());
+
+    btn.setSelected(true);
+    assertDoesNotThrow(() -> btn.paintComponent(g2));
+    g2.dispose();
+
+    // Clearing waitingApproval removes trailing icon
+    btn.setWaitingApproval(false);
+    assertFalse(btn.isWaitingApproval());
+    assertNull(btn.getStatusIcon());
   }
 }

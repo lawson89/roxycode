@@ -65,7 +65,6 @@ public final class MainFrame extends JFrame {
   private JTabbedPane qaTabs;
   private JTabbedPane taskTabs;
   private HeaderPanel header;
-  private JLabel mentorModeLabel;
   private JLabel planLabel;
   private JPanel progressTracker;
   private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
@@ -149,7 +148,7 @@ public final class MainFrame extends JFrame {
     setLayout(new MigLayout("fill, insets 0", "[200!]0[fill, grow]", "[fill, grow]"));
 
     // Sidebar
-    SidebarPanel sidebar = new SidebarPanel(workflowService, this::showCard);
+    SidebarPanel sidebar = new SidebarPanel(this::showCard);
 
     // Main Workspace
     JPanel workspace =
@@ -166,7 +165,7 @@ public final class MainFrame extends JFrame {
     qaHeaderBar.setBorder(
         BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
 
-    mentorModeLabel = new JLabel("READ-ONLY MENTOR MODE");
+    JLabel mentorModeLabel = new JLabel("READ-ONLY MENTOR MODE");
     mentorModeLabel.putClientProperty(
         FlatClientProperties.STYLE, "font: bold -1; foreground: $Label.disabledForeground");
     mentorModeLabel.setIcon(
@@ -222,6 +221,14 @@ public final class MainFrame extends JFrame {
     this.taskTabs = new JTabbedPane();
     this.taskChatPanel =
         new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "task", null, true);
+    this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
+    workflowService.addTransitionRequestListener(
+        (current, requested, reason) ->
+            SwingUtilities.invokeLater(() -> sidebar.setTaskWaitingApproval(requested != null)));
+    workflowService.addPhaseListener(
+        phase ->
+            SwingUtilities.invokeLater(
+                () -> sidebar.setTaskWaitingApproval(workflowService.getPendingPhase() != null)));
     taskTabs.addTab("Chat", taskChatPanel);
     taskTabs.addTab("Plan", new PlanPanel(planManagerService, workflowService));
     gitChangesPanel = new GitChangesPanel(gitService);
@@ -250,7 +257,7 @@ public final class MainFrame extends JFrame {
         new BuildConfigPanel(buildToolService, settingsService, projectService), BUILD_CONFIG_VIEW);
     contentArea.add(new ContextManagerPanel(promptService), CONTEXT_MGR_VIEW);
 
-    workspace.add(header, "h 80!, wrap");
+    workspace.add(header, "h 36!, wrap");
     workspace.add(contentArea, "grow, wrap");
     workspace.add(statusBar, "h 30!");
 

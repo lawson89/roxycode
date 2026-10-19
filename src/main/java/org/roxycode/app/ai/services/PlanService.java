@@ -1,13 +1,16 @@
 package org.roxycode.app.ai.services;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import org.apache.commons.lang3.Strings;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.model.ImplementationPlan;
 import org.springframework.context.annotation.Lazy;
@@ -17,7 +20,12 @@ import org.springframework.context.annotation.Lazy;
     value = "planService",
     phases = {"PLAN", "CODE", "REVIEW"})
 @AgentDoc("Service for managing project plans and specifications.")
+@SuppressWarnings({
+  "PMD.NullAssignment",
+})
 public class PlanService {
+
+  private static final StackWalker STACK_WALKER = StackWalker.getInstance();
 
   private ImplementationPlan currentPlan;
   private final WorkflowService workflowService;
@@ -48,8 +56,8 @@ public class PlanService {
    * @param plan the implementation plan to submit
    * @return a success message
    */
-  public String submitPlan(
-      @AgentDoc("The implementation plan to submit.") ImplementationPlan plan) {
+  public String submitPlan(ImplementationPlan plan) {
+    requirePhase("submitPlan", WorkflowPhase.PLAN);
     if (plan == null) {
       return "Error: Plan cannot be null.";
     }
@@ -112,6 +120,7 @@ public class PlanService {
       @AgentDoc("List of functional requirements (String array or list).") Object requirements,
       @AgentDoc("List of technical implementation steps (String array or list).")
           Object technicalSteps) {
+    requirePhase("submitPlan", WorkflowPhase.PLAN);
     List<String> rawRequirements = extractStringList(requirements);
     List<String> rawTechSteps = extractStringList(technicalSteps);
 
@@ -136,6 +145,7 @@ public class PlanService {
   public String submitPlan(
       @AgentDoc("Map containing title, goal, requirements, and technicalSteps.")
           Map<String, Object> planMap) {
+    requirePhase("submitPlan", WorkflowPhase.PLAN);
     String title = (String) planMap.getOrDefault("title", "");
     String goal = (String) planMap.getOrDefault("goal", "");
     List<String> requirements = extractStringList(planMap.get("requirements"));
@@ -150,9 +160,9 @@ public class PlanService {
         new ImplementationPlan(title, goal, requirements, steps, false, null, null, null, null));
   }
 
-  /** Approves the current plan. */
-  @AgentDoc("Approves the current implementation plan.")
+  /** Approves the current plan. Internal lifecycle method; cannot be invoked from JEXL. */
   public void approvePlan(String user, String timestamp) {
+    checkNotJexlCaller("approvePlan");
     if (currentPlan == null) return;
     currentPlan =
         new ImplementationPlan(
@@ -168,9 +178,11 @@ public class PlanService {
     notifyListeners();
   }
 
-  /** Marks the current plan as completed. */
-  @AgentDoc("Marks the current implementation plan as completed.")
+  /**
+   * Marks the current plan as completed. Internal lifecycle method; cannot be invoked from JEXL.
+   */
   public void completePlan(String timestamp) {
+    checkNotJexlCaller("completePlan");
     if (currentPlan == null) return;
     currentPlan =
         new ImplementationPlan(
@@ -194,6 +206,7 @@ public class PlanService {
   public void markStepCompleted(
       @AgentDoc("The index of the step (0-based). index must be valid for the current plan.")
           int index) {
+    requirePhase("markStepCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
     updateStepStatus(index, true);
   }
 
@@ -202,6 +215,7 @@ public class PlanService {
       value = "Marks a technical implementation step as incomplete.",
       examples = "planService.markStepIncomplete(0)")
   public void markStepIncomplete(@AgentDoc("The index of the step (0-based).") int index) {
+    requirePhase("markStepIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
     updateStepStatus(index, false);
   }
 
@@ -231,16 +245,11 @@ public class PlanService {
     return currentPlan;
   }
 
-  /** Clears the existing plan. */
-  @SuppressWarnings("PMD.NullAssignment")
-  @AgentDoc("Clears the current implementation plan.")
+  /** Clears the existing plan. Internal lifecycle method; cannot be invoked from JEXL. */
   public void clearPlan() {
+    checkNotJexlCaller("clearPlan");
     this.currentPlan = null;
     notifyListeners();
-  }
-
-  public void clearSpecs() {
-    clearPlan();
   }
 
   /** Transitions the workflow to the development (CODE) phase. */
@@ -248,6 +257,7 @@ public class PlanService {
       value = "Requests transition to the development (CODE) phase.",
       examples = "planService.requestDevelopment('Ready to start coding.')")
   public String requestDevelopment(String reason) {
+    requirePhase("requestDevelopment", WorkflowPhase.PLAN);
     return workflowService.routeToPhase("CODE", reason);
   }
 
@@ -256,6 +266,7 @@ public class PlanService {
       value = "Requests transition to the review phase.",
       examples = "planService.requestReview('Feature implemented, needs review.')")
   public String requestReview(String reason) {
+    requirePhase("requestReview", WorkflowPhase.CODE);
     return workflowService.routeToPhase("REVIEW", reason);
   }
 
@@ -264,6 +275,7 @@ public class PlanService {
       value = "Requests transition back to development to address fixes.",
       examples = "planService.requestFixes('Found a bug in auth logic.')")
   public String requestFixes(String reason) {
+    requirePhase("requestFixes", WorkflowPhase.REVIEW);
     return workflowService.routeToPhase("CODE", reason);
   }
 
@@ -272,6 +284,7 @@ public class PlanService {
       value = "Signals completion of the current cycle and returns to planning.",
       examples = "planService.requestCompletion('All steps verified, project ready.')")
   public String requestCompletion(String reason) {
+    requirePhase("requestCompletion", WorkflowPhase.REVIEW);
     return workflowService.routeToPhase("PLAN", reason);
   }
 
@@ -282,7 +295,52 @@ public class PlanService {
       examples =
           "planService.requestPlanRevision('Blocked by missing API, need to update the architecture.')")
   public String requestPlanRevision(String reason) {
+    requirePhase("requestPlanRevision", WorkflowPhase.CODE);
     return workflowService.routeToPhase("PLAN", reason);
+  }
+
+  private void requirePhase(String methodName, WorkflowPhase... allowedPhases) {
+    if (workflowService == null) {
+      return;
+    }
+    WorkflowPhase current = workflowService.getCurrentPhase();
+    for (WorkflowPhase allowed : allowedPhases) {
+      if (current == allowed) {
+        return;
+      }
+    }
+    throw new IllegalStateException(
+        "Method '"
+            + methodName
+            + "' is only allowed in phase(s) "
+            + Arrays.toString(allowedPhases)
+            + ". Current phase: "
+            + current);
+  }
+
+  private void checkNotJexlCaller(String methodName) {
+    boolean calledDirectlyFromJexl =
+        STACK_WALKER.walk(
+            frames -> {
+              for (StackWalker.StackFrame frame :
+                  (Iterable<StackWalker.StackFrame>) frames::iterator) {
+                String className = frame.getClassName();
+                if (className.equals(WorkflowService.class.getName())) {
+                  return false;
+                }
+                if (Strings.CS.startsWith(className, "org.apache.commons.jexl3.")
+                    || Strings.CS.equals(className, "org.roxycode.app.ai.JexlTool")) {
+                  return true;
+                }
+              }
+              return false;
+            });
+    if (calledDirectlyFromJexl) {
+      throw new IllegalStateException(
+          "Method '"
+              + methodName
+              + "' is an internal lifecycle operation and cannot be invoked from JEXL.");
+    }
   }
 
   private List<String> extractStringList(Object obj) {
@@ -321,8 +379,23 @@ public class PlanService {
     }
   }
 
-  /** Adds an entry to the handoff log. */
+  /** Adds an entry to the handoff log. Internal lifecycle method; cannot be invoked from JEXL. */
   public void addHandoffLogEntry(String timestamp, String user, String message) {
+    checkNotJexlCaller("addHandoffLogEntry");
+    appendHandoffLogEntry(timestamp, user, message);
+  }
+
+  /** Adds an entry to the handoff log. */
+  @AgentDoc(
+      value = "Adds a high-level summary entry to the handoff log.",
+      examples = "planService.addHandoffLogEntry('Updated the README.')")
+  public void addHandoffLogEntry(String entry) {
+    requirePhase(
+        "addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+    appendHandoffLogEntry(java.time.OffsetDateTime.now().toString(), "System", entry);
+  }
+
+  private void appendHandoffLogEntry(String timestamp, String user, String message) {
     if (currentPlan == null) return;
     List<ImplementationPlan.LogEntry> logs = new ArrayList<>(currentPlan.handoffLog());
     logs.add(new ImplementationPlan.LogEntry(timestamp, user, message));
@@ -338,13 +411,5 @@ public class PlanService {
             currentPlan.completedOn(),
             logs);
     notifyListeners();
-  }
-
-  /** Adds an entry to the handoff log. */
-  @AgentDoc(
-      value = "Adds a high-level summary entry to the handoff log.",
-      examples = "planService.addHandoffLogEntry('Updated the README.')")
-  public void addHandoffLogEntry(String entry) {
-    addHandoffLogEntry(java.time.OffsetDateTime.now().toString(), "System", entry);
   }
 }

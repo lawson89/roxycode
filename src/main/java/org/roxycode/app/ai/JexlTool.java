@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlContext;
@@ -24,6 +23,7 @@ public class JexlTool {
 
   private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
   private static final String ERROR_KEY = "error";
+  private static final ObjectMapper MAPPER = AiConfig.SHARED_OBJECT_MAPPER;
   private final JexlEngine jexl;
   private final JexlServiceRegistry registry;
   private final WorkflowPhase phase;
@@ -57,14 +57,13 @@ public class JexlTool {
       throw new CancellationException("Execution interrupted before start");
     }
     log.info("Executing JEXL script: {}", script);
-    ObjectMapper mapper = new ObjectMapper();
 
     JexlScript jexlScript;
     try {
       jexlScript = jexl.createScript(script);
     } catch (Exception e) {
       log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
-      return toJsonError(mapper, "Syntax Error (Script not executed): " + e.getMessage());
+      return toJsonError("Syntax Error (Script not executed): " + e.getMessage());
     }
 
     try {
@@ -74,59 +73,49 @@ public class JexlTool {
       fireEvent(new JexlExecutionEvent(script, result, true, null));
 
       if (result instanceof Map) {
-        return mapper.writeValueAsString(result);
+        return MAPPER.writeValueAsString(result);
       }
 
       String output = result == null ? "null" : result.toString();
       if (output.trim().isEmpty()) {
         output = "<empty result>";
       }
-      return mapper.writeValueAsString(Map.of("result", output));
+      return MAPPER.writeValueAsString(Map.of("result", output));
     } catch (Exception e) {
-      // Check if this is a YieldTurnException wrapping or direct
-      Throwable current = e;
-      while (current != null) {
-        if (current instanceof YieldTurnException yieldEx) {
-          try {
-            fireEvent(new JexlExecutionEvent(script, yieldEx.getMessage(), true, null));
-          } catch (Exception ignored) {
-            // Preserve YieldTurnException even if turn limit listener throws
-          }
-          throw new YieldTurnException(yieldEx.getMessage(), e);
+      YieldTurnException yieldEx = YieldTurnException.findCause(e, YieldTurnException.class);
+      if (yieldEx != null) {
+        try {
+          fireEvent(new JexlExecutionEvent(script, yieldEx.getMessage(), true, null));
+        } catch (Exception ignored) {
+          // Preserve YieldTurnException even if turn limit listener throws
         }
-        if (current.getMessage() != null
-            && current.getMessage().contains("MAX_TOOL_TURNS_EXCEEDED")) {
-          throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED", e);
-        }
-        if (current instanceof InterruptedException || current instanceof CancellationException) {
-          if (current instanceof InterruptedException) {
-            Thread.currentThread().interrupt();
-          }
-          throw new RuntimeException(e);
-        }
-        if (Objects.equals(current.getCause(), current) || current.getCause() == null) {
-          break;
-        }
-        current = current.getCause();
+        throw new YieldTurnException(yieldEx.getMessage(), e);
+      }
+      if (YieldTurnException.hasCauseWithMessage(e, "MAX_TOOL_TURNS_EXCEEDED")) {
+        throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED", e);
+      }
+      if (YieldTurnException.findCause(e, InterruptedException.class) != null) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
+      }
+      if (YieldTurnException.findCause(e, CancellationException.class) != null) {
+        throw new RuntimeException(e);
       }
 
       log.error("Error executing JEXL script: {}", e.getMessage(), e);
-      Throwable cause = e;
-      while (cause.getCause() != null && !Objects.equals(cause.getCause(), cause)) {
-        cause = cause.getCause();
-      }
+      Throwable cause = YieldTurnException.getRootCause(e);
       String error = cause.getMessage();
       if (error == null) {
         error = cause.toString();
       }
       fireEvent(new JexlExecutionEvent(script, null, false, error));
-      return toJsonError(mapper, error);
+      return toJsonError(error);
     }
   }
 
-  private String toJsonError(ObjectMapper mapper, String message) {
+  private String toJsonError(String message) {
     try {
-      return mapper.writeValueAsString(
+      return MAPPER.writeValueAsString(
           Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
     } catch (Exception ex) {
       return "{error: Internal Error during error serialization}";

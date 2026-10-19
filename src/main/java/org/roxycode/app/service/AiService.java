@@ -1,10 +1,9 @@
 package org.roxycode.app.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -99,45 +98,41 @@ public class AiService {
           }
         });
 
+    String content;
     try {
-      String content;
-      try {
-        content =
-            buildPrompt(phase, message, systemPromptText, images, ephemeralJexlTool)
-                .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
-                .call()
-                .content();
+      content =
+          buildPrompt(phase, message, systemPromptText, images, ephemeralJexlTool)
+              .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
+              .call()
+              .content();
 
-        content = formatStructuredContent(content);
-      } catch (Exception e) {
-        YieldTurnException yieldEx = findYieldTurnException(e);
-        if (yieldEx != null) {
-          content = formatStructuredContent(yieldEx.getMessage());
-          if (content != null && !content.isBlank()) {
-            chatMemory.add(conversationId, new AssistantMessage(content));
-          }
-        } else if (isMaxToolTurnsExceeded(e)) {
-          content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
-        } else {
-          eventPublisher.publishEvent(
-              new AgentTurnCompleteEvent(
-                  conversationId, "Roxy", turnCount.get(), "Error: " + e.getMessage()));
-          throw e;
+      content = formatStructuredContent(content);
+    } catch (Exception e) {
+      YieldTurnException yieldEx = YieldTurnException.findCause(e, YieldTurnException.class);
+      if (yieldEx != null) {
+        content = formatStructuredContent(yieldEx.getMessage());
+        if (content != null && !content.isBlank()) {
+          chatMemory.add(conversationId, new AssistantMessage(content));
         }
+      } else if (YieldTurnException.hasCauseWithMessage(e, MAX_TURNS_EXCEEDED)) {
+        content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
+      } else {
+        eventPublisher.publishEvent(
+            new AgentTurnCompleteEvent(
+                conversationId, "Roxy", turnCount.get(), "Error: " + e.getMessage()));
+        throw e;
       }
-
-      eventPublisher.publishEvent(
-          new AgentTurnCompleteEvent(conversationId, "Roxy", turnCount.get(), content));
-      return content;
-    } finally {
-      // Ephemeral tool, no cleanup needed
     }
+
+    eventPublisher.publishEvent(
+        new AgentTurnCompleteEvent(conversationId, "Roxy", turnCount.get(), content));
+    return content;
   }
 
   private String formatStructuredContent(String raw) {
     if (raw != null && raw.trim().startsWith("{") && raw.contains(FIELD_MESSAGE)) {
       try {
-        JsonNode node = new ObjectMapper().readTree(raw);
+        JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(raw);
         if (node.has("summary")
             && !node.get("summary").asText().isBlank()
             && node.has(FIELD_MESSAGE)) {
@@ -150,34 +145,6 @@ public class AiService {
       }
     }
     return raw;
-  }
-
-  private static YieldTurnException findYieldTurnException(Throwable t) {
-    Throwable current = t;
-    while (current != null) {
-      if (current instanceof YieldTurnException yieldEx) {
-        return yieldEx;
-      }
-      if (Objects.equals(current.getCause(), current)) {
-        break;
-      }
-      current = current.getCause();
-    }
-    return null;
-  }
-
-  private static boolean isMaxToolTurnsExceeded(Throwable t) {
-    Throwable current = t;
-    while (current != null) {
-      if (current.getMessage() != null && current.getMessage().contains(MAX_TURNS_EXCEEDED)) {
-        return true;
-      }
-      if (Objects.equals(current.getCause(), current)) {
-        break;
-      }
-      current = current.getCause();
-    }
-    return false;
   }
 
   private ChatClient.ChatClientRequestSpec buildPrompt(
