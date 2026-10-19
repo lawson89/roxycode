@@ -64,13 +64,21 @@ class HeaderPanelTest {
   }
 
   @Test
-  void testHeaderLayoutInsets() {
+  void testHeaderLayoutInsetsAndInlineLeftSection() {
     SettingsService ss = createSettingsService();
     ProjectService ps = createProjectService(ss);
     HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
     net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
     Object constraints = layout.getLayoutConstraints();
-    assertTrue(constraints.toString().contains("insets 5 20 5 20"));
+    assertTrue(constraints.toString().contains("insets 2 15 2 15"));
+
+    JButton openButton =
+        (JButton)
+            findComponent(
+                header, JButton.class, c -> "Open Project".equals(((JButton) c).getToolTipText()));
+    assertNotNull(openButton);
+    Container leftPanel = openButton.getParent();
+    assertEquals(3, leftPanel.getComponentCount(), "leftPanel should have projectLabel, openButton, and branchLabel inline");
   }
 
   private Component findComponent(

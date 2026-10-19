@@ -30,34 +30,29 @@ public final class HeaderPanel extends JPanel {
     this.gitService = gitService;
 
     // 2-column layout: Left (Project), Right (Utils)
-    setLayout(new MigLayout("insets 5 20 5 20, fillx", "[left]push[right]", LAYOUT_CENTER));
+    setLayout(new MigLayout("insets 2 15 2 15, fillx", "[left]push[right]", LAYOUT_CENTER));
 
     putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
     setBorder(
         BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
 
     // --- LEFT SECTION: Project Info ---
-    JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]", "[]0[]"));
+    JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]5[]12[]", LAYOUT_CENTER));
     leftPanel.setOpaque(false);
 
-    JPanel namePanel = new JPanel(new MigLayout("insets 0", "[]5[]", "center"));
-    namePanel.setOpaque(false);
-
     projectLabel = new JLabel(projectService.getProjectName());
-    projectLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
-    namePanel.add(projectLabel);
+    projectLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
+    leftPanel.add(projectLabel);
 
     JButton openButton =
         createIconButton(Codicons.FOLDER_OPENED, "Open Project", e -> chooseProject());
-    namePanel.add(openButton);
-
-    leftPanel.add(namePanel, "wrap");
+    leftPanel.add(openButton);
 
     branchLabel = new JLabel();
     branchLabel.putClientProperty(
         FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
     updateBranchLabel();
-    leftPanel.add(branchLabel, "gapleft 2");
+    leftPanel.add(branchLabel);
 
     add(leftPanel, "left");
 
@@ -104,7 +99,7 @@ public final class HeaderPanel extends JPanel {
     button.setToolTipText(tooltip);
     button.setFocusable(false);
     button.setContentAreaFilled(false);
-    button.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+    button.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
     button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
     button.addActionListener(listener);
 
