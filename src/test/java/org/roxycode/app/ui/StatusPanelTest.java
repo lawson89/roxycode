@@ -1,18 +1,24 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
+import java.awt.Component;
+import javax.swing.JLabel;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.service.EnvironmentService;
-import org.springframework.ai.chat.memory.ChatMemory;
 
 class StatusPanelTest {
   @Test
   void testStatusPanelInstantiation() {
     EnvironmentService envService = new EnvironmentService();
-    ChatMemory chatMemory = mock(ChatMemory.class);
-    StatusPanel status = new StatusPanel(envService, chatMemory);
+    StatusPanel status = new StatusPanel(envService);
     assertNotNull(status);
+    assertEquals(3, status.getComponentCount());
+
+    for (Component comp : status.getComponents()) {
+      if (comp instanceof JLabel label) {
+        assertFalse(label.getText().contains("Messages:"), "Status bar should not contain Messages count");
+      }
+    }
   }
 }

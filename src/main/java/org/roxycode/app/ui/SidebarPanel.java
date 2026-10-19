@@ -47,7 +47,7 @@ public final class SidebarPanel extends JPanel {
     NavButton qaBtn = createNavButton("Codebase Q&A", "QA_VIEW", Codicons.COMMENT_DISCUSSION);
     add(qaBtn);
 
-    NavButton taskBtn = createNavButton("Active Task", "TASK_VIEW", Codicons.ROCKET);
+    NavButton taskBtn = createNavButton("Feature Request", "TASK_VIEW", Codicons.GIT_PULL_REQUEST);
     add(taskBtn);
 
     add(createSectionHeader("CONTEXT"), "gaptop 15");

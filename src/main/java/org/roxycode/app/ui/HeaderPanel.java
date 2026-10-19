@@ -3,57 +3,34 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.function.Consumer;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 
 /** Header panel containing application controls and project selection. */
-
 public final class HeaderPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final String LAYOUT_CENTER = "center";
   private final transient ProjectService projectService;
   private final transient GitService gitService;
-  private final transient WorkflowService workflowService;
-  private final transient PlanService planManagerService;
 
   private final JLabel projectLabel;
   private final JLabel branchLabel;
   private final JLabel modelLabel;
-  private final JLabel mentorModeLabel;
-  private boolean mentorMode = false;
-
-  // Workflow components
-  private final JLabel planLabel;
-  private final JPanel progressTracker;
-  private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
 
   public HeaderPanel(
       ProjectService projectService,
       GitService gitService,
-      SettingsService settingsService,
-      WorkflowService workflowService,
-      PlanService planManagerService,
-      Consumer<String> navigationAction) {
+      SettingsService settingsService) {
     this.projectService = projectService;
     this.gitService = gitService;
-    this.workflowService = workflowService;
-    this.planManagerService = planManagerService;
 
-    // 3-column layout: Left (Project), Center (Workflow), Right (Utils)
-    setLayout(new MigLayout("insets 5 20 5 20, fillx", "[left][" + LAYOUT_CENTER + ", grow][right]", LAYOUT_CENTER));
+    // 2-column layout: Left (Project), Right (Utils)
+    setLayout(new MigLayout("insets 5 20 5 20, fillx", "[left]push[right]", LAYOUT_CENTER));
 
     putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
     setBorder(
@@ -83,33 +60,6 @@ public final class HeaderPanel extends JPanel {
     leftPanel.add(branchLabel, "gapleft 2");
 
     add(leftPanel, "left");
-
-    // --- CENTER SECTION: Workflow Info ---
-    JPanel workflowPanel = new JPanel(new MigLayout("insets 0, gapy 0", "[" + LAYOUT_CENTER + "]", "[]0[]0[]"));
-    workflowPanel.setOpaque(false);
-
-    planLabel = new JLabel();
-    planLabel.putClientProperty(
-        FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
-    workflowPanel.add(planLabel, LAYOUT_CENTER + ", wrap, hidemode 3");
-
-    progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", LAYOUT_CENTER));
-    progressTracker.setOpaque(false);
-
-    mentorModeLabel = new JLabel("READ-ONLY MENTOR MODE");
-    mentorModeLabel.putClientProperty(
-        FlatClientProperties.STYLE, "font: bold -1; foreground: $Label.disabledForeground");
-    mentorModeLabel.setIcon(
-        FontIcon.of(Codicons.SEARCH, 16, UIManager.getColor("Label.disabledForeground")));
-    mentorModeLabel.setVisible(false);
-    workflowPanel.add(mentorModeLabel, LAYOUT_CENTER + ", hidemode 3");
-
-    WorkflowPhase[] phases = WorkflowPhase.values();
-    for (WorkflowPhase phase : phases) {
-      indicators.add(new WorkflowPhaseIndicator(phase, "font: bold -1"));
-    }
-    workflowPanel.add(progressTracker, LAYOUT_CENTER + ", hidemode 3, gaptop 2");
-    add(workflowPanel, LAYOUT_CENTER);
 
     // --- RIGHT SECTION: Model & Utils ---
     JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]", LAYOUT_CENTER));
@@ -146,49 +96,6 @@ public final class HeaderPanel extends JPanel {
         settings -> {
           updateModelDisplay(settings.getGeminiModel());
         });
-
-    workflowService.addPhaseListener(this::updateActivePhase);
-    planManagerService.addListener((plan) -> updateActivePhase(workflowService.getCurrentPhase()));
-
-    // Initialize workflow display
-    updateActivePhase(workflowService.getCurrentPhase());
-  }
-
-  private void updateActivePhase(WorkflowPhase currentPhase) {
-    if (mentorMode) {
-      planLabel.setVisible(false);
-      progressTracker.setVisible(false);
-      mentorModeLabel.setVisible(true);
-      return;
-    }
-
-    mentorModeLabel.setVisible(false);
-    progressTracker.setVisible(true);
-
-    ImplementationPlan plan = planManagerService.getCurrentPlan();
-    if (plan != null
-        && plan.title() != null
-        && !plan.title().isBlank()) {
-      planLabel.setText(plan.title().toUpperCase(Locale.ROOT));
-      planLabel.setVisible(true);
-    } else {
-      planLabel.setVisible(false);
-    }
-
-    progressTracker.removeAll();
-    for (WorkflowPhaseIndicator indicator : indicators) {
-      if (indicator.getPhase() == WorkflowPhase.EXPLORE) continue;
-      indicator.setActive(indicator.getPhase() == currentPhase);
-      indicator.setCompleted(workflowService.getVisitedPhases().contains(indicator.getPhase()));
-      progressTracker.add(indicator);
-    }
-    revalidate();
-    repaint();
-  }
-
-  public void setMentorMode(boolean mentorMode) {
-    this.mentorMode = mentorMode;
-    updateActivePhase(workflowService.getCurrentPhase());
   }
 
   private JButton createIconButton(

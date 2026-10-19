@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
 
 import java.awt.Component;
 import java.awt.Container;
@@ -9,13 +8,9 @@ import java.nio.file.Path;
 import javax.swing.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
-import org.springframework.context.ApplicationEventPublisher;
 
 class HeaderPanelTest {
   @TempDir Path tempDir;
@@ -34,57 +29,32 @@ class HeaderPanelTest {
     return new GitService(ps);
   }
 
-  private WorkflowService createWorkflowService() {
-    return new WorkflowService(
-        mock(PlanService.class),
-        mock(EnvironmentService.class),
-        mock(ApplicationEventPublisher.class));
-  }
-
   @Test
   void testHeaderPanelInstantiation() {
     SettingsService ss = createSettingsService();
     ProjectService ps = createProjectService(ss);
-    HeaderPanel header =
-        new HeaderPanel(
-            ps,
-            createGitService(ps),
-            ss,
-            createWorkflowService(),
-            mock(PlanService.class),
-            name -> {});
+    HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
     assertNotNull(header);
   }
 
   @Test
-  void testModeTogglesAreRemoved() {
+  void testModeTogglesAndWorkflowIndicatorsAreRemovedFromHeader() {
     SettingsService ss = createSettingsService();
     ProjectService ps = createProjectService(ss);
-    HeaderPanel header =
-        new HeaderPanel(
-            ps,
-            createGitService(ps),
-            ss,
-            createWorkflowService(),
-            mock(PlanService.class),
-            name -> {});
+    HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
 
     Component toggle = findComponent(header, JToggleButton.class, c -> true);
     assertNull(toggle, "Mode toggle buttons should be removed from HeaderPanel");
+
+    Component indicator = findComponent(header, WorkflowPhaseIndicator.class, c -> true);
+    assertNull(indicator, "WorkflowPhaseIndicator should be removed from HeaderPanel");
   }
 
   @Test
   void testOpenButtonIsPresent() {
     SettingsService ss = createSettingsService();
     ProjectService ps = createProjectService(ss);
-    HeaderPanel header =
-        new HeaderPanel(
-            ps,
-            createGitService(ps),
-            ss,
-            createWorkflowService(),
-            mock(PlanService.class),
-            name -> {});
+    HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
 
     JButton openButton =
         (JButton)
@@ -97,14 +67,7 @@ class HeaderPanelTest {
   void testHeaderLayoutInsets() {
     SettingsService ss = createSettingsService();
     ProjectService ps = createProjectService(ss);
-    HeaderPanel header =
-        new HeaderPanel(
-            ps,
-            createGitService(ps),
-            ss,
-            createWorkflowService(),
-            mock(PlanService.class),
-            name -> {});
+    HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
     net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
     Object constraints = layout.getLayoutConstraints();
     assertTrue(constraints.toString().contains("insets 5 20 5 20"));

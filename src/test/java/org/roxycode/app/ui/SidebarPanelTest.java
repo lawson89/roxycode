@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.util.function.Consumer;
 import javax.swing.*;
 import org.junit.jupiter.api.Test;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
@@ -108,16 +110,18 @@ class SidebarPanelTest {
     for (Component c : sidebar.getComponents()) {
       if (c instanceof JButton) {
         JButton b = (JButton) c;
-        if ("Codebase Q&A".equals(b.getText())) qaBtn = b;
-        if ("Active Task".equals(b.getText())) taskBtn = b;
+                if ("Codebase Q&A".equals(b.getText())) qaBtn = b;
+        if ("Feature Request".equals(b.getText())) taskBtn = b;
       }
     }
 
-    assertNotNull(qaBtn, "QA Button should be found");
+        assertNotNull(qaBtn, "QA Button should be found");
     assertNotNull(taskBtn, "Task Button should be found");
+    assertInstanceOf(FontIcon.class, taskBtn.getIcon());
+            assertEquals(Codicons.GIT_PULL_REQUEST, ((FontIcon) taskBtn.getIcon()).getIkon());
 
     assertTrue(qaBtn.isSelected(), "Codebase Q&A button should be selected on startup");
-    assertFalse(taskBtn.isSelected(), "Active Task button should not be selected on startup");
+    assertFalse(taskBtn.isSelected(), "Feature Request button should not be selected on startup");
 
     qaBtn.doClick();
     verify(navAction).accept("QA_VIEW");

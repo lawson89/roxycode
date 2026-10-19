@@ -3,6 +3,8 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.awt.Container;
+import java.util.List;
 import javax.swing.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,7 @@ import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
@@ -30,6 +33,7 @@ class MentorModeIntegrationTest {
     private SettingsService settingsService;
     private ProjectService projectService;
     private WorkflowService workflowService;
+    private PlanService planService;
     private MainFrame mainFrame;
 
     @BeforeEach
@@ -41,14 +45,14 @@ class MentorModeIntegrationTest {
         when(projectService.getProjectName()).thenReturn("TestProject");
         
         workflowService = mock(WorkflowService.class);
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
+        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         
         AiService aiService = mock(AiService.class);
         SystemToolService toolService = mock(SystemToolService.class);
         GitService gitService = mock(GitService.class);
         EnvironmentService envService = mock(EnvironmentService.class);
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
-        PlanService planService = mock(PlanService.class);
+        planService = mock(PlanService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
         RepoMapPackerService packerService = mock(RepoMapPackerService.class);
         ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
@@ -66,28 +70,51 @@ class MentorModeIntegrationTest {
     }
 
     @Test
-    void testShowCardTogglesMentorMode() throws Exception {
-        // Access private fields via reflection for verification
-        java.lang.reflect.Field headerField = MainFrame.class.getDeclaredField("header");
-        headerField.setAccessible(true);
-        HeaderPanel header = (HeaderPanel) headerField.get(mainFrame);
-        
-        java.lang.reflect.Field mentorModeField = HeaderPanel.class.getDeclaredField("mentorMode");
-        mentorModeField.setAccessible(true);
+    void testWorkspaceBarsLocatedInRespectiveViews() throws Exception {
+        java.lang.reflect.Field mentorLabelField = MainFrame.class.getDeclaredField("mentorModeLabel");
+        mentorLabelField.setAccessible(true);
+        JLabel mentorModeLabel = (JLabel) mentorLabelField.get(mainFrame);
 
-        // Initially QA_VIEW should be mentor mode
-        assertTrue((Boolean) mentorModeField.get(header));
+        java.lang.reflect.Field qaTabsField = MainFrame.class.getDeclaredField("qaTabs");
+        qaTabsField.setAccessible(true);
+        JTabbedPane qaTabs = (JTabbedPane) qaTabsField.get(mainFrame);
 
-        // Switch to TASK_VIEW
-        java.lang.reflect.Method showCardMethod = MainFrame.class.getDeclaredMethod("showCard", String.class);
-        showCardMethod.setAccessible(true);
-        showCardMethod.invoke(mainFrame, "TASK_VIEW");
-        
-        assertFalse((Boolean) mentorModeField.get(header));
+        java.lang.reflect.Field progressTrackerField = MainFrame.class.getDeclaredField("progressTracker");
+        progressTrackerField.setAccessible(true);
+        JPanel progressTracker = (JPanel) progressTrackerField.get(mainFrame);
 
-        // Switch back to QA_VIEW
-        showCardMethod.invoke(mainFrame, "QA_VIEW");
-        assertTrue((Boolean) mentorModeField.get(header));
+        java.lang.reflect.Field planLabelField = MainFrame.class.getDeclaredField("planLabel");
+        planLabelField.setAccessible(true);
+        JLabel planLabel = (JLabel) planLabelField.get(mainFrame);
+
+        java.lang.reflect.Field taskTabsField = MainFrame.class.getDeclaredField("taskTabs");
+        taskTabsField.setAccessible(true);
+        JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
+
+        // Verify mentorModeLabel is inside the QA view wrapper (same parent container as qaTabs)
+        Container qaViewPanel = qaTabs.getParent();
+        assertNotNull(qaViewPanel);
+        assertSame(qaViewPanel, mentorModeLabel.getParent().getParent());
+        assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
+
+        // Verify progressTracker and planLabel are inside the Task view wrapper (same parent container as taskTabs)
+        Container taskViewPanel = taskTabs.getParent();
+        assertNotNull(taskViewPanel);
+        assertSame(taskViewPanel, progressTracker.getParent().getParent());
+        assertSame(taskViewPanel, planLabel.getParent().getParent());
+        assertEquals(3, progressTracker.getComponentCount(), "Progress tracker should have Plan, Code, and Review indicators");
+
+        // Verify planLabel updates when a plan is active
+        ImplementationPlan mockPlan = new ImplementationPlan(
+            "My Feature Plan", "Goal", List.of(), List.of(), false, null, null, null, List.of(), List.of());
+        when(planService.getCurrentPlan()).thenReturn(mockPlan);
+
+        java.lang.reflect.Method updatePhaseMethod = MainFrame.class.getDeclaredMethod("updateActivePhase", WorkflowPhase.class);
+        updatePhaseMethod.setAccessible(true);
+        updatePhaseMethod.invoke(mainFrame, WorkflowPhase.CODE);
+
+        assertTrue(planLabel.isVisible());
+        assertEquals("MY FEATURE PLAN", planLabel.getText());
     }
 
     @Test

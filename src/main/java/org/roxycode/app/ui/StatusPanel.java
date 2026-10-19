@@ -7,19 +7,14 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.service.EnvironmentService;
 
 /** Bottom status bar with system info. */
-
 public final class StatusPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private final transient EnvironmentService envService;
-  private final transient org.springframework.ai.chat.memory.ChatMemory chatMemory;
   private final JLabel memLabel;
-  private final JLabel msgLabel;
 
-  public StatusPanel(
-      EnvironmentService envService, org.springframework.ai.chat.memory.ChatMemory chatMemory) {
+  public StatusPanel(EnvironmentService envService) {
     this.envService = envService;
-    this.chatMemory = chatMemory;
-    setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] 20 [] push []", "center"));
+    setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push []", "center"));
 
     // Use theme-aware styling
     putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
@@ -38,14 +33,10 @@ public final class StatusPanel extends JPanel {
     memLabel = new JLabel();
     memLabel.setFont(osLabel.getFont());
 
-    msgLabel = new JLabel();
-    msgLabel.setFont(osLabel.getFont());
-
     updateStats();
 
     add(osLabel);
     add(javaLabel);
-    add(msgLabel);
     add(memLabel);
 
     // Update memory usage every 5 seconds
@@ -56,10 +47,5 @@ public final class StatusPanel extends JPanel {
   private void updateStats() {
     memLabel.setText(
         "Mem: " + envService.getMemoryUsageMb() + "/" + envService.getTotalMemoryMb() + "MB");
-
-    java.util.List<org.springframework.ai.chat.messages.Message> messages =
-        chatMemory.get("default");
-    int count = (messages != null) ? messages.size() : 0;
-    msgLabel.setText("Messages: " + count);
   }
 }
