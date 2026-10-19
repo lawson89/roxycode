@@ -158,7 +158,7 @@ public class FileEditorService {
         newLines.add(lines.get(i));
       }
 
-            // Add the replacement text
+      // Add the replacement text
       newLines.addAll(splitLines(replacementText));
 
       // Add lines after the range
@@ -206,7 +206,7 @@ public class FileEditorService {
         throw new IllegalArgumentException("Invalid line number: " + lineNumber);
       }
 
-            List<String> newLines = new ArrayList<>(lines);
+      List<String> newLines = new ArrayList<>(lines);
       newLines.addAll(lineNumber - 1, splitLines(content));
 
       Files.write(path, newLines);
@@ -227,7 +227,7 @@ public class FileEditorService {
     }
   }
 
-        /**
+  /**
    * Deletes a file at the given path relative to the project root.
    *
    * @param relativePath the path relative to the project root

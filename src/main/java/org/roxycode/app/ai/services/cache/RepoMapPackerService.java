@@ -149,7 +149,7 @@ public class RepoMapPackerService {
 
       List<Tag> tags = new ArrayList<>();
       String output = result.output();
-            if (output != null && !output.isEmpty()) {
+      if (output != null && !output.isEmpty()) {
         for (String line : output.lines().toList()) {
           if (line.isBlank()) {
             continue;

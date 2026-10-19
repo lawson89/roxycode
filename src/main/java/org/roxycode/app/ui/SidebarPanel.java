@@ -64,7 +64,8 @@ public final class SidebarPanel extends JPanel {
   }
 
   private JPanel createBrandingHeader() {
-    JPanel brandingPanel = new JPanel(new MigLayout("fillx, insets 20, wrap 1", "[center]", "[]15[]"));
+    JPanel brandingPanel =
+        new JPanel(new MigLayout("fillx, insets 20, wrap 1", "[center]", "[]15[]"));
     brandingPanel.setOpaque(false);
 
     try {

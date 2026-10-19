@@ -16,7 +16,6 @@ import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 public final class BuildConfigPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);

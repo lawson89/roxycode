@@ -78,7 +78,10 @@ class HeaderPanelTest {
                 header, JButton.class, c -> "Open Project".equals(((JButton) c).getToolTipText()));
     assertNotNull(openButton);
     Container leftPanel = openButton.getParent();
-    assertEquals(3, leftPanel.getComponentCount(), "leftPanel should have projectLabel, openButton, and branchLabel inline");
+    assertEquals(
+        3,
+        leftPanel.getComponentCount(),
+        "leftPanel should have projectLabel, openButton, and branchLabel inline");
   }
 
   private Component findComponent(

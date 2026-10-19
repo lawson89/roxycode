@@ -86,9 +86,7 @@ public class LLMDocGenerator {
         if (!first) {
           sb.append(", ");
         }
-        sb.append(p.getName())
-            .append(": ")
-            .append(getTypeName(p.getType(), extraTypes));
+        sb.append(p.getName()).append(": ").append(getTypeName(p.getType(), extraTypes));
         first = false;
       }
       sb.append("): ").append(getTypeName(m.getReturnType(), extraTypes)).append(";\n\n");

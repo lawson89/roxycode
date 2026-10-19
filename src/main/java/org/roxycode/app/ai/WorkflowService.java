@@ -55,6 +55,7 @@ public class WorkflowService {
   /**
    * Handles manual user phase switches from the UI header toggle. EXPLORE is decoupled and can be
    * entered/exited freely. PLAN is the gateway for task workflows.
+   *
    * @param targetPhase Phase moving to
    */
   public void switchMode(WorkflowPhase targetPhase) {
@@ -88,9 +89,7 @@ public class WorkflowService {
     try {
       nextPhase = WorkflowPhase.valueOf(normalizedName);
     } catch (IllegalArgumentException e) {
-      return "Error: Invalid phase name: "
-          + phaseName
-          + ". Valid phases are: PLAN, CODE, REVIEW.";
+      return "Error: Invalid phase name: " + phaseName + ". Valid phases are: PLAN, CODE, REVIEW.";
     }
 
     if (nextPhase == currentPhase) {
@@ -124,14 +123,14 @@ public class WorkflowService {
       String user = "System";
       String message = String.format("%s -> %s: %s", oldPhase, nextPhase, reason);
       planManager.addHandoffLogEntry(timestamp, user, message);
-      
+
       handleCompletionMetadata(oldPhase, nextPhase, timestamp);
 
       this.currentPhase = nextPhase;
       this.visitedPhases.add(nextPhase);
       notifyPhaseListeners();
 
-                  eventPublisher.publishEvent(new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
+      eventPublisher.publishEvent(new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
 
       String autoMessage =
           String.format(
@@ -140,8 +139,7 @@ public class WorkflowService {
       String autoJson =
           String.format(
               "{\"message\": \"%s\", \"reason\": \"%s\"}",
-              StringEscapeUtils.escapeJson(autoMessage),
-              StringEscapeUtils.escapeJson(reason));
+              StringEscapeUtils.escapeJson(autoMessage), StringEscapeUtils.escapeJson(reason));
       throw new YieldTurnException(autoJson);
     }
     this.pendingPhase = nextPhase;
@@ -205,8 +203,7 @@ public class WorkflowService {
       ImplementationPlan plan = planManager.getCurrentPlan();
       if (plan != null) {
         boolean allDone =
-            plan.technicalSteps().stream()
-                .allMatch(ImplementationPlan.TechStep::completed);
+            plan.technicalSteps().stream().allMatch(ImplementationPlan.TechStep::completed);
         if (allDone && !plan.technicalSteps().isEmpty()) {
           planManager.completePlan(timestamp);
           planManager.clearPlan();
@@ -262,7 +259,7 @@ public class WorkflowService {
   }
 
   public void resetWorkflow() {
-        this.pendingPhase = null;
+    this.pendingPhase = null;
     this.pendingReason = null;
     this.currentPhase = WorkflowPhase.PLAN;
     this.visitedPhases.clear();

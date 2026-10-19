@@ -31,12 +31,7 @@ class CodebaseCachePanelTest {
     when(metaService.loadMeta()).thenReturn(Optional.empty());
     when(metaService.loadRepoCache()).thenReturn(Optional.empty());
 
-    panel =
-        new CodebaseCachePanel(
-            packerService,
-            metaService,
-            geminiCacheService,
-            promptService);
+    panel = new CodebaseCachePanel(packerService, metaService, geminiCacheService, promptService);
   }
 
   @Test

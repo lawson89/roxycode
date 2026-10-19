@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 
 /** Panel for the chat interface, including output display and user input area. */
-
 public final class ChatPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
@@ -52,7 +51,7 @@ public final class ChatPanel extends JPanel {
   private final JLabel transitionLabel;
   private final JLabel turnLabel;
   private final JScrollPane outputScrollPane;
-    private SwingWorker<String, Void> currentWorker;
+  private SwingWorker<String, Void> currentWorker;
   private final List<Runnable> pendingPostTurnActions = new ArrayList<>();
   private final List<BufferedImage> pendingImages = new ArrayList<>();
   private final JPanel attachmentPanel;
@@ -84,7 +83,7 @@ public final class ChatPanel extends JPanel {
     turnEventBridge.addTurnListener(getConversationId(), this::onAgentTurn);
     turnEventBridge.addAutonomousTransitionListener(this::onAutonomousTransition);
     turnEventBridge.addToolExecutionListener(getConversationId(), this::onToolExecution);
-        turnEventBridge.addCompleteListener(
+    turnEventBridge.addCompleteListener(
         getConversationId(),
         event ->
             SwingUtilities.invokeLater(
@@ -135,7 +134,7 @@ public final class ChatPanel extends JPanel {
     inlineActionPanel.add(approveButton);
     inlineActionPanel.add(rejectButton);
 
-        outputScrollPane = new JScrollPane(outputArea);
+    outputScrollPane = new JScrollPane(outputArea);
     outputScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
     outputScrollPane.setBorder(BorderFactory.createTitledBorder("Roxy"));
 
@@ -270,7 +269,7 @@ public final class ChatPanel extends JPanel {
         });
   }
 
-    private void runAfterCurrentTurn(Runnable action) {
+  private void runAfterCurrentTurn(Runnable action) {
     SwingUtilities.invokeLater(
         () -> {
           if (currentWorker != null) {
@@ -418,7 +417,7 @@ public final class ChatPanel extends JPanel {
             "Reset session? This cancels active tasks and clears chat history.",
             "Reset",
             JOptionPane.YES_NO_OPTION);
-        if (result == JOptionPane.YES_OPTION) {
+    if (result == JOptionPane.YES_OPTION) {
       pendingPostTurnActions.clear();
       if (currentWorker != null) {
         currentWorker.cancel(true);
@@ -512,7 +511,7 @@ public final class ChatPanel extends JPanel {
     attachmentPanel.removeAll();
     attachmentPanel.setVisible(false);
 
-        if (currentWorker != null && !currentWorker.isDone()) {
+    if (currentWorker != null && !currentWorker.isDone()) {
       currentWorker.cancel(true);
     }
 
@@ -606,7 +605,7 @@ public final class ChatPanel extends JPanel {
     return sendButton;
   }
 
-    public JButton getStopButton() {
+  public JButton getStopButton() {
     return stopButton;
   }
 

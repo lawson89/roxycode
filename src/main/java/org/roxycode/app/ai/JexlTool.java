@@ -126,7 +126,8 @@ public class JexlTool {
 
   private String toJsonError(ObjectMapper mapper, String message) {
     try {
-      return mapper.writeValueAsString(Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
+      return mapper.writeValueAsString(
+          Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
     } catch (Exception ex) {
       return "{error: Internal Error during error serialization}";
     }

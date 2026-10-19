@@ -17,7 +17,6 @@ import org.springframework.context.annotation.Lazy;
     value = "planService",
     phases = {"PLAN", "CODE", "REVIEW"})
 @AgentDoc("Service for managing project plans and specifications.")
-
 public class PlanService {
 
   private ImplementationPlan currentPlan;
@@ -83,7 +82,7 @@ public class PlanService {
       steps.add(new ImplementationPlan.TechStep("Automated code review passes", false));
     }
 
-        this.currentPlan =
+    this.currentPlan =
         new ImplementationPlan(
             plan.title(),
             plan.goal(),
@@ -121,9 +120,8 @@ public class PlanService {
             .map(s -> new ImplementationPlan.TechStep(s, false))
             .collect(Collectors.toList());
 
-        return submitPlan(
-        new ImplementationPlan(
-            title, goal, rawRequirements, steps, false, null, null, null, null));
+    return submitPlan(
+        new ImplementationPlan(title, goal, rawRequirements, steps, false, null, null, null, null));
   }
 
   /**
@@ -148,16 +146,15 @@ public class PlanService {
             .map(s -> new ImplementationPlan.TechStep(s, false))
             .collect(Collectors.toList());
 
-        return submitPlan(
-        new ImplementationPlan(
-            title, goal, requirements, steps, false, null, null, null, null));
+    return submitPlan(
+        new ImplementationPlan(title, goal, requirements, steps, false, null, null, null, null));
   }
 
   /** Approves the current plan. */
   @AgentDoc("Approves the current implementation plan.")
   public void approvePlan(String user, String timestamp) {
     if (currentPlan == null) return;
-        currentPlan =
+    currentPlan =
         new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),
@@ -175,7 +172,7 @@ public class PlanService {
   @AgentDoc("Marks the current implementation plan as completed.")
   public void completePlan(String timestamp) {
     if (currentPlan == null) return;
-        currentPlan =
+    currentPlan =
         new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),
@@ -215,7 +212,7 @@ public class PlanService {
     List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
     ImplementationPlan.TechStep step = steps.get(index);
     steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
-        currentPlan =
+    currentPlan =
         new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),
@@ -324,14 +321,12 @@ public class PlanService {
     }
   }
 
-  
-
   /** Adds an entry to the handoff log. */
   public void addHandoffLogEntry(String timestamp, String user, String message) {
     if (currentPlan == null) return;
     List<ImplementationPlan.LogEntry> logs = new ArrayList<>(currentPlan.handoffLog());
     logs.add(new ImplementationPlan.LogEntry(timestamp, user, message));
-        currentPlan =
+    currentPlan =
         new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),

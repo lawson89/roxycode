@@ -76,7 +76,8 @@ public class ChatPanelTest {
         new ChatPanel(aiService, workflowService, turnEventBridge, chatMemory, "test", null, true);
 
     // Simulate keyboard shortcut which previously passed null
-    javax.swing.Action sendMessageAction = chatPanel.getInputArea().getActionMap().get("send-message");
+    javax.swing.Action sendMessageAction =
+        chatPanel.getInputArea().getActionMap().get("send-message");
     assertNotNull(sendMessageAction, "send-message action should exist");
 
     // Setting some text so it doesn't return early
@@ -113,7 +114,7 @@ public class ChatPanelTest {
     Thread.sleep(300);
     verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
 
-        // Transition to REVIEW (should trigger turn)
+    // Transition to REVIEW (should trigger turn)
     turnEventBridge.handleAutonomousTransition(
         new AutonomousTransitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason"));
     Thread.sleep(600); // Give it more time for SwingWorker
@@ -159,7 +160,7 @@ public class ChatPanelTest {
 
     assertTrue(aiResponseIndex >= 0, "AI response should be rendered");
     assertTrue(transitionMsgIndex >= 0, "Transition request message should be rendered");
-        assertTrue(
+    assertTrue(
         aiResponseIndex < transitionMsgIndex,
         "AI response should appear before the transition request prompt");
   }
@@ -179,7 +180,7 @@ public class ChatPanelTest {
     chatPanel.getInputArea().setCaretPosition(0);
     assertEquals(0, chatPanel.getInputArea().getCaretPosition());
 
-        chatPanel.focusInput();
+    chatPanel.focusInput();
 
     assertEquals(
         "Existing text in input".length(),

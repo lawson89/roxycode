@@ -55,8 +55,7 @@ class ProcessRunnerTest {
   @Test
   void testTimeoutDestroysProcessTree() throws IOException {
     ProcessResult result =
-        ProcessRunner.run(
-            shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofMillis(200), true);
+        ProcessRunner.run(shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofMillis(200), true);
 
     assertTrue(result.timedOut());
     assertEquals(-1, result.exitCode());

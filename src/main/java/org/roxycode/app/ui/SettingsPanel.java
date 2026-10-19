@@ -20,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Panel for application settings. */
-
 public final class SettingsPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 

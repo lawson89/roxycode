@@ -30,7 +30,8 @@ class GrepServiceTest {
     EditorResult result = grepService.grep("class Hello", "src", "*.java");
 
     if (result.success()) {
-      assertTrue(result.content().contains("src/Hello.java") || result.content().contains("Hello.java"));
+      assertTrue(
+          result.content().contains("src/Hello.java") || result.content().contains("Hello.java"));
       assertFalse(result.content().startsWith(tempDir.toAbsolutePath().toString()));
       assertTrue(result.content().contains("class Hello"));
     }
@@ -52,8 +53,7 @@ class GrepServiceTest {
     if (!files.isEmpty()) {
       assertTrue(files.contains("src/main/resources/prompts/core_workflow.md"));
       for (String file : files) {
-        assertFalse(
-            Path.of(file).isAbsolute(), "Expected relative path but got absolute: " + file);
+        assertFalse(Path.of(file).isAbsolute(), "Expected relative path but got absolute: " + file);
       }
     }
   }

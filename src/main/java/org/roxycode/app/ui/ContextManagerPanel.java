@@ -8,7 +8,6 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.roxycode.app.service.PromptService;
 
-
 public final class ContextManagerPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
@@ -81,7 +80,7 @@ public final class ContextManagerPanel extends JPanel {
               btnDelete.setEnabled(true);
               btnSave.setEnabled(true);
             } else {
-              currentFile = null; //NOPMD
+              currentFile = null; // NOPMD
               textArea.setText("");
               btnDelete.setEnabled(false);
               btnSave.setEnabled(false);
@@ -113,10 +112,7 @@ public final class ContextManagerPanel extends JPanel {
             String filename = currentFile;
             int ans =
                 JOptionPane.showConfirmDialog(
-                    this,
-                    "Delete " + filename + "?",
-                    "Confirm Delete",
-                    JOptionPane.YES_NO_OPTION);
+                    this, "Delete " + filename + "?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
             if (ans == JOptionPane.YES_OPTION) {
               promptService.deleteContextFile(filename);
               refreshFileList();

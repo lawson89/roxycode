@@ -30,7 +30,7 @@ class WorkflowServiceTest {
   }
 
   private void setupCodePhase() {
-        ImplementationPlan plan =
+    ImplementationPlan plan =
         new ImplementationPlan(
             "T", "G", List.of(), List.of(), true, "now", "user", null, List.of());
     lenient().when(planManager.getCurrentPlan()).thenReturn(plan);
@@ -49,7 +49,7 @@ class WorkflowServiceTest {
   void testPhaseManagement() {
     assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
-        when(planManager.getCurrentPlan())
+    when(planManager.getCurrentPlan())
         .thenReturn(
             new ImplementationPlan(
                 "T", "G", List.of(), List.of(), false, null, null, null, List.of()));
@@ -126,17 +126,9 @@ class WorkflowServiceTest {
     assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
     ImplementationPlan.TechStep step = new ImplementationPlan.TechStep("Desc", true);
-        ImplementationPlan plan =
+    ImplementationPlan plan =
         new ImplementationPlan(
-            "Title",
-            "Goal",
-            List.of(),
-            List.of(step),
-            true,
-            "now",
-            "user",
-            null,
-            List.of());
+            "Title", "Goal", List.of(), List.of(step), true, "now", "user", null, List.of());
     when(planManager.getCurrentPlan()).thenReturn(plan);
 
     // Request PLAN from REVIEW - Requires HITL Approval

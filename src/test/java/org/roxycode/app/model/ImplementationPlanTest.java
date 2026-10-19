@@ -28,15 +28,7 @@ class ImplementationPlanTest {
 
     ImplementationPlan plan =
         new ImplementationPlan(
-            "Title",
-            "Goal",
-            null,
-            null,
-            false,
-            null,
-            null,
-            null,
-            List.of(handoffEntry));
+            "Title", "Goal", null, null, false, null, null, null, List.of(handoffEntry));
     assertNotNull(plan.requirements());
     assertNotNull(plan.technicalSteps());
     assertEquals(1, plan.handoffLog().size());

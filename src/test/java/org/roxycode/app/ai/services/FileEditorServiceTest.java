@@ -131,7 +131,7 @@ class FileEditorServiceTest {
     verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
   }
 
-    @Test
+  @Test
   void testReplaceLinesMultiLineAndTrailingNewline() throws IOException {
     Path filePath = tempDir.resolve("test.txt");
     Files.write(filePath, List.of("Line 1", "Line 2", "Line 3", "Line 4"));
@@ -163,15 +163,14 @@ class FileEditorServiceTest {
     Path filePath = tempDir.resolve("test.txt");
     Files.write(filePath, List.of("Line 1", "Line 4"));
 
-    EditorResult result =
-        fileEditorService.insertAtLine("test.txt", 2, "Line 2\r\nLine 3\n");
+    EditorResult result = fileEditorService.insertAtLine("test.txt", 2, "Line 2\r\nLine 3\n");
 
     assertTrue(result.success());
     List<String> lines = Files.readAllLines(filePath);
     assertEquals(List.of("Line 1", "Line 2", "Line 3", "Line 4"), lines);
   }
 
-    @Test
+  @Test
   void testDeleteFileSuccess() throws IOException {
     Path filePath = tempDir.resolve("to_delete.txt");
     Files.writeString(filePath, "delete me");
@@ -204,7 +203,7 @@ class FileEditorServiceTest {
     assertTrue(Files.exists(filePath));
   }
 
-      @Test
+  @Test
   void testPathTraversalReturnsFailure() {
     EditorResult result = fileEditorService.writeFile("../outside.txt", "content");
 

@@ -21,7 +21,7 @@ class SwingHtmlUtilsTest {
     assertEquals("", SwingHtmlUtils.escapeHtml(""));
     assertEquals(
         "&lt;div&gt;&quot;Hello &amp; World&#39;&quot;&lt;/div&gt;",
-                SwingHtmlUtils.escapeHtml("<div>\"Hello & World'\"</div>"));
+        SwingHtmlUtils.escapeHtml("<div>\"Hello & World'\"</div>"));
   }
 
   @Test
@@ -43,8 +43,10 @@ class SwingHtmlUtilsTest {
     pane.setContentType("text/html");
     SwingHtmlUtils.applyTheme(pane, 10);
 
-    String longCodeLine = "public static void veryLongMethodNameWithManyParameters(String paramOne, String paramTwo, String paramThree) {}";
-    String longInlineToken = "https://example.com/very/long/path/that/has/no/spaces/and/should/allow/horizontal/wrapping/in/view";
+    String longCodeLine =
+        "public static void veryLongMethodNameWithManyParameters(String paramOne, String paramTwo, String paramThree) {}";
+    String longInlineToken =
+        "https://example.com/very/long/path/that/has/no/spaces/and/should/allow/horizontal/wrapping/in/view";
     pane.setText(
         "<html><body><div>"
             + longInlineToken

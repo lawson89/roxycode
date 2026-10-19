@@ -5,7 +5,6 @@ import javax.swing.*;
 import org.roxycode.app.ai.JexlServiceRegistry;
 
 /** Dedicated panel for viewing JEXL API documentation with syntax highlighting. */
-
 public final class JexlApiPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private final transient JexlServiceRegistry registry;

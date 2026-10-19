@@ -17,7 +17,8 @@ class StatusPanelTest {
 
     for (Component comp : status.getComponents()) {
       if (comp instanceof JLabel label) {
-        assertFalse(label.getText().contains("Messages:"), "Status bar should not contain Messages count");
+        assertFalse(
+            label.getText().contains("Messages:"), "Status bar should not contain Messages count");
       }
     }
   }

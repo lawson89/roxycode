@@ -9,9 +9,9 @@ import java.nio.file.Path;
 import java.util.function.Consumer;
 import javax.swing.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
@@ -90,7 +90,10 @@ class SidebarPanelTest {
 
     assertTrue(foundLogoPanel, "Should have a 128x128 logo panel in branding header");
     assertTrue(foundTitleLabel, "Should have 'RoxyCode' title label in branding header");
-    assertEquals(1, brandingLabels, "Branding header should only contain the RoxyCode title label (no username)");
+    assertEquals(
+        1,
+        brandingLabels,
+        "Branding header should only contain the RoxyCode title label (no username)");
   }
 
   @Test
@@ -110,15 +113,15 @@ class SidebarPanelTest {
     for (Component c : sidebar.getComponents()) {
       if (c instanceof JButton) {
         JButton b = (JButton) c;
-                if ("Codebase Q&A".equals(b.getText())) qaBtn = b;
+        if ("Codebase Q&A".equals(b.getText())) qaBtn = b;
         if ("Feature Request".equals(b.getText())) taskBtn = b;
       }
     }
 
-        assertNotNull(qaBtn, "QA Button should be found");
+    assertNotNull(qaBtn, "QA Button should be found");
     assertNotNull(taskBtn, "Task Button should be found");
     assertInstanceOf(FontIcon.class, taskBtn.getIcon());
-            assertEquals(Codicons.GIT_PULL_REQUEST, ((FontIcon) taskBtn.getIcon()).getIkon());
+    assertEquals(Codicons.GIT_PULL_REQUEST, ((FontIcon) taskBtn.getIcon()).getIkon());
 
     assertTrue(qaBtn.isSelected(), "Codebase Q&A button should be selected on startup");
     assertFalse(taskBtn.isSelected(), "Feature Request button should not be selected on startup");

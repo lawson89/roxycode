@@ -173,13 +173,11 @@ public class GenericBuildToolService {
       String templateName = detectTemplate();
       try (InputStream is =
           getClass().getResourceAsStream("/templates/build/" + templateName + ".toml")) {
-                if (is != null) {
+        if (is != null) {
           Files.copy(is, configPath);
         } else {
           Files.writeString(
-              configPath,
-              "[build]\ncompile = 'echo No build command'",
-              StandardCharsets.UTF_8);
+              configPath, "[build]\ncompile = 'echo No build command'", StandardCharsets.UTF_8);
         }
       }
     } catch (IOException e) {

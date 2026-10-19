@@ -30,146 +30,176 @@ import org.springframework.ai.chat.memory.ChatMemory;
 
 class MentorModeIntegrationTest {
 
-    private SettingsService settingsService;
-    private ProjectService projectService;
-    private WorkflowService workflowService;
-    private PlanService planService;
-    private MainFrame mainFrame;
+  private SettingsService settingsService;
+  private ProjectService projectService;
+  private WorkflowService workflowService;
+  private PlanService planService;
+  private MainFrame mainFrame;
 
-    @BeforeEach
-    void setUp() {
-        settingsService = mock(SettingsService.class);
-        when(settingsService.getSettings()).thenReturn(new AppSettings());
-        
-        projectService = mock(ProjectService.class);
-        when(projectService.getProjectName()).thenReturn("TestProject");
-        
-        workflowService = mock(WorkflowService.class);
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-        
-        AiService aiService = mock(AiService.class);
-        SystemToolService toolService = mock(SystemToolService.class);
-        GitService gitService = mock(GitService.class);
-        EnvironmentService envService = mock(EnvironmentService.class);
-        JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
-        planService = mock(PlanService.class);
-        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
-        RepoMapPackerService packerService = mock(RepoMapPackerService.class);
-        ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
-        GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
-        PromptService promptService = mock(PromptService.class);
-        GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
+  @BeforeEach
+  void setUp() {
+    settingsService = mock(SettingsService.class);
+    when(settingsService.getSettings()).thenReturn(new AppSettings());
 
-        mainFrame = new MainFrame(
-            settingsService, aiService, toolService, projectService, gitService,
-            envService, jexlServiceRegistry, workflowService, planService,
-            turnEventBridge, packerService, cacheMetaService, geminiCacheService,
-            promptService, buildToolService, chatMemory
-        );
-    }
+    projectService = mock(ProjectService.class);
+    when(projectService.getProjectName()).thenReturn("TestProject");
 
-    @Test
-    void testWorkspaceBarsLocatedInRespectiveViews() throws Exception {
-        java.lang.reflect.Field mentorLabelField = MainFrame.class.getDeclaredField("mentorModeLabel");
-        mentorLabelField.setAccessible(true);
-        JLabel mentorModeLabel = (JLabel) mentorLabelField.get(mainFrame);
+    workflowService = mock(WorkflowService.class);
+    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
-        java.lang.reflect.Field qaTabsField = MainFrame.class.getDeclaredField("qaTabs");
-        qaTabsField.setAccessible(true);
-        JTabbedPane qaTabs = (JTabbedPane) qaTabsField.get(mainFrame);
+    AiService aiService = mock(AiService.class);
+    SystemToolService toolService = mock(SystemToolService.class);
+    GitService gitService = mock(GitService.class);
+    EnvironmentService envService = mock(EnvironmentService.class);
+    JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
+    planService = mock(PlanService.class);
+    TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+    RepoMapPackerService packerService = mock(RepoMapPackerService.class);
+    ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
+    GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
+    PromptService promptService = mock(PromptService.class);
+    GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
+    ChatMemory chatMemory = mock(ChatMemory.class);
 
-        java.lang.reflect.Field progressTrackerField = MainFrame.class.getDeclaredField("progressTracker");
-        progressTrackerField.setAccessible(true);
-        JPanel progressTracker = (JPanel) progressTrackerField.get(mainFrame);
+    mainFrame =
+        new MainFrame(
+            settingsService,
+            aiService,
+            toolService,
+            projectService,
+            gitService,
+            envService,
+            jexlServiceRegistry,
+            workflowService,
+            planService,
+            turnEventBridge,
+            packerService,
+            cacheMetaService,
+            geminiCacheService,
+            promptService,
+            buildToolService,
+            chatMemory);
+  }
 
-        java.lang.reflect.Field planLabelField = MainFrame.class.getDeclaredField("planLabel");
-        planLabelField.setAccessible(true);
-        JLabel planLabel = (JLabel) planLabelField.get(mainFrame);
+  @Test
+  void testWorkspaceBarsLocatedInRespectiveViews() throws Exception {
+    java.lang.reflect.Field mentorLabelField = MainFrame.class.getDeclaredField("mentorModeLabel");
+    mentorLabelField.setAccessible(true);
+    JLabel mentorModeLabel = (JLabel) mentorLabelField.get(mainFrame);
 
-        java.lang.reflect.Field taskTabsField = MainFrame.class.getDeclaredField("taskTabs");
-        taskTabsField.setAccessible(true);
-        JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
+    java.lang.reflect.Field qaTabsField = MainFrame.class.getDeclaredField("qaTabs");
+    qaTabsField.setAccessible(true);
+    JTabbedPane qaTabs = (JTabbedPane) qaTabsField.get(mainFrame);
 
-        // Verify mentorModeLabel is inside the QA view wrapper (same parent container as qaTabs)
-        Container qaViewPanel = qaTabs.getParent();
-        assertNotNull(qaViewPanel);
-        assertSame(qaViewPanel, mentorModeLabel.getParent().getParent());
-        assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
+    java.lang.reflect.Field progressTrackerField =
+        MainFrame.class.getDeclaredField("progressTracker");
+    progressTrackerField.setAccessible(true);
+    JPanel progressTracker = (JPanel) progressTrackerField.get(mainFrame);
 
-                // Verify progressTracker and planLabel are inside the Task view wrapper (same parent container as taskTabs)
-        Container taskViewPanel = taskTabs.getParent();
-        assertNotNull(taskViewPanel);
-        Container taskHeaderBar = progressTracker.getParent();
-        assertSame(taskViewPanel, taskHeaderBar.getParent());
-        assertSame(taskHeaderBar, planLabel.getParent(), "planLabel and progressTracker should share taskHeaderBar");
-        assertEquals(0, taskHeaderBar.getComponentZOrder(progressTracker), "progressTracker should precede planLabel");
-        assertEquals(1, taskHeaderBar.getComponentZOrder(planLabel), "planLabel should sit to the right of progressTracker");
+    java.lang.reflect.Field planLabelField = MainFrame.class.getDeclaredField("planLabel");
+    planLabelField.setAccessible(true);
+    JLabel planLabel = (JLabel) planLabelField.get(mainFrame);
 
-        // 3 phase indicators + 2 wizard connector lines = 5 components
-        assertEquals(5, progressTracker.getComponentCount(), "Progress tracker should have 3 indicators and 2 connector lines");
-                assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(0));
-        assertFalse(progressTracker.getComponent(1) instanceof WorkflowPhaseIndicator);
-        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(2));
-        assertFalse(progressTracker.getComponent(3) instanceof WorkflowPhaseIndicator);
-        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(4));
+    java.lang.reflect.Field taskTabsField = MainFrame.class.getDeclaredField("taskTabs");
+    taskTabsField.setAccessible(true);
+    JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
 
-        // Verify planLabel updates when a plan is active
-                ImplementationPlan mockPlan = new ImplementationPlan(
+    // Verify mentorModeLabel is inside the QA view wrapper (same parent container as qaTabs)
+    Container qaViewPanel = qaTabs.getParent();
+    assertNotNull(qaViewPanel);
+    assertSame(qaViewPanel, mentorModeLabel.getParent().getParent());
+    assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
+
+    // Verify progressTracker and planLabel are inside the Task view wrapper (same parent container
+    // as taskTabs)
+    Container taskViewPanel = taskTabs.getParent();
+    assertNotNull(taskViewPanel);
+    Container taskHeaderBar = progressTracker.getParent();
+    assertSame(taskViewPanel, taskHeaderBar.getParent());
+    assertSame(
+        taskHeaderBar,
+        planLabel.getParent(),
+        "planLabel and progressTracker should share taskHeaderBar");
+    assertEquals(
+        0,
+        taskHeaderBar.getComponentZOrder(progressTracker),
+        "progressTracker should precede planLabel");
+    assertEquals(
+        1,
+        taskHeaderBar.getComponentZOrder(planLabel),
+        "planLabel should sit to the right of progressTracker");
+
+    // 3 phase indicators + 2 wizard connector lines = 5 components
+    assertEquals(
+        5,
+        progressTracker.getComponentCount(),
+        "Progress tracker should have 3 indicators and 2 connector lines");
+    assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(0));
+    assertFalse(progressTracker.getComponent(1) instanceof WorkflowPhaseIndicator);
+    assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(2));
+    assertFalse(progressTracker.getComponent(3) instanceof WorkflowPhaseIndicator);
+    assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(4));
+
+    // Verify planLabel updates when a plan is active
+    ImplementationPlan mockPlan =
+        new ImplementationPlan(
             "My Feature Plan", "Goal", List.of(), List.of(), false, null, null, null, List.of());
-        when(planService.getCurrentPlan()).thenReturn(mockPlan);
+    when(planService.getCurrentPlan()).thenReturn(mockPlan);
 
-        java.lang.reflect.Method updatePhaseMethod = MainFrame.class.getDeclaredMethod("updateActivePhase", WorkflowPhase.class);
-        updatePhaseMethod.setAccessible(true);
-        updatePhaseMethod.invoke(mainFrame, WorkflowPhase.CODE);
+    java.lang.reflect.Method updatePhaseMethod =
+        MainFrame.class.getDeclaredMethod("updateActivePhase", WorkflowPhase.class);
+    updatePhaseMethod.setAccessible(true);
+    updatePhaseMethod.invoke(mainFrame, WorkflowPhase.CODE);
 
-        assertTrue(planLabel.isVisible());
-        assertEquals("MY FEATURE PLAN", planLabel.getText());
-    }
+    assertTrue(planLabel.isVisible());
+    assertEquals("MY FEATURE PLAN", planLabel.getText());
+  }
 
-    @Test
-    void testShowCardFocusesInputAndSetsCaretToEnd() throws Exception {
-        java.lang.reflect.Field qaChatField = MainFrame.class.getDeclaredField("qaChatPanel");
-        qaChatField.setAccessible(true);
-        ChatPanel qaChatPanel = (ChatPanel) qaChatField.get(mainFrame);
+  @Test
+  void testShowCardFocusesInputAndSetsCaretToEnd() throws Exception {
+    java.lang.reflect.Field qaChatField = MainFrame.class.getDeclaredField("qaChatPanel");
+    qaChatField.setAccessible(true);
+    ChatPanel qaChatPanel = (ChatPanel) qaChatField.get(mainFrame);
 
-        java.lang.reflect.Field taskChatField = MainFrame.class.getDeclaredField("taskChatPanel");
-        taskChatField.setAccessible(true);
-        ChatPanel taskChatPanel = (ChatPanel) taskChatField.get(mainFrame);
+    java.lang.reflect.Field taskChatField = MainFrame.class.getDeclaredField("taskChatPanel");
+    taskChatField.setAccessible(true);
+    ChatPanel taskChatPanel = (ChatPanel) taskChatField.get(mainFrame);
 
-        java.lang.reflect.Field taskTabsField = MainFrame.class.getDeclaredField("taskTabs");
-        taskTabsField.setAccessible(true);
-        JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
+    java.lang.reflect.Field taskTabsField = MainFrame.class.getDeclaredField("taskTabs");
+    taskTabsField.setAccessible(true);
+    JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
 
-        qaChatPanel.getInputArea().setText("QA draft message");
-        qaChatPanel.getInputArea().setCaretPosition(0);
+    qaChatPanel.getInputArea().setText("QA draft message");
+    qaChatPanel.getInputArea().setCaretPosition(0);
 
-        taskChatPanel.getInputArea().setText("Task draft message");
-        taskChatPanel.getInputArea().setCaretPosition(0);
+    taskChatPanel.getInputArea().setText("Task draft message");
+    taskChatPanel.getInputArea().setCaretPosition(0);
 
-        // Select another tab in taskTabs (e.g., Plan tab at index 1)
-        taskTabs.setSelectedIndex(1);
+    // Select another tab in taskTabs (e.g., Plan tab at index 1)
+    taskTabs.setSelectedIndex(1);
 
-        java.lang.reflect.Method showCardMethod = MainFrame.class.getDeclaredMethod("showCard", String.class);
-        showCardMethod.setAccessible(true);
+    java.lang.reflect.Method showCardMethod =
+        MainFrame.class.getDeclaredMethod("showCard", String.class);
+    showCardMethod.setAccessible(true);
 
-        // Switch to TASK_VIEW
-        showCardMethod.invoke(mainFrame, "TASK_VIEW");
-        SwingUtilities.invokeAndWait(() -> {});
+    // Switch to TASK_VIEW
+    showCardMethod.invoke(mainFrame, "TASK_VIEW");
+    SwingUtilities.invokeAndWait(() -> {});
 
-        assertEquals(taskChatPanel, taskTabs.getSelectedComponent(), "Chat tab should be selected in TASK_VIEW");
-        assertEquals(
-            "Task draft message".length(),
-            taskChatPanel.getInputArea().getCaretPosition(),
-            "Task input caret should be at the end of the text");
+    assertEquals(
+        taskChatPanel, taskTabs.getSelectedComponent(), "Chat tab should be selected in TASK_VIEW");
+    assertEquals(
+        "Task draft message".length(),
+        taskChatPanel.getInputArea().getCaretPosition(),
+        "Task input caret should be at the end of the text");
 
-        // Switch back to QA_VIEW
-        showCardMethod.invoke(mainFrame, "QA_VIEW");
-        SwingUtilities.invokeAndWait(() -> {});
+    // Switch back to QA_VIEW
+    showCardMethod.invoke(mainFrame, "QA_VIEW");
+    SwingUtilities.invokeAndWait(() -> {});
 
-        assertEquals(
-            "QA draft message".length(),
-            qaChatPanel.getInputArea().getCaretPosition(),
-            "QA input caret should be at the end of the text");
-    }
+    assertEquals(
+        "QA draft message".length(),
+        qaChatPanel.getInputArea().getCaretPosition(),
+        "QA input caret should be at the end of the text");
+  }
 }

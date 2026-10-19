@@ -43,7 +43,7 @@ public final class MarkdownPane extends JTextPane {
     SwingHtmlUtils.installTextContextMenu(this);
   }
 
-    @Override
+  @Override
   public boolean getScrollableTracksViewportWidth() {
     return true;
   }

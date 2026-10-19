@@ -23,9 +23,7 @@ public final class HeaderPanel extends JPanel {
   private final JLabel modelLabel;
 
   public HeaderPanel(
-      ProjectService projectService,
-      GitService gitService,
-      SettingsService settingsService) {
+      ProjectService projectService, GitService gitService, SettingsService settingsService) {
     this.projectService = projectService;
     this.gitService = gitService;
 

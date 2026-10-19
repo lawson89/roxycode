@@ -7,7 +7,6 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
 
 /** UI panel for displaying the current project plan and specifications. */
-
 public final class PlanPanel extends JPanel {
   private static final long serialVersionUID = 1L;
 
@@ -92,7 +91,7 @@ public final class PlanPanel extends JPanel {
       html.append("<p>The AI will submit a plan as it progresses through the project.</p>");
     } else {
       html.append("<h2 class='spec-technical-header'>Implementation Plan</h2>");
-      
+
       html.append("<b>Title:</b> ").append(SwingHtmlUtils.escapeHtml(plan.title())).append("<br>");
       html.append("<b>Goal:</b> ").append(SwingHtmlUtils.escapeHtml(plan.goal())).append("<br>");
 
@@ -129,7 +128,6 @@ public final class PlanPanel extends JPanel {
       }
       html.append("</table>");
 
-      
       html.append(renderLogTable("Handoff Log", plan.handoffLog()));
     }
 

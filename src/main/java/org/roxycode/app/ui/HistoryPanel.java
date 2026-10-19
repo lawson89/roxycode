@@ -15,7 +15,6 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 
 /** Panel for displaying a persistent history of all AI interactions and tool executions. */
-
 public final class HistoryPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final String DEFAULT_CONVERSATION_SUFFIX = ":default";

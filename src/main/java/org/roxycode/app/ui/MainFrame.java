@@ -34,7 +34,7 @@ public final class MainFrame extends JFrame {
   private static final String API_VIEW = "API";
   private static final String TOOLS_VIEW = "TOOLS";
   private static final String SETTINGS_VIEW = "SETTINGS";
-    private static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
+  private static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
   private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
   private static final String LAYOUT_CENTER = "center";
 
@@ -50,7 +50,8 @@ public final class MainFrame extends JFrame {
   private final transient PlanService planManagerService;
   private final transient org.roxycode.app.events.TurnEventBridge turnEventBridge;
   private final transient org.roxycode.app.ai.services.cache.RepoMapPackerService packerService;
-  private final transient org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService;
+  private final transient org.roxycode.app.ai.services.cache.ProjectCacheMetaService
+      cacheMetaService;
   private final transient org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService;
   private final transient ChatMemory chatMemory;
   private final transient org.roxycode.app.service.PromptService promptService;
@@ -158,7 +159,7 @@ public final class MainFrame extends JFrame {
 
     StatusPanel statusBar = new StatusPanel(envService);
 
-        // QA Workspace (Explore)
+    // QA Workspace (Explore)
     JPanel qaViewPanel = new JPanel(new BorderLayout());
     JPanel qaHeaderBar =
         new JPanel(new MigLayout("insets 8 20 8 20, fillx", "[center, grow]", LAYOUT_CENTER));
@@ -194,7 +195,7 @@ public final class MainFrame extends JFrame {
     qaViewPanel.add(qaHeaderBar, BorderLayout.NORTH);
     qaViewPanel.add(qaTabs, BorderLayout.CENTER);
 
-                // Task Workspace (Plan/Code/Review)
+    // Task Workspace (Plan/Code/Review)
     JPanel taskViewPanel = new JPanel(new BorderLayout());
     JPanel taskHeaderBar =
         new JPanel(new MigLayout("insets 6 20 6 20, fillx", "[grow]", LAYOUT_CENTER));
@@ -240,11 +241,7 @@ public final class MainFrame extends JFrame {
     contentArea.add(qaViewPanel, QA_VIEW);
     contentArea.add(taskViewPanel, TASK_VIEW);
     contentArea.add(
-        new CodebaseCachePanel(
-            packerService,
-            cacheMetaService,
-            geminiCacheService,
-            promptService),
+        new CodebaseCachePanel(packerService, cacheMetaService, geminiCacheService, promptService),
         CACHE_VIEW);
     contentArea.add(new JexlApiPanel(jexlServiceRegistry), API_VIEW);
     contentArea.add(new SystemToolsPanel(toolService), TOOLS_VIEW);
@@ -264,7 +261,7 @@ public final class MainFrame extends JFrame {
     showCard(QA_VIEW);
   }
 
-    private void updateActivePhase(WorkflowPhase currentPhase) {
+  private void updateActivePhase(WorkflowPhase currentPhase) {
     ImplementationPlan plan = planManagerService.getCurrentPlan();
     if (plan != null && plan.title() != null && !plan.title().isBlank()) {
       planLabel.setText(plan.title().toUpperCase(Locale.ROOT));

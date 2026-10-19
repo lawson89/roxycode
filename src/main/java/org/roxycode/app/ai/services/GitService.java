@@ -74,9 +74,7 @@ public class GitService {
 
       ProcessResult result =
           ProcessRunner.run(
-              command,
-              projectService.getCurrentProjectRoot(),
-              Map.of("GIT_TERMINAL_PROMPT", "0"));
+              command, projectService.getCurrentProjectRoot(), Map.of("GIT_TERMINAL_PROMPT", "0"));
 
       if (result.timedOut()) {
         log.warn("Git command {} timed out", String.join(" ", args));

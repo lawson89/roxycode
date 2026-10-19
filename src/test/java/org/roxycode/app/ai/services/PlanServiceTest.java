@@ -31,7 +31,7 @@ class PlanServiceTest {
 
     service.addListener((plan) -> notifications.incrementAndGet());
 
-        ImplementationPlan plan =
+    ImplementationPlan plan =
         new ImplementationPlan(
             "Title",
             "Goal",

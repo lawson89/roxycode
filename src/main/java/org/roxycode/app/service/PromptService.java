@@ -126,7 +126,7 @@ public class PromptService {
 
     StringBuilder systemPrompt = new StringBuilder(getStableContext());
 
-        String phasePrompt =
+    String phasePrompt =
         currentPhase == WorkflowPhase.EXPLORE
             ? generateExploreSystemPrompt()
             : loadPhasePrompt(currentPhase);
@@ -151,7 +151,7 @@ public class PromptService {
     return systemPrompt.toString();
   }
 
-    public String loadPhasePrompt(WorkflowPhase phase) {
+  public String loadPhasePrompt(WorkflowPhase phase) {
     String path =
         switch (phase) {
           case EXPLORE -> EXPLORE_PROMPT_PATH;
@@ -326,7 +326,7 @@ public class PromptService {
     return sb.toString();
   }
 
-    private String readClasspathResource(String path) {
+  private String readClasspathResource(String path) {
     try {
       Resource resource = new ClassPathResource(path);
       return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);

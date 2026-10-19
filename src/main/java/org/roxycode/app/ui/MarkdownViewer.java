@@ -9,7 +9,6 @@ import java.util.Arrays;
 import javax.swing.*;
 
 /** A reusable component for viewing Markdown content with theme-aware styling. */
-
 public final class MarkdownViewer extends JTextPane {
   private static final long serialVersionUID = 1L;
   private final transient Parser parser;

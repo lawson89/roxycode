@@ -27,8 +27,7 @@ public class ProcessRunner {
   public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
   /** Result of executing an external process. */
-  public record ProcessResult(
-      int exitCode, String output, String errorOutput, boolean timedOut) {
+  public record ProcessResult(int exitCode, String output, String errorOutput, boolean timedOut) {
     public ProcessResult(int exitCode, String output, boolean timedOut) {
       this(exitCode, output, "", timedOut);
     }
@@ -43,8 +42,8 @@ public class ProcessRunner {
     return run(command, workingDir, Map.of(), DEFAULT_TIMEOUT, redirectErrorStream);
   }
 
-  public static ProcessResult run(
-      List<String> command, Path workingDir, Map<String, String> env) throws IOException {
+  public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env)
+      throws IOException {
     return run(command, workingDir, env, DEFAULT_TIMEOUT, true);
   }
 
@@ -68,7 +67,7 @@ public class ProcessRunner {
     if (env != null && !env.isEmpty()) {
       pb.environment().putAll(env);
     }
-        pb.redirectErrorStream(redirectErrorStream);
+    pb.redirectErrorStream(redirectErrorStream);
 
     Process process = pb.start();
     try {

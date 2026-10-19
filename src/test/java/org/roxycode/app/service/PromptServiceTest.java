@@ -102,7 +102,7 @@ class PromptServiceTest {
     assertTrue(prompt.contains("Requirements Gathering & Clarification"));
   }
 
-    @Test
+  @Test
   void testLoadCodePrompt() {
     String prompt = promptService.loadCodePrompt();
     assertNotNull(prompt);
@@ -112,10 +112,12 @@ class PromptServiceTest {
 
   @Test
   void testLoadPhasePrompt() {
-    assertEquals(promptService.loadExplorePrompt(), promptService.loadPhasePrompt(WorkflowPhase.EXPLORE));
+    assertEquals(
+        promptService.loadExplorePrompt(), promptService.loadPhasePrompt(WorkflowPhase.EXPLORE));
     assertEquals(promptService.loadPlanPrompt(), promptService.loadPhasePrompt(WorkflowPhase.PLAN));
     assertEquals(promptService.loadCodePrompt(), promptService.loadPhasePrompt(WorkflowPhase.CODE));
-    assertEquals(promptService.loadReviewPrompt(), promptService.loadPhasePrompt(WorkflowPhase.REVIEW));
+    assertEquals(
+        promptService.loadReviewPrompt(), promptService.loadPhasePrompt(WorkflowPhase.REVIEW));
   }
 
   @Test
@@ -211,7 +213,8 @@ class PromptServiceTest {
     assertTrue(session.contains("JEXL DOCS"));
     assertTrue(session.contains("M file.java"));
 
-    String fullSystemPrompt = fullPromptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS");
+    String fullSystemPrompt =
+        fullPromptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS");
     assertTrue(fullSystemPrompt.contains(stable));
     assertTrue(fullSystemPrompt.contains("REPO MAP CONTENT"));
     assertTrue(fullSystemPrompt.contains(session));
