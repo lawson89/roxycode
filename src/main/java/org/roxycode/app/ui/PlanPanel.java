@@ -34,6 +34,10 @@ public final class PlanPanel extends JPanel {
     updateDisplay(planManagerService.getCurrentPlan());
   }
 
+  JEditorPane getDisplayArea() {
+    return displayArea;
+  }
+
   @Override
   public void updateUI() {
     super.updateUI();
@@ -47,7 +51,71 @@ public final class PlanPanel extends JPanel {
     SwingHtmlUtils.applyTheme(displayArea, 15);
   }
 
-  private String renderLogTable(String title, java.util.List<ImplementationPlan.LogEntry> logs) {
+  private void updateDisplay(ImplementationPlan plan) {
+    String html = buildPlanHtml(plan);
+    SwingUtilities.invokeLater(
+        () -> {
+          displayArea.setText(html);
+          displayArea.setCaretPosition(0);
+        });
+  }
+
+  static String buildPlanHtml(ImplementationPlan plan) {
+    StringBuilder html = new StringBuilder("<html><body>");
+
+    if (plan == null) {
+      html.append("<h3>No implementation plan submitted yet.</h3>");
+      html.append("<p>The AI will submit a plan as it progresses through the project.</p>");
+    } else {
+      html.append("<h2 class='spec-technical-header'>Implementation Plan</h2>");
+
+      html.append("<b>Title:</b> ").append(SwingHtmlUtils.escapeHtml(plan.title())).append("<br>");
+      html.append("<b>Goal:</b> ").append(SwingHtmlUtils.escapeHtml(plan.goal())).append("<br>");
+
+      html.append("<h3>Requirements:</h3><ul>");
+      for (String req : plan.requirements()) {
+        html.append("<li>").append(SwingHtmlUtils.escapeHtml(req)).append("</li>");
+      }
+      html.append("</ul>");
+
+      html.append(
+          "<h3>Technical Steps:</h3><table width='100%' border='0' cellpadding='4' cellspacing='0'>");
+      int index = 0;
+      for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
+        String checkbox =
+            step.completed()
+                ? "<font color='#28a745'><b>[x]</b></font>"
+                : "<font color='#888888'>[&nbsp;]</font>";
+        String textStyle =
+            step.completed() ? "style='text-decoration: line-through; color: #888888;'" : "";
+
+        html.append("<tr>");
+        html.append(
+                "<td valign='top' nowrap='nowrap' style='font-family: monospace; color: #888888;'>")
+            .append(index)
+            .append(".</td>");
+        html.append("<td valign='top' nowrap='nowrap' style='font-family: monospace;'>")
+            .append(checkbox)
+            .append("</td>");
+        html.append("<td width='100%' ")
+            .append(textStyle)
+            .append(">")
+            .append(SwingHtmlUtils.escapeHtml(step.description()))
+            .append("</td>");
+        html.append("</tr>");
+        index++;
+      }
+      html.append("</table>");
+
+      html.append(renderLogTable("Handoff Log", plan.handoffLog()));
+    }
+
+    html.append("</body></html>");
+    return html.toString();
+  }
+
+  private static String renderLogTable(
+      String title, java.util.List<ImplementationPlan.LogEntry> logs) {
     if (logs == null || logs.isEmpty()) return "";
 
     StringBuilder sb = new StringBuilder();
@@ -81,62 +149,5 @@ public final class PlanPanel extends JPanel {
     }
     sb.append("</table>");
     return sb.toString();
-  }
-
-  private void updateDisplay(ImplementationPlan plan) {
-    StringBuilder html = new StringBuilder("<html><body>");
-
-    if (plan == null) {
-      html.append("<h3>No implementation plan submitted yet.</h3>");
-      html.append("<p>The AI will submit a plan as it progresses through the project.</p>");
-    } else {
-      html.append("<h2 class='spec-technical-header'>Implementation Plan</h2>");
-
-      html.append("<b>Title:</b> ").append(SwingHtmlUtils.escapeHtml(plan.title())).append("<br>");
-      html.append("<b>Goal:</b> ").append(SwingHtmlUtils.escapeHtml(plan.goal())).append("<br>");
-
-      html.append("<h3>Requirements:</h3><ul>");
-      for (String req : plan.requirements()) {
-        html.append("<li>").append(SwingHtmlUtils.escapeHtml(req)).append("</li>");
-      }
-      html.append("</ul>");
-
-      html.append("<h3>Technical Steps:</h3><table border='0' cellpadding='4' cellspacing='0'>");
-      int index = 0;
-      for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
-        String checkbox =
-            step.completed()
-                ? "<font color='#28a745'><b>[x]</b></font>"
-                : "<font color='#888888'>[ ]</font>";
-        String textStyle =
-            step.completed() ? "style='text-decoration: line-through; color: #888888;'" : "";
-
-        html.append("<tr>");
-        html.append("<td valign='top' style='font-family: monospace; color: #888888;'>")
-            .append(index)
-            .append(".</td>");
-        html.append("<td valign='top' style='font-family: monospace;'>")
-            .append(checkbox)
-            .append("</td>");
-        html.append("<td ")
-            .append(textStyle)
-            .append(">")
-            .append(SwingHtmlUtils.escapeHtml(step.description()))
-            .append("</td>");
-        html.append("</tr>");
-        index++;
-      }
-      html.append("</table>");
-
-      html.append(renderLogTable("Handoff Log", plan.handoffLog()));
-    }
-
-    html.append("</body></html>");
-
-    SwingUtilities.invokeLater(
-        () -> {
-          displayArea.setText(html.toString());
-          displayArea.setCaretPosition(0);
-        });
   }
 }

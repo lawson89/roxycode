@@ -1,0 +1,130 @@
+package org.roxycode.app.ui;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import java.util.List;
+import javax.swing.JEditorPane;
+import javax.swing.SwingUtilities;
+import javax.swing.text.Element;
+import javax.swing.text.View;
+import javax.swing.text.ViewFactory;
+import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.InlineView;
+import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.model.ImplementationPlan;
+
+class PlanPanelTest {
+
+  @Test
+  void testBuildPlanHtmlUsesNowrapAndNonBreakingCheckbox() {
+    ImplementationPlan plan =
+        new ImplementationPlan(
+            "Test Plan",
+            "Test Goal",
+            List.of("Requirement 1"),
+            List.of(
+                new ImplementationPlan.TechStep(
+                    "Long step description that should wrap in its column without squishing the index or checkbox.",
+                    false),
+                new ImplementationPlan.TechStep("Completed step", true)),
+            false,
+            null,
+            null,
+            null,
+            List.of());
+
+    String html = PlanPanel.buildPlanHtml(plan);
+
+    assertTrue(html.contains("[&nbsp;]"), "Unchecked checkbox should use non-breaking space");
+    assertFalse(html.contains(">[ ]<"), "Unchecked checkbox should not use regular breaking space");
+    assertTrue(html.contains("<b>[x]</b>"), "Completed checkbox should contain [x]");
+    assertTrue(html.contains("nowrap='nowrap'"), "Index and checkbox cells should have nowrap");
+    assertTrue(
+        html.contains("<td width='100%'"),
+        "Step description cell should take 100% remaining width");
+  }
+
+  @Test
+  void testPlanPanelRendersNonZeroMinimumSpanForNowrapCells() throws Exception {
+    PlanService planService = mock(PlanService.class);
+    WorkflowService workflowService = mock(WorkflowService.class);
+
+    ImplementationPlan plan =
+        new ImplementationPlan(
+            "Test Plan",
+            "Test Goal",
+            List.of("Req"),
+            List.of(
+                new ImplementationPlan.TechStep(
+                    "Update src/main/resources/prompts/plan_phase.md to remove stale planService method names and refer to the provided JEXL API documentation.",
+                    false)),
+            false,
+            null,
+            null,
+            null,
+            List.of());
+
+    when(planService.getCurrentPlan()).thenReturn(plan);
+
+    PlanPanel panel = new PlanPanel(planService, workflowService);
+    SwingUtilities.invokeAndWait(() -> {});
+
+    JEditorPane editorPane = panel.getDisplayArea();
+    HTMLEditorKit kit = (HTMLEditorKit) editorPane.getEditorKit();
+    ViewFactory factory = kit.getViewFactory();
+    HTMLDocument doc = (HTMLDocument) editorPane.getDocument();
+
+    Element td0 = findTdWithText(doc.getDefaultRootElement(), "0.");
+    assertNotNull(td0, "Should find index <td> element");
+    assertTrue(
+        hasPositiveInlineMinSpan(td0, factory),
+        "Nowrap index cell inline content should preserve positive minimum X span so it does not wrap");
+
+    Element tdCheckbox = findTdWithText(doc.getDefaultRootElement(), "[");
+    assertNotNull(tdCheckbox, "Should find checkbox <td> element");
+    assertTrue(
+        hasPositiveInlineMinSpan(tdCheckbox, factory),
+        "Nowrap checkbox cell inline content should preserve positive minimum X span so it does not wrap");
+
+    Element tdDesc = findTdWithText(doc.getDefaultRootElement(), "Update src/main/resources");
+    assertNotNull(tdDesc, "Should find description <td> element");
+    assertFalse(
+        hasPositiveInlineMinSpan(tdDesc, factory),
+        "Description cell inline content should have 0 minimum X span to allow wrapping");
+  }
+
+  private boolean hasPositiveInlineMinSpan(Element elem, ViewFactory factory) {
+    View view = factory.create(elem);
+    if (view instanceof InlineView) {
+      return view.getMinimumSpan(View.X_AXIS) > 0;
+    }
+    for (int i = 0; i < elem.getElementCount(); i++) {
+      if (hasPositiveInlineMinSpan(elem.getElement(i), factory)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private Element findTdWithText(Element elem, String snippet) throws Exception {
+    if ("td".equalsIgnoreCase(elem.getName())) {
+      int start = elem.getStartOffset();
+      int end = elem.getEndOffset();
+      String text = elem.getDocument().getText(start, end - start);
+      if (text.contains(snippet)) {
+        return elem;
+      }
+    }
+    for (int i = 0; i < elem.getElementCount(); i++) {
+      Element found = findTdWithText(elem.getElement(i), snippet);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
+  }
+}

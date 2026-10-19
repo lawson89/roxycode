@@ -31,7 +31,7 @@ import org.springframework.stereotype.Service;
 @Service
 @AgentService(
     value = "buildToolService",
-    phases = {"CODE", "EXPLORE", "REVIEW"})
+    phases = {"CODE", "EXPLORE", "PLAN", "REVIEW"})
 public class GenericBuildToolService {
 
   private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);

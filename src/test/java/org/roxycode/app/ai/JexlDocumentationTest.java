@@ -1,5 +1,6 @@
 package org.roxycode.app.ai;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -17,10 +18,17 @@ public class JexlDocumentationTest {
   }
 
   @Test
-  public void testJexlDocForbidsArbitraryClassInstantiation() throws IOException {
+  public void testJexlDocForbidsArbitraryClassInstantiationAndUsesValidServices() throws IOException {
     Path path = Paths.get("src/main/resources/docs/jexl.md");
     String content = Files.readString(path);
     assertTrue(content.contains("FORBIDDEN: Arbitrary Java Class Instantiation"));
-    assertTrue(content.contains("genericBuildToolService.runTests()"));
+    assertTrue(content.contains("buildToolService"));
+    assertTrue(content.contains("fileEditorService"));
+    assertTrue(content.contains("fileReadService"));
+    assertTrue(content.contains("grepService"));
+    assertTrue(content.contains("JEXL API Documentation"));
+    assertFalse(content.contains("textEditorService"));
+    assertFalse(content.contains("genericBuildToolService"));
+    assertFalse(content.contains("ColinxCode"));
   }
 }

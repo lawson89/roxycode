@@ -78,12 +78,14 @@ class PromptServiceTest {
     assertFalse(allDocs.contains("## jexl.md"));
   }
 
-  @Test
+    @Test
   void testLoadReviewPrompt() {
     String prompt = promptService.loadReviewPrompt();
     assertNotNull(prompt);
     assertTrue(prompt.contains("REVIEW"));
     assertTrue(prompt.contains("PHASE"));
+    assertTrue(prompt.contains("buildToolService"));
+    assertFalse(prompt.contains("genericBuildToolService"));
   }
 
   @Test
@@ -91,6 +93,10 @@ class PromptServiceTest {
     String prompt = promptService.loadExplorePrompt();
     assertNotNull(prompt);
     assertTrue(prompt.contains("EXPLORE phase"));
+    assertTrue(prompt.contains("grepService"));
+    assertTrue(prompt.contains("fileReadService"));
+    assertFalse(prompt.contains("textEditorService"));
+    assertFalse(prompt.contains("readFiles"));
   }
 
   @Test
@@ -100,6 +106,12 @@ class PromptServiceTest {
     assertTrue(prompt.contains("ANALYST"));
     assertTrue(prompt.contains("PLANNING"));
     assertTrue(prompt.contains("Requirements Gathering & Clarification"));
+    assertTrue(prompt.contains("planService"));
+    assertTrue(prompt.contains("buildToolService"));
+    assertFalse(prompt.contains("createPlan"));
+    assertFalse(prompt.contains("addRequirement"));
+    assertFalse(prompt.contains("addConstraint"));
+    assertFalse(prompt.contains("validateReadyForApproval"));
   }
 
   @Test

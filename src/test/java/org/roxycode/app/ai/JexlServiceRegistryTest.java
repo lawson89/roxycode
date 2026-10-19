@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.FileEditorService;
+import org.roxycode.app.ai.services.GenericBuildToolService;
 
 class JexlServiceRegistryTest {
 
@@ -41,11 +42,23 @@ class JexlServiceRegistryTest {
     FileEditorService editor = mock(FileEditorService.class);
     registry.register(editor);
 
-    // Note: FileEditorService has @AgentService("textEditorService")
+    // FileEditorService has @AgentService(value = "fileEditorService", phases = {"CODE"})
     // It should be available in CODE but not in PLAN/EXPLORE
 
     assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(editor));
     assertFalse(registry.getServices(WorkflowPhase.PLAN).containsValue(editor));
     assertFalse(registry.getServices(WorkflowPhase.EXPLORE).containsValue(editor));
+  }
+
+  @Test
+  void testBuildToolServiceAvailableInPlanPhase() {
+    JexlServiceRegistry registry = new JexlServiceRegistry();
+    GenericBuildToolService buildTool = mock(GenericBuildToolService.class);
+    registry.register(buildTool);
+
+    assertTrue(registry.getServices(WorkflowPhase.PLAN).containsValue(buildTool));
+    assertTrue(registry.getServices(WorkflowPhase.EXPLORE).containsValue(buildTool));
+    assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(buildTool));
+    assertTrue(registry.getServices(WorkflowPhase.REVIEW).containsValue(buildTool));
   }
 }

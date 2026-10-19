@@ -6,12 +6,15 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URL;
 import javax.swing.*;
+import javax.swing.text.AttributeSet;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.Element;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
 import javax.swing.text.html.BlockView;
+import javax.swing.text.html.CSS;
+import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.InlineView;
 import javax.swing.text.html.ParagraphView;
@@ -76,10 +79,32 @@ public final class SwingHtmlUtils {
     textPane.setEditorKit(kit);
   }
 
+  private static boolean isNoWrap(Element elem) {
+    for (Element curr = elem; curr != null; curr = curr.getParentElement()) {
+      AttributeSet attrs = curr.getAttributes();
+      if (attrs != null) {
+        if (attrs.isDefined(HTML.Attribute.NOWRAP)) {
+          return true;
+        }
+        Object ws = attrs.getAttribute(CSS.Attribute.WHITE_SPACE);
+        if (ws != null && "nowrap".equalsIgnoreCase(ws.toString())) {
+          return true;
+        }
+      }
+      if ("td".equalsIgnoreCase(curr.getName()) || "th".equalsIgnoreCase(curr.getName())) {
+        break;
+      }
+    }
+    return false;
+  }
+
   private static final class WrappingHtmlFactory extends HTMLEditorKit.HTMLFactory {
     @Override
     public View create(Element elem) {
       View view = super.create(elem);
+      if (isNoWrap(elem)) {
+        return view;
+      }
       if (view instanceof InlineView) {
         return new InlineView(elem) {
           @Override
