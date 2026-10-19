@@ -11,17 +11,17 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AiMemoryConfig {
 
-  @Bean
-  public ChatMemoryRepository chatMemoryRepository() {
-    return new InMemoryChatMemoryRepository();
-  }
+    @Bean
+    public ChatMemoryRepository chatMemoryRepository() {
+        return new InMemoryChatMemoryRepository();
+    }
 
-  @Bean
-  public ChatMemory chatMemory(ChatMemoryRepository repository, SettingsService settingsService) {
-    int max = settingsService.getSettings().getMaxChatMemoryMessages();
-    return MessageWindowChatMemory.builder()
-        .chatMemoryRepository(repository)
-        .maxMessages(max > 0 ? max : 50)
-        .build();
-  }
+    @Bean
+    public ChatMemory chatMemory(ChatMemoryRepository repository, SettingsService settingsService) {
+        int max = settingsService.getSettings().getMaxChatMemoryMessages();
+        return MessageWindowChatMemory.builder()
+                .chatMemoryRepository(repository)
+                .maxMessages(max > 0 ? max : 50)
+                .build();
+    }
 }

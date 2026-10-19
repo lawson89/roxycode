@@ -23,142 +23,145 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ProcessRunner {
-  private static final Logger log = LoggerFactory.getLogger(ProcessRunner.class);
-  public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+    private static final Logger log = LoggerFactory.getLogger(ProcessRunner.class);
+    public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
-  /** Result of executing an external process. */
-  public record ProcessResult(int exitCode, String output, String errorOutput, boolean timedOut) {
-    public ProcessResult(int exitCode, String output, boolean timedOut) {
-      this(exitCode, output, "", timedOut);
+    /** Result of executing an external process. */
+    public record ProcessResult(int exitCode, String output, String errorOutput, boolean timedOut) {
+        public ProcessResult(int exitCode, String output, boolean timedOut) {
+            this(exitCode, output, "", timedOut);
+        }
     }
-  }
 
-  public static ProcessResult run(List<String> command, Path workingDir) throws IOException {
-    return run(command, workingDir, Map.of(), DEFAULT_TIMEOUT, true);
-  }
-
-  public static ProcessResult run(
-      List<String> command, Path workingDir, boolean redirectErrorStream) throws IOException {
-    return run(command, workingDir, Map.of(), DEFAULT_TIMEOUT, redirectErrorStream);
-  }
-
-  public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env)
-      throws IOException {
-    return run(command, workingDir, env, DEFAULT_TIMEOUT, true);
-  }
-
-  public static ProcessResult run(
-      List<String> command, Path workingDir, Map<String, String> env, Duration timeout)
-      throws IOException {
-    return run(command, workingDir, env, timeout, true);
-  }
-
-  public static ProcessResult run(
-      List<String> command,
-      Path workingDir,
-      Map<String, String> env,
-      Duration timeout,
-      boolean redirectErrorStream)
-      throws IOException {
-    ProcessBuilder pb = new ProcessBuilder(command);
-    if (workingDir != null) {
-      pb.directory(workingDir.toFile());
+    public static ProcessResult run(List<String> command, Path workingDir) throws IOException {
+        return run(command, workingDir, Map.of(), DEFAULT_TIMEOUT, true);
     }
-    if (env != null && !env.isEmpty()) {
-      pb.environment().putAll(env);
-    }
-    pb.redirectErrorStream(redirectErrorStream);
 
-    Process process = pb.start();
-    try {
-      process.getOutputStream().close();
-    } catch (IOException ignored) {
+    public static ProcessResult run(
+            List<String> command, Path workingDir, boolean redirectErrorStream) throws IOException {
+        return run(command, workingDir, Map.of(), DEFAULT_TIMEOUT, redirectErrorStream);
     }
-    StringBuffer stdoutBuffer = new StringBuffer();
-    StringBuffer stderrBuffer = new StringBuffer();
 
-    CompletableFuture<Void> stdoutFuture =
-        CompletableFuture.runAsync(() -> readStream(process.getInputStream(), stdoutBuffer));
-    CompletableFuture<Void> stderrFuture =
-        redirectErrorStream
-            ? CompletableFuture.completedFuture(null)
-            : CompletableFuture.runAsync(() -> readStream(process.getErrorStream(), stderrBuffer));
+    public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env)
+            throws IOException {
+        return run(command, workingDir, env, DEFAULT_TIMEOUT, true);
+    }
 
-    boolean cleanupNeeded = true;
-    try {
-      Duration effectiveTimeout = timeout != null ? timeout : DEFAULT_TIMEOUT;
-      boolean finished = process.waitFor(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
-      if (!finished) {
-        destroyProcessTree(process);
-        cleanupNeeded = false;
-        awaitReaders(stdoutFuture, stderrFuture, 2, TimeUnit.SECONDS);
-        return new ProcessResult(-1, stdoutBuffer.toString(), stderrBuffer.toString(), true);
-      }
+    public static ProcessResult run(
+            List<String> command, Path workingDir, Map<String, String> env, Duration timeout)
+            throws IOException {
+        return run(command, workingDir, env, timeout, true);
+    }
 
-      int exitCode = process.exitValue();
-      cleanupNeeded = false;
-      awaitReaders(stdoutFuture, stderrFuture, 5, TimeUnit.SECONDS);
-      return new ProcessResult(exitCode, stdoutBuffer.toString(), stderrBuffer.toString(), false);
-    } catch (InterruptedException e) {
-      destroyProcessTree(process);
-      cleanupNeeded = false;
-      Thread.currentThread().interrupt();
-      CancellationException ce = new CancellationException("Process execution interrupted");
-      ce.initCause(e);
-      throw ce;
-    } finally {
-      if (cleanupNeeded || process.isAlive()) {
-        destroyProcessTree(process);
-      }
-    }
-  }
+    public static ProcessResult run(
+            List<String> command,
+            Path workingDir,
+            Map<String, String> env,
+            Duration timeout,
+            boolean redirectErrorStream)
+            throws IOException {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        if (workingDir != null) {
+            pb.directory(workingDir.toFile());
+        }
+        if (env != null && !env.isEmpty()) {
+            pb.environment().putAll(env);
+        }
+        pb.redirectErrorStream(redirectErrorStream);
 
-  private static void readStream(InputStream inputStream, StringBuffer buffer) {
-    try (BufferedReader reader =
-        new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-      String line = reader.readLine();
-      while (line != null) {
-        buffer.append(line).append('\n');
-        line = reader.readLine();
-      }
-    } catch (IOException e) {
-      log.debug("Stream closed or failed while reading process output", e);
-    }
-  }
+        Process process = pb.start();
+        try {
+            process.getOutputStream().close();
+        } catch (IOException ignored) {
+        }
+        StringBuffer stdoutBuffer = new StringBuffer();
+        StringBuffer stderrBuffer = new StringBuffer();
 
-  private static void awaitReaders(
-      CompletableFuture<Void> stdoutFuture,
-      CompletableFuture<Void> stderrFuture,
-      long timeout,
-      TimeUnit unit) {
-    try {
-      CompletableFuture.allOf(stdoutFuture, stderrFuture).get(timeout, unit);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    } catch (Exception e) {
-      log.debug("Output readers did not complete within {} {}", timeout, unit, e);
-    }
-  }
+        CompletableFuture<Void> stdoutFuture =
+                CompletableFuture.runAsync(
+                        () -> readStream(process.getInputStream(), stdoutBuffer));
+        CompletableFuture<Void> stderrFuture =
+                redirectErrorStream
+                        ? CompletableFuture.completedFuture(null)
+                        : CompletableFuture.runAsync(
+                                () -> readStream(process.getErrorStream(), stderrBuffer));
 
-  public static void destroyProcessTree(Process process) {
-    if (process == null) {
-      return;
+        boolean cleanupNeeded = true;
+        try {
+            Duration effectiveTimeout = timeout != null ? timeout : DEFAULT_TIMEOUT;
+            boolean finished = process.waitFor(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!finished) {
+                destroyProcessTree(process);
+                cleanupNeeded = false;
+                awaitReaders(stdoutFuture, stderrFuture, 2, TimeUnit.SECONDS);
+                return new ProcessResult(
+                        -1, stdoutBuffer.toString(), stderrBuffer.toString(), true);
+            }
+
+            int exitCode = process.exitValue();
+            cleanupNeeded = false;
+            awaitReaders(stdoutFuture, stderrFuture, 5, TimeUnit.SECONDS);
+            return new ProcessResult(
+                    exitCode, stdoutBuffer.toString(), stderrBuffer.toString(), false);
+        } catch (InterruptedException e) {
+            destroyProcessTree(process);
+            cleanupNeeded = false;
+            Thread.currentThread().interrupt();
+            CancellationException ce = new CancellationException("Process execution interrupted");
+            ce.initCause(e);
+            throw ce;
+        } finally {
+            if (cleanupNeeded || process.isAlive()) {
+                destroyProcessTree(process);
+            }
+        }
     }
-    try {
-      process
-          .descendants()
-          .forEach(
-              handle -> {
-                try {
-                  handle.destroyForcibly();
-                } catch (Exception ignored) {
-                }
-              });
-    } catch (Exception ignored) {
+
+    private static void readStream(InputStream inputStream, StringBuffer buffer) {
+        try (BufferedReader reader =
+                new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+            String line = reader.readLine();
+            while (line != null) {
+                buffer.append(line).append('\n');
+                line = reader.readLine();
+            }
+        } catch (IOException e) {
+            log.debug("Stream closed or failed while reading process output", e);
+        }
     }
-    try {
-      process.destroyForcibly();
-    } catch (Exception ignored) {
+
+    private static void awaitReaders(
+            CompletableFuture<Void> stdoutFuture,
+            CompletableFuture<Void> stderrFuture,
+            long timeout,
+            TimeUnit unit) {
+        try {
+            CompletableFuture.allOf(stdoutFuture, stderrFuture).get(timeout, unit);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            log.debug("Output readers did not complete within {} {}", timeout, unit, e);
+        }
     }
-  }
+
+    public static void destroyProcessTree(Process process) {
+        if (process == null) {
+            return;
+        }
+        try {
+            process.descendants()
+                    .forEach(
+                            handle -> {
+                                try {
+                                    handle.destroyForcibly();
+                                } catch (Exception ignored) {
+                                }
+                            });
+        } catch (Exception ignored) {
+        }
+        try {
+            process.destroyForcibly();
+        } catch (Exception ignored) {
+        }
+    }
 }

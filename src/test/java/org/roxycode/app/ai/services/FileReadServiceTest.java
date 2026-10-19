@@ -14,67 +14,67 @@ import org.roxycode.app.service.ProjectService;
 
 public class FileReadServiceTest {
 
-  @TempDir Path tempDir;
+    @TempDir Path tempDir;
 
-  private ProjectService projectService;
-  private FileReadService fileReadService;
+    private ProjectService projectService;
+    private FileReadService fileReadService;
 
-  @BeforeEach
-  void setUp() {
-    projectService = mock(ProjectService.class);
-    when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-    lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
-    fileReadService = new FileReadService(projectService);
-  }
+    @BeforeEach
+    void setUp() {
+        projectService = mock(ProjectService.class);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
+        fileReadService = new FileReadService(projectService);
+    }
 
-  @Test
-  void testFileExists() throws IOException {
-    Path file = tempDir.resolve("test.txt");
-    Files.writeString(file, "hello");
+    @Test
+    void testFileExists() throws IOException {
+        Path file = tempDir.resolve("test.txt");
+        Files.writeString(file, "hello");
 
-    assertTrue(fileReadService.fileExists("test.txt"));
-    assertFalse(fileReadService.fileExists("nonexistent.txt"));
-  }
+        assertTrue(fileReadService.fileExists("test.txt"));
+        assertFalse(fileReadService.fileExists("nonexistent.txt"));
+    }
 
-  @Test
-  void testReadFile() throws IOException {
-    Path file = tempDir.resolve("test.txt");
-    String content = "hello world";
-    Files.writeString(file, content);
+    @Test
+    void testReadFile() throws IOException {
+        Path file = tempDir.resolve("test.txt");
+        String content = "hello world";
+        Files.writeString(file, content);
 
-    assertEquals(content, fileReadService.readFile("test.txt"));
-  }
+        assertEquals(content, fileReadService.readFile("test.txt"));
+    }
 
-  @Test
-  void testListDirectory() throws IOException {
-    Files.createFile(tempDir.resolve("file1.txt"));
-    Files.createFile(tempDir.resolve("file2.txt"));
-    Files.createDirectory(tempDir.resolve("subdir"));
+    @Test
+    void testListDirectory() throws IOException {
+        Files.createFile(tempDir.resolve("file1.txt"));
+        Files.createFile(tempDir.resolve("file2.txt"));
+        Files.createDirectory(tempDir.resolve("subdir"));
 
-    List<String> contents = fileReadService.listDirectory(".");
-    assertTrue(contents.contains("file1.txt"));
-    assertTrue(contents.contains("file2.txt"));
-    assertTrue(contents.contains("subdir"));
-    assertEquals(3, contents.size());
-  }
+        List<String> contents = fileReadService.listDirectory(".");
+        assertTrue(contents.contains("file1.txt"));
+        assertTrue(contents.contains("file2.txt"));
+        assertTrue(contents.contains("subdir"));
+        assertEquals(3, contents.size());
+    }
 
-  @Test
-  void testPathTraversalProtection() {
-    assertThrows(
-        SecurityException.class,
-        () -> {
-          fileReadService.readFile("../secret.txt");
-        });
-  }
+    @Test
+    void testPathTraversalProtection() {
+        assertThrows(
+                SecurityException.class,
+                () -> {
+                    fileReadService.readFile("../secret.txt");
+                });
+    }
 
-  @Test
-  void testReadFileOutsideRoot() throws IOException {
-    Path outsideFile = tempDir.getParent().resolve("outside.txt");
-    // We don't actually create it, just test the path resolution
-    assertThrows(
-        SecurityException.class,
-        () -> {
-          fileReadService.readFile("../" + outsideFile.getFileName());
-        });
-  }
+    @Test
+    void testReadFileOutsideRoot() throws IOException {
+        Path outsideFile = tempDir.getParent().resolve("outside.txt");
+        // We don't actually create it, just test the path resolution
+        assertThrows(
+                SecurityException.class,
+                () -> {
+                    fileReadService.readFile("../" + outsideFile.getFileName());
+                });
+    }
 }

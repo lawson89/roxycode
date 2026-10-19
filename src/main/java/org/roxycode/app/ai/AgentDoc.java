@@ -9,24 +9,25 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
 public @interface AgentDoc {
-  /**
-   * A description of the component.
-   *
-   * @return the description
-   */
-  String value();
 
-  /**
-   * Usage examples for the component.
-   *
-   * @return the examples
-   */
-  String[] examples() default {};
+    /**
+     * A description of the component.
+     *
+     * @return the description
+     */
+    String value();
 
-  /**
-   * Additional notes about the component.
-   *
-   * @return the notes
-   */
-  String[] notes() default {};
+    /**
+     * Usage examples for the component.
+     *
+     * @return the examples
+     */
+    String[] examples() default {};
+
+    /**
+     * Additional notes about the component.
+     *
+     * @return the notes
+     */
+    String[] notes() default {};
 }

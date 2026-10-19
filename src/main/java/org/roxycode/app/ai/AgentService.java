@@ -14,18 +14,18 @@ import org.springframework.stereotype.Service;
 @Retention(RetentionPolicy.RUNTIME)
 @Service
 public @interface AgentService {
-  /**
-   * The name of the variable as it will be exposed in the JEXL context.
-   *
-   * @return the JEXL variable name
-   */
-  String value();
+    /**
+     * The name of the variable as it will be exposed in the JEXL context.
+     *
+     * @return the JEXL variable name
+     */
+    String value();
 
-  /**
-   * The phases allowed to access this service. Defaults to an empty array, meaning no phases are
-   * allowed. Use "*" as a wildcard to allow access to all agent phases.
-   *
-   * @return the allowed phases
-   */
-  String[] phases() default {};
+    /**
+     * The phases allowed to access this service. Defaults to an empty array, meaning no phases are
+     * allowed. Use "*" as a wildcard to allow access to all agent phases.
+     *
+     * @return the allowed phases
+     */
+    String[] phases() default {};
 }

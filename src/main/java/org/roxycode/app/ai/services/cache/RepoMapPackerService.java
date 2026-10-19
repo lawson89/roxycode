@@ -31,206 +31,206 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @AgentService(
-    value = "repoMapPackerService",
-    phases = {"*"})
+        value = "repoMapPackerService",
+        phases = {"*"})
 @AgentDoc("Generates a token-optimized map of the repository using ripgrep and universal-ctags.")
 public class RepoMapPackerService {
-  private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
-  private static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB
+    private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
+    private static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB
 
-  private final ProjectService projectService;
-  private final ObjectMapper objectMapper;
-  private final GrepService grepService;
-  private final ProjectCacheMetaService metaService;
-  private final GeminiCacheService geminiCacheService;
+    private final ProjectService projectService;
+    private final ObjectMapper objectMapper;
+    private final GrepService grepService;
+    private final ProjectCacheMetaService metaService;
+    private final GeminiCacheService geminiCacheService;
 
-  private String cachedMap = null;
-  private boolean needsUpdate = true;
-  private List<String> excludePatterns;
+    private String cachedMap = null;
+    private boolean needsUpdate = true;
+    private List<String> excludePatterns;
 
-  public RepoMapPackerService(
-      ProjectService projectService,
-      ObjectMapper objectMapper,
-      GrepService grepService,
-      ProjectCacheMetaService metaService,
-      GeminiCacheService geminiCacheService) {
-    this.projectService = projectService;
-    this.objectMapper = objectMapper;
-    this.grepService = grepService;
-    this.metaService = metaService;
-    this.geminiCacheService = geminiCacheService;
+    public RepoMapPackerService(
+            ProjectService projectService,
+            ObjectMapper objectMapper,
+            GrepService grepService,
+            ProjectCacheMetaService metaService,
+            GeminiCacheService geminiCacheService) {
+        this.projectService = projectService;
+        this.objectMapper = objectMapper;
+        this.grepService = grepService;
+        this.metaService = metaService;
+        this.geminiCacheService = geminiCacheService;
 
-    // Listen for project changes
-    this.excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
-    this.projectService.addProjectListener(
-        p -> {
-          this.needsUpdate = true;
-          log.debug("Repo map invalidated due to project change.");
-        });
-  }
-
-  @EventListener
-  public void handleFileChanged(FileChangedEvent event) {
-    this.needsUpdate = true;
-    log.debug("Repo map invalidated due to file change: {}", event.path());
-  }
-
-  public EditorResult generateRepoMap() {
-    if (Thread.currentThread().isInterrupted()) {
-      throw new CancellationException("Repo map generation cancelled");
-    }
-    if (!projectService.hasActiveProject()) {
-      return new EditorResult(false, "", "No active project");
+        // Listen for project changes
+        this.excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
+        this.projectService.addProjectListener(
+                p -> {
+                    this.needsUpdate = true;
+                    log.debug("Repo map invalidated due to project change.");
+                });
     }
 
-    if (!needsUpdate && cachedMap != null) {
-      return new EditorResult(true, cachedMap, null);
+    @EventListener
+    public void handleFileChanged(FileChangedEvent event) {
+        this.needsUpdate = true;
+        log.debug("Repo map invalidated due to file change: {}", event.path());
     }
 
-    Path root = projectService.getCurrentProjectRoot();
-    List<String> files = grepService.listFiles(null);
-    files =
-        files.stream()
-            .filter(f -> excludePatterns.stream().noneMatch(p -> f.startsWith(p)))
-            .filter(f -> !isBinaryFile(root.resolve(f)))
-            .toList();
-
-    StringBuilder sb = new StringBuilder();
-    sb.append("# Repo Map Snapshot\n\n");
-    sb.append("## Project Tree\n\n```\n");
-    sb.append(FileTreeFormatter.format(files));
-    sb.append("\n```\n\n");
-
-    for (String relPath : files) {
-      if (Thread.currentThread().isInterrupted()) {
-        throw new CancellationException("Repo map generation cancelled");
-      }
-      Path filePath = root.resolve(relPath);
-      if (!Files.isRegularFile(filePath)) {
-        continue;
-      }
-      sb.append("--- ").append(relPath).append(" ---\n");
-      try {
-        long size = Files.size(filePath);
-        if (size < RAW_CONTENT_THRESHOLD) {
-          sb.append(Files.readString(filePath));
-        } else {
-          String skeleton = getSkeleton(filePath);
-          if (skeleton == null || skeleton.isBlank()) {
-            sb.append("[Full content omitted due to size - no skeleton available]\n");
-          } else {
-            sb.append(skeleton);
-          }
+    public EditorResult generateRepoMap() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Repo map generation cancelled");
         }
-      } catch (Exception e) {
-        rethrowIfCancelled(e);
-        sb.append("[Error processing file: ").append(e.getMessage()).append("]\n");
-      }
-      sb.append("\n\n");
-    }
+        if (!projectService.hasActiveProject()) {
+            return new EditorResult(false, "", "No active project");
+        }
 
-    this.cachedMap = sb.toString();
-    this.needsUpdate = false;
-    long tokens = geminiCacheService.estimateTokens(cachedMap);
-    metaService.saveRepoCache(cachedMap);
-    metaService.saveMeta(
-        new ProjectCacheMeta(projectService.getProjectName(), LocalDateTime.now(), tokens));
-    return new EditorResult(true, cachedMap, null);
-  }
+        if (!needsUpdate && cachedMap != null) {
+            return new EditorResult(true, cachedMap, null);
+        }
 
-  private String getSkeleton(Path filePath) {
-    try {
-      List<String> command =
-          List.of(
-              "ctags",
-              "-f",
-              "-",
-              "--output-format=json",
-              "--fields=+n",
-              filePath.toAbsolutePath().toString());
-      ProcessResult result = ProcessRunner.run(command, null, false);
-      if (result.timedOut()) {
-        log.warn("Ctags timed out for {}", filePath);
-        return null;
-      }
+        Path root = projectService.getCurrentProjectRoot();
+        List<String> files = grepService.listFiles(null);
+        files =
+                files.stream()
+                        .filter(f -> excludePatterns.stream().noneMatch(p -> f.startsWith(p)))
+                        .filter(f -> !isBinaryFile(root.resolve(f)))
+                        .toList();
 
-      List<Tag> tags = new ArrayList<>();
-      String output = result.output();
-      if (output != null && !output.isEmpty()) {
-        for (String line : output.lines().toList()) {
-          if (line.isBlank()) {
-            continue;
-          }
-          try {
-            JsonNode node = objectMapper.readTree(line);
-            JsonNode nameNode = node.get("name");
-            JsonNode lineNode = node.get("line");
-            if (nameNode != null && lineNode != null) {
-              tags.add(new Tag(nameNode.asText(), lineNode.asInt()));
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Repo Map Snapshot\n\n");
+        sb.append("## Project Tree\n\n```\n");
+        sb.append(FileTreeFormatter.format(files));
+        sb.append("\n```\n\n");
+
+        for (String relPath : files) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new CancellationException("Repo map generation cancelled");
             }
-          } catch (Exception e) {
+            Path filePath = root.resolve(relPath);
+            if (!Files.isRegularFile(filePath)) {
+                continue;
+            }
+            sb.append("--- ").append(relPath).append(" ---\n");
+            try {
+                long size = Files.size(filePath);
+                if (size < RAW_CONTENT_THRESHOLD) {
+                    sb.append(Files.readString(filePath));
+                } else {
+                    String skeleton = getSkeleton(filePath);
+                    if (skeleton == null || skeleton.isBlank()) {
+                        sb.append("[Full content omitted due to size - no skeleton available]\n");
+                    } else {
+                        sb.append(skeleton);
+                    }
+                }
+            } catch (Exception e) {
+                rethrowIfCancelled(e);
+                sb.append("[Error processing file: ").append(e.getMessage()).append("]\n");
+            }
+            sb.append("\n\n");
+        }
+
+        this.cachedMap = sb.toString();
+        this.needsUpdate = false;
+        long tokens = geminiCacheService.estimateTokens(cachedMap);
+        metaService.saveRepoCache(cachedMap);
+        metaService.saveMeta(
+                new ProjectCacheMeta(projectService.getProjectName(), LocalDateTime.now(), tokens));
+        return new EditorResult(true, cachedMap, null);
+    }
+
+    private String getSkeleton(Path filePath) {
+        try {
+            List<String> command =
+                    List.of(
+                            "ctags",
+                            "-f",
+                            "-",
+                            "--output-format=json",
+                            "--fields=+n",
+                            filePath.toAbsolutePath().toString());
+            ProcessResult result = ProcessRunner.run(command, null, false);
+            if (result.timedOut()) {
+                log.warn("Ctags timed out for {}", filePath);
+                return null;
+            }
+
+            List<Tag> tags = new ArrayList<>();
+            String output = result.output();
+            if (output != null && !output.isEmpty()) {
+                for (String line : output.lines().toList()) {
+                    if (line.isBlank()) {
+                        continue;
+                    }
+                    try {
+                        JsonNode node = objectMapper.readTree(line);
+                        JsonNode nameNode = node.get("name");
+                        JsonNode lineNode = node.get("line");
+                        if (nameNode != null && lineNode != null) {
+                            tags.add(new Tag(nameNode.asText(), lineNode.asInt()));
+                        }
+                    } catch (Exception e) {
+                        rethrowIfCancelled(e);
+                        log.trace("Skip unparseable line: {}", line);
+                    }
+                }
+            }
+            if (tags.isEmpty()) return null;
+            tags.sort(Comparator.comparingInt(t -> t.line));
+            List<String> lines = Files.readAllLines(filePath);
+            StringBuilder skeleton = new StringBuilder();
+            int lastLine = -1;
+            for (Tag tag : tags) {
+                if (tag.line > 0 && tag.line <= lines.size() && tag.line != lastLine) {
+                    skeleton.append(tag.line)
+                            .append(": ")
+                            .append(lines.get(tag.line - 1).trim())
+                            .append('\n');
+                    lastLine = tag.line;
+                }
+            }
+            return skeleton.toString();
+        } catch (Exception e) {
             rethrowIfCancelled(e);
-            log.trace("Skip unparseable line: {}", line);
-          }
+            log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
+            return null;
         }
-      }
-      if (tags.isEmpty()) return null;
-      tags.sort(Comparator.comparingInt(t -> t.line));
-      List<String> lines = Files.readAllLines(filePath);
-      StringBuilder skeleton = new StringBuilder();
-      int lastLine = -1;
-      for (Tag tag : tags) {
-        if (tag.line > 0 && tag.line <= lines.size() && tag.line != lastLine) {
-          skeleton
-              .append(tag.line)
-              .append(": ")
-              .append(lines.get(tag.line - 1).trim())
-              .append('\n');
-          lastLine = tag.line;
+    }
+
+    private boolean isBinaryFile(Path path) {
+        try {
+            if (Files.exists(path)) {
+                try (java.io.InputStream is = Files.newInputStream(path)) {
+                    byte[] buffer = new byte[1024];
+                    int bytesRead = is.read(buffer);
+                    for (int i = 0; i < bytesRead; i++) {
+                        if (buffer[i] == 0) return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            rethrowIfCancelled(e);
+            log.warn("Could not determine if file is binary: {}", path, e);
         }
-      }
-      return skeleton.toString();
-    } catch (Exception e) {
-      rethrowIfCancelled(e);
-      log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
-      return null;
+        return false;
     }
-  }
 
-  private boolean isBinaryFile(Path path) {
-    try {
-      if (Files.exists(path)) {
-        try (java.io.InputStream is = Files.newInputStream(path)) {
-          byte[] buffer = new byte[1024];
-          int bytesRead = is.read(buffer);
-          for (int i = 0; i < bytesRead; i++) {
-            if (buffer[i] == 0) return true;
-          }
+    private void rethrowIfCancelled(Exception e) {
+        if (e instanceof CancellationException
+                || e instanceof ClosedByInterruptException
+                || YieldTurnException.findCause(e, CancellationException.class) != null
+                || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
+                || YieldTurnException.findCause(e, InterruptedException.class) != null
+                || Thread.currentThread().isInterrupted()) {
+            Thread.currentThread().interrupt();
+            if (e instanceof CancellationException ce) {
+                throw ce;
+            }
+            CancellationException cancelEx =
+                    new CancellationException("Repo map operation cancelled");
+            cancelEx.initCause(e);
+            throw cancelEx;
         }
-      }
-    } catch (Exception e) {
-      rethrowIfCancelled(e);
-      log.warn("Could not determine if file is binary: {}", path, e);
     }
-    return false;
-  }
 
-  private void rethrowIfCancelled(Exception e) {
-    if (e instanceof CancellationException
-        || e instanceof ClosedByInterruptException
-        || YieldTurnException.findCause(e, CancellationException.class) != null
-        || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
-        || YieldTurnException.findCause(e, InterruptedException.class) != null
-        || Thread.currentThread().isInterrupted()) {
-      Thread.currentThread().interrupt();
-      if (e instanceof CancellationException ce) {
-        throw ce;
-      }
-      CancellationException cancelEx = new CancellationException("Repo map operation cancelled");
-      cancelEx.initCause(e);
-      throw cancelEx;
-    }
-  }
-
-  private record Tag(String name, int line) {}
+    private record Tag(String name, int line) {}
 }

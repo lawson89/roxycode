@@ -17,91 +17,91 @@ import org.springframework.stereotype.Service;
 @Service
 @SuppressWarnings("PMD.NullAssignment")
 public class SettingsService {
-  private static final Logger log = LoggerFactory.getLogger(SettingsService.class);
-  private static final String SETTINGS_DIR = ".roxycode";
-  private static final String SETTINGS_FILE = "settings.toml";
+    private static final Logger log = LoggerFactory.getLogger(SettingsService.class);
+    private static final String SETTINGS_DIR = ".roxycode";
+    private static final String SETTINGS_FILE = "settings.toml";
 
-  private final TomlMapper mapper;
+    private final TomlMapper mapper;
 
-  public SettingsService() {
-    this(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
-  }
-
-  @org.springframework.beans.factory.annotation.Autowired
-  public SettingsService(TomlMapper mapper) {
-    this.mapper = mapper != null ? mapper : org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER;
-  }
-
-  private AppSettings settings;
-  private Path settingsPathOverride;
-  private final List<Consumer<AppSettings>> listeners = new ArrayList<>();
-
-  /**
-   * Gets the current application settings.
-   *
-   * @return AppSettings object.
-   */
-  public AppSettings getSettings() {
-    if (settings == null) {
-      loadSettings();
+    public SettingsService() {
+        this(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
     }
-    return settings;
-  }
 
-  /** Saves the current settings to the TOML file. */
-  public void addSettingsListener(Consumer<AppSettings> listener) {
-    listeners.add(listener);
-  }
-
-  public void saveSettings() {
-    try {
-      Path path = getSettingsPath();
-      if (path.getParent() != null) {
-        Files.createDirectories(path.getParent());
-      }
-      mapper.writeValue(path.toFile(), getSettings());
-      notifyListeners();
-    } catch (IOException e) {
-      log.error("Failed to save settings: {}", e.getMessage(), e);
+    @org.springframework.beans.factory.annotation.Autowired
+    public SettingsService(TomlMapper mapper) {
+        this.mapper = mapper != null ? mapper : org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER;
     }
-  }
 
-  /**
-   * Overrides the settings path, useful for testing.
-   *
-   * @param path The path to use for settings.
-   */
-  public void setSettingsPathOverride(Path path) {
-    this.settingsPathOverride = path;
-    this.settings = null; // Force reload
-  }
+    private AppSettings settings;
+    private Path settingsPathOverride;
+    private final List<Consumer<AppSettings>> listeners = new ArrayList<>();
 
-  private void loadSettings() {
-    Path path = getSettingsPath();
-    if (Files.exists(path)) {
-      try {
-        settings = mapper.readValue(path.toFile(), AppSettings.class);
-      } catch (IOException e) {
-        log.error("Failed to load settings from {}: {}", path, e.getMessage(), e);
-        settings = new AppSettings();
-      }
-    } else {
-      settings = new AppSettings();
+    /**
+     * Gets the current application settings.
+     *
+     * @return AppSettings object.
+     */
+    public AppSettings getSettings() {
+        if (settings == null) {
+            loadSettings();
+        }
+        return settings;
     }
-  }
 
-  private void notifyListeners() {
-    AppSettings currentSettings = getSettings();
-    for (Consumer<AppSettings> listener : listeners) {
-      listener.accept(currentSettings);
+    /** Saves the current settings to the TOML file. */
+    public void addSettingsListener(Consumer<AppSettings> listener) {
+        listeners.add(listener);
     }
-  }
 
-  private Path getSettingsPath() {
-    if (settingsPathOverride != null) {
-      return settingsPathOverride;
+    public void saveSettings() {
+        try {
+            Path path = getSettingsPath();
+            if (path.getParent() != null) {
+                Files.createDirectories(path.getParent());
+            }
+            mapper.writeValue(path.toFile(), getSettings());
+            notifyListeners();
+        } catch (IOException e) {
+            log.error("Failed to save settings: {}", e.getMessage(), e);
+        }
     }
-    String userHome = System.getProperty("user.home");
-    return Paths.get(userHome, SETTINGS_DIR, SETTINGS_FILE);
-  }
+
+    /**
+     * Overrides the settings path, useful for testing.
+     *
+     * @param path The path to use for settings.
+     */
+    public void setSettingsPathOverride(Path path) {
+        this.settingsPathOverride = path;
+        this.settings = null; // Force reload
+    }
+
+    private void loadSettings() {
+        Path path = getSettingsPath();
+        if (Files.exists(path)) {
+            try {
+                settings = mapper.readValue(path.toFile(), AppSettings.class);
+            } catch (IOException e) {
+                log.error("Failed to load settings from {}: {}", path, e.getMessage(), e);
+                settings = new AppSettings();
+            }
+        } else {
+            settings = new AppSettings();
+        }
+    }
+
+    private void notifyListeners() {
+        AppSettings currentSettings = getSettings();
+        for (Consumer<AppSettings> listener : listeners) {
+            listener.accept(currentSettings);
+        }
+    }
+
+    private Path getSettingsPath() {
+        if (settingsPathOverride != null) {
+            return settingsPathOverride;
+        }
+        String userHome = System.getProperty("user.home");
+        return Paths.get(userHome, SETTINGS_DIR, SETTINGS_FILE);
+    }
 }

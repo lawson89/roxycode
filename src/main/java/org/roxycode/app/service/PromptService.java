@@ -24,373 +24,383 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class PromptService {
-  private static final Logger log = LoggerFactory.getLogger(PromptService.class);
-  private static final String CLASSPATH_PROMPT = "prompts/core_workflow.md";
-  private static final String JEXL_DOC_PATH = "docs/jexl.md";
-  private static final String EXPLORE_PROMPT_PATH = "prompts/explore_phase.md";
-  private static final String REVIEW_PROMPT_PATH = "prompts/review_phase.md";
-  private static final String PLAN_PROMPT_PATH = "prompts/plan_phase.md";
-  private static final String CODE_PROMPT_PATH = "prompts/code_phase.md";
-  private static final String CONTEXT_DIR = ".roxycode/context";
+    private static final Logger log = LoggerFactory.getLogger(PromptService.class);
+    private static final String CLASSPATH_PROMPT = "prompts/core_workflow.md";
+    private static final String JEXL_DOC_PATH = "docs/jexl.md";
+    private static final String EXPLORE_PROMPT_PATH = "prompts/explore_phase.md";
+    private static final String REVIEW_PROMPT_PATH = "prompts/review_phase.md";
+    private static final String PLAN_PROMPT_PATH = "prompts/plan_phase.md";
+    private static final String CODE_PROMPT_PATH = "prompts/code_phase.md";
+    private static final String CONTEXT_DIR = ".roxycode/context";
 
-  private static final String NEWLINE_DOUBLE = "\n\n";
-  private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
-  private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
-  private static final String HEADER_SESSION_CONTEXT = "\n\n## SESSION CONTEXT\n";
-  private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
-  private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
+    private static final String NEWLINE_DOUBLE = "\n\n";
+    private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
+    private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
+    private static final String HEADER_SESSION_CONTEXT = "\n\n## SESSION CONTEXT\n";
+    private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
+    private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
 
-  private final ProjectService projectService;
-  private final SettingsService settingsService;
-  private final WorkflowService workflowService;
-  private final JexlServiceRegistry jexlServiceRegistry;
-  private final GitService gitService;
-  private final ProjectAnalysisService projectAnalysisService;
-  private final RepoMapPackerService repoMapPackerService;
+    private final ProjectService projectService;
+    private final SettingsService settingsService;
+    private final WorkflowService workflowService;
+    private final JexlServiceRegistry jexlServiceRegistry;
+    private final GitService gitService;
+    private final ProjectAnalysisService projectAnalysisService;
+    private final RepoMapPackerService repoMapPackerService;
 
-  public PromptService() {
-    this(null, null, null, null, null, null, null);
-  }
-
-  public PromptService(ProjectService projectService, SettingsService settingsService) {
-    this(projectService, settingsService, null, null, null, null, null);
-  }
-
-  @Autowired
-  public PromptService(
-      ProjectService projectService,
-      SettingsService settingsService,
-      WorkflowService workflowService,
-      JexlServiceRegistry jexlServiceRegistry,
-      GitService gitService,
-      ProjectAnalysisService projectAnalysisService,
-      RepoMapPackerService repoMapPackerService) {
-    this.projectService = projectService;
-    this.settingsService = settingsService;
-    this.workflowService = workflowService;
-    this.jexlServiceRegistry = jexlServiceRegistry;
-    this.gitService = gitService;
-    this.projectAnalysisService = projectAnalysisService;
-    this.repoMapPackerService = repoMapPackerService;
-  }
-
-  public String getStableContext() {
-    if (Thread.currentThread().isInterrupted()) {
-      throw new CancellationException("Prompt building cancelled");
+    public PromptService() {
+        this(null, null, null, null, null, null, null);
     }
-    StringBuilder sb = new StringBuilder(loadCoreWorkflowPrompt());
-    sb.append(loadAllPrompts());
-    sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
-    sb.append(loadAllDocs());
-    sb.append(loadProjectContext());
-    return sb.toString();
-  }
 
-  public String getSessionContext() {
-    WorkflowPhase phase =
-        workflowService != null ? workflowService.getCurrentPhase() : WorkflowPhase.EXPLORE;
-    return getSessionContext(phase);
-  }
-
-  public String getSessionContext(WorkflowPhase phase) {
-    if (Thread.currentThread().isInterrupted()) {
-      throw new CancellationException("Session context building cancelled");
+    public PromptService(ProjectService projectService, SettingsService settingsService) {
+        this(projectService, settingsService, null, null, null, null, null);
     }
-    try {
-      WorkflowPhase currentPhase =
-          phase != null
-              ? phase
-              : (workflowService != null
-                  ? workflowService.getCurrentPhase()
-                  : WorkflowPhase.EXPLORE);
 
-      StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
-      if (projectAnalysisService != null) {
-        sb.append("DOMINANT LANGUAGE: ")
-            .append(projectAnalysisService.getDominantLanguage())
-            .append("\n");
-      }
-      sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
+    @Autowired
+    public PromptService(
+            ProjectService projectService,
+            SettingsService settingsService,
+            WorkflowService workflowService,
+            JexlServiceRegistry jexlServiceRegistry,
+            GitService gitService,
+            ProjectAnalysisService projectAnalysisService,
+            RepoMapPackerService repoMapPackerService) {
+        this.projectService = projectService;
+        this.settingsService = settingsService;
+        this.workflowService = workflowService;
+        this.jexlServiceRegistry = jexlServiceRegistry;
+        this.gitService = gitService;
+        this.projectAnalysisService = projectAnalysisService;
+        this.repoMapPackerService = repoMapPackerService;
+    }
 
-      String persona =
-          String.format(
-              "You are the %s. %s", currentPhase.getPersonaTitle(), currentPhase.getDescription());
-      sb.append(persona).append(NEWLINE_DOUBLE);
-      if (jexlServiceRegistry != null) {
-        sb.append("You have access to the following JEXL tools:\n")
-            .append(jexlServiceRegistry.getDocumentation(currentPhase));
-      }
-
-      if (gitService != null) {
-        String gitStatus = gitService.getStatus();
-        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
-          sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
+    public String getStableContext() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Prompt building cancelled");
         }
-      }
-      if (Thread.currentThread().isInterrupted()) {
-        throw new CancellationException("Session context building cancelled");
-      }
-      return sb.toString();
-    } catch (Exception e) {
-      rethrowIfCancelled(e);
-      throw e;
+        StringBuilder sb = new StringBuilder(loadCoreWorkflowPrompt());
+        sb.append(loadAllPrompts());
+        sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
+        sb.append(loadAllDocs());
+        sb.append(loadProjectContext());
+        return sb.toString();
     }
-  }
 
-  public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
-    if (Thread.currentThread().isInterrupted()) {
-      throw new CancellationException("System prompt building cancelled");
+    public String getSessionContext() {
+        WorkflowPhase phase =
+                workflowService != null ? workflowService.getCurrentPhase() : WorkflowPhase.EXPLORE;
+        return getSessionContext(phase);
     }
-    try {
-      WorkflowPhase currentPhase =
-          phase != null
-              ? phase
-              : (workflowService != null
-                  ? workflowService.getCurrentPhase()
-                  : WorkflowPhase.EXPLORE);
 
-      StringBuilder systemPrompt = new StringBuilder(getStableContext());
-
-      String phasePrompt =
-          currentPhase == WorkflowPhase.EXPLORE
-              ? generateExploreSystemPrompt()
-              : loadPhasePrompt(currentPhase);
-      systemPrompt.append(NEWLINE_DOUBLE).append(phasePrompt);
-
-      if (repoMapPackerService != null) {
-        EditorResult repoMap = repoMapPackerService.generateRepoMap();
-        if (repoMap != null && repoMap.success()) {
-          systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
+    public String getSessionContext(WorkflowPhase phase) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Session context building cancelled");
         }
-      }
+        try {
+            WorkflowPhase currentPhase =
+                    phase != null
+                            ? phase
+                            : (workflowService != null
+                                    ? workflowService.getCurrentPhase()
+                                    : WorkflowPhase.EXPLORE);
 
-      systemPrompt.append(getSessionContext(currentPhase));
+            StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
+            if (projectAnalysisService != null) {
+                sb.append("DOMINANT LANGUAGE: ")
+                        .append(projectAnalysisService.getDominantLanguage())
+                        .append("\n");
+            }
+            sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
 
-      if (additionalInstructions != null) {
-        systemPrompt
-            .append(HEADER_ADDITIONAL_INSTRUCTIONS)
-            .append(additionalInstructions)
-            .append(NEWLINE_DOUBLE);
-      }
+            String persona =
+                    String.format(
+                            "You are the %s. %s",
+                            currentPhase.getPersonaTitle(), currentPhase.getDescription());
+            sb.append(persona).append(NEWLINE_DOUBLE);
+            if (jexlServiceRegistry != null) {
+                sb.append("You have access to the following JEXL tools:\n")
+                        .append(jexlServiceRegistry.getDocumentation(currentPhase));
+            }
 
-      if (Thread.currentThread().isInterrupted()) {
-        throw new CancellationException("System prompt building cancelled");
-      }
-      return systemPrompt.toString();
-    } catch (Exception e) {
-      rethrowIfCancelled(e);
-      throw e;
-    }
-  }
-
-  public String loadPhasePrompt(WorkflowPhase phase) {
-    String path =
-        switch (phase) {
-          case EXPLORE -> EXPLORE_PROMPT_PATH;
-          case PLAN -> PLAN_PROMPT_PATH;
-          case CODE -> CODE_PROMPT_PATH;
-          case REVIEW -> REVIEW_PROMPT_PATH;
-        };
-    return readClasspathResource(path);
-  }
-
-  public String loadCoreWorkflowPrompt() {
-    return readClasspathResource(CLASSPATH_PROMPT);
-  }
-
-  public String loadJexlContext() {
-    return readClasspathResource(JEXL_DOC_PATH);
-  }
-
-  public String loadExplorePrompt() {
-    return loadPhasePrompt(WorkflowPhase.EXPLORE);
-  }
-
-  public String loadReviewPrompt() {
-    return loadPhasePrompt(WorkflowPhase.REVIEW);
-  }
-
-  public String loadPlanPrompt() {
-    return loadPhasePrompt(WorkflowPhase.PLAN);
-  }
-
-  public String loadCodePrompt() {
-    return loadPhasePrompt(WorkflowPhase.CODE);
-  }
-
-  public String loadAllPrompts() {
-    return loadMarkdownFromClasspath(
-        "prompts",
-        "core_workflow.md",
-        "explore_phase.md",
-        "plan_phase.md",
-        "code_phase.md",
-        "review_phase.md");
-  }
-
-  public String loadAllDocs() {
-    return loadMarkdownFromClasspath("docs", "jexl.md");
-  }
-
-  public String loadProjectContext() {
-    if (Thread.currentThread().isInterrupted()) {
-      throw new CancellationException("Project context loading cancelled");
-    }
-    if (projectService == null || !projectService.hasActiveProject()) {
-      return "";
-    }
-    Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
-    if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
-      return "";
-    }
-
-    StringBuilder sb = new StringBuilder();
-    try (Stream<Path> stream = Files.list(contextDir)) {
-      stream
-          .filter(Files::isRegularFile)
-          .filter(p -> p.getFileName().toString().endsWith(".md"))
-          .sorted(
-              (p1, p2) ->
-                  p1.getFileName().toString().compareToIgnoreCase(p2.getFileName().toString()))
-          .forEach(
-              p -> {
-                if (Thread.currentThread().isInterrupted()) {
-                  throw new CancellationException("Project context loading cancelled");
+            if (gitService != null) {
+                String gitStatus = gitService.getStatus();
+                if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
+                    sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
                 }
-                try {
-                  String content = Files.readString(p, StandardCharsets.UTF_8);
-                  sb.append("\n\n## Project Context: ")
-                      .append(p.getFileName().toString())
-                      .append("\n");
-                  sb.append(content);
-                } catch (Exception e) {
-                  rethrowIfCancelled(e);
-                  log.error("Failed to read project context file {}: {}", p, e.getMessage());
-                }
-              });
-    } catch (Exception e) {
-      rethrowIfCancelled(e);
-      log.error("Failed to list project context files in {}: {}", contextDir, e.getMessage());
-    }
-
-    return sb.toString();
-  }
-
-  private void rethrowIfCancelled(Exception e) {
-    if (e instanceof CancellationException
-        || e instanceof ClosedByInterruptException
-        || YieldTurnException.findCause(e, CancellationException.class) != null
-        || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
-        || YieldTurnException.findCause(e, InterruptedException.class) != null
-        || Thread.currentThread().isInterrupted()) {
-      Thread.currentThread().interrupt();
-      if (e instanceof CancellationException ce) {
-        throw ce;
-      }
-      CancellationException cancelEx =
-          new CancellationException("Prompt service operation cancelled");
-      cancelEx.initCause(e);
-      throw cancelEx;
-    }
-  }
-
-  public java.util.List<String> listContextFiles() {
-    if (projectService == null || !projectService.hasActiveProject()) {
-      return java.util.Collections.emptyList();
-    }
-    Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
-    if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
-      return java.util.Collections.emptyList();
-    }
-    try (Stream<Path> stream = Files.list(contextDir)) {
-      return stream
-          .filter(Files::isRegularFile)
-          .filter(p -> p.getFileName().toString().endsWith(".md"))
-          .map(p -> p.getFileName().toString())
-          .sorted()
-          .toList();
-    } catch (IOException e) {
-      log.error("Failed to list context files: {}", e.getMessage());
-      return java.util.Collections.emptyList();
-    }
-  }
-
-  public String readContextFile(String filename) {
-    if (projectService == null || !projectService.hasActiveProject()) {
-      return "";
-    }
-    Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
-    if (Files.exists(file)) {
-      try {
-        return Files.readString(file, StandardCharsets.UTF_8);
-      } catch (IOException e) {
-        log.error("Failed to read context file {}: {}", filename, e.getMessage());
-      }
-    }
-    return "";
-  }
-
-  public void saveContextFile(String filename, String content) {
-    if (projectService == null || !projectService.hasActiveProject()) {
-      throw new IllegalStateException("No active project");
-    }
-    Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
-    try {
-      Files.createDirectories(file.getParent());
-      Files.writeString(file, content, StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      log.error("Failed to save context file {}: {}", filename, e.getMessage());
-      throw new RuntimeException("Failed to save context file", e);
-    }
-  }
-
-  public void deleteContextFile(String filename) {
-    if (projectService == null || !projectService.hasActiveProject()) {
-      return;
-    }
-    Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
-    try {
-      Files.deleteIfExists(file);
-    } catch (IOException e) {
-      log.error("Failed to delete context file {}: {}", filename, e.getMessage());
-      throw new RuntimeException("Failed to delete context file", e);
-    }
-  }
-
-  public String generateExploreSystemPrompt() {
-    String prompt = loadExplorePrompt();
-    if (settingsService != null) {
-      return prompt.replace(
-          "${maxTurns}", String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
-    }
-    return prompt;
-  }
-
-  private String loadMarkdownFromClasspath(String directory, String... excludeFiles) {
-    java.util.List<String> excludes = java.util.Arrays.asList(excludeFiles);
-    StringBuilder sb = new StringBuilder();
-    try {
-      PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-      Resource[] resources = resolver.getResources("classpath*:" + directory + "/*.md");
-      for (Resource resource : resources) {
-        if (resource.getFilename() != null && !excludes.contains(resource.getFilename())) {
-          sb.append("\n\n## ").append(resource.getFilename()).append("\n");
-          sb.append(new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+            }
+            if (Thread.currentThread().isInterrupted()) {
+                throw new CancellationException("Session context building cancelled");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            rethrowIfCancelled(e);
+            throw e;
         }
-      }
-    } catch (IOException e) {
-      log.error("Failed to discover markdown files in {}: {}", directory, e.getMessage());
     }
-    return sb.toString();
-  }
 
-  private String readClasspathResource(String path) {
-    try {
-      Resource resource = new ClassPathResource(path);
-      return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      log.error("Failed to load resource {} from classpath: {}", path, e.getMessage());
-      return "";
+    public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("System prompt building cancelled");
+        }
+        try {
+            WorkflowPhase currentPhase =
+                    phase != null
+                            ? phase
+                            : (workflowService != null
+                                    ? workflowService.getCurrentPhase()
+                                    : WorkflowPhase.EXPLORE);
+
+            StringBuilder systemPrompt = new StringBuilder(getStableContext());
+
+            String phasePrompt =
+                    currentPhase == WorkflowPhase.EXPLORE
+                            ? generateExploreSystemPrompt()
+                            : loadPhasePrompt(currentPhase);
+            systemPrompt.append(NEWLINE_DOUBLE).append(phasePrompt);
+
+            if (repoMapPackerService != null) {
+                EditorResult repoMap = repoMapPackerService.generateRepoMap();
+                if (repoMap != null && repoMap.success()) {
+                    systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
+                }
+            }
+
+            systemPrompt.append(getSessionContext(currentPhase));
+
+            if (additionalInstructions != null) {
+                systemPrompt
+                        .append(HEADER_ADDITIONAL_INSTRUCTIONS)
+                        .append(additionalInstructions)
+                        .append(NEWLINE_DOUBLE);
+            }
+
+            if (Thread.currentThread().isInterrupted()) {
+                throw new CancellationException("System prompt building cancelled");
+            }
+            return systemPrompt.toString();
+        } catch (Exception e) {
+            rethrowIfCancelled(e);
+            throw e;
+        }
     }
-  }
+
+    public String loadPhasePrompt(WorkflowPhase phase) {
+        String path =
+                switch (phase) {
+                    case EXPLORE -> EXPLORE_PROMPT_PATH;
+                    case PLAN -> PLAN_PROMPT_PATH;
+                    case CODE -> CODE_PROMPT_PATH;
+                    case REVIEW -> REVIEW_PROMPT_PATH;
+                };
+        return readClasspathResource(path);
+    }
+
+    public String loadCoreWorkflowPrompt() {
+        return readClasspathResource(CLASSPATH_PROMPT);
+    }
+
+    public String loadJexlContext() {
+        return readClasspathResource(JEXL_DOC_PATH);
+    }
+
+    public String loadExplorePrompt() {
+        return loadPhasePrompt(WorkflowPhase.EXPLORE);
+    }
+
+    public String loadReviewPrompt() {
+        return loadPhasePrompt(WorkflowPhase.REVIEW);
+    }
+
+    public String loadPlanPrompt() {
+        return loadPhasePrompt(WorkflowPhase.PLAN);
+    }
+
+    public String loadCodePrompt() {
+        return loadPhasePrompt(WorkflowPhase.CODE);
+    }
+
+    public String loadAllPrompts() {
+        return loadMarkdownFromClasspath(
+                "prompts",
+                "core_workflow.md",
+                "explore_phase.md",
+                "plan_phase.md",
+                "code_phase.md",
+                "review_phase.md");
+    }
+
+    public String loadAllDocs() {
+        return loadMarkdownFromClasspath("docs", "jexl.md");
+    }
+
+    public String loadProjectContext() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Project context loading cancelled");
+        }
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return "";
+        }
+        Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
+        if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        try (Stream<Path> stream = Files.list(contextDir)) {
+            stream.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".md"))
+                    .sorted(
+                            (p1, p2) ->
+                                    p1.getFileName()
+                                            .toString()
+                                            .compareToIgnoreCase(p2.getFileName().toString()))
+                    .forEach(
+                            p -> {
+                                if (Thread.currentThread().isInterrupted()) {
+                                    throw new CancellationException(
+                                            "Project context loading cancelled");
+                                }
+                                try {
+                                    String content = Files.readString(p, StandardCharsets.UTF_8);
+                                    sb.append("\n\n## Project Context: ")
+                                            .append(p.getFileName().toString())
+                                            .append("\n");
+                                    sb.append(content);
+                                } catch (Exception e) {
+                                    rethrowIfCancelled(e);
+                                    log.error(
+                                            "Failed to read project context file {}: {}",
+                                            p,
+                                            e.getMessage());
+                                }
+                            });
+        } catch (Exception e) {
+            rethrowIfCancelled(e);
+            log.error("Failed to list project context files in {}: {}", contextDir, e.getMessage());
+        }
+
+        return sb.toString();
+    }
+
+    private void rethrowIfCancelled(Exception e) {
+        if (e instanceof CancellationException
+                || e instanceof ClosedByInterruptException
+                || YieldTurnException.findCause(e, CancellationException.class) != null
+                || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
+                || YieldTurnException.findCause(e, InterruptedException.class) != null
+                || Thread.currentThread().isInterrupted()) {
+            Thread.currentThread().interrupt();
+            if (e instanceof CancellationException ce) {
+                throw ce;
+            }
+            CancellationException cancelEx =
+                    new CancellationException("Prompt service operation cancelled");
+            cancelEx.initCause(e);
+            throw cancelEx;
+        }
+    }
+
+    public java.util.List<String> listContextFiles() {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return java.util.Collections.emptyList();
+        }
+        Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
+        if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
+            return java.util.Collections.emptyList();
+        }
+        try (Stream<Path> stream = Files.list(contextDir)) {
+            return stream.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".md"))
+                    .map(p -> p.getFileName().toString())
+                    .sorted()
+                    .toList();
+        } catch (IOException e) {
+            log.error("Failed to list context files: {}", e.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    public String readContextFile(String filename) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return "";
+        }
+        Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
+        if (Files.exists(file)) {
+            try {
+                return Files.readString(file, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                log.error("Failed to read context file {}: {}", filename, e.getMessage());
+            }
+        }
+        return "";
+    }
+
+    public void saveContextFile(String filename, String content) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            throw new IllegalStateException("No active project");
+        }
+        Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, content, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("Failed to save context file {}: {}", filename, e.getMessage());
+            throw new RuntimeException("Failed to save context file", e);
+        }
+    }
+
+    public void deleteContextFile(String filename) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return;
+        }
+        Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            log.error("Failed to delete context file {}: {}", filename, e.getMessage());
+            throw new RuntimeException("Failed to delete context file", e);
+        }
+    }
+
+    public String generateExploreSystemPrompt() {
+        String prompt = loadExplorePrompt();
+        if (settingsService != null) {
+            return prompt.replace(
+                    "${maxTurns}",
+                    String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
+        }
+        return prompt;
+    }
+
+    private String loadMarkdownFromClasspath(String directory, String... excludeFiles) {
+        java.util.List<String> excludes = java.util.Arrays.asList(excludeFiles);
+        StringBuilder sb = new StringBuilder();
+        try {
+            PathMatchingResourcePatternResolver resolver =
+                    new PathMatchingResourcePatternResolver();
+            Resource[] resources = resolver.getResources("classpath*:" + directory + "/*.md");
+            for (Resource resource : resources) {
+                if (resource.getFilename() != null && !excludes.contains(resource.getFilename())) {
+                    sb.append("\n\n## ").append(resource.getFilename()).append("\n");
+                    sb.append(
+                            new String(
+                                    resource.getInputStream().readAllBytes(),
+                                    StandardCharsets.UTF_8));
+                }
+            }
+        } catch (IOException e) {
+            log.error("Failed to discover markdown files in {}: {}", directory, e.getMessage());
+        }
+        return sb.toString();
+    }
+
+    private String readClasspathResource(String path) {
+        try {
+            Resource resource = new ClassPathResource(path);
+            return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("Failed to load resource {} from classpath: {}", path, e.getMessage());
+            return "";
+        }
+    }
 }

@@ -163,7 +163,9 @@
                 <version>3.10.2</version>
                 <configuration>
                     <java>
-                        <googleJavaFormat/>
+                        <googleJavaFormat>
+                            <style>AOSP</style>
+                        </googleJavaFormat>
                     </java>
                 </configuration>
             </plugin>

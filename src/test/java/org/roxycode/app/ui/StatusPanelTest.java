@@ -8,18 +8,19 @@ import org.junit.jupiter.api.Test;
 import org.roxycode.app.service.EnvironmentService;
 
 class StatusPanelTest {
-  @Test
-  void testStatusPanelInstantiation() {
-    EnvironmentService envService = new EnvironmentService();
-    StatusPanel status = new StatusPanel(envService);
-    assertNotNull(status);
-    assertEquals(3, status.getComponentCount());
+    @Test
+    void testStatusPanelInstantiation() {
+        EnvironmentService envService = new EnvironmentService();
+        StatusPanel status = new StatusPanel(envService);
+        assertNotNull(status);
+        assertEquals(3, status.getComponentCount());
 
-    for (Component comp : status.getComponents()) {
-      if (comp instanceof JLabel label) {
-        assertFalse(
-            label.getText().contains("Messages:"), "Status bar should not contain Messages count");
-      }
+        for (Component comp : status.getComponents()) {
+            if (comp instanceof JLabel label) {
+                assertFalse(
+                        label.getText().contains("Messages:"),
+                        "Status bar should not contain Messages count");
+            }
+        }
     }
-  }
 }

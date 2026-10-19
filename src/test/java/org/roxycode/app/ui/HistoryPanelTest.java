@@ -12,28 +12,28 @@ import org.springframework.ai.chat.memory.ChatMemory;
 
 public class HistoryPanelTest {
 
-  @Test
-  public void testHistoryPanelInitialization() {
-    TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+    @Test
+    public void testHistoryPanelInitialization() {
+        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
 
-    ChatMemory chatMemory = mock(ChatMemory.class);
-    GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
-    HistoryPanel historyPanel =
-        new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "test");
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
+        HistoryPanel historyPanel =
+                new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "test");
 
-    // Verify listeners registered
-    verify(turnEventBridge).addUserMessageListener(anyString(), any());
-    verify(turnEventBridge).addCompleteListener(anyString(), any());
-    verify(turnEventBridge).addToolExecutionListener(anyString(), any());
+        // Verify listeners registered
+        verify(turnEventBridge).addUserMessageListener(anyString(), any());
+        verify(turnEventBridge).addCompleteListener(anyString(), any());
+        verify(turnEventBridge).addToolExecutionListener(anyString(), any());
 
-    // Verify layout
-    boolean hasScrollPane = false;
-    for (Component comp : historyPanel.getComponents()) {
-      if (comp instanceof JScrollPane) {
-        hasScrollPane = true;
-        break;
-      }
+        // Verify layout
+        boolean hasScrollPane = false;
+        for (Component comp : historyPanel.getComponents()) {
+            if (comp instanceof JScrollPane) {
+                hasScrollPane = true;
+                break;
+            }
+        }
+        assertTrue(hasScrollPane, "HistoryPanel should contain a JScrollPane");
     }
-    assertTrue(hasScrollPane, "HistoryPanel should contain a JScrollPane");
-  }
 }

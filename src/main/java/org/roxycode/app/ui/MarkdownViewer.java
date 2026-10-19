@@ -10,50 +10,50 @@ import javax.swing.*;
 
 /** A reusable component for viewing Markdown content with theme-aware styling. */
 public final class MarkdownViewer extends JTextPane {
-  private static final long serialVersionUID = 1L;
-  private final transient Parser parser;
-  private final transient HtmlRenderer renderer;
-  private String currentMarkdown = "";
+    private static final long serialVersionUID = 1L;
+    private final transient Parser parser;
+    private final transient HtmlRenderer renderer;
+    private String currentMarkdown = "";
 
-  public MarkdownViewer() {
-    setEditable(false);
-    setContentType("text/html");
-    setOpaque(true);
-    putClientProperty("JEditorPane.honorDisplayProperties", true);
+    public MarkdownViewer() {
+        setEditable(false);
+        setContentType("text/html");
+        setOpaque(true);
+        putClientProperty("JEditorPane.honorDisplayProperties", true);
 
-    MutableDataSet options = new MutableDataSet();
-    options.set(
-        Parser.EXTENSIONS,
-        Arrays.asList(TablesExtension.create(), StrikethroughExtension.create()));
-    parser = Parser.builder(options).build();
-    renderer = HtmlRenderer.builder(options).build();
+        MutableDataSet options = new MutableDataSet();
+        options.set(
+                Parser.EXTENSIONS,
+                Arrays.asList(TablesExtension.create(), StrikethroughExtension.create()));
+        parser = Parser.builder(options).build();
+        renderer = HtmlRenderer.builder(options).build();
 
-    updateTheme();
-    SwingHtmlUtils.installTextContextMenu(this);
-  }
-
-  @Override
-  public void updateUI() {
-    super.updateUI();
-    if (parser != null) {
-      updateTheme();
+        updateTheme();
+        SwingHtmlUtils.installTextContextMenu(this);
     }
-  }
 
-  public void updateTheme() {
-    SwingHtmlUtils.applyTheme(this, 10);
-    render();
-  }
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (parser != null) {
+            updateTheme();
+        }
+    }
 
-  public void setContent(String markdown) {
-    this.currentMarkdown = markdown == null ? "" : markdown;
-    render();
-  }
+    public void updateTheme() {
+        SwingHtmlUtils.applyTheme(this, 10);
+        render();
+    }
 
-  private void render() {
-    String htmlContent = renderer.render(parser.parse(currentMarkdown));
-    String highlightedHtml = JexlToHtmlConverter.highlightCodeBlocks(htmlContent);
-    setText("<html><body>" + highlightedHtml + "</body></html>");
-    setCaretPosition(0);
-  }
+    public void setContent(String markdown) {
+        this.currentMarkdown = markdown == null ? "" : markdown;
+        render();
+    }
+
+    private void render() {
+        String htmlContent = renderer.render(parser.parse(currentMarkdown));
+        String highlightedHtml = JexlToHtmlConverter.highlightCodeBlocks(htmlContent);
+        setText("<html><body>" + highlightedHtml + "</body></html>");
+        setCaretPosition(0);
+    }
 }

@@ -9,22 +9,22 @@ import org.springframework.stereotype.Service;
 
 @Service
 @AgentService(
-    value = "geminiCacheService",
-    phases = {"*"})
+        value = "geminiCacheService",
+        phases = {"*"})
 @AgentDoc("Manages Gemini API context caching indicators.")
 public class GeminiCacheService {
-  private static final Logger log = LoggerFactory.getLogger(GeminiCacheService.class);
-  private final SettingsService settingsService;
+    private static final Logger log = LoggerFactory.getLogger(GeminiCacheService.class);
+    private final SettingsService settingsService;
 
-  public GeminiCacheService(SettingsService settingsService) {
-    this.settingsService = settingsService;
-  }
+    public GeminiCacheService(SettingsService settingsService) {
+        this.settingsService = settingsService;
+    }
 
-  @AgentDoc(
-      value = "Roughly estimates the number of tokens in a string.",
-      examples = "geminiCacheService.estimateTokens('Some text to estimate tokens for.')")
-  public long estimateTokens(String text) {
-    if (text == null) return 0;
-    return text.length() / 4;
-  }
+    @AgentDoc(
+            value = "Roughly estimates the number of tokens in a string.",
+            examples = "geminiCacheService.estimateTokens('Some text to estimate tokens for.')")
+    public long estimateTokens(String text) {
+        if (text == null) return 0;
+        return text.length() / 4;
+    }
 }

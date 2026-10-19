@@ -18,68 +18,68 @@ import org.roxycode.app.service.ProjectService;
 
 class RepoMapPackerServiceTest {
 
-  @TempDir Path tempDir;
+    @TempDir Path tempDir;
 
-  private ProjectService projectService;
-  private ObjectMapper objectMapper;
-  private GrepService grepService;
-  private ProjectCacheMetaService metaService;
-  private GeminiCacheService geminiCacheService;
-  private RepoMapPackerService service;
+    private ProjectService projectService;
+    private ObjectMapper objectMapper;
+    private GrepService grepService;
+    private ProjectCacheMetaService metaService;
+    private GeminiCacheService geminiCacheService;
+    private RepoMapPackerService service;
 
-  @BeforeEach
-  void setUp() {
-    projectService = Mockito.mock(ProjectService.class);
-    objectMapper = new ObjectMapper();
-    grepService = Mockito.mock(GrepService.class);
-    metaService = Mockito.mock(ProjectCacheMetaService.class);
-    geminiCacheService = Mockito.mock(GeminiCacheService.class);
-    service =
-        new RepoMapPackerService(
-            projectService, objectMapper, grepService, metaService, geminiCacheService);
-  }
+    @BeforeEach
+    void setUp() {
+        projectService = Mockito.mock(ProjectService.class);
+        objectMapper = new ObjectMapper();
+        grepService = Mockito.mock(GrepService.class);
+        metaService = Mockito.mock(ProjectCacheMetaService.class);
+        geminiCacheService = Mockito.mock(GeminiCacheService.class);
+        service =
+                new RepoMapPackerService(
+                        projectService, objectMapper, grepService, metaService, geminiCacheService);
+    }
 
-  @Test
-  void testNoActiveProject() {
-    when(projectService.hasActiveProject()).thenReturn(false);
-    EditorResult result = service.generateRepoMap();
-    assertFalse(result.success());
-    assertEquals("No active project", result.errorHint());
-  }
+    @Test
+    void testNoActiveProject() {
+        when(projectService.hasActiveProject()).thenReturn(false);
+        EditorResult result = service.generateRepoMap();
+        assertFalse(result.success());
+        assertEquals("No active project", result.errorHint());
+    }
 
-  @Test
-  void testGenerateRepoMapWithSmallFile() throws IOException {
-    when(projectService.hasActiveProject()).thenReturn(true);
-    when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    @Test
+    void testGenerateRepoMapWithSmallFile() throws IOException {
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
 
-    Path testFile = tempDir.resolve("test.txt");
-    Files.writeString(testFile, "Hello World");
-    when(grepService.listFiles(null)).thenReturn(List.of("test.txt"));
+        Path testFile = tempDir.resolve("test.txt");
+        Files.writeString(testFile, "Hello World");
+        when(grepService.listFiles(null)).thenReturn(List.of("test.txt"));
 
-    EditorResult result = service.generateRepoMap();
-    assertTrue(result.success());
-    assertTrue(result.content().contains("# Repo Map Snapshot"));
-    assertTrue(result.content().contains("## Project Tree"));
-  }
+        EditorResult result = service.generateRepoMap();
+        assertTrue(result.success());
+        assertTrue(result.content().contains("# Repo Map Snapshot"));
+        assertTrue(result.content().contains("## Project Tree"));
+    }
 
-  @Test
-  void testExcludeBinaryFiles() throws IOException {
-    when(projectService.hasActiveProject()).thenReturn(true);
-    when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    @Test
+    void testExcludeBinaryFiles() throws IOException {
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
 
-    // Create a text file
-    Path textFile = tempDir.resolve("test.txt");
-    Files.writeString(textFile, "Hello Text");
+        // Create a text file
+        Path textFile = tempDir.resolve("test.txt");
+        Files.writeString(textFile, "Hello Text");
 
-    // Create a binary file (contains NUL byte)
-    Path binaryFile = tempDir.resolve("test.bin");
-    Files.write(binaryFile, new byte[] {0, 1, 2, 3});
+        // Create a binary file (contains NUL byte)
+        Path binaryFile = tempDir.resolve("test.bin");
+        Files.write(binaryFile, new byte[] {0, 1, 2, 3});
 
-    when(grepService.listFiles(null)).thenReturn(List.of("test.txt", "test.bin"));
+        when(grepService.listFiles(null)).thenReturn(List.of("test.txt", "test.bin"));
 
-    EditorResult result = service.generateRepoMap();
-    assertTrue(result.success());
-    assertTrue(result.content().contains("test.txt"));
-    assertFalse(result.content().contains("test.bin"), "Binary file should be excluded");
-  }
+        EditorResult result = service.generateRepoMap();
+        assertTrue(result.success());
+        assertTrue(result.content().contains("test.txt"));
+        assertFalse(result.content().contains("test.bin"), "Binary file should be excluded");
+    }
 }

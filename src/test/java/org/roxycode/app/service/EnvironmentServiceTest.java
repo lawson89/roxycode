@@ -6,24 +6,24 @@ import org.junit.jupiter.api.Test;
 
 class EnvironmentServiceTest {
 
-  private final EnvironmentService service = new EnvironmentService();
+    private final EnvironmentService service = new EnvironmentService();
 
-  @Test
-  void testGetSystemInfo() {
-    assertNotNull(service.getOsName());
-    assertNotNull(service.getJavaVersion());
-    assertNotNull(service.getCurrentUser());
-  }
+    @Test
+    void testGetSystemInfo() {
+        assertNotNull(service.getOsName());
+        assertNotNull(service.getJavaVersion());
+        assertNotNull(service.getCurrentUser());
+    }
 
-  @Test
-  void testMemoryUsage() {
-    assertTrue(service.getTotalMemoryMb() > 0);
-    assertTrue(service.getMemoryUsageMb() >= 0);
-  }
+    @Test
+    void testMemoryUsage() {
+        assertTrue(service.getTotalMemoryMb() > 0);
+        assertTrue(service.getMemoryUsageMb() >= 0);
+    }
 
-  @Test
-  void testGetOsIcon() {
-    // Note: Headless environment check
-    assertNotNull(service.getOsIcon());
-  }
+    @Test
+    void testGetOsIcon() {
+        // Note: Headless environment check
+        assertNotNull(service.getOsIcon());
+    }
 }
