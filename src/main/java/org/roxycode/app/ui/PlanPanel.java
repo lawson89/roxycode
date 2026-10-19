@@ -129,7 +129,7 @@ public final class PlanPanel extends JPanel {
       }
       html.append("</table>");
 
-      html.append(renderLogTable("Code Review Log", plan.codeReviewLog()));
+      
       html.append(renderLogTable("Handoff Log", plan.handoffLog()));
     }
 

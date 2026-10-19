@@ -13,7 +13,6 @@ public record ImplementationPlan(
     String approvalTimestamp,
     String approvedBy,
     String completedOn,
-    List<LogEntry> codeReviewLog,
     List<LogEntry> handoffLog) {
   public record TechStep(String description, boolean completed) {}
 
@@ -23,7 +22,6 @@ public record ImplementationPlan(
   public ImplementationPlan {
     requirements = requirements != null ? List.copyOf(requirements) : List.of();
     technicalSteps = technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
-    codeReviewLog = codeReviewLog != null ? List.copyOf(codeReviewLog) : List.of();
     handoffLog = handoffLog != null ? List.copyOf(handoffLog) : List.of();
   }
 }

@@ -124,10 +124,7 @@ public class WorkflowService {
       String user = "System";
       String message = String.format("%s -> %s: %s", oldPhase, nextPhase, reason);
       planManager.addHandoffLogEntry(timestamp, user, message);
-      if ((oldPhase == WorkflowPhase.CODE && nextPhase == WorkflowPhase.REVIEW)
-          || (oldPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE)) {
-        planManager.addCodeReviewLogEntry(timestamp, user, message);
-      }
+      
       handleCompletionMetadata(oldPhase, nextPhase, timestamp);
 
       this.currentPhase = nextPhase;

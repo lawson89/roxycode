@@ -83,7 +83,7 @@ public class PlanService {
       steps.add(new ImplementationPlan.TechStep("Automated code review passes", false));
     }
 
-    this.currentPlan =
+        this.currentPlan =
         new ImplementationPlan(
             plan.title(),
             plan.goal(),
@@ -93,7 +93,6 @@ public class PlanService {
             plan.approvalTimestamp(),
             plan.approvedBy(),
             plan.completedOn(),
-            plan.codeReviewLog(),
             plan.handoffLog());
     notifyListeners();
     return "Implementation plan submitted successfully with mandatory verification checklist items.";
@@ -122,9 +121,9 @@ public class PlanService {
             .map(s -> new ImplementationPlan.TechStep(s, false))
             .collect(Collectors.toList());
 
-    return submitPlan(
+        return submitPlan(
         new ImplementationPlan(
-            title, goal, rawRequirements, steps, false, null, null, null, null, null));
+            title, goal, rawRequirements, steps, false, null, null, null, null));
   }
 
   /**
@@ -149,16 +148,16 @@ public class PlanService {
             .map(s -> new ImplementationPlan.TechStep(s, false))
             .collect(Collectors.toList());
 
-    return submitPlan(
+        return submitPlan(
         new ImplementationPlan(
-            title, goal, requirements, steps, false, null, null, null, null, null));
+            title, goal, requirements, steps, false, null, null, null, null));
   }
 
   /** Approves the current plan. */
   @AgentDoc("Approves the current implementation plan.")
   public void approvePlan(String user, String timestamp) {
     if (currentPlan == null) return;
-    currentPlan =
+        currentPlan =
         new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),
@@ -168,7 +167,6 @@ public class PlanService {
             timestamp,
             user,
             currentPlan.completedOn(),
-            currentPlan.codeReviewLog(),
             currentPlan.handoffLog());
     notifyListeners();
   }
@@ -177,7 +175,7 @@ public class PlanService {
   @AgentDoc("Marks the current implementation plan as completed.")
   public void completePlan(String timestamp) {
     if (currentPlan == null) return;
-    currentPlan =
+        currentPlan =
         new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),
@@ -187,7 +185,6 @@ public class PlanService {
             currentPlan.approvalTimestamp(),
             currentPlan.approvedBy(),
             timestamp,
-            currentPlan.codeReviewLog(),
             currentPlan.handoffLog());
     notifyListeners();
   }
@@ -218,7 +215,7 @@ public class PlanService {
     List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
     ImplementationPlan.TechStep step = steps.get(index);
     steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
-    currentPlan =
+        currentPlan =
         new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),
@@ -228,7 +225,6 @@ public class PlanService {
             currentPlan.approvalTimestamp(),
             currentPlan.approvedBy(),
             currentPlan.completedOn(),
-            currentPlan.codeReviewLog(),
             currentPlan.handoffLog());
     notifyListeners();
   }
@@ -328,40 +324,14 @@ public class PlanService {
     }
   }
 
-  /** Adds an entry to the code review log. */
-  public void addCodeReviewLogEntry(String timestamp, String user, String message) {
-    if (currentPlan == null) return;
-    List<ImplementationPlan.LogEntry> logs = new ArrayList<>(currentPlan.codeReviewLog());
-    logs.add(new ImplementationPlan.LogEntry(timestamp, user, message));
-    currentPlan =
-        new ImplementationPlan(
-            currentPlan.title(),
-            currentPlan.goal(),
-            currentPlan.requirements(),
-            currentPlan.technicalSteps(),
-            currentPlan.userApproved(),
-            currentPlan.approvalTimestamp(),
-            currentPlan.approvedBy(),
-            currentPlan.completedOn(),
-            logs,
-            currentPlan.handoffLog());
-    notifyListeners();
-  }
-
-  /** Adds an entry to the code review log. */
-  @AgentDoc(
-      value = "Adds an entry to the code review log.",
-      examples = "planService.addCodeReviewLogEntry('Found a bug in auth logic.')")
-  public void addCodeReviewLogEntry(String entry) {
-    addCodeReviewLogEntry(java.time.OffsetDateTime.now().toString(), "System", entry);
-  }
+  
 
   /** Adds an entry to the handoff log. */
   public void addHandoffLogEntry(String timestamp, String user, String message) {
     if (currentPlan == null) return;
     List<ImplementationPlan.LogEntry> logs = new ArrayList<>(currentPlan.handoffLog());
     logs.add(new ImplementationPlan.LogEntry(timestamp, user, message));
-    currentPlan =
+        currentPlan =
         new ImplementationPlan(
             currentPlan.title(),
             currentPlan.goal(),
@@ -371,7 +341,6 @@ public class PlanService {
             currentPlan.approvalTimestamp(),
             currentPlan.approvedBy(),
             currentPlan.completedOn(),
-            currentPlan.codeReviewLog(),
             logs);
     notifyListeners();
   }

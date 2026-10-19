@@ -115,8 +115,8 @@ class MentorModeIntegrationTest {
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(4));
 
         // Verify planLabel updates when a plan is active
-        ImplementationPlan mockPlan = new ImplementationPlan(
-            "My Feature Plan", "Goal", List.of(), List.of(), false, null, null, null, List.of(), List.of());
+                ImplementationPlan mockPlan = new ImplementationPlan(
+            "My Feature Plan", "Goal", List.of(), List.of(), false, null, null, null, List.of());
         when(planService.getCurrentPlan()).thenReturn(mockPlan);
 
         java.lang.reflect.Method updatePhaseMethod = MainFrame.class.getDeclaredMethod("updateActivePhase", WorkflowPhase.class);

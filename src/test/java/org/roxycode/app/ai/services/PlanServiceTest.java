@@ -31,14 +31,13 @@ class PlanServiceTest {
 
     service.addListener((plan) -> notifications.incrementAndGet());
 
-    ImplementationPlan plan =
+        ImplementationPlan plan =
         new ImplementationPlan(
             "Title",
             "Goal",
             List.of("Req 1"),
             List.of(new ImplementationPlan.TechStep("Step 1", false)),
             false,
-            null,
             null,
             null,
             null,
