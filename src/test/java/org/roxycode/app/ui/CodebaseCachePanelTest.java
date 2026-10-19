@@ -53,7 +53,8 @@ class CodebaseCachePanelTest {
 
   @Test
   void testRefreshStatusRunsAsyncAndUpdatesAreas() throws Exception {
-    // Ensure initial constructor refreshStatus has finished before re-stubbing mocks
+    // Ensure initial constructor refreshStatus has finished before re-stubbing
+    // mocks
     for (int i = 0; i < 20; i++) {
       SwingUtilities.invokeAndWait(() -> {});
       if (!"Status: Unknown".equals(panel.getStatusLabel().getText())) {

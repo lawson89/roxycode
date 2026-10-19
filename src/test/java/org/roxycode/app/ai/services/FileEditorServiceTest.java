@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -210,5 +212,36 @@ class FileEditorServiceTest {
 
     assertFalse(result.success());
     assertTrue(result.errorHint().contains("Path traversal"));
+  }
+
+  @Test
+  void testInterruptedThreadThrowsCancellationExceptionAndPreservesInterrupt() {
+    Thread.currentThread().interrupt();
+    try {
+      assertThrows(
+          CancellationException.class,
+          () -> fileEditorService.writeFile("interrupted.txt", "content"));
+      assertTrue(Thread.currentThread().isInterrupted());
+    } finally {
+      Thread.interrupted();
+    }
+  }
+
+  @Test
+  void testClosedByInterruptExceptionRethrownAsCancellationException() {
+    when(projectService.resolvePath("closed.txt"))
+        .thenAnswer(
+            inv -> {
+              throw new ClosedByInterruptException();
+            });
+    try {
+      assertThrows(
+          CancellationException.class, () -> fileEditorService.writeFile("closed.txt", "content"));
+      assertTrue(
+          Thread.currentThread().isInterrupted(),
+          "Interrupt flag should be restored when ClosedByInterruptException is caught");
+    } finally {
+      Thread.interrupted();
+    }
   }
 }

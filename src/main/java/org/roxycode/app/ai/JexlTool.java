@@ -1,6 +1,7 @@
 package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.channels.ClosedByInterruptException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,7 @@ import java.util.concurrent.CancellationException;
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
+import org.apache.commons.jexl3.JexlException;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.apache.commons.jexl3.introspection.JexlPermissions;
@@ -69,6 +71,9 @@ public class JexlTool {
     try {
       JexlContext context = new MapContext(registry.getServices(phase));
       Object result = jexlScript.execute(context);
+      if (Thread.currentThread().isInterrupted()) {
+        throw new CancellationException("JEXL execution cancelled");
+      }
 
       fireEvent(new JexlExecutionEvent(script, result, true, null));
 
@@ -94,12 +99,20 @@ public class JexlTool {
       if (YieldTurnException.hasCauseWithMessage(e, "MAX_TOOL_TURNS_EXCEEDED")) {
         throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED", e);
       }
-      if (YieldTurnException.findCause(e, InterruptedException.class) != null) {
+      if (YieldTurnException.findCause(e, JexlException.Cancel.class) != null
+          || YieldTurnException.findCause(e, InterruptedException.class) != null
+          || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
+          || YieldTurnException.findCause(e, CancellationException.class) != null
+          || Thread.currentThread().isInterrupted()) {
         Thread.currentThread().interrupt();
-        throw new RuntimeException(e);
-      }
-      if (YieldTurnException.findCause(e, CancellationException.class) != null) {
-        throw new RuntimeException(e);
+        try {
+          fireEvent(new JexlExecutionEvent(script, null, false, "Execution cancelled"));
+        } catch (Exception ignored) {
+          // Ignore listener exceptions during cancellation
+        }
+        CancellationException cancelEx = new CancellationException("JEXL execution cancelled");
+        cancelEx.initCause(e);
+        throw cancelEx;
       }
 
       log.error("Error executing JEXL script: {}", e.getMessage(), e);

@@ -1,7 +1,9 @@
 package org.roxycode.app.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
@@ -81,6 +83,9 @@ public class AiService {
       String message,
       String systemPromptText,
       List<byte[]> images) {
+    if (Thread.currentThread().isInterrupted()) {
+      throw new CancellationException("Chat turn interrupted before start");
+    }
     JexlTool ephemeralJexlTool = new JexlTool(jexlServiceRegistry, phase);
     AtomicInteger turnCount = new AtomicInteger(0);
     int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
@@ -100,14 +105,41 @@ public class AiService {
 
     String content;
     try {
+      if (Thread.currentThread().isInterrupted()) {
+        throw new CancellationException("Chat turn interrupted before prompt build");
+      }
+      ChatClient.ChatClientRequestSpec promptSpec =
+          buildPrompt(phase, message, systemPromptText, images, ephemeralJexlTool);
+      if (Thread.currentThread().isInterrupted()) {
+        throw new CancellationException("Chat turn interrupted after prompt build");
+      }
       content =
-          buildPrompt(phase, message, systemPromptText, images, ephemeralJexlTool)
+          promptSpec
               .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
               .call()
               .content();
+      if (Thread.currentThread().isInterrupted()) {
+        throw new CancellationException("Chat turn interrupted after model call");
+      }
 
       content = formatStructuredContent(content);
     } catch (Exception e) {
+      CancellationException cancelCause =
+          YieldTurnException.findCause(e, CancellationException.class);
+      if (cancelCause != null
+          || YieldTurnException.findCause(e, InterruptedException.class) != null
+          || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
+          || Thread.currentThread().isInterrupted()) {
+        Thread.currentThread().interrupt();
+        if (e instanceof CancellationException ce) {
+          throw ce;
+        }
+        CancellationException cancelEx =
+            new CancellationException(
+                cancelCause != null ? cancelCause.getMessage() : "Chat turn cancelled");
+        cancelEx.initCause(e);
+        throw cancelEx;
+      }
       YieldTurnException yieldEx = YieldTurnException.findCause(e, YieldTurnException.class);
       if (yieldEx != null) {
         content = formatStructuredContent(yieldEx.getMessage());

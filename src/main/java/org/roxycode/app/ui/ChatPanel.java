@@ -12,6 +12,8 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -22,6 +24,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.TurnEventBridge;
@@ -53,6 +56,7 @@ public final class ChatPanel extends JPanel {
   private final JLabel turnLabel;
   private final JScrollPane outputScrollPane;
   private SwingWorker<String, Void> currentWorker;
+  private final AtomicBoolean turnCancelled = new AtomicBoolean(false);
   private final List<Runnable> pendingPostTurnActions = new ArrayList<>();
   private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
   private final List<BufferedImage> pendingImages = new ArrayList<>();
@@ -190,7 +194,11 @@ public final class ChatPanel extends JPanel {
     stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
     stopButton.addActionListener(
         e -> {
-          if (currentWorker != null) currentWorker.cancel(true);
+          turnCancelled.set(true);
+          pendingPostTurnActions.clear();
+          if (currentWorker != null) {
+            currentWorker.cancel(true);
+          }
         });
 
     resetSessionButton = new JButton("Reset Session", FontIcon.of(Codicons.REFRESH, 16));
@@ -278,8 +286,10 @@ public final class ChatPanel extends JPanel {
   }
 
   private void runAfterCurrentTurn(Runnable action) {
+    if (turnCancelled.get()) return;
     SwingUtilities.invokeLater(
         () -> {
+          if (turnCancelled.get()) return;
           if (currentWorker != null) {
             pendingPostTurnActions.add(action);
           } else {
@@ -289,9 +299,10 @@ public final class ChatPanel extends JPanel {
   }
 
   private void onAutonomousTransition(AutonomousTransitionEvent event) {
-    if (!isTaskMode) return;
+    if (!isTaskMode || turnCancelled.get()) return;
     runAfterCurrentTurn(
         () -> {
+          if (turnCancelled.get()) return;
           outputArea.appendMessage(
               ROLE_SYSTEM,
               "Autonomous transition detected: **"
@@ -318,8 +329,10 @@ public final class ChatPanel extends JPanel {
   }
 
   private void onAgentTurn(AgentTurnEvent event) {
+    if (turnCancelled.get()) return;
     SwingUtilities.invokeLater(
         () -> {
+          if (turnCancelled.get()) return;
           turnLabel.setText("Turns: " + event.turnNumber());
         });
   }
@@ -376,8 +389,10 @@ public final class ChatPanel extends JPanel {
           });
       return;
     }
+    if (turnCancelled.get()) return;
     runAfterCurrentTurn(
         () -> {
+          if (turnCancelled.get()) return;
           String path = current.getDisplayName() + " → " + requested.getDisplayName();
           transitionLabel.setText(path);
           approveButton.setText("Approve");
@@ -394,6 +409,7 @@ public final class ChatPanel extends JPanel {
     WorkflowPhase current = workflowService.getCurrentPhase();
     WorkflowPhase requested = workflowService.getPendingPhase();
     if (requested != null) {
+      turnCancelled.set(false);
       workflowService.approveTransition();
       outputArea.appendMessage(
           ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** approved.");
@@ -416,6 +432,7 @@ public final class ChatPanel extends JPanel {
   private void rejectPhase() {
     WorkflowPhase requested = workflowService.getPendingPhase();
     if (requested != null) {
+      turnCancelled.set(false);
       workflowService.rejectTransition();
       outputArea.appendMessage(
           ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
@@ -434,10 +451,12 @@ public final class ChatPanel extends JPanel {
             "Reset",
             JOptionPane.YES_NO_OPTION);
     if (result == JOptionPane.YES_OPTION) {
+      turnCancelled.set(true);
       pendingPostTurnActions.clear();
       if (currentWorker != null) {
-        currentWorker.cancel(true);
+        SwingWorker<String, Void> workerToCancel = currentWorker;
         currentWorker = null; // NOPMD
+        workerToCancel.cancel(true);
         setLoading(false);
       }
       if (isTaskMode) {
@@ -508,6 +527,15 @@ public final class ChatPanel extends JPanel {
   private void triggerTurn(String text) {
     if (text == null || text.trim().isEmpty()) return;
 
+    turnCancelled.set(false);
+    pendingPostTurnActions.clear();
+
+    if (currentWorker != null && !currentWorker.isDone()) {
+      SwingWorker<String, Void> previousWorker = currentWorker;
+      currentWorker = null; // NOPMD
+      previousWorker.cancel(true);
+    }
+
     setLoading(true);
     thoughtPanel.clear();
     turnLabel.setText("Turns: 0");
@@ -527,10 +555,6 @@ public final class ChatPanel extends JPanel {
     attachmentPanel.removeAll();
     attachmentPanel.setVisible(false);
 
-    if (currentWorker != null && !currentWorker.isDone()) {
-      currentWorker.cancel(true);
-    }
-
     currentWorker =
         new SwingWorker<>() {
           @Override
@@ -539,7 +563,17 @@ public final class ChatPanel extends JPanel {
               WorkflowPhase phase =
                   (lockedPhase != null) ? lockedPhase : workflowService.getCurrentPhase();
               return aiService.chat(getConversationId(), phase, text, null, imageBytes);
+            } catch (CancellationException ex) {
+              throw ex;
             } catch (Exception ex) {
+              if (isCancelled()
+                  || turnCancelled.get()
+                  || Thread.currentThread().isInterrupted()
+                  || YieldTurnException.findCause(ex, CancellationException.class) != null) {
+                CancellationException ce = new CancellationException("Turn cancelled");
+                ce.initCause(ex);
+                throw ce;
+              }
               log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
               return "Error: "
                   + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
@@ -548,26 +582,41 @@ public final class ChatPanel extends JPanel {
 
           @Override
           protected void done() {
-            boolean cancelled = isCancelled();
+            if (currentWorker != this) {
+              return;
+            }
+            boolean cancelled = isCancelled() || turnCancelled.get();
             try {
               String response = get();
-              outputArea.appendMessage("ai", response);
-            } catch (java.util.concurrent.CancellationException ce) {
+              if (!cancelled) {
+                outputArea.appendMessage("ai", response);
+              } else {
+                outputArea.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
+              }
+            } catch (CancellationException ce) {
               cancelled = true;
+              turnCancelled.set(true);
               outputArea.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
             } catch (Exception ex) {
-              log.error("Failed to retrieve AI response: {}", ex.getMessage(), ex);
-              outputArea.appendMessage("ai", "_Error communicating with AI._");
+              if (cancelled
+                  || YieldTurnException.findCause(ex, CancellationException.class) != null) {
+                cancelled = true;
+                turnCancelled.set(true);
+                outputArea.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
+              } else {
+                log.error("Failed to retrieve AI response: {}", ex.getMessage(), ex);
+                outputArea.appendMessage("ai", "_Error communicating with AI._");
+              }
             } finally {
               if (currentWorker == this) {
                 currentWorker = null; // NOPMD
                 setLoading(false);
-              }
-              List<Runnable> actions = new ArrayList<>(pendingPostTurnActions);
-              pendingPostTurnActions.clear();
-              if (!cancelled) {
-                for (Runnable action : actions) {
-                  action.run();
+                List<Runnable> actions = new ArrayList<>(pendingPostTurnActions);
+                pendingPostTurnActions.clear();
+                if (!cancelled && !turnCancelled.get()) {
+                  for (Runnable action : actions) {
+                    action.run();
+                  }
                 }
               }
             }
@@ -577,8 +626,10 @@ public final class ChatPanel extends JPanel {
   }
 
   private void onToolExecution(org.roxycode.app.events.ToolExecutionEvent event) {
+    if (turnCancelled.get()) return;
     SwingUtilities.invokeLater(
         () -> {
+          if (turnCancelled.get()) return;
           String toolName = "";
           String output = JexlToHtmlConverter.convert(event.script());
           outputArea.appendToolLog(toolName, output);

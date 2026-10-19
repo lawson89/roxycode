@@ -291,7 +291,8 @@ public class ChatPanelTest {
             any());
     assertFalse(chatPanel.getOutputArea().getText().contains("Task complete"));
 
-    // Case 2: REVIEW -> PLAN (completion) should show Task complete and not trigger a new AI turn
+    // Case 2: REVIEW -> PLAN (completion) should show Task complete and not trigger
+    // a new AI turn
     clearInvocations(aiService);
     when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
     when(workflowService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
@@ -342,7 +343,8 @@ public class ChatPanelTest {
         rejectButton.isEnabled(),
         "rejectButton should remain disabled when setLoading(false) and no pending phase");
 
-    // When a pending phase exists and loading=true, buttons are disabled during loading
+    // When a pending phase exists and loading=true, buttons are disabled during
+    // loading
     when(workflowService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
     setLoadingMethod.invoke(chatPanel, true);
     assertFalse(approveButton.isEnabled(), "approveButton should be disabled during loading");

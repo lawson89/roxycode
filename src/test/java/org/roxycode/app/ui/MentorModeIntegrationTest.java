@@ -113,13 +113,15 @@ class MentorModeIntegrationTest {
     taskTabsField.setAccessible(true);
     JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
 
-    // Verify mentorModeLabel is inside the QA view wrapper (same parent container as qaTabs)
+    // Verify mentorModeLabel is inside the QA view wrapper (same parent container
+    // as qaTabs)
     Container qaViewPanel = qaTabs.getParent();
     assertNotNull(qaViewPanel);
     assertSame(qaViewPanel, mentorModeLabel.getParent().getParent());
     assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
 
-    // Verify progressTracker and planLabel are inside the Task view wrapper (same parent container
+    // Verify progressTracker and planLabel are inside the Task view wrapper (same
+    // parent container
     // as taskTabs)
     Container taskViewPanel = taskTabs.getParent();
     assertNotNull(taskViewPanel);

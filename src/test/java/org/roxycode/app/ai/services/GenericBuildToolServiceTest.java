@@ -25,7 +25,8 @@ class GenericBuildToolServiceTest {
     projectService = mock(ProjectService.class);
     tomlMapper = new TomlMapper();
 
-    // In the original test, buildToolService was initialized BEFORE mocks were configured,
+    // In the original test, buildToolService was initialized BEFORE mocks were
+    // configured,
     // so ensureConfig() wasn't called in constructor.
     buildToolService = new GenericBuildToolService(projectService, tomlMapper);
 

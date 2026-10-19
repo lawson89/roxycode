@@ -1,13 +1,16 @@
 package org.roxycode.app.ai.services;
 
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
@@ -62,6 +65,7 @@ public class FileEditorService {
       eventPublisher.publishEvent(new FileChangedEvent(relativePath));
       return new EditorResult(true, "File written successfully: " + relativePath, null);
     } catch (Exception e) {
+      rethrowIfCancelled(e);
       log.error("Failed to write file {}: {}", relativePath, e.getMessage());
       return new EditorResult(false, null, e.getMessage());
     }
@@ -120,6 +124,7 @@ public class FileEditorService {
       eventPublisher.publishEvent(new FileChangedEvent(relativePath));
       return new EditorResult(true, "Block replaced successfully in: " + relativePath, null);
     } catch (Exception e) {
+      rethrowIfCancelled(e);
       log.error("Failed to replace block in {}: {}", relativePath, e.getMessage());
       return new EditorResult(false, null, e.getMessage());
     }
@@ -180,6 +185,7 @@ public class FileEditorService {
       eventPublisher.publishEvent(new FileChangedEvent(relativePath));
       return new EditorResult(true, "Lines replaced successfully in: " + relativePath, null);
     } catch (Exception e) {
+      rethrowIfCancelled(e);
       log.error("Failed to replace lines in {}: {}", relativePath, e.getMessage());
       return new EditorResult(false, null, e.getMessage());
     }
@@ -222,6 +228,7 @@ public class FileEditorService {
       eventPublisher.publishEvent(new FileChangedEvent(relativePath));
       return new EditorResult(true, "Content inserted successfully in: " + relativePath, null);
     } catch (Exception e) {
+      rethrowIfCancelled(e);
       log.error("Failed to insert at line in {}: {}", relativePath, e.getMessage());
       return new EditorResult(false, null, e.getMessage());
     }
@@ -252,8 +259,26 @@ public class FileEditorService {
       eventPublisher.publishEvent(new FileChangedEvent(relativePath));
       return new EditorResult(true, "File deleted successfully: " + relativePath, null);
     } catch (Exception e) {
+      rethrowIfCancelled(e);
       log.error("Failed to delete file {}: {}", relativePath, e.getMessage());
       return new EditorResult(false, null, e.getMessage());
+    }
+  }
+
+  private void rethrowIfCancelled(Exception e) {
+    if (e instanceof CancellationException
+        || e instanceof ClosedByInterruptException
+        || YieldTurnException.findCause(e, CancellationException.class) != null
+        || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
+        || YieldTurnException.findCause(e, InterruptedException.class) != null
+        || Thread.currentThread().isInterrupted()) {
+      Thread.currentThread().interrupt();
+      if (e instanceof CancellationException ce) {
+        throw ce;
+      }
+      CancellationException cancelEx = new CancellationException("File edit operation cancelled");
+      cancelEx.initCause(e);
+      throw cancelEx;
     }
   }
 
@@ -271,6 +296,9 @@ public class FileEditorService {
   }
 
   private void checkPhase() {
+    if (Thread.currentThread().isInterrupted()) {
+      throw new CancellationException("File edit operation cancelled");
+    }
     if (workflowService.getCurrentPhase() != WorkflowPhase.CODE) {
       throw new IllegalStateException(
           "Mutation methods are only allowed in the CODE phase. Current phase: "

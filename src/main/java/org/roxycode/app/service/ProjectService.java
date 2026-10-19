@@ -24,7 +24,8 @@ public class ProjectService {
     if (savedPath != null && !savedPath.isEmpty()) {
       this.currentProjectRoot = Paths.get(savedPath);
     } else {
-      // Fix: Do not default to user.dir to avoid accidental indexing of home directory
+      // Fix: Do not default to user.dir to avoid accidental indexing of home
+      // directory
       this.currentProjectRoot = null;
     }
   }

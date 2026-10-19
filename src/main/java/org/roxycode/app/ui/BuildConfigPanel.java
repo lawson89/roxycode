@@ -40,7 +40,8 @@ public final class BuildConfigPanel extends JPanel {
     add(title, "wrap, gapbottom 15");
 
     textArea = new RSyntaxTextArea();
-    // Using PROPERTIES as a safe fallback if TOML is not available in the library version
+    // Using PROPERTIES as a safe fallback if TOML is not available in the library
+    // version
     textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_INI);
     textArea.setCodeFoldingEnabled(true);
     textArea.setAntiAliasingEnabled(true);

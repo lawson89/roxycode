@@ -1,10 +1,12 @@
 package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.concurrent.CancellationException;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -167,8 +169,8 @@ class AiServiceTest {
     org.roxycode.app.ai.YieldTurnException yieldEx =
         new org.roxycode.app.ai.YieldTurnException(
             """
-            {"summary":"PLAN SUMMARY","message":"Transition Request"}
-            """);
+				{"summary":"PLAN SUMMARY","message":"Transition Request"}
+				""");
     when(requestSpec.call()).thenThrow(new RuntimeException(yieldEx));
 
     String result = aiService.chat("Create plan");
@@ -177,5 +179,36 @@ class AiServiceTest {
     assertTrue(result.contains("Transition Request"));
     verify(chatMemory)
         .add(eq("default"), any(org.springframework.ai.chat.messages.AssistantMessage.class));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void testChatPropagatesCancellationAndPostCallInterruption() {
+    when(chatClient.prompt()).thenReturn(requestSpec);
+    when(requestSpec.system(anyString())).thenReturn(requestSpec);
+    when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.tools(any())).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.options(any())).thenReturn(requestSpec);
+
+    when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+    when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null)).thenReturn("CODE PROMPT");
+
+    when(requestSpec.call()).thenReturn(responseSpec);
+    when(responseSpec.content())
+        .thenAnswer(
+            inv -> {
+              Thread.currentThread().interrupt();
+              return "Should be discarded due to interrupt";
+            });
+
+    try {
+      assertThrows(CancellationException.class, () -> aiService.chat("Run code"));
+      assertTrue(
+          Thread.currentThread().isInterrupted(),
+          "Interrupt flag should be preserved when chat is cancelled");
+    } finally {
+      Thread.interrupted();
+    }
   }
 }

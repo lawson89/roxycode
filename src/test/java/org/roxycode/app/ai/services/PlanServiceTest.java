@@ -121,7 +121,8 @@ class PlanServiceTest {
     assertThrows(IllegalStateException.class, () -> service.requestCompletion("complete"));
     assertThrows(IllegalStateException.class, () -> service.requestPlanRevision("revise"));
 
-    // In CODE phase, submitPlan, requestDevelopment, requestFixes, requestCompletion should fail
+    // In CODE phase, submitPlan, requestDevelopment, requestFixes,
+    // requestCompletion should fail
     when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
     assertDoesNotThrow(() -> service.markStepCompleted(0));
     assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
@@ -131,7 +132,8 @@ class PlanServiceTest {
     assertThrows(IllegalStateException.class, () -> service.requestFixes("fix"));
     assertThrows(IllegalStateException.class, () -> service.requestCompletion("complete"));
 
-    // In REVIEW phase, submitPlan, requestDevelopment, requestReview, requestPlanRevision should
+    // In REVIEW phase, submitPlan, requestDevelopment, requestReview,
+    // requestPlanRevision should
     // fail
     when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
     assertDoesNotThrow(() -> service.markStepCompleted(1));

@@ -44,33 +44,39 @@ public class ChatHtmlTemplates {
 
     String template =
         """
-            <table class="chat-entry ${entryClass}" width="100%" cellpadding="10" cellspacing="0" border="0">
-                <tr>
-                    <td class="accent-bar ${accentClass}" width="4">&nbsp;</td>
-                    <td class="message-body">
-                        <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                            <tr>
-                                <td align="left" valign="middle"><span class="timestamp">${timestamp}</span>&nbsp;&nbsp;${indicator}</td>
-                                ${actionCell}
-                            </tr>
-                        </table>
-                        <div class="content">${content}</div>
-                    </td>
-                </tr>
-            </table>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr><td height="4">&nbsp;</td></tr>
-            </table>
-            """;
+				<table class="chat-entry ${entryClass}" width="100%" cellpadding="10" cellspacing="0" border="0">
+				    <tr>
+				        <td class="accent-bar ${accentClass}" width="4">&nbsp;</td>
+				        <td class="message-body">
+				            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+				                <tr>
+				                    <td align="left" valign="middle"><span class="timestamp">${timestamp}</span>&nbsp;&nbsp;${indicator}</td>
+				                    ${actionCell}
+				                </tr>
+				            </table>
+				            <div class="content">${content}</div>
+				        </td>
+				    </tr>
+				</table>
+				<table width="100%" cellpadding="0" cellspacing="0" border="0">
+				    <tr><td height="4">&nbsp;</td></tr>
+				</table>
+				""";
 
     Map<String, String> values =
         Map.of(
-            "entryClass", entryClass,
-            "accentClass", accentClass,
-            "timestamp", safeTimestamp,
-            "indicator", indicator,
-            "actionCell", actionCell,
-            "content", content != null ? content : "");
+            "entryClass",
+            entryClass,
+            "accentClass",
+            accentClass,
+            "timestamp",
+            safeTimestamp,
+            "indicator",
+            indicator,
+            "actionCell",
+            actionCell,
+            "content",
+            content != null ? content : "");
 
     return StringSubstitutor.replace(template, values);
   }
@@ -83,8 +89,8 @@ public class ChatHtmlTemplates {
     String safeTimestamp = SwingHtmlUtils.escapeHtml(timestamp != null ? timestamp : "");
     String template =
         """
-            <div class="chat-timestamp">${timestamp}</div>
-            """;
+				<div class="chat-timestamp">${timestamp}</div>
+				""";
     return StringSubstitutor.replace(template, Map.of("timestamp", safeTimestamp));
   }
 
@@ -95,24 +101,21 @@ public class ChatHtmlTemplates {
             : "<div class='tool-header'>" + SwingHtmlUtils.escapeHtml(toolName) + "</div>";
     String template =
         """
-            <table class="tool-call" width="100%" cellpadding="8" cellspacing="0" border="0">
-                <tr>
-                    <td class="accent-bar tool-accent" width="4">&nbsp;</td>
-                    <td class="tool-body-container">
-                        ${header}
-                        <pre class="tool-body">${output}</pre>
-                    </td>
-                </tr>
-            </table>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr><td height="4">&nbsp;</td></tr>
-            </table>
-            """;
+				<table class="tool-call" width="100%" cellpadding="8" cellspacing="0" border="0">
+				    <tr>
+				        <td class="accent-bar tool-accent" width="4">&nbsp;</td>
+				        <td class="tool-body-container">
+				            ${header}
+				            <pre class="tool-body">${output}</pre>
+				        </td>
+				    </tr>
+				</table>
+				<table width="100%" cellpadding="0" cellspacing="0" border="0">
+				    <tr><td height="4">&nbsp;</td></tr>
+				</table>
+				""";
 
-    Map<String, String> values =
-        Map.of(
-            "header", header,
-            "output", output);
+    Map<String, String> values = Map.of("header", header, "output", output);
 
     return StringSubstitutor.replace(template, values);
   }

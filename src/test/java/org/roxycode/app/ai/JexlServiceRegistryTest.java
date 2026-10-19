@@ -42,7 +42,8 @@ class JexlServiceRegistryTest {
     FileEditorService editor = mock(FileEditorService.class);
     registry.register(editor);
 
-    // FileEditorService has @AgentService(value = "fileEditorService", phases = {"CODE"})
+    // FileEditorService has @AgentService(value = "fileEditorService", phases =
+    // {"CODE"})
     // It should be available in CODE but not in PLAN/EXPLORE
 
     assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(editor));

@@ -28,7 +28,8 @@ public class ProjectAnalysisService {
       int lastDot = filePath.lastIndexOf('.');
       int lastSlash = filePath.lastIndexOf('/');
 
-      // Ensure the dot is actually an extension and not a hidden file without an extension (like
+      // Ensure the dot is actually an extension and not a hidden file without an
+      // extension (like
       // .gitignore)
       if (lastDot > lastSlash + 1 && lastDot < filePath.length() - 1) {
         String ext = filePath.substring(lastDot).toLowerCase(Locale.ROOT);

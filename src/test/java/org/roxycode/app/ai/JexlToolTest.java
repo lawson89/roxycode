@@ -3,19 +3,33 @@ package org.roxycode.app.ai;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 public class JexlToolTest {
 
   @AgentService("testService")
   public static class TestService {
+    private final CountDownLatch loopStarted = new CountDownLatch(1);
+
     public String hello(String name) {
       return "Hello, " + name;
     }
 
     public String requestTransition() {
       throw new YieldTurnException("{\"message\":\"Yielded\"}");
+    }
+
+    public void signalStarted() {
+      loopStarted.countDown();
+    }
+
+    public String interruptSelfAndReturn() {
+      Thread.currentThread().interrupt();
+      return "done";
     }
   }
 
@@ -78,7 +92,6 @@ public class JexlToolTest {
     assertTrue(result.contains("\"result\":\"null\""));
   }
 
-  @Test
   public void testExecuteJexlError() {
     JexlServiceRegistry registry = new JexlServiceRegistry();
     JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
@@ -95,6 +108,67 @@ public class JexlToolTest {
       assertThrows(CancellationException.class, () -> tool.executeJexl("1 + 1"));
     } finally {
       Thread.interrupted(); // Clear flag
+    }
+  }
+
+  @Test
+  public void testExecuteJexlLoopInterruptedPropagatesCancelAsCancellationException()
+      throws Exception {
+    JexlServiceRegistry registry = new JexlServiceRegistry();
+    TestService testService = new TestService();
+    registry.register(testService);
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
+
+    AtomicReference<JexlExecutionEvent> capturedEvent = new AtomicReference<>();
+    tool.addListener(capturedEvent::set);
+
+    AtomicReference<Throwable> thrownRef = new AtomicReference<>();
+    AtomicBoolean interruptFlagPreserved = new AtomicBoolean(false);
+
+    Thread worker =
+        new Thread(
+            () -> {
+              try {
+                tool.executeJexl("testService.signalStarted(); while (true) { var x = 1; }");
+              } catch (Throwable t) {
+                thrownRef.set(t);
+                interruptFlagPreserved.set(Thread.currentThread().isInterrupted());
+              }
+            });
+    worker.start();
+
+    assertTrue(testService.loopStarted.await(5, TimeUnit.SECONDS), "JEXL loop should have started");
+    worker.interrupt();
+    worker.join(5000);
+
+    assertFalse(worker.isAlive(), "Worker thread should have terminated after interrupt");
+    assertInstanceOf(
+        CancellationException.class,
+        thrownRef.get(),
+        "JexlException.Cancel should be propagated as CancellationException");
+    assertTrue(
+        interruptFlagPreserved.get(),
+        "Thread interrupt flag should be restored when JexlException.Cancel is caught");
+    assertNotNull(capturedEvent.get(), "Listener should be notified on cancellation");
+    assertFalse(capturedEvent.get().success(), "Listener event should indicate failure");
+    assertEquals("Execution cancelled", capturedEvent.get().error());
+  }
+
+  @Test
+  public void testExecuteJexlInterruptedDuringScriptExecutionThrowsCancellationException() {
+    JexlServiceRegistry registry = new JexlServiceRegistry();
+    registry.register(new TestService());
+    JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
+
+    try {
+      assertThrows(
+          CancellationException.class,
+          () -> tool.executeJexl("testService.interruptSelfAndReturn()"));
+      assertTrue(
+          Thread.currentThread().isInterrupted(),
+          "Interrupt flag should remain set after post-execution interrupt check");
+    } finally {
+      Thread.interrupted();
     }
   }
 }
