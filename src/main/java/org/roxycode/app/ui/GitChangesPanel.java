@@ -2,6 +2,9 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -14,10 +17,20 @@ import org.slf4j.LoggerFactory;
 public final class GitChangesPanel extends JPanel {
   private static final long serialVersionUID = 1L;
   private static final Logger log = LoggerFactory.getLogger(GitChangesPanel.class);
+  static final String ALL_CHANGES = "All Changes";
+  private static final String CARD_LIST = "LIST";
+  private static final String CARD_TEXT = "TEXT";
+
   private final transient GitService gitService;
   private final JTextArea statusArea;
+  private final DefaultListModel<String> fileListModel;
+  private final JList<String> fileList;
+  private final JPanel statusCardPanel;
+  private final CardLayout statusCardLayout;
   private final JTextPane diffArea;
   private String currentDiffHtml = "";
+  private String selectedFilePath = null;
+  private boolean updatingSelection = false;
 
   public GitChangesPanel(GitService gitService) {
     this.gitService = gitService;
@@ -47,8 +60,25 @@ public final class GitChangesPanel extends JPanel {
     statusArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
     SwingHtmlUtils.installTextContextMenu(statusArea);
     JScrollPane statusScroll = new JScrollPane(statusArea);
-    statusScroll.setBorder(BorderFactory.createTitledBorder("Status"));
-    splitPane.setTopComponent(statusScroll);
+
+    fileListModel = new DefaultListModel<>();
+    fileList = new JList<>(fileListModel);
+    fileList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+    fileList.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+    fileList.addListSelectionListener(
+        e -> {
+          if (!e.getValueIsAdjusting() && !updatingSelection) {
+            onFileSelectionChanged();
+          }
+        });
+    JScrollPane listScroll = new JScrollPane(fileList);
+
+    statusCardLayout = new CardLayout();
+    statusCardPanel = new JPanel(statusCardLayout);
+    statusCardPanel.setBorder(BorderFactory.createTitledBorder("Status"));
+    statusCardPanel.add(listScroll, CARD_LIST);
+    statusCardPanel.add(statusScroll, CARD_TEXT);
+    splitPane.setTopComponent(statusCardPanel);
 
     diffArea = new JTextPane();
     diffArea.setEditable(false);
@@ -70,12 +100,24 @@ public final class GitChangesPanel extends JPanel {
   }
 
   SwingWorker<GitChangesResult, Void> refreshAsync() {
+    final String targetFile = selectedFilePath;
     SwingWorker<GitChangesResult, Void> worker =
         new SwingWorker<>() {
           @Override
           protected GitChangesResult doInBackground() {
             String status = gitService.getStatus();
-            String diff = gitService.getDiff();
+            List<String> entries = parseStatusEntries(status);
+            String preservedPath = null;
+            if (targetFile != null && !targetFile.isBlank()) {
+              for (String entry : entries) {
+                if (targetFile.equals(extractFilePathFromStatusLine(entry))) {
+                  preservedPath = targetFile;
+                  break;
+                }
+              }
+            }
+            String diff =
+                preservedPath != null ? gitService.getDiff(preservedPath) : gitService.getDiff();
             return new GitChangesResult(status, formatDiff(diff));
           }
 
@@ -83,10 +125,40 @@ public final class GitChangesPanel extends JPanel {
           protected void done() {
             try {
               GitChangesResult result = get();
-              statusArea.setText(result.status() != null ? result.status() : "");
+              String rawStatus = result.status() != null ? result.status() : "";
+              statusArea.setText(rawStatus);
+              statusArea.setCaretPosition(0);
+
+              List<String> entries = parseStatusEntries(rawStatus);
+              updatingSelection = true;
+              try {
+                fileListModel.clear();
+                if (!entries.isEmpty()) {
+                  fileListModel.addElement(ALL_CHANGES);
+                  int restoreIndex = 0;
+                  for (int i = 0; i < entries.size(); i++) {
+                    String entry = entries.get(i);
+                    fileListModel.addElement(entry);
+                    if (selectedFilePath != null
+                        && selectedFilePath.equals(extractFilePathFromStatusLine(entry))) {
+                      restoreIndex = i + 1;
+                    }
+                  }
+                  if (restoreIndex == 0) {
+                    selectedFilePath = null;
+                  }
+                  fileList.setSelectedIndex(restoreIndex);
+                  statusCardLayout.show(statusCardPanel, CARD_LIST);
+                } else {
+                  selectedFilePath = null;
+                  statusCardLayout.show(statusCardPanel, CARD_TEXT);
+                }
+              } finally {
+                updatingSelection = false;
+              }
+
               currentDiffHtml = result.formattedDiff() != null ? result.formattedDiff() : "";
               diffArea.setText(currentDiffHtml);
-              statusArea.setCaretPosition(0);
               diffArea.setCaretPosition(0);
             } catch (Exception e) {
               log.error("Failed to refresh git changes", e);
@@ -95,6 +167,86 @@ public final class GitChangesPanel extends JPanel {
         };
     worker.execute();
     return worker;
+  }
+
+  private void onFileSelectionChanged() {
+    String selected = fileList.getSelectedValue();
+    if (selected == null || ALL_CHANGES.equals(selected)) {
+      selectedFilePath = null;
+      loadDiffAsync(null);
+    } else {
+      String path = extractFilePathFromStatusLine(selected);
+      selectedFilePath = path;
+      loadDiffAsync(path);
+    }
+  }
+
+  SwingWorker<String, Void> loadDiffAsync(String filePath) {
+    SwingWorker<String, Void> worker =
+        new SwingWorker<>() {
+          @Override
+          protected String doInBackground() {
+            String diff =
+                (filePath == null || filePath.isBlank())
+                    ? gitService.getDiff()
+                    : gitService.getDiff(filePath);
+            return formatDiff(diff);
+          }
+
+          @Override
+          protected void done() {
+            try {
+              String formatted = get();
+              currentDiffHtml = formatted != null ? formatted : "";
+              diffArea.setText(currentDiffHtml);
+              diffArea.setCaretPosition(0);
+            } catch (Exception e) {
+              log.error("Failed to load file diff", e);
+            }
+          }
+        };
+    worker.execute();
+    return worker;
+  }
+
+  static List<String> parseStatusEntries(String porcelainStatus) {
+    if (porcelainStatus == null || porcelainStatus.isBlank()) {
+      return Collections.emptyList();
+    }
+    String trimmedStatus = porcelainStatus.trim();
+    if (trimmedStatus.startsWith("No active project")
+        || trimmedStatus.startsWith("Not a git repository")
+        || trimmedStatus.startsWith("Error")) {
+      return Collections.emptyList();
+    }
+    String[] lines = porcelainStatus.split("\\R");
+    List<String> entries = new ArrayList<>();
+    for (String line : lines) {
+      String trimmed = line.trim();
+      if (!trimmed.isEmpty()) {
+        entries.add(trimmed);
+      }
+    }
+    return entries;
+  }
+
+  static String extractFilePathFromStatusLine(String statusLine) {
+    if (statusLine == null || statusLine.isBlank()) {
+      return "";
+    }
+    String trimmed = statusLine.trim();
+    int arrowIndex = trimmed.indexOf(" -> ");
+    if (arrowIndex >= 0) {
+      return trimmed.substring(arrowIndex + 4).trim();
+    }
+    int firstSpace = 0;
+    while (firstSpace < trimmed.length() && !Character.isWhitespace(trimmed.charAt(firstSpace))) {
+      firstSpace++;
+    }
+    if (firstSpace < trimmed.length()) {
+      return trimmed.substring(firstSpace).trim();
+    }
+    return trimmed;
   }
 
   public static String formatDiff(String diff) {
@@ -129,6 +281,10 @@ public final class GitChangesPanel extends JPanel {
       statusArea.setBackground(UIManager.getColor("TextArea.background"));
       statusArea.setForeground(UIManager.getColor("TextArea.foreground"));
     }
+    if (fileList != null) {
+      fileList.setBackground(UIManager.getColor("List.background"));
+      fileList.setForeground(UIManager.getColor("List.foreground"));
+    }
     if (diffArea != null) {
       SwingHtmlUtils.applyTheme(diffArea, 5);
       if (currentDiffHtml != null && !currentDiffHtml.isEmpty()) {
@@ -139,6 +295,14 @@ public final class GitChangesPanel extends JPanel {
 
   JTextArea getStatusArea() {
     return statusArea;
+  }
+
+  JList<String> getFileList() {
+    return fileList;
+  }
+
+  DefaultListModel<String> getFileListModel() {
+    return fileListModel;
   }
 
   JTextPane getDiffArea() {

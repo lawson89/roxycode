@@ -17,7 +17,9 @@ public class TurnEventBridge {
       new CopyOnWriteArrayList<>();
   private final List<Consumer<ToolExecutionEvent>> toolExecutionListeners =
       new CopyOnWriteArrayList<>();
-  private final List<Consumer<AutonomousTransitionEvent>> autonomousTransitionListeners =
+    private final List<Consumer<AutonomousTransitionEvent>> autonomousTransitionListeners =
+      new CopyOnWriteArrayList<>();
+  private final List<Consumer<FileChangedEvent>> fileChangedListeners =
       new CopyOnWriteArrayList<>();
 
   public TurnEventBridge(ApplicationEventPublisher publisher) {
@@ -62,8 +64,12 @@ public class TurnEventBridge {
         });
   }
 
-  public void addAutonomousTransitionListener(Consumer<AutonomousTransitionEvent> listener) {
+    public void addAutonomousTransitionListener(Consumer<AutonomousTransitionEvent> listener) {
     autonomousTransitionListeners.add(listener);
+  }
+
+  public void addFileChangedListener(Consumer<FileChangedEvent> listener) {
+    fileChangedListeners.add(listener);
   }
 
   public void publishUserMessage(String conversationId, String user, String message) {
@@ -90,8 +96,13 @@ public class TurnEventBridge {
     toolExecutionListeners.forEach(l -> l.accept(event));
   }
 
-  @EventListener
+    @EventListener
   public void handleAutonomousTransition(AutonomousTransitionEvent event) {
     autonomousTransitionListeners.forEach(l -> l.accept(event));
+  }
+
+  @EventListener
+  public void handleFileChanged(FileChangedEvent event) {
+    fileChangedListeners.forEach(l -> l.accept(event));
   }
 }

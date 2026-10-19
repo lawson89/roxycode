@@ -61,4 +61,17 @@ class TurnEventBridgeTest {
 
     assertTrue(toolCalled.get());
   }
+
+  @Test
+  void testFileChangedEvent() {
+    ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    TurnEventBridge bridge = new TurnEventBridge(publisher);
+    AtomicReference<FileChangedEvent> fileChangedRef = new AtomicReference<>();
+
+    bridge.addFileChangedListener(fileChangedRef::set);
+    bridge.handleFileChanged(new FileChangedEvent("src/main/java/App.java"));
+
+    assertNotNull(fileChangedRef.get());
+    assertEquals("src/main/java/App.java", fileChangedRef.get().path());
+  }
 }

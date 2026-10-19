@@ -35,4 +35,21 @@ class GitServiceTest {
     // Either "Not a git repository" or an error message if git is not installed
     assertTrue(result.contains("Not a git repository") || result.contains("Error"));
   }
+
+  @Test
+  void testGetDiffPerFileDelegatesOnBlankAndChecksActiveProject() {
+    ProjectService projectService = mock(ProjectService.class);
+    when(projectService.hasActiveProject()).thenReturn(false);
+
+    GitService gitService = spy(new GitService(projectService));
+
+    assertEquals("No active project", gitService.getDiff("src/App.java"));
+    verify(gitService, never()).getDiff();
+
+    assertEquals("No active project", gitService.getDiff(null));
+    verify(gitService, times(1)).getDiff();
+
+    assertEquals("No active project", gitService.getDiff("   "));
+    verify(gitService, times(2)).getDiff();
+  }
 }

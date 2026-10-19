@@ -106,11 +106,14 @@ public final class MainFrame extends JFrame {
     setupLaf();
     setupWindow();
     initComponents();
-    projectService.addProjectListener(
+        projectService.addProjectListener(
         path -> {
           updateTitle();
           chatMemory.clear("qa:default");
           chatMemory.clear("task:default");
+          if (gitChangesPanel != null) {
+            gitChangesPanel.refresh();
+          }
         });
   }
 
@@ -231,7 +234,11 @@ public final class MainFrame extends JFrame {
                 () -> sidebar.setTaskWaitingApproval(workflowService.getPendingPhase() != null)));
     taskTabs.addTab("Chat", taskChatPanel);
     taskTabs.addTab("Plan", new PlanPanel(planManagerService, workflowService));
-    gitChangesPanel = new GitChangesPanel(gitService);
+        gitChangesPanel = new GitChangesPanel(gitService);
+    if (turnEventBridge != null) {
+      turnEventBridge.addFileChangedListener(
+          event -> SwingUtilities.invokeLater(gitChangesPanel::refresh));
+    }
     taskTabs.addTab("Git", gitChangesPanel);
     taskTabs.addTab(
         "History", new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "task"));
@@ -239,6 +246,8 @@ public final class MainFrame extends JFrame {
         e -> {
           if (taskChatPanel.equals(taskTabs.getSelectedComponent())) {
             SwingUtilities.invokeLater(taskChatPanel::focusInput);
+          } else if (gitChangesPanel.equals(taskTabs.getSelectedComponent())) {
+            gitChangesPanel.refresh();
           }
         });
     taskViewPanel.add(taskHeaderBar, BorderLayout.NORTH);

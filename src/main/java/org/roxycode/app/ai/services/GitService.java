@@ -40,9 +40,19 @@ public class GitService {
     return executeGitCommand("status", "--porcelain");
   }
 
-  @AgentDoc(value = "Returns the git diff for unstaged changes.", examples = "gitService.getDiff()")
+    @AgentDoc(value = "Returns the git diff for unstaged changes.", examples = "gitService.getDiff()")
   public String getDiff() {
     return executeGitCommand("diff");
+  }
+
+  @AgentDoc(
+      value = "Returns the git diff for a specific file.",
+      examples = "gitService.getDiff('src/main/java/App.java')")
+  public String getDiff(String relativePath) {
+    if (relativePath == null || relativePath.isBlank()) {
+      return getDiff();
+    }
+    return executeGitCommand("diff", "--", relativePath.trim());
   }
 
   @AgentDoc(value = "Returns the git log (last 10 commits).", examples = "gitService.getLog()")
