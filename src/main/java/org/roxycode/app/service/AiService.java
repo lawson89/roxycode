@@ -123,6 +123,25 @@ public class AiService {
       }
 
       content = formatStructuredContent(content);
+    } catch (CancellationException e) {
+      Thread.currentThread().interrupt();
+      throw e;
+    } catch (RuntimeException e) {
+      if (YieldTurnException.findCause(e, InterruptedException.class) != null
+          || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
+          || Thread.currentThread().isInterrupted()) {
+        Thread.currentThread().interrupt();
+        throw e;
+      }
+      YieldTurnException yieldEx = YieldTurnException.findCause(e, YieldTurnException.class);
+      if (yieldEx != null) {
+        content = processYield(conversationId, yieldEx);
+      } else if (YieldTurnException.hasCauseWithMessage(e, MAX_TURNS_EXCEEDED)) {
+        content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
+      } else {
+        publishError(conversationId, turnCount, e);
+        throw e;
+      }
     } catch (Exception e) {
       CancellationException cancelCause =
           YieldTurnException.findCause(e, CancellationException.class);
@@ -131,28 +150,17 @@ public class AiService {
           || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
           || Thread.currentThread().isInterrupted()) {
         Thread.currentThread().interrupt();
-        if (e instanceof CancellationException ce) {
-          throw ce;
-        }
-        CancellationException cancelEx =
+        throw (CancellationException)
             new CancellationException(
-                cancelCause != null ? cancelCause.getMessage() : "Chat turn cancelled");
-        cancelEx.initCause(e);
-        throw cancelEx;
+                    cancelCause != null ? cancelCause.getMessage() : "Chat turn cancelled")
+                .initCause(e);
       }
       YieldTurnException yieldEx = YieldTurnException.findCause(e, YieldTurnException.class);
       if (yieldEx != null) {
-        content = formatStructuredContent(yieldEx.getMessage());
-        if (content != null && !content.isBlank()) {
-          chatMemory.add(conversationId, new AssistantMessage(content));
-        }
-      } else if (YieldTurnException.hasCauseWithMessage(e, MAX_TURNS_EXCEEDED)) {
-        content = "Autonomous execution stopped: Maximum tool turns (" + maxTurns + ") exceeded.";
+        content = processYield(conversationId, yieldEx);
       } else {
-        eventPublisher.publishEvent(
-            new AgentTurnCompleteEvent(
-                conversationId, "Roxy", turnCount.get(), "Error: " + e.getMessage()));
-        throw e;
+        publishError(conversationId, turnCount, e);
+        throw new RuntimeException("Unexpected error during chat turn", e);
       }
     }
 
@@ -207,5 +215,19 @@ public class AiService {
         .options(
             org.springframework.ai.google.genai.GoogleGenAiChatOptions.builder()
                 .model(activeModel));
+  }
+
+  private String processYield(String conversationId, YieldTurnException yieldEx) {
+    String content = formatStructuredContent(yieldEx.getMessage());
+    if (content != null && !content.isBlank()) {
+      chatMemory.add(conversationId, new AssistantMessage(content));
+    }
+    return content;
+  }
+
+  private void publishError(String conversationId, AtomicInteger turnCount, Exception e) {
+    eventPublisher.publishEvent(
+        new AgentTurnCompleteEvent(
+            conversationId, "Roxy", turnCount.get(), "Error: " + e.getMessage()));
   }
 }
