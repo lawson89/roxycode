@@ -417,7 +417,8 @@ public final class ChatPanel extends JPanel {
         outputArea.appendMessage(
             ROLE_SYSTEM,
             "Task complete. We are back in Explore mode. Please enter a new question or task.");
-      } else if (current == WorkflowPhase.REVIEW && requested == WorkflowPhase.PLAN) {
+            } else if (current == WorkflowPhase.REVIEW && requested == WorkflowPhase.PLAN) {
+        chatMemory.clear(getConversationId());
         outputArea.appendMessage(
             ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
       } else {

@@ -282,13 +282,14 @@ public class ChatPanelTest {
     Thread.sleep(400);
     javax.swing.SwingUtilities.invokeAndWait(() -> {});
 
-    verify(aiService, atLeastOnce())
+        verify(aiService, atLeastOnce())
         .chat(
             eq("task:default"),
             eq(WorkflowPhase.PLAN),
             contains("I approve the transition to Plan"),
             isNull(),
             any());
+    verify(chatMemory, never()).clear(anyString());
     assertFalse(chatPanel.getOutputArea().getText().contains("Task complete"));
 
     // Case 2: REVIEW -> PLAN (completion) should show Task complete and not trigger
@@ -303,6 +304,7 @@ public class ChatPanelTest {
     javax.swing.SwingUtilities.invokeAndWait(() -> {});
 
     verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
+    verify(chatMemory).clear("task:default");
     assertTrue(chatPanel.getOutputArea().getText().contains("Task complete"));
   }
 
