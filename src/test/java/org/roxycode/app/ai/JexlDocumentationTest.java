@@ -18,7 +18,8 @@ public class JexlDocumentationTest {
   }
 
   @Test
-  public void testJexlDocForbidsArbitraryClassInstantiationAndUsesValidServices() throws IOException {
+  public void testJexlDocForbidsArbitraryClassInstantiationAndUsesValidServices()
+      throws IOException {
     Path path = Paths.get("src/main/resources/docs/jexl.md");
     String content = Files.readString(path);
     assertTrue(content.contains("FORBIDDEN: Arbitrary Java Class Instantiation"));

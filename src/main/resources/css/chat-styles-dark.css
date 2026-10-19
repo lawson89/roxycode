@@ -33,3 +33,5 @@ code { font-family: monospace; background-color: #2d2d2d; color: #d4d4d4; }
 .tk-cm { color: #6a9955; font-style: italic; }
 .tool-result { color: #4caf50; margin-top: 4px; }
 .tool-error { color: #f44336; margin-top: 4px; }
+.copy-action { font-family: sans-serif; font-size: 10px; color: #888888; text-decoration: none; }
+.copy-feedback { font-family: sans-serif; font-size: 10px; color: #4caf50; font-weight: bold; }

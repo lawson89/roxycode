@@ -11,6 +11,11 @@ public class ChatHtmlTemplates {
   private static final String ROLE_SYSTEM = "system";
 
   public static String renderChatEntry(String role, String content, String timestamp) {
+    return renderChatEntry(role, content, timestamp, -1, false);
+  }
+
+  public static String renderChatEntry(
+      String role, String content, String timestamp, int messageIndex, boolean copied) {
     String entryClass = role + "-entry";
     String accentClass = role + "-accent";
 
@@ -26,6 +31,15 @@ public class ChatHtmlTemplates {
           "<span style='font-family: monospace; color: #888888; font-size: 10px;'>SYSTEM</span>";
     }
 
+    String actionCell = "";
+    if (ROLE_AI.equals(role) && messageIndex >= 0) {
+      String actionContent =
+          copied
+              ? "<span class='copy-feedback'>&#10003; Copied!</span>"
+              : "<a class='copy-action' href='copy:" + messageIndex + "'>&#128203; Copy</a>";
+      actionCell = "<td align='right' valign='middle' nowrap='nowrap'>" + actionContent + "</td>";
+    }
+
     String template =
         """
             <table class="chat-entry ${entryClass}" width="100%" cellpadding="10" cellspacing="0" border="0">
@@ -35,6 +49,7 @@ public class ChatHtmlTemplates {
                         <table width="100%" cellpadding="0" cellspacing="0" border="0">
                             <tr>
                                 <td align="left" valign="middle"><span class="timestamp">${timestamp}</span>&nbsp;&nbsp;${indicator}</td>
+                                ${actionCell}
                             </tr>
                         </table>
                         <div class="content">${content}</div>
@@ -52,6 +67,7 @@ public class ChatHtmlTemplates {
             "accentClass", accentClass,
             "timestamp", timestamp,
             "indicator", indicator,
+            "actionCell", actionCell,
             "content", content);
 
     return StringSubstitutor.replace(template, values);

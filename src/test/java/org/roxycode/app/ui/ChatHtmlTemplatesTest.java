@@ -16,6 +16,39 @@ class ChatHtmlTemplatesTest {
     assertTrue(result.contains("user-entry"));
     assertTrue(result.contains("<p>Hello</p>"));
     assertTrue(result.contains("12:00:00"));
+    assertFalse(result.contains("copy-action"));
+  }
+
+  @Test
+  void testRenderAiChatEntryWithCopyAction() {
+    String result =
+        ChatHtmlTemplates.renderChatEntry("ai", "<p>Response</p>", "12:00:00", 2, false);
+
+    assertTrue(result.contains("ai-entry"));
+    assertTrue(result.contains("href='copy:2'"));
+    assertTrue(result.contains("copy-action"));
+    assertTrue(result.contains("&#128203; Copy"));
+    assertFalse(result.contains("copy-feedback"));
+  }
+
+  @Test
+  void testRenderAiChatEntryWithCopiedFeedback() {
+    String result = ChatHtmlTemplates.renderChatEntry("ai", "<p>Response</p>", "12:00:00", 2, true);
+
+    assertTrue(result.contains("ai-entry"));
+    assertTrue(result.contains("copy-feedback"));
+    assertTrue(result.contains("&#10003; Copied!"));
+    assertFalse(result.contains("href='copy:2'"));
+  }
+
+  @Test
+  void testRenderUserChatEntryDoesNotIncludeCopyAction() {
+    String result =
+        ChatHtmlTemplates.renderChatEntry("user", "<p>Prompt</p>", "12:00:00", 0, false);
+
+    assertTrue(result.contains("user-entry"));
+    assertFalse(result.contains("copy-action"));
+    assertFalse(result.contains("href='copy:0'"));
   }
 
   @Test

@@ -78,7 +78,7 @@ class PromptServiceTest {
     assertFalse(allDocs.contains("## jexl.md"));
   }
 
-    @Test
+  @Test
   void testLoadReviewPrompt() {
     String prompt = promptService.loadReviewPrompt();
     assertNotNull(prompt);
