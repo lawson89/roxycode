@@ -4,17 +4,13 @@ import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
-import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 
 /** Shared UI component for workflow phase indicators with safe color fallbacks. */
-
 public final class WorkflowPhaseIndicator extends JPanel {
   private static final long serialVersionUID = 1L;
   private final WorkflowPhase phase;
   private final JLabel textLabel;
-  private final JLabel iconLabel;
   private boolean isActive;
   private boolean isCompleted;
 
@@ -24,16 +20,14 @@ public final class WorkflowPhaseIndicator extends JPanel {
 
   public WorkflowPhaseIndicator(WorkflowPhase phase, String fontStyle) {
     this.phase = phase;
-    setLayout(new MigLayout("insets 2 8 2 8", "[]5[]", "center"));
+    setLayout(new MigLayout("insets 3 10 3 10", "[center]", "center"));
     setOpaque(false);
 
-    iconLabel = new JLabel();
     textLabel = new JLabel(phase.getDisplayName());
     if (fontStyle != null) {
       textLabel.putClientProperty(FlatClientProperties.STYLE, fontStyle);
     }
 
-    add(iconLabel);
     add(textLabel);
     updateStyle();
   }
@@ -63,17 +57,14 @@ public final class WorkflowPhaseIndicator extends JPanel {
       putClientProperty(FlatClientProperties.STYLE, "arc: 12");
       setBackground(accentColor);
       textLabel.setForeground(accentForeground);
-      iconLabel.setIcon(FontIcon.of(phase.getIcon(), 14, accentForeground));
     } else {
       setOpaque(false);
       putClientProperty(FlatClientProperties.STYLE, "arc: 0");
 
       if (isCompleted) {
         textLabel.setForeground(foreground);
-        iconLabel.setIcon(FontIcon.of(Codicons.CHECK, 14, foreground));
       } else {
         textLabel.setForeground(disabledForeground);
-        iconLabel.setIcon(FontIcon.of(phase.getIcon(), 14, disabledForeground));
       }
     }
   }

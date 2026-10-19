@@ -194,25 +194,25 @@ public final class MainFrame extends JFrame {
     qaViewPanel.add(qaHeaderBar, BorderLayout.NORTH);
     qaViewPanel.add(qaTabs, BorderLayout.CENTER);
 
-        // Task Workspace (Plan/Code/Review)
+                // Task Workspace (Plan/Code/Review)
     JPanel taskViewPanel = new JPanel(new BorderLayout());
     JPanel taskHeaderBar =
-        new JPanel(new MigLayout("insets 6 20 6 20, fillx, gapy 2", "[center, grow]", LAYOUT_CENTER));
+        new JPanel(new MigLayout("insets 6 20 6 20, fillx", "[grow]", LAYOUT_CENTER));
     taskHeaderBar.setBorder(
         BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
 
-    planLabel = new JLabel();
-    planLabel.putClientProperty(
-        FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
-    taskHeaderBar.add(planLabel, "center, wrap, hidemode 3");
-
-    progressTracker = new JPanel(new MigLayout("insets 0, gapx 8", "[]", LAYOUT_CENTER));
+    progressTracker = new JPanel(new MigLayout("insets 0, gapx 4", "[]", LAYOUT_CENTER));
     progressTracker.setOpaque(false);
     for (WorkflowPhase phase : WorkflowPhase.values()) {
       if (phase == WorkflowPhase.EXPLORE) continue;
       indicators.add(new WorkflowPhaseIndicator(phase, "font: bold -1"));
     }
-    taskHeaderBar.add(progressTracker, LAYOUT_CENTER);
+    taskHeaderBar.add(progressTracker, "split 2, center");
+
+    planLabel = new JLabel();
+    planLabel.putClientProperty(
+        FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
+    taskHeaderBar.add(planLabel, "gapleft 16, center, hidemode 3");
 
     workflowService.addPhaseListener(this::updateActivePhase);
     planManagerService.addListener(plan -> updateActivePhase(workflowService.getCurrentPhase()));
@@ -264,7 +264,7 @@ public final class MainFrame extends JFrame {
     showCard(QA_VIEW);
   }
 
-  private void updateActivePhase(WorkflowPhase currentPhase) {
+    private void updateActivePhase(WorkflowPhase currentPhase) {
     ImplementationPlan plan = planManagerService.getCurrentPlan();
     if (plan != null && plan.title() != null && !plan.title().isBlank()) {
       planLabel.setText(plan.title().toUpperCase(Locale.ROOT));
@@ -274,13 +274,33 @@ public final class MainFrame extends JFrame {
     }
 
     progressTracker.removeAll();
-    for (WorkflowPhaseIndicator indicator : indicators) {
-      indicator.setActive(indicator.getPhase() == currentPhase);
-      indicator.setCompleted(workflowService.getVisitedPhases().contains(indicator.getPhase()));
+    var visitedPhases = workflowService.getVisitedPhases();
+    for (int i = 0; i < indicators.size(); i++) {
+      WorkflowPhaseIndicator indicator = indicators.get(i);
+      boolean isActive = indicator.getPhase() == currentPhase;
+      boolean isCompleted = visitedPhases != null && visitedPhases.contains(indicator.getPhase());
+      indicator.setActive(isActive);
+      indicator.setCompleted(isCompleted);
+      if (i > 0) {
+        progressTracker.add(createConnectorLine(isActive || isCompleted), "w 24!, h 2!, center");
+      }
       progressTracker.add(indicator);
     }
     progressTracker.revalidate();
     progressTracker.repaint();
+  }
+
+  private JPanel createConnectorLine(boolean reached) {
+    JPanel line = new JPanel();
+    line.setOpaque(true);
+    Color accentColor = UIManager.getColor("Component.accentColor");
+    Color borderColor = UIManager.getColor("Component.borderColor");
+    if (reached) {
+      line.setBackground(accentColor != null ? accentColor : Color.BLUE);
+    } else {
+      line.setBackground(borderColor != null ? borderColor : Color.GRAY);
+    }
+    return line;
   }
 
   private void showCard(String cardName) {

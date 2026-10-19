@@ -2,6 +2,8 @@ package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.awt.Component;
+import javax.swing.JLabel;
 import javax.swing.UIManager;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -23,6 +25,17 @@ class WorkflowPhaseIndicatorTest {
     } finally {
       UIManager.put("Component.accentForeground", oldAccent);
     }
+  }
+
+  @Test
+  void testWorkflowPhaseIndicatorTextOnlyNoIcon() {
+    WorkflowPhaseIndicator indicator = new WorkflowPhaseIndicator(WorkflowPhase.PLAN);
+    assertEquals(1, indicator.getComponentCount(), "Indicator should only have textLabel");
+    Component comp = indicator.getComponent(0);
+    assertInstanceOf(JLabel.class, comp);
+    JLabel label = (JLabel) comp;
+    assertEquals("Plan", label.getText());
+    assertNull(label.getIcon(), "Indicator label should not have an icon");
   }
 
   @Test

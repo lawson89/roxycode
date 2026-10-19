@@ -97,12 +97,22 @@ class MentorModeIntegrationTest {
         assertSame(qaViewPanel, mentorModeLabel.getParent().getParent());
         assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
 
-        // Verify progressTracker and planLabel are inside the Task view wrapper (same parent container as taskTabs)
+                // Verify progressTracker and planLabel are inside the Task view wrapper (same parent container as taskTabs)
         Container taskViewPanel = taskTabs.getParent();
         assertNotNull(taskViewPanel);
-        assertSame(taskViewPanel, progressTracker.getParent().getParent());
-        assertSame(taskViewPanel, planLabel.getParent().getParent());
-        assertEquals(3, progressTracker.getComponentCount(), "Progress tracker should have Plan, Code, and Review indicators");
+        Container taskHeaderBar = progressTracker.getParent();
+        assertSame(taskViewPanel, taskHeaderBar.getParent());
+        assertSame(taskHeaderBar, planLabel.getParent(), "planLabel and progressTracker should share taskHeaderBar");
+        assertEquals(0, taskHeaderBar.getComponentZOrder(progressTracker), "progressTracker should precede planLabel");
+        assertEquals(1, taskHeaderBar.getComponentZOrder(planLabel), "planLabel should sit to the right of progressTracker");
+
+        // 3 phase indicators + 2 wizard connector lines = 5 components
+        assertEquals(5, progressTracker.getComponentCount(), "Progress tracker should have 3 indicators and 2 connector lines");
+                assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(0));
+        assertFalse(progressTracker.getComponent(1) instanceof WorkflowPhaseIndicator);
+        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(2));
+        assertFalse(progressTracker.getComponent(3) instanceof WorkflowPhaseIndicator);
+        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(4));
 
         // Verify planLabel updates when a plan is active
         ImplementationPlan mockPlan = new ImplementationPlan(
