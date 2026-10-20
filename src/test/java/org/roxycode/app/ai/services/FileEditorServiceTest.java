@@ -4,16 +4,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.CancellationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -23,20 +19,17 @@ class FileEditorServiceTest {
     @TempDir Path tempDir;
 
     private ProjectService projectService;
-    private WorkflowService workflowService;
     private ApplicationEventPublisher eventPublisher;
     private FileEditorService fileEditorService;
 
     @BeforeEach
     void setUp() {
         projectService = mock(ProjectService.class);
-        workflowService = mock(WorkflowService.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
-        fileEditorService = new FileEditorService(projectService, workflowService, eventPublisher);
+        fileEditorService = new FileEditorService(projectService, eventPublisher);
 
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
     }
 
     @Test
@@ -51,16 +44,6 @@ class FileEditorServiceTest {
         assertTrue(Files.exists(filePath));
         assertEquals(content, Files.readString(filePath));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
-    }
-
-    @Test
-    void testWriteFileWrongPhaseReturnsFailure() {
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-
-        EditorResult result = fileEditorService.writeFile("test.txt", "content");
-
-        assertFalse(result.success());
-        assertTrue(result.errorHint().contains("CODE phase"));
     }
 
     @Test
@@ -112,10 +95,11 @@ class FileEditorServiceTest {
         Path filePath = tempDir.resolve("test.java");
         Files.writeString(filePath, "// TODO\n // TODO");
 
-        EditorResult result = fileEditorService.replaceBlock("test.java", "// TODO", "// Done");
-
-        assertFalse(result.success());
-        assertTrue(result.errorHint().contains("not unique"));
+        IllegalArgumentException ex =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> fileEditorService.replaceBlock("test.java", "// TODO", "// Done"));
+        assertTrue(ex.getMessage().contains("not unique"));
     }
 
     @Test
@@ -187,62 +171,19 @@ class FileEditorServiceTest {
 
     @Test
     void testDeleteFileNonExistentReturnsFailure() {
-        EditorResult result = fileEditorService.deleteFile("missing.txt");
-
-        assertFalse(result.success());
-        assertTrue(result.errorHint().contains("does not exist"));
-    }
-
-    @Test
-    void testDeleteFileWrongPhaseReturnsFailure() throws IOException {
-        Path filePath = tempDir.resolve("to_delete.txt");
-        Files.writeString(filePath, "delete me");
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-
-        EditorResult result = fileEditorService.deleteFile("to_delete.txt");
-
-        assertFalse(result.success());
-        assertTrue(result.errorHint().contains("CODE phase"));
-        assertTrue(Files.exists(filePath));
+        IllegalArgumentException ex =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> fileEditorService.deleteFile("missing.txt"));
+        assertTrue(ex.getMessage().contains("does not exist"));
     }
 
     @Test
     void testPathTraversalReturnsFailure() {
-        EditorResult result = fileEditorService.writeFile("../outside.txt", "content");
-
-        assertFalse(result.success());
-        assertTrue(result.errorHint().contains("Path traversal"));
-    }
-
-    @Test
-    void testInterruptedThreadThrowsCancellationExceptionAndPreservesInterrupt() {
-        Thread.currentThread().interrupt();
-        try {
-            assertThrows(
-                    CancellationException.class,
-                    () -> fileEditorService.writeFile("interrupted.txt", "content"));
-            assertTrue(Thread.currentThread().isInterrupted());
-        } finally {
-            Thread.interrupted();
-        }
-    }
-
-    @Test
-    void testClosedByInterruptExceptionRethrownAsCancellationException() {
-        when(projectService.resolvePath("closed.txt"))
-                .thenAnswer(
-                        inv -> {
-                            throw new ClosedByInterruptException();
-                        });
-        try {
-            assertThrows(
-                    CancellationException.class,
-                    () -> fileEditorService.writeFile("closed.txt", "content"));
-            assertTrue(
-                    Thread.currentThread().isInterrupted(),
-                    "Interrupt flag should be restored when ClosedByInterruptException is caught");
-        } finally {
-            Thread.interrupted();
-        }
+        SecurityException ex =
+                assertThrows(
+                        SecurityException.class,
+                        () -> fileEditorService.writeFile("../outside.txt", "content"));
+        assertTrue(ex.getMessage().contains("Path traversal"));
     }
 }

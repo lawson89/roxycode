@@ -2,6 +2,8 @@ package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.IOException;
+import java.nio.channels.ClosedByInterruptException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +36,14 @@ public class JexlToolTest {
         public String interruptSelfAndReturn() {
             Thread.currentThread().interrupt();
             return "done";
+        }
+
+        public String throwIllegalArgument() {
+            throw new IllegalArgumentException("File does not exist: missing.txt");
+        }
+
+        public String throwClosedByInterrupt() throws IOException {
+            throw new ClosedByInterruptException();
         }
     }
 
@@ -241,6 +251,33 @@ public class JexlToolTest {
             assertTrue(
                     Thread.currentThread().isInterrupted(),
                     "Interrupt flag should remain set after post-execution interrupt check");
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    public void testExecuteJexlServiceExceptionsUnwrappedAndClosedByInterruptCancelled() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        registry.register(new TestService());
+        JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
+
+        AtomicReference<JexlExecutionEvent> capturedEvent = new AtomicReference<>();
+        tool.addListener(capturedEvent::set);
+
+        String errorJson = tool.executeJexl("testService.throwIllegalArgument()");
+        assertTrue(errorJson.contains("File does not exist: missing.txt"));
+        assertNotNull(capturedEvent.get());
+        assertFalse(capturedEvent.get().success());
+        assertEquals("File does not exist: missing.txt", capturedEvent.get().error());
+
+        try {
+            assertThrows(
+                    CancellationException.class,
+                    () -> tool.executeJexl("testService.throwClosedByInterrupt()"));
+            assertTrue(
+                    Thread.currentThread().isInterrupted(),
+                    "Interrupt flag should be restored when service throws ClosedByInterruptException");
         } finally {
             Thread.interrupted();
         }

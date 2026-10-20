@@ -1,5 +1,6 @@
 package org.roxycode.app.ai.services;
 
+import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,9 +10,6 @@ import java.util.List;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
-import org.roxycode.app.util.ExceptionUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** Service providing read-only file access to AI agents. */
 @AgentService(
@@ -20,7 +18,6 @@ import org.slf4j.LoggerFactory;
 @AgentDoc("Provides read-only access to files within the current project.")
 public class FileReadService {
 
-    private static final Logger log = LoggerFactory.getLogger(FileReadService.class);
     private final ProjectService projectService;
 
     public FileReadService(ProjectService projectService) {
@@ -32,7 +29,6 @@ public class FileReadService {
                     "Checks if a file or directory exists at the given path relative to the project root.",
             examples = "fileReadService.fileExists('src/main/java/Main.java')")
     public boolean fileExists(String relativePath) {
-        ExceptionUtils.checkInterrupted("File read operation cancelled");
         Path path = projectService.resolvePath(relativePath);
         return Files.exists(path);
     }
@@ -40,25 +36,18 @@ public class FileReadService {
     @AgentDoc(
             value = "Reads the content of a file at the given path relative to the project root.",
             examples = "fileReadService.readFile('pom.xml')")
-    public String readFile(String relativePath) {
-        ExceptionUtils.checkInterrupted("File read operation cancelled");
+    public String readFile(String relativePath) throws IOException {
         Path path = projectService.resolvePath(relativePath);
         if (!Files.isRegularFile(path)) {
             return "Error: Path is not a regular file or does not exist.";
         }
-        try {
-            return Files.readString(path);
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, "File read operation cancelled");
-            log.error("Failed to read file {}: {}", relativePath, e.getMessage(), e);
-            return "Error reading file: " + e.getMessage();
-        }
+        return Files.readString(path);
     }
 
     @AgentDoc(
             value = "Lists the contents of the project root directory.",
             examples = "fileReadService.listDirectory()")
-    public List<String> listDirectory() {
+    public List<String> listDirectory() throws IOException {
         return listDirectory(".");
     }
 
@@ -66,8 +55,7 @@ public class FileReadService {
             value =
                     "Lists the contents of a directory at the given path relative to the project root.",
             examples = "fileReadService.listDirectory('src')")
-    public List<String> listDirectory(String relativePath) {
-        ExceptionUtils.checkInterrupted("Directory listing cancelled");
+    public List<String> listDirectory(String relativePath) throws IOException {
         Path path = projectService.resolvePath(relativePath);
         if (!Files.isDirectory(path)) {
             return Collections.singletonList("Error: Path is not a directory or does not exist.");
@@ -78,10 +66,6 @@ public class FileReadService {
                 entries.add(entry.getFileName().toString());
             }
             return entries;
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, "File read operation cancelled");
-            log.error("Failed to list directory {}: {}", relativePath, e.getMessage(), e);
-            return Collections.singletonList("Error listing directory: " + e.getMessage());
         }
     }
 }
