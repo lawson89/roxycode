@@ -18,8 +18,12 @@ import org.roxycode.app.model.GeminiModels;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
 
 /** Panel for application settings. */
+@Component
+@Lazy
 public final class SettingsPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 

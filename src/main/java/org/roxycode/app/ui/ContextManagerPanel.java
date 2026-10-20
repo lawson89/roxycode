@@ -9,7 +9,11 @@ import org.fife.ui.rtextarea.RTextScrollPane;
 import org.roxycode.app.service.PromptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
 
+@Component
+@Lazy
 public final class ContextManagerPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(ContextManagerPanel.class);

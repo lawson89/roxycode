@@ -3,8 +3,12 @@ package org.roxycode.app.ui;
 import java.awt.*;
 import javax.swing.*;
 import org.roxycode.app.ai.JexlServiceRegistry;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
 
 /** Dedicated panel for viewing JEXL API documentation with syntax highlighting. */
+@Component
+@Lazy
 public final class JexlApiPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private final transient JexlServiceRegistry registry;

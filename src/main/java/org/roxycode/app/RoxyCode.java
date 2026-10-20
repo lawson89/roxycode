@@ -6,16 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.SwingUtilities;
-import org.roxycode.app.ai.JexlServiceRegistry;
-import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.services.GenericBuildToolService;
-import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.service.AiService;
-import org.roxycode.app.service.EnvironmentService;
-import org.roxycode.app.service.ProjectService;
-import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MainFrame;
 import org.roxycode.app.ui.SettingsPanel;
 import org.roxycode.app.ui.SplashScreenWindow;
@@ -97,53 +88,7 @@ public class RoxyCode {
                             splash.setStatus("Building workspace UI...");
                         }
 
-                        SettingsService settingsService = context.getBean(SettingsService.class);
-                        AiService aiService = context.getBean(AiService.class);
-                        org.roxycode.app.service.SystemToolService toolService =
-                                context.getBean(org.roxycode.app.service.SystemToolService.class);
-                        ProjectService projectService = context.getBean(ProjectService.class);
-                        GitService gitService = context.getBean(GitService.class);
-                        EnvironmentService envService = context.getBean(EnvironmentService.class);
-                        JexlServiceRegistry jexlServiceRegistry =
-                                context.getBean(JexlServiceRegistry.class);
-                        WorkflowService workflowService = context.getBean(WorkflowService.class);
-                        PlanService planManagerService = context.getBean(PlanService.class);
-                        org.roxycode.app.events.TurnEventBridge turnEventBridge =
-                                context.getBean(org.roxycode.app.events.TurnEventBridge.class);
-                        org.roxycode.app.ai.services.cache.RepoMapPackerService packerService =
-                                context.getBean(
-                                        org.roxycode.app.ai.services.cache.RepoMapPackerService
-                                                .class);
-                        org.roxycode.app.ai.services.cache.ProjectCacheMetaService
-                                cacheMetaService =
-                                        context.getBean(
-                                                org.roxycode.app.ai.services.cache
-                                                        .ProjectCacheMetaService.class);
-                        org.roxycode.app.service.PromptService promptService =
-                                context.getBean(org.roxycode.app.service.PromptService.class);
-                        GenericBuildToolService buildToolService =
-                                context.getBean(GenericBuildToolService.class);
-                        org.springframework.ai.chat.memory.ChatMemory chatMemory =
-                                context.getBean(
-                                        org.springframework.ai.chat.memory.ChatMemory.class);
-
-                        MainFrame frame =
-                                new MainFrame(
-                                        settingsService,
-                                        aiService,
-                                        toolService,
-                                        projectService,
-                                        gitService,
-                                        envService,
-                                        jexlServiceRegistry,
-                                        workflowService,
-                                        planManagerService,
-                                        turnEventBridge,
-                                        packerService,
-                                        cacheMetaService,
-                                        promptService,
-                                        buildToolService,
-                                        chatMemory);
+                        MainFrame frame = context.getBean(MainFrame.class);
                         frame.setVisible(true);
                     } finally {
                         disposeSplash(splash);

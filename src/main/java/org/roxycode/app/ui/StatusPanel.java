@@ -4,8 +4,12 @@ import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.service.EnvironmentService;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
 
 /** Bottom status bar with system info. */
+@Component
+@Lazy
 public final class StatusPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private final transient EnvironmentService envService;

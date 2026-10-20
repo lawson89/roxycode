@@ -10,7 +10,11 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
 
+@Component
+@Lazy
 public final class SystemToolsPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
@@ -95,7 +99,7 @@ public final class SystemToolsPanel extends JPanel {
         private static final long serialVersionUID = 1L;
 
         @Override
-        public Component getTableCellRendererComponent(
+        public java.awt.Component getTableCellRendererComponent(
                 JTable table,
                 Object value,
                 boolean isSelected,

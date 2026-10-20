@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.awt.Container;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,8 @@ class MentorModeIntegrationTest {
     private ProjectService projectService;
     private WorkflowService workflowService;
     private PlanService planService;
+    private QaWorkspacePanel qaWorkspacePanel;
+    private TaskWorkspacePanel taskWorkspacePanel;
     private MainFrame mainFrame;
 
     @BeforeEach
@@ -48,9 +51,11 @@ class MentorModeIntegrationTest {
 
         AiService aiService = mock(AiService.class);
         SystemToolService toolService = mock(SystemToolService.class);
+        when(toolService.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of()));
         GitService gitService = mock(GitService.class);
         EnvironmentService envService = mock(EnvironmentService.class);
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
+        when(jexlServiceRegistry.getDocumentation(any())).thenReturn("");
         planService = mock(PlanService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
         RepoMapPackerService packerService = mock(RepoMapPackerService.class);
@@ -59,30 +64,57 @@ class MentorModeIntegrationTest {
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        mainFrame =
-                new MainFrame(
-                        settingsService,
+        ChatPanelFactory chatPanelFactory =
+                new ChatPanelFactory(
                         aiService,
-                        toolService,
-                        projectService,
-                        gitService,
-                        envService,
-                        jexlServiceRegistry,
+                        workflowService,
+                        turnEventBridge,
+                        chatMemory,
+                        settingsService,
+                        planService);
+
+        HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
+        StatusPanel statusPanel = new StatusPanel(envService);
+        qaWorkspacePanel = new QaWorkspacePanel(chatPanelFactory);
+        PlanPanel planPanel = new PlanPanel(planService, workflowService);
+        GitChangesPanel gitChangesPanel = new GitChangesPanel(gitService);
+        taskWorkspacePanel =
+                new TaskWorkspacePanel(
+                        chatPanelFactory,
                         workflowService,
                         planService,
                         turnEventBridge,
-                        packerService,
-                        cacheMetaService,
-                        promptService,
-                        buildToolService,
-                        chatMemory);
+                        planPanel,
+                        gitChangesPanel);
+        CodebaseCachePanel codebaseCachePanel =
+                new CodebaseCachePanel(packerService, cacheMetaService, promptService);
+        JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
+        SystemToolsPanel systemToolsPanel = new SystemToolsPanel(toolService);
+        SettingsPanel settingsPanel = new SettingsPanel(settingsService);
+        BuildConfigPanel buildConfigPanel =
+                new BuildConfigPanel(buildToolService, settingsService, projectService);
+        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(promptService);
+
+        mainFrame =
+                new MainFrame(
+                        settingsService,
+                        projectService,
+                        chatMemory,
+                        headerPanel,
+                        statusPanel,
+                        qaWorkspacePanel,
+                        taskWorkspacePanel,
+                        codebaseCachePanel,
+                        jexlApiPanel,
+                        systemToolsPanel,
+                        settingsPanel,
+                        buildConfigPanel,
+                        contextManagerPanel);
     }
 
     @Test
     void testWorkspaceBarsLocatedInRespectiveViews() throws Exception {
-        java.lang.reflect.Field headerField = MainFrame.class.getDeclaredField("header");
-        headerField.setAccessible(true);
-        HeaderPanel header = (HeaderPanel) headerField.get(mainFrame);
+        HeaderPanel header = mainFrame.getHeader();
         JPanel workspace = (JPanel) header.getParent();
         net.miginfocom.swing.MigLayout workspaceLayout =
                 (net.miginfocom.swing.MigLayout) workspace.getLayout();
@@ -91,24 +123,13 @@ class MentorModeIntegrationTest {
                 workspaceLayout.getComponentConstraints(header),
                 "Main header bar should have a compact height constraint of h 36!");
 
-        java.lang.reflect.Field qaTabsField = MainFrame.class.getDeclaredField("qaTabs");
-        qaTabsField.setAccessible(true);
-        JTabbedPane qaTabs = (JTabbedPane) qaTabsField.get(mainFrame);
+        JTabbedPane qaTabs = qaWorkspacePanel.getQaTabs();
         JPanel qaHeaderBar = (JPanel) qaTabs.getParent().getComponent(0);
         JLabel mentorModeLabel = (JLabel) qaHeaderBar.getComponent(0);
 
-        java.lang.reflect.Field progressTrackerField =
-                MainFrame.class.getDeclaredField("progressTracker");
-        progressTrackerField.setAccessible(true);
-        JPanel progressTracker = (JPanel) progressTrackerField.get(mainFrame);
-
-        java.lang.reflect.Field planLabelField = MainFrame.class.getDeclaredField("planLabel");
-        planLabelField.setAccessible(true);
-        JLabel planLabel = (JLabel) planLabelField.get(mainFrame);
-
-        java.lang.reflect.Field taskTabsField = MainFrame.class.getDeclaredField("taskTabs");
-        taskTabsField.setAccessible(true);
-        JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
+        JPanel progressTracker = taskWorkspacePanel.getProgressTracker();
+        JLabel planLabel = taskWorkspacePanel.getPlanLabel();
+        JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
 
         // Verify mentorModeLabel is inside the QA view wrapper (same parent container
         // as qaTabs)
@@ -162,10 +183,7 @@ class MentorModeIntegrationTest {
                         List.of());
         when(planService.getCurrentPlan()).thenReturn(mockPlan);
 
-        java.lang.reflect.Method updatePhaseMethod =
-                MainFrame.class.getDeclaredMethod("updateActivePhase", WorkflowPhase.class);
-        updatePhaseMethod.setAccessible(true);
-        updatePhaseMethod.invoke(mainFrame, WorkflowPhase.CODE);
+        taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
 
         assertTrue(planLabel.isVisible());
         assertEquals("MY FEATURE PLAN", planLabel.getText());
@@ -173,17 +191,9 @@ class MentorModeIntegrationTest {
 
     @Test
     void testShowCardFocusesInputAndSetsCaretToEnd() throws Exception {
-        java.lang.reflect.Field qaChatField = MainFrame.class.getDeclaredField("qaChatPanel");
-        qaChatField.setAccessible(true);
-        ChatPanel qaChatPanel = (ChatPanel) qaChatField.get(mainFrame);
-
-        java.lang.reflect.Field taskChatField = MainFrame.class.getDeclaredField("taskChatPanel");
-        taskChatField.setAccessible(true);
-        ChatPanel taskChatPanel = (ChatPanel) taskChatField.get(mainFrame);
-
-        java.lang.reflect.Field taskTabsField = MainFrame.class.getDeclaredField("taskTabs");
-        taskTabsField.setAccessible(true);
-        JTabbedPane taskTabs = (JTabbedPane) taskTabsField.get(mainFrame);
+        ChatPanel qaChatPanel = qaWorkspacePanel.getQaChatPanel();
+        ChatPanel taskChatPanel = taskWorkspacePanel.getTaskChatPanel();
+        JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
 
         qaChatPanel.getInputArea().setText("QA draft message");
         qaChatPanel.getInputArea().setCaretPosition(0);
@@ -194,12 +204,8 @@ class MentorModeIntegrationTest {
         // Select another tab in taskTabs (e.g., Plan tab at index 1)
         taskTabs.setSelectedIndex(1);
 
-        java.lang.reflect.Method showCardMethod =
-                MainFrame.class.getDeclaredMethod("showCard", String.class);
-        showCardMethod.setAccessible(true);
-
         // Switch to TASK_VIEW
-        showCardMethod.invoke(mainFrame, "TASK_VIEW");
+        mainFrame.showCard("TASK_VIEW");
         SwingUtilities.invokeAndWait(() -> {});
 
         assertEquals(
@@ -212,7 +218,7 @@ class MentorModeIntegrationTest {
                 "Task input caret should be at the end of the text");
 
         // Switch back to QA_VIEW
-        showCardMethod.invoke(mainFrame, "QA_VIEW");
+        mainFrame.showCard("QA_VIEW");
         SwingUtilities.invokeAndWait(() -> {});
 
         assertEquals(

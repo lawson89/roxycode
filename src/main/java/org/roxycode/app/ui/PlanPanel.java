@@ -8,8 +8,12 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.ImplementationPlan;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
 
 /** UI panel for displaying the current project plan and specifications. */
+@Component
+@Lazy
 public final class PlanPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
