@@ -9,13 +9,9 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
@@ -24,12 +20,8 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.events.AgentTurnEvent;
-import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.TurnEventBridge;
-import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
@@ -41,13 +33,10 @@ public final class ChatPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
-    private static final String ROLE_SYSTEM = "system";
-    private final transient AiService aiService;
-    private final transient WorkflowService workflowService;
-    private final transient TurnEventBridge turnEventBridge;
-    private final transient ChatMemory chatMemory;
-    private final transient SettingsService settingsService;
-    private final transient PlanService planService;
+
+    private final transient ChatModel model;
+    private final transient ChatController controller;
+
     private final MarkdownPane outputArea;
     private final ThoughtPanel thoughtPanel;
     private final JTextArea inputArea;
@@ -60,17 +49,8 @@ public final class ChatPanel extends JPanel {
     private final JLabel transitionLabel;
     private final JLabel turnLabel;
     private final JScrollPane outputScrollPane;
-    private SwingWorker<String, Void> currentWorker;
-    private final AtomicBoolean turnCancelled = new AtomicBoolean(false);
-    private final List<Runnable> pendingPostTurnActions = new ArrayList<>();
-    private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
-    private final List<BufferedImage> pendingImages = new ArrayList<>();
     private final JPanel attachmentPanel;
-    private int currentTurn = 0;
-
-    private final String sessionPrefix;
-    private final WorkflowPhase lockedPhase;
-    private final boolean isTaskMode;
+    private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
 
     public ChatPanel(
             AiService aiService,
@@ -102,34 +82,21 @@ public final class ChatPanel extends JPanel {
             boolean isTaskMode,
             SettingsService settingsService,
             PlanService planService) {
-        this.aiService = aiService;
-        this.workflowService = workflowService;
-        this.turnEventBridge = turnEventBridge;
-        this.chatMemory = chatMemory;
-        this.sessionPrefix = sessionPrefix;
-        this.lockedPhase = lockedPhase;
-        this.isTaskMode = isTaskMode;
-        this.settingsService = settingsService;
-        this.planService = planService;
+        this.model = new ChatModel(sessionPrefix, lockedPhase, isTaskMode);
+        this.controller =
+                new ChatController(
+                        this.model,
+                        this,
+                        aiService,
+                        workflowService,
+                        turnEventBridge,
+                        chatMemory,
+                        settingsService,
+                        planService);
 
         attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         attachmentPanel.setOpaque(false);
         attachmentPanel.setVisible(false);
-
-        turnEventBridge.addTurnListener(getConversationId(), this::onAgentTurn);
-        if (isTaskMode) {
-            turnEventBridge.addAutonomousTransitionListener(this::onAutonomousTransition);
-        }
-        turnEventBridge.addToolExecutionListener(getConversationId(), this::onToolExecution);
-        turnEventBridge.addCompleteListener(
-                getConversationId(),
-                event ->
-                        SwingUtilities.invokeLater(
-                                () -> {
-                                    if (currentWorker == null) {
-                                        setLoading(false);
-                                    }
-                                }));
 
         setLayout(new BorderLayout());
 
@@ -161,13 +128,13 @@ public final class ChatPanel extends JPanel {
         approveButton.setEnabled(false);
         approveButton.putClientProperty(
                 FlatClientProperties.STYLE, "background: $Actions.Green; foreground: #ffffff");
-        approveButton.addActionListener(e -> approvePhase());
+        approveButton.addActionListener(e -> controller.approvePhase());
 
         rejectButton = new JButton("Reject", FontIcon.of(Codicons.CLOSE, 16));
         rejectButton.setEnabled(false);
         rejectButton.putClientProperty(
                 FlatClientProperties.STYLE, "background: $Actions.Red; foreground: #ffffff");
-        rejectButton.addActionListener(e -> rejectPhase());
+        rejectButton.addActionListener(e -> controller.rejectPhase());
 
         inlineActionPanel.add(transitionLabel);
         inlineActionPanel.add(Box.createHorizontalStrut(10));
@@ -223,19 +190,12 @@ public final class ChatPanel extends JPanel {
         stopButton = new JButton("Stop", FontIcon.of(Codicons.DEBUG_STOP, 16));
         stopButton.setEnabled(false);
         stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
-        stopButton.addActionListener(
-                e -> {
-                    turnCancelled.set(true);
-                    pendingPostTurnActions.clear();
-                    if (currentWorker != null) {
-                        currentWorker.cancel(true);
-                    }
-                });
+        stopButton.addActionListener(e -> controller.stopTurn());
 
         resetSessionButton = new JButton("Reset Session", FontIcon.of(Codicons.REFRESH, 16));
         resetSessionButton.putClientProperty(
                 FlatClientProperties.STYLE, "arc: 999; foreground: $Label.disabledForeground");
-        resetSessionButton.addActionListener(e -> resetSession());
+        resetSessionButton.addActionListener(e -> controller.resetSession());
 
         turnLabel = new JLabel();
         turnLabel.putClientProperty(
@@ -261,51 +221,170 @@ public final class ChatPanel extends JPanel {
         add(splitPane, BorderLayout.CENTER);
 
         sendButton.addActionListener(this::sendMessage);
-        if (settingsService != null) {
-            settingsService.addSettingsListener(
-                    s -> SwingUtilities.invokeLater(this::updateTurnLabel));
-        }
-        if (isTaskMode) {
-            workflowService.addPhaseListener(this::onPhaseChanged);
-            workflowService.addTransitionRequestListener(this::onTransitionRequested);
-            if (planService != null) {
-                planService.addListener(plan -> SwingUtilities.invokeLater(this::updateTurnLabel));
-            }
-        }
+        controller.registerListeners();
 
         setupInputContextMenu();
         setupUndoRedo();
         setupKeyboardShortcuts();
     }
 
-    private void updateTurnLabel() {
-        StringBuilder sb = new StringBuilder("Turns: ").append(currentTurn);
-        if (settingsService != null && settingsService.getSettings() != null) {
-            int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
-            sb.append(" / ").append(maxTurns);
-        }
-        if (isTaskMode && planService != null) {
-            ImplementationPlan plan = planService.getCurrentPlan();
-            if (plan != null && !plan.technicalSteps().isEmpty()) {
-                int completed = 0;
-                for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                    if (step.completed()) {
-                        completed++;
-                    }
-                }
-                int total = plan.technicalSteps().size();
-                sb.append(" | Plan: ").append(completed).append("/").append(total).append(" steps");
-            }
-        }
-        turnLabel.setText(sb.toString());
+    void updateTurnLabel() {
+        turnLabel.setText(controller.formatCurrentTurnStatus());
     }
 
     JLabel getTurnLabel() {
         return turnLabel;
     }
 
-    private String getConversationId() {
-        return sessionPrefix + ":default";
+    ChatModel getModel() {
+        return model;
+    }
+
+    ChatController getController() {
+        return controller;
+    }
+
+    void appendMessage(String role, String content) {
+        outputArea.appendMessage(role, content);
+    }
+
+    void appendToolLog(String toolName, String output) {
+        outputArea.appendToolLog(toolName, output);
+    }
+
+    void clearOutput() {
+        outputArea.clear();
+    }
+
+    void clearThoughts() {
+        thoughtPanel.clear();
+    }
+
+    void clearInputText() {
+        inputArea.setText("");
+    }
+
+    void clearAttachments() {
+        attachmentPanel.removeAll();
+        attachmentPanel.setVisible(false);
+    }
+
+    void showTransitionBanner(String path) {
+        transitionLabel.setText(path);
+        approveButton.setText("Approve");
+        approveButton.setEnabled(true);
+        rejectButton.setEnabled(true);
+        inlineActionPanel.setVisible(true);
+    }
+
+    void hideTransitionBanner() {
+        approveButton.setEnabled(false);
+        rejectButton.setEnabled(false);
+        inlineActionPanel.setVisible(false);
+    }
+
+    boolean confirmResetSession() {
+        int result =
+                JOptionPane.showConfirmDialog(
+                        this,
+                        "Reset session? This cancels active tasks and clears chat history.",
+                        "Reset",
+                        JOptionPane.YES_NO_OPTION);
+        return result == JOptionPane.YES_OPTION;
+    }
+
+    private void sendMessage(ActionEvent e) {
+        if (e != null) {
+            log.debug("Send message triggered by: {}", e.getActionCommand());
+        }
+        controller.sendMessage(inputArea.getText());
+    }
+
+    private void addPendingImage(Image img) {
+        BufferedImage bimage = model.addPendingImage(img);
+
+        Image thumbnail = bimage.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
+        JLabel thumbLabel = new JLabel(new ImageIcon(thumbnail));
+        thumbLabel.setBorder(
+                BorderFactory.createLineBorder(UIManager.getColor("Component.borderColor")));
+
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
+        wrapper.add(thumbLabel, BorderLayout.CENTER);
+
+        JButton removeBtn = new JButton(FontIcon.of(Codicons.CLOSE, 12));
+        removeBtn.putClientProperty(
+                FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        removeBtn.setMargin(new Insets(0, 0, 0, 0));
+        removeBtn.addActionListener(
+                ae -> {
+                    model.removePendingImage(bimage);
+                    attachmentPanel.remove(wrapper);
+                    attachmentPanel.setVisible(model.hasPendingImages());
+                    attachmentPanel.revalidate();
+                    attachmentPanel.repaint();
+                });
+        wrapper.add(removeBtn, BorderLayout.NORTH);
+
+        attachmentPanel.add(wrapper);
+        attachmentPanel.setVisible(true);
+        attachmentPanel.revalidate();
+        attachmentPanel.repaint();
+    }
+
+    void setLoading(boolean loading) {
+        model.setLoading(loading);
+        if (loading) {
+            stopButton.setEnabled(true);
+            SwingUtilities.invokeLater(stopButton::requestFocusInWindow);
+            sendButton.setEnabled(false);
+            inputArea.setEnabled(false);
+            if (model.isTaskMode()) {
+                approveButton.setEnabled(false);
+                rejectButton.setEnabled(false);
+            }
+        } else {
+            sendButton.setEnabled(true);
+            inputArea.setEnabled(true);
+            if (model.isTaskMode()) {
+                boolean hasPending = controller.hasPendingPhase();
+                approveButton.setEnabled(hasPending);
+                rejectButton.setEnabled(hasPending);
+            }
+            stopButton.setEnabled(false);
+            SwingUtilities.invokeLater(inputArea::requestFocusInWindow);
+        }
+        sendButton.setText(loading ? "Sending..." : "Send");
+        for (Consumer<Boolean> listener : loadingListeners) {
+            listener.accept(loading);
+        }
+    }
+
+    public void addLoadingListener(Consumer<Boolean> listener) {
+        if (listener != null) {
+            loadingListeners.add(listener);
+        }
+    }
+
+    public MarkdownPane getOutputArea() {
+        return outputArea;
+    }
+
+    public JTextArea getInputArea() {
+        return inputArea;
+    }
+
+    public JButton getSendButton() {
+        return sendButton;
+    }
+
+    public JButton getStopButton() {
+        return stopButton;
+    }
+
+    public void focusInput() {
+        inputArea.requestFocusInWindow();
+        inputArea.setCaretPosition(inputArea.getDocument().getLength());
     }
 
     private void setupUndoRedo() {
@@ -352,60 +431,6 @@ public final class ChatPanel extends JPanel {
                 });
     }
 
-    private void runAfterCurrentTurn(Runnable action) {
-        if (turnCancelled.get()) return;
-        SwingUtilities.invokeLater(
-                () -> {
-                    if (turnCancelled.get()) return;
-                    if (currentWorker != null) {
-                        pendingPostTurnActions.add(action);
-                    } else {
-                        action.run();
-                    }
-                });
-    }
-
-    private void onAutonomousTransition(AutonomousTransitionEvent event) {
-        if (!isTaskMode || turnCancelled.get()) return;
-        runAfterCurrentTurn(
-                () -> {
-                    if (turnCancelled.get()) return;
-                    outputArea.appendMessage(
-                            ROLE_SYSTEM,
-                            "Autonomous transition detected: **"
-                                    + event.from()
-                                    + " → "
-                                    + event.to()
-                                    + "**. Reason: "
-                                    + event.reason());
-
-                    if (event.to() == WorkflowPhase.EXPLORE) {
-                        outputArea.appendMessage(
-                                ROLE_SYSTEM,
-                                "Task complete. We are back in Explore mode. Please enter a new question or task.");
-                    } else if (event.to() == WorkflowPhase.PLAN) {
-                        outputArea.appendMessage(
-                                ROLE_SYSTEM,
-                                "Task complete. What is the next feature you would like to work on?");
-                    } else {
-                        triggerTurn(
-                                "Phase changed to "
-                                        + event.to()
-                                        + ". Please proceed with the tasks in the new phase.");
-                    }
-                });
-    }
-
-    private void onAgentTurn(AgentTurnEvent event) {
-        if (turnCancelled.get()) return;
-        SwingUtilities.invokeLater(
-                () -> {
-                    if (turnCancelled.get()) return;
-                    currentTurn = event.turnNumber();
-                    updateTurnLabel();
-                });
-    }
-
     private void setupInputContextMenu() {
         inputArea.addMouseListener(
                 new MouseAdapter() {
@@ -433,352 +458,6 @@ public final class ChatPanel extends JPanel {
                         menu.show(e.getComponent(), e.getX(), e.getY());
                     }
                 });
-    }
-
-    private void onPhaseChanged(WorkflowPhase phase) {
-        log.debug("Phase changed to: {}", phase);
-        SwingUtilities.invokeLater(
-                () -> {
-                    if (isTaskMode) {
-                        approveButton.setEnabled(false);
-                        rejectButton.setEnabled(false);
-                        inlineActionPanel.setVisible(false);
-                        updateTurnLabel();
-                    }
-                });
-    }
-
-    private void onTransitionRequested(
-            WorkflowPhase current, WorkflowPhase requested, String reason) {
-        if (!isTaskMode) return;
-        if (requested == null) {
-            SwingUtilities.invokeLater(
-                    () -> {
-                        approveButton.setEnabled(false);
-                        rejectButton.setEnabled(false);
-                        inlineActionPanel.setVisible(false);
-                    });
-            return;
-        }
-        if (turnCancelled.get()) return;
-        runAfterCurrentTurn(
-                () -> {
-                    if (turnCancelled.get()) return;
-                    String path = current.getDisplayName() + " → " + requested.getDisplayName();
-                    transitionLabel.setText(path);
-                    approveButton.setText("Approve");
-                    approveButton.setEnabled(true);
-                    rejectButton.setEnabled(true);
-                    inlineActionPanel.setVisible(true);
-                    outputArea.appendMessage(
-                            ROLE_SYSTEM,
-                            "Roxy requested a transition: **"
-                                    + path
-                                    + "**.\n\n**Reason:** "
-                                    + reason);
-                });
-    }
-
-    private void approvePhase() {
-        WorkflowPhase current = workflowService.getCurrentPhase();
-        WorkflowPhase requested = workflowService.getPendingPhase();
-        if (requested != null) {
-            turnCancelled.set(false);
-            workflowService.approveTransition();
-            outputArea.appendMessage(
-                    ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** approved.");
-            if (requested == WorkflowPhase.EXPLORE) {
-                outputArea.appendMessage(
-                        ROLE_SYSTEM,
-                        "Task complete. We are back in Explore mode. Please enter a new question or task.");
-            } else if (current == WorkflowPhase.REVIEW && requested == WorkflowPhase.PLAN) {
-                chatMemory.clear(getConversationId());
-                outputArea.appendMessage(
-                        ROLE_SYSTEM,
-                        "Task complete. What is the next feature you would like to work on?");
-            } else {
-                triggerTurn(
-                        "I approve the transition to "
-                                + requested.getDisplayName()
-                                + ". Please proceed with the next phase.");
-            }
-        }
-    }
-
-    private void rejectPhase() {
-        WorkflowPhase requested = workflowService.getPendingPhase();
-        if (requested != null) {
-            turnCancelled.set(false);
-            workflowService.rejectTransition();
-            outputArea.appendMessage(
-                    ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
-            triggerTurn(
-                    "I have rejected the transition to "
-                            + requested.getDisplayName()
-                            + ". Let's discuss what needs to be fixed or adjusted.");
-        }
-    }
-
-    private void resetSession() {
-        int result =
-                JOptionPane.showConfirmDialog(
-                        this,
-                        "Reset session? This cancels active tasks and clears chat history.",
-                        "Reset",
-                        JOptionPane.YES_NO_OPTION);
-        if (result == JOptionPane.YES_OPTION) {
-            turnCancelled.set(true);
-            pendingPostTurnActions.clear();
-            if (currentWorker != null) {
-                SwingWorker<String, Void> workerToCancel = currentWorker;
-                currentWorker = null; // NOPMD
-                workerToCancel.cancel(true);
-                setLoading(false);
-            }
-            if (isTaskMode) {
-                workflowService.resetWorkflow();
-            }
-            currentTurn = 0;
-            updateTurnLabel();
-            chatMemory.clear(getConversationId());
-            outputArea.clear();
-            outputArea.appendMessage(ROLE_SYSTEM, "Session reset.");
-        }
-    }
-
-    private void sendMessage(ActionEvent e) {
-        if (e != null) {
-            log.debug("Send message triggered by: {}", e.getActionCommand());
-        }
-        String text = inputArea.getText().trim();
-        if (text.isEmpty()) return;
-
-        turnEventBridge.publishUserMessage(getConversationId(), "user", text);
-        outputArea.appendMessage("user", text);
-        inputArea.setText("");
-        triggerTurn(text);
-    }
-
-    private void addPendingImage(Image img) {
-        BufferedImage bimage;
-        if (img instanceof BufferedImage) {
-            bimage = (BufferedImage) img;
-        } else {
-            bimage =
-                    new BufferedImage(
-                            img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-            Graphics2D bGr = bimage.createGraphics();
-            bGr.drawImage(img, 0, 0, null);
-            bGr.dispose();
-        }
-
-        pendingImages.add(bimage);
-
-        Image thumbnail = bimage.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
-        JLabel thumbLabel = new JLabel(new ImageIcon(thumbnail));
-        thumbLabel.setBorder(
-                BorderFactory.createLineBorder(UIManager.getColor("Component.borderColor")));
-
-        JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.setOpaque(false);
-        wrapper.add(thumbLabel, BorderLayout.CENTER);
-
-        JButton removeBtn = new JButton(FontIcon.of(Codicons.CLOSE, 12));
-        removeBtn.putClientProperty(
-                FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-        removeBtn.setMargin(new Insets(0, 0, 0, 0));
-        removeBtn.addActionListener(
-                ae -> {
-                    pendingImages.remove(bimage);
-                    attachmentPanel.remove(wrapper);
-                    attachmentPanel.setVisible(!pendingImages.isEmpty());
-                    attachmentPanel.revalidate();
-                    attachmentPanel.repaint();
-                });
-        wrapper.add(removeBtn, BorderLayout.NORTH);
-
-        attachmentPanel.add(wrapper);
-        attachmentPanel.setVisible(true);
-        attachmentPanel.revalidate();
-        attachmentPanel.repaint();
-    }
-
-    private void triggerTurn(String text) {
-        if (text == null || text.trim().isEmpty()) return;
-
-        turnCancelled.set(false);
-        pendingPostTurnActions.clear();
-
-        if (currentWorker != null && !currentWorker.isDone()) {
-            SwingWorker<String, Void> previousWorker = currentWorker;
-            currentWorker = null; // NOPMD
-            previousWorker.cancel(true);
-        }
-
-        setLoading(true);
-        thoughtPanel.clear();
-        currentTurn = 0;
-        updateTurnLabel();
-
-        List<byte[]> imageBytes = new ArrayList<>();
-        for (BufferedImage bimg : pendingImages) {
-            try {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                ImageIO.write(bimg, "png", baos);
-                imageBytes.add(baos.toByteArray());
-            } catch (Exception ex) {
-                log.error("Failed to encode image", ex);
-            }
-        }
-
-        pendingImages.clear();
-        attachmentPanel.removeAll();
-        attachmentPanel.setVisible(false);
-
-        currentWorker =
-                new SwingWorker<>() {
-                    @Override
-                    protected String doInBackground() {
-                        try {
-                            WorkflowPhase phase =
-                                    (lockedPhase != null)
-                                            ? lockedPhase
-                                            : workflowService.getCurrentPhase();
-                            return aiService.chat(
-                                    getConversationId(), phase, text, null, imageBytes);
-                        } catch (CancellationException ex) {
-                            throw ex;
-                        } catch (Exception ex) {
-                            if (isCancelled()
-                                    || turnCancelled.get()
-                                    || Thread.currentThread().isInterrupted()
-                                    || YieldTurnException.findCause(ex, CancellationException.class)
-                                            != null) {
-                                CancellationException ce =
-                                        new CancellationException("Turn cancelled");
-                                ce.initCause(ex);
-                                throw ce;
-                            }
-                            log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
-                            return "Error: "
-                                    + (ex.getMessage() != null
-                                            ? ex.getMessage()
-                                            : ex.getClass().getSimpleName());
-                        }
-                    }
-
-                    @Override
-                    protected void done() {
-                        if (currentWorker != this) {
-                            return;
-                        }
-                        boolean cancelled = isCancelled() || turnCancelled.get();
-                        try {
-                            String response = get();
-                            if (!cancelled) {
-                                outputArea.appendMessage("ai", response);
-                            } else {
-                                outputArea.appendMessage(
-                                        ROLE_SYSTEM, "_Request cancelled by user._");
-                            }
-                        } catch (CancellationException ce) {
-                            cancelled = true;
-                            turnCancelled.set(true);
-                            outputArea.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
-                        } catch (Exception ex) {
-                            if (cancelled
-                                    || YieldTurnException.findCause(ex, CancellationException.class)
-                                            != null) {
-                                cancelled = true;
-                                turnCancelled.set(true);
-                                outputArea.appendMessage(
-                                        ROLE_SYSTEM, "_Request cancelled by user._");
-                            } else {
-                                log.error(
-                                        "Failed to retrieve AI response: {}", ex.getMessage(), ex);
-                                outputArea.appendMessage("ai", "_Error communicating with AI._");
-                            }
-                        } finally {
-                            if (currentWorker == this) {
-                                currentWorker = null; // NOPMD
-                                setLoading(false);
-                                List<Runnable> actions = new ArrayList<>(pendingPostTurnActions);
-                                pendingPostTurnActions.clear();
-                                if (!cancelled && !turnCancelled.get()) {
-                                    for (Runnable action : actions) {
-                                        action.run();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                };
-        currentWorker.execute();
-    }
-
-    private void onToolExecution(org.roxycode.app.events.ToolExecutionEvent event) {
-        if (turnCancelled.get()) return;
-        SwingUtilities.invokeLater(
-                () -> {
-                    if (turnCancelled.get()) return;
-                    String toolName = "";
-                    String output = JexlToHtmlConverter.convert(event.script());
-                    outputArea.appendToolLog(toolName, output);
-                });
-    }
-
-    private void setLoading(boolean loading) {
-        if (loading) {
-            stopButton.setEnabled(true);
-            SwingUtilities.invokeLater(() -> stopButton.requestFocusInWindow());
-            sendButton.setEnabled(false);
-            inputArea.setEnabled(false);
-            if (isTaskMode) {
-                approveButton.setEnabled(false);
-                rejectButton.setEnabled(false);
-            }
-        } else {
-            sendButton.setEnabled(true);
-            inputArea.setEnabled(true);
-            if (isTaskMode) {
-                boolean hasPending = workflowService.getPendingPhase() != null;
-                approveButton.setEnabled(hasPending);
-                rejectButton.setEnabled(hasPending);
-            }
-            stopButton.setEnabled(false);
-            SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow());
-        }
-        sendButton.setText(loading ? "Sending..." : "Send");
-        for (Consumer<Boolean> listener : loadingListeners) {
-            listener.accept(loading);
-        }
-    }
-
-    public void addLoadingListener(Consumer<Boolean> listener) {
-        if (listener != null) {
-            loadingListeners.add(listener);
-        }
-    }
-
-    public MarkdownPane getOutputArea() {
-        return outputArea;
-    }
-
-    public JTextArea getInputArea() {
-        return inputArea;
-    }
-
-    public JButton getSendButton() {
-        return sendButton;
-    }
-
-    public JButton getStopButton() {
-        return stopButton;
-    }
-
-    public void focusInput() {
-        inputArea.requestFocusInWindow();
-        inputArea.setCaretPosition(inputArea.getDocument().getLength());
     }
 
     private void setupKeyboardShortcuts() {

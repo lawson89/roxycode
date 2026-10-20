@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.*;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.service.EnvironmentService;
