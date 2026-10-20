@@ -26,7 +26,6 @@ public final class ChatModel {
     private final boolean taskMode;
 
     private final AtomicBoolean turnCancelled = new AtomicBoolean(false);
-    private final List<Runnable> pendingPostTurnActions = new ArrayList<>();
     private final List<BufferedImage> pendingImages = new ArrayList<>();
 
     private int currentTurn = 0;
@@ -128,26 +127,6 @@ public final class ChatModel {
         }
         pendingImages.clear();
         return imageBytes;
-    }
-
-    public void enqueuePostTurnAction(Runnable action) {
-        if (action != null) {
-            pendingPostTurnActions.add(action);
-        }
-    }
-
-    public List<Runnable> drainPostTurnActions() {
-        List<Runnable> actions = new ArrayList<>(pendingPostTurnActions);
-        pendingPostTurnActions.clear();
-        return actions;
-    }
-
-    public void clearPostTurnActions() {
-        pendingPostTurnActions.clear();
-    }
-
-    public List<Runnable> getPendingPostTurnActions() {
-        return Collections.unmodifiableList(pendingPostTurnActions);
     }
 
     public String formatTurnStatus(AppSettings settings, ImplementationPlan plan) {

@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 
 /** Controller coordinating chat turns, service events, and workflow transitions. */
+@SuppressWarnings("PMD.NullAssignment")
 public final class ChatController {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
     static final String ROLE_SYSTEM = "system";
@@ -43,6 +44,8 @@ public final class ChatController {
     private final ExecutorService turnExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     private volatile Future<?> activeTurnFuture;
+    private volatile TransitionRequestedEvent pendingTransitionRequest;
+    private volatile AutonomousTransitionEvent pendingAutonomousTransition;
 
     public ChatController(
             ChatModel model,
@@ -106,7 +109,8 @@ public final class ChatController {
     }
 
     public boolean hasPendingPhase() {
-        return planService != null && planService.getPendingPhase() != null;
+        return (planService != null && planService.getPendingPhase() != null)
+                || pendingTransitionRequest != null;
     }
 
     public void sendMessage(String rawText) {
@@ -122,10 +126,11 @@ public final class ChatController {
 
     public void stopTurn() {
         model.setTurnCancelled(true);
-        model.clearPostTurnActions();
+        pendingTransitionRequest = null;
+        pendingAutonomousTransition = null;
         Future<?> futureToCancel = activeTurnFuture;
         if (futureToCancel != null) {
-            activeTurnFuture = null; // NOPMD
+            activeTurnFuture = null;
             futureToCancel.cancel(true);
             Runnable uiUpdate =
                     () -> {
@@ -145,6 +150,7 @@ public final class ChatController {
         WorkflowPhase requested = planService.getPendingPhase();
         if (requested != null) {
             model.setTurnCancelled(false);
+            pendingTransitionRequest = null;
             planService.approveTransition();
             view.appendMessage(
                     ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** approved.");
@@ -170,6 +176,7 @@ public final class ChatController {
         WorkflowPhase requested = planService.getPendingPhase();
         if (requested != null) {
             model.setTurnCancelled(false);
+            pendingTransitionRequest = null;
             planService.rejectTransition();
             view.appendMessage(
                     ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
@@ -188,10 +195,11 @@ public final class ChatController {
 
     void performResetSession() {
         model.setTurnCancelled(true);
-        model.clearPostTurnActions();
+        pendingTransitionRequest = null;
+        pendingAutonomousTransition = null;
         Future<?> futureToCancel = activeTurnFuture;
         if (futureToCancel != null) {
-            activeTurnFuture = null; // NOPMD
+            activeTurnFuture = null;
             futureToCancel.cancel(true);
             view.setLoading(false);
         }
@@ -209,11 +217,12 @@ public final class ChatController {
         if (text == null || text.trim().isEmpty()) return;
 
         model.setTurnCancelled(false);
-        model.clearPostTurnActions();
+        pendingTransitionRequest = null;
+        pendingAutonomousTransition = null;
 
         Future<?> previousFuture = activeTurnFuture;
         if (previousFuture != null) {
-            activeTurnFuture = null; // NOPMD
+            activeTurnFuture = null;
             previousFuture.cancel(true);
         }
 
@@ -274,15 +283,20 @@ public final class ChatController {
         if (activeTurnFuture != thisFuture || model.isTurnCancelled()) {
             return;
         }
-        activeTurnFuture = null; // NOPMD
+        activeTurnFuture = null;
+        TransitionRequestedEvent transitionReq = pendingTransitionRequest;
+        AutonomousTransitionEvent autoTrans = pendingAutonomousTransition;
+        pendingTransitionRequest = null;
+        pendingAutonomousTransition = null;
+
         view.appendMessage(ROLE_AI, response);
         view.setLoading(false);
-        List<Runnable> actions = model.drainPostTurnActions();
-        for (Runnable action : actions) {
-            if (model.isTurnCancelled()) {
-                break;
-            }
-            action.run();
+
+        if (transitionReq != null && !model.isTurnCancelled()) {
+            applyTransitionRequest(transitionReq);
+        }
+        if (autoTrans != null && !model.isTurnCancelled()) {
+            applyAutonomousTransition(autoTrans);
         }
     }
 
@@ -290,51 +304,39 @@ public final class ChatController {
         if (activeTurnFuture != thisFuture) {
             return;
         }
-        activeTurnFuture = null; // NOPMD
+        activeTurnFuture = null;
         model.setTurnCancelled(true);
-        model.clearPostTurnActions();
+        pendingTransitionRequest = null;
+        pendingAutonomousTransition = null;
         view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
         view.setLoading(false);
     }
 
-    void runAfterCurrentTurn(Runnable action) {
-        if (model.isTurnCancelled()) return;
+    void onAutonomousTransition(AutonomousTransitionEvent event) {
+        if (!model.isTaskMode() || model.isTurnCancelled()) return;
         SwingUtilities.invokeLater(
                 () -> {
                     if (model.isTurnCancelled()) return;
                     if (isTurnActive()) {
-                        model.enqueuePostTurnAction(action);
+                        pendingAutonomousTransition = event;
                     } else {
-                        action.run();
+                        applyAutonomousTransition(event);
                     }
                 });
     }
 
-    void onAutonomousTransition(AutonomousTransitionEvent event) {
-        if (!model.isTaskMode() || model.isTurnCancelled()) return;
-        runAfterCurrentTurn(
-                () -> {
-                    if (model.isTurnCancelled()) return;
-                    view.appendMessage(
-                            ROLE_SYSTEM,
-                            "Autonomous transition detected: **"
-                                    + event.from()
-                                    + " → "
-                                    + event.to()
-                                    + "**. Reason: "
-                                    + event.reason());
-
-                    if (event.to() == WorkflowPhase.PLAN) {
-                        view.appendMessage(
-                                ROLE_SYSTEM,
-                                "Task complete. What is the next feature you would like to work on?");
-                    } else {
-                        triggerTurn(
-                                "Phase changed to "
-                                        + event.to()
-                                        + ". Please proceed with the tasks in the new phase.");
-                    }
-                });
+    private void applyAutonomousTransition(AutonomousTransitionEvent event) {
+        if (model.isTurnCancelled()) return;
+        if (event.to() == WorkflowPhase.PLAN) {
+            view.appendMessage(
+                    ROLE_SYSTEM,
+                    "Task complete. What is the next feature you would like to work on?");
+        } else {
+            triggerTurn(
+                    "Phase changed to "
+                            + event.to()
+                            + ". Please proceed with the tasks in the new phase.");
+        }
     }
 
     void onAgentTurn(AgentTurnEvent event) {
@@ -372,21 +374,26 @@ public final class ChatController {
     void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason) {
         if (!model.isTaskMode()) return;
         if (requested == null) {
+            pendingTransitionRequest = null;
             SwingUtilities.invokeLater(view::hideTransitionBanner);
             return;
         }
         if (model.isTurnCancelled()) return;
-        runAfterCurrentTurn(
+        TransitionRequestedEvent event = new TransitionRequestedEvent(current, requested, reason);
+        SwingUtilities.invokeLater(
                 () -> {
                     if (model.isTurnCancelled()) return;
-                    String path = current.getDisplayName() + " → " + requested.getDisplayName();
-                    view.showTransitionBanner(path);
-                    view.appendMessage(
-                            ROLE_SYSTEM,
-                            "Roxy requested a transition: **"
-                                    + path
-                                    + "**.\n\n**Reason:** "
-                                    + reason);
+                    if (isTurnActive()) {
+                        pendingTransitionRequest = event;
+                    } else {
+                        applyTransitionRequest(event);
+                    }
                 });
+    }
+
+    private void applyTransitionRequest(TransitionRequestedEvent event) {
+        if (model.isTurnCancelled() || event.requested() == null) return;
+        String path = event.current().getDisplayName() + " → " + event.requested().getDisplayName();
+        view.showTransitionBanner(path);
     }
 }

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.*;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,10 +20,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.roxycode.app.ai.AgentDoc;
-import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
+import org.roxycode.app.ai.ReturnDirectToolCallingManager;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
@@ -37,6 +37,7 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
@@ -66,40 +67,29 @@ class AiServiceTest {
 
     @Mock private ApplicationEventPublisher eventPublisher;
 
+    private JexlTool jexlTool;
     private AiService aiService;
     private AppSettings settings;
-
-    @AgentService(
-            value = "transitionTestService",
-            phases = {"*"})
-    public static class TransitionTestService {
-        @AgentDoc("Triggers a transition result.")
-        public PlanService.TransitionResult triggerTransition() {
-            return new PlanService.TransitionResult(
-                    """
-                    PLAN SUMMARY
-
-                    Transition Request""");
-        }
-    }
 
     @BeforeEach
     void setUp() {
         settings = new AppSettings();
         lenient().when(settingsService.getSettings()).thenReturn(settings);
         lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
+        lenient().when(requestSpec.tools(any(Object[].class))).thenReturn(requestSpec);
 
         when(chatClientBuilder.defaultAdvisors(
                         any(org.springframework.ai.chat.client.advisor.api.Advisor[].class)))
                 .thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
 
+        jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher);
         aiService =
                 new AiService(
                         chatClientBuilder,
                         settingsService,
                         promptService,
-                        jexlServiceRegistry,
+                        jexlTool,
                         planService,
                         chatMemory,
                         eventPublisher);
@@ -116,7 +106,6 @@ class AiServiceTest {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
-        when(requestSpec.tools(any())).thenReturn(requestSpec);
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
 
         when(requestSpec.options(any())).thenReturn(requestSpec);
@@ -134,8 +123,41 @@ class AiServiceTest {
         assertEquals("FULL CODE SYSTEM PROMPT", capturedPrompt);
         verify(promptService).buildSystemPrompt(WorkflowPhase.CODE, null);
         verify(requestSpec).options(any());
+        verify(requestSpec).tools(jexlTool, planService);
         verify(requestSpec)
-                .toolContext(argThat(ctx -> ctx.containsKey(AiService.TOOL_CONTEXT_JEXL_TOOL)));
+                .toolContext(
+                        argThat(
+                                ctx ->
+                                        "default"
+                                                        .equals(
+                                                                ctx.get(
+                                                                        AiService
+                                                                                .TOOL_CONTEXT_CONVERSATION_ID))
+                                                && WorkflowPhase.CODE
+                                                        == ctx.get(AiService.TOOL_CONTEXT_PHASE)
+                                                && ctx.get(AiService.TOOL_CONTEXT_TURN_COUNTER)
+                                                        instanceof AtomicInteger));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testChatRegistersOnlyJexlToolInExplorePhase() {
+        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null))
+                .thenReturn("EXPLORE SYSTEM PROMPT");
+
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.content()).thenReturn("Explore Response");
+
+        String result =
+                aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null, null);
+
+        assertEquals("Explore Response", result);
+        verify(requestSpec).tools(jexlTool);
     }
 
     @Test
@@ -148,7 +170,6 @@ class AiServiceTest {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
-        when(requestSpec.tools(any())).thenReturn(requestSpec);
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
 
         when(requestSpec.options(any())).thenReturn(requestSpec);
@@ -164,8 +185,7 @@ class AiServiceTest {
         ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).system(systemPromptCaptor.capture());
         assertEquals("REVIEW SYSTEM PROMPT", systemPromptCaptor.getValue());
-
-        // Verify conversation ID set in advisor
+        verify(requestSpec).tools(jexlTool, planService);
         verify(requestSpec).advisors(any(Consumer.class));
     }
 
@@ -174,17 +194,10 @@ class AiServiceTest {
     void testChatHandlesTurnLimitExceeded() {
         settings.setMaxAgentToolTurns(2);
 
-        AtomicReference<JexlTool> capturedTool = new AtomicReference<>();
         AtomicReference<Map<String, Object>> capturedToolContext = new AtomicReference<>();
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
-        when(requestSpec.tools(any()))
-                .thenAnswer(
-                        inv -> {
-                            capturedTool.set(inv.getArgument(0));
-                            return requestSpec;
-                        });
         when(requestSpec.toolContext(anyMap()))
                 .thenAnswer(
                         inv -> {
@@ -199,7 +212,9 @@ class AiServiceTest {
                 .thenReturn("EXPLORE PROMPT");
 
         ToolCallingManager delegate = mock(ToolCallingManager.class);
-        ToolCallingManager manager = aiService.createReturnDirectToolCallingManager(delegate);
+        ToolCallingManager manager =
+                new ReturnDirectToolCallingManager(
+                        delegate, settingsService, planService, eventPublisher);
 
         AssistantMessage.ToolCall toolCall =
                 new AssistantMessage.ToolCall(
@@ -215,7 +230,9 @@ class AiServiceTest {
         when(delegate.executeToolCalls(any(Prompt.class), eq(chatResponse)))
                 .thenAnswer(
                         inv -> {
-                            String out = capturedTool.get().executeJexl("1 + 1");
+                            String out =
+                                    jexlTool.executeJexl(
+                                            "1 + 1", new ToolContext(capturedToolContext.get()));
                             ToolResponseMessage toolMsg =
                                     ToolResponseMessage.builder()
                                             .responses(
@@ -263,8 +280,8 @@ class AiServiceTest {
         String result = aiService.chat("Hello");
 
         assertEquals("Autonomous execution stopped: Maximum tool turns (2) exceeded.", result);
-        // Delegate is invoked on all 3 calls; JexlTool short-circuits on the 3rd call
-        verify(delegate, times(3)).executeToolCalls(any(Prompt.class), eq(chatResponse));
+        // Delegate is only invoked 2 times because the 3rd call short-circuits in the turn manager
+        verify(delegate, times(2)).executeToolCalls(any(Prompt.class), eq(chatResponse));
         verify(eventPublisher, times(2)).publishEvent(any(AgentTurnEvent.class));
         verify(eventPublisher, times(2)).publishEvent(any(ToolExecutionEvent.class));
 
@@ -283,7 +300,6 @@ class AiServiceTest {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
-        when(requestSpec.tools(any())).thenReturn(requestSpec);
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
 
@@ -304,66 +320,83 @@ class AiServiceTest {
     }
 
     @Test
-    void testReturnDirectToolCallingManagerMarksTransitionAsReturnDirect() {
+    void testReturnDirectToolCallingManagerHandlesFailedTransitionAndLogsPlanToolCalls() {
         ToolCallingManager delegate = mock(ToolCallingManager.class);
-        ToolCallingManager manager = aiService.createReturnDirectToolCallingManager(delegate);
-
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new TransitionTestService());
-        JexlTool jexlTool = new JexlTool(registry, WorkflowPhase.PLAN);
+        ToolCallingManager manager =
+                new ReturnDirectToolCallingManager(
+                        delegate, settingsService, planService, eventPublisher);
 
         ToolCallingChatOptions options =
                 ToolCallingChatOptions.builder()
-                        .toolContext(Map.of(AiService.TOOL_CONTEXT_JEXL_TOOL, jexlTool))
+                        .toolContext(
+                                Map.of(
+                                        AiService.TOOL_CONTEXT_CONVERSATION_ID,
+                                        "task:default",
+                                        AiService.TOOL_CONTEXT_PHASE,
+                                        WorkflowPhase.PLAN,
+                                        AiService.TOOL_CONTEXT_TURN_COUNTER,
+                                        new AtomicInteger(0)))
                         .build();
         Prompt prompt = new Prompt(List.of(new UserMessage("Transition")), options);
-        ChatResponse chatResponse = mock(ChatResponse.class);
+        AssistantMessage.ToolCall tc =
+                new AssistantMessage.ToolCall(
+                        "call-1",
+                        "function",
+                        "requestDevelopment",
+                        """
+                        {"reason":"Ready"}""");
+        AssistantMessage assistantMsg =
+                AssistantMessage.builder().content("").toolCalls(List.of(tc)).build();
+        ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
+        // Case 1: Transition tool fails validation (e.g. throws IllegalStateException or returns
+        // Error: ...) -> returnDirect becomes false so agent can self-correct
         when(delegate.executeToolCalls(prompt, chatResponse))
-                .thenAnswer(
-                        inv -> {
-                            String out =
-                                    jexlTool.executeJexl(
-                                            "transitionTestService.triggerTransition()");
-                            ToolResponseMessage transitionMsg =
-                                    ToolResponseMessage.builder()
-                                            .responses(
-                                                    List.of(
-                                                            new ToolResponseMessage.ToolResponse(
-                                                                    "1", "executeJexl", out)))
-                                            .build();
-                            return ToolExecutionResult.builder()
-                                    .conversationHistory(List.of(transitionMsg))
-                                    .returnDirect(false)
-                                    .build();
-                        });
+                .thenThrow(
+                        new IllegalStateException(
+                                "Error: Cannot advance to CODE. Implementation Plan is missing."));
 
-        ToolExecutionResult result = manager.executeToolCalls(prompt, chatResponse);
-        assertTrue(
-                result.returnDirect(),
-                "Transition tool response should set ToolExecutionResult.returnDirect() to true");
-
-        when(delegate.executeToolCalls(prompt, chatResponse))
-                .thenAnswer(
-                        inv -> {
-                            String out = jexlTool.executeJexl("1 + 1");
-                            ToolResponseMessage normalMsg =
-                                    ToolResponseMessage.builder()
-                                            .responses(
-                                                    List.of(
-                                                            new ToolResponseMessage.ToolResponse(
-                                                                    "2", "executeJexl", out)))
-                                            .build();
-                            return ToolExecutionResult.builder()
-                                    .conversationHistory(List.of(normalMsg))
-                                    .returnDirect(false)
-                                    .build();
-                        });
-
-        ToolExecutionResult normalResult = manager.executeToolCalls(prompt, chatResponse);
+        ToolExecutionResult failedResult = manager.executeToolCalls(prompt, chatResponse);
         assertFalse(
-                normalResult.returnDirect(),
-                "Normal tool response should keep ToolExecutionResult.returnDirect() as false");
+                failedResult.returnDirect(),
+                "Failed transition validation must return returnDirect=false so agent can self-correct");
+
+        // Case 2: Valid transition tool with returnDirect=true -> preserves returnDirect=true and
+        // unquotes JSON string
+        String jsonQuoted = '"' + "PLAN SUMMARY: Transition Request" + '"';
+        doReturn(
+                        ToolExecutionResult.builder()
+                                .conversationHistory(
+                                        List.of(
+                                                new UserMessage("Transition"),
+                                                assistantMsg,
+                                                ToolResponseMessage.builder()
+                                                        .responses(
+                                                                List.of(
+                                                                        new ToolResponseMessage
+                                                                                .ToolResponse(
+                                                                                "call-1",
+                                                                                "requestDevelopment",
+                                                                                jsonQuoted)))
+                                                        .build()))
+                                .returnDirect(true)
+                                .build())
+                .when(delegate)
+                .executeToolCalls(prompt, chatResponse);
+
+        ToolExecutionResult successResult = manager.executeToolCalls(prompt, chatResponse);
+        assertTrue(
+                successResult.returnDirect(),
+                "Valid transition tool should keep returnDirect=true");
+        ToolResponseMessage lastMsg =
+                assertInstanceOf(
+                        ToolResponseMessage.class,
+                        successResult
+                                .conversationHistory()
+                                .get(successResult.conversationHistory().size() - 1));
+        assertEquals(
+                "PLAN SUMMARY: Transition Request", lastMsg.getResponses().get(0).responseData());
+        verify(eventPublisher, atLeast(2)).publishEvent(any(ToolExecutionEvent.class));
     }
 
     @Test
@@ -372,7 +405,6 @@ class AiServiceTest {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
-        when(requestSpec.tools(any())).thenReturn(requestSpec);
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
 

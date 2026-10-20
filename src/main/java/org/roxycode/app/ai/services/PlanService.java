@@ -7,10 +7,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
-import org.roxycode.app.ai.AgentDoc;
-import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
@@ -18,26 +15,18 @@ import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
 
 /** Unified service for managing project plans, specifications, and workflow phase transitions. */
-@AgentService(
-        value = "planService",
-        phases = {"PLAN", "CODE", "REVIEW"})
-@AgentDoc("Service for managing project plans and specifications.")
+@Service
 @SuppressWarnings("PMD.NullAssignment")
 public class PlanService {
 
     private static final String PHASE_DEVELOP = "DEVELOP";
     private static final String PHASE_CODE = "CODE";
-
-    /** Represents a validated workflow transition response that should return directly. */
-    public record TransitionResult(String markdown) {
-        @Override
-        public String toString() {
-            return markdown;
-        }
-    }
 
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
@@ -54,8 +43,7 @@ public class PlanService {
     }
 
     /**
-     * Submits an implementation plan for the project. Internal Java-only method; cannot be invoked
-     * from JEXL.
+     * Submits an implementation plan for the project.
      *
      * @param plan the implementation plan to submit
      * @return a success message
@@ -63,7 +51,7 @@ public class PlanService {
     public String submitPlan(ImplementationPlan plan) {
         requirePhase("submitPlan", WorkflowPhase.PLAN);
         if (plan == null) {
-            return "Error: Plan cannot be null.";
+            throw new IllegalArgumentException("Error: Plan cannot be null.");
         }
 
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(plan.technicalSteps());
@@ -103,57 +91,35 @@ public class PlanService {
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
-    /**
-     * Submits a project plan covering both functional and technical specifications via positional
-     * arguments.
-     */
-    @AgentDoc(
-            value =
-                    "Submits a project plan covering both functional and technical specifications via positional arguments.",
-            examples =
-                    "planService.submitPlan('Auth Service', 'Implement JWT', ['Login', 'Logout'], ['Create entity', 'Setup filter'])")
+    /** Submits a project plan covering both functional and technical specifications. */
+    @Tool(
+            description =
+                    "Submits a project plan covering both functional requirements and technical implementation steps.")
     public String submitPlan(
-            @AgentDoc("The title of the project.") String title,
-            @AgentDoc("The high-level goal.") String goal,
-            @AgentDoc("List of functional requirements (String array or list).")
-                    Object requirements,
-            @AgentDoc("List of technical implementation steps (String array or list).")
-                    Object technicalSteps) {
+            @ToolParam(description = "The title of the project or feature plan.") String title,
+            @ToolParam(description = "The high-level goal of the plan.") String goal,
+            @ToolParam(description = "List of functional requirements.") List<String> requirements,
+            @ToolParam(description = "List of technical implementation steps.")
+                    List<String> technicalSteps) {
         requirePhase("submitPlan", WorkflowPhase.PLAN);
-        List<String> rawRequirements = extractStringList(requirements);
-        List<String> rawTechSteps = extractStringList(technicalSteps);
+        List<String> safeRequirements =
+                requirements != null ? List.copyOf(requirements) : List.of();
+        List<String> safeTechSteps =
+                technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
 
-        List<ImplementationPlan.TechStep> steps = toTechSteps(rawTechSteps);
+        List<ImplementationPlan.TechStep> steps = toTechSteps(safeTechSteps);
 
         return submitPlan(
                 new ImplementationPlan(
-                        title, goal, rawRequirements, steps, false, null, null, null, null));
-    }
-
-    /**
-     * Submits a project plan covering both functional and technical specifications via a Map
-     * literal.
-     */
-    @SuppressWarnings("unchecked")
-    @AgentDoc(
-            value =
-                    "Submits a project plan covering both functional and technical specifications via a Map literal.",
-            examples =
-                    "planService.submitPlan({'title': 'Auth Service', 'goal': 'Implement JWT', 'requirements': ['Login', 'Logout'], 'technicalSteps': ['Create entity', 'Setup filter']})")
-    public String submitPlan(
-            @AgentDoc("Map containing title, goal, requirements, and technicalSteps.")
-                    Map<String, Object> planMap) {
-        requirePhase("submitPlan", WorkflowPhase.PLAN);
-        String title = (String) planMap.getOrDefault("title", "");
-        String goal = (String) planMap.getOrDefault("goal", "");
-        List<String> requirements = extractStringList(planMap.get("requirements"));
-        List<String> rawTechSteps = extractStringList(planMap.get("technicalSteps"));
-
-        List<ImplementationPlan.TechStep> steps = toTechSteps(rawTechSteps);
-
-        return submitPlan(
-                new ImplementationPlan(
-                        title, goal, requirements, steps, false, null, null, null, null));
+                        title != null ? title : "",
+                        goal != null ? goal : "",
+                        safeRequirements,
+                        steps,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null));
     }
 
     private List<ImplementationPlan.TechStep> toTechSteps(List<String> rawTechSteps) {
@@ -164,7 +130,7 @@ public class PlanService {
         return steps;
     }
 
-    /** Approves the current plan. Internal lifecycle method; cannot be invoked from JEXL. */
+    /** Approves the current plan. Internal lifecycle method. */
     public void approvePlan(String user, String timestamp) {
         if (currentPlan == null) {
             return;
@@ -173,9 +139,7 @@ public class PlanService {
         publishPlanUpdated();
     }
 
-    /**
-     * Marks the current plan as completed. Internal lifecycle method; cannot be invoked from JEXL.
-     */
+    /** Marks the current plan as completed. Internal lifecycle method. */
     public void completePlan(String timestamp) {
         if (currentPlan == null) {
             return;
@@ -185,24 +149,48 @@ public class PlanService {
     }
 
     /** Marks a specific technical implementation step as completed using its 0-based index. */
-    @AgentDoc(
-            value =
-                    "Marks a specific technical implementation step as completed using its 0-based index.",
-            examples = "planService.markStepCompleted(0)")
+    @Tool(
+            description =
+                    "Marks a specific technical implementation step as completed using its 0-based index.")
     public void markStepCompleted(
-            @AgentDoc("The index of the step (0-based). index must be valid for the current plan.")
+            @ToolParam(
+                            description =
+                                    "The index of the step (0-based). Must be valid for the current plan.")
                     int index) {
         requirePhase("markStepCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         updateStepStatus(index, true);
     }
 
+    /** Marks multiple technical implementation steps as completed using their 0-based indices. */
+    @Tool(
+            description =
+                    "Marks multiple technical implementation steps as completed using their 0-based indices.")
+    public void markStepsCompleted(
+            @ToolParam(description = "List of 0-based step indices to mark as completed.")
+                    List<Integer> indices) {
+        requirePhase("markStepsCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+        updateStepsStatus(indices, true);
+    }
+
     /** Marks a technical implementation step as incomplete. */
-    @AgentDoc(
-            value = "Marks a technical implementation step as incomplete.",
-            examples = "planService.markStepIncomplete(0)")
-    public void markStepIncomplete(@AgentDoc("The index of the step (0-based).") int index) {
+    @Tool(
+            description =
+                    "Marks a technical implementation step as incomplete using its 0-based index.")
+    public void markStepIncomplete(
+            @ToolParam(description = "The index of the step (0-based).") int index) {
         requirePhase("markStepIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         updateStepStatus(index, false);
+    }
+
+    /** Marks multiple technical implementation steps as incomplete using their 0-based indices. */
+    @Tool(
+            description =
+                    "Marks multiple technical implementation steps as incomplete using their 0-based indices.")
+    public void markStepsIncomplete(
+            @ToolParam(description = "List of 0-based step indices to mark as incomplete.")
+                    List<Integer> indices) {
+        requirePhase("markStepsIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+        updateStepsStatus(indices, false);
     }
 
     private void updateStepStatus(int index, boolean completed) {
@@ -213,6 +201,24 @@ public class PlanService {
         ImplementationPlan.TechStep step = steps.get(index);
         steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
         setCurrentPlan(currentPlan.withTechnicalSteps(steps));
+    }
+
+    private void updateStepsStatus(List<Integer> indices, boolean completed) {
+        if (currentPlan == null || indices == null || indices.isEmpty()) {
+            return;
+        }
+        List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
+        boolean modified = false;
+        for (Integer index : indices) {
+            if (index != null && index >= 0 && index < steps.size()) {
+                ImplementationPlan.TechStep step = steps.get(index);
+                steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
+                modified = true;
+            }
+        }
+        if (modified) {
+            setCurrentPlan(currentPlan.withTechnicalSteps(steps));
+        }
     }
 
     /** Gets the current implementation plan. */
@@ -226,61 +232,71 @@ public class PlanService {
         publishPlanUpdated();
     }
 
-    /** Clears the existing plan. Internal lifecycle method; cannot be invoked from JEXL. */
+    /** Clears the existing plan. Internal lifecycle method. */
     public void clearPlan() {
         this.currentPlan = null;
         publishPlanUpdated();
     }
 
     /** Transitions the workflow to the development (CODE) phase. */
-    @AgentDoc(
-            value = "Requests transition to the development (CODE) phase.",
-            examples = "planService.requestDevelopment('Ready to start coding.')")
-    public Object requestDevelopment(String reason) {
+    @Tool(description = "Requests transition to the development (CODE) phase.", returnDirect = true)
+    public String requestDevelopment(
+            @ToolParam(description = "The reason for requesting transition to the CODE phase.")
+                    String reason) {
         requirePhase("requestDevelopment", WorkflowPhase.PLAN);
         return routeToPhase("CODE", reason);
     }
 
     /** Transitions the workflow to the review phase. */
-    @AgentDoc(
-            value = "Requests transition to the review phase.",
-            examples = "planService.requestReview('Feature implemented, needs review.')")
-    public Object requestReview(String reason) {
+    @Tool(description = "Requests transition to the review phase.", returnDirect = true)
+    public String requestReview(
+            @ToolParam(description = "The reason for requesting transition to the REVIEW phase.")
+                    String reason) {
         requirePhase("requestReview", WorkflowPhase.CODE);
         return routeToPhase("REVIEW", reason);
     }
 
     /** Transitions the workflow back to development (CODE) to address fixes. */
-    @AgentDoc(
-            value = "Requests transition back to development to address fixes.",
-            examples = "planService.requestFixes('Found a bug in auth logic.')")
-    public Object requestFixes(String reason) {
+    @Tool(
+            description = "Requests transition back to development to address fixes.",
+            returnDirect = true)
+    public String requestFixes(
+            @ToolParam(description = "The reason for requesting transition back to the CODE phase.")
+                    String reason) {
         requirePhase("requestFixes", WorkflowPhase.REVIEW);
         return routeToPhase("CODE", reason);
     }
 
     /** Signals completion of the current cycle and returns to planning. */
-    @AgentDoc(
-            value = "Signals completion of the current cycle and returns to planning.",
-            examples = "planService.requestCompletion('All steps verified, project ready.')")
-    public Object requestCompletion(String reason) {
+    @Tool(
+            description = "Signals completion of the current cycle and returns to planning.",
+            returnDirect = true)
+    public String requestCompletion(
+            @ToolParam(description = "The reason for completing the current cycle.")
+                    String reason) {
         requirePhase("requestCompletion", WorkflowPhase.REVIEW);
         return routeToPhase("PLAN", reason);
     }
 
     /** Transitions the workflow back to planning (PLAN) to address technical blockers. */
-    @AgentDoc(
-            value =
+    @Tool(
+            description =
                     "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.",
-            examples =
-                    "planService.requestPlanRevision('Blocked by missing API, need to update the architecture.')")
-    public Object requestPlanRevision(String reason) {
+            returnDirect = true)
+    public String requestPlanRevision(
+            @ToolParam(description = "The reason for requesting a plan revision.") String reason) {
         requirePhase("requestPlanRevision", WorkflowPhase.CODE);
         return routeToPhase("PLAN", reason);
     }
 
-    /** Routes the workflow to the target phase. Internal method; not exposed to JEXL. */
-    public Object routeToPhase(String phaseName, String reason) {
+    /** Routes the workflow to the target phase. Internal method. */
+    public String routeToPhase(String phaseName, String reason) {
+        if (phaseName == null || phaseName.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Error: Invalid phase name: "
+                            + phaseName
+                            + ". Valid phases are: PLAN, CODE, REVIEW.");
+        }
         WorkflowPhase nextPhase;
         String normalizedName = phaseName.toUpperCase(Locale.ROOT);
         if (PHASE_DEVELOP.equals(normalizedName)) {
@@ -290,32 +306,37 @@ public class PlanService {
         try {
             nextPhase = WorkflowPhase.valueOf(normalizedName);
         } catch (IllegalArgumentException e) {
-            return "Error: Invalid phase name: "
-                    + phaseName
-                    + ". Valid phases are: PLAN, CODE, REVIEW.";
+            throw new IllegalArgumentException(
+                    "Error: Invalid phase name: "
+                            + phaseName
+                            + ". Valid phases are: PLAN, CODE, REVIEW.",
+                    e);
         }
 
         if (nextPhase == currentPhase) {
-            return "Already in phase: " + nextPhase;
+            throw new IllegalStateException("Already in phase: " + nextPhase);
         }
 
         if (reason == null || reason.isBlank()) {
-            return "Error: You must provide a descriptive 'reason' for requesting a phase transition.";
+            throw new IllegalArgumentException(
+                    "Error: You must provide a descriptive 'reason' for requesting a phase transition.");
         }
 
         // Enforce strict single-step adjacent transitions for task flow
         if (!isAdjacent(currentPhase, nextPhase)) {
-            return "Error: Cannot jump from "
-                    + currentPhase
-                    + " to "
-                    + nextPhase
-                    + ". Only single-step transitions to adjacent phases are allowed.";
+            throw new IllegalStateException(
+                    "Error: Cannot jump from "
+                            + currentPhase
+                            + " to "
+                            + nextPhase
+                            + ". Only single-step transitions to adjacent phases are allowed.");
         }
 
         // Check prerequisites for specific transitions
         if (currentPhase == WorkflowPhase.PLAN && nextPhase == WorkflowPhase.CODE) {
             if (currentPlan == null) {
-                return "Error: Cannot advance to CODE. Implementation Plan is missing. Call planService.submitPlan() first.";
+                throw new IllegalStateException(
+                        "Error: Cannot advance to CODE. Implementation Plan is missing. Call submitPlan first.");
             }
         }
 
@@ -323,11 +344,12 @@ public class PlanService {
                 || (currentPhase == WorkflowPhase.REVIEW
                         && (nextPhase == WorkflowPhase.CODE || nextPhase == WorkflowPhase.PLAN))) {
             if (currentPlan == null || !currentPlan.userApproved()) {
-                return "Error: Cannot transition from "
-                        + currentPhase
-                        + " to "
-                        + nextPhase
-                        + ". An approved Implementation Plan is required.";
+                throw new IllegalStateException(
+                        "Error: Cannot transition from "
+                                + currentPhase
+                                + " to "
+                                + nextPhase
+                                + ". An approved Implementation Plan is required.");
             }
         }
 
@@ -349,11 +371,9 @@ public class PlanService {
                 eventPublisher.publishEvent(
                         new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
             }
-            String autoMessage =
-                    String.format(
-                            "Autonomous transition from %s to %s successful. Reason: %s",
-                            oldPhase, nextPhase, reason);
-            return new TransitionResult(autoMessage);
+            return String.format(
+                    "Autonomous transition from %s to %s successful. Reason: %s",
+                    oldPhase, nextPhase, reason);
         }
         this.pendingPhase = nextPhase;
         this.pendingReason = reason;
@@ -369,20 +389,9 @@ public class PlanService {
                                 currentPhase.getDisplayName(), nextPhase.getDisplayName(), reason);
         // Yield execution turn immediately for user approval
         String newlineDouble = String.valueOf((char) 10) + (char) 10;
-        String markdown =
-                (summary != null && !summary.isBlank())
-                        ? summary + newlineDouble + message
-                        : message;
-
-        return new TransitionResult(markdown);
-    }
-
-    /**
-     * Checks whether the given tool execution result represents a structured workflow transition
-     * payload that should return directly rather than continuing the LLM tool loop.
-     */
-    public static boolean isTransitionResponse(Object result) {
-        return result instanceof TransitionResult;
+        return (summary != null && !summary.isBlank())
+                ? summary + newlineDouble + message
+                : message;
     }
 
     private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
@@ -553,37 +562,7 @@ public class PlanService {
                         + current);
     }
 
-    private List<String> extractStringList(Object obj) {
-        if (obj == null) {
-            return List.of();
-        }
-        List<String> result = new ArrayList<>();
-        if (obj instanceof List) {
-            for (Object item : (List<?>) obj) {
-                result.add(extractString(item));
-            }
-        } else if (obj instanceof Object[]) {
-            for (Object item : (Object[]) obj) {
-                result.add(extractString(item));
-            }
-        } else {
-            result.add(extractString(obj));
-        }
-        return result;
-    }
-
-    private String extractString(Object item) {
-        if (item == null) return "";
-        if (item instanceof Map) {
-            Map<?, ?> map = (Map<?, ?>) item;
-            Object desc = map.get("description");
-            if (desc == null) desc = map.get("text");
-            return desc != null ? desc.toString() : item.toString();
-        }
-        return item.toString();
-    }
-
-    /** Adds an entry to the handoff log. Internal lifecycle method; cannot be invoked from JEXL. */
+    /** Adds an entry to the handoff log. Internal lifecycle method. */
     public void addHandoffLogEntry(String timestamp, String user, String message) {
         if (currentPlan == null) {
             return;
@@ -593,10 +572,9 @@ public class PlanService {
     }
 
     /** Adds an entry to the handoff log. */
-    @AgentDoc(
-            value = "Adds a high-level summary entry to the handoff log.",
-            examples = "planService.addHandoffLogEntry('Updated the README.')")
-    public void addHandoffLogEntry(String entry) {
+    @Tool(description = "Adds a high-level summary entry to the handoff log.")
+    public void addHandoffLogEntry(
+            @ToolParam(description = "The summary entry to add to the handoff log.") String entry) {
         requirePhase(
                 "addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         addHandoffLogEntry(OffsetDateTime.now().toString(), "System", entry);

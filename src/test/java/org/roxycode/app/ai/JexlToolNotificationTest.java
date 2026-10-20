@@ -2,46 +2,65 @@ package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.events.ToolExecutionEvent;
+import org.springframework.ai.chat.model.ToolContext;
 
 public class JexlToolNotificationTest {
 
     @Test
     public void testListenerNotification() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
         AtomicBoolean called = new AtomicBoolean(false);
 
-        tool.addListener(
-                event -> {
-                    called.set(true);
-                    assertEquals("1 + 1", event.script());
-                    assertEquals(2, ((Number) event.result()).intValue());
-                    assertTrue(event.success());
-                });
+        JexlTool tool =
+                new JexlTool(
+                        registry,
+                        event -> {
+                            if (event instanceof ToolExecutionEvent tee) {
+                                called.set(true);
+                                assertEquals("qa:default", tee.conversationId());
+                                assertEquals("1 + 1", tee.script());
+                                assertEquals(2, ((Number) tee.result()).intValue());
+                                assertTrue(tee.success());
+                            }
+                        });
 
-        tool.executeJexl("1 + 1");
+        tool.executeJexl(
+                "1 + 1",
+                new ToolContext(
+                        Map.of(
+                                JexlTool.TOOL_CONTEXT_CONVERSATION_ID,
+                                "qa:default",
+                                JexlTool.TOOL_CONTEXT_PHASE,
+                                WorkflowPhase.EXPLORE)));
         assertTrue(called.get());
     }
 
     @Test
     public void testSyntaxErrorListenerNotification() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
         AtomicBoolean called = new AtomicBoolean(false);
 
-        tool.addListener(
-                event -> {
-                    called.set(true);
-                    assertEquals("if (", event.script());
-                    assertNull(event.result());
-                    assertFalse(event.success());
-                    assertNotNull(event.error());
-                    assertTrue(event.error().startsWith("Syntax Error: "));
-                });
+        JexlTool tool =
+                new JexlTool(
+                        registry,
+                        event -> {
+                            if (event instanceof ToolExecutionEvent tee) {
+                                called.set(true);
+                                assertEquals("default", tee.conversationId());
+                                assertEquals("if (", tee.script());
+                                assertNull(tee.result());
+                                assertFalse(tee.success());
+                                assertNotNull(tee.error());
+                                assertTrue(tee.error().startsWith("Syntax Error: "));
+                            }
+                        });
 
         tool.executeJexl("if (");
-        assertTrue(called.get(), "Listener should be notified on JEXL syntax error");
+        assertTrue(
+                called.get(), "ApplicationEventPublisher should be notified on JEXL syntax error");
     }
 }

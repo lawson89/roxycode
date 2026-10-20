@@ -3,6 +3,7 @@ package org.roxycode.app.ai.services;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -18,7 +20,9 @@ import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
+import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
 
 @ExtendWith(MockitoExtension.class)
 class PlanServiceTest {
@@ -34,7 +38,7 @@ class PlanServiceTest {
     }
 
     private void setupCodePhase() {
-        service.submitPlan("T", "G", List.of(), List.of("Step 1"));
+        service.submitPlan("T", "G", List.of(), List.of("Step 1", "Step 2"));
         service.requestDevelopment("Reason");
         lenient().when(envService.getCurrentUser()).thenReturn("user");
         service.approveTransition();
@@ -100,23 +104,35 @@ class PlanServiceTest {
     }
 
     @Test
+    void testBatchMarkStepsCompletedAndIncomplete() {
+        setupCodePhase();
+        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
+        assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
+
+        service.markStepsCompleted(List.of(0, 1));
+        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
+        assertTrue(service.getCurrentPlan().technicalSteps().get(1).completed());
+
+        service.markStepsIncomplete(List.of(0, 1));
+        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
+        assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
+    }
+
+    @Test
     void testPhaseManagementAndSemanticWorkflowMethods() {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
         // Cannot requestDevelopment without a submitted plan
-        Object missingPlanRes = service.requestDevelopment("Reason");
-        assertFalse(PlanService.isTransitionResponse(missingPlanRes));
-        assertTrue(missingPlanRes.toString().contains("Implementation Plan is missing"));
+        IllegalStateException missingPlanEx =
+                assertThrows(
+                        IllegalStateException.class, () -> service.requestDevelopment("Reason"));
+        assertTrue(missingPlanEx.getMessage().contains("Implementation Plan is missing"));
 
         service.submitPlan("T", "G", List.of("R1"), List.of("S1"));
 
-        Object devResponse = service.requestDevelopment("Ready to build");
-        assertTrue(PlanService.isTransitionResponse(devResponse));
-        PlanService.TransitionResult transitionResult =
-                assertInstanceOf(PlanService.TransitionResult.class, devResponse);
-        assertTrue(transitionResult.markdown().contains("PLAN SUMMARY:"));
-        assertTrue(transitionResult.markdown().contains("Transition Request"));
-        assertEquals(transitionResult.markdown(), transitionResult.toString());
+        String devResponse = service.requestDevelopment("Ready to build");
+        assertTrue(devResponse.contains("PLAN SUMMARY:"));
+        assertTrue(devResponse.contains("Transition Request"));
         assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
 
         when(envService.getCurrentUser()).thenReturn("testuser");
@@ -128,20 +144,20 @@ class PlanServiceTest {
         assertEquals("testuser", service.getCurrentPlan().approvedBy());
 
         // CODE -> REVIEW (autonomous)
-        Object reviewRes = service.requestReview("Feature implemented");
-        assertTrue(PlanService.isTransitionResponse(reviewRes));
+        String reviewRes = service.requestReview("Feature implemented");
+        assertTrue(reviewRes.contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
         // REVIEW -> CODE (autonomous)
-        Object fixesRes = service.requestFixes("Needs a fix");
-        assertTrue(PlanService.isTransitionResponse(fixesRes));
+        String fixesRes = service.requestFixes("Needs a fix");
+        assertTrue(fixesRes.contains("Autonomous transition"));
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
 
         // CODE -> REVIEW -> PLAN (completion)
         service.requestReview("Fixed");
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
-        Object completionRes = service.requestCompletion("All verified");
-        assertTrue(PlanService.isTransitionResponse(completionRes));
+        String completionRes = service.requestCompletion("All verified");
+        assertTrue(completionRes.contains("Transition Request"));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
     }
 
@@ -164,10 +180,9 @@ class PlanServiceTest {
         service.setCurrentPlan(planWithAllDone);
 
         // Request PLAN from CODE (plan revision) - Requires HITL approval
-        Object response = service.requestPlanRevision("Need architecture revision");
-        assertTrue(PlanService.isTransitionResponse(response));
-        assertTrue(response.toString().contains("Transition Request"));
-        assertFalse(response.toString().contains("Autonomous transition"));
+        String response = service.requestPlanRevision("Need architecture revision");
+        assertTrue(response.contains("Transition Request"));
+        assertFalse(response.contains("Autonomous transition"));
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
@@ -184,8 +199,8 @@ class PlanServiceTest {
     @Test
     void testReviewToPlanCompletesAndClearsPlanEvenWithIncompleteSteps() {
         setupCodePhase();
-        Object reviewResponse = service.requestReview("Checking quality"); // Autonomous
-        assertTrue(PlanService.isTransitionResponse(reviewResponse));
+        String reviewResponse = service.requestReview("Checking quality"); // Autonomous
+        assertTrue(reviewResponse.contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
         ImplementationPlan.TechStep incompleteStep =
@@ -216,8 +231,8 @@ class PlanServiceTest {
                 .publishEvent(any(Object.class));
 
         // Request PLAN from REVIEW - Requires HITL Approval
-        Object planResponse = service.requestCompletion("Finalizing");
-        assertTrue(PlanService.isTransitionResponse(planResponse));
+        String planResponse = service.requestCompletion("Finalizing");
+        assertTrue(planResponse.contains("Transition Request"));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
         when(envService.getCurrentUser()).thenReturn("testuser");
@@ -234,24 +249,25 @@ class PlanServiceTest {
     void testAutonomousReviewTransitionAndUnapprovedPlanGuard() {
         setupCodePhase();
 
-        // If plan is unapproved, requestReview should return an error
+        // If plan is unapproved, requestReview should throw IllegalStateException
         service.setCurrentPlan(
                 new ImplementationPlan(
                         "Title", "Goal", List.of(), List.of(), false, null, null, null, List.of()));
-        Object unapprovedRes = service.requestReview("Checking quality");
-        assertFalse(PlanService.isTransitionResponse(unapprovedRes));
+        IllegalStateException unapprovedEx =
+                assertThrows(
+                        IllegalStateException.class,
+                        () -> service.requestReview("Checking quality"));
         assertTrue(
-                unapprovedRes.toString().contains("An approved Implementation Plan is required"));
+                unapprovedEx.getMessage().contains("An approved Implementation Plan is required"));
 
         // Restore approved plan
         service.approvePlan("user", "now");
         int initialLogSize = service.getCurrentPlan().handoffLog().size();
 
-        // Request REVIEW - Autonomous transition returns TransitionResult
-        Object response = service.requestReview("Checking quality");
-        assertTrue(PlanService.isTransitionResponse(response));
+        // Request REVIEW - Autonomous transition returns String directly
+        String response = service.requestReview("Checking quality");
         assertTrue(
-                response.toString().contains("Autonomous transition"),
+                response.contains("Autonomous transition"),
                 "Expected autonomous transition message but got: " + response);
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
@@ -263,10 +279,10 @@ class PlanServiceTest {
     void testExploreDecoupling() {
         setupCodePhase();
         // Transition to EXPLORE should fail now because it's decoupled
-        Object result = service.routeToPhase("EXPLORE", "Jump");
-        assertFalse(PlanService.isTransitionResponse(result));
-        assertInstanceOf(String.class, result);
-        assertTrue(result.toString().contains("Error: Cannot jump from CODE to EXPLORE"));
+        IllegalStateException ex =
+                assertThrows(
+                        IllegalStateException.class, () -> service.routeToPhase("EXPLORE", "Jump"));
+        assertTrue(ex.getMessage().contains("Error: Cannot jump from CODE to EXPLORE"));
 
         service.resetWorkflow();
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
@@ -278,7 +294,9 @@ class PlanServiceTest {
         service.submitPlan("T", "G", List.of(), List.of("S1"));
 
         assertThrows(IllegalStateException.class, () -> service.markStepCompleted(0));
+        assertThrows(IllegalStateException.class, () -> service.markStepsCompleted(List.of(0)));
         assertThrows(IllegalStateException.class, () -> service.markStepIncomplete(0));
+        assertThrows(IllegalStateException.class, () -> service.markStepsIncomplete(List.of(0)));
         assertThrows(IllegalStateException.class, () -> service.requestReview("done"));
         assertThrows(IllegalStateException.class, () -> service.requestFixes("fix"));
         assertThrows(IllegalStateException.class, () -> service.requestCompletion("complete"));
@@ -317,38 +335,54 @@ class PlanServiceTest {
     }
 
     @Test
-    void testInternalLifecycleMethodsBlockedFromJexlAndOmittedFromDocs() {
-        service.submitPlan("T", "G", List.of(), List.of("S1"));
-        service.requestDevelopment("Ready");
+    void testPlanServiceIsDedicatedSpringToolBeanAndNotExposedInJexl() throws Exception {
+        assertNull(
+                PlanService.class.getAnnotation(AgentService.class),
+                "PlanService must not be annotated with @AgentService");
+        assertNotNull(
+                PlanService.class.getAnnotation(Service.class),
+                "PlanService must be annotated with @Service");
 
         JexlServiceRegistry registry = new JexlServiceRegistry();
         registry.register(service);
+        assertTrue(
+                registry.getServices(WorkflowPhase.PLAN).isEmpty(),
+                "PlanService must not be registered in JexlServiceRegistry");
 
-        String docs = registry.getDocumentation(WorkflowPhase.PLAN);
-        assertFalse(docs.contains("approvePlan("));
-        assertFalse(docs.contains("completePlan("));
-        assertFalse(docs.contains("clearPlan("));
-        assertFalse(docs.contains("approveTransition("));
-        assertFalse(docs.contains("rejectTransition("));
-        assertFalse(docs.contains("resetWorkflow("));
-        assertFalse(docs.contains("routeToPhase("));
+        JexlTool jexlTool = new JexlTool(registry);
+        String jexlRes = jexlTool.executeJexl("planService.submitPlan('T', 'G', [], [])");
+        assertTrue(jexlRes.contains("error"));
 
-        JexlTool jexlTool = new JexlTool(registry, WorkflowPhase.PLAN);
+        // Verify @Tool annotations on terminal and non-terminal methods
+        Method submitPlanMethod =
+                PlanService.class.getMethod(
+                        "submitPlan", String.class, String.class, List.class, List.class);
+        Tool submitTool = submitPlanMethod.getAnnotation(Tool.class);
+        assertNotNull(submitTool);
+        assertFalse(submitTool.returnDirect());
 
-        String approveResult = jexlTool.executeJexl("planService.approvePlan('hacker', 'now')");
-        assertTrue(approveResult.contains("error"));
-        assertFalse(service.getCurrentPlan().userApproved());
+        Method markStepsCompletedMethod =
+                PlanService.class.getMethod("markStepsCompleted", List.class);
+        assertNotNull(markStepsCompletedMethod.getAnnotation(Tool.class));
+        assertFalse(markStepsCompletedMethod.getAnnotation(Tool.class).returnDirect());
 
-        String approveTransResult = jexlTool.executeJexl("planService.approveTransition()");
-        assertTrue(approveTransResult.contains("error"));
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+        Method markStepsIncompleteMethod =
+                PlanService.class.getMethod("markStepsIncomplete", List.class);
+        assertNotNull(markStepsIncompleteMethod.getAnnotation(Tool.class));
+        assertFalse(markStepsIncompleteMethod.getAnnotation(Tool.class).returnDirect());
 
-        String completeResult = jexlTool.executeJexl("planService.completePlan('now')");
-        assertTrue(completeResult.contains("error"));
-        assertNull(service.getCurrentPlan().completedOn());
-
-        String clearResult = jexlTool.executeJexl("planService.clearPlan()");
-        assertTrue(clearResult.contains("error"));
-        assertNotNull(service.getCurrentPlan());
+        for (String terminalMethodName :
+                List.of(
+                        "requestDevelopment",
+                        "requestReview",
+                        "requestFixes",
+                        "requestCompletion",
+                        "requestPlanRevision")) {
+            Method m = PlanService.class.getMethod(terminalMethodName, String.class);
+            Tool t = m.getAnnotation(Tool.class);
+            assertNotNull(t, terminalMethodName + " should be annotated with @Tool");
+            assertTrue(t.returnDirect(), terminalMethodName + " should have returnDirect = true");
+            assertEquals(String.class, m.getReturnType());
+        }
     }
 }

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.image.BufferedImage;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.model.AppSettings;
@@ -43,21 +42,6 @@ class ChatModelTest {
         assertEquals(1, encoded.size());
         assertTrue(encoded.get(0).length > 0);
         assertFalse(model.hasPendingImages());
-    }
-
-    @Test
-    void testPostTurnActionQueue() {
-        ChatModel model = new ChatModel("task", null, true);
-        AtomicBoolean ran = new AtomicBoolean(false);
-        model.enqueuePostTurnAction(() -> ran.set(true));
-        assertEquals(1, model.getPendingPostTurnActions().size());
-
-        List<Runnable> drained = model.drainPostTurnActions();
-        assertEquals(1, drained.size());
-        assertTrue(model.getPendingPostTurnActions().isEmpty());
-
-        drained.get(0).run();
-        assertTrue(ran.get());
     }
 
     @Test

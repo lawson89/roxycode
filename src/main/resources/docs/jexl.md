@@ -1,6 +1,10 @@
 # RoxyCode JEXL Documentation
 
-This document describes the Apache Commons JEXL 3 syntax and safety rules for the RoxyCode environment. Always consult the injected **JEXL API Documentation** in your session context for the exact services and methods available in your current phase.
+This document describes the Apache Commons JEXL 3 syntax and safety rules for the RoxyCode environment. Always consult the injected **JEXL API Documentation** in your session context for the exact workspace services and methods available in your current phase.
+
+## Tool Separation: Workspace Services (`executeJexl`) vs. Native Plan Tools
+- **`executeJexl` (`JexlTool`)** is strictly for workspace services: `fileReadService`, `fileEditorService`, `grepService`, `gitService`, and `buildToolService`.
+- **`PlanService` tools** (`submitPlan`, `markStepCompleted`, `markStepsCompleted`, `markStepIncomplete`, `markStepsIncomplete`, `addHandoffLogEntry`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`) are dedicated native tools called directly—**NOT** inside JEXL scripts.
 
 ## JEXL Syntax Rules
 

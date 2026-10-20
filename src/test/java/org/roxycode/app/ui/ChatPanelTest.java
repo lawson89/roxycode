@@ -155,14 +155,16 @@ public class ChatPanelTest {
         javax.swing.SwingUtilities.invokeAndWait(() -> {});
 
         String renderedHtml = chatPanel.getOutputArea().getText();
-        int aiResponseIndex = renderedHtml.indexOf("FINAL_PLAN_SUMMARY");
-        int transitionMsgIndex = renderedHtml.indexOf("Roxy requested a transition");
+        assertTrue(renderedHtml.contains("FINAL_PLAN_SUMMARY"), "AI response should be rendered");
+        assertFalse(
+                renderedHtml.contains("Roxy requested a transition"),
+                "Duplicate system transition message should not be appended");
 
-        assertTrue(aiResponseIndex >= 0, "AI response should be rendered");
-        assertTrue(transitionMsgIndex >= 0, "Transition request message should be rendered");
-        assertTrue(
-                aiResponseIndex < transitionMsgIndex,
-                "AI response should appear before the transition request prompt");
+        java.lang.reflect.Field inlinePanelField =
+                ChatPanel.class.getDeclaredField("inlineActionPanel");
+        inlinePanelField.setAccessible(true);
+        javax.swing.JPanel inlinePanel = (javax.swing.JPanel) inlinePanelField.get(chatPanel);
+        assertTrue(inlinePanel.isVisible(), "Transition banner should be visible after turn");
     }
 
     @Test

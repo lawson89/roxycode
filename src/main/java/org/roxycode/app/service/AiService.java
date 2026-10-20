@@ -2,44 +2,37 @@ package org.roxycode.app.service;
 
 import java.util.List;
 import java.util.Map;
-import org.roxycode.app.ai.JexlServiceRegistry;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.roxycode.app.ai.JexlTool;
+import org.roxycode.app.ai.ReturnDirectToolCallingManager;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
-import org.roxycode.app.events.AgentTurnEvent;
-import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.util.ExceptionUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
-import org.springframework.ai.model.tool.ToolExecutionResult;
-import org.springframework.ai.tool.definition.ToolDefinition;
-import org.springframework.ai.tool.execution.DefaultToolExecutionExceptionProcessor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AiService {
-    static final String TOOL_CONTEXT_JEXL_TOOL = "jexlTool";
+    public static final String TOOL_CONTEXT_CONVERSATION_ID =
+            ReturnDirectToolCallingManager.TOOL_CONTEXT_CONVERSATION_ID;
+    public static final String TOOL_CONTEXT_PHASE =
+            ReturnDirectToolCallingManager.TOOL_CONTEXT_PHASE;
+    public static final String TOOL_CONTEXT_TURN_COUNTER =
+            ReturnDirectToolCallingManager.TOOL_CONTEXT_TURN_COUNTER;
 
-    public String chat(String message) {
-        return chat("default", planService.getCurrentPhase(), message, null, null);
-    }
-
-    public String chat(String message, List<byte[]> images) {
-        return chat("default", planService.getCurrentPhase(), message, null, images);
-    }
+    private static final String DEFAULT_CONVERSATION_ID = "default";
+    private static final String AGENT_NAME = "Roxy";
 
     private final ChatClient chatClient;
     private final SettingsService settingsService;
     private final PromptService promptService;
-    private final JexlServiceRegistry jexlServiceRegistry;
+    private final JexlTool jexlTool;
     private final PlanService planService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -47,24 +40,17 @@ public class AiService {
             ChatClient.Builder chatClientBuilder,
             SettingsService settingsService,
             PromptService promptService,
-            JexlServiceRegistry jexlServiceRegistry,
+            JexlTool jexlTool,
             PlanService planService,
             ChatMemory chatMemory,
             ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
         this.promptService = promptService;
-        this.jexlServiceRegistry = jexlServiceRegistry;
+        this.jexlTool = jexlTool;
         this.planService = planService;
         this.eventPublisher = eventPublisher;
-        ToolCallingManager defaultToolCallingManager =
-                ToolCallingManager.builder()
-                        .toolExecutionExceptionProcessor(
-                                DefaultToolExecutionExceptionProcessor.builder()
-                                        .alwaysThrow(true)
-                                        .build())
-                        .build();
         ToolCallingManager returnDirectToolCallingManager =
-                createReturnDirectToolCallingManager(defaultToolCallingManager);
+                new ReturnDirectToolCallingManager(settingsService, planService, eventPublisher);
         this.chatClient =
                 chatClientBuilder
                         .defaultAdvisors(
@@ -75,36 +61,12 @@ public class AiService {
                         .build();
     }
 
-    final ToolCallingManager createReturnDirectToolCallingManager(ToolCallingManager delegate) {
-        return new ToolCallingManager() {
-            @Override
-            public List<ToolDefinition> resolveToolDefinitions(ToolCallingChatOptions chatOptions) {
-                return delegate.resolveToolDefinitions(chatOptions);
-            }
-
-            @Override
-            public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
-                ToolExecutionResult result = delegate.executeToolCalls(prompt, chatResponse);
-                if (!result.returnDirect() && isDirectReturn(prompt)) {
-                    return ToolExecutionResult.builder()
-                            .conversationHistory(result.conversationHistory())
-                            .returnDirect(true)
-                            .build();
-                }
-                return result;
-            }
-        };
+    public String chat(String message) {
+        return chat(DEFAULT_CONVERSATION_ID, planService.getCurrentPhase(), message, null, null);
     }
 
-    private static boolean isDirectReturn(Prompt prompt) {
-        if (prompt != null
-                && prompt.getOptions() instanceof ToolCallingChatOptions options
-                && options.getToolContext() != null
-                && options.getToolContext().get(TOOL_CONTEXT_JEXL_TOOL)
-                        instanceof JexlTool jexlTool) {
-            return jexlTool.isReturnDirect();
-        }
-        return false;
+    public String chat(String message, List<byte[]> images) {
+        return chat(DEFAULT_CONVERSATION_ID, planService.getCurrentPhase(), message, null, images);
     }
 
     public String chat(
@@ -114,37 +76,31 @@ public class AiService {
             String systemPromptText,
             List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
-        int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
-        JexlTool ephemeralJexlTool = new JexlTool(jexlServiceRegistry, phase, maxTurns);
-
-        ephemeralJexlTool.addListener(
-                event -> {
-                    int turn = ephemeralJexlTool.getTurnCount();
-                    eventPublisher.publishEvent(
-                            new AgentTurnEvent(conversationId, "Roxy", turn, phase.name()));
-                    eventPublisher.publishEvent(
-                            new ToolExecutionEvent(
-                                    conversationId,
-                                    event.script(),
-                                    event.result(),
-                                    event.success(),
-                                    event.error()));
-                });
+        AtomicInteger turnCounter = new AtomicInteger(0);
+        WorkflowPhase currentPhase = (phase != null) ? phase : planService.getCurrentPhase();
+        if (currentPhase == null) {
+            currentPhase = WorkflowPhase.EXPLORE;
+        }
+        String convId =
+                (conversationId != null && !conversationId.isBlank())
+                        ? conversationId
+                        : DEFAULT_CONVERSATION_ID;
 
         String content;
         try {
             ChatClient.ChatClientRequestSpec promptSpec =
-                    buildPrompt(phase, message, systemPromptText, images, ephemeralJexlTool);
+                    buildPrompt(
+                            convId, currentPhase, message, systemPromptText, images, turnCounter);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
             content =
                     promptSpec
-                            .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
+                            .advisors(a -> a.param("chat_memory_conversation_id", convId))
                             .call()
                             .content();
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, "Chat turn cancelled");
-            publishError(conversationId, ephemeralJexlTool.getTurnCount(), e);
+            publishError(convId, turnCounter.get(), e);
             if (e instanceof RuntimeException re) {
                 throw re;
             }
@@ -152,17 +108,17 @@ public class AiService {
         }
 
         eventPublisher.publishEvent(
-                new AgentTurnCompleteEvent(
-                        conversationId, "Roxy", ephemeralJexlTool.getTurnCount(), content));
+                new AgentTurnCompleteEvent(convId, AGENT_NAME, turnCounter.get(), content));
         return content;
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(
+            String conversationId,
             WorkflowPhase phase,
             String message,
             String systemPromptText,
             List<byte[]> images,
-            JexlTool tools) {
+            AtomicInteger turnCounter) {
         String activeModel = settingsService.getSettings().getGeminiModel();
         WorkflowPhase currentPhase = (phase != null) ? phase : planService.getCurrentPhase();
         String systemPrompt = promptService.buildSystemPrompt(currentPhase, systemPromptText);
@@ -187,16 +143,25 @@ public class AiService {
                         .options(
                                 org.springframework.ai.google.genai.GoogleGenAiChatOptions.builder()
                                         .model(activeModel));
-        if (tools != null) {
-            promptSpec.tools(tools);
-            promptSpec.toolContext(Map.of(TOOL_CONTEXT_JEXL_TOOL, tools));
+        if (currentPhase == WorkflowPhase.EXPLORE) {
+            promptSpec.tools(jexlTool);
+        } else {
+            promptSpec.tools(jexlTool, planService);
         }
+        promptSpec.toolContext(
+                Map.of(
+                        TOOL_CONTEXT_CONVERSATION_ID,
+                        conversationId,
+                        TOOL_CONTEXT_PHASE,
+                        currentPhase,
+                        TOOL_CONTEXT_TURN_COUNTER,
+                        turnCounter));
         return promptSpec;
     }
 
     private void publishError(String conversationId, int turnCount, Exception e) {
         eventPublisher.publishEvent(
                 new AgentTurnCompleteEvent(
-                        conversationId, "Roxy", turnCount, "Error: " + e.getMessage()));
+                        conversationId, AGENT_NAME, turnCount, "Error: " + e.getMessage()));
     }
 }
