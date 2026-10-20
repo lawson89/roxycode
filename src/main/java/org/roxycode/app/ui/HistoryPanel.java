@@ -7,8 +7,8 @@ import java.util.Locale;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
-import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.util.TokenUtils;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -18,8 +18,7 @@ import org.springframework.ai.chat.messages.MessageType;
 public final class HistoryPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
-    private final transient ChatMemory chatMemory;
-    private final transient GeminiCacheService geminiCacheService;
+        private final transient ChatMemory chatMemory;
     private final HistoryTableModel tableModel;
     private final JTable table;
     private final JLabel statsLabel;
@@ -28,10 +27,8 @@ public final class HistoryPanel extends JPanel {
     public HistoryPanel(
             TurnEventBridge turnEventBridge,
             ChatMemory chatMemory,
-            GeminiCacheService geminiCacheService,
             String sessionPrefix) {
         this.chatMemory = chatMemory;
-        this.geminiCacheService = geminiCacheService;
         this.sessionPrefix = sessionPrefix;
         this.tableModel = new HistoryTableModel();
         this.table = new JTable(tableModel);
@@ -151,7 +148,7 @@ public final class HistoryPanel extends JPanel {
 
                     long totalTokens = 0;
                     for (Message m : messages) {
-                        totalTokens += geminiCacheService.estimateTokens(m.getText());
+                                                totalTokens += TokenUtils.estimateTokens(m.getText());
                     }
                     statsLabel.setText(
                             messages.size() + " Messages | " + totalTokens + " Tokens (Estimated)");
@@ -227,8 +224,8 @@ public final class HistoryPanel extends JPanel {
                         return "tool-response";
                     }
                     return msg.getMessageType().name().toLowerCase(Locale.ROOT);
-                case 2:
-                    return geminiCacheService.estimateTokens(msg.getText());
+                                case 2:
+                    return TokenUtils.estimateTokens(msg.getText());
                 case 3:
                     String content = msg.getText();
                     if (content == null) return "";

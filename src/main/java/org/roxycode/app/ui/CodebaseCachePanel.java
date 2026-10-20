@@ -5,21 +5,20 @@ import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
-import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.PromptService;
+import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class CodebaseCachePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
-    private final transient ProjectCacheMetaService metaService;
+        private final transient ProjectCacheMetaService metaService;
     private final transient RepoMapPackerService packerService;
     private final transient PromptService promptService;
-    private final transient GeminiCacheService geminiCacheService;
 
     private final JLabel statusLabel = new JLabel("Status: Unknown");
     private final JProgressBar progressBar = new JProgressBar(0, 100);
@@ -39,15 +38,13 @@ public final class CodebaseCachePanel extends JPanel {
             long stableTokens,
             String sessionContext) {}
 
-    public CodebaseCachePanel(
+        public CodebaseCachePanel(
             RepoMapPackerService packerService,
             ProjectCacheMetaService metaService,
-            GeminiCacheService geminiCacheService,
             PromptService promptService) {
         this.packerService = packerService;
         this.metaService = metaService;
         this.promptService = promptService;
-        this.geminiCacheService = geminiCacheService;
 
         initComponents();
         refreshStatus();
@@ -123,10 +120,7 @@ public final class CodebaseCachePanel extends JPanel {
                                         : Optional.empty();
                         if (meta != null && meta.isPresent()) {
                             String stableContext = getStableContextString();
-                            long stableTokens =
-                                    geminiCacheService != null
-                                            ? geminiCacheService.estimateTokens(stableContext)
-                                            : 0;
+                                                        long stableTokens = TokenUtils.estimateTokens(stableContext);
                             String sessionContext = getSessionContextString();
                             return new CacheStatusData(
                                     meta, packed, stableContext, stableTokens, sessionContext);

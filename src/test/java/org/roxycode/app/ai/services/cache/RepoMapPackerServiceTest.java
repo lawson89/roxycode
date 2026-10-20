@@ -20,11 +20,10 @@ class RepoMapPackerServiceTest {
 
     @TempDir Path tempDir;
 
-    private ProjectService projectService;
+        private ProjectService projectService;
     private ObjectMapper objectMapper;
     private GrepService grepService;
     private ProjectCacheMetaService metaService;
-    private GeminiCacheService geminiCacheService;
     private RepoMapPackerService service;
 
     @BeforeEach
@@ -33,10 +32,7 @@ class RepoMapPackerServiceTest {
         objectMapper = new ObjectMapper();
         grepService = Mockito.mock(GrepService.class);
         metaService = Mockito.mock(ProjectCacheMetaService.class);
-        geminiCacheService = Mockito.mock(GeminiCacheService.class);
-        service =
-                new RepoMapPackerService(
-                        projectService, objectMapper, grepService, metaService, geminiCacheService);
+        service = new RepoMapPackerService(projectService, objectMapper, grepService, metaService);
     }
 
     @Test

@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.ProjectCacheMeta;
@@ -24,10 +23,9 @@ import org.roxycode.app.service.PromptService;
 @ExtendWith(MockitoExtension.class)
 class CodebaseCachePanelTest {
 
-    @Mock private PromptService promptService;
+        @Mock private PromptService promptService;
     @Mock private RepoMapPackerService packerService;
     @Mock private ProjectCacheMetaService metaService;
-    @Mock private GeminiCacheService geminiCacheService;
 
     private CodebaseCachePanel panel;
 
@@ -36,9 +34,7 @@ class CodebaseCachePanelTest {
         lenient().when(metaService.loadMeta()).thenReturn(Optional.empty());
         lenient().when(metaService.loadRepoCache()).thenReturn(Optional.empty());
 
-        panel =
-                new CodebaseCachePanel(
-                        packerService, metaService, geminiCacheService, promptService);
+        panel = new CodebaseCachePanel(packerService, metaService, promptService);
     }
 
     @Test
@@ -69,8 +65,7 @@ class CodebaseCachePanelTest {
                 new ProjectCacheMeta("roxycode", LocalDateTime.of(2026, 1, 1, 12, 0), 500L);
         when(metaService.loadMeta()).thenReturn(Optional.of(meta));
         when(metaService.loadRepoCache()).thenReturn(Optional.of("cached repo map"));
-        when(promptService.getStableContext()).thenReturn("stable prompt");
-        when(geminiCacheService.estimateTokens("stable prompt")).thenReturn(100L);
+                when(promptService.getStableContext()).thenReturn("stable prompt");
         when(promptService.getSessionContext()).thenReturn("session prompt");
 
         panel.refreshStatus().get();
@@ -83,7 +78,7 @@ class CodebaseCachePanelTest {
             Thread.sleep(20);
         }
 
-        assertTrue(panel.getStatusLabel().getText().contains("Total: 600"));
+        assertTrue(panel.getStatusLabel().getText().contains("Total: 503"));
         assertEquals("cached repo map", panel.getRepoMapArea().getText());
         assertEquals("stable prompt", panel.getStableContextArea().getText());
         assertEquals("session prompt", panel.getSessionContextArea().getText());

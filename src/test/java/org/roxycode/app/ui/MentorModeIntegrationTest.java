@@ -14,7 +14,6 @@ import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.TurnEventBridge;
@@ -54,9 +53,8 @@ class MentorModeIntegrationTest {
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
         planService = mock(PlanService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
-        RepoMapPackerService packerService = mock(RepoMapPackerService.class);
+                RepoMapPackerService packerService = mock(RepoMapPackerService.class);
         ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
-        GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
         PromptService promptService = mock(PromptService.class);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
@@ -75,7 +73,6 @@ class MentorModeIntegrationTest {
                         turnEventBridge,
                         packerService,
                         cacheMetaService,
-                        geminiCacheService,
                         promptService,
                         buildToolService,
                         chatMemory);

@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 import java.awt.Component;
 import javax.swing.JScrollPane;
 import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.services.cache.GeminiCacheService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.springframework.ai.chat.memory.ChatMemory;
 
@@ -17,9 +16,7 @@ public class HistoryPanelTest {
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
 
         ChatMemory chatMemory = mock(ChatMemory.class);
-        GeminiCacheService geminiCacheService = mock(GeminiCacheService.class);
-        HistoryPanel historyPanel =
-                new HistoryPanel(turnEventBridge, chatMemory, geminiCacheService, "test");
+        HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, chatMemory, "test");
 
         // Verify listeners registered
         verify(turnEventBridge).addUserMessageListener(anyString(), any());

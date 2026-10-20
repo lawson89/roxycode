@@ -20,6 +20,7 @@ import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -41,8 +42,7 @@ public class RepoMapPackerService {
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
     private final GrepService grepService;
-    private final ProjectCacheMetaService metaService;
-    private final GeminiCacheService geminiCacheService;
+        private final ProjectCacheMetaService metaService;
 
     private String cachedMap = null;
     private boolean needsUpdate = true;
@@ -52,13 +52,11 @@ public class RepoMapPackerService {
             ProjectService projectService,
             ObjectMapper objectMapper,
             GrepService grepService,
-            ProjectCacheMetaService metaService,
-            GeminiCacheService geminiCacheService) {
+            ProjectCacheMetaService metaService) {
         this.projectService = projectService;
         this.objectMapper = objectMapper;
         this.grepService = grepService;
         this.metaService = metaService;
-        this.geminiCacheService = geminiCacheService;
 
         // Listen for project changes
         this.excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
@@ -132,7 +130,7 @@ public class RepoMapPackerService {
 
         this.cachedMap = sb.toString();
         this.needsUpdate = false;
-        long tokens = geminiCacheService.estimateTokens(cachedMap);
+                long tokens = TokenUtils.estimateTokens(cachedMap);
         metaService.saveRepoCache(cachedMap);
         metaService.saveMeta(
                 new ProjectCacheMeta(projectService.getProjectName(), LocalDateTime.now(), tokens));

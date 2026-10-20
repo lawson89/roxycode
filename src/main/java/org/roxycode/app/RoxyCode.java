@@ -76,13 +76,10 @@ public class RoxyCode {
                     org.roxycode.app.ai.services.cache.RepoMapPackerService packerService =
                             context.getBean(
                                     org.roxycode.app.ai.services.cache.RepoMapPackerService.class);
-                    org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService =
+                                        org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService =
                             context.getBean(
                                     org.roxycode.app.ai.services.cache.ProjectCacheMetaService
                                             .class);
-                    org.roxycode.app.ai.services.cache.GeminiCacheService geminiCacheService =
-                            context.getBean(
-                                    org.roxycode.app.ai.services.cache.GeminiCacheService.class);
                     org.roxycode.app.service.PromptService promptService =
                             context.getBean(org.roxycode.app.service.PromptService.class);
                     GenericBuildToolService buildToolService =
@@ -104,7 +101,6 @@ public class RoxyCode {
                                     turnEventBridge,
                                     packerService,
                                     cacheMetaService,
-                                    geminiCacheService,
                                     promptService,
                                     buildToolService,
                                     chatMemory);
