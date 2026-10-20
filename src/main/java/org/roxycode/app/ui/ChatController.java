@@ -7,7 +7,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import javax.swing.SwingUtilities;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
@@ -37,7 +36,6 @@ public final class ChatController {
     private final ChatModel model;
     private final ChatPanel view;
     private final AiService aiService;
-    private final WorkflowService workflowService;
     private final TurnEventBridge turnEventBridge;
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
@@ -50,19 +48,17 @@ public final class ChatController {
             ChatModel model,
             ChatPanel view,
             AiService aiService,
-            WorkflowService workflowService,
+            PlanService planService,
             TurnEventBridge turnEventBridge,
             ChatMemory chatMemory,
-            SettingsService settingsService,
-            PlanService planService) {
+            SettingsService settingsService) {
         this.model = model;
         this.view = view;
         this.aiService = aiService;
-        this.workflowService = workflowService;
+        this.planService = planService;
         this.turnEventBridge = turnEventBridge;
         this.chatMemory = chatMemory;
         this.settingsService = settingsService;
-        this.planService = planService;
     }
 
     public void registerListeners() {
@@ -110,7 +106,7 @@ public final class ChatController {
     }
 
     public boolean hasPendingPhase() {
-        return workflowService != null && workflowService.getPendingPhase() != null;
+        return planService != null && planService.getPendingPhase() != null;
     }
 
     public void sendMessage(String rawText) {
@@ -145,11 +141,11 @@ public final class ChatController {
     }
 
     public void approvePhase() {
-        WorkflowPhase current = workflowService.getCurrentPhase();
-        WorkflowPhase requested = workflowService.getPendingPhase();
+        WorkflowPhase current = planService.getCurrentPhase();
+        WorkflowPhase requested = planService.getPendingPhase();
         if (requested != null) {
             model.setTurnCancelled(false);
-            workflowService.approveTransition();
+            planService.approveTransition();
             view.appendMessage(
                     ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** approved.");
             if (requested == WorkflowPhase.EXPLORE) {
@@ -171,10 +167,10 @@ public final class ChatController {
     }
 
     public void rejectPhase() {
-        WorkflowPhase requested = workflowService.getPendingPhase();
+        WorkflowPhase requested = planService.getPendingPhase();
         if (requested != null) {
             model.setTurnCancelled(false);
-            workflowService.rejectTransition();
+            planService.rejectTransition();
             view.appendMessage(
                     ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
             triggerTurn(
@@ -200,7 +196,7 @@ public final class ChatController {
             view.setLoading(false);
         }
         if (model.isTaskMode()) {
-            workflowService.resetWorkflow();
+            planService.resetWorkflow();
         }
         model.setCurrentTurn(0);
         view.updateTurnLabel();
@@ -236,7 +232,7 @@ public final class ChatController {
                             Future<?> thisFuture = taskRef[0];
                             try {
                                 WorkflowPhase phase =
-                                        model.resolveActivePhase(workflowService.getCurrentPhase());
+                                        model.resolveActivePhase(planService.getCurrentPhase());
                                 String response =
                                         aiService.chat(
                                                 model.getConversationId(),

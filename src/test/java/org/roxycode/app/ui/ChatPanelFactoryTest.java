@@ -5,7 +5,6 @@ import static org.mockito.Mockito.*;
 
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.AppSettings;
@@ -18,21 +17,15 @@ class ChatPanelFactoryTest {
     @Test
     void testCreateChatPanelAndHistoryPanel() {
         AiService aiService = mock(AiService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
+        PlanService planService = mock(PlanService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         SettingsService settingsService = mock(SettingsService.class);
         when(settingsService.getSettings()).thenReturn(new AppSettings());
-        PlanService planService = mock(PlanService.class);
 
         ChatPanelFactory factory =
                 new ChatPanelFactory(
-                        aiService,
-                        workflowService,
-                        turnEventBridge,
-                        chatMemory,
-                        settingsService,
-                        planService);
+                        aiService, planService, turnEventBridge, chatMemory, settingsService);
 
         ChatPanel qaPanel = factory.createChatPanel("qa", WorkflowPhase.EXPLORE, false);
         assertNotNull(qaPanel);

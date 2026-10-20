@@ -19,7 +19,6 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.AiService;
@@ -54,7 +53,7 @@ public final class ChatPanel extends JPanel {
 
     public ChatPanel(
             AiService aiService,
-            WorkflowService workflowService,
+            PlanService planService,
             TurnEventBridge turnEventBridge,
             ChatMemory chatMemory,
             String sessionPrefix,
@@ -62,37 +61,34 @@ public final class ChatPanel extends JPanel {
             boolean isTaskMode) {
         this(
                 aiService,
-                workflowService,
+                planService,
                 turnEventBridge,
                 chatMemory,
                 sessionPrefix,
                 lockedPhase,
                 isTaskMode,
-                null,
                 null);
     }
 
     public ChatPanel(
             AiService aiService,
-            WorkflowService workflowService,
+            PlanService planService,
             TurnEventBridge turnEventBridge,
             ChatMemory chatMemory,
             String sessionPrefix,
             WorkflowPhase lockedPhase,
             boolean isTaskMode,
-            SettingsService settingsService,
-            PlanService planService) {
+            SettingsService settingsService) {
         this.model = new ChatModel(sessionPrefix, lockedPhase, isTaskMode);
         this.controller =
                 new ChatController(
                         this.model,
                         this,
                         aiService,
-                        workflowService,
+                        planService,
                         turnEventBridge,
                         chatMemory,
-                        settingsService,
-                        planService);
+                        settingsService);
 
         attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         attachmentPanel.setOpaque(false);

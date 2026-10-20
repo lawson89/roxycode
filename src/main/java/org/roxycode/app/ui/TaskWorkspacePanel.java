@@ -14,7 +14,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
@@ -33,7 +32,6 @@ public final class TaskWorkspacePanel extends JPanel {
     private static final String SESSION_PREFIX = "task";
     private static final String LAYOUT_CENTER = "center";
 
-    private final transient WorkflowService workflowService;
     private final transient PlanService planService;
     private final transient TurnEventBridge turnEventBridge;
     private final GitChangesPanel gitChangesPanel;
@@ -45,13 +43,11 @@ public final class TaskWorkspacePanel extends JPanel {
 
     public TaskWorkspacePanel(
             ChatPanelFactory chatPanelFactory,
-            WorkflowService workflowService,
             PlanService planService,
             TurnEventBridge turnEventBridge,
             PlanPanel planPanel,
             GitChangesPanel gitChangesPanel) {
         super(new BorderLayout());
-        this.workflowService = workflowService;
         this.planService = planService;
         this.turnEventBridge = turnEventBridge;
         this.gitChangesPanel = gitChangesPanel;
@@ -82,9 +78,9 @@ public final class TaskWorkspacePanel extends JPanel {
                     PhaseChangedEvent.class, event -> updateActivePhase(event.phase()));
             turnEventBridge.subscribe(
                     PlanUpdatedEvent.class,
-                    event -> updateActivePhase(workflowService.getCurrentPhase()));
+                    event -> updateActivePhase(planService.getCurrentPhase()));
         }
-        updateActivePhase(workflowService.getCurrentPhase());
+        updateActivePhase(planService.getCurrentPhase());
 
         this.taskTabs = new JTabbedPane();
         this.taskChatPanel = chatPanelFactory.createChatPanel(SESSION_PREFIX, null, true);
@@ -127,7 +123,7 @@ public final class TaskWorkspacePanel extends JPanel {
                             SwingUtilities.invokeLater(
                                     () ->
                                             sidebar.setTaskWaitingApproval(
-                                                    workflowService.getPendingPhase() != null)));
+                                                    planService.getPendingPhase() != null)));
         }
     }
 
@@ -157,7 +153,7 @@ public final class TaskWorkspacePanel extends JPanel {
         }
 
         progressTracker.removeAll();
-        var visitedPhases = workflowService.getVisitedPhases();
+        var visitedPhases = planService.getVisitedPhases();
         for (int i = 0; i < indicators.size(); i++) {
             WorkflowPhaseIndicator indicator = indicators.get(i);
             boolean isActive = indicator.getPhase() == currentPhase;

@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.AiService;
@@ -16,39 +15,35 @@ import org.springframework.stereotype.Component;
 public class ChatPanelFactory {
 
     private final AiService aiService;
-    private final WorkflowService workflowService;
+    private final PlanService planService;
     private final TurnEventBridge turnEventBridge;
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
-    private final PlanService planService;
 
     public ChatPanelFactory(
             AiService aiService,
-            WorkflowService workflowService,
+            PlanService planService,
             TurnEventBridge turnEventBridge,
             ChatMemory chatMemory,
-            SettingsService settingsService,
-            PlanService planService) {
+            SettingsService settingsService) {
         this.aiService = aiService;
-        this.workflowService = workflowService;
+        this.planService = planService;
         this.turnEventBridge = turnEventBridge;
         this.chatMemory = chatMemory;
         this.settingsService = settingsService;
-        this.planService = planService;
     }
 
     public ChatPanel createChatPanel(
             String sessionPrefix, WorkflowPhase lockedPhase, boolean isTaskMode) {
         return new ChatPanel(
                 aiService,
-                workflowService,
+                planService,
                 turnEventBridge,
                 chatMemory,
                 sessionPrefix,
                 lockedPhase,
                 isTaskMode,
-                settingsService,
-                planService);
+                settingsService);
     }
 
     public HistoryPanel createHistoryPanel(String sessionPrefix) {

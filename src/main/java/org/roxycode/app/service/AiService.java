@@ -5,7 +5,7 @@ import java.util.Map;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
@@ -29,18 +29,18 @@ public class AiService {
     static final String TOOL_CONTEXT_JEXL_TOOL = "jexlTool";
 
     public String chat(String message) {
-        return chat("default", workflowService.getCurrentPhase(), message, null, null);
+        return chat("default", planService.getCurrentPhase(), message, null, null);
     }
 
     public String chat(String message, List<byte[]> images) {
-        return chat("default", workflowService.getCurrentPhase(), message, null, images);
+        return chat("default", planService.getCurrentPhase(), message, null, images);
     }
 
     private final ChatClient chatClient;
     private final SettingsService settingsService;
     private final PromptService promptService;
     private final JexlServiceRegistry jexlServiceRegistry;
-    private final WorkflowService workflowService;
+    private final PlanService planService;
     private final ApplicationEventPublisher eventPublisher;
 
     public AiService(
@@ -48,13 +48,13 @@ public class AiService {
             SettingsService settingsService,
             PromptService promptService,
             JexlServiceRegistry jexlServiceRegistry,
-            WorkflowService workflowService,
+            PlanService planService,
             ChatMemory chatMemory,
             ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
         this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
-        this.workflowService = workflowService;
+        this.planService = planService;
         this.eventPublisher = eventPublisher;
         ToolCallingManager defaultToolCallingManager =
                 ToolCallingManager.builder()
@@ -164,7 +164,7 @@ public class AiService {
             List<byte[]> images,
             JexlTool tools) {
         String activeModel = settingsService.getSettings().getGeminiModel();
-        WorkflowPhase currentPhase = (phase != null) ? phase : workflowService.getCurrentPhase();
+        WorkflowPhase currentPhase = (phase != null) ? phase : planService.getCurrentPhase();
         String systemPrompt = promptService.buildSystemPrompt(currentPhase, systemPromptText);
 
         ChatClient.ChatClientRequestSpec promptSpec =

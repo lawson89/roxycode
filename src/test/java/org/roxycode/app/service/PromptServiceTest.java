@@ -14,9 +14,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.AppSettings;
 
@@ -25,7 +25,7 @@ class PromptServiceTest {
 
     @Mock private ProjectService projectService;
     @Mock private SettingsService settingsService;
-    @Mock private WorkflowService workflowService;
+    @Mock private PlanService planService;
     @Mock private JexlServiceRegistry jexlServiceRegistry;
     @Mock private GitService gitService;
     @Mock private ProjectAnalysisService projectAnalysisService;
@@ -41,7 +41,7 @@ class PromptServiceTest {
                 new PromptService(
                         projectService,
                         settingsService,
-                        workflowService,
+                        planService,
                         jexlServiceRegistry,
                         gitService,
                         projectAnalysisService,
@@ -201,7 +201,7 @@ class PromptServiceTest {
         Files.createDirectories(contextDir);
         Files.writeString(contextDir.resolve("rules.md"), "CUSTOM RULES");
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
         when(gitService.getStatus()).thenReturn("M file.java");
         when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");

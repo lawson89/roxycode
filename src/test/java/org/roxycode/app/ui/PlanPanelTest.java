@@ -13,7 +13,6 @@ import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.InlineView;
 import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.TurnEventBridge;
@@ -55,7 +54,6 @@ class PlanPanelTest {
     @Test
     void testPlanPanelRendersNonZeroMinimumSpanForNowrapCells() throws Exception {
         PlanService planService = mock(PlanService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
 
         ImplementationPlan plan =
                 new ImplementationPlan(
@@ -74,7 +72,7 @@ class PlanPanelTest {
 
         when(planService.getCurrentPlan()).thenReturn(plan);
 
-        PlanPanel panel = new PlanPanel(planService, workflowService);
+        PlanPanel panel = new PlanPanel(planService);
         SwingUtilities.invokeAndWait(() -> {});
 
         JEditorPane editorPane = panel.getDisplayArea();
@@ -141,12 +139,11 @@ class PlanPanelTest {
     @Test
     void testCopyMarkdownButtonStateAndAction() throws Exception {
         PlanService planService = mock(PlanService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
         TurnEventBridge turnEventBridge =
                 new TurnEventBridge(mock(ApplicationEventPublisher.class));
 
         when(planService.getCurrentPlan()).thenReturn(null);
-        PlanPanel panel = new PlanPanel(planService, workflowService, turnEventBridge);
+        PlanPanel panel = new PlanPanel(planService, turnEventBridge);
         SwingUtilities.invokeAndWait(() -> {});
 
         assertFalse(

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
@@ -35,7 +34,6 @@ class MentorModeIntegrationTest {
 
     private SettingsService settingsService;
     private ProjectService projectService;
-    private WorkflowService workflowService;
     private PlanService planService;
     private TurnEventBridge turnEventBridge;
     private QaWorkspacePanel qaWorkspacePanel;
@@ -50,8 +48,8 @@ class MentorModeIntegrationTest {
         projectService = mock(ProjectService.class);
         when(projectService.getProjectName()).thenReturn("TestProject");
 
-        workflowService = mock(WorkflowService.class);
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        planService = mock(PlanService.class);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
         AiService aiService = mock(AiService.class);
         SystemToolService toolService = mock(SystemToolService.class);
@@ -60,7 +58,6 @@ class MentorModeIntegrationTest {
         EnvironmentService envService = mock(EnvironmentService.class);
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
         when(jexlServiceRegistry.getDocumentation(any())).thenReturn("");
-        planService = mock(PlanService.class);
         turnEventBridge = new TurnEventBridge(mock(ApplicationEventPublisher.class));
         RepoMapPackerService packerService = mock(RepoMapPackerService.class);
         ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
@@ -70,26 +67,16 @@ class MentorModeIntegrationTest {
 
         ChatPanelFactory chatPanelFactory =
                 new ChatPanelFactory(
-                        aiService,
-                        workflowService,
-                        turnEventBridge,
-                        chatMemory,
-                        settingsService,
-                        planService);
+                        aiService, planService, turnEventBridge, chatMemory, settingsService);
 
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
         StatusPanel statusPanel = new StatusPanel(envService);
         qaWorkspacePanel = new QaWorkspacePanel(chatPanelFactory);
-        PlanPanel planPanel = new PlanPanel(planService, workflowService);
+        PlanPanel planPanel = new PlanPanel(planService);
         GitChangesPanel gitChangesPanel = new GitChangesPanel(gitService);
         taskWorkspacePanel =
                 new TaskWorkspacePanel(
-                        chatPanelFactory,
-                        workflowService,
-                        planService,
-                        turnEventBridge,
-                        planPanel,
-                        gitChangesPanel);
+                        chatPanelFactory, planService, turnEventBridge, planPanel, gitChangesPanel);
         CodebaseCachePanel codebaseCachePanel =
                 new CodebaseCachePanel(packerService, cacheMetaService, promptService);
         JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
@@ -232,7 +219,7 @@ class MentorModeIntegrationTest {
     }
 
     @Test
-    void testSidebarWaitingApprovalSyncedWithWorkflowService() throws Exception {
+    void testSidebarWaitingApprovalSyncedWithPlanService() throws Exception {
         SidebarPanel sidebar = null;
         for (java.awt.Component comp : mainFrame.getContentPane().getComponents()) {
             if (comp instanceof SidebarPanel sp) {
@@ -251,7 +238,7 @@ class MentorModeIntegrationTest {
                 sidebar.isTaskWaitingApproval(),
                 "Sidebar should show waiting approval when transition is requested");
 
-        when(workflowService.getPendingPhase()).thenReturn(null);
+        when(planService.getPendingPhase()).thenReturn(null);
         turnEventBridge.dispatch(new PhaseChangedEvent(WorkflowPhase.CODE));
         SwingUtilities.invokeAndWait(() -> {});
         assertFalse(

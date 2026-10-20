@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.*;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
@@ -25,19 +25,13 @@ public class ChatPanelStopButtonTest {
     @Test
     public void testStopButtonEnablement() {
         AiService aiService = mock(AiService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
+        PlanService planService = mock(PlanService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService,
-                        workflowService,
-                        turnEventBridge,
-                        chatMemory,
-                        "test",
-                        null,
-                        true);
+                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
         JButton stopButton = chatPanel.getStopButton();
         JButton sendButton = chatPanel.getSendButton();
         JTextArea inputArea = chatPanel.getInputArea();
@@ -60,12 +54,12 @@ public class ChatPanelStopButtonTest {
     public void testStopButtonCancelsTurnAndBlocksLateAutonomousTransitionsAndEvents()
             throws Exception {
         AiService aiService = mock(AiService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
+        PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
 
         CountDownLatch callStarted = new CountDownLatch(1);
         CountDownLatch allowExit = new CountDownLatch(1);
@@ -87,13 +81,7 @@ public class ChatPanelStopButtonTest {
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService,
-                        workflowService,
-                        turnEventBridge,
-                        chatMemory,
-                        "test",
-                        null,
-                        true);
+                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
 
         chatPanel.getInputArea().setText("Start coding");
         chatPanel.getSendButton().doClick();

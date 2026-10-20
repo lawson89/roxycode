@@ -5,7 +5,6 @@ import java.awt.datatransfer.StringSelection;
 import javax.swing.*;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -29,15 +28,12 @@ public final class PlanPanel extends JPanel {
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
 
-    public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {
-        this(planManagerService, workflowService, null);
+    public PlanPanel(PlanService planManagerService) {
+        this(planManagerService, null);
     }
 
     @Autowired
-    public PlanPanel(
-            PlanService planManagerService,
-            WorkflowService workflowService,
-            TurnEventBridge turnEventBridge) {
+    public PlanPanel(PlanService planManagerService, TurnEventBridge turnEventBridge) {
         this.planManagerService = planManagerService;
         this.setLayout(new BorderLayout());
 

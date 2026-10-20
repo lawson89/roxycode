@@ -19,11 +19,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
@@ -59,7 +60,7 @@ class AiServiceTest {
 
     @Mock private JexlServiceRegistry jexlServiceRegistry;
 
-    @Mock private WorkflowService workflowService;
+    @Mock private PlanService planService;
 
     @Mock private ChatMemory chatMemory;
 
@@ -72,8 +73,9 @@ class AiServiceTest {
             value = "transitionTestService",
             phases = {"*"})
     public static class TransitionTestService {
-        public WorkflowService.TransitionResult triggerTransition() {
-            return new WorkflowService.TransitionResult(
+        @AgentDoc("Triggers a transition result.")
+        public PlanService.TransitionResult triggerTransition() {
+            return new PlanService.TransitionResult(
                     """
                     PLAN SUMMARY
 
@@ -98,7 +100,7 @@ class AiServiceTest {
                         settingsService,
                         promptService,
                         jexlServiceRegistry,
-                        workflowService,
+                        planService,
                         chatMemory,
                         eventPublisher);
     }
@@ -107,7 +109,7 @@ class AiServiceTest {
     @SuppressWarnings("unchecked")
     void testChatUsesConfiguredModelAndDynamicPrompt() {
         settings.setGeminiModel("test-model-123");
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null))
                 .thenReturn("FULL CODE SYSTEM PROMPT");
 
@@ -192,7 +194,7 @@ class AiServiceTest {
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
         when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null))
                 .thenReturn("EXPLORE PROMPT");
 
@@ -285,7 +287,7 @@ class AiServiceTest {
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(promptService.buildSystemPrompt(WorkflowPhase.PLAN, null)).thenReturn("PLAN PROMPT");
 
         String expectedMarkdown =
@@ -374,7 +376,7 @@ class AiServiceTest {
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null)).thenReturn("CODE PROMPT");
 
         when(requestSpec.call()).thenReturn(responseSpec);

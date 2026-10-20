@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.PlanService;
 
 public class JexlToolTest {
 
@@ -20,29 +21,39 @@ public class JexlToolTest {
     public static class TestService {
         private final CountDownLatch loopStarted = new CountDownLatch(1);
 
+        @AgentDoc("Greets a user by name.")
         public String hello(String name) {
             return "Hello, " + name;
         }
 
-        public WorkflowService.TransitionResult requestTransition() {
-            return new WorkflowService.TransitionResult("Yielded: Done");
+        @AgentDoc("Requests a workflow transition.")
+        public PlanService.TransitionResult requestTransition() {
+            return new PlanService.TransitionResult("Yielded: Done");
         }
 
+        @AgentDoc("Signals that a background loop has started.")
         public void signalStarted() {
             loopStarted.countDown();
         }
 
+        @AgentDoc("Interrupts current thread and returns.")
         public String interruptSelfAndReturn() {
             Thread.currentThread().interrupt();
             return "done";
         }
 
+        @AgentDoc("Throws IllegalArgumentException.")
         public String throwIllegalArgument() {
             throw new IllegalArgumentException("File does not exist: missing.txt");
         }
 
+        @AgentDoc("Throws ClosedByInterruptException.")
         public String throwClosedByInterrupt() throws IOException {
             throw new ClosedByInterruptException();
+        }
+
+        public String internalMethodWithoutAgentDoc() {
+            return "secret-internal";
         }
     }
 
@@ -60,6 +71,23 @@ public class JexlToolTest {
         String result = tool.executeJexl("testService.hello('Roxy')");
         assertTrue(result.contains("Hello, Roxy"));
         assertFalse(tool.isReturnDirect());
+    }
+
+    @Test
+    public void testAgentServiceMethodWithoutAgentDocIsBlockedWhileObjectMethodsAllowed() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        registry.register(new TestService());
+
+        JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
+
+        String toStringResult = tool.executeJexl("testService.toString()");
+        assertTrue(toStringResult.contains("TestService"), "Object.toString() should be allowed");
+
+        String blockedResult = tool.executeJexl("testService.internalMethodWithoutAgentDoc()");
+        assertTrue(
+                blockedResult.contains("error"),
+                "Unannotated method on @AgentService must be rejected by JexlPermissions");
+        assertFalse(blockedResult.contains("secret-internal"));
     }
 
     @Test

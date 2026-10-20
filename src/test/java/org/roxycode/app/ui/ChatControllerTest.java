@@ -7,7 +7,6 @@ import static org.mockito.Mockito.*;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.AiService;
@@ -20,35 +19,33 @@ class ChatControllerTest {
     @Test
     void testRejectPhaseNotifiesWorkflowAndTriggersTurn() throws Exception {
         AiService aiService = mock(AiService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
+        PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
         SettingsService settingsService = mock(SettingsService.class);
-        PlanService planService = mock(PlanService.class);
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-        when(workflowService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
         when(aiService.chat(anyString(), any(), anyString(), any(), any()))
                 .thenReturn("Let's revise the plan.");
 
         ChatPanel panel =
                 new ChatPanel(
                         aiService,
-                        workflowService,
+                        planService,
                         turnEventBridge,
                         chatMemory,
                         "task",
                         null,
                         true,
-                        settingsService,
-                        planService);
+                        settingsService);
 
         panel.getController().rejectPhase();
         Thread.sleep(300);
         SwingUtilities.invokeAndWait(() -> {});
 
-        verify(workflowService).rejectTransition();
+        verify(planService).rejectTransition();
         verify(aiService)
                 .chat(
                         eq("task:default"),
@@ -62,25 +59,19 @@ class ChatControllerTest {
     @Test
     void testPerformResetSessionResetsWorkflowAndClearsMemory() {
         AiService aiService = mock(AiService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
+        PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel panel =
                 new ChatPanel(
-                        aiService,
-                        workflowService,
-                        turnEventBridge,
-                        chatMemory,
-                        "task",
-                        null,
-                        true);
+                        aiService, planService, turnEventBridge, chatMemory, "task", null, true);
 
         panel.getModel().setCurrentTurn(3);
         panel.getController().performResetSession();
 
-        verify(workflowService).resetWorkflow();
+        verify(planService).resetWorkflow();
         verify(chatMemory).clear("task:default");
         assertEquals(0, panel.getModel().getCurrentTurn());
         assertTrue(panel.getOutputArea().getText().contains("Session reset."));
@@ -89,20 +80,14 @@ class ChatControllerTest {
     @Test
     void testOnToolExecutionRendersSuccessAndErrorStatus() throws Exception {
         AiService aiService = mock(AiService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
+        PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel panel =
                 new ChatPanel(
-                        aiService,
-                        workflowService,
-                        turnEventBridge,
-                        chatMemory,
-                        "task",
-                        null,
-                        true);
+                        aiService, planService, turnEventBridge, chatMemory, "task", null, true);
 
         panel.getController()
                 .onToolExecution(

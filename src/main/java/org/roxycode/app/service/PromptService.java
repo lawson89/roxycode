@@ -9,9 +9,9 @@ import java.util.stream.Stream;
 import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +40,7 @@ public class PromptService {
 
     private final ProjectService projectService;
     private final SettingsService settingsService;
-    private final WorkflowService workflowService;
+    private final PlanService planService;
     private final JexlServiceRegistry jexlServiceRegistry;
     private final GitService gitService;
     private final ProjectAnalysisService projectAnalysisService;
@@ -49,14 +49,14 @@ public class PromptService {
     public PromptService(
             ProjectService projectService,
             SettingsService settingsService,
-            WorkflowService workflowService,
+            PlanService planService,
             JexlServiceRegistry jexlServiceRegistry,
             GitService gitService,
             ProjectAnalysisService projectAnalysisService,
             RepoMapPackerService repoMapPackerService) {
         this.projectService = projectService;
         this.settingsService = settingsService;
-        this.workflowService = workflowService;
+        this.planService = planService;
         this.jexlServiceRegistry = jexlServiceRegistry;
         this.gitService = gitService;
         this.projectAnalysisService = projectAnalysisService;
@@ -73,11 +73,11 @@ public class PromptService {
     }
 
     public String getSessionContext() {
-        return getSessionContext(workflowService.getCurrentPhase());
+        return getSessionContext(planService.getCurrentPhase());
     }
 
     public String getSessionContext(WorkflowPhase phase) {
-        WorkflowPhase currentPhase = phase != null ? phase : workflowService.getCurrentPhase();
+        WorkflowPhase currentPhase = phase != null ? phase : planService.getCurrentPhase();
 
         StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
         sb.append("DOMINANT LANGUAGE: ")
@@ -101,7 +101,7 @@ public class PromptService {
     }
 
     public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
-        WorkflowPhase currentPhase = phase != null ? phase : workflowService.getCurrentPhase();
+        WorkflowPhase currentPhase = phase != null ? phase : planService.getCurrentPhase();
 
         StringBuilder systemPrompt = new StringBuilder(getStableContext());
 
@@ -259,7 +259,7 @@ public class PromptService {
         }
     }
 
-            public String generateExploreSystemPrompt() {
+    public String generateExploreSystemPrompt() {
         String prompt = loadPhasePrompt(WorkflowPhase.EXPLORE);
         return StringSubstitutor.replace(
                 prompt, Map.of("maxTurns", settingsService.getSettings().getMaxAgentToolTurns()));
