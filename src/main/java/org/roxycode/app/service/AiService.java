@@ -46,7 +46,6 @@ public class AiService {
     private final PromptService promptService;
     private final JexlServiceRegistry jexlServiceRegistry;
     private final WorkflowService workflowService;
-    private final ChatMemory chatMemory;
     private final ApplicationEventPublisher eventPublisher;
 
     public AiService(
@@ -61,7 +60,6 @@ public class AiService {
         this.promptService = promptService;
         this.jexlServiceRegistry = jexlServiceRegistry;
         this.workflowService = workflowService;
-        this.chatMemory = chatMemory;
         this.eventPublisher = eventPublisher;
         ToolCallingManager defaultToolCallingManager =
                 ToolCallingManager.builder()
