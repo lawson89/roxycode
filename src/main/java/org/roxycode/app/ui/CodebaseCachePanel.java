@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 public final class CodebaseCachePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
-        private final transient ProjectCacheMetaService metaService;
+    private final transient ProjectCacheMetaService metaService;
     private final transient RepoMapPackerService packerService;
     private final transient PromptService promptService;
 
@@ -38,7 +38,7 @@ public final class CodebaseCachePanel extends JPanel {
             long stableTokens,
             String sessionContext) {}
 
-        public CodebaseCachePanel(
+    public CodebaseCachePanel(
             RepoMapPackerService packerService,
             ProjectCacheMetaService metaService,
             PromptService promptService) {
@@ -120,7 +120,7 @@ public final class CodebaseCachePanel extends JPanel {
                                         : Optional.empty();
                         if (meta != null && meta.isPresent()) {
                             String stableContext = getStableContextString();
-                                                        long stableTokens = TokenUtils.estimateTokens(stableContext);
+                            long stableTokens = TokenUtils.estimateTokens(stableContext);
                             String sessionContext = getSessionContextString();
                             return new CacheStatusData(
                                     meta, packed, stableContext, stableTokens, sessionContext);

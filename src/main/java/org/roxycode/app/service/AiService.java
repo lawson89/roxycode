@@ -10,16 +10,22 @@ import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.util.ExceptionUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.model.tool.ToolExecutionResult;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.execution.DefaultToolExecutionExceptionProcessor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -46,6 +52,7 @@ public class AiService {
     private final WorkflowService workflowService;
     private final ChatMemory chatMemory;
     private final ApplicationEventPublisher eventPublisher;
+    private final ThreadLocal<JexlTool> activeJexlTool = new ThreadLocal<>();
 
     public AiService(
             ChatClient.Builder chatClientBuilder,
@@ -61,21 +68,64 @@ public class AiService {
         this.workflowService = workflowService;
         this.chatMemory = chatMemory;
         this.eventPublisher = eventPublisher;
+        ToolCallingManager defaultToolCallingManager =
+                ToolCallingManager.builder()
+                        .toolExecutionExceptionProcessor(
+                                DefaultToolExecutionExceptionProcessor.builder()
+                                        .alwaysThrow(true)
+                                        .build())
+                        .build();
+        ToolCallingManager returnDirectToolCallingManager =
+                createReturnDirectToolCallingManager(defaultToolCallingManager);
         this.chatClient =
                 chatClientBuilder
                         .defaultAdvisors(
                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                                 ToolCallingAdvisor.builder()
-                                        .toolCallingManager(
-                                                ToolCallingManager.builder()
-                                                        .toolExecutionExceptionProcessor(
-                                                                DefaultToolExecutionExceptionProcessor
-                                                                        .builder()
-                                                                        .alwaysThrow(true)
-                                                                        .build())
-                                                        .build())
+                                        .toolCallingManager(returnDirectToolCallingManager)
                                         .build())
                         .build();
+    }
+
+    ToolCallingManager createReturnDirectToolCallingManager(ToolCallingManager delegate) {
+        return new ToolCallingManager() {
+            @Override
+            public List<ToolDefinition> resolveToolDefinitions(ToolCallingChatOptions chatOptions) {
+                return delegate.resolveToolDefinitions(chatOptions);
+            }
+
+            @Override
+            public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
+                ToolExecutionResult result = delegate.executeToolCalls(prompt, chatResponse);
+                JexlTool currentTool = activeJexlTool.get();
+                if ((currentTool != null && currentTool.isReturnDirect())
+                        || isDirectReturnResult(result)) {
+                    return ToolExecutionResult.builder()
+                            .conversationHistory(result.conversationHistory())
+                            .returnDirect(true)
+                            .build();
+                }
+                return result;
+            }
+        };
+    }
+
+    private static boolean isDirectReturnResult(ToolExecutionResult result) {
+        if (result == null
+                || result.conversationHistory() == null
+                || result.conversationHistory().isEmpty()) {
+            return false;
+        }
+        Message lastMessage =
+                result.conversationHistory().get(result.conversationHistory().size() - 1);
+        if (lastMessage instanceof ToolResponseMessage toolMsg) {
+            for (ToolResponseMessage.ToolResponse resp : toolMsg.getResponses()) {
+                if (WorkflowService.isTransitionResponse(resp.responseData())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public String chat(
@@ -103,12 +153,13 @@ public class AiService {
                                     event.result(),
                                     event.success(),
                                     event.error()));
-                    if (turn > maxTurns) {
+                    if (turn > maxTurns && !ephemeralJexlTool.isReturnDirect()) {
                         throw new RuntimeException(MAX_TURNS_EXCEEDED);
                     }
                 });
 
         String content;
+        activeJexlTool.set(ephemeralJexlTool);
         try {
             if (Thread.currentThread().isInterrupted()) {
                 throw new CancellationException("Chat turn interrupted before prompt build");
@@ -132,16 +183,13 @@ public class AiService {
             Thread.currentThread().interrupt();
             throw e;
         } catch (RuntimeException e) {
-            if (YieldTurnException.findCause(e, InterruptedException.class) != null
-                    || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
+            if (ExceptionUtils.findCause(e, InterruptedException.class) != null
+                    || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
                     || Thread.currentThread().isInterrupted()) {
                 Thread.currentThread().interrupt();
                 throw e;
             }
-            YieldTurnException yieldEx = YieldTurnException.findCause(e, YieldTurnException.class);
-            if (yieldEx != null) {
-                content = processYield(conversationId, yieldEx);
-            } else if (YieldTurnException.hasCauseWithMessage(e, MAX_TURNS_EXCEEDED)) {
+            if (ExceptionUtils.hasCauseWithMessage(e, MAX_TURNS_EXCEEDED)) {
                 content =
                         "Autonomous execution stopped: Maximum tool turns ("
                                 + maxTurns
@@ -152,10 +200,10 @@ public class AiService {
             }
         } catch (Exception e) {
             CancellationException cancelCause =
-                    YieldTurnException.findCause(e, CancellationException.class);
+                    ExceptionUtils.findCause(e, CancellationException.class);
             if (cancelCause != null
-                    || YieldTurnException.findCause(e, InterruptedException.class) != null
-                    || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
+                    || ExceptionUtils.findCause(e, InterruptedException.class) != null
+                    || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
                     || Thread.currentThread().isInterrupted()) {
                 Thread.currentThread().interrupt();
                 throw (CancellationException)
@@ -165,13 +213,10 @@ public class AiService {
                                                 : "Chat turn cancelled")
                                 .initCause(e);
             }
-            YieldTurnException yieldEx = YieldTurnException.findCause(e, YieldTurnException.class);
-            if (yieldEx != null) {
-                content = processYield(conversationId, yieldEx);
-            } else {
-                publishError(conversationId, turnCount, e);
-                throw new RuntimeException("Unexpected error during chat turn", e);
-            }
+            publishError(conversationId, turnCount, e);
+            throw new RuntimeException("Unexpected error during chat turn", e);
+        } finally {
+            activeJexlTool.remove();
         }
 
         eventPublisher.publishEvent(
@@ -180,20 +225,26 @@ public class AiService {
     }
 
     private String formatStructuredContent(String raw) {
-        if (raw != null && raw.trim().startsWith("{") && raw.contains(FIELD_MESSAGE)) {
-            try {
-                JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(raw);
-                if (node.has("summary")
-                        && !node.get("summary").asText().isBlank()
-                        && node.has(FIELD_MESSAGE)) {
-                    return node.get("summary").asText()
-                            + NEWLINE_DOUBLE
-                            + node.get(FIELD_MESSAGE).asText();
-                } else if (node.has(FIELD_MESSAGE)) {
-                    return node.get(FIELD_MESSAGE).asText();
+        if (raw != null && raw.contains(FIELD_MESSAGE)) {
+            String trimmed = raw.trim();
+            if (!trimmed.isEmpty() && (trimmed.charAt(0) == '{' || trimmed.charAt(0) == '"')) {
+                try {
+                    JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(trimmed);
+                    if (node.isTextual()) {
+                        node = AiConfig.SHARED_OBJECT_MAPPER.readTree(node.asText());
+                    }
+                    if (node.has("summary")
+                            && !node.get("summary").asText().isBlank()
+                            && node.has(FIELD_MESSAGE)) {
+                        return node.get("summary").asText()
+                                + NEWLINE_DOUBLE
+                                + node.get(FIELD_MESSAGE).asText();
+                    } else if (node.has(FIELD_MESSAGE)) {
+                        return node.get(FIELD_MESSAGE).asText();
+                    }
+                } catch (Exception e) {
+                    log.trace("Response is not valid JSON, using raw content");
                 }
-            } catch (Exception e) {
-                log.trace("Response is not valid JSON, using raw content");
             }
         }
         return raw;
@@ -227,14 +278,6 @@ public class AiService {
                 .options(
                         org.springframework.ai.google.genai.GoogleGenAiChatOptions.builder()
                                 .model(activeModel));
-    }
-
-    private String processYield(String conversationId, YieldTurnException yieldEx) {
-        String content = formatStructuredContent(yieldEx.getMessage());
-        if (content != null && !content.isBlank()) {
-            chatMemory.add(conversationId, new AssistantMessage(content));
-        }
-        return content;
     }
 
     private void publishError(String conversationId, AtomicInteger turnCount, Exception e) {

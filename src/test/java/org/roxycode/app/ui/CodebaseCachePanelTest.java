@@ -23,7 +23,7 @@ import org.roxycode.app.service.PromptService;
 @ExtendWith(MockitoExtension.class)
 class CodebaseCachePanelTest {
 
-        @Mock private PromptService promptService;
+    @Mock private PromptService promptService;
     @Mock private RepoMapPackerService packerService;
     @Mock private ProjectCacheMetaService metaService;
 
@@ -65,7 +65,7 @@ class CodebaseCachePanelTest {
                 new ProjectCacheMeta("roxycode", LocalDateTime.of(2026, 1, 1, 12, 0), 500L);
         when(metaService.loadMeta()).thenReturn(Optional.of(meta));
         when(metaService.loadRepoCache()).thenReturn(Optional.of("cached repo map"));
-                when(promptService.getStableContext()).thenReturn("stable prompt");
+        when(promptService.getStableContext()).thenReturn("stable prompt");
         when(promptService.getSessionContext()).thenReturn("session prompt");
 
         panel.refreshStatus().get();

@@ -50,7 +50,7 @@ public final class MainFrame extends JFrame {
     private final transient PlanService planManagerService;
     private final transient org.roxycode.app.events.TurnEventBridge turnEventBridge;
     private final transient org.roxycode.app.ai.services.cache.RepoMapPackerService packerService;
-        private final transient org.roxycode.app.ai.services.cache.ProjectCacheMetaService
+    private final transient org.roxycode.app.ai.services.cache.ProjectCacheMetaService
             cacheMetaService;
     private final transient ChatMemory chatMemory;
     private final transient org.roxycode.app.service.PromptService promptService;
@@ -79,7 +79,7 @@ public final class MainFrame extends JFrame {
             WorkflowService workflowService,
             PlanService planManagerService,
             org.roxycode.app.events.TurnEventBridge turnEventBridge,
-                        org.roxycode.app.ai.services.cache.RepoMapPackerService packerService,
+            org.roxycode.app.ai.services.cache.RepoMapPackerService packerService,
             org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService,
             org.roxycode.app.service.PromptService promptService,
             GenericBuildToolService buildToolService,
@@ -187,7 +187,7 @@ public final class MainFrame extends JFrame {
                         settingsService,
                         planManagerService);
         qaTabs.addTab("Chat", qaChatPanel);
-                qaTabs.addTab("History", new HistoryPanel(turnEventBridge, chatMemory, "qa"));
+        qaTabs.addTab("History", new HistoryPanel(turnEventBridge, chatMemory, "qa"));
         qaTabs.addChangeListener(
                 e -> {
                     if (qaChatPanel.equals(qaTabs.getSelectedComponent())) {
@@ -254,7 +254,7 @@ public final class MainFrame extends JFrame {
                     event -> SwingUtilities.invokeLater(gitChangesPanel::refresh));
         }
         taskTabs.addTab("Git", gitChangesPanel);
-                taskTabs.addTab("History", new HistoryPanel(turnEventBridge, chatMemory, "task"));
+        taskTabs.addTab("History", new HistoryPanel(turnEventBridge, chatMemory, "task"));
         taskTabs.addChangeListener(
                 e -> {
                     if (taskChatPanel.equals(taskTabs.getSelectedComponent())) {
@@ -269,9 +269,8 @@ public final class MainFrame extends JFrame {
         // Content Area Panels
         contentArea.add(qaViewPanel, QA_VIEW);
         contentArea.add(taskViewPanel, TASK_VIEW);
-                contentArea.add(
-                new CodebaseCachePanel(packerService, cacheMetaService, promptService),
-                CACHE_VIEW);
+        contentArea.add(
+                new CodebaseCachePanel(packerService, cacheMetaService, promptService), CACHE_VIEW);
         contentArea.add(new JexlApiPanel(jexlServiceRegistry), API_VIEW);
         contentArea.add(new SystemToolsPanel(toolService), TOOLS_VIEW);
         contentArea.add(new SettingsPanel(settingsService), SETTINGS_VIEW);

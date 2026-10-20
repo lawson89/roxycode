@@ -34,10 +34,7 @@ class WorkflowServiceTest {
                 new ImplementationPlan(
                         "T", "G", List.of(), List.of(), true, "now", "user", null, List.of());
         lenient().when(planManager.getCurrentPlan()).thenReturn(plan);
-        try {
-            service.routeToPhase("CODE", "Reason");
-        } catch (YieldTurnException e) {
-        }
+        service.routeToPhase("CODE", "Reason");
         lenient().when(envService.getCurrentUser()).thenReturn("user");
         service.approveTransition();
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
@@ -55,7 +52,9 @@ class WorkflowServiceTest {
                                 "T", "G", List.of(), List.of(), false, null, null, null,
                                 List.of()));
 
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("CODE", "Reason"));
+        String response = service.routeToPhase("CODE", "Reason");
+        assertTrue(WorkflowService.isTransitionResponse(response));
+        assertTrue(response.contains("Transition Request"));
         assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
 
         when(envService.getCurrentUser()).thenReturn("testuser");
@@ -84,12 +83,10 @@ class WorkflowServiceTest {
         when(planManager.getCurrentPlan()).thenReturn(planWithAllDone);
 
         // Request PLAN from CODE (plan revision) - Requires HITL approval
-        YieldTurnException ex =
-                assertThrows(
-                        YieldTurnException.class,
-                        () -> service.routeToPhase("PLAN", "Need architecture revision"));
-        assertTrue(ex.getMessage().contains("Transition Request"));
-        assertFalse(ex.getMessage().contains("Autonomous transition"));
+        String response = service.routeToPhase("PLAN", "Need architecture revision");
+        assertTrue(WorkflowService.isTransitionResponse(response));
+        assertTrue(response.contains("Transition Request"));
+        assertFalse(response.contains("Autonomous transition"));
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
@@ -106,9 +103,8 @@ class WorkflowServiceTest {
     @Test
     void testReviewToPlanCompletesAndClearsPlanEvenWithIncompleteSteps() {
         setupCodePhase();
-        assertThrows(
-                YieldTurnException.class,
-                () -> service.routeToPhase("REVIEW", "Checking quality")); // Autonomous
+        String reviewResponse = service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
+        assertTrue(WorkflowService.isTransitionResponse(reviewResponse));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
         ImplementationPlan.TechStep incompleteStep =
@@ -127,7 +123,8 @@ class WorkflowServiceTest {
         when(planManager.getCurrentPlan()).thenReturn(planWithIncompleteStep);
 
         // Request PLAN from REVIEW - Requires HITL Approval
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Finalizing"));
+        String planResponse = service.routeToPhase("PLAN", "Finalizing");
+        assertTrue(WorkflowService.isTransitionResponse(planResponse));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
         when(envService.getCurrentUser()).thenReturn("testuser");
@@ -142,14 +139,12 @@ class WorkflowServiceTest {
     void testAutonomousReviewTransition() {
         setupCodePhase();
 
-        // Request REVIEW - Autonomous transition yields turn
-        YieldTurnException ex =
-                assertThrows(
-                        YieldTurnException.class,
-                        () -> service.routeToPhase("REVIEW", "Checking quality"));
+        // Request REVIEW - Autonomous transition returns structured JSON
+        String response = service.routeToPhase("REVIEW", "Checking quality");
+        assertTrue(WorkflowService.isTransitionResponse(response));
         assertTrue(
-                ex.getMessage().contains("Autonomous transition"),
-                "Expected autonomous yield message but got: " + ex.getMessage());
+                response.contains("Autonomous transition"),
+                "Expected autonomous transition message but got: " + response);
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
         verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
@@ -161,6 +156,7 @@ class WorkflowServiceTest {
         setupCodePhase();
         // Transition to EXPLORE should fail now because it's decoupled
         String result = service.routeToPhase("EXPLORE", "Jump");
+        assertFalse(WorkflowService.isTransitionResponse(result));
         assertTrue(result.contains("Error: Cannot jump from CODE to EXPLORE"));
 
         service.resetWorkflow();
@@ -170,9 +166,8 @@ class WorkflowServiceTest {
     @Test
     void testReviewCompletionAndClear() {
         setupCodePhase();
-        assertThrows(
-                YieldTurnException.class,
-                () -> service.routeToPhase("REVIEW", "Checking quality")); // Autonomous
+        String reviewResponse = service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
+        assertTrue(WorkflowService.isTransitionResponse(reviewResponse));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
         ImplementationPlan.TechStep step = new ImplementationPlan.TechStep("Desc", true);
@@ -190,7 +185,8 @@ class WorkflowServiceTest {
         when(planManager.getCurrentPlan()).thenReturn(plan);
 
         // Request PLAN from REVIEW - Requires HITL Approval
-        assertThrows(YieldTurnException.class, () -> service.routeToPhase("PLAN", "Finalizing"));
+        String planResponse = service.routeToPhase("PLAN", "Finalizing");
+        assertTrue(WorkflowService.isTransitionResponse(planResponse));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
         when(envService.getCurrentUser()).thenReturn("testuser");

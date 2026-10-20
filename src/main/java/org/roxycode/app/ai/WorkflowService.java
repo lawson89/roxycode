@@ -117,7 +117,7 @@ public class WorkflowService {
                             "{\"message\": \"%s\", \"reason\": \"%s\"}",
                             StringEscapeUtils.escapeJson(autoMessage),
                             StringEscapeUtils.escapeJson(reason));
-            throw new YieldTurnException(autoJson);
+            return autoJson;
         }
         this.pendingPhase = nextPhase;
         this.pendingReason = reason;
@@ -130,9 +130,7 @@ public class WorkflowService {
 
                 **Reason:** %s"""
                         .formatted(
-                                currentPhase.getDisplayName(),
-                                nextPhase.getDisplayName(),
-                                reason);
+                                currentPhase.getDisplayName(), nextPhase.getDisplayName(), reason);
 
         // Yield execution turn immediately for user approval
         String json =
@@ -142,7 +140,35 @@ public class WorkflowService {
                         StringEscapeUtils.escapeJson(message),
                         StringEscapeUtils.escapeJson(reason));
 
-        throw new YieldTurnException(json);
+        return json;
+    }
+
+    /**
+     * Checks whether the given tool execution result represents a structured workflow transition
+     * payload that should return directly rather than continuing the LLM tool loop.
+     */
+    public static boolean isTransitionResponse(Object result) {
+        if (!(result instanceof String str)) {
+            return false;
+        }
+        String trimmed = str.trim();
+        if (trimmed.isEmpty() || !trimmed.contains("message")) {
+            return false;
+        }
+        char first = trimmed.charAt(0);
+        if (first != '{' && first != '"') {
+            return false;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode node =
+                    AiConfig.SHARED_OBJECT_MAPPER.readTree(trimmed);
+            if (node.isTextual()) {
+                node = AiConfig.SHARED_OBJECT_MAPPER.readTree(node.asText());
+            }
+            return node.isObject() && node.has("message");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
@@ -277,8 +303,7 @@ public class WorkflowService {
 
                 """
                         .formatted(
-                                plan.title().trim(),
-                                plan.goal().replaceAll("\\s+", " ").trim()));
+                                plan.title().trim(), plan.goal().replaceAll("\\s+", " ").trim()));
 
         if (!plan.requirements().isEmpty()) {
             sb.append("#### Requirements\n");

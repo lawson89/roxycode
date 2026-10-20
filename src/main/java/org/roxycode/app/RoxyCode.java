@@ -76,7 +76,7 @@ public class RoxyCode {
                     org.roxycode.app.ai.services.cache.RepoMapPackerService packerService =
                             context.getBean(
                                     org.roxycode.app.ai.services.cache.RepoMapPackerService.class);
-                                        org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService =
+                    org.roxycode.app.ai.services.cache.ProjectCacheMetaService cacheMetaService =
                             context.getBean(
                                     org.roxycode.app.ai.services.cache.ProjectCacheMetaService
                                             .class);

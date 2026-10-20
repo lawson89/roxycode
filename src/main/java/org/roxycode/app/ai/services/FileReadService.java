@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,9 +96,9 @@ public class FileReadService {
     private void rethrowIfCancelled(Exception e) {
         if (e instanceof CancellationException
                 || e instanceof ClosedByInterruptException
-                || YieldTurnException.findCause(e, CancellationException.class) != null
-                || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
-                || YieldTurnException.findCause(e, InterruptedException.class) != null
+                || ExceptionUtils.findCause(e, CancellationException.class) != null
+                || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
+                || ExceptionUtils.findCause(e, InterruptedException.class) != null
                 || Thread.currentThread().isInterrupted()) {
             Thread.currentThread().interrupt();
             if (e instanceof CancellationException ce) {

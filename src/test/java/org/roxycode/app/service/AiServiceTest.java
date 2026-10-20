@@ -1,11 +1,13 @@
 package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +22,11 @@ import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.model.AppSettings;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,7 +58,7 @@ class AiServiceTest {
     @BeforeEach
     void setUp() {
         settings = new AppSettings();
-        when(settingsService.getSettings()).thenReturn(settings);
+        lenient().when(settingsService.getSettings()).thenReturn(settings);
 
         when(chatClientBuilder.defaultAdvisors(
                         any(org.springframework.ai.chat.client.advisor.api.Advisor[].class)))
@@ -157,7 +164,7 @@ class AiServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void testChatHandlesYieldTurnExceptionImmediately() {
+    void testChatFormatsDirectReturnTransitionOutput() {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
@@ -168,21 +175,71 @@ class AiServiceTest {
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(promptService.buildSystemPrompt(WorkflowPhase.PLAN, null)).thenReturn("PLAN PROMPT");
 
-        org.roxycode.app.ai.YieldTurnException yieldEx =
-                new org.roxycode.app.ai.YieldTurnException(
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.content())
+                .thenReturn(
                         """
-				{"summary":"PLAN SUMMARY","message":"Transition Request"}
-				""");
-        when(requestSpec.call()).thenThrow(new RuntimeException(yieldEx));
+                        {"summary":"PLAN SUMMARY","message":"Transition Request","reason":"Ready"}
+                        """);
 
         String result = aiService.chat("Create plan");
 
-        assertTrue(result.contains("PLAN SUMMARY"));
-        assertTrue(result.contains("Transition Request"));
-        verify(chatMemory)
-                .add(
-                        eq("default"),
-                        any(org.springframework.ai.chat.messages.AssistantMessage.class));
+        assertEquals("PLAN SUMMARY\n\nTransition Request", result);
+    }
+
+    @Test
+    void testReturnDirectToolCallingManagerMarksTransitionAsReturnDirect() {
+        ToolCallingManager delegate = mock(ToolCallingManager.class);
+        ToolCallingManager manager = aiService.createReturnDirectToolCallingManager(delegate);
+
+        Prompt prompt = mock(Prompt.class);
+        ChatResponse chatResponse = mock(ChatResponse.class);
+
+        ToolResponseMessage transitionMsg =
+                ToolResponseMessage.builder()
+                        .responses(
+                                List.of(
+                                        new ToolResponseMessage.ToolResponse(
+                                                "1",
+                                                "executeJexl",
+                                                """
+                                                {"summary":"PLAN","message":"Transition Request","reason":"Ready"}""")))
+                        .build();
+        ToolExecutionResult transitionExecResult =
+                ToolExecutionResult.builder()
+                        .conversationHistory(List.of(transitionMsg))
+                        .returnDirect(false)
+                        .build();
+
+        when(delegate.executeToolCalls(prompt, chatResponse)).thenReturn(transitionExecResult);
+
+        ToolExecutionResult result = manager.executeToolCalls(prompt, chatResponse);
+        assertTrue(
+                result.returnDirect(),
+                "Transition tool response should set ToolExecutionResult.returnDirect() to true");
+
+        ToolResponseMessage normalMsg =
+                ToolResponseMessage.builder()
+                        .responses(
+                                List.of(
+                                        new ToolResponseMessage.ToolResponse(
+                                                "2",
+                                                "executeJexl",
+                                                """
+                                                {"result":"2"}""")))
+                        .build();
+        ToolExecutionResult normalExecResult =
+                ToolExecutionResult.builder()
+                        .conversationHistory(List.of(normalMsg))
+                        .returnDirect(false)
+                        .build();
+
+        when(delegate.executeToolCalls(prompt, chatResponse)).thenReturn(normalExecResult);
+
+        ToolExecutionResult normalResult = manager.executeToolCalls(prompt, chatResponse);
+        assertFalse(
+                normalResult.returnDirect(),
+                "Normal tool response should keep ToolExecutionResult.returnDirect() as false");
     }
 
     @Test

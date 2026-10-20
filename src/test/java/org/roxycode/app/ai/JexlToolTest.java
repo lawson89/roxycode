@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 
 public class JexlToolTest {
 
-    @AgentService("testService")
+    @AgentService(
+            value = "testService",
+            phases = {"*"})
     public static class TestService {
         private final CountDownLatch loopStarted = new CountDownLatch(1);
 
@@ -20,7 +22,8 @@ public class JexlToolTest {
         }
 
         public String requestTransition() {
-            throw new YieldTurnException("{\"message\":\"Yielded\"}");
+            return """
+                    {"message":"Yielded","reason":"Done"}""";
         }
 
         public void signalStarted() {
@@ -42,13 +45,15 @@ public class JexlToolTest {
 
         String varCheck = tool.executeJexl("testService");
         assertNotNull(varCheck);
+        assertFalse(tool.isReturnDirect());
 
         String result = tool.executeJexl("testService.hello('Roxy')");
         assertTrue(result.contains("Hello, Roxy"));
+        assertFalse(tool.isReturnDirect());
     }
 
     @Test
-    public void testExecuteJexlRethrowsYieldTurnExceptionAndNotifiesListeners() {
+    public void testExecuteJexlTransitionSetsReturnDirectAndNotifiesListeners() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         registry.register(new TestService());
 
@@ -58,15 +63,16 @@ public class JexlToolTest {
                 event -> {
                     listenerNotified.set(true);
                     assertTrue(event.success());
+                    assertTrue(event.result().toString().contains("Yielded"));
                 });
 
-        YieldTurnException thrown =
-                assertThrows(
-                        YieldTurnException.class,
-                        () -> tool.executeJexl("testService.requestTransition()"));
-        assertTrue(thrown.getMessage().contains("Yielded"));
-        assertNotNull(thrown.getCause(), "The original exception (cause) should be preserved");
-        assertTrue(listenerNotified.get(), "Execution listener should be notified before yielding");
+        String response = tool.executeJexl("testService.requestTransition()");
+        assertEquals(
+                """
+                {"message":"Yielded","reason":"Done"}""",
+                response);
+        assertTrue(tool.isReturnDirect(), "Transition should mark tool as returnDirect");
+        assertTrue(listenerNotified.get(), "Execution listener should be notified on transition");
     }
 
     @Test
@@ -74,7 +80,12 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
         String result = tool.executeJexl("1 + 1");
-        assertTrue(result.contains("\"result\":\"2\""));
+        assertTrue(
+                result.contains(
+                        """
+                        "result":"2" """
+                                .trim()));
+        assertFalse(tool.isReturnDirect());
     }
 
     @Test
@@ -82,7 +93,11 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
         String result = tool.executeJexl("var x = 10; x * 2");
-        assertTrue(result.contains("\"result\":\"20\""));
+        assertTrue(
+                result.contains(
+                        """
+                        "result":"20" """
+                                .trim()));
     }
 
     @Test
@@ -90,9 +105,14 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
         String result = tool.executeJexl("null");
-        assertTrue(result.contains("\"result\":\"null\""));
+        assertTrue(
+                result.contains(
+                        """
+                        "result":"null" """
+                                .trim()));
     }
 
+    @Test
     public void testExecuteJexlError() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);

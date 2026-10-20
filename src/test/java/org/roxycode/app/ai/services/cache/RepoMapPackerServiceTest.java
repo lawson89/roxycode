@@ -20,7 +20,7 @@ class RepoMapPackerServiceTest {
 
     @TempDir Path tempDir;
 
-        private ProjectService projectService;
+    private ProjectService projectService;
     private ObjectMapper objectMapper;
     private GrepService grepService;
     private ProjectCacheMetaService metaService;

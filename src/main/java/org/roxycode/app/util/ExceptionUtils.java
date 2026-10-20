@@ -1,21 +1,11 @@
-package org.roxycode.app.ai;
+package org.roxycode.app.util;
 
 import java.util.Objects;
 
-/**
- * Exception thrown to immediately stop the current agent turn and yield control back to the user.
- * The message typically contains content (like a proposal or plan) to be displayed to the user.
- */
-public class YieldTurnException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
+/** Utility methods for inspecting exception causal chains. */
+public final class ExceptionUtils {
 
-    public YieldTurnException(String message) {
-        super(message);
-    }
-
-    public YieldTurnException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    private ExceptionUtils() {}
 
     /**
      * Traverses the causal chain of the given throwable to find the first instance of the target

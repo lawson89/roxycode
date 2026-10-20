@@ -18,16 +18,14 @@ import org.springframework.ai.chat.messages.MessageType;
 public final class HistoryPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
-        private final transient ChatMemory chatMemory;
+    private final transient ChatMemory chatMemory;
     private final HistoryTableModel tableModel;
     private final JTable table;
     private final JLabel statsLabel;
     private final String sessionPrefix;
 
     public HistoryPanel(
-            TurnEventBridge turnEventBridge,
-            ChatMemory chatMemory,
-            String sessionPrefix) {
+            TurnEventBridge turnEventBridge, ChatMemory chatMemory, String sessionPrefix) {
         this.chatMemory = chatMemory;
         this.sessionPrefix = sessionPrefix;
         this.tableModel = new HistoryTableModel();
@@ -148,7 +146,7 @@ public final class HistoryPanel extends JPanel {
 
                     long totalTokens = 0;
                     for (Message m : messages) {
-                                                totalTokens += TokenUtils.estimateTokens(m.getText());
+                        totalTokens += TokenUtils.estimateTokens(m.getText());
                     }
                     statsLabel.setText(
                             messages.size() + " Messages | " + totalTokens + " Tokens (Estimated)");
@@ -224,7 +222,7 @@ public final class HistoryPanel extends JPanel {
                         return "tool-response";
                     }
                     return msg.getMessageType().name().toLowerCase(Locale.ROOT);
-                                case 2:
+                case 2:
                     return TokenUtils.estimateTokens(msg.getText());
                 case 3:
                     String content = msg.getText();

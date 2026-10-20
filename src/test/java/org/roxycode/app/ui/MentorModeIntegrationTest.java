@@ -53,7 +53,7 @@ class MentorModeIntegrationTest {
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
         planService = mock(PlanService.class);
         TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
-                RepoMapPackerService packerService = mock(RepoMapPackerService.class);
+        RepoMapPackerService packerService = mock(RepoMapPackerService.class);
         ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
         PromptService promptService = mock(PromptService.class);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);

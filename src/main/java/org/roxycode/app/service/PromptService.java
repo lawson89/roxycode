@@ -10,10 +10,10 @@ import java.util.stream.Stream;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -285,9 +285,9 @@ public class PromptService {
     private void rethrowIfCancelled(Exception e) {
         if (e instanceof CancellationException
                 || e instanceof ClosedByInterruptException
-                || YieldTurnException.findCause(e, CancellationException.class) != null
-                || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
-                || YieldTurnException.findCause(e, InterruptedException.class) != null
+                || ExceptionUtils.findCause(e, CancellationException.class) != null
+                || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
+                || ExceptionUtils.findCause(e, InterruptedException.class) != null
                 || Thread.currentThread().isInterrupted()) {
             Thread.currentThread().interrupt();
             if (e instanceof CancellationException ce) {

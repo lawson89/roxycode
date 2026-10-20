@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -20,6 +19,7 @@ import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.ExceptionUtils;
 import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +42,7 @@ public class RepoMapPackerService {
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
     private final GrepService grepService;
-        private final ProjectCacheMetaService metaService;
+    private final ProjectCacheMetaService metaService;
 
     private String cachedMap = null;
     private boolean needsUpdate = true;
@@ -130,7 +130,7 @@ public class RepoMapPackerService {
 
         this.cachedMap = sb.toString();
         this.needsUpdate = false;
-                long tokens = TokenUtils.estimateTokens(cachedMap);
+        long tokens = TokenUtils.estimateTokens(cachedMap);
         metaService.saveRepoCache(cachedMap);
         metaService.saveMeta(
                 new ProjectCacheMeta(projectService.getProjectName(), LocalDateTime.now(), tokens));
@@ -225,9 +225,9 @@ public class RepoMapPackerService {
     private void rethrowIfCancelled(Exception e) {
         if (e instanceof CancellationException
                 || e instanceof ClosedByInterruptException
-                || YieldTurnException.findCause(e, CancellationException.class) != null
-                || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
-                || YieldTurnException.findCause(e, InterruptedException.class) != null
+                || ExceptionUtils.findCause(e, CancellationException.class) != null
+                || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
+                || ExceptionUtils.findCause(e, InterruptedException.class) != null
                 || Thread.currentThread().isInterrupted()) {
             Thread.currentThread().interrupt();
             if (e instanceof CancellationException ce) {

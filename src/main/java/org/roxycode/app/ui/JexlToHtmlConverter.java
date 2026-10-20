@@ -53,7 +53,7 @@ public class JexlToHtmlConverter {
         "fileReadService",
         "fileEditorService",
         "workflowService",
-                "grepService",
+        "grepService",
         "repoMapPackerService",
         "projectService",
         "settingsService",

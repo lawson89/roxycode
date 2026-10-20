@@ -6,7 +6,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
-import org.roxycode.app.ai.YieldTurnException;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AutonomousTransitionEvent;
@@ -16,6 +15,7 @@ import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -217,7 +217,7 @@ public final class ChatController {
                             if (isCancelled()
                                     || model.isTurnCancelled()
                                     || Thread.currentThread().isInterrupted()
-                                    || YieldTurnException.findCause(ex, CancellationException.class)
+                                    || ExceptionUtils.findCause(ex, CancellationException.class)
                                             != null) {
                                 CancellationException ce =
                                         new CancellationException("Turn cancelled");
@@ -251,7 +251,7 @@ public final class ChatController {
                             view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
                         } catch (Exception ex) {
                             if (cancelled
-                                    || YieldTurnException.findCause(ex, CancellationException.class)
+                                    || ExceptionUtils.findCause(ex, CancellationException.class)
                                             != null) {
                                 cancelled = true;
                                 model.setTurnCancelled(true);
@@ -350,8 +350,7 @@ public final class ChatController {
                 });
     }
 
-    void onTransitionRequested(
-            WorkflowPhase current, WorkflowPhase requested, String reason) {
+    void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason) {
         if (!model.isTaskMode()) return;
         if (requested == null) {
             SwingUtilities.invokeLater(view::hideTransitionBanner);

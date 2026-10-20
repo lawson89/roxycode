@@ -13,6 +13,7 @@ import org.apache.commons.jexl3.JexlException;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.apache.commons.jexl3.introspection.JexlPermissions;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -30,6 +31,7 @@ public class JexlTool {
     private final JexlServiceRegistry registry;
     private final WorkflowPhase phase;
     private final List<JexlExecutionListener> listeners = new ArrayList<>();
+    private boolean returnDirect;
 
     public JexlTool(JexlServiceRegistry registry, WorkflowPhase phase) {
         this.jexl = new JexlBuilder().permissions(JexlPermissions.UNRESTRICTED).create();
@@ -45,6 +47,10 @@ public class JexlTool {
         listeners.remove(listener);
     }
 
+    public boolean isReturnDirect() {
+        return returnDirect;
+    }
+
     /**
      * Executes a Jexl script and returns the result.
      *
@@ -55,6 +61,7 @@ public class JexlTool {
             description =
                     "Executes a Jexl script and returns the result as a string. Useful for calculations and logic.")
     public String executeJexl(String script) {
+        this.returnDirect = false;
         if (Thread.currentThread().isInterrupted()) {
             throw new CancellationException("Execution interrupted before start");
         }
@@ -75,6 +82,16 @@ public class JexlTool {
                 throw new CancellationException("JEXL execution cancelled");
             }
 
+            if (WorkflowService.isTransitionResponse(result)) {
+                this.returnDirect = true;
+                try {
+                    fireEvent(new JexlExecutionEvent(script, result, true, null));
+                } catch (Exception ignored) {
+                    // Preserve direct return transition even if turn limit listener throws
+                }
+                return (String) result;
+            }
+
             fireEvent(new JexlExecutionEvent(script, result, true, null));
 
             if (result instanceof Map) {
@@ -87,22 +104,13 @@ public class JexlTool {
             }
             return MAPPER.writeValueAsString(Map.of("result", output));
         } catch (Exception e) {
-            YieldTurnException yieldEx = YieldTurnException.findCause(e, YieldTurnException.class);
-            if (yieldEx != null) {
-                try {
-                    fireEvent(new JexlExecutionEvent(script, yieldEx.getMessage(), true, null));
-                } catch (Exception ignored) {
-                    // Preserve YieldTurnException even if turn limit listener throws
-                }
-                throw new YieldTurnException(yieldEx.getMessage(), e);
-            }
-            if (YieldTurnException.hasCauseWithMessage(e, "MAX_TOOL_TURNS_EXCEEDED")) {
+            if (ExceptionUtils.hasCauseWithMessage(e, "MAX_TOOL_TURNS_EXCEEDED")) {
                 throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED", e);
             }
-            if (YieldTurnException.findCause(e, JexlException.Cancel.class) != null
-                    || YieldTurnException.findCause(e, InterruptedException.class) != null
-                    || YieldTurnException.findCause(e, ClosedByInterruptException.class) != null
-                    || YieldTurnException.findCause(e, CancellationException.class) != null
+            if (ExceptionUtils.findCause(e, JexlException.Cancel.class) != null
+                    || ExceptionUtils.findCause(e, InterruptedException.class) != null
+                    || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
+                    || ExceptionUtils.findCause(e, CancellationException.class) != null
                     || Thread.currentThread().isInterrupted()) {
                 Thread.currentThread().interrupt();
                 try {
@@ -117,7 +125,7 @@ public class JexlTool {
             }
 
             log.error("Error executing JEXL script: {}", e.getMessage(), e);
-            Throwable cause = YieldTurnException.getRootCause(e);
+            Throwable cause = ExceptionUtils.getRootCause(e);
             String error = cause.getMessage();
             if (error == null) {
                 error = cause.toString();
