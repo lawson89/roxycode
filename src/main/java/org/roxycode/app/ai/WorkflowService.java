@@ -39,8 +39,7 @@ public class WorkflowService {
     }
 
     public WorkflowService(
-            EnvironmentService environmentService,
-            ApplicationEventPublisher eventPublisher) {
+            EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
         this.environmentService = environmentService;
         this.eventPublisher = eventPublisher;
     }
@@ -147,7 +146,7 @@ public class WorkflowService {
                     String.format(
                             "Autonomous transition from %s to %s successful. Reason: %s",
                             oldPhase, nextPhase, reason);
-                        String autoJson =
+            String autoJson =
                     String.format(
                             "{\"message\": \"%s\", \"reason\": \"%s\"}",
                             StringEscapeUtils.escapeJson(autoMessage),
@@ -167,7 +166,7 @@ public class WorkflowService {
                         .formatted(
                                 currentPhase.getDisplayName(), nextPhase.getDisplayName(), reason);
 
-                // Yield execution turn immediately for user approval
+        // Yield execution turn immediately for user approval
         String json =
                 String.format(
                         "{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
@@ -342,8 +341,7 @@ public class WorkflowService {
                 **Goal:** %s
 
                 """
-                        .formatted(
-                                plan.title().trim(), plan.goal().replaceAll("\s+", " ").trim()));
+                        .formatted(plan.title().trim(), plan.goal().replaceAll("\s+", " ").trim()));
 
         if (!plan.requirements().isEmpty()) {
             sb.append("#### Requirements\n");

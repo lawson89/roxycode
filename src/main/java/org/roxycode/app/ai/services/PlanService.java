@@ -344,6 +344,7 @@ public class PlanService {
     public void addHandoffLogEntry(String entry) {
         requirePhase(
                 "addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
-        workflowService.addHandoffLogEntry(java.time.OffsetDateTime.now().toString(), "System", entry);
+        workflowService.addHandoffLogEntry(
+                java.time.OffsetDateTime.now().toString(), "System", entry);
     }
 }
