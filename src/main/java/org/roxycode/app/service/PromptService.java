@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.stream.Stream;
+import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
@@ -257,11 +259,10 @@ public class PromptService {
         }
     }
 
-    public String generateExploreSystemPrompt() {
+            public String generateExploreSystemPrompt() {
         String prompt = loadPhasePrompt(WorkflowPhase.EXPLORE);
-        return prompt.replace(
-                "${maxTurns}",
-                String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
+        return StringSubstitutor.replace(
+                prompt, Map.of("maxTurns", settingsService.getSettings().getMaxAgentToolTurns()));
     }
 
     private String loadMarkdownFromClasspath(String directory, String... excludeFiles) {
@@ -274,10 +275,7 @@ public class PromptService {
             for (Resource resource : resources) {
                 if (resource.getFilename() != null && !excludes.contains(resource.getFilename())) {
                     sb.append("\n\n## ").append(resource.getFilename()).append("\n");
-                    sb.append(
-                            new String(
-                                    resource.getInputStream().readAllBytes(),
-                                    StandardCharsets.UTF_8));
+                    sb.append(resource.getContentAsString(StandardCharsets.UTF_8));
                 }
             }
         } catch (IOException e) {
@@ -289,7 +287,7 @@ public class PromptService {
     private String readClasspathResource(String path) {
         try {
             Resource resource = new ClassPathResource(path);
-            return new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            return resource.getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.error("Failed to load resource {} from classpath: {}", path, e.getMessage());
             return "";
