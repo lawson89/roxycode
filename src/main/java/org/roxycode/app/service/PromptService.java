@@ -1,11 +1,9 @@
 package org.roxycode.app.service;
 
 import java.io.IOException;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.CancellationException;
 import java.util.stream.Stream;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -75,9 +73,7 @@ public class PromptService {
     }
 
     public String getStableContext() {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("Prompt building cancelled");
-        }
+        ExceptionUtils.checkInterrupted("Prompt building cancelled");
         StringBuilder sb = new StringBuilder(loadCoreWorkflowPrompt());
         sb.append(loadAllPrompts());
         sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
@@ -93,9 +89,7 @@ public class PromptService {
     }
 
     public String getSessionContext(WorkflowPhase phase) {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("Session context building cancelled");
-        }
+        ExceptionUtils.checkInterrupted("Session context building cancelled");
         try {
             WorkflowPhase currentPhase =
                     phase != null
@@ -128,20 +122,16 @@ public class PromptService {
                     sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
                 }
             }
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("Session context building cancelled");
-            }
+            ExceptionUtils.checkInterrupted("Session context building cancelled");
             return sb.toString();
         } catch (Exception e) {
-            rethrowIfCancelled(e);
+            ExceptionUtils.rethrowIfCancelled(e, "Prompt service operation cancelled");
             throw e;
         }
     }
 
     public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("System prompt building cancelled");
-        }
+        ExceptionUtils.checkInterrupted("System prompt building cancelled");
         try {
             WorkflowPhase currentPhase =
                     phase != null
@@ -174,12 +164,10 @@ public class PromptService {
                         .append(NEWLINE_DOUBLE);
             }
 
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("System prompt building cancelled");
-            }
+            ExceptionUtils.checkInterrupted("System prompt building cancelled");
             return systemPrompt.toString();
         } catch (Exception e) {
-            rethrowIfCancelled(e);
+            ExceptionUtils.rethrowIfCancelled(e, "Prompt service operation cancelled");
             throw e;
         }
     }
@@ -234,9 +222,7 @@ public class PromptService {
     }
 
     public String loadProjectContext() {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("Project context loading cancelled");
-        }
+        ExceptionUtils.checkInterrupted("Project context loading cancelled");
         if (projectService == null || !projectService.hasActiveProject()) {
             return "";
         }
@@ -256,10 +242,8 @@ public class PromptService {
                                             .compareToIgnoreCase(p2.getFileName().toString()))
                     .forEach(
                             p -> {
-                                if (Thread.currentThread().isInterrupted()) {
-                                    throw new CancellationException(
-                                            "Project context loading cancelled");
-                                }
+                                ExceptionUtils.checkInterrupted(
+                                        "Project context loading cancelled");
                                 try {
                                     String content = Files.readString(p, StandardCharsets.UTF_8);
                                     sb.append("\n\n## Project Context: ")
@@ -267,7 +251,8 @@ public class PromptService {
                                             .append("\n");
                                     sb.append(content);
                                 } catch (Exception e) {
-                                    rethrowIfCancelled(e);
+                                    ExceptionUtils.rethrowIfCancelled(
+                                            e, "Prompt service operation cancelled");
                                     log.error(
                                             "Failed to read project context file {}: {}",
                                             p,
@@ -275,29 +260,11 @@ public class PromptService {
                                 }
                             });
         } catch (Exception e) {
-            rethrowIfCancelled(e);
+            ExceptionUtils.rethrowIfCancelled(e, "Prompt service operation cancelled");
             log.error("Failed to list project context files in {}: {}", contextDir, e.getMessage());
         }
 
         return sb.toString();
-    }
-
-    private void rethrowIfCancelled(Exception e) {
-        if (e instanceof CancellationException
-                || e instanceof ClosedByInterruptException
-                || ExceptionUtils.findCause(e, CancellationException.class) != null
-                || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
-                || ExceptionUtils.findCause(e, InterruptedException.class) != null
-                || Thread.currentThread().isInterrupted()) {
-            Thread.currentThread().interrupt();
-            if (e instanceof CancellationException ce) {
-                throw ce;
-            }
-            CancellationException cancelEx =
-                    new CancellationException("Prompt service operation cancelled");
-            cancelEx.initCause(e);
-            throw cancelEx;
-        }
     }
 
     public java.util.List<String> listContextFiles() {

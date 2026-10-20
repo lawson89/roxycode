@@ -214,7 +214,8 @@ class AiServiceTest {
                             assertFalse(r1.returnDirect());
                             ToolExecutionResult r2 = manager.executeToolCalls(prompt, chatResponse);
                             assertFalse(r2.returnDirect());
-                            // 3rd call exceeds maxTurns (2) and short-circuits with returnDirect(true)
+                            // 3rd call exceeds maxTurns (2) and short-circuits with
+                            // returnDirect(true)
                             ToolExecutionResult r3 = manager.executeToolCalls(prompt, chatResponse);
                             assertTrue(r3.returnDirect());
 
@@ -229,7 +230,7 @@ class AiServiceTest {
         String result = aiService.chat("Hello");
 
         assertEquals("Autonomous execution stopped: Maximum tool turns (2) exceeded.", result);
-                // Delegate is invoked on all 3 calls; JexlTool short-circuits on the 3rd call
+        // Delegate is invoked on all 3 calls; JexlTool short-circuits on the 3rd call
         verify(delegate, times(3)).executeToolCalls(prompt, chatResponse);
         verify(eventPublisher, times(2)).publishEvent(any(AgentTurnEvent.class));
         verify(eventPublisher, times(2)).publishEvent(any(ToolExecutionEvent.class));

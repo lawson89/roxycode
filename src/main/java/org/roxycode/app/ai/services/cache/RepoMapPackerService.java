@@ -2,14 +2,12 @@ package org.roxycode.app.ai.services.cache;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.CancellationException;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.EditorResult;
@@ -74,9 +72,7 @@ public class RepoMapPackerService {
     }
 
     public EditorResult generateRepoMap() {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("Repo map generation cancelled");
-        }
+        ExceptionUtils.checkInterrupted("Repo map generation cancelled");
         if (!projectService.hasActiveProject()) {
             return new EditorResult(false, "", "No active project");
         }
@@ -101,9 +97,7 @@ public class RepoMapPackerService {
         sb.append("\n```\n\n");
 
         for (String relPath : files) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("Repo map generation cancelled");
-            }
+            ExceptionUtils.checkInterrupted("Repo map generation cancelled");
             Path filePath = root.resolve(relPath);
             if (!Files.isRegularFile(filePath)) {
                 continue;
@@ -122,7 +116,7 @@ public class RepoMapPackerService {
                     }
                 }
             } catch (Exception e) {
-                rethrowIfCancelled(e);
+                ExceptionUtils.rethrowIfCancelled(e, "Repo map operation cancelled");
                 sb.append("[Error processing file: ").append(e.getMessage()).append("]\n");
             }
             sb.append("\n\n");
@@ -168,7 +162,7 @@ public class RepoMapPackerService {
                             tags.add(new Tag(nameNode.asText(), lineNode.asInt()));
                         }
                     } catch (Exception e) {
-                        rethrowIfCancelled(e);
+                        ExceptionUtils.rethrowIfCancelled(e, "Repo map operation cancelled");
                         log.trace("Skip unparseable line: {}", line);
                     }
                 }
@@ -189,7 +183,7 @@ public class RepoMapPackerService {
             }
             return skeleton.toString();
         } catch (Exception e) {
-            rethrowIfCancelled(e);
+            ExceptionUtils.rethrowIfCancelled(e, "Repo map operation cancelled");
             log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
             return null;
         }
@@ -216,28 +210,10 @@ public class RepoMapPackerService {
                 }
             }
         } catch (Exception e) {
-            rethrowIfCancelled(e);
+            ExceptionUtils.rethrowIfCancelled(e, "Repo map operation cancelled");
             log.warn("Could not determine if file is binary: {}", path, e);
         }
         return false;
-    }
-
-    private void rethrowIfCancelled(Exception e) {
-        if (e instanceof CancellationException
-                || e instanceof ClosedByInterruptException
-                || ExceptionUtils.findCause(e, CancellationException.class) != null
-                || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
-                || ExceptionUtils.findCause(e, InterruptedException.class) != null
-                || Thread.currentThread().isInterrupted()) {
-            Thread.currentThread().interrupt();
-            if (e instanceof CancellationException ce) {
-                throw ce;
-            }
-            CancellationException cancelEx =
-                    new CancellationException("Repo map operation cancelled");
-            cancelEx.initCause(e);
-            throw cancelEx;
-        }
     }
 
     private record Tag(String name, int line) {}

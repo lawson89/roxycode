@@ -1,13 +1,11 @@
 package org.roxycode.app.ai.services;
 
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CancellationException;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
@@ -34,9 +32,7 @@ public class FileReadService {
                     "Checks if a file or directory exists at the given path relative to the project root.",
             examples = "fileReadService.fileExists('src/main/java/Main.java')")
     public boolean fileExists(String relativePath) {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("File read operation cancelled");
-        }
+        ExceptionUtils.checkInterrupted("File read operation cancelled");
         Path path = projectService.resolvePath(relativePath);
         return Files.exists(path);
     }
@@ -45,9 +41,7 @@ public class FileReadService {
             value = "Reads the content of a file at the given path relative to the project root.",
             examples = "fileReadService.readFile('pom.xml')")
     public String readFile(String relativePath) {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("File read operation cancelled");
-        }
+        ExceptionUtils.checkInterrupted("File read operation cancelled");
         Path path = projectService.resolvePath(relativePath);
         if (!Files.isRegularFile(path)) {
             return "Error: Path is not a regular file or does not exist.";
@@ -55,7 +49,7 @@ public class FileReadService {
         try {
             return Files.readString(path);
         } catch (Exception e) {
-            rethrowIfCancelled(e);
+            ExceptionUtils.rethrowIfCancelled(e, "File read operation cancelled");
             log.error("Failed to read file {}: {}", relativePath, e.getMessage(), e);
             return "Error reading file: " + e.getMessage();
         }
@@ -73,9 +67,7 @@ public class FileReadService {
                     "Lists the contents of a directory at the given path relative to the project root.",
             examples = "fileReadService.listDirectory('src')")
     public List<String> listDirectory(String relativePath) {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("Directory listing cancelled");
-        }
+        ExceptionUtils.checkInterrupted("Directory listing cancelled");
         Path path = projectService.resolvePath(relativePath);
         if (!Files.isDirectory(path)) {
             return Collections.singletonList("Error: Path is not a directory or does not exist.");
@@ -87,27 +79,9 @@ public class FileReadService {
             }
             return entries;
         } catch (Exception e) {
-            rethrowIfCancelled(e);
+            ExceptionUtils.rethrowIfCancelled(e, "File read operation cancelled");
             log.error("Failed to list directory {}: {}", relativePath, e.getMessage(), e);
             return Collections.singletonList("Error listing directory: " + e.getMessage());
-        }
-    }
-
-    private void rethrowIfCancelled(Exception e) {
-        if (e instanceof CancellationException
-                || e instanceof ClosedByInterruptException
-                || ExceptionUtils.findCause(e, CancellationException.class) != null
-                || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
-                || ExceptionUtils.findCause(e, InterruptedException.class) != null
-                || Thread.currentThread().isInterrupted()) {
-            Thread.currentThread().interrupt();
-            if (e instanceof CancellationException ce) {
-                throw ce;
-            }
-            CancellationException cancelEx =
-                    new CancellationException("File read operation cancelled");
-            cancelEx.initCause(e);
-            throw cancelEx;
         }
     }
 }

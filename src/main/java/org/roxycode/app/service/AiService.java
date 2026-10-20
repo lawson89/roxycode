@@ -1,9 +1,7 @@
 package org.roxycode.app.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
-import java.util.concurrent.CancellationException;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
@@ -32,8 +30,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class AiService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AiService.class);
-        private static final String NEWLINE_DOUBLE = "\n\n";
+    private static final String NEWLINE_DOUBLE = "\n\n";
     private static final String FIELD_MESSAGE = "message";
+
     public String chat(String message) {
         return chat("default", workflowService.getCurrentPhase(), message, null, null);
     }
@@ -130,9 +129,7 @@ public class AiService {
             String message,
             String systemPromptText,
             List<byte[]> images) {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("Chat turn interrupted before start");
-        }
+        ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
         int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
         JexlTool ephemeralJexlTool = new JexlTool(jexlServiceRegistry, phase, maxTurns);
 
@@ -152,52 +149,24 @@ public class AiService {
 
         String content;
         try {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("Chat turn interrupted before prompt build");
-            }
+            ExceptionUtils.checkInterrupted("Chat turn interrupted before prompt build");
             ChatClient.ChatClientRequestSpec promptSpec =
                     buildPrompt(phase, message, systemPromptText, images, ephemeralJexlTool);
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("Chat turn interrupted after prompt build");
-            }
+            ExceptionUtils.checkInterrupted("Chat turn interrupted after prompt build");
             content =
                     promptSpec
                             .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                             .call()
                             .content();
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("Chat turn interrupted after model call");
-            }
+            ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
 
             content = formatStructuredContent(content);
-        } catch (CancellationException e) {
-            Thread.currentThread().interrupt();
-            throw e;
-        } catch (RuntimeException e) {
-            if (ExceptionUtils.findCause(e, InterruptedException.class) != null
-                    || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
-                    || Thread.currentThread().isInterrupted()) {
-                Thread.currentThread().interrupt();
-                throw e;
-            }
-            publishError(conversationId, ephemeralJexlTool.getTurnCount(), e);
-            throw e;
         } catch (Exception e) {
-            CancellationException cancelCause =
-                    ExceptionUtils.findCause(e, CancellationException.class);
-            if (cancelCause != null
-                    || ExceptionUtils.findCause(e, InterruptedException.class) != null
-                    || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
-                    || Thread.currentThread().isInterrupted()) {
-                Thread.currentThread().interrupt();
-                throw (CancellationException)
-                        new CancellationException(
-                                        cancelCause != null
-                                                ? cancelCause.getMessage()
-                                                : "Chat turn cancelled")
-                                .initCause(e);
-            }
+            ExceptionUtils.rethrowIfCancelled(e, "Chat turn cancelled");
             publishError(conversationId, ephemeralJexlTool.getTurnCount(), e);
+            if (e instanceof RuntimeException re) {
+                throw re;
+            }
             throw new RuntimeException("Unexpected error during chat turn", e);
         }
 

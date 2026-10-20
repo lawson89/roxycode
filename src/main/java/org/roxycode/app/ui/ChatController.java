@@ -1,9 +1,11 @@
 package org.roxycode.app.ui;
 
 import java.util.List;
-import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
@@ -35,8 +37,9 @@ public final class ChatController {
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
     private final PlanService planService;
+    private final ExecutorService turnExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    private SwingWorker<String, Void> currentWorker;
+    private volatile Future<?> activeTurnFuture;
 
     public ChatController(
             ChatModel model,
@@ -69,7 +72,7 @@ public final class ChatController {
                 event ->
                         SwingUtilities.invokeLater(
                                 () -> {
-                                    if (currentWorker == null) {
+                                    if (!isTurnActive()) {
                                         view.setLoading(false);
                                     }
                                 }));
@@ -85,6 +88,10 @@ public final class ChatController {
                 planService.addListener(plan -> SwingUtilities.invokeLater(view::updateTurnLabel));
             }
         }
+    }
+
+    public boolean isTurnActive() {
+        return activeTurnFuture != null;
     }
 
     public String formatCurrentTurnStatus() {
@@ -112,8 +119,20 @@ public final class ChatController {
     public void stopTurn() {
         model.setTurnCancelled(true);
         model.clearPostTurnActions();
-        if (currentWorker != null) {
-            currentWorker.cancel(true);
+        Future<?> futureToCancel = activeTurnFuture;
+        if (futureToCancel != null) {
+            activeTurnFuture = null; // NOPMD
+            futureToCancel.cancel(true);
+            Runnable uiUpdate =
+                    () -> {
+                        view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
+                        view.setLoading(false);
+                    };
+            if (SwingUtilities.isEventDispatchThread()) {
+                uiUpdate.run();
+            } else {
+                SwingUtilities.invokeLater(uiUpdate);
+            }
         }
     }
 
@@ -166,10 +185,10 @@ public final class ChatController {
     void performResetSession() {
         model.setTurnCancelled(true);
         model.clearPostTurnActions();
-        if (currentWorker != null) {
-            SwingWorker<String, Void> workerToCancel = currentWorker;
-            currentWorker = null; // NOPMD
-            workerToCancel.cancel(true);
+        Future<?> futureToCancel = activeTurnFuture;
+        if (futureToCancel != null) {
+            activeTurnFuture = null; // NOPMD
+            futureToCancel.cancel(true);
             view.setLoading(false);
         }
         if (model.isTaskMode()) {
@@ -188,10 +207,10 @@ public final class ChatController {
         model.setTurnCancelled(false);
         model.clearPostTurnActions();
 
-        if (currentWorker != null && !currentWorker.isDone()) {
-            SwingWorker<String, Void> previousWorker = currentWorker;
-            currentWorker = null; // NOPMD
-            previousWorker.cancel(true);
+        Future<?> previousFuture = activeTurnFuture;
+        if (previousFuture != null) {
+            activeTurnFuture = null; // NOPMD
+            previousFuture.cancel(true);
         }
 
         view.setLoading(true);
@@ -202,80 +221,76 @@ public final class ChatController {
         List<byte[]> imageBytes = model.drainPendingImagesAsPngBytes();
         view.clearAttachments();
 
-        currentWorker =
-                new SwingWorker<>() {
-                    @Override
-                    protected String doInBackground() {
-                        try {
-                            WorkflowPhase phase =
-                                    model.resolveActivePhase(workflowService.getCurrentPhase());
-                            return aiService.chat(
-                                    model.getConversationId(), phase, text, null, imageBytes);
-                        } catch (CancellationException ex) {
-                            throw ex;
-                        } catch (Exception ex) {
-                            if (isCancelled()
-                                    || model.isTurnCancelled()
-                                    || Thread.currentThread().isInterrupted()
-                                    || ExceptionUtils.findCause(ex, CancellationException.class)
-                                            != null) {
-                                CancellationException ce =
-                                        new CancellationException("Turn cancelled");
-                                ce.initCause(ex);
-                                throw ce;
-                            }
-                            log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
-                            return "Error: "
-                                    + (ex.getMessage() != null
-                                            ? ex.getMessage()
-                                            : ex.getClass().getSimpleName());
-                        }
-                    }
-
-                    @Override
-                    protected void done() {
-                        if (currentWorker != this) {
-                            return;
-                        }
-                        boolean cancelled = isCancelled() || model.isTurnCancelled();
-                        try {
-                            String response = get();
-                            if (!cancelled) {
-                                view.appendMessage(ROLE_AI, response);
-                            } else {
-                                view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
-                            }
-                        } catch (CancellationException ce) {
-                            cancelled = true;
-                            model.setTurnCancelled(true);
-                            view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
-                        } catch (Exception ex) {
-                            if (cancelled
-                                    || ExceptionUtils.findCause(ex, CancellationException.class)
-                                            != null) {
-                                cancelled = true;
-                                model.setTurnCancelled(true);
-                                view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
-                            } else {
-                                log.error(
-                                        "Failed to retrieve AI response: {}", ex.getMessage(), ex);
-                                view.appendMessage(ROLE_AI, "_Error communicating with AI._");
-                            }
-                        } finally {
-                            if (currentWorker == this) {
-                                currentWorker = null; // NOPMD
-                                view.setLoading(false);
-                                List<Runnable> actions = model.drainPostTurnActions();
-                                if (!cancelled && !model.isTurnCancelled()) {
-                                    for (Runnable action : actions) {
-                                        action.run();
-                                    }
+        Future<?>[] taskRef = new Future<?>[1];
+        FutureTask<Void> task =
+                new FutureTask<>(
+                        () -> {
+                            Future<?> thisFuture = taskRef[0];
+                            try {
+                                WorkflowPhase phase =
+                                        model.resolveActivePhase(workflowService.getCurrentPhase());
+                                String response =
+                                        aiService.chat(
+                                                model.getConversationId(),
+                                                phase,
+                                                text,
+                                                null,
+                                                imageBytes);
+                                if (Thread.currentThread().isInterrupted()
+                                        || model.isTurnCancelled()) {
+                                    SwingUtilities.invokeLater(
+                                            () -> finishTurnCancelled(thisFuture));
+                                    return;
                                 }
+                                SwingUtilities.invokeLater(
+                                        () -> finishTurnSuccess(thisFuture, response));
+                            } catch (Exception ex) {
+                                if (ExceptionUtils.isCancellation(ex) || model.isTurnCancelled()) {
+                                    SwingUtilities.invokeLater(
+                                            () -> finishTurnCancelled(thisFuture));
+                                    return;
+                                }
+                                log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
+                                String errorMsg =
+                                        "Error: "
+                                                + (ex.getMessage() != null
+                                                        ? ex.getMessage()
+                                                        : ex.getClass().getSimpleName());
+                                SwingUtilities.invokeLater(
+                                        () -> finishTurnSuccess(thisFuture, errorMsg));
                             }
-                        }
-                    }
-                };
-        currentWorker.execute();
+                        },
+                        null);
+        taskRef[0] = task;
+        activeTurnFuture = task;
+        turnExecutor.execute(task);
+    }
+
+    private void finishTurnSuccess(Future<?> thisFuture, String response) {
+        if (activeTurnFuture != thisFuture || model.isTurnCancelled()) {
+            return;
+        }
+        activeTurnFuture = null; // NOPMD
+        view.appendMessage(ROLE_AI, response);
+        view.setLoading(false);
+        List<Runnable> actions = model.drainPostTurnActions();
+        for (Runnable action : actions) {
+            if (model.isTurnCancelled()) {
+                break;
+            }
+            action.run();
+        }
+    }
+
+    private void finishTurnCancelled(Future<?> thisFuture) {
+        if (activeTurnFuture != thisFuture) {
+            return;
+        }
+        activeTurnFuture = null; // NOPMD
+        model.setTurnCancelled(true);
+        model.clearPostTurnActions();
+        view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
+        view.setLoading(false);
     }
 
     void runAfterCurrentTurn(Runnable action) {
@@ -283,7 +298,7 @@ public final class ChatController {
         SwingUtilities.invokeLater(
                 () -> {
                     if (model.isTurnCancelled()) return;
-                    if (currentWorker != null) {
+                    if (isTurnActive()) {
                         model.enqueuePostTurnAction(action);
                     } else {
                         action.run();

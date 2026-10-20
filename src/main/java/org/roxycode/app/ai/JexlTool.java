@@ -1,16 +1,13 @@
 package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.nio.channels.ClosedByInterruptException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
-import org.apache.commons.jexl3.JexlException;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.apache.commons.jexl3.introspection.JexlPermissions;
@@ -84,9 +81,7 @@ public class JexlTool {
                     "Executes a Jexl script and returns the result as a string. Useful for calculations and logic.")
     public String executeJexl(String script) {
         this.returnDirect = false;
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("Execution interrupted before start");
-        }
+        ExceptionUtils.checkInterrupted("Execution interrupted before start");
         if (maxTurns > 0 && turnCount.get() >= maxTurns) {
             this.returnDirect = true;
             return formatMaxTurnsExceededMessage();
@@ -107,9 +102,7 @@ public class JexlTool {
         try {
             JexlContext context = new MapContext(registry.getServices(phase));
             Object result = jexlScript.execute(context);
-            if (Thread.currentThread().isInterrupted()) {
-                throw new CancellationException("JEXL execution cancelled");
-            }
+            ExceptionUtils.checkInterrupted("JEXL execution cancelled");
 
             if (WorkflowService.isTransitionResponse(result)) {
                 this.returnDirect = true;
@@ -129,21 +122,13 @@ public class JexlTool {
             }
             return MAPPER.writeValueAsString(Map.of("result", output));
         } catch (Exception e) {
-            if (ExceptionUtils.findCause(e, JexlException.Cancel.class) != null
-                    || ExceptionUtils.findCause(e, InterruptedException.class) != null
-                    || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null
-                    || ExceptionUtils.findCause(e, CancellationException.class) != null
-                    || Thread.currentThread().isInterrupted()) {
-                Thread.currentThread().interrupt();
+            if (ExceptionUtils.isCancellation(e)) {
                 try {
                     fireEvent(new JexlExecutionEvent(script, null, false, "Execution cancelled"));
                 } catch (Exception ignored) {
                     // Ignore listener exceptions during cancellation
                 }
-                CancellationException cancelEx =
-                        new CancellationException("JEXL execution cancelled");
-                cancelEx.initCause(e);
-                throw cancelEx;
+                throw ExceptionUtils.asCancellationException(e, "JEXL execution cancelled");
             }
 
             log.error("Error executing JEXL script: {}", e.getMessage(), e);

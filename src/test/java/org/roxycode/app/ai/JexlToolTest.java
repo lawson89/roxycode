@@ -91,7 +91,7 @@ public class JexlToolTest {
 
         assertEquals(0, tool.getTurnCount());
 
-                String r1 = tool.executeJexl("1 + 1");
+        String r1 = tool.executeJexl("1 + 1");
         assertTrue(r1.contains("2"));
         assertEquals(1, tool.getTurnCount());
         assertEquals(1, lastSeenTurnCount.get());
