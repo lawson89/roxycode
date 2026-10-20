@@ -130,7 +130,7 @@ public class ChatPanelTest {
                         null,
                         true);
 
-                // Transition to PLAN
+        // Transition to PLAN
         turnEventBridge.dispatch(
                 new AutonomousTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason"));
@@ -158,7 +158,7 @@ public class ChatPanelTest {
         TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-                ChatPanel chatPanel =
+        ChatPanel chatPanel =
                 new ChatPanel(
                         aiService,
                         workflowService,
@@ -290,7 +290,7 @@ public class ChatPanelTest {
                         false);
         assertNotNull(qaChatPanel);
 
-                verify(turnEventBridge, never()).subscribe(eq(PhaseChangedEvent.class), any());
+        verify(turnEventBridge, never()).subscribe(eq(PhaseChangedEvent.class), any());
         verify(turnEventBridge, never()).subscribe(eq(TransitionRequestedEvent.class), any());
         verify(turnEventBridge, never()).subscribe(eq(AutonomousTransitionEvent.class), any());
         verify(turnEventBridge, never()).subscribe(eq(PlanUpdatedEvent.class), any());
@@ -465,7 +465,7 @@ public class ChatPanelTest {
         appSettings.setMaxAgentToolTurns(5);
         when(settingsService.getSettings()).thenReturn(appSettings);
 
-                org.roxycode.app.ai.services.PlanService planService =
+        org.roxycode.app.ai.services.PlanService planService =
                 mock(org.roxycode.app.ai.services.PlanService.class);
 
         ChatPanel chatPanel =

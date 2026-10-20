@@ -29,7 +29,7 @@ public final class PlanPanel extends JPanel {
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
 
-        public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {
+    public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {
         this(planManagerService, workflowService, null);
     }
 
@@ -59,11 +59,10 @@ public final class PlanPanel extends JPanel {
         scrollPane.setBorder(null);
         this.add(scrollPane, BorderLayout.CENTER);
 
-                SwingHtmlUtils.installTextContextMenu(displayArea);
+        SwingHtmlUtils.installTextContextMenu(displayArea);
         updateTheme();
         if (turnEventBridge != null) {
-            turnEventBridge.subscribe(
-                    PlanUpdatedEvent.class, event -> updateDisplay(event.plan()));
+            turnEventBridge.subscribe(PlanUpdatedEvent.class, event -> updateDisplay(event.plan()));
             turnEventBridge.subscribe(
                     PhaseChangedEvent.class,
                     event -> updateDisplay(planManagerService.getCurrentPlan()));

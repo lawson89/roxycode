@@ -65,7 +65,7 @@ public final class ChatController {
         this.planService = planService;
     }
 
-        public void registerListeners() {
+    public void registerListeners() {
         String conversationId = model.getConversationId();
         turnEventBridge.subscribe(AgentTurnEvent.class, conversationId, this::onAgentTurn);
         if (model.isTaskMode()) {

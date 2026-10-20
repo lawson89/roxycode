@@ -140,7 +140,7 @@ class PlanPanelTest {
 
     @Test
     void testCopyMarkdownButtonStateAndAction() throws Exception {
-                PlanService planService = mock(PlanService.class);
+        PlanService planService = mock(PlanService.class);
         WorkflowService workflowService = mock(WorkflowService.class);
         TurnEventBridge turnEventBridge =
                 new TurnEventBridge(mock(ApplicationEventPublisher.class));

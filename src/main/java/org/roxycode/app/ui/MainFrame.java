@@ -41,7 +41,7 @@ public final class MainFrame extends JFrame {
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
 
-        public MainFrame(
+    public MainFrame(
             SettingsService settingsService,
             ProjectService projectService,
             ChatMemory chatMemory,

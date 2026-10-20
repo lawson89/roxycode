@@ -198,7 +198,7 @@ public class PlanService {
     @AgentDoc(
             value = "Requests transition to the development (CODE) phase.",
             examples = "planService.requestDevelopment('Ready to start coding.')")
-    public String requestDevelopment(String reason) {
+    public Object requestDevelopment(String reason) {
         requirePhase("requestDevelopment", WorkflowPhase.PLAN);
         return workflowService.routeToPhase("CODE", reason);
     }
@@ -207,7 +207,7 @@ public class PlanService {
     @AgentDoc(
             value = "Requests transition to the review phase.",
             examples = "planService.requestReview('Feature implemented, needs review.')")
-    public String requestReview(String reason) {
+    public Object requestReview(String reason) {
         requirePhase("requestReview", WorkflowPhase.CODE);
         return workflowService.routeToPhase("REVIEW", reason);
     }
@@ -216,7 +216,7 @@ public class PlanService {
     @AgentDoc(
             value = "Requests transition back to development to address fixes.",
             examples = "planService.requestFixes('Found a bug in auth logic.')")
-    public String requestFixes(String reason) {
+    public Object requestFixes(String reason) {
         requirePhase("requestFixes", WorkflowPhase.REVIEW);
         return workflowService.routeToPhase("CODE", reason);
     }
@@ -225,7 +225,7 @@ public class PlanService {
     @AgentDoc(
             value = "Signals completion of the current cycle and returns to planning.",
             examples = "planService.requestCompletion('All steps verified, project ready.')")
-    public String requestCompletion(String reason) {
+    public Object requestCompletion(String reason) {
         requirePhase("requestCompletion", WorkflowPhase.REVIEW);
         return workflowService.routeToPhase("PLAN", reason);
     }
@@ -236,7 +236,7 @@ public class PlanService {
                     "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.",
             examples =
                     "planService.requestPlanRevision('Blocked by missing API, need to update the architecture.')")
-    public String requestPlanRevision(String reason) {
+    public Object requestPlanRevision(String reason) {
         requirePhase("requestPlanRevision", WorkflowPhase.CODE);
         return workflowService.routeToPhase("PLAN", reason);
     }

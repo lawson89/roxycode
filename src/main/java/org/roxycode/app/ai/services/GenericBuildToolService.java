@@ -43,7 +43,7 @@ public class GenericBuildToolService {
     private final ProjectService projectService;
     private final TomlMapper tomlMapper;
 
-        @Autowired
+    @Autowired
     public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper) {
         this.projectService = projectService;
         this.tomlMapper = tomlMapper;

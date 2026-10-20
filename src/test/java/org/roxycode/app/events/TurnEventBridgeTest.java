@@ -62,8 +62,7 @@ class TurnEventBridgeTest {
         String convId = "test-conv";
         bridge.subscribe(ToolExecutionEvent.class, convId, event -> toolCalled.set(true));
 
-        bridge.handleApplicationEvent(
-                new ToolExecutionEvent(convId, "var x = 1;", 1, true, null));
+        bridge.handleApplicationEvent(new ToolExecutionEvent(convId, "var x = 1;", 1, true, null));
 
         assertTrue(toolCalled.get());
     }

@@ -4,7 +4,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
-import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -19,6 +18,14 @@ import org.springframework.stereotype.Service;
 public class WorkflowService {
     private static final String PHASE_DEVELOP = "DEVELOP";
     private static final String PHASE_CODE = "CODE";
+
+    /** Represents a validated workflow transition response that should return directly. */
+    public record TransitionResult(String markdown) {
+        @Override
+        public String toString() {
+            return markdown;
+        }
+    }
 
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
@@ -72,7 +79,7 @@ public class WorkflowService {
         publishPlanUpdated();
     }
 
-    public String routeToPhase(String phaseName, String reason) {
+    public Object routeToPhase(String phaseName, String reason) {
 
         WorkflowPhase nextPhase;
         String normalizedName = phaseName.toUpperCase(Locale.ROOT);
@@ -127,17 +134,11 @@ public class WorkflowService {
             publishPhaseChanged();
 
             eventPublisher.publishEvent(new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
-                        String autoMessage =
+            String autoMessage =
                     String.format(
                             "Autonomous transition from %s to %s successful. Reason: %s",
                             oldPhase, nextPhase, reason);
-            String autoJson =
-                    """
-                    {"message": "%s", "reason": "%s"}"""
-                            .formatted(
-                                    StringEscapeUtils.escapeJson(autoMessage),
-                                    StringEscapeUtils.escapeJson(reason));
-            return autoJson;
+            return new TransitionResult(autoMessage);
         }
         this.pendingPhase = nextPhase;
         this.pendingReason = reason;
@@ -151,17 +152,14 @@ public class WorkflowService {
                 **Reason:** %s"""
                         .formatted(
                                 currentPhase.getDisplayName(), nextPhase.getDisplayName(), reason);
-
         // Yield execution turn immediately for user approval
-        String json =
-                """
-                {"summary": "%s", "message": "%s", "reason": "%s"}"""
-                        .formatted(
-                                StringEscapeUtils.escapeJson(summary),
-                                StringEscapeUtils.escapeJson(message),
-                                StringEscapeUtils.escapeJson(reason));
+        String newlineDouble = String.valueOf((char) 10) + (char) 10;
+        String markdown =
+                (summary != null && !summary.isBlank())
+                        ? summary + newlineDouble + message
+                        : message;
 
-        return json;
+        return new TransitionResult(markdown);
     }
 
     /**
@@ -169,27 +167,7 @@ public class WorkflowService {
      * payload that should return directly rather than continuing the LLM tool loop.
      */
     public static boolean isTransitionResponse(Object result) {
-        if (!(result instanceof String str)) {
-            return false;
-        }
-        String trimmed = str.trim();
-        if (trimmed.isEmpty() || !trimmed.contains("message")) {
-            return false;
-        }
-        char first = trimmed.charAt(0);
-        if (first != '{' && first != '"') {
-            return false;
-        }
-        try {
-            com.fasterxml.jackson.databind.JsonNode node =
-                    AiConfig.SHARED_OBJECT_MAPPER.readTree(trimmed);
-            if (node.isTextual()) {
-                node = AiConfig.SHARED_OBJECT_MAPPER.readTree(node.asText());
-            }
-            return node.isObject() && node.has("message");
-        } catch (Exception e) {
-            return false;
-        }
+        return result instanceof TransitionResult;
     }
 
     private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
@@ -301,7 +279,7 @@ public class WorkflowService {
         eventPublisher.publishEvent(new PlanUpdatedEvent(currentPlan));
     }
 
-            private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
+    private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
         if (plan == null) {
             return "";
         }
@@ -335,6 +313,6 @@ public class WorkflowService {
                         .append(nl);
             }
         }
-                return sb.toString();
+        return sb.toString();
     }
 }

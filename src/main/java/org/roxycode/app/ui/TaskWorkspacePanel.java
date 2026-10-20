@@ -33,7 +33,7 @@ public final class TaskWorkspacePanel extends JPanel {
     private static final String SESSION_PREFIX = "task";
     private static final String LAYOUT_CENTER = "center";
 
-        private final transient WorkflowService workflowService;
+    private final transient WorkflowService workflowService;
     private final transient PlanService planService;
     private final transient TurnEventBridge turnEventBridge;
     private final GitChangesPanel gitChangesPanel;
@@ -51,7 +51,7 @@ public final class TaskWorkspacePanel extends JPanel {
             PlanPanel planPanel,
             GitChangesPanel gitChangesPanel) {
         super(new BorderLayout());
-                this.workflowService = workflowService;
+        this.workflowService = workflowService;
         this.planService = planService;
         this.turnEventBridge = turnEventBridge;
         this.gitChangesPanel = gitChangesPanel;
@@ -77,7 +77,7 @@ public final class TaskWorkspacePanel extends JPanel {
                 FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
         taskHeaderBar.add(planLabel, "gapleft 16, center, hidemode 3");
 
-                if (turnEventBridge != null) {
+        if (turnEventBridge != null) {
             turnEventBridge.subscribe(
                     PhaseChangedEvent.class, event -> updateActivePhase(event.phase()));
             turnEventBridge.subscribe(
@@ -111,7 +111,7 @@ public final class TaskWorkspacePanel extends JPanel {
         add(taskTabs, BorderLayout.CENTER);
     }
 
-        public void bindSidebar(SidebarPanel sidebar) {
+    public void bindSidebar(SidebarPanel sidebar) {
         this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
         if (turnEventBridge != null) {
             turnEventBridge.subscribe(

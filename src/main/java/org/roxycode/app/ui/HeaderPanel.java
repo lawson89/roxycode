@@ -3,11 +3,11 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import java.io.File;
+import java.nio.file.Path;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import java.nio.file.Path;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -34,7 +34,7 @@ public final class HeaderPanel extends JPanel {
     private final JLabel branchLabel;
     private final JLabel modelLabel;
 
-        public HeaderPanel(
+    public HeaderPanel(
             ProjectService projectService, GitService gitService, SettingsService settingsService) {
         this(projectService, gitService, settingsService, null);
     }
@@ -89,7 +89,7 @@ public final class HeaderPanel extends JPanel {
         rightPanel.add(modelLabel);
         add(rightPanel, "right");
 
-                // Listeners
+        // Listeners
         if (turnEventBridge != null) {
             turnEventBridge.subscribe(
                     ProjectChangedEvent.class,

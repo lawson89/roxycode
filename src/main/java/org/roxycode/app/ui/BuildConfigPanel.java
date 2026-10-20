@@ -34,7 +34,7 @@ public final class BuildConfigPanel extends JPanel {
     private final JLabel statusLabel;
     private final Timer statusTimer;
 
-        public BuildConfigPanel(
+    public BuildConfigPanel(
             GenericBuildToolService buildToolService,
             SettingsService settingsService,
             ProjectService projectService) {
@@ -85,7 +85,7 @@ public final class BuildConfigPanel extends JPanel {
 
         loadConfig();
 
-                if (turnEventBridge != null) {
+        if (turnEventBridge != null) {
             turnEventBridge.subscribe(SettingsChangedEvent.class, event -> updateTextAreaTheme());
             turnEventBridge.subscribe(ProjectChangedEvent.class, event -> loadConfig());
         }

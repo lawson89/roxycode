@@ -104,10 +104,10 @@ public class JexlTool {
             Object result = jexlScript.execute(context);
             ExceptionUtils.checkInterrupted("JEXL execution cancelled");
 
-            if (WorkflowService.isTransitionResponse(result)) {
+            if (result instanceof WorkflowService.TransitionResult transitionResult) {
                 this.returnDirect = true;
-                fireEvent(new JexlExecutionEvent(script, result, true, null));
-                return (String) result;
+                fireEvent(new JexlExecutionEvent(script, transitionResult.markdown(), true, null));
+                return transitionResult.markdown();
             }
 
             fireEvent(new JexlExecutionEvent(script, result, true, null));

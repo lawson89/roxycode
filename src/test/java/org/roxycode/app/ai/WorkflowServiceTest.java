@@ -48,9 +48,13 @@ class WorkflowServiceTest {
                 new ImplementationPlan(
                         "T", "G", List.of(), List.of(), false, null, null, null, List.of()));
 
-        String response = service.routeToPhase("CODE", "Reason");
+        Object response = service.routeToPhase("CODE", "Reason");
         assertTrue(WorkflowService.isTransitionResponse(response));
-        assertTrue(response.contains("Transition Request"));
+        WorkflowService.TransitionResult transitionResult =
+                assertInstanceOf(WorkflowService.TransitionResult.class, response);
+        assertTrue(transitionResult.markdown().contains("PLAN SUMMARY:"));
+        assertTrue(transitionResult.markdown().contains("Transition Request"));
+        assertEquals(transitionResult.markdown(), transitionResult.toString());
         assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
 
         when(envService.getCurrentUser()).thenReturn("testuser");
@@ -81,10 +85,10 @@ class WorkflowServiceTest {
         service.setCurrentPlan(planWithAllDone);
 
         // Request PLAN from CODE (plan revision) - Requires HITL approval
-        String response = service.routeToPhase("PLAN", "Need architecture revision");
+        Object response = service.routeToPhase("PLAN", "Need architecture revision");
         assertTrue(WorkflowService.isTransitionResponse(response));
-        assertTrue(response.contains("Transition Request"));
-        assertFalse(response.contains("Autonomous transition"));
+        assertTrue(response.toString().contains("Transition Request"));
+        assertFalse(response.toString().contains("Autonomous transition"));
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
@@ -101,7 +105,7 @@ class WorkflowServiceTest {
     @Test
     void testReviewToPlanCompletesAndClearsPlanEvenWithIncompleteSteps() {
         setupCodePhase();
-        String reviewResponse = service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
+        Object reviewResponse = service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
         assertTrue(WorkflowService.isTransitionResponse(reviewResponse));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
@@ -118,7 +122,7 @@ class WorkflowServiceTest {
                         "user",
                         null,
                         List.of());
-                service.setCurrentPlan(planWithIncompleteStep);
+        service.setCurrentPlan(planWithIncompleteStep);
 
         List<ImplementationPlan> updates = new ArrayList<>();
         doAnswer(
@@ -133,7 +137,7 @@ class WorkflowServiceTest {
                 .publishEvent(any(Object.class));
 
         // Request PLAN from REVIEW - Requires HITL Approval
-        String planResponse = service.routeToPhase("PLAN", "Finalizing");
+        Object planResponse = service.routeToPhase("PLAN", "Finalizing");
         assertTrue(WorkflowService.isTransitionResponse(planResponse));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
@@ -152,11 +156,11 @@ class WorkflowServiceTest {
         setupCodePhase();
         int initialLogSize = service.getCurrentPlan().handoffLog().size();
 
-        // Request REVIEW - Autonomous transition returns structured JSON
-        String response = service.routeToPhase("REVIEW", "Checking quality");
+        // Request REVIEW - Autonomous transition returns TransitionResult
+        Object response = service.routeToPhase("REVIEW", "Checking quality");
         assertTrue(WorkflowService.isTransitionResponse(response));
         assertTrue(
-                response.contains("Autonomous transition"),
+                response.toString().contains("Autonomous transition"),
                 "Expected autonomous transition message but got: " + response);
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
@@ -168,9 +172,10 @@ class WorkflowServiceTest {
     void testExploreDecoupling() {
         setupCodePhase();
         // Transition to EXPLORE should fail now because it's decoupled
-        String result = service.routeToPhase("EXPLORE", "Jump");
+        Object result = service.routeToPhase("EXPLORE", "Jump");
         assertFalse(WorkflowService.isTransitionResponse(result));
-        assertTrue(result.contains("Error: Cannot jump from CODE to EXPLORE"));
+        assertInstanceOf(String.class, result);
+        assertTrue(result.toString().contains("Error: Cannot jump from CODE to EXPLORE"));
 
         service.resetWorkflow();
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
@@ -179,7 +184,7 @@ class WorkflowServiceTest {
     @Test
     void testReviewCompletionAndClear() {
         setupCodePhase();
-        String reviewResponse = service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
+        Object reviewResponse = service.routeToPhase("REVIEW", "Checking quality"); // Autonomous
         assertTrue(WorkflowService.isTransitionResponse(reviewResponse));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
@@ -195,7 +200,7 @@ class WorkflowServiceTest {
                         "user",
                         null,
                         List.of());
-                service.setCurrentPlan(plan);
+        service.setCurrentPlan(plan);
 
         List<ImplementationPlan> updates = new ArrayList<>();
         doAnswer(
@@ -210,7 +215,7 @@ class WorkflowServiceTest {
                 .publishEvent(any(Object.class));
 
         // Request PLAN from REVIEW - Requires HITL Approval
-        String planResponse = service.routeToPhase("PLAN", "Finalizing");
+        Object planResponse = service.routeToPhase("PLAN", "Finalizing");
         assertTrue(WorkflowService.isTransitionResponse(planResponse));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 

@@ -35,7 +35,7 @@ class HeaderPanelTest {
         return new GitService(ps);
     }
 
-        @Test
+    @Test
     void testHeaderPanelInstantiation() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);

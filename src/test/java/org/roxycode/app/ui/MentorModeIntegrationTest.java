@@ -20,7 +20,6 @@ import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.events.TurnEventBridge;
-import org.springframework.context.ApplicationEventPublisher;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
@@ -30,10 +29,11 @@ import org.roxycode.app.service.PromptService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.context.ApplicationEventPublisher;
 
 class MentorModeIntegrationTest {
 
-        private SettingsService settingsService;
+    private SettingsService settingsService;
     private ProjectService projectService;
     private WorkflowService workflowService;
     private PlanService planService;
@@ -60,7 +60,7 @@ class MentorModeIntegrationTest {
         EnvironmentService envService = mock(EnvironmentService.class);
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
         when(jexlServiceRegistry.getDocumentation(any())).thenReturn("");
-                planService = mock(PlanService.class);
+        planService = mock(PlanService.class);
         turnEventBridge = new TurnEventBridge(mock(ApplicationEventPublisher.class));
         RepoMapPackerService packerService = mock(RepoMapPackerService.class);
         ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
@@ -243,7 +243,7 @@ class MentorModeIntegrationTest {
         assertNotNull(sidebar, "MainFrame should contain a SidebarPanel");
         assertFalse(sidebar.isTaskWaitingApproval());
 
-                turnEventBridge.dispatch(
+        turnEventBridge.dispatch(
                 new TransitionRequestedEvent(
                         WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code"));
         SwingUtilities.invokeAndWait(() -> {});

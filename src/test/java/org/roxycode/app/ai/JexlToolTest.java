@@ -24,9 +24,8 @@ public class JexlToolTest {
             return "Hello, " + name;
         }
 
-        public String requestTransition() {
-            return """
-                    {"message":"Yielded","reason":"Done"}""";
+        public WorkflowService.TransitionResult requestTransition() {
+            return new WorkflowService.TransitionResult("Yielded: Done");
         }
 
         public void signalStarted() {
@@ -78,10 +77,7 @@ public class JexlToolTest {
                 });
 
         String response = tool.executeJexl("testService.requestTransition()");
-        assertEquals(
-                """
-                {"message":"Yielded","reason":"Done"}""",
-                response);
+        assertEquals("Yielded: Done", response);
         assertTrue(tool.isReturnDirect(), "Transition should mark tool as returnDirect");
         assertTrue(listenerNotified.get(), "Execution listener should be notified on transition");
     }

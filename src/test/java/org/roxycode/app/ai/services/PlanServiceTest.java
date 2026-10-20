@@ -35,10 +35,10 @@ class PlanServiceTest {
         service = new PlanService(workflowService);
     }
 
-        @Test
+    @Test
     void testSubmitPlanAndNotifyListeners() {
         AtomicInteger notifications = new AtomicInteger(0);
-                doAnswer(
+        doAnswer(
                         inv -> {
                             if (inv.getArgument(0) instanceof PlanUpdatedEvent) {
                                 notifications.incrementAndGet();

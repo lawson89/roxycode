@@ -22,12 +22,10 @@ public class HistoryPanelTest {
         HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, chatMemory, "test");
 
         // Verify listeners registered
-        verify(turnEventBridge)
-                .subscribe(eq(UserMessageEvent.class), eq("test:default"), any());
+        verify(turnEventBridge).subscribe(eq(UserMessageEvent.class), eq("test:default"), any());
         verify(turnEventBridge)
                 .subscribe(eq(AgentTurnCompleteEvent.class), eq("test:default"), any());
-        verify(turnEventBridge)
-                .subscribe(eq(ToolExecutionEvent.class), eq("test:default"), any());
+        verify(turnEventBridge).subscribe(eq(ToolExecutionEvent.class), eq("test:default"), any());
 
         // Verify layout
         boolean hasScrollPane = false;

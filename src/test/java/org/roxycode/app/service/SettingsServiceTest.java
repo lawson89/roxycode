@@ -47,6 +47,8 @@ class SettingsServiceTest {
         service.setSettingsPathOverride(tempDir.resolve("test_listener.toml"));
 
         service.saveSettings();
-        assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
+        assertTrue(
+                listenerCalled.get(),
+                "SettingsChangedEvent should be published when settings are saved");
     }
 }

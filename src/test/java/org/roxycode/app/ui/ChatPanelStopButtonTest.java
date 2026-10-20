@@ -102,7 +102,7 @@ public class ChatPanelStopButtonTest {
                 callStarted.await(5, TimeUnit.SECONDS),
                 "Background worker should start aiService.chat");
 
-                // Simulate an event queued before Stop is clicked
+        // Simulate an event queued before Stop is clicked
         turnEventBridge.dispatch(
                 new AutonomousTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop transition"));

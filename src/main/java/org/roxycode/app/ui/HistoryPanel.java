@@ -127,10 +127,9 @@ public final class HistoryPanel extends JPanel {
                         refresh();
                     }
                 });
-                String conversationId = sessionPrefix + DEFAULT_CONVERSATION_SUFFIX;
+        String conversationId = sessionPrefix + DEFAULT_CONVERSATION_SUFFIX;
         turnEventBridge.subscribe(UserMessageEvent.class, conversationId, event -> refresh());
-        turnEventBridge.subscribe(
-                AgentTurnCompleteEvent.class, conversationId, event -> refresh());
+        turnEventBridge.subscribe(AgentTurnCompleteEvent.class, conversationId, event -> refresh());
         turnEventBridge.subscribe(ToolExecutionEvent.class, conversationId, event -> refresh());
 
         refresh();

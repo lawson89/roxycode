@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -35,6 +37,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.context.ApplicationEventPublisher;
@@ -65,10 +68,24 @@ class AiServiceTest {
     private AiService aiService;
     private AppSettings settings;
 
+    @AgentService(
+            value = "transitionTestService",
+            phases = {"*"})
+    public static class TransitionTestService {
+        public WorkflowService.TransitionResult triggerTransition() {
+            return new WorkflowService.TransitionResult(
+                    """
+                    PLAN SUMMARY
+
+                    Transition Request""");
+        }
+    }
+
     @BeforeEach
     void setUp() {
         settings = new AppSettings();
         lenient().when(settingsService.getSettings()).thenReturn(settings);
+        lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
 
         when(chatClientBuilder.defaultAdvisors(
                         any(org.springframework.ai.chat.client.advisor.api.Advisor[].class)))
@@ -115,6 +132,8 @@ class AiServiceTest {
         assertEquals("FULL CODE SYSTEM PROMPT", capturedPrompt);
         verify(promptService).buildSystemPrompt(WorkflowPhase.CODE, null);
         verify(requestSpec).options(any());
+        verify(requestSpec)
+                .toolContext(argThat(ctx -> ctx.containsKey(AiService.TOOL_CONTEXT_JEXL_TOOL)));
     }
 
     @Test
@@ -154,6 +173,7 @@ class AiServiceTest {
         settings.setMaxAgentToolTurns(2);
 
         AtomicReference<JexlTool> capturedTool = new AtomicReference<>();
+        AtomicReference<Map<String, Object>> capturedToolContext = new AtomicReference<>();
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
@@ -161,6 +181,12 @@ class AiServiceTest {
                 .thenAnswer(
                         inv -> {
                             capturedTool.set(inv.getArgument(0));
+                            return requestSpec;
+                        });
+        when(requestSpec.toolContext(anyMap()))
+                .thenAnswer(
+                        inv -> {
+                            capturedToolContext.set(inv.getArgument(0));
                             return requestSpec;
                         });
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
@@ -173,7 +199,6 @@ class AiServiceTest {
         ToolCallingManager delegate = mock(ToolCallingManager.class);
         ToolCallingManager manager = aiService.createReturnDirectToolCallingManager(delegate);
 
-        Prompt prompt = new Prompt(List.of(new UserMessage("Hello")));
         AssistantMessage.ToolCall toolCall =
                 new AssistantMessage.ToolCall(
                         "call-1",
@@ -185,7 +210,7 @@ class AiServiceTest {
                 AssistantMessage.builder().content("").toolCalls(List.of(toolCall)).build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMessage)));
 
-        when(delegate.executeToolCalls(prompt, chatResponse))
+        when(delegate.executeToolCalls(any(Prompt.class), eq(chatResponse)))
                 .thenAnswer(
                         inv -> {
                             String out = capturedTool.get().executeJexl("1 + 1");
@@ -210,6 +235,12 @@ class AiServiceTest {
         when(responseSpec.content())
                 .thenAnswer(
                         inv -> {
+                            ToolCallingChatOptions options =
+                                    ToolCallingChatOptions.builder()
+                                            .toolContext(capturedToolContext.get())
+                                            .build();
+                            Prompt prompt = new Prompt(List.of(new UserMessage("Hello")), options);
+
                             ToolExecutionResult r1 = manager.executeToolCalls(prompt, chatResponse);
                             assertFalse(r1.returnDirect());
                             ToolExecutionResult r2 = manager.executeToolCalls(prompt, chatResponse);
@@ -231,7 +262,7 @@ class AiServiceTest {
 
         assertEquals("Autonomous execution stopped: Maximum tool turns (2) exceeded.", result);
         // Delegate is invoked on all 3 calls; JexlTool short-circuits on the 3rd call
-        verify(delegate, times(3)).executeToolCalls(prompt, chatResponse);
+        verify(delegate, times(3)).executeToolCalls(any(Prompt.class), eq(chatResponse));
         verify(eventPublisher, times(2)).publishEvent(any(AgentTurnEvent.class));
         verify(eventPublisher, times(2)).publishEvent(any(ToolExecutionEvent.class));
 
@@ -257,16 +288,17 @@ class AiServiceTest {
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(promptService.buildSystemPrompt(WorkflowPhase.PLAN, null)).thenReturn("PLAN PROMPT");
 
+        String expectedMarkdown =
+                """
+                PLAN SUMMARY
+
+                Transition Request""";
         when(requestSpec.call()).thenReturn(responseSpec);
-        when(responseSpec.content())
-                .thenReturn(
-                        """
-                        {"summary":"PLAN SUMMARY","message":"Transition Request","reason":"Ready"}
-                        """);
+        when(responseSpec.content()).thenReturn(expectedMarkdown);
 
         String result = aiService.chat("Create plan");
 
-        assertEquals("PLAN SUMMARY\n\nTransition Request", result);
+        assertEquals(expectedMarkdown, result);
     }
 
     @Test
@@ -274,49 +306,57 @@ class AiServiceTest {
         ToolCallingManager delegate = mock(ToolCallingManager.class);
         ToolCallingManager manager = aiService.createReturnDirectToolCallingManager(delegate);
 
-        Prompt prompt = mock(Prompt.class);
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        registry.register(new TransitionTestService());
+        JexlTool jexlTool = new JexlTool(registry, WorkflowPhase.PLAN);
+
+        ToolCallingChatOptions options =
+                ToolCallingChatOptions.builder()
+                        .toolContext(Map.of(AiService.TOOL_CONTEXT_JEXL_TOOL, jexlTool))
+                        .build();
+        Prompt prompt = new Prompt(List.of(new UserMessage("Transition")), options);
         ChatResponse chatResponse = mock(ChatResponse.class);
 
-        ToolResponseMessage transitionMsg =
-                ToolResponseMessage.builder()
-                        .responses(
-                                List.of(
-                                        new ToolResponseMessage.ToolResponse(
-                                                "1",
-                                                "executeJexl",
-                                                """
-                                                {"summary":"PLAN","message":"Transition Request","reason":"Ready"}""")))
-                        .build();
-        ToolExecutionResult transitionExecResult =
-                ToolExecutionResult.builder()
-                        .conversationHistory(List.of(transitionMsg))
-                        .returnDirect(false)
-                        .build();
-
-        when(delegate.executeToolCalls(prompt, chatResponse)).thenReturn(transitionExecResult);
+        when(delegate.executeToolCalls(prompt, chatResponse))
+                .thenAnswer(
+                        inv -> {
+                            String out =
+                                    jexlTool.executeJexl(
+                                            "transitionTestService.triggerTransition()");
+                            ToolResponseMessage transitionMsg =
+                                    ToolResponseMessage.builder()
+                                            .responses(
+                                                    List.of(
+                                                            new ToolResponseMessage.ToolResponse(
+                                                                    "1", "executeJexl", out)))
+                                            .build();
+                            return ToolExecutionResult.builder()
+                                    .conversationHistory(List.of(transitionMsg))
+                                    .returnDirect(false)
+                                    .build();
+                        });
 
         ToolExecutionResult result = manager.executeToolCalls(prompt, chatResponse);
         assertTrue(
                 result.returnDirect(),
                 "Transition tool response should set ToolExecutionResult.returnDirect() to true");
 
-        ToolResponseMessage normalMsg =
-                ToolResponseMessage.builder()
-                        .responses(
-                                List.of(
-                                        new ToolResponseMessage.ToolResponse(
-                                                "2",
-                                                "executeJexl",
-                                                """
-                                                {"result":"2"}""")))
-                        .build();
-        ToolExecutionResult normalExecResult =
-                ToolExecutionResult.builder()
-                        .conversationHistory(List.of(normalMsg))
-                        .returnDirect(false)
-                        .build();
-
-        when(delegate.executeToolCalls(prompt, chatResponse)).thenReturn(normalExecResult);
+        when(delegate.executeToolCalls(prompt, chatResponse))
+                .thenAnswer(
+                        inv -> {
+                            String out = jexlTool.executeJexl("1 + 1");
+                            ToolResponseMessage normalMsg =
+                                    ToolResponseMessage.builder()
+                                            .responses(
+                                                    List.of(
+                                                            new ToolResponseMessage.ToolResponse(
+                                                                    "2", "executeJexl", out)))
+                                            .build();
+                            return ToolExecutionResult.builder()
+                                    .conversationHistory(List.of(normalMsg))
+                                    .returnDirect(false)
+                                    .build();
+                        });
 
         ToolExecutionResult normalResult = manager.executeToolCalls(prompt, chatResponse);
         assertFalse(

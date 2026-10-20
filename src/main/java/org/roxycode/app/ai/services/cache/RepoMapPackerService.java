@@ -57,7 +57,7 @@ public class RepoMapPackerService {
         this.grepService = grepService;
         this.metaService = metaService;
 
-                this.excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
+        this.excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
     }
 
     @EventListener
