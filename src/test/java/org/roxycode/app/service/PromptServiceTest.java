@@ -8,15 +8,28 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.model.AppSettings;
 
+@ExtendWith(MockitoExtension.class)
 class PromptServiceTest {
+
+    @Mock private ProjectService projectService;
+    @Mock private SettingsService settingsService;
+    @Mock private WorkflowService workflowService;
+    @Mock private JexlServiceRegistry jexlServiceRegistry;
+    @Mock private GitService gitService;
+    @Mock private ProjectAnalysisService projectAnalysisService;
+    @Mock private RepoMapPackerService repoMapPackerService;
 
     private PromptService promptService;
 
@@ -24,12 +37,20 @@ class PromptServiceTest {
 
     @BeforeEach
     void setUp() {
-        promptService = new PromptService(null, null);
+        promptService =
+                new PromptService(
+                        projectService,
+                        settingsService,
+                        workflowService,
+                        jexlServiceRegistry,
+                        gitService,
+                        projectAnalysisService,
+                        repoMapPackerService);
     }
 
     @Test
     void testLoadCoreWorkflowPrompt() {
-        String prompt = promptService.loadCoreWorkflowPrompt();
+        String prompt = promptService.getStableContext();
         assertNotNull(prompt);
         assertTrue(prompt.contains("RoxyCode Workflow Protocol"));
     }
@@ -40,7 +61,7 @@ class PromptServiceTest {
      */
     @Test
     void testCoreWorkflowPromptReflectsRoxyCodePhasesAndServices() {
-        String prompt = promptService.loadCoreWorkflowPrompt();
+        String prompt = promptService.getStableContext();
         assertNotNull(prompt);
         assertTrue(prompt.contains("EXPLORE (Technical Mentor)"));
         assertTrue(prompt.contains("PLAN (Lead Architect)"));
@@ -80,7 +101,7 @@ class PromptServiceTest {
 
     @Test
     void testLoadReviewPrompt() {
-        String prompt = promptService.loadReviewPrompt();
+        String prompt = promptService.loadPhasePrompt(WorkflowPhase.REVIEW);
         assertNotNull(prompt);
         assertTrue(prompt.contains("REVIEW"));
         assertTrue(prompt.contains("PHASE"));
@@ -90,7 +111,7 @@ class PromptServiceTest {
 
     @Test
     void testLoadExplorePrompt() {
-        String prompt = promptService.loadExplorePrompt();
+        String prompt = promptService.loadPhasePrompt(WorkflowPhase.EXPLORE);
         assertNotNull(prompt);
         assertTrue(prompt.contains("EXPLORE phase"));
         assertTrue(prompt.contains("grepService"));
@@ -101,7 +122,7 @@ class PromptServiceTest {
 
     @Test
     void testLoadPlanPrompt() {
-        String prompt = promptService.loadPlanPrompt();
+        String prompt = promptService.loadPhasePrompt(WorkflowPhase.PLAN);
         assertNotNull(prompt);
         assertTrue(prompt.contains("ANALYST"));
         assertTrue(prompt.contains("PLANNING"));
@@ -116,7 +137,7 @@ class PromptServiceTest {
 
     @Test
     void testLoadCodePrompt() {
-        String prompt = promptService.loadCodePrompt();
+        String prompt = promptService.loadPhasePrompt(WorkflowPhase.CODE);
         assertNotNull(prompt);
         assertTrue(prompt.contains("CODER"));
         assertTrue(prompt.contains("ACTING"));
@@ -124,27 +145,20 @@ class PromptServiceTest {
 
     @Test
     void testLoadPhasePrompt() {
-        assertEquals(
-                promptService.loadExplorePrompt(),
-                promptService.loadPhasePrompt(WorkflowPhase.EXPLORE));
-        assertEquals(
-                promptService.loadPlanPrompt(), promptService.loadPhasePrompt(WorkflowPhase.PLAN));
-        assertEquals(
-                promptService.loadCodePrompt(), promptService.loadPhasePrompt(WorkflowPhase.CODE));
-        assertEquals(
-                promptService.loadReviewPrompt(),
-                promptService.loadPhasePrompt(WorkflowPhase.REVIEW));
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            String prompt = promptService.loadPhasePrompt(phase);
+            assertNotNull(prompt);
+            assertFalse(prompt.isBlank());
+        }
     }
 
     @Test
     void testLoadProjectContext() throws IOException {
-        ProjectService projectService = mock(ProjectService.class);
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
 
-        PromptService serviceWithProject = new PromptService(projectService, null);
         // Case 1: no .roxycode/context directory
-        assertEquals("", serviceWithProject.loadProjectContext());
+        assertEquals("", promptService.loadProjectContext());
 
         // Case 2: .roxycode/context with markdown files
         Path contextDir = tempDir.resolve(".roxycode/context");
@@ -153,7 +167,7 @@ class PromptServiceTest {
         Files.writeString(contextDir.resolve("a_rules.md"), "Project rules");
         Files.writeString(contextDir.resolve("ignore.txt"), "Ignore me");
 
-        String context = serviceWithProject.loadProjectContext();
+        String context = promptService.loadProjectContext();
         assertTrue(context.contains("## Project Context: a_rules.md"));
         assertTrue(context.contains("Project rules"));
         assertTrue(context.contains("## Project Context: b_architecture.md"));
@@ -168,13 +182,11 @@ class PromptServiceTest {
 
     @Test
     void testGenerateExploreSystemPrompt() {
-        SettingsService settingsService = mock(SettingsService.class);
-        org.roxycode.app.model.AppSettings settings = new org.roxycode.app.model.AppSettings();
+        AppSettings settings = new AppSettings();
         settings.setMaxAgentToolTurns(42);
         when(settingsService.getSettings()).thenReturn(settings);
 
-        PromptService serviceWithSettings = new PromptService(null, settingsService);
-        String prompt = serviceWithSettings.generateExploreSystemPrompt();
+        String prompt = promptService.generateExploreSystemPrompt();
 
         assertNotNull(prompt);
         assertTrue(prompt.contains("42"));
@@ -183,46 +195,25 @@ class PromptServiceTest {
 
     @Test
     void testGetStableSessionAndSystemPrompt() throws IOException {
-        ProjectService projectService = mock(ProjectService.class);
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         Path contextDir = tempDir.resolve(".roxycode/context");
         Files.createDirectories(contextDir);
         Files.writeString(contextDir.resolve("rules.md"), "CUSTOM RULES");
 
-        SettingsService settingsService = mock(SettingsService.class);
-        WorkflowService workflowService = mock(WorkflowService.class);
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
-
-        JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
-
-        GitService gitService = mock(GitService.class);
         when(gitService.getStatus()).thenReturn("M file.java");
-
-        ProjectAnalysisService projectAnalysisService = mock(ProjectAnalysisService.class);
         when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
-
-        RepoMapPackerService repoMapPackerService = mock(RepoMapPackerService.class);
         when(repoMapPackerService.generateRepoMap())
                 .thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
 
-        PromptService fullPromptService =
-                new PromptService(
-                        projectService,
-                        settingsService,
-                        workflowService,
-                        jexlServiceRegistry,
-                        gitService,
-                        projectAnalysisService,
-                        repoMapPackerService);
-
-        String stable = fullPromptService.getStableContext();
+        String stable = promptService.getStableContext();
         assertTrue(stable.contains("RoxyCode Workflow Protocol"));
         assertTrue(stable.contains("## JEXL CONTEXT"));
         assertTrue(stable.contains("CUSTOM RULES"));
 
-        String session = fullPromptService.getSessionContext();
+        String session = promptService.getSessionContext();
         assertTrue(session.contains("DOMINANT LANGUAGE: Java"));
         assertTrue(session.contains("CURRENT PHASE: CODE"));
         assertTrue(session.contains("Senior Developer"));
@@ -230,7 +221,7 @@ class PromptServiceTest {
         assertTrue(session.contains("M file.java"));
 
         String fullSystemPrompt =
-                fullPromptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS");
+                promptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS");
         assertTrue(fullSystemPrompt.contains(stable));
         assertTrue(fullSystemPrompt.contains("REPO MAP CONTENT"));
         assertTrue(fullSystemPrompt.contains(session));

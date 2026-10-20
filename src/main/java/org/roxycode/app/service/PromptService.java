@@ -13,7 +13,6 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -45,15 +44,6 @@ public class PromptService {
     private final ProjectAnalysisService projectAnalysisService;
     private final RepoMapPackerService repoMapPackerService;
 
-    public PromptService() {
-        this(null, null, null, null, null, null, null);
-    }
-
-    public PromptService(ProjectService projectService, SettingsService settingsService) {
-        this(projectService, settingsService, null, null, null, null, null);
-    }
-
-    @Autowired
     public PromptService(
             ProjectService projectService,
             SettingsService settingsService,
@@ -72,7 +62,7 @@ public class PromptService {
     }
 
     public String getStableContext() {
-        StringBuilder sb = new StringBuilder(loadCoreWorkflowPrompt());
+        StringBuilder sb = new StringBuilder(readClasspathResource(CLASSPATH_PROMPT));
         sb.append(loadAllPrompts());
         sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
         sb.append(loadAllDocs());
@@ -81,25 +71,16 @@ public class PromptService {
     }
 
     public String getSessionContext() {
-        WorkflowPhase phase =
-                workflowService != null ? workflowService.getCurrentPhase() : WorkflowPhase.EXPLORE;
-        return getSessionContext(phase);
+        return getSessionContext(workflowService.getCurrentPhase());
     }
 
     public String getSessionContext(WorkflowPhase phase) {
-        WorkflowPhase currentPhase =
-                phase != null
-                        ? phase
-                        : (workflowService != null
-                                ? workflowService.getCurrentPhase()
-                                : WorkflowPhase.EXPLORE);
+        WorkflowPhase currentPhase = phase != null ? phase : workflowService.getCurrentPhase();
 
         StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
-        if (projectAnalysisService != null) {
-            sb.append("DOMINANT LANGUAGE: ")
-                    .append(projectAnalysisService.getDominantLanguage())
-                    .append("\n");
-        }
+        sb.append("DOMINANT LANGUAGE: ")
+                .append(projectAnalysisService.getDominantLanguage())
+                .append("\n");
         sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
 
         String persona =
@@ -107,27 +88,18 @@ public class PromptService {
                         "You are the %s. %s",
                         currentPhase.getPersonaTitle(), currentPhase.getDescription());
         sb.append(persona).append(NEWLINE_DOUBLE);
-        if (jexlServiceRegistry != null) {
-            sb.append("You have access to the following JEXL tools:\n")
-                    .append(jexlServiceRegistry.getDocumentation(currentPhase));
-        }
+        sb.append("You have access to the following JEXL tools:\n")
+                .append(jexlServiceRegistry.getDocumentation(currentPhase));
 
-        if (gitService != null) {
-            String gitStatus = gitService.getStatus();
-            if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
-                sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
-            }
+        String gitStatus = gitService.getStatus();
+        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
+            sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
         }
         return sb.toString();
     }
 
     public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
-        WorkflowPhase currentPhase =
-                phase != null
-                        ? phase
-                        : (workflowService != null
-                                ? workflowService.getCurrentPhase()
-                                : WorkflowPhase.EXPLORE);
+        WorkflowPhase currentPhase = phase != null ? phase : workflowService.getCurrentPhase();
 
         StringBuilder systemPrompt = new StringBuilder(getStableContext());
 
@@ -137,11 +109,9 @@ public class PromptService {
                         : loadPhasePrompt(currentPhase);
         systemPrompt.append(NEWLINE_DOUBLE).append(phasePrompt);
 
-        if (repoMapPackerService != null) {
-            EditorResult repoMap = repoMapPackerService.generateRepoMap();
-            if (repoMap != null && repoMap.success()) {
-                systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
-            }
+        EditorResult repoMap = repoMapPackerService.generateRepoMap();
+        if (repoMap != null && repoMap.success()) {
+            systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
         }
 
         systemPrompt.append(getSessionContext(currentPhase));
@@ -167,28 +137,8 @@ public class PromptService {
         return readClasspathResource(path);
     }
 
-    public String loadCoreWorkflowPrompt() {
-        return readClasspathResource(CLASSPATH_PROMPT);
-    }
-
     public String loadJexlContext() {
         return readClasspathResource(JEXL_DOC_PATH);
-    }
-
-    public String loadExplorePrompt() {
-        return loadPhasePrompt(WorkflowPhase.EXPLORE);
-    }
-
-    public String loadReviewPrompt() {
-        return loadPhasePrompt(WorkflowPhase.REVIEW);
-    }
-
-    public String loadPlanPrompt() {
-        return loadPhasePrompt(WorkflowPhase.PLAN);
-    }
-
-    public String loadCodePrompt() {
-        return loadPhasePrompt(WorkflowPhase.CODE);
     }
 
     public String loadAllPrompts() {
@@ -206,7 +156,7 @@ public class PromptService {
     }
 
     public String loadProjectContext() {
-        if (projectService == null || !projectService.hasActiveProject()) {
+        if (!projectService.hasActiveProject()) {
             return "";
         }
         Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
@@ -246,7 +196,7 @@ public class PromptService {
     }
 
     public java.util.List<String> listContextFiles() {
-        if (projectService == null || !projectService.hasActiveProject()) {
+        if (!projectService.hasActiveProject()) {
             return java.util.Collections.emptyList();
         }
         Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
@@ -266,7 +216,7 @@ public class PromptService {
     }
 
     public String readContextFile(String filename) {
-        if (projectService == null || !projectService.hasActiveProject()) {
+        if (!projectService.hasActiveProject()) {
             return "";
         }
         Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
@@ -281,7 +231,7 @@ public class PromptService {
     }
 
     public void saveContextFile(String filename, String content) {
-        if (projectService == null || !projectService.hasActiveProject()) {
+        if (!projectService.hasActiveProject()) {
             throw new IllegalStateException("No active project");
         }
         Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
@@ -295,7 +245,7 @@ public class PromptService {
     }
 
     public void deleteContextFile(String filename) {
-        if (projectService == null || !projectService.hasActiveProject()) {
+        if (!projectService.hasActiveProject()) {
             return;
         }
         Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
@@ -308,13 +258,10 @@ public class PromptService {
     }
 
     public String generateExploreSystemPrompt() {
-        String prompt = loadExplorePrompt();
-        if (settingsService != null) {
-            return prompt.replace(
-                    "${maxTurns}",
-                    String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
-        }
-        return prompt;
+        String prompt = loadPhasePrompt(WorkflowPhase.EXPLORE);
+        return prompt.replace(
+                "${maxTurns}",
+                String.valueOf(settingsService.getSettings().getMaxAgentToolTurns()));
     }
 
     private String loadMarkdownFromClasspath(String directory, String... excludeFiles) {
