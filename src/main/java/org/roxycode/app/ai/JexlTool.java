@@ -1,7 +1,6 @@
 package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,7 +10,6 @@ import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
-import org.apache.commons.jexl3.introspection.JexlPermissions;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
@@ -29,31 +27,6 @@ public class JexlTool {
     private static final String MAX_TURNS_EXCEEDED_PREFIX =
             "Autonomous execution stopped: Maximum tool turns (";
     private static final ObjectMapper MAPPER = AiConfig.SHARED_OBJECT_MAPPER;
-    private static final JexlPermissions PERMISSIONS =
-            new JexlPermissions.Delegate(JexlPermissions.UNRESTRICTED) {
-                @Override
-                public boolean allow(Method method) {
-                    if (method == null) {
-                        return false;
-                    }
-                    return allow(method.getDeclaringClass(), method);
-                }
-
-                @Override
-                public boolean allow(Class<?> clazz, Method method) {
-                    if (clazz == null || method == null) {
-                        return false;
-                    }
-                    if (method.getDeclaringClass() == Object.class) {
-                        return super.allow(clazz, method);
-                    }
-                    if (isAgentServiceClass(clazz)
-                            || isAgentServiceClass(method.getDeclaringClass())) {
-                        return hasAgentDoc(method) && super.allow(clazz, method);
-                    }
-                    return super.allow(clazz, method);
-                }
-            };
 
     private final JexlEngine jexl;
     private final JexlServiceRegistry registry;
@@ -70,7 +43,7 @@ public class JexlTool {
     public JexlTool(JexlServiceRegistry registry, WorkflowPhase phase, int maxTurns) {
         this.jexl =
                 new JexlBuilder()
-                        .permissions(PERMISSIONS)
+                        .permissions(AgentJexlPermissions.INSTANCE)
                         .strict(true)
                         .silent(false)
                         .safe(false)
@@ -78,35 +51,6 @@ public class JexlTool {
         this.registry = registry;
         this.phase = phase;
         this.maxTurns = maxTurns;
-    }
-
-    private static boolean isAgentServiceClass(Class<?> clazz) {
-        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
-            if (c.isAnnotationPresent(AgentService.class)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean hasAgentDoc(Method method) {
-        if (method.isAnnotationPresent(AgentDoc.class)) {
-            return true;
-        }
-        for (Class<?> c = method.getDeclaringClass().getSuperclass();
-                c != null && c != Object.class;
-                c = c.getSuperclass()) {
-            try {
-                Method superMethod =
-                        c.getDeclaredMethod(method.getName(), method.getParameterTypes());
-                if (superMethod.isAnnotationPresent(AgentDoc.class)) {
-                    return true;
-                }
-            } catch (NoSuchMethodException ignored) {
-                // continue walking hierarchy
-            }
-        }
-        return false;
     }
 
     public void addListener(JexlExecutionListener listener) {
