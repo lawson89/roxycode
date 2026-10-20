@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.Strings;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
@@ -64,38 +63,33 @@ public class PlanService {
 
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(plan.technicalSteps());
 
+        boolean hasCompile = false;
+        boolean hasTests = false;
+        boolean hasReview = false;
+        for (ImplementationPlan.TechStep s : steps) {
+            String desc = s.description().toLowerCase(Locale.ROOT);
+            if (desc.contains("compile")) {
+                hasCompile = true;
+            }
+            if (desc.contains("unit test") || desc.contains("tests pass")) {
+                hasTests = true;
+            }
+            if (desc.contains("code review")) {
+                hasReview = true;
+            }
+        }
+
         // 1. Auto-append mandatory compile step
-        boolean hasCompile =
-                steps.stream()
-                        .anyMatch(
-                                s -> s.description().toLowerCase(Locale.ROOT).contains("compile"));
         if (!hasCompile) {
             steps.add(new ImplementationPlan.TechStep("Code compiles successfully", false));
         }
 
         // 2. Auto-append mandatory test step
-        boolean hasTests =
-                steps.stream()
-                        .anyMatch(
-                                s ->
-                                        s.description()
-                                                        .toLowerCase(Locale.ROOT)
-                                                        .contains("unit test")
-                                                || s.description()
-                                                        .toLowerCase(Locale.ROOT)
-                                                        .contains("tests pass"));
         if (!hasTests) {
             steps.add(new ImplementationPlan.TechStep("Unit tests pass", false));
         }
 
         // 3. Auto-append mandatory code review step
-        boolean hasReview =
-                steps.stream()
-                        .anyMatch(
-                                s ->
-                                        s.description()
-                                                .toLowerCase(Locale.ROOT)
-                                                .contains("code review"));
         if (!hasReview) {
             steps.add(new ImplementationPlan.TechStep("Automated code review passes", false));
         }
@@ -135,10 +129,7 @@ public class PlanService {
         List<String> rawRequirements = extractStringList(requirements);
         List<String> rawTechSteps = extractStringList(technicalSteps);
 
-        List<ImplementationPlan.TechStep> steps =
-                rawTechSteps.stream()
-                        .map(s -> new ImplementationPlan.TechStep(s, false))
-                        .collect(Collectors.toList());
+        List<ImplementationPlan.TechStep> steps = toTechSteps(rawTechSteps);
 
         return submitPlan(
                 new ImplementationPlan(
@@ -164,14 +155,19 @@ public class PlanService {
         List<String> requirements = extractStringList(planMap.get("requirements"));
         List<String> rawTechSteps = extractStringList(planMap.get("technicalSteps"));
 
-        List<ImplementationPlan.TechStep> steps =
-                rawTechSteps.stream()
-                        .map(s -> new ImplementationPlan.TechStep(s, false))
-                        .collect(Collectors.toList());
+        List<ImplementationPlan.TechStep> steps = toTechSteps(rawTechSteps);
 
         return submitPlan(
                 new ImplementationPlan(
                         title, goal, requirements, steps, false, null, null, null, null));
+    }
+
+    private List<ImplementationPlan.TechStep> toTechSteps(List<String> rawTechSteps) {
+        List<ImplementationPlan.TechStep> steps = new ArrayList<>(rawTechSteps.size());
+        for (String s : rawTechSteps) {
+            steps.add(new ImplementationPlan.TechStep(s, false));
+        }
+        return steps;
     }
 
     /** Approves the current plan. Internal lifecycle method; cannot be invoked from JEXL. */

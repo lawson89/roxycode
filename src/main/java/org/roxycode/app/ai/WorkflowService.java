@@ -125,13 +125,14 @@ public class WorkflowService {
 
         String summary = formatPlanSummary(planManager.getCurrentPlan());
         String message =
-                "**Transition Request ("
-                        + currentPhase.getDisplayName()
-                        + " → "
-                        + nextPhase.getDisplayName()
-                        + ")**\n\n"
-                        + "**Reason:** "
-                        + reason;
+                """
+                **Transition Request (%s → %s)**
+
+                **Reason:** %s"""
+                        .formatted(
+                                currentPhase.getDisplayName(),
+                                nextPhase.getDisplayName(),
+                                reason);
 
         // Yield execution turn immediately for user approval
         String json =
@@ -267,8 +268,17 @@ public class WorkflowService {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("PLAN SUMMARY:\n\n### ").append(plan.title().trim()).append("\n");
-        sb.append("**Goal:** ").append(plan.goal().replaceAll("\\s+", " ").trim()).append("\n\n");
+        sb.append(
+                """
+                PLAN SUMMARY:
+
+                ### %s
+                **Goal:** %s
+
+                """
+                        .formatted(
+                                plan.title().trim(),
+                                plan.goal().replaceAll("\\s+", " ").trim()));
 
         if (!plan.requirements().isEmpty()) {
             sb.append("#### Requirements\n");

@@ -2,7 +2,6 @@ package org.roxycode.app.ai;
 
 import java.lang.reflect.*;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Generates LLM-friendly documentation for JEXL-exposed services. Uses pseudo-TypeScript syntax for
@@ -133,12 +132,15 @@ public class LLMDocGenerator {
     private void generateTypeSchema(Class<?> type, StringBuilder sb, Set<Class<?>> extraTypes) {
         if (type.isEnum()) {
             sb.append("enum ").append(type.getSimpleName()).append(" {\n");
-            sb.append("    ")
-                    .append(
-                            Arrays.stream(type.getEnumConstants())
-                                    .map(Object::toString)
-                                    .collect(Collectors.joining(", ")))
-                    .append("\n}\n");
+            sb.append("    ");
+            Object[] constants = type.getEnumConstants();
+            for (int i = 0; i < constants.length; i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(constants[i]);
+            }
+            sb.append("\n}\n");
         } else if (type.isRecord()) {
             sb.append("interface ").append(type.getSimpleName()).append(" {\n");
             for (RecordComponent comp : type.getRecordComponents()) {

@@ -41,11 +41,14 @@ public class ProjectAnalysisService {
             return "Unknown";
         }
 
-        String dominantExt =
-                extensionCounts.entrySet().stream()
-                        .max(Map.Entry.comparingByValue())
-                        .map(Map.Entry::getKey)
-                        .orElse("");
+        String dominantExt = "";
+        int maxCount = -1;
+        for (var entry : extensionCounts.entrySet()) {
+            if (entry.getValue() > maxCount) {
+                maxCount = entry.getValue();
+                dominantExt = entry.getKey();
+            }
+        }
 
         return switch (dominantExt) {
             case ".java" -> "Java";

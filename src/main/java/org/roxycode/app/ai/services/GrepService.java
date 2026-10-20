@@ -146,7 +146,7 @@ public class GrepService {
             }
             String output = result.output();
             if (output != null && !output.isEmpty()) {
-                for (String line : output.lines().toList()) {
+                for (String line : output.split("\\R")) {
                     if (!line.isBlank()) {
                         String normalized = line.replace((char) 92, '/');
                         if (normalized.startsWith("./")) {

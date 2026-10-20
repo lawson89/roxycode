@@ -128,18 +128,22 @@ public final class PlanPanel extends JPanel {
             return "";
         }
         StringBuilder md = new StringBuilder();
-        md.append("# Implementation Plan: ")
-                .append(plan.title() != null ? plan.title() : "")
-                .append("\n\n");
-        md.append("**Goal:** ").append(plan.goal() != null ? plan.goal() : "").append("\n\n");
+        md.append(
+                """
+                # Implementation Plan: %s
 
-        md.append("## Requirements\n");
+                **Goal:** %s
+
+                ## Requirements
+                """
+                        .formatted(
+                                plan.title() != null ? plan.title() : "",
+                                plan.goal() != null ? plan.goal() : ""));
+
         for (String req : plan.requirements()) {
             md.append("- ").append(req).append("\n");
         }
-        md.append("\n");
-
-        md.append("## Technical Steps\n");
+        md.append("\n## Technical Steps\n");
         int index = 0;
         for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
             md.append(step.completed() ? "- [x] " : "- [ ] ")
@@ -151,9 +155,13 @@ public final class PlanPanel extends JPanel {
         }
 
         if (plan.handoffLog() != null && !plan.handoffLog().isEmpty()) {
-            md.append("\n## Handoff Log\n");
-            md.append("| Timestamp | User | Message |\n");
-            md.append("| :--- | :--- | :--- |\n");
+            md.append(
+                    """
+
+                    ## Handoff Log
+                    | Timestamp | User | Message |
+                    | :--- | :--- | :--- |
+                    """);
             for (ImplementationPlan.LogEntry entry : plan.handoffLog()) {
                 String ts = entry.timestamp() != null ? entry.timestamp() : "";
                 final int timestampLength = 19;
@@ -181,100 +189,106 @@ public final class PlanPanel extends JPanel {
     }
 
     static String buildPlanHtml(ImplementationPlan plan) {
-        StringBuilder html = new StringBuilder("<html><body>");
-
         if (plan == null) {
-            html.append("<h3>No implementation plan submitted yet.</h3>");
-            html.append("<p>The AI will submit a plan as it progresses through the project.</p>");
-        } else {
-            html.append("<h2 class='spec-technical-header'>Implementation Plan</h2>");
-
-            html.append("<b>Title:</b> ")
-                    .append(SwingHtmlUtils.escapeHtml(plan.title()))
-                    .append("<br>");
-            html.append("<b>Goal:</b> ")
-                    .append(SwingHtmlUtils.escapeHtml(plan.goal()))
-                    .append("<br>");
-
-            html.append("<h3>Requirements:</h3><ul>");
-            for (String req : plan.requirements()) {
-                html.append("<li>").append(SwingHtmlUtils.escapeHtml(req)).append("</li>");
-            }
-            html.append("</ul>");
-
-            html.append(
-                    "<h3>Technical Steps:</h3><table width='100%' border='0' cellpadding='4' cellspacing='0'>");
-            int index = 0;
-            for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                String checkbox =
-                        step.completed()
-                                ? "<font color='#28a745'><b>[x]</b></font>"
-                                : "<font color='#888888'>[&nbsp;]</font>";
-                String textStyle =
-                        step.completed()
-                                ? "style='text-decoration: line-through; color: #888888;'"
-                                : "";
-
-                html.append("<tr>");
-                html.append(
-                                "<td valign='top' nowrap='nowrap' style='font-family: monospace; color: #888888;'>")
-                        .append(index)
-                        .append(".</td>");
-                html.append("<td valign='top' nowrap='nowrap' style='font-family: monospace;'>")
-                        .append(checkbox)
-                        .append("</td>");
-                html.append("<td width='100%' ")
-                        .append(textStyle)
-                        .append(">")
-                        .append(SwingHtmlUtils.escapeHtml(step.description()))
-                        .append("</td>");
-                html.append("</tr>");
-                index++;
-            }
-            html.append("</table>");
-
-            html.append(renderLogTable("Handoff Log", plan.handoffLog()));
+            return """
+                    <html><body>
+                    <h3>No implementation plan submitted yet.</h3>
+                    <p>The AI will submit a plan as it progresses through the project.</p>
+                    </body></html>
+                    """;
         }
 
-        html.append("</body></html>");
-        return html.toString();
+        StringBuilder reqItems = new StringBuilder();
+        for (String req : plan.requirements()) {
+            reqItems.append("<li>").append(SwingHtmlUtils.escapeHtml(req)).append("</li>");
+        }
+
+        StringBuilder stepRows = new StringBuilder();
+        int index = 0;
+        for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
+            String checkbox =
+                    step.completed()
+                            ? "<font color='#28a745'><b>[x]</b></font>"
+                            : "<font color='#888888'>[&nbsp;]</font>";
+            String textStyle =
+                    step.completed()
+                            ? "style='text-decoration: line-through; color: #888888;'"
+                            : "";
+
+            stepRows.append(
+                    """
+                    <tr>
+                        <td valign='top' nowrap='nowrap' style='font-family: monospace; color: #888888;'>%d.</td>
+                        <td valign='top' nowrap='nowrap' style='font-family: monospace;'>%s</td>
+                        <td width='100%%' %s>%s</td>
+                    </tr>
+                    """
+                            .formatted(
+                                    index,
+                                    checkbox,
+                                    textStyle,
+                                    SwingHtmlUtils.escapeHtml(step.description())));
+            index++;
+        }
+
+        return """
+                <html><body>
+                <h2 class='spec-technical-header'>Implementation Plan</h2>
+                <b>Title:</b> %s<br>
+                <b>Goal:</b> %s<br>
+                <h3>Requirements:</h3>
+                <ul>%s</ul>
+                <h3>Technical Steps:</h3>
+                <table width='100%%' border='0' cellpadding='4' cellspacing='0'>
+                %s
+                </table>
+                %s
+                </body></html>
+                """
+                .formatted(
+                        SwingHtmlUtils.escapeHtml(plan.title()),
+                        SwingHtmlUtils.escapeHtml(plan.goal()),
+                        reqItems,
+                        stepRows,
+                        renderLogTable("Handoff Log", plan.handoffLog()));
     }
 
     private static String renderLogTable(
             String title, java.util.List<ImplementationPlan.LogEntry> logs) {
         if (logs == null || logs.isEmpty()) return "";
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("<h3>").append(title).append(":</h3>");
-        sb.append("<table width='100%' border='0' cellpadding='2' cellspacing='0'>");
-        sb.append("<tr bgcolor='#2d2d2d'>");
-        sb.append(
-                "<td width='25%' align='left'><b><font size='2' color='#888888'>Timestamp</font></b></td>");
-        sb.append(
-                "<td width='15%' align='left'><b><font size='2' color='#888888'>User</font></b></td>");
-        sb.append(
-                "<td width='60%' align='left'><b><font size='2' color='#888888'>Message</font></b></td>");
-        sb.append("</tr>");
-
+        StringBuilder rows = new StringBuilder();
         for (ImplementationPlan.LogEntry entry : logs) {
             String ts = entry.timestamp();
             final int timestampLength = 19;
             if (ts.length() > timestampLength)
                 ts = ts.substring(0, timestampLength).replace('T', ' ');
 
-            sb.append("<tr>");
-            sb.append("<td valign='top'><font size='2' color='#888888'>")
-                    .append(SwingHtmlUtils.escapeHtml(ts))
-                    .append("</font></td>");
-            sb.append("<td valign='top'><font size='2' color='#569cd6'>")
-                    .append(SwingHtmlUtils.escapeHtml(entry.user()))
-                    .append("</font></td>");
-            sb.append("<td valign='top'><font size='3'>")
-                    .append(SwingHtmlUtils.escapeHtml(entry.message()))
-                    .append("</font></td>");
-            sb.append("</tr>");
+            rows.append(
+                    """
+                    <tr>
+                        <td valign='top'><font size='2' color='#888888'>%s</font></td>
+                        <td valign='top'><font size='2' color='#569cd6'>%s</font></td>
+                        <td valign='top'><font size='3'>%s</font></td>
+                    </tr>
+                    """
+                            .formatted(
+                                    SwingHtmlUtils.escapeHtml(ts),
+                                    SwingHtmlUtils.escapeHtml(entry.user()),
+                                    SwingHtmlUtils.escapeHtml(entry.message())));
         }
-        sb.append("</table>");
-        return sb.toString();
+
+        return """
+                <h3>%s:</h3>
+                <table width='100%%' border='0' cellpadding='2' cellspacing='0'>
+                    <tr bgcolor='#2d2d2d'>
+                        <td width='25%%' align='left'><b><font size='2' color='#888888'>Timestamp</font></b></td>
+                        <td width='15%%' align='left'><b><font size='2' color='#888888'>User</font></b></td>
+                        <td width='60%%' align='left'><b><font size='2' color='#888888'>Message</font></b></td>
+                    </tr>
+                %s
+                </table>
+                """
+                .formatted(title, rows);
     }
 }

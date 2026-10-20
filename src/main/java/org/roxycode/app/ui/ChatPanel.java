@@ -287,10 +287,12 @@ public final class ChatPanel extends JPanel {
         if (isTaskMode && planService != null) {
             ImplementationPlan plan = planService.getCurrentPlan();
             if (plan != null && !plan.technicalSteps().isEmpty()) {
-                long completed =
-                        plan.technicalSteps().stream()
-                                .filter(ImplementationPlan.TechStep::completed)
-                                .count();
+                int completed = 0;
+                for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
+                    if (step.completed()) {
+                        completed++;
+                    }
+                }
                 int total = plan.technicalSteps().size();
                 sb.append(" | Plan: ").append(completed).append("/").append(total).append(" steps");
             }

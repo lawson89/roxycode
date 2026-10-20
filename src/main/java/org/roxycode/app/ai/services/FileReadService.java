@@ -1,13 +1,13 @@
 package org.roxycode.app.ai.services;
 
 import java.nio.channels.ClosedByInterruptException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CancellationException;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.YieldTurnException;
@@ -80,8 +80,12 @@ public class FileReadService {
         if (!Files.isDirectory(path)) {
             return Collections.singletonList("Error: Path is not a directory or does not exist.");
         }
-        try (Stream<Path> stream = Files.list(path)) {
-            return stream.map(p -> p.getFileName().toString()).collect(Collectors.toList());
+        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(path)) {
+            List<String> entries = new ArrayList<>();
+            for (Path entry : dirStream) {
+                entries.add(entry.getFileName().toString());
+            }
+            return entries;
         } catch (Exception e) {
             rethrowIfCancelled(e);
             log.error("Failed to list directory {}: {}", relativePath, e.getMessage(), e);

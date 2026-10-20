@@ -88,12 +88,13 @@ public class RepoMapPackerService {
         }
 
         Path root = projectService.getCurrentProjectRoot();
-        List<String> files = grepService.listFiles(null);
-        files =
-                files.stream()
-                        .filter(f -> excludePatterns.stream().noneMatch(p -> f.startsWith(p)))
-                        .filter(f -> !isBinaryFile(root.resolve(f)))
-                        .toList();
+        List<String> rawFiles = grepService.listFiles(null);
+        List<String> files = new ArrayList<>();
+        for (String f : rawFiles) {
+            if (!isExcluded(f) && !isBinaryFile(root.resolve(f))) {
+                files.add(f);
+            }
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("# Repo Map Snapshot\n\n");
@@ -157,7 +158,7 @@ public class RepoMapPackerService {
             List<Tag> tags = new ArrayList<>();
             String output = result.output();
             if (output != null && !output.isEmpty()) {
-                for (String line : output.lines().toList()) {
+                for (String line : output.split("\\R")) {
                     if (line.isBlank()) {
                         continue;
                     }
@@ -194,6 +195,15 @@ public class RepoMapPackerService {
             log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
             return null;
         }
+    }
+
+    private boolean isExcluded(String filePath) {
+        for (String pattern : excludePatterns) {
+            if (filePath.startsWith(pattern)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isBinaryFile(Path path) {
