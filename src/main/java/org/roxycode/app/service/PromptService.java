@@ -11,7 +11,6 @@ import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
-import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,7 +72,6 @@ public class PromptService {
     }
 
     public String getStableContext() {
-        ExceptionUtils.checkInterrupted("Prompt building cancelled");
         StringBuilder sb = new StringBuilder(loadCoreWorkflowPrompt());
         sb.append(loadAllPrompts());
         sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
@@ -89,87 +87,73 @@ public class PromptService {
     }
 
     public String getSessionContext(WorkflowPhase phase) {
-        ExceptionUtils.checkInterrupted("Session context building cancelled");
-        try {
-            WorkflowPhase currentPhase =
-                    phase != null
-                            ? phase
-                            : (workflowService != null
-                                    ? workflowService.getCurrentPhase()
-                                    : WorkflowPhase.EXPLORE);
+        WorkflowPhase currentPhase =
+                phase != null
+                        ? phase
+                        : (workflowService != null
+                                ? workflowService.getCurrentPhase()
+                                : WorkflowPhase.EXPLORE);
 
-            StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
-            if (projectAnalysisService != null) {
-                sb.append("DOMINANT LANGUAGE: ")
-                        .append(projectAnalysisService.getDominantLanguage())
-                        .append("\n");
-            }
-            sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
-
-            String persona =
-                    String.format(
-                            "You are the %s. %s",
-                            currentPhase.getPersonaTitle(), currentPhase.getDescription());
-            sb.append(persona).append(NEWLINE_DOUBLE);
-            if (jexlServiceRegistry != null) {
-                sb.append("You have access to the following JEXL tools:\n")
-                        .append(jexlServiceRegistry.getDocumentation(currentPhase));
-            }
-
-            if (gitService != null) {
-                String gitStatus = gitService.getStatus();
-                if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
-                    sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
-                }
-            }
-            ExceptionUtils.checkInterrupted("Session context building cancelled");
-            return sb.toString();
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, "Prompt service operation cancelled");
-            throw e;
+        StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
+        if (projectAnalysisService != null) {
+            sb.append("DOMINANT LANGUAGE: ")
+                    .append(projectAnalysisService.getDominantLanguage())
+                    .append("\n");
         }
+        sb.append("CURRENT PHASE: ").append(currentPhase.name()).append("\n");
+
+        String persona =
+                String.format(
+                        "You are the %s. %s",
+                        currentPhase.getPersonaTitle(), currentPhase.getDescription());
+        sb.append(persona).append(NEWLINE_DOUBLE);
+        if (jexlServiceRegistry != null) {
+            sb.append("You have access to the following JEXL tools:\n")
+                    .append(jexlServiceRegistry.getDocumentation(currentPhase));
+        }
+
+        if (gitService != null) {
+            String gitStatus = gitService.getStatus();
+            if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
+                sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
+            }
+        }
+        return sb.toString();
     }
 
     public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
-        ExceptionUtils.checkInterrupted("System prompt building cancelled");
-        try {
-            WorkflowPhase currentPhase =
-                    phase != null
-                            ? phase
-                            : (workflowService != null
-                                    ? workflowService.getCurrentPhase()
-                                    : WorkflowPhase.EXPLORE);
+        WorkflowPhase currentPhase =
+                phase != null
+                        ? phase
+                        : (workflowService != null
+                                ? workflowService.getCurrentPhase()
+                                : WorkflowPhase.EXPLORE);
 
-            StringBuilder systemPrompt = new StringBuilder(getStableContext());
+        StringBuilder systemPrompt = new StringBuilder(getStableContext());
 
-            String phasePrompt =
-                    currentPhase == WorkflowPhase.EXPLORE
-                            ? generateExploreSystemPrompt()
-                            : loadPhasePrompt(currentPhase);
-            systemPrompt.append(NEWLINE_DOUBLE).append(phasePrompt);
+        String phasePrompt =
+                currentPhase == WorkflowPhase.EXPLORE
+                        ? generateExploreSystemPrompt()
+                        : loadPhasePrompt(currentPhase);
+        systemPrompt.append(NEWLINE_DOUBLE).append(phasePrompt);
 
-            if (repoMapPackerService != null) {
-                EditorResult repoMap = repoMapPackerService.generateRepoMap();
-                if (repoMap != null && repoMap.success()) {
-                    systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
-                }
+        if (repoMapPackerService != null) {
+            EditorResult repoMap = repoMapPackerService.generateRepoMap();
+            if (repoMap != null && repoMap.success()) {
+                systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
             }
-
-            systemPrompt.append(getSessionContext(currentPhase));
-
-            if (additionalInstructions != null) {
-                systemPrompt
-                        .append(HEADER_ADDITIONAL_INSTRUCTIONS)
-                        .append(additionalInstructions)
-                        .append(NEWLINE_DOUBLE);
-            }
-
-            ExceptionUtils.checkInterrupted("System prompt building cancelled");
-            return systemPrompt.toString();
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, "Prompt service operation cancelled");
-            throw e;
         }
+
+        systemPrompt.append(getSessionContext(currentPhase));
+
+        if (additionalInstructions != null) {
+            systemPrompt
+                    .append(HEADER_ADDITIONAL_INSTRUCTIONS)
+                    .append(additionalInstructions)
+                    .append(NEWLINE_DOUBLE);
+        }
+
+        return systemPrompt.toString();
     }
 
     public String loadPhasePrompt(WorkflowPhase phase) {
@@ -222,7 +206,6 @@ public class PromptService {
     }
 
     public String loadProjectContext() {
-        ExceptionUtils.checkInterrupted("Project context loading cancelled");
         if (projectService == null || !projectService.hasActiveProject()) {
             return "";
         }
@@ -242,25 +225,20 @@ public class PromptService {
                                             .compareToIgnoreCase(p2.getFileName().toString()))
                     .forEach(
                             p -> {
-                                ExceptionUtils.checkInterrupted(
-                                        "Project context loading cancelled");
                                 try {
                                     String content = Files.readString(p, StandardCharsets.UTF_8);
                                     sb.append("\n\n## Project Context: ")
                                             .append(p.getFileName().toString())
                                             .append("\n");
                                     sb.append(content);
-                                } catch (Exception e) {
-                                    ExceptionUtils.rethrowIfCancelled(
-                                            e, "Prompt service operation cancelled");
+                                } catch (IOException e) {
                                     log.error(
                                             "Failed to read project context file {}: {}",
                                             p,
                                             e.getMessage());
                                 }
                             });
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, "Prompt service operation cancelled");
+        } catch (IOException e) {
             log.error("Failed to list project context files in {}: {}", contextDir, e.getMessage());
         }
 

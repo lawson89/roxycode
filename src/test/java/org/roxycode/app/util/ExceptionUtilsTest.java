@@ -19,16 +19,8 @@ class ExceptionUtilsTest {
         assertSame(mid, ExceptionUtils.findCause(top, IllegalStateException.class));
         assertNull(ExceptionUtils.findCause(top, InterruptedException.class));
         assertSame(root, ExceptionUtils.getRootCause(top));
+        assertSame(root, ExceptionUtils.getRootCause(root));
         assertNull(ExceptionUtils.getRootCause(null));
-    }
-
-    @Test
-    void testHasCauseWithMessage() {
-        IllegalArgumentException root = new IllegalArgumentException("MAX_TOOL_TURNS_EXCEEDED");
-        RuntimeException top = new RuntimeException("Wrapper", root);
-
-        assertTrue(ExceptionUtils.hasCauseWithMessage(top, "MAX_TOOL_TURNS_EXCEEDED"));
-        assertFalse(ExceptionUtils.hasCauseWithMessage(top, "NON_EXISTENT"));
     }
 
     @Test

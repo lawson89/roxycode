@@ -149,10 +149,9 @@ public class AiService {
 
         String content;
         try {
-            ExceptionUtils.checkInterrupted("Chat turn interrupted before prompt build");
             ChatClient.ChatClientRequestSpec promptSpec =
                     buildPrompt(phase, message, systemPromptText, images, ephemeralJexlTool);
-            ExceptionUtils.checkInterrupted("Chat turn interrupted after prompt build");
+            ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
             content =
                     promptSpec
                             .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
