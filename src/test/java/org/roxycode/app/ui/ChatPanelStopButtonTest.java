@@ -102,8 +102,8 @@ public class ChatPanelStopButtonTest {
                 callStarted.await(5, TimeUnit.SECONDS),
                 "Background worker should start aiService.chat");
 
-        // Simulate an event queued before Stop is clicked
-        turnEventBridge.handleAutonomousTransition(
+                // Simulate an event queued before Stop is clicked
+        turnEventBridge.dispatch(
                 new AutonomousTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop transition"));
         SwingUtilities.invokeAndWait(() -> {});
@@ -114,12 +114,12 @@ public class ChatPanelStopButtonTest {
 
         // Now simulate late events from the dying background thread after Stop was
         // clicked
-        turnEventBridge.handleAutonomousTransition(
+        turnEventBridge.dispatch(
                 new AutonomousTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition"));
-        turnEventBridge.handleToolExecution(
+        turnEventBridge.dispatch(
                 new ToolExecutionEvent("test:default", "lateToolCall()", "ok", true, null));
-        turnEventBridge.handleTurn(new AgentTurnEvent("test:default", "Roxy", 99, "CODE"));
+        turnEventBridge.dispatch(new AgentTurnEvent("test:default", "Roxy", 99, "CODE"));
 
         allowExit.countDown();
         Thread.sleep(200);

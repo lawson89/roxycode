@@ -23,23 +23,8 @@ public class PlanService {
 
     private final WorkflowService workflowService;
 
-    /** Listener for plan updates. */
-    @FunctionalInterface
-    public interface PlanUpdateListener {
-        void onPlanUpdated(ImplementationPlan plan);
-    }
-
     public PlanService(WorkflowService workflowService) {
         this.workflowService = workflowService;
-    }
-
-    /**
-     * Adds a listener for plan updates.
-     *
-     * @param listener the listener to add
-     */
-    public void addListener(PlanUpdateListener listener) {
-        workflowService.addPlanListener(listener::onPlanUpdated);
     }
 
     /**

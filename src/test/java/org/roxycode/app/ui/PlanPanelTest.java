@@ -15,7 +15,10 @@ import javax.swing.text.html.InlineView;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.ImplementationPlan;
+import org.springframework.context.ApplicationEventPublisher;
 
 class PlanPanelTest {
 
@@ -137,14 +140,13 @@ class PlanPanelTest {
 
     @Test
     void testCopyMarkdownButtonStateAndAction() throws Exception {
-        PlanService planService = mock(PlanService.class);
+                PlanService planService = mock(PlanService.class);
         WorkflowService workflowService = mock(WorkflowService.class);
-        org.mockito.ArgumentCaptor<PlanService.PlanUpdateListener> listenerCaptor =
-                org.mockito.ArgumentCaptor.forClass(PlanService.PlanUpdateListener.class);
+        TurnEventBridge turnEventBridge =
+                new TurnEventBridge(mock(ApplicationEventPublisher.class));
 
         when(planService.getCurrentPlan()).thenReturn(null);
-        PlanPanel panel = new PlanPanel(planService, workflowService);
-        verify(planService).addListener(listenerCaptor.capture());
+        PlanPanel panel = new PlanPanel(planService, workflowService, turnEventBridge);
         SwingUtilities.invokeAndWait(() -> {});
 
         assertFalse(
@@ -163,7 +165,7 @@ class PlanPanelTest {
                         null,
                         List.of());
         when(planService.getCurrentPlan()).thenReturn(plan);
-        listenerCaptor.getValue().onPlanUpdated(plan);
+        turnEventBridge.dispatch(new PlanUpdatedEvent(plan));
         SwingUtilities.invokeAndWait(() -> {});
 
         assertTrue(

@@ -7,11 +7,16 @@ import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
+import java.nio.file.Path;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -29,8 +34,17 @@ public final class HeaderPanel extends JPanel {
     private final JLabel branchLabel;
     private final JLabel modelLabel;
 
-    public HeaderPanel(
+        public HeaderPanel(
             ProjectService projectService, GitService gitService, SettingsService settingsService) {
+        this(projectService, gitService, settingsService, null);
+    }
+
+    @Autowired
+    public HeaderPanel(
+            ProjectService projectService,
+            GitService gitService,
+            SettingsService settingsService,
+            TurnEventBridge turnEventBridge) {
         this.projectService = projectService;
         this.gitService = gitService;
 
@@ -75,17 +89,24 @@ public final class HeaderPanel extends JPanel {
         rightPanel.add(modelLabel);
         add(rightPanel, "right");
 
-        // Listeners
-        projectService.addProjectListener(
-                newRoot -> {
-                    projectLabel.setText(projectService.getProjectName());
-                    if (newRoot != null) {
-                        projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
-                    } else {
-                        projectLabel.setToolTipText("No project selected");
-                    }
-                    updateBranchLabel();
-                });
+                // Listeners
+        if (turnEventBridge != null) {
+            turnEventBridge.subscribe(
+                    ProjectChangedEvent.class,
+                    event -> {
+                        Path newRoot = event.projectRoot();
+                        projectLabel.setText(projectService.getProjectName());
+                        if (newRoot != null) {
+                            projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
+                        } else {
+                            projectLabel.setToolTipText("No project selected");
+                        }
+                        updateBranchLabel();
+                    });
+            turnEventBridge.subscribe(
+                    SettingsChangedEvent.class,
+                    event -> updateModelDisplay(event.settings().getGeminiModel()));
+        }
 
         if (projectService.getCurrentProjectRoot() != null) {
             projectLabel.setToolTipText(
@@ -93,11 +114,6 @@ public final class HeaderPanel extends JPanel {
         } else {
             projectLabel.setToolTipText("No project selected");
         }
-
-        settingsService.addSettingsListener(
-                settings -> {
-                    updateModelDisplay(settings.getGeminiModel());
-                });
     }
 
     private JButton createIconButton(

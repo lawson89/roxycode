@@ -2,11 +2,11 @@ package org.roxycode.app.service;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
 import org.roxycode.app.ai.AgentDoc;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 /** Service for managing the active project root directory. */
@@ -15,11 +15,18 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("PMD.NullAssignment")
 public class ProjectService {
     private final SettingsService settingsService;
-    private final List<Consumer<Path>> projectListeners = new ArrayList<>();
+    private final ApplicationEventPublisher eventPublisher;
     private Path currentProjectRoot;
 
     public ProjectService(SettingsService settingsService) {
+        this(settingsService, event -> {});
+    }
+
+    @Autowired
+    public ProjectService(
+            SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
+        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {};
         String savedPath = settingsService.getSettings().getCurrentProjectPath();
         if (savedPath != null && !savedPath.isEmpty()) {
             this.currentProjectRoot = Paths.get(savedPath);
@@ -47,7 +54,7 @@ public class ProjectService {
             AppSettings settings = settingsService.getSettings();
             settings.setCurrentProjectPath(newRoot.toAbsolutePath().toString());
             settingsService.saveSettings();
-            notifyListeners(newRoot);
+            eventPublisher.publishEvent(new ProjectChangedEvent(newRoot));
         }
     }
 
@@ -82,15 +89,5 @@ public class ProjectService {
             throw new SecurityException("Path traversal attempt detected: " + relativePath);
         }
         return resolved;
-    }
-
-    public void addProjectListener(Consumer<Path> listener) {
-        projectListeners.add(listener);
-    }
-
-    private void notifyListeners(Path newRoot) {
-        for (Consumer<Path> listener : projectListeners) {
-            listener.accept(newRoot);
-        }
     }
 }

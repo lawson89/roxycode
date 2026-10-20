@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.events.ProjectChangedEvent;
 
 class ProjectServiceTest {
 
@@ -34,10 +35,15 @@ class ProjectServiceTest {
         SettingsService settingsService = new SettingsService();
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
-        ProjectService projectService = new ProjectService(settingsService);
         AtomicReference<Path> notifiedPath = new AtomicReference<>();
-
-        projectService.addProjectListener(notifiedPath::set);
+        ProjectService projectService =
+                new ProjectService(
+                        settingsService,
+                        event -> {
+                            if (event instanceof ProjectChangedEvent pce) {
+                                notifiedPath.set(pce.projectRoot());
+                            }
+                        });
 
         Path projectPath = tempDir.resolve("new-project");
         projectService.setCurrentProjectRoot(projectPath);

@@ -16,12 +16,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
@@ -41,11 +43,17 @@ public class GenericBuildToolService {
     private final ProjectService projectService;
     private final TomlMapper tomlMapper;
 
-    @Autowired
+        @Autowired
     public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper) {
         this.projectService = projectService;
         this.tomlMapper = tomlMapper;
-        this.projectService.addProjectListener(path -> ensureConfig());
+        if (this.projectService.hasActiveProject()) {
+            ensureConfig();
+        }
+    }
+
+    @EventListener
+    public void handleProjectChanged(ProjectChangedEvent event) {
         if (this.projectService.hasActiveProject()) {
             ensureConfig();
         }

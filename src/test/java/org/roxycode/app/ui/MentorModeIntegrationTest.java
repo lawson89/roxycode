@@ -17,7 +17,10 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.events.PhaseChangedEvent;
+import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.events.TurnEventBridge;
+import org.springframework.context.ApplicationEventPublisher;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
@@ -30,10 +33,11 @@ import org.springframework.ai.chat.memory.ChatMemory;
 
 class MentorModeIntegrationTest {
 
-    private SettingsService settingsService;
+        private SettingsService settingsService;
     private ProjectService projectService;
     private WorkflowService workflowService;
     private PlanService planService;
+    private TurnEventBridge turnEventBridge;
     private QaWorkspacePanel qaWorkspacePanel;
     private TaskWorkspacePanel taskWorkspacePanel;
     private MainFrame mainFrame;
@@ -56,8 +60,8 @@ class MentorModeIntegrationTest {
         EnvironmentService envService = mock(EnvironmentService.class);
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
         when(jexlServiceRegistry.getDocumentation(any())).thenReturn("");
-        planService = mock(PlanService.class);
-        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+                planService = mock(PlanService.class);
+        turnEventBridge = new TurnEventBridge(mock(ApplicationEventPublisher.class));
         RepoMapPackerService packerService = mock(RepoMapPackerService.class);
         ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
         PromptService promptService = mock(PromptService.class);
@@ -239,28 +243,16 @@ class MentorModeIntegrationTest {
         assertNotNull(sidebar, "MainFrame should contain a SidebarPanel");
         assertFalse(sidebar.isTaskWaitingApproval());
 
-        org.mockito.ArgumentCaptor<WorkflowService.TransitionRequestListener> requestCaptor =
-                org.mockito.ArgumentCaptor.forClass(
-                        WorkflowService.TransitionRequestListener.class);
-        verify(workflowService, atLeastOnce())
-                .addTransitionRequestListener(requestCaptor.capture());
-
-        for (WorkflowService.TransitionRequestListener listener : requestCaptor.getAllValues()) {
-            listener.onTransitionRequested(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code");
-        }
+                turnEventBridge.dispatch(
+                new TransitionRequestedEvent(
+                        WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code"));
         SwingUtilities.invokeAndWait(() -> {});
         assertTrue(
                 sidebar.isTaskWaitingApproval(),
                 "Sidebar should show waiting approval when transition is requested");
 
         when(workflowService.getPendingPhase()).thenReturn(null);
-        org.mockito.ArgumentCaptor<java.util.function.Consumer<WorkflowPhase>> phaseCaptor =
-                org.mockito.ArgumentCaptor.forClass(java.util.function.Consumer.class);
-        verify(workflowService, atLeastOnce()).addPhaseListener(phaseCaptor.capture());
-
-        for (java.util.function.Consumer<WorkflowPhase> listener : phaseCaptor.getAllValues()) {
-            listener.accept(WorkflowPhase.CODE);
-        }
+        turnEventBridge.dispatch(new PhaseChangedEvent(WorkflowPhase.CODE));
         SwingUtilities.invokeAndWait(() -> {});
         assertFalse(
                 sidebar.isTaskWaitingApproval(),

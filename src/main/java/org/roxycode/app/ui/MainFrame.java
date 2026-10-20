@@ -5,11 +5,14 @@ import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -38,7 +41,7 @@ public final class MainFrame extends JFrame {
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
 
-    public MainFrame(
+        public MainFrame(
             SettingsService settingsService,
             ProjectService projectService,
             ChatMemory chatMemory,
@@ -52,6 +55,39 @@ public final class MainFrame extends JFrame {
             SettingsPanel settingsPanel,
             BuildConfigPanel buildConfigPanel,
             ContextManagerPanel contextManagerPanel) {
+        this(
+                settingsService,
+                projectService,
+                chatMemory,
+                header,
+                statusBar,
+                qaWorkspacePanel,
+                taskWorkspacePanel,
+                codebaseCachePanel,
+                jexlApiPanel,
+                systemToolsPanel,
+                settingsPanel,
+                buildConfigPanel,
+                contextManagerPanel,
+                null);
+    }
+
+    @Autowired
+    public MainFrame(
+            SettingsService settingsService,
+            ProjectService projectService,
+            ChatMemory chatMemory,
+            HeaderPanel header,
+            StatusPanel statusBar,
+            QaWorkspacePanel qaWorkspacePanel,
+            TaskWorkspacePanel taskWorkspacePanel,
+            CodebaseCachePanel codebaseCachePanel,
+            JexlApiPanel jexlApiPanel,
+            SystemToolsPanel systemToolsPanel,
+            SettingsPanel settingsPanel,
+            BuildConfigPanel buildConfigPanel,
+            ContextManagerPanel contextManagerPanel,
+            TurnEventBridge turnEventBridge) {
         this.settingsService = settingsService;
         this.projectService = projectService;
         this.header = header;
@@ -68,15 +104,18 @@ public final class MainFrame extends JFrame {
                 settingsPanel,
                 buildConfigPanel,
                 contextManagerPanel);
-        projectService.addProjectListener(
-                path -> {
-                    updateTitle();
-                    chatMemory.clear("qa:default");
-                    chatMemory.clear("task:default");
-                    if (taskWorkspacePanel != null) {
-                        taskWorkspacePanel.refreshGitChanges();
-                    }
-                });
+        if (turnEventBridge != null) {
+            turnEventBridge.subscribe(
+                    ProjectChangedEvent.class,
+                    event -> {
+                        updateTitle();
+                        chatMemory.clear("qa:default");
+                        chatMemory.clear("task:default");
+                        if (taskWorkspacePanel != null) {
+                            taskWorkspacePanel.refreshGitChanges();
+                        }
+                    });
+        }
     }
 
     private void setupLaf() {

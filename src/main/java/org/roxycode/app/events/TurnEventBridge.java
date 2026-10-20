@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.PayloadApplicationEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -43,63 +44,16 @@ public class TurnEventBridge {
         }
     }
 
-    public void addTurnListener(String conversationId, Consumer<AgentTurnEvent> listener) {
-        subscribe(AgentTurnEvent.class, conversationId, listener);
-    }
-
-    public void addCompleteListener(
-            String conversationId, Consumer<AgentTurnCompleteEvent> listener) {
-        subscribe(AgentTurnCompleteEvent.class, conversationId, listener);
-    }
-
-    public void addUserMessageListener(String conversationId, Consumer<UserMessageEvent> listener) {
-        subscribe(UserMessageEvent.class, conversationId, listener);
-    }
-
-    public void addToolExecutionListener(
-            String conversationId, Consumer<ToolExecutionEvent> listener) {
-        subscribe(ToolExecutionEvent.class, conversationId, listener);
-    }
-
-    public void addAutonomousTransitionListener(Consumer<AutonomousTransitionEvent> listener) {
-        subscribe(AutonomousTransitionEvent.class, listener);
-    }
-
-    public void addFileChangedListener(Consumer<FileChangedEvent> listener) {
-        subscribe(FileChangedEvent.class, listener);
-    }
-
     public void publishUserMessage(String conversationId, String user, String message) {
         publisher.publishEvent(new UserMessageEvent(conversationId, user, message));
     }
 
     @EventListener
-    public void handleTurn(AgentTurnEvent event) {
-        dispatch(event);
-    }
-
-    @EventListener
-    public void handleComplete(AgentTurnCompleteEvent event) {
-        dispatch(event);
-    }
-
-    @EventListener
-    public void handleUserMessage(UserMessageEvent event) {
-        dispatch(event);
-    }
-
-    @EventListener
-    public void handleToolExecution(ToolExecutionEvent event) {
-        dispatch(event);
-    }
-
-    @EventListener
-    public void handleAutonomousTransition(AutonomousTransitionEvent event) {
-        dispatch(event);
-    }
-
-    @EventListener
-    public void handleFileChanged(FileChangedEvent event) {
-        dispatch(event);
+    public void handleApplicationEvent(Object event) {
+        if (event instanceof PayloadApplicationEvent<?> payloadEvent) {
+            dispatch(payloadEvent.getPayload());
+        } else {
+            dispatch(event);
+        }
     }
 }

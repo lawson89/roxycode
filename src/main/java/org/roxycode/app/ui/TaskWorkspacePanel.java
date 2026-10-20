@@ -16,6 +16,10 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.PhaseChangedEvent;
+import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.ImplementationPlan;
 import org.springframework.context.annotation.Lazy;
@@ -29,8 +33,9 @@ public final class TaskWorkspacePanel extends JPanel {
     private static final String SESSION_PREFIX = "task";
     private static final String LAYOUT_CENTER = "center";
 
-    private final transient WorkflowService workflowService;
+        private final transient WorkflowService workflowService;
     private final transient PlanService planService;
+    private final transient TurnEventBridge turnEventBridge;
     private final GitChangesPanel gitChangesPanel;
     private final ChatPanel taskChatPanel;
     private final JTabbedPane taskTabs;
@@ -46,8 +51,9 @@ public final class TaskWorkspacePanel extends JPanel {
             PlanPanel planPanel,
             GitChangesPanel gitChangesPanel) {
         super(new BorderLayout());
-        this.workflowService = workflowService;
+                this.workflowService = workflowService;
         this.planService = planService;
+        this.turnEventBridge = turnEventBridge;
         this.gitChangesPanel = gitChangesPanel;
 
         JPanel taskHeaderBar =
@@ -71,8 +77,13 @@ public final class TaskWorkspacePanel extends JPanel {
                 FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
         taskHeaderBar.add(planLabel, "gapleft 16, center, hidemode 3");
 
-        workflowService.addPhaseListener(this::updateActivePhase);
-        planService.addListener(plan -> updateActivePhase(workflowService.getCurrentPhase()));
+                if (turnEventBridge != null) {
+            turnEventBridge.subscribe(
+                    PhaseChangedEvent.class, event -> updateActivePhase(event.phase()));
+            turnEventBridge.subscribe(
+                    PlanUpdatedEvent.class,
+                    event -> updateActivePhase(workflowService.getCurrentPhase()));
+        }
         updateActivePhase(workflowService.getCurrentPhase());
 
         this.taskTabs = new JTabbedPane();
@@ -80,7 +91,8 @@ public final class TaskWorkspacePanel extends JPanel {
         taskTabs.addTab("Chat", taskChatPanel);
         taskTabs.addTab("Plan", planPanel);
         if (turnEventBridge != null && gitChangesPanel != null) {
-            turnEventBridge.addFileChangedListener(
+            turnEventBridge.subscribe(
+                    FileChangedEvent.class,
                     event -> SwingUtilities.invokeLater(gitChangesPanel::refresh));
         }
         taskTabs.addTab("Git", gitChangesPanel);
@@ -99,18 +111,24 @@ public final class TaskWorkspacePanel extends JPanel {
         add(taskTabs, BorderLayout.CENTER);
     }
 
-    public void bindSidebar(SidebarPanel sidebar) {
+        public void bindSidebar(SidebarPanel sidebar) {
         this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
-        workflowService.addTransitionRequestListener(
-                (current, requested, reason) ->
-                        SwingUtilities.invokeLater(
-                                () -> sidebar.setTaskWaitingApproval(requested != null)));
-        workflowService.addPhaseListener(
-                phase ->
-                        SwingUtilities.invokeLater(
-                                () ->
-                                        sidebar.setTaskWaitingApproval(
-                                                workflowService.getPendingPhase() != null)));
+        if (turnEventBridge != null) {
+            turnEventBridge.subscribe(
+                    TransitionRequestedEvent.class,
+                    event ->
+                            SwingUtilities.invokeLater(
+                                    () ->
+                                            sidebar.setTaskWaitingApproval(
+                                                    event.requested() != null)));
+            turnEventBridge.subscribe(
+                    PhaseChangedEvent.class,
+                    event ->
+                            SwingUtilities.invokeLater(
+                                    () ->
+                                            sidebar.setTaskWaitingApproval(
+                                                    workflowService.getPendingPhase() != null)));
+        }
     }
 
     public void onViewShown() {

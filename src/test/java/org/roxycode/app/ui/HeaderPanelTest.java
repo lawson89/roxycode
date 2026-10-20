@@ -10,8 +10,13 @@ import javax.swing.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.springframework.context.ApplicationEventPublisher;
 
 class HeaderPanelTest {
     @TempDir Path tempDir;
@@ -30,12 +35,31 @@ class HeaderPanelTest {
         return new GitService(ps);
     }
 
-    @Test
+        @Test
     void testHeaderPanelInstantiation() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        TurnEventBridge bridge = new TurnEventBridge(mock(ApplicationEventPublisher.class));
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, bridge);
         assertNotNull(header);
+
+        Path newRoot = tempDir.resolve("updated-proj");
+        ps.setCurrentProjectRoot(newRoot);
+        bridge.dispatch(new ProjectChangedEvent(newRoot));
+
+        AppSettings updatedSettings = ss.getSettings();
+        updatedSettings.setGeminiModel("gemini-4-argon");
+        bridge.dispatch(new SettingsChangedEvent(updatedSettings));
+
+        Component projLabel =
+                findComponent(
+                        header, JLabel.class, c -> "updated-proj".equals(((JLabel) c).getText()));
+        assertNotNull(projLabel, "Project label should update on ProjectChangedEvent");
+
+        Component modelLabel =
+                findComponent(
+                        header, JLabel.class, c -> "gemini-4-argon".equals(((JLabel) c).getText()));
+        assertNotNull(modelLabel, "Model label should update on SettingsChangedEvent");
     }
 
     @Test

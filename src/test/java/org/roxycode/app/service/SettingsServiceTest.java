@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 
 class SettingsServiceTest {
@@ -35,16 +36,17 @@ class SettingsServiceTest {
 
     @Test
     void testSettingsListener() {
-        SettingsService service = new SettingsService();
+        AtomicBoolean listenerCalled = new AtomicBoolean(false);
+        SettingsService service =
+                new SettingsService(
+                        event -> {
+                            if (event instanceof SettingsChangedEvent) {
+                                listenerCalled.set(true);
+                            }
+                        });
         service.setSettingsPathOverride(tempDir.resolve("test_listener.toml"));
 
-        AtomicBoolean listenerCalled = new AtomicBoolean(false);
-        service.addSettingsListener(
-                settings -> {
-                    listenerCalled.set(true);
-                });
-
         service.saveSettings();
-        assertTrue(listenerCalled.get(), "Listener should be called when settings are saved");
+        assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
     }
 }

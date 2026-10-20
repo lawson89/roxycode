@@ -7,7 +7,10 @@ import java.util.Locale;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.UserMessageEvent;
 import org.roxycode.app.util.TokenUtils;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -124,12 +127,11 @@ public final class HistoryPanel extends JPanel {
                         refresh();
                     }
                 });
-        turnEventBridge.addUserMessageListener(
-                sessionPrefix + DEFAULT_CONVERSATION_SUFFIX, event -> refresh());
-        turnEventBridge.addCompleteListener(
-                sessionPrefix + DEFAULT_CONVERSATION_SUFFIX, event -> refresh());
-        turnEventBridge.addToolExecutionListener(
-                sessionPrefix + DEFAULT_CONVERSATION_SUFFIX, event -> refresh());
+                String conversationId = sessionPrefix + DEFAULT_CONVERSATION_SUFFIX;
+        turnEventBridge.subscribe(UserMessageEvent.class, conversationId, event -> refresh());
+        turnEventBridge.subscribe(
+                AgentTurnCompleteEvent.class, conversationId, event -> refresh());
+        turnEventBridge.subscribe(ToolExecutionEvent.class, conversationId, event -> refresh());
 
         refresh();
     }

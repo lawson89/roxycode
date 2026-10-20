@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.events.AutonomousTransitionEvent;
+import org.roxycode.app.events.PhaseChangedEvent;
+import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.AiService;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -127,8 +130,8 @@ public class ChatPanelTest {
                         null,
                         true);
 
-        // Transition to PLAN
-        turnEventBridge.handleAutonomousTransition(
+                // Transition to PLAN
+        turnEventBridge.dispatch(
                 new AutonomousTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason"));
 
@@ -139,7 +142,7 @@ public class ChatPanelTest {
         verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
 
         // Transition to REVIEW (should trigger turn)
-        turnEventBridge.handleAutonomousTransition(
+        turnEventBridge.dispatch(
                 new AutonomousTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason"));
         Thread.sleep(600); // Give it more time for SwingWorker
@@ -155,11 +158,7 @@ public class ChatPanelTest {
         TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        org.mockito.ArgumentCaptor<WorkflowService.TransitionRequestListener> listenerCaptor =
-                org.mockito.ArgumentCaptor.forClass(
-                        WorkflowService.TransitionRequestListener.class);
-
-        ChatPanel chatPanel =
+                ChatPanel chatPanel =
                 new ChatPanel(
                         aiService,
                         workflowService,
@@ -169,15 +168,13 @@ public class ChatPanelTest {
                         null,
                         true);
 
-        verify(workflowService).addTransitionRequestListener(listenerCaptor.capture());
-        WorkflowService.TransitionRequestListener transitionListener = listenerCaptor.getValue();
-
         when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(aiService.chat(anyString(), any(), anyString(), any(), any()))
                 .thenAnswer(
                         inv -> {
-                            transitionListener.onTransitionRequested(
-                                    WorkflowPhase.PLAN, WorkflowPhase.CODE, "Plan ready");
+                            turnEventBridge.dispatch(
+                                    new TransitionRequestedEvent(
+                                            WorkflowPhase.PLAN, WorkflowPhase.CODE, "Plan ready"));
                             return "FINAL_PLAN_SUMMARY";
                         });
 
@@ -293,9 +290,10 @@ public class ChatPanelTest {
                         false);
         assertNotNull(qaChatPanel);
 
-        verify(workflowService, never()).addPhaseListener(any());
-        verify(workflowService, never()).addTransitionRequestListener(any());
-        verify(turnEventBridge, never()).addAutonomousTransitionListener(any());
+                verify(turnEventBridge, never()).subscribe(eq(PhaseChangedEvent.class), any());
+        verify(turnEventBridge, never()).subscribe(eq(TransitionRequestedEvent.class), any());
+        verify(turnEventBridge, never()).subscribe(eq(AutonomousTransitionEvent.class), any());
+        verify(turnEventBridge, never()).subscribe(eq(PlanUpdatedEvent.class), any());
     }
 
     @Test
@@ -467,12 +465,8 @@ public class ChatPanelTest {
         appSettings.setMaxAgentToolTurns(5);
         when(settingsService.getSettings()).thenReturn(appSettings);
 
-        org.roxycode.app.ai.services.PlanService planService =
+                org.roxycode.app.ai.services.PlanService planService =
                 mock(org.roxycode.app.ai.services.PlanService.class);
-        org.mockito.ArgumentCaptor<org.roxycode.app.ai.services.PlanService.PlanUpdateListener>
-                planListenerCaptor =
-                        org.mockito.ArgumentCaptor.forClass(
-                                org.roxycode.app.ai.services.PlanService.PlanUpdateListener.class);
 
         ChatPanel chatPanel =
                 new ChatPanel(
@@ -486,7 +480,6 @@ public class ChatPanelTest {
                         settingsService,
                         planService);
 
-        verify(planService).addListener(planListenerCaptor.capture());
         assertEquals("Turns: 0 / 5", chatPanel.getTurnLabel().getText());
 
         org.roxycode.app.model.ImplementationPlan plan =
@@ -508,13 +501,13 @@ public class ChatPanelTest {
                         java.util.List.of());
         when(planService.getCurrentPlan()).thenReturn(plan);
 
-        turnEventBridge.handleTurn(
+        turnEventBridge.dispatch(
                 new org.roxycode.app.events.AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
         javax.swing.SwingUtilities.invokeAndWait(() -> {});
 
         assertEquals("Turns: 2 / 5 | Plan: 1/3 steps", chatPanel.getTurnLabel().getText());
 
-        // Simulate step 1 completion via PlanUpdateListener callback
+        // Simulate step 1 completion via PlanUpdatedEvent
         org.roxycode.app.model.ImplementationPlan updatedPlan =
                 new org.roxycode.app.model.ImplementationPlan(
                         "Feature X",
@@ -533,7 +526,7 @@ public class ChatPanelTest {
                         null,
                         java.util.List.of());
         when(planService.getCurrentPlan()).thenReturn(updatedPlan);
-        planListenerCaptor.getValue().onPlanUpdated(updatedPlan);
+        turnEventBridge.dispatch(new PlanUpdatedEvent(updatedPlan));
         javax.swing.SwingUtilities.invokeAndWait(() -> {});
 
         assertEquals("Turns: 2 / 5 | Plan: 2/3 steps", chatPanel.getTurnLabel().getText());

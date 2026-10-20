@@ -6,7 +6,10 @@ import static org.mockito.Mockito.*;
 import java.awt.Component;
 import javax.swing.JScrollPane;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.UserMessageEvent;
 import org.springframework.ai.chat.memory.ChatMemory;
 
 public class HistoryPanelTest {
@@ -19,9 +22,12 @@ public class HistoryPanelTest {
         HistoryPanel historyPanel = new HistoryPanel(turnEventBridge, chatMemory, "test");
 
         // Verify listeners registered
-        verify(turnEventBridge).addUserMessageListener(anyString(), any());
-        verify(turnEventBridge).addCompleteListener(anyString(), any());
-        verify(turnEventBridge).addToolExecutionListener(anyString(), any());
+        verify(turnEventBridge)
+                .subscribe(eq(UserMessageEvent.class), eq("test:default"), any());
+        verify(turnEventBridge)
+                .subscribe(eq(AgentTurnCompleteEvent.class), eq("test:default"), any());
+        verify(turnEventBridge)
+                .subscribe(eq(ToolExecutionEvent.class), eq("test:default"), any());
 
         // Verify layout
         boolean hasScrollPane = false;

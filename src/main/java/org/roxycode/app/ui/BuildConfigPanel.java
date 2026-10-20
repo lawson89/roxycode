@@ -11,10 +11,14 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.Theme;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -30,10 +34,19 @@ public final class BuildConfigPanel extends JPanel {
     private final JLabel statusLabel;
     private final Timer statusTimer;
 
-    public BuildConfigPanel(
+        public BuildConfigPanel(
             GenericBuildToolService buildToolService,
             SettingsService settingsService,
             ProjectService projectService) {
+        this(buildToolService, settingsService, projectService, null);
+    }
+
+    @Autowired
+    public BuildConfigPanel(
+            GenericBuildToolService buildToolService,
+            SettingsService settingsService,
+            ProjectService projectService,
+            TurnEventBridge turnEventBridge) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow][]"));
@@ -72,8 +85,10 @@ public final class BuildConfigPanel extends JPanel {
 
         loadConfig();
 
-        settingsService.addSettingsListener(settings -> updateTextAreaTheme());
-        projectService.addProjectListener(path -> loadConfig());
+                if (turnEventBridge != null) {
+            turnEventBridge.subscribe(SettingsChangedEvent.class, event -> updateTextAreaTheme());
+            turnEventBridge.subscribe(ProjectChangedEvent.class, event -> loadConfig());
+        }
     }
 
     private void loadConfig() {

@@ -14,6 +14,7 @@ import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -34,11 +35,18 @@ class PlanServiceTest {
         service = new PlanService(workflowService);
     }
 
-    @Test
+        @Test
     void testSubmitPlanAndNotifyListeners() {
         AtomicInteger notifications = new AtomicInteger(0);
-
-        service.addListener((plan) -> notifications.incrementAndGet());
+                doAnswer(
+                        inv -> {
+                            if (inv.getArgument(0) instanceof PlanUpdatedEvent) {
+                                notifications.incrementAndGet();
+                            }
+                            return null;
+                        })
+                .when(eventPublisher)
+                .publishEvent(any(Object.class));
 
         ImplementationPlan plan =
                 new ImplementationPlan(

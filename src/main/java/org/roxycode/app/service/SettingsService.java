@@ -5,12 +5,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 /** Service for managing application settings. */
@@ -22,19 +22,28 @@ public class SettingsService {
     private static final String SETTINGS_FILE = "settings.toml";
 
     private final TomlMapper mapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     public SettingsService() {
-        this(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
+        this(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER, event -> {});
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public SettingsService(TomlMapper mapper) {
+        this(mapper, event -> {});
+    }
+
+    public SettingsService(ApplicationEventPublisher eventPublisher) {
+        this(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER, eventPublisher);
+    }
+
+    @Autowired
+    public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
         this.mapper = mapper != null ? mapper : org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER;
+        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {};
     }
 
     private AppSettings settings;
     private Path settingsPathOverride;
-    private final List<Consumer<AppSettings>> listeners = new ArrayList<>();
 
     /**
      * Gets the current application settings.
@@ -49,18 +58,15 @@ public class SettingsService {
     }
 
     /** Saves the current settings to the TOML file. */
-    public void addSettingsListener(Consumer<AppSettings> listener) {
-        listeners.add(listener);
-    }
-
     public void saveSettings() {
         try {
             Path path = getSettingsPath();
             if (path.getParent() != null) {
                 Files.createDirectories(path.getParent());
             }
-            mapper.writeValue(path.toFile(), getSettings());
-            notifyListeners();
+            AppSettings currentSettings = getSettings();
+            mapper.writeValue(path.toFile(), currentSettings);
+            eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
         } catch (IOException e) {
             log.error("Failed to save settings: {}", e.getMessage(), e);
         }
@@ -87,13 +93,6 @@ public class SettingsService {
             }
         } else {
             settings = new AppSettings();
-        }
-    }
-
-    private void notifyListeners() {
-        AppSettings currentSettings = getSettings();
-        for (Consumer<AppSettings> listener : listeners) {
-            listener.accept(currentSettings);
         }
     }
 

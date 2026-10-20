@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.events.AutonomousTransitionEvent;
+import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -117,10 +118,19 @@ class WorkflowServiceTest {
                         "user",
                         null,
                         List.of());
-        service.setCurrentPlan(planWithIncompleteStep);
+                service.setCurrentPlan(planWithIncompleteStep);
 
         List<ImplementationPlan> updates = new ArrayList<>();
-        service.addPlanListener(updates::add);
+        doAnswer(
+                        inv -> {
+                            Object ev = inv.getArgument(0);
+                            if (ev instanceof PlanUpdatedEvent pue) {
+                                updates.add(pue.plan());
+                            }
+                            return null;
+                        })
+                .when(eventPublisher)
+                .publishEvent(any(Object.class));
 
         // Request PLAN from REVIEW - Requires HITL Approval
         String planResponse = service.routeToPhase("PLAN", "Finalizing");
@@ -185,10 +195,19 @@ class WorkflowServiceTest {
                         "user",
                         null,
                         List.of());
-        service.setCurrentPlan(plan);
+                service.setCurrentPlan(plan);
 
         List<ImplementationPlan> updates = new ArrayList<>();
-        service.addPlanListener(updates::add);
+        doAnswer(
+                        inv -> {
+                            Object ev = inv.getArgument(0);
+                            if (ev instanceof PlanUpdatedEvent pue) {
+                                updates.add(pue.plan());
+                            }
+                            return null;
+                        })
+                .when(eventPublisher)
+                .publishEvent(any(Object.class));
 
         // Request PLAN from REVIEW - Requires HITL Approval
         String planResponse = service.routeToPhase("PLAN", "Finalizing");

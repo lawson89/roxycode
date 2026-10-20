@@ -1,15 +1,14 @@
 package org.roxycode.app.ai;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.events.AutonomousTransitionEvent;
+import org.roxycode.app.events.PhaseChangedEvent;
+import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,15 +28,6 @@ public class WorkflowService {
     private WorkflowPhase pendingPhase;
     private String pendingReason;
 
-    private final List<Consumer<WorkflowPhase>> phaseListeners = new ArrayList<>();
-    private final List<TransitionRequestListener> requestListeners = new ArrayList<>();
-    private final List<Consumer<ImplementationPlan>> planListeners = new CopyOnWriteArrayList<>();
-
-    @FunctionalInterface
-    public interface TransitionRequestListener {
-        void onTransitionRequested(WorkflowPhase current, WorkflowPhase requested, String reason);
-    }
-
     public WorkflowService(
             EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
         this.environmentService = environmentService;
@@ -50,7 +40,7 @@ public class WorkflowService {
 
     public void setCurrentPlan(ImplementationPlan plan) {
         this.currentPlan = plan;
-        notifyPlanListeners();
+        publishPlanUpdated();
     }
 
     public void approvePlan(String user, String timestamp) {
@@ -58,7 +48,7 @@ public class WorkflowService {
             return;
         }
         currentPlan = currentPlan.withApproval(user, timestamp);
-        notifyPlanListeners();
+        publishPlanUpdated();
     }
 
     public void completePlan(String timestamp) {
@@ -66,12 +56,12 @@ public class WorkflowService {
             return;
         }
         currentPlan = currentPlan.withCompletedOn(timestamp);
-        notifyPlanListeners();
+        publishPlanUpdated();
     }
 
     public void clearPlan() {
         this.currentPlan = null;
-        notifyPlanListeners();
+        publishPlanUpdated();
     }
 
     public void addHandoffLogEntry(String timestamp, String user, String message) {
@@ -79,11 +69,7 @@ public class WorkflowService {
             return;
         }
         currentPlan = currentPlan.withAddedHandoffLogEntry(timestamp, user, message);
-        notifyPlanListeners();
-    }
-
-    public void addPlanListener(Consumer<ImplementationPlan> listener) {
-        planListeners.add(listener);
+        publishPlanUpdated();
     }
 
     public String routeToPhase(String phaseName, String reason) {
@@ -138,24 +124,24 @@ public class WorkflowService {
 
             this.currentPhase = nextPhase;
             this.visitedPhases.add(nextPhase);
-            notifyPhaseListeners();
+            publishPhaseChanged();
 
             eventPublisher.publishEvent(new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
-
-            String autoMessage =
+                        String autoMessage =
                     String.format(
                             "Autonomous transition from %s to %s successful. Reason: %s",
                             oldPhase, nextPhase, reason);
             String autoJson =
-                    String.format(
-                            "{\"message\": \"%s\", \"reason\": \"%s\"}",
-                            StringEscapeUtils.escapeJson(autoMessage),
-                            StringEscapeUtils.escapeJson(reason));
+                    """
+                    {"message": "%s", "reason": "%s"}"""
+                            .formatted(
+                                    StringEscapeUtils.escapeJson(autoMessage),
+                                    StringEscapeUtils.escapeJson(reason));
             return autoJson;
         }
         this.pendingPhase = nextPhase;
         this.pendingReason = reason;
-        notifyRequestListeners();
+        publishTransitionRequested();
 
         String summary = formatPlanSummary(currentPlan);
         String message =
@@ -168,11 +154,12 @@ public class WorkflowService {
 
         // Yield execution turn immediately for user approval
         String json =
-                String.format(
-                        "{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
-                        StringEscapeUtils.escapeJson(summary),
-                        StringEscapeUtils.escapeJson(message),
-                        StringEscapeUtils.escapeJson(reason));
+                """
+                {"summary": "%s", "message": "%s", "reason": "%s"}"""
+                        .formatted(
+                                StringEscapeUtils.escapeJson(summary),
+                                StringEscapeUtils.escapeJson(message),
+                                StringEscapeUtils.escapeJson(reason));
 
         return json;
     }
@@ -276,14 +263,14 @@ public class WorkflowService {
             this.visitedPhases.add(pendingPhase);
             this.pendingPhase = null;
             this.pendingReason = null;
-            notifyPhaseListeners();
+            publishPhaseChanged();
         }
     }
 
     public void rejectTransition() {
         this.pendingPhase = null;
         this.pendingReason = null;
-        notifyRequestListeners();
+        publishTransitionRequested();
     }
 
     public Set<WorkflowPhase> getVisitedPhases() {
@@ -297,41 +284,29 @@ public class WorkflowService {
         this.visitedPhases.clear();
         this.visitedPhases.add(WorkflowPhase.PLAN);
         clearPlan();
-        notifyPhaseListeners();
-        notifyRequestListeners();
+        publishPhaseChanged();
+        publishTransitionRequested();
     }
 
-    public void addPhaseListener(Consumer<WorkflowPhase> listener) {
-        phaseListeners.add(listener);
-        listener.accept(currentPhase);
+    private void publishPhaseChanged() {
+        eventPublisher.publishEvent(new PhaseChangedEvent(currentPhase));
     }
 
-    public void addTransitionRequestListener(TransitionRequestListener listener) {
-        requestListeners.add(listener);
+    private void publishTransitionRequested() {
+        eventPublisher.publishEvent(
+                new TransitionRequestedEvent(currentPhase, pendingPhase, pendingReason));
     }
 
-    private void notifyPhaseListeners() {
-        for (Consumer<WorkflowPhase> listener : phaseListeners) {
-            listener.accept(currentPhase);
-        }
+    private void publishPlanUpdated() {
+        eventPublisher.publishEvent(new PlanUpdatedEvent(currentPlan));
     }
 
-    private void notifyRequestListeners() {
-        for (TransitionRequestListener listener : requestListeners) {
-            listener.onTransitionRequested(currentPhase, pendingPhase, pendingReason);
-        }
-    }
-
-    private void notifyPlanListeners() {
-        for (Consumer<ImplementationPlan> listener : planListeners) {
-            listener.accept(currentPlan);
-        }
-    }
-
-    private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
+            private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
         if (plan == null) {
             return "";
         }
+        char nl = 10;
+        String wsRegex = "[" + (char) 92 + "s]+";
         StringBuilder sb = new StringBuilder();
         sb.append(
                 """
@@ -341,24 +316,25 @@ public class WorkflowService {
                 **Goal:** %s
 
                 """
-                        .formatted(plan.title().trim(), plan.goal().replaceAll("\s+", " ").trim()));
+                        .formatted(
+                                plan.title().trim(), plan.goal().replaceAll(wsRegex, " ").trim()));
 
         if (!plan.requirements().isEmpty()) {
-            sb.append("#### Requirements\n");
+            sb.append("#### Requirements").append(nl);
             for (String req : plan.requirements()) {
-                sb.append("* ").append(req.replaceAll("\s+", " ").trim()).append("\n");
+                sb.append("* ").append(req.replaceAll(wsRegex, " ").trim()).append(nl);
             }
-            sb.append("\n");
+            sb.append(nl);
         }
 
         if (!plan.technicalSteps().isEmpty()) {
-            sb.append("#### Technical Steps\n");
+            sb.append("#### Technical Steps").append(nl);
             for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
                 sb.append(step.completed() ? "* [x] " : "* [ ] ")
-                        .append(step.description().replaceAll("\s+", " ").trim())
-                        .append("\n");
+                        .append(step.description().replaceAll(wsRegex, " ").trim())
+                        .append(nl);
             }
         }
-        return sb.toString();
+                return sb.toString();
     }
 }

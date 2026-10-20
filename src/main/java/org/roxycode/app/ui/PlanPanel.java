@@ -7,7 +7,11 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.PhaseChangedEvent;
+import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.ImplementationPlan;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -25,7 +29,15 @@ public final class PlanPanel extends JPanel {
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
 
-    public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {
+        public PlanPanel(PlanService planManagerService, WorkflowService workflowService) {
+        this(planManagerService, workflowService, null);
+    }
+
+    @Autowired
+    public PlanPanel(
+            PlanService planManagerService,
+            WorkflowService workflowService,
+            TurnEventBridge turnEventBridge) {
         this.planManagerService = planManagerService;
         this.setLayout(new BorderLayout());
 
@@ -47,11 +59,15 @@ public final class PlanPanel extends JPanel {
         scrollPane.setBorder(null);
         this.add(scrollPane, BorderLayout.CENTER);
 
-        SwingHtmlUtils.installTextContextMenu(displayArea);
+                SwingHtmlUtils.installTextContextMenu(displayArea);
         updateTheme();
-        planManagerService.addListener(this::updateDisplay);
-        workflowService.addPhaseListener(
-                phase -> updateDisplay(planManagerService.getCurrentPlan()));
+        if (turnEventBridge != null) {
+            turnEventBridge.subscribe(
+                    PlanUpdatedEvent.class, event -> updateDisplay(event.plan()));
+            turnEventBridge.subscribe(
+                    PhaseChangedEvent.class,
+                    event -> updateDisplay(planManagerService.getCurrentPlan()));
+        }
         updateDisplay(planManagerService.getCurrentPlan());
     }
 

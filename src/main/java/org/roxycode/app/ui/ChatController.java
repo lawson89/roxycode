@@ -9,9 +9,14 @@ import javax.swing.SwingUtilities;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.AutonomousTransitionEvent;
+import org.roxycode.app.events.PhaseChangedEvent;
+import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
@@ -60,14 +65,26 @@ public final class ChatController {
         this.planService = planService;
     }
 
-    public void registerListeners() {
+        public void registerListeners() {
         String conversationId = model.getConversationId();
-        turnEventBridge.addTurnListener(conversationId, this::onAgentTurn);
+        turnEventBridge.subscribe(AgentTurnEvent.class, conversationId, this::onAgentTurn);
         if (model.isTaskMode()) {
-            turnEventBridge.addAutonomousTransitionListener(this::onAutonomousTransition);
+            turnEventBridge.subscribe(
+                    AutonomousTransitionEvent.class, this::onAutonomousTransition);
+            turnEventBridge.subscribe(
+                    PhaseChangedEvent.class, event -> onPhaseChanged(event.phase()));
+            turnEventBridge.subscribe(
+                    TransitionRequestedEvent.class,
+                    event ->
+                            onTransitionRequested(
+                                    event.current(), event.requested(), event.reason()));
+            turnEventBridge.subscribe(
+                    PlanUpdatedEvent.class,
+                    event -> SwingUtilities.invokeLater(view::updateTurnLabel));
         }
-        turnEventBridge.addToolExecutionListener(conversationId, this::onToolExecution);
-        turnEventBridge.addCompleteListener(
+        turnEventBridge.subscribe(ToolExecutionEvent.class, conversationId, this::onToolExecution);
+        turnEventBridge.subscribe(
+                AgentTurnCompleteEvent.class,
                 conversationId,
                 event ->
                         SwingUtilities.invokeLater(
@@ -76,18 +93,9 @@ public final class ChatController {
                                         view.setLoading(false);
                                     }
                                 }));
-
-        if (settingsService != null) {
-            settingsService.addSettingsListener(
-                    s -> SwingUtilities.invokeLater(view::updateTurnLabel));
-        }
-        if (model.isTaskMode()) {
-            workflowService.addPhaseListener(this::onPhaseChanged);
-            workflowService.addTransitionRequestListener(this::onTransitionRequested);
-            if (planService != null) {
-                planService.addListener(plan -> SwingUtilities.invokeLater(view::updateTurnLabel));
-            }
-        }
+        turnEventBridge.subscribe(
+                SettingsChangedEvent.class,
+                event -> SwingUtilities.invokeLater(view::updateTurnLabel));
     }
 
     public boolean isTurnActive() {

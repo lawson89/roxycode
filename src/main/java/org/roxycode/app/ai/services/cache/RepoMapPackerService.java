@@ -13,6 +13,7 @@ import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -56,13 +57,13 @@ public class RepoMapPackerService {
         this.grepService = grepService;
         this.metaService = metaService;
 
-        // Listen for project changes
-        this.excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
-        this.projectService.addProjectListener(
-                p -> {
-                    this.needsUpdate = true;
-                    log.debug("Repo map invalidated due to project change.");
-                });
+                this.excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
+    }
+
+    @EventListener
+    public void handleProjectChanged(ProjectChangedEvent event) {
+        this.needsUpdate = true;
+        log.debug("Repo map invalidated due to project change.");
     }
 
     @EventListener
