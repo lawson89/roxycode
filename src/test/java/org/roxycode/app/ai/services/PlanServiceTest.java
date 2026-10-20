@@ -15,17 +15,22 @@ import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.service.EnvironmentService;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class PlanServiceTest {
 
-    @Mock private WorkflowService workflowService;
+    @Mock private EnvironmentService envService;
+    @Mock private ApplicationEventPublisher eventPublisher;
+
+    private WorkflowService workflowService;
 
     private PlanService service;
 
     @BeforeEach
     void setUp() {
-        lenient().when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        workflowService = spy(new WorkflowService(envService, eventPublisher));
         service = new PlanService(workflowService);
     }
 
@@ -84,15 +89,15 @@ class PlanServiceTest {
     void testSemanticWorkflowMethods() {
         String reason = "Ready to build";
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        doReturn(WorkflowPhase.PLAN).when(workflowService).getCurrentPhase();
         service.requestDevelopment(reason);
         verify(workflowService).routeToPhase("CODE", reason);
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        doReturn(WorkflowPhase.CODE).when(workflowService).getCurrentPhase();
         service.requestReview(reason);
         verify(workflowService).routeToPhase("REVIEW", reason);
 
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
+        doReturn(WorkflowPhase.REVIEW).when(workflowService).getCurrentPhase();
         service.requestFixes(reason);
         verify(workflowService, times(2)).routeToPhase("CODE", reason);
 
@@ -102,7 +107,7 @@ class PlanServiceTest {
 
     @Test
     void testRequestPlanRevision() {
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        doReturn(WorkflowPhase.CODE).when(workflowService).getCurrentPhase();
         String reason = "Technical blocker";
         service.requestPlanRevision(reason);
         verify(workflowService, times(1)).routeToPhase("PLAN", reason);
@@ -111,7 +116,7 @@ class PlanServiceTest {
     @Test
     void testPhaseRestrictionsEnforced() {
         // In PLAN phase, markStepCompleted and requestReview should fail
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        doReturn(WorkflowPhase.PLAN).when(workflowService).getCurrentPhase();
         service.submitPlan("T", "G", List.of(), List.of("S1"));
 
         assertThrows(IllegalStateException.class, () -> service.markStepCompleted(0));
@@ -123,7 +128,7 @@ class PlanServiceTest {
 
         // In CODE phase, submitPlan, requestDevelopment, requestFixes,
         // requestCompletion should fail
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        doReturn(WorkflowPhase.CODE).when(workflowService).getCurrentPhase();
         assertDoesNotThrow(() -> service.markStepCompleted(0));
         assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
         assertThrows(
@@ -136,7 +141,7 @@ class PlanServiceTest {
         // In REVIEW phase, submitPlan, requestDevelopment, requestReview,
         // requestPlanRevision should
         // fail
-        when(workflowService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
+        doReturn(WorkflowPhase.REVIEW).when(workflowService).getCurrentPhase();
         assertDoesNotThrow(() -> service.markStepCompleted(1));
         assertThrows(
                 IllegalStateException.class,

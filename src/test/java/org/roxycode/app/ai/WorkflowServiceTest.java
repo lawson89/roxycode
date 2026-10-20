@@ -3,13 +3,13 @@ package org.roxycode.app.ai;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
@@ -18,7 +18,6 @@ import org.springframework.context.ApplicationEventPublisher;
 @ExtendWith(MockitoExtension.class)
 class WorkflowServiceTest {
 
-    @Mock private PlanService planManager;
     @Mock private EnvironmentService envService;
     @Mock private ApplicationEventPublisher eventPublisher;
 
@@ -26,31 +25,27 @@ class WorkflowServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new WorkflowService(planManager, envService, eventPublisher);
+        service = new WorkflowService(envService, eventPublisher);
     }
 
     private void setupCodePhase() {
         ImplementationPlan plan =
                 new ImplementationPlan(
                         "T", "G", List.of(), List.of(), true, "now", "user", null, List.of());
-        lenient().when(planManager.getCurrentPlan()).thenReturn(plan);
+        service.setCurrentPlan(plan);
         service.routeToPhase("CODE", "Reason");
         lenient().when(envService.getCurrentUser()).thenReturn("user");
         service.approveTransition();
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-        reset(planManager); // Clear interactions from setup
-        lenient().when(planManager.getCurrentPlan()).thenReturn(plan);
     }
 
     @Test
     void testPhaseManagement() {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
-        when(planManager.getCurrentPlan())
-                .thenReturn(
-                        new ImplementationPlan(
-                                "T", "G", List.of(), List.of(), false, null, null, null,
-                                List.of()));
+        service.setCurrentPlan(
+                new ImplementationPlan(
+                        "T", "G", List.of(), List.of(), false, null, null, null, List.of()));
 
         String response = service.routeToPhase("CODE", "Reason");
         assertTrue(WorkflowService.isTransitionResponse(response));
@@ -61,7 +56,9 @@ class WorkflowServiceTest {
         service.approveTransition();
 
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-        assertEquals(null, service.getPendingPhase());
+        assertNull(service.getPendingPhase());
+        assertTrue(service.getCurrentPlan().userApproved());
+        assertEquals("testuser", service.getCurrentPlan().approvedBy());
     }
 
     @Test
@@ -80,7 +77,7 @@ class WorkflowServiceTest {
                         "user",
                         null,
                         List.of());
-        when(planManager.getCurrentPlan()).thenReturn(planWithAllDone);
+        service.setCurrentPlan(planWithAllDone);
 
         // Request PLAN from CODE (plan revision) - Requires HITL approval
         String response = service.routeToPhase("PLAN", "Need architecture revision");
@@ -96,8 +93,8 @@ class WorkflowServiceTest {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         assertNull(service.getPendingPhase());
         // Must NOT complete or clear the plan during a CODE -> PLAN revision
-        verify(planManager, never()).completePlan(anyString());
-        verify(planManager, never()).clearPlan();
+        assertNotNull(service.getCurrentPlan());
+        assertNull(service.getCurrentPlan().completedOn());
     }
 
     @Test
@@ -120,7 +117,10 @@ class WorkflowServiceTest {
                         "user",
                         null,
                         List.of());
-        when(planManager.getCurrentPlan()).thenReturn(planWithIncompleteStep);
+        service.setCurrentPlan(planWithIncompleteStep);
+
+        List<ImplementationPlan> updates = new ArrayList<>();
+        service.addPlanListener(updates::add);
 
         // Request PLAN from REVIEW - Requires HITL Approval
         String planResponse = service.routeToPhase("PLAN", "Finalizing");
@@ -131,13 +131,16 @@ class WorkflowServiceTest {
         service.approveTransition();
 
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        verify(planManager).completePlan(anyString());
-        verify(planManager).clearPlan();
+        assertNull(service.getCurrentPlan());
+        assertTrue(
+                updates.stream().anyMatch(p -> p != null && p.completedOn() != null),
+                "Plan should be marked completed before being cleared");
     }
 
     @Test
     void testAutonomousReviewTransition() {
         setupCodePhase();
+        int initialLogSize = service.getCurrentPlan().handoffLog().size();
 
         // Request REVIEW - Autonomous transition returns structured JSON
         String response = service.routeToPhase("REVIEW", "Checking quality");
@@ -148,7 +151,7 @@ class WorkflowServiceTest {
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
         verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
-        verify(planManager).addHandoffLogEntry(anyString(), anyString(), anyString());
+        assertEquals(initialLogSize + 1, service.getCurrentPlan().handoffLog().size());
     }
 
     @Test
@@ -182,7 +185,10 @@ class WorkflowServiceTest {
                         "user",
                         null,
                         List.of());
-        when(planManager.getCurrentPlan()).thenReturn(plan);
+        service.setCurrentPlan(plan);
+
+        List<ImplementationPlan> updates = new ArrayList<>();
+        service.addPlanListener(updates::add);
 
         // Request PLAN from REVIEW - Requires HITL Approval
         String planResponse = service.routeToPhase("PLAN", "Finalizing");
@@ -193,7 +199,7 @@ class WorkflowServiceTest {
         service.approveTransition();
 
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        verify(planManager).completePlan(anyString());
-        verify(planManager).clearPlan();
+        assertNull(service.getCurrentPlan());
+        assertTrue(updates.stream().anyMatch(p -> p != null && p.completedOn() != null));
     }
 }

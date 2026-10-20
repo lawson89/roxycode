@@ -5,30 +5,23 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.apache.commons.lang3.Strings;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
 import org.roxycode.app.model.ImplementationPlan;
-import org.springframework.context.annotation.Lazy;
 
 /** Service for managing project plans and specifications. */
 @AgentService(
         value = "planService",
         phases = {"PLAN", "CODE", "REVIEW"})
 @AgentDoc("Service for managing project plans and specifications.")
-@SuppressWarnings({
-    "PMD.NullAssignment",
-})
 public class PlanService {
 
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
 
-    private ImplementationPlan currentPlan;
     private final WorkflowService workflowService;
-    private final List<PlanUpdateListener> listeners = new CopyOnWriteArrayList<>();
 
     /** Listener for plan updates. */
     @FunctionalInterface
@@ -36,7 +29,7 @@ public class PlanService {
         void onPlanUpdated(ImplementationPlan plan);
     }
 
-    public PlanService(@Lazy WorkflowService workflowService) {
+    public PlanService(WorkflowService workflowService) {
         this.workflowService = workflowService;
     }
 
@@ -46,7 +39,7 @@ public class PlanService {
      * @param listener the listener to add
      */
     public void addListener(PlanUpdateListener listener) {
-        listeners.add(listener);
+        workflowService.addPlanListener(listener::onPlanUpdated);
     }
 
     /**
@@ -94,18 +87,7 @@ public class PlanService {
             steps.add(new ImplementationPlan.TechStep("Automated code review passes", false));
         }
 
-        this.currentPlan =
-                new ImplementationPlan(
-                        plan.title(),
-                        plan.goal(),
-                        plan.requirements(),
-                        steps,
-                        plan.userApproved(),
-                        plan.approvalTimestamp(),
-                        plan.approvedBy(),
-                        plan.completedOn(),
-                        plan.handoffLog());
-        notifyListeners();
+        workflowService.setCurrentPlan(plan.withTechnicalSteps(steps));
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
@@ -173,19 +155,7 @@ public class PlanService {
     /** Approves the current plan. Internal lifecycle method; cannot be invoked from JEXL. */
     public void approvePlan(String user, String timestamp) {
         checkNotJexlCaller("approvePlan");
-        if (currentPlan == null) return;
-        currentPlan =
-                new ImplementationPlan(
-                        currentPlan.title(),
-                        currentPlan.goal(),
-                        currentPlan.requirements(),
-                        currentPlan.technicalSteps(),
-                        true,
-                        timestamp,
-                        user,
-                        currentPlan.completedOn(),
-                        currentPlan.handoffLog());
-        notifyListeners();
+        workflowService.approvePlan(user, timestamp);
     }
 
     /**
@@ -193,19 +163,7 @@ public class PlanService {
      */
     public void completePlan(String timestamp) {
         checkNotJexlCaller("completePlan");
-        if (currentPlan == null) return;
-        currentPlan =
-                new ImplementationPlan(
-                        currentPlan.title(),
-                        currentPlan.goal(),
-                        currentPlan.requirements(),
-                        currentPlan.technicalSteps(),
-                        currentPlan.userApproved(),
-                        currentPlan.approvalTimestamp(),
-                        currentPlan.approvedBy(),
-                        timestamp,
-                        currentPlan.handoffLog());
-        notifyListeners();
+        workflowService.completePlan(timestamp);
     }
 
     /** Marks a specific technical implementation step as completed using its 0-based index. */
@@ -230,36 +188,25 @@ public class PlanService {
     }
 
     private void updateStepStatus(int index, boolean completed) {
+        ImplementationPlan currentPlan = workflowService.getCurrentPlan();
         if (currentPlan == null || index < 0 || index >= currentPlan.technicalSteps().size()) {
             return;
         }
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
         ImplementationPlan.TechStep step = steps.get(index);
         steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
-        currentPlan =
-                new ImplementationPlan(
-                        currentPlan.title(),
-                        currentPlan.goal(),
-                        currentPlan.requirements(),
-                        steps,
-                        currentPlan.userApproved(),
-                        currentPlan.approvalTimestamp(),
-                        currentPlan.approvedBy(),
-                        currentPlan.completedOn(),
-                        currentPlan.handoffLog());
-        notifyListeners();
+        workflowService.setCurrentPlan(currentPlan.withTechnicalSteps(steps));
     }
 
     /** Gets the current implementation plan. */
     public ImplementationPlan getCurrentPlan() {
-        return currentPlan;
+        return workflowService.getCurrentPlan();
     }
 
     /** Clears the existing plan. Internal lifecycle method; cannot be invoked from JEXL. */
     public void clearPlan() {
         checkNotJexlCaller("clearPlan");
-        this.currentPlan = null;
-        notifyListeners();
+        workflowService.clearPlan();
     }
 
     /** Transitions the workflow to the development (CODE) phase. */
@@ -384,16 +331,10 @@ public class PlanService {
         return item.toString();
     }
 
-    private void notifyListeners() {
-        for (PlanUpdateListener listener : listeners) {
-            listener.onPlanUpdated(currentPlan);
-        }
-    }
-
     /** Adds an entry to the handoff log. Internal lifecycle method; cannot be invoked from JEXL. */
     public void addHandoffLogEntry(String timestamp, String user, String message) {
         checkNotJexlCaller("addHandoffLogEntry");
-        appendHandoffLogEntry(timestamp, user, message);
+        workflowService.addHandoffLogEntry(timestamp, user, message);
     }
 
     /** Adds an entry to the handoff log. */
@@ -403,24 +344,6 @@ public class PlanService {
     public void addHandoffLogEntry(String entry) {
         requirePhase(
                 "addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
-        appendHandoffLogEntry(java.time.OffsetDateTime.now().toString(), "System", entry);
-    }
-
-    private void appendHandoffLogEntry(String timestamp, String user, String message) {
-        if (currentPlan == null) return;
-        List<ImplementationPlan.LogEntry> logs = new ArrayList<>(currentPlan.handoffLog());
-        logs.add(new ImplementationPlan.LogEntry(timestamp, user, message));
-        currentPlan =
-                new ImplementationPlan(
-                        currentPlan.title(),
-                        currentPlan.goal(),
-                        currentPlan.requirements(),
-                        currentPlan.technicalSteps(),
-                        currentPlan.userApproved(),
-                        currentPlan.approvalTimestamp(),
-                        currentPlan.approvedBy(),
-                        currentPlan.completedOn(),
-                        logs);
-        notifyListeners();
+        workflowService.addHandoffLogEntry(java.time.OffsetDateTime.now().toString(), "System", entry);
     }
 }

@@ -6,14 +6,13 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import org.apache.commons.text.StringEscapeUtils;
-import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,9 +21,9 @@ public class WorkflowService {
     private static final String PHASE_DEVELOP = "DEVELOP";
     private static final String PHASE_CODE = "CODE";
 
-    private final PlanService planManager;
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
+    private ImplementationPlan currentPlan;
     private WorkflowPhase currentPhase = WorkflowPhase.PLAN;
     private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.PLAN);
     private WorkflowPhase pendingPhase;
@@ -32,6 +31,7 @@ public class WorkflowService {
 
     private final List<Consumer<WorkflowPhase>> phaseListeners = new ArrayList<>();
     private final List<TransitionRequestListener> requestListeners = new ArrayList<>();
+    private final List<Consumer<ImplementationPlan>> planListeners = new CopyOnWriteArrayList<>();
 
     @FunctionalInterface
     public interface TransitionRequestListener {
@@ -39,17 +39,52 @@ public class WorkflowService {
     }
 
     public WorkflowService(
-            @Lazy PlanService planManager,
             EnvironmentService environmentService,
             ApplicationEventPublisher eventPublisher) {
-        this.planManager = planManager;
         this.environmentService = environmentService;
         this.eventPublisher = eventPublisher;
-        this.planManager.addListener(plan -> handlePlanUpdate());
     }
 
-    private void handlePlanUpdate() {
-        // Enforce HITL approval for CODE completion. Auto-transition removed.
+    public ImplementationPlan getCurrentPlan() {
+        return currentPlan;
+    }
+
+    public void setCurrentPlan(ImplementationPlan plan) {
+        this.currentPlan = plan;
+        notifyPlanListeners();
+    }
+
+    public void approvePlan(String user, String timestamp) {
+        if (currentPlan == null) {
+            return;
+        }
+        currentPlan = currentPlan.withApproval(user, timestamp);
+        notifyPlanListeners();
+    }
+
+    public void completePlan(String timestamp) {
+        if (currentPlan == null) {
+            return;
+        }
+        currentPlan = currentPlan.withCompletedOn(timestamp);
+        notifyPlanListeners();
+    }
+
+    public void clearPlan() {
+        this.currentPlan = null;
+        notifyPlanListeners();
+    }
+
+    public void addHandoffLogEntry(String timestamp, String user, String message) {
+        if (currentPlan == null) {
+            return;
+        }
+        currentPlan = currentPlan.withAddedHandoffLogEntry(timestamp, user, message);
+        notifyPlanListeners();
+    }
+
+    public void addPlanListener(Consumer<ImplementationPlan> listener) {
+        planListeners.add(listener);
     }
 
     public String routeToPhase(String phaseName, String reason) {
@@ -87,7 +122,7 @@ public class WorkflowService {
 
         // Check prerequisites for specific transitions
         if (currentPhase == WorkflowPhase.PLAN && nextPhase == WorkflowPhase.CODE) {
-            if (planManager.getCurrentPlan() == null) {
+            if (currentPlan == null) {
                 return "Error: Cannot advance to CODE. Implementation Plan is missing. Call planService.submitPlan() first.";
             }
         }
@@ -98,7 +133,7 @@ public class WorkflowService {
             String timestamp = java.time.OffsetDateTime.now().toString();
             String user = "System";
             String message = String.format("%s -> %s: %s", oldPhase, nextPhase, reason);
-            planManager.addHandoffLogEntry(timestamp, user, message);
+            addHandoffLogEntry(timestamp, user, message);
 
             handleCompletionMetadata(oldPhase, nextPhase, timestamp);
 
@@ -112,7 +147,7 @@ public class WorkflowService {
                     String.format(
                             "Autonomous transition from %s to %s successful. Reason: %s",
                             oldPhase, nextPhase, reason);
-            String autoJson =
+                        String autoJson =
                     String.format(
                             "{\"message\": \"%s\", \"reason\": \"%s\"}",
                             StringEscapeUtils.escapeJson(autoMessage),
@@ -123,7 +158,7 @@ public class WorkflowService {
         this.pendingReason = reason;
         notifyRequestListeners();
 
-        String summary = formatPlanSummary(planManager.getCurrentPlan());
+        String summary = formatPlanSummary(currentPlan);
         String message =
                 """
                 **Transition Request (%s → %s)**
@@ -132,7 +167,7 @@ public class WorkflowService {
                         .formatted(
                                 currentPhase.getDisplayName(), nextPhase.getDisplayName(), reason);
 
-        // Yield execution turn immediately for user approval
+                // Yield execution turn immediately for user approval
         String json =
                 String.format(
                         "{\"summary\": \"%s\", \"message\": \"%s\", \"reason\": \"%s\"}",
@@ -201,10 +236,9 @@ public class WorkflowService {
 
     private void handleCompletionMetadata(WorkflowPhase from, WorkflowPhase to, String timestamp) {
         if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.PLAN) {
-            ImplementationPlan plan = planManager.getCurrentPlan();
-            if (plan != null) {
-                planManager.completePlan(timestamp);
-                planManager.clearPlan();
+            if (currentPlan != null) {
+                completePlan(timestamp);
+                clearPlan();
             }
         }
     }
@@ -229,11 +263,11 @@ public class WorkflowService {
                     String.format(
                             "%s -> %s (User Approved): %s",
                             currentPhase, pendingPhase, pendingReason);
-            planManager.addHandoffLogEntry(timestamp, user, message);
+            addHandoffLogEntry(timestamp, user, message);
 
             // Plan Approval Metadata
             if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE) {
-                planManager.approvePlan(user, timestamp);
+                approvePlan(user, timestamp);
             }
 
             // Phase Completion Metadata
@@ -263,7 +297,7 @@ public class WorkflowService {
         this.currentPhase = WorkflowPhase.PLAN;
         this.visitedPhases.clear();
         this.visitedPhases.add(WorkflowPhase.PLAN);
-        this.planManager.clearPlan();
+        clearPlan();
         notifyPhaseListeners();
         notifyRequestListeners();
     }
@@ -289,6 +323,12 @@ public class WorkflowService {
         }
     }
 
+    private void notifyPlanListeners() {
+        for (Consumer<ImplementationPlan> listener : planListeners) {
+            listener.accept(currentPlan);
+        }
+    }
+
     private String formatPlanSummary(org.roxycode.app.model.ImplementationPlan plan) {
         if (plan == null) {
             return "";
@@ -303,12 +343,12 @@ public class WorkflowService {
 
                 """
                         .formatted(
-                                plan.title().trim(), plan.goal().replaceAll("\\s+", " ").trim()));
+                                plan.title().trim(), plan.goal().replaceAll("\s+", " ").trim()));
 
         if (!plan.requirements().isEmpty()) {
             sb.append("#### Requirements\n");
             for (String req : plan.requirements()) {
-                sb.append("* ").append(req.replaceAll("\\s+", " ").trim()).append("\n");
+                sb.append("* ").append(req.replaceAll("\s+", " ").trim()).append("\n");
             }
             sb.append("\n");
         }
@@ -317,7 +357,7 @@ public class WorkflowService {
             sb.append("#### Technical Steps\n");
             for (org.roxycode.app.model.ImplementationPlan.TechStep step : plan.technicalSteps()) {
                 sb.append(step.completed() ? "* [x] " : "* [ ] ")
-                        .append(step.description().replaceAll("\\s+", " ").trim())
+                        .append(step.description().replaceAll("\s+", " ").trim())
                         .append("\n");
             }
         }
