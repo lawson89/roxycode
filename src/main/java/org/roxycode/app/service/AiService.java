@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
@@ -33,10 +32,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class AiService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AiService.class);
-    private static final String NEWLINE_DOUBLE = "\n\n";
+        private static final String NEWLINE_DOUBLE = "\n\n";
     private static final String FIELD_MESSAGE = "message";
-    private static final String MAX_TURNS_EXCEEDED = "MAX_TOOL_TURNS_EXCEEDED";
-
     public String chat(String message) {
         return chat("default", workflowService.getCurrentPhase(), message, null, null);
     }
@@ -52,7 +49,6 @@ public class AiService {
     private final WorkflowService workflowService;
     private final ChatMemory chatMemory;
     private final ApplicationEventPublisher eventPublisher;
-    private final ThreadLocal<JexlTool> activeJexlTool = new ThreadLocal<>();
 
     public AiService(
             ChatClient.Builder chatClientBuilder,
@@ -97,9 +93,7 @@ public class AiService {
             @Override
             public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
                 ToolExecutionResult result = delegate.executeToolCalls(prompt, chatResponse);
-                JexlTool currentTool = activeJexlTool.get();
-                if ((currentTool != null && currentTool.isReturnDirect())
-                        || isDirectReturnResult(result)) {
+                if (isDirectReturnResult(result)) {
                     return ToolExecutionResult.builder()
                             .conversationHistory(result.conversationHistory())
                             .returnDirect(true)
@@ -120,7 +114,9 @@ public class AiService {
                 result.conversationHistory().get(result.conversationHistory().size() - 1);
         if (lastMessage instanceof ToolResponseMessage toolMsg) {
             for (ToolResponseMessage.ToolResponse resp : toolMsg.getResponses()) {
-                if (WorkflowService.isTransitionResponse(resp.responseData())) {
+                String data = resp.responseData();
+                if (WorkflowService.isTransitionResponse(data)
+                        || JexlTool.isMaxTurnsExceededResponse(data)) {
                     return true;
                 }
             }
@@ -137,13 +133,12 @@ public class AiService {
         if (Thread.currentThread().isInterrupted()) {
             throw new CancellationException("Chat turn interrupted before start");
         }
-        JexlTool ephemeralJexlTool = new JexlTool(jexlServiceRegistry, phase);
-        AtomicInteger turnCount = new AtomicInteger(0);
         int maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
+        JexlTool ephemeralJexlTool = new JexlTool(jexlServiceRegistry, phase, maxTurns);
 
         ephemeralJexlTool.addListener(
                 event -> {
-                    int turn = turnCount.incrementAndGet();
+                    int turn = ephemeralJexlTool.getTurnCount();
                     eventPublisher.publishEvent(
                             new AgentTurnEvent(conversationId, "Roxy", turn, phase.name()));
                     eventPublisher.publishEvent(
@@ -153,13 +148,9 @@ public class AiService {
                                     event.result(),
                                     event.success(),
                                     event.error()));
-                    if (turn > maxTurns && !ephemeralJexlTool.isReturnDirect()) {
-                        throw new RuntimeException(MAX_TURNS_EXCEEDED);
-                    }
                 });
 
         String content;
-        activeJexlTool.set(ephemeralJexlTool);
         try {
             if (Thread.currentThread().isInterrupted()) {
                 throw new CancellationException("Chat turn interrupted before prompt build");
@@ -189,15 +180,8 @@ public class AiService {
                 Thread.currentThread().interrupt();
                 throw e;
             }
-            if (ExceptionUtils.hasCauseWithMessage(e, MAX_TURNS_EXCEEDED)) {
-                content =
-                        "Autonomous execution stopped: Maximum tool turns ("
-                                + maxTurns
-                                + ") exceeded.";
-            } else {
-                publishError(conversationId, turnCount, e);
-                throw e;
-            }
+            publishError(conversationId, ephemeralJexlTool.getTurnCount(), e);
+            throw e;
         } catch (Exception e) {
             CancellationException cancelCause =
                     ExceptionUtils.findCause(e, CancellationException.class);
@@ -213,14 +197,13 @@ public class AiService {
                                                 : "Chat turn cancelled")
                                 .initCause(e);
             }
-            publishError(conversationId, turnCount, e);
+            publishError(conversationId, ephemeralJexlTool.getTurnCount(), e);
             throw new RuntimeException("Unexpected error during chat turn", e);
-        } finally {
-            activeJexlTool.remove();
         }
 
         eventPublisher.publishEvent(
-                new AgentTurnCompleteEvent(conversationId, "Roxy", turnCount.get(), content));
+                new AgentTurnCompleteEvent(
+                        conversationId, "Roxy", ephemeralJexlTool.getTurnCount(), content));
         return content;
     }
 
@@ -280,9 +263,9 @@ public class AiService {
                                 .model(activeModel));
     }
 
-    private void publishError(String conversationId, AtomicInteger turnCount, Exception e) {
+    private void publishError(String conversationId, int turnCount, Exception e) {
         eventPublisher.publishEvent(
                 new AgentTurnCompleteEvent(
-                        conversationId, "Roxy", turnCount.get(), "Error: " + e.getMessage()));
+                        conversationId, "Roxy", turnCount, "Error: " + e.getMessage()));
     }
 }

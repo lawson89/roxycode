@@ -6,6 +6,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +74,46 @@ public class JexlToolTest {
                 response);
         assertTrue(tool.isReturnDirect(), "Transition should mark tool as returnDirect");
         assertTrue(listenerNotified.get(), "Execution listener should be notified on transition");
+    }
+
+    @Test
+    public void testExecuteJexlTurnCountAndMaxTurnsShortCircuit() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE, 2);
+
+        AtomicInteger listenerCallCount = new AtomicInteger(0);
+        AtomicInteger lastSeenTurnCount = new AtomicInteger(0);
+        tool.addListener(
+                event -> {
+                    listenerCallCount.incrementAndGet();
+                    lastSeenTurnCount.set(tool.getTurnCount());
+                });
+
+        assertEquals(0, tool.getTurnCount());
+
+                String r1 = tool.executeJexl("1 + 1");
+        assertTrue(r1.contains("2"));
+        assertEquals(1, tool.getTurnCount());
+        assertEquals(1, lastSeenTurnCount.get());
+        assertFalse(tool.isReturnDirect());
+        assertFalse(JexlTool.isMaxTurnsExceededResponse(r1));
+
+        String r2 = tool.executeJexl("2 + 2");
+        assertTrue(r2.contains("4"));
+        assertEquals(2, tool.getTurnCount());
+        assertEquals(2, lastSeenTurnCount.get());
+        assertFalse(tool.isReturnDirect());
+        assertFalse(JexlTool.isMaxTurnsExceededResponse(r2));
+
+        String r3 = tool.executeJexl("3 + 3");
+        assertEquals("Autonomous execution stopped: Maximum tool turns (2) exceeded.", r3);
+        assertTrue(JexlTool.isMaxTurnsExceededResponse(r3));
+        assertTrue(tool.isReturnDirect(), "Max turns exceeded should set returnDirect to true");
+        assertEquals(2, tool.getTurnCount(), "Turn count should not increment after maxTurns");
+        assertEquals(
+                2,
+                listenerCallCount.get(),
+                "Listener should not be notified when maxTurns short-circuits");
     }
 
     @Test

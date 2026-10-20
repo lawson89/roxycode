@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
@@ -26,17 +27,26 @@ public class JexlTool {
 
     private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
     private static final String ERROR_KEY = "error";
+    private static final String MAX_TURNS_EXCEEDED_PREFIX =
+            "Autonomous execution stopped: Maximum tool turns (";
     private static final ObjectMapper MAPPER = AiConfig.SHARED_OBJECT_MAPPER;
     private final JexlEngine jexl;
     private final JexlServiceRegistry registry;
     private final WorkflowPhase phase;
+    private final int maxTurns;
+    private final AtomicInteger turnCount = new AtomicInteger(0);
     private final List<JexlExecutionListener> listeners = new ArrayList<>();
     private boolean returnDirect;
 
     public JexlTool(JexlServiceRegistry registry, WorkflowPhase phase) {
+        this(registry, phase, Integer.MAX_VALUE);
+    }
+
+    public JexlTool(JexlServiceRegistry registry, WorkflowPhase phase, int maxTurns) {
         this.jexl = new JexlBuilder().permissions(JexlPermissions.UNRESTRICTED).create();
         this.registry = registry;
         this.phase = phase;
+        this.maxTurns = maxTurns;
     }
 
     public void addListener(JexlExecutionListener listener) {
@@ -49,6 +59,18 @@ public class JexlTool {
 
     public boolean isReturnDirect() {
         return returnDirect;
+    }
+
+    public int getTurnCount() {
+        return turnCount.get();
+    }
+
+    public static boolean isMaxTurnsExceededResponse(String response) {
+        return response != null && response.startsWith(MAX_TURNS_EXCEEDED_PREFIX);
+    }
+
+    private String formatMaxTurnsExceededMessage() {
+        return MAX_TURNS_EXCEEDED_PREFIX + maxTurns + ") exceeded.";
     }
 
     /**
@@ -65,6 +87,11 @@ public class JexlTool {
         if (Thread.currentThread().isInterrupted()) {
             throw new CancellationException("Execution interrupted before start");
         }
+        if (maxTurns > 0 && turnCount.get() >= maxTurns) {
+            this.returnDirect = true;
+            return formatMaxTurnsExceededMessage();
+        }
+        turnCount.incrementAndGet();
         log.info("Executing JEXL script: {}", script);
 
         JexlScript jexlScript;
@@ -86,11 +113,7 @@ public class JexlTool {
 
             if (WorkflowService.isTransitionResponse(result)) {
                 this.returnDirect = true;
-                try {
-                    fireEvent(new JexlExecutionEvent(script, result, true, null));
-                } catch (Exception ignored) {
-                    // Preserve direct return transition even if turn limit listener throws
-                }
+                fireEvent(new JexlExecutionEvent(script, result, true, null));
                 return (String) result;
             }
 
@@ -106,9 +129,6 @@ public class JexlTool {
             }
             return MAPPER.writeValueAsString(Map.of("result", output));
         } catch (Exception e) {
-            if (ExceptionUtils.hasCauseWithMessage(e, "MAX_TOOL_TURNS_EXCEEDED")) {
-                throw new RuntimeException("MAX_TOOL_TURNS_EXCEEDED", e);
-            }
             if (ExceptionUtils.findCause(e, JexlException.Cancel.class) != null
                     || ExceptionUtils.findCause(e, InterruptedException.class) != null
                     || ExceptionUtils.findCause(e, ClosedByInterruptException.class) != null

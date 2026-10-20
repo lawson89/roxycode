@@ -2,6 +2,7 @@ package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,13 +19,21 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.WorkflowService;
+import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.roxycode.app.events.AgentTurnEvent;
+import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
@@ -141,10 +151,18 @@ class AiServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void testChatHandlesTurnLimitExceeded() {
+        settings.setMaxAgentToolTurns(2);
+
+        AtomicReference<JexlTool> capturedTool = new AtomicReference<>();
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
         when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
-        when(requestSpec.tools(any())).thenReturn(requestSpec);
+        when(requestSpec.tools(any()))
+                .thenAnswer(
+                        inv -> {
+                            capturedTool.set(inv.getArgument(0));
+                            return requestSpec;
+                        });
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
 
@@ -152,14 +170,77 @@ class AiServiceTest {
         when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null))
                 .thenReturn("EXPLORE PROMPT");
 
-        // Mocking the call to throw the limit exception
-        when(requestSpec.call()).thenThrow(new RuntimeException("MAX_TOOL_TURNS_EXCEEDED"));
+        ToolCallingManager delegate = mock(ToolCallingManager.class);
+        ToolCallingManager manager = aiService.createReturnDirectToolCallingManager(delegate);
 
-        settings.setMaxAgentToolTurns(3);
+        Prompt prompt = new Prompt(List.of(new UserMessage("Hello")));
+        AssistantMessage.ToolCall toolCall =
+                new AssistantMessage.ToolCall(
+                        "call-1",
+                        "function",
+                        "executeJexl",
+                        """
+                        {"script":"1 + 1"}""");
+        AssistantMessage assistantMessage =
+                AssistantMessage.builder().content("").toolCalls(List.of(toolCall)).build();
+        ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMessage)));
+
+        when(delegate.executeToolCalls(prompt, chatResponse))
+                .thenAnswer(
+                        inv -> {
+                            String out = capturedTool.get().executeJexl("1 + 1");
+                            ToolResponseMessage toolMsg =
+                                    ToolResponseMessage.builder()
+                                            .responses(
+                                                    List.of(
+                                                            new ToolResponseMessage.ToolResponse(
+                                                                    "call-1", "executeJexl", out)))
+                                            .build();
+                            return ToolExecutionResult.builder()
+                                    .conversationHistory(
+                                            List.of(
+                                                    new UserMessage("Hello"),
+                                                    assistantMessage,
+                                                    toolMsg))
+                                    .returnDirect(false)
+                                    .build();
+                        });
+
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.content())
+                .thenAnswer(
+                        inv -> {
+                            ToolExecutionResult r1 = manager.executeToolCalls(prompt, chatResponse);
+                            assertFalse(r1.returnDirect());
+                            ToolExecutionResult r2 = manager.executeToolCalls(prompt, chatResponse);
+                            assertFalse(r2.returnDirect());
+                            // 3rd call exceeds maxTurns (2) and short-circuits with returnDirect(true)
+                            ToolExecutionResult r3 = manager.executeToolCalls(prompt, chatResponse);
+                            assertTrue(r3.returnDirect());
+
+                            List<Message> history = r3.conversationHistory();
+                            assertEquals(3, history.size());
+                            assertEquals(assistantMessage, history.get(1));
+                            ToolResponseMessage stopToolMsg =
+                                    assertInstanceOf(ToolResponseMessage.class, history.get(2));
+                            return stopToolMsg.getResponses().get(0).responseData();
+                        });
 
         String result = aiService.chat("Hello");
 
-        assertTrue(result.contains("Maximum tool turns (3) exceeded"));
+        assertEquals("Autonomous execution stopped: Maximum tool turns (2) exceeded.", result);
+                // Delegate is invoked on all 3 calls; JexlTool short-circuits on the 3rd call
+        verify(delegate, times(3)).executeToolCalls(prompt, chatResponse);
+        verify(eventPublisher, times(2)).publishEvent(any(AgentTurnEvent.class));
+        verify(eventPublisher, times(2)).publishEvent(any(ToolExecutionEvent.class));
+
+        ArgumentCaptor<AgentTurnCompleteEvent> completeCaptor =
+                ArgumentCaptor.forClass(AgentTurnCompleteEvent.class);
+        verify(eventPublisher).publishEvent(completeCaptor.capture());
+        assertEquals(2, completeCaptor.getValue().totalTurns());
+        assertEquals(
+                "Autonomous execution stopped: Maximum tool turns (2) exceeded.",
+                completeCaptor.getValue().result());
     }
 
     @Test
