@@ -116,8 +116,17 @@ public class JexlToolTest {
     public void testExecuteJexlError() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
+        AtomicReference<JexlExecutionEvent> capturedEvent = new AtomicReference<>();
+        tool.addListener(capturedEvent::set);
+
         String result = tool.executeJexl("if (");
         assertTrue(result.contains("Syntax Error"));
+        assertNotNull(capturedEvent.get(), "Syntax error should fire JexlExecutionEvent");
+        assertEquals("if (", capturedEvent.get().script());
+        assertNull(capturedEvent.get().result());
+        assertFalse(capturedEvent.get().success());
+        assertNotNull(capturedEvent.get().error());
+        assertTrue(capturedEvent.get().error().startsWith("Syntax Error: "));
     }
 
     @Test

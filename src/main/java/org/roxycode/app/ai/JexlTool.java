@@ -72,6 +72,8 @@ public class JexlTool {
             jexlScript = jexl.createScript(script);
         } catch (Exception e) {
             log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
+            fireEvent(
+                    new JexlExecutionEvent(script, null, false, "Syntax Error: " + e.getMessage()));
             return toJsonError("Syntax Error (Script not executed): " + e.getMessage());
         }
 

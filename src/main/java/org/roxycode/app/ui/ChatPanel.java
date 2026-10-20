@@ -252,6 +252,10 @@ public final class ChatPanel extends JPanel {
         outputArea.appendToolLog(toolName, output);
     }
 
+    void appendToolLog(String toolName, String output, boolean success, String error) {
+        outputArea.appendToolLog(toolName, output, success, error);
+    }
+
     void clearOutput() {
         outputArea.clear();
     }

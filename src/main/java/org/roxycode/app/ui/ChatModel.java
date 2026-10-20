@@ -23,7 +23,7 @@ public final class ChatModel {
     private final String sessionPrefix;
     private final String conversationId;
     private final WorkflowPhase lockedPhase;
-    private final boolean isTaskMode;
+    private final boolean taskMode;
 
     private final AtomicBoolean turnCancelled = new AtomicBoolean(false);
     private final List<Runnable> pendingPostTurnActions = new ArrayList<>();
@@ -32,11 +32,11 @@ public final class ChatModel {
     private int currentTurn = 0;
     private boolean loading = false;
 
-    public ChatModel(String sessionPrefix, WorkflowPhase lockedPhase, boolean isTaskMode) {
+    public ChatModel(String sessionPrefix, WorkflowPhase lockedPhase, boolean taskMode) {
         this.sessionPrefix = sessionPrefix;
         this.conversationId = sessionPrefix + DEFAULT_CONVERSATION_SUFFIX;
         this.lockedPhase = lockedPhase;
-        this.isTaskMode = isTaskMode;
+        this.taskMode = taskMode;
     }
 
     public String getSessionPrefix() {
@@ -52,7 +52,7 @@ public final class ChatModel {
     }
 
     public boolean isTaskMode() {
-        return isTaskMode;
+        return taskMode;
     }
 
     public WorkflowPhase resolveActivePhase(WorkflowPhase workflowCurrentPhase) {
@@ -156,7 +156,7 @@ public final class ChatModel {
             int maxTurns = settings.getMaxAgentToolTurns();
             sb.append(" / ").append(maxTurns);
         }
-        if (isTaskMode && plan != null && !plan.technicalSteps().isEmpty()) {
+        if (taskMode && plan != null && !plan.technicalSteps().isEmpty()) {
             int completed = 0;
             for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
                 if (step.completed()) {

@@ -75,6 +75,32 @@ class ChatHtmlTemplatesTest {
         assertTrue(result.contains("tool-call"));
         assertTrue(result.contains("git"));
         assertTrue(result.contains("diff output"));
+        assertTrue(
+                result.contains("<div class=\"tool-result\">&#10003; Executed successfully</div>"));
+        assertFalse(result.contains("tool-error"));
+    }
+
+    @Test
+    void testRenderToolLogSuccessAndFailure() {
+        String successHtml = ChatHtmlTemplates.renderToolLog("jexl", "1 + 1", true, null);
+        assertTrue(
+                successHtml.contains(
+                        "<div class=\"tool-result\">&#10003; Executed successfully</div>"));
+        assertFalse(successHtml.contains("tool-error"));
+
+        String failureHtml =
+                ChatHtmlTemplates.renderToolLog(
+                        "jexl", "bad()", false, "Syntax Error: <unexpected> & token");
+        assertTrue(
+                failureHtml.contains(
+                        "<div class=\"tool-error\">&#10007; Error: Syntax Error: &lt;unexpected&gt; &amp; token</div>"));
+        assertFalse(failureHtml.contains("<unexpected>"));
+        assertFalse(failureHtml.contains("tool-result"));
+
+        String fallbackHtml = ChatHtmlTemplates.renderToolLog("jexl", "bad()", false, "   ");
+        assertTrue(
+                fallbackHtml.contains(
+                        "<div class=\"tool-error\">&#10007; Error: Unknown error</div>"));
     }
 
     @Test

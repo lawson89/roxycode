@@ -37,4 +37,16 @@ class MarkdownPaneTest {
         pane.clear();
         assertEquals(-1, pane.getCopiedMessageIndex());
     }
+
+    @Test
+    void testAppendToolLogRendersSuccessAndErrorStatus() {
+        MarkdownPane pane = new MarkdownPane();
+        pane.appendToolLog("", "var x = 1;", true, null);
+        pane.appendToolLog("", "if (", false, "Syntax Error: <eof>");
+
+        String html = pane.getText();
+        assertTrue(html.contains("Executed successfully"));
+        assertTrue(html.contains("Error: Syntax Error: &lt;eof&gt;"));
+        assertFalse(html.contains("<eof>"));
+    }
 }

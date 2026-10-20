@@ -33,7 +33,13 @@ public final class MarkdownPane extends JTextPane {
     private String lastCopiedMarkdown;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-    private record Message(String role, StringBuilder content, String timestamp, boolean isTool) {}
+    private record Message(
+            String role,
+            StringBuilder content,
+            String timestamp,
+            boolean isTool,
+            boolean success,
+            String error) {}
 
     public MarkdownPane() {
         setEditable(false);
@@ -57,6 +63,7 @@ public final class MarkdownPane extends JTextPane {
                                 int index = Integer.parseInt(desc.substring(COPY_PREFIX.length()));
                                 copyMessageMarkdown(index);
                             } catch (NumberFormatException ignored) {
+                                // Ignore malformed copy link index
                             }
                         }
                     }
@@ -91,18 +98,26 @@ public final class MarkdownPane extends JTextPane {
                         role,
                         new StringBuilder(safeContent),
                         LocalDateTime.now().format(TIME_FORMATTER),
-                        false));
+                        false,
+                        true,
+                        null));
         renderAll(true);
     }
 
     public void appendToolLog(String toolName, String output) {
+        appendToolLog(toolName, output, true, null);
+    }
+
+    public void appendToolLog(String toolName, String output, boolean success, String error) {
         String safeOutput = output != null ? output : "";
         messages.add(
                 new Message(
                         toolName,
                         new StringBuilder(safeOutput),
                         LocalDateTime.now().format(TIME_FORMATTER),
-                        true));
+                        true,
+                        success,
+                        error));
         renderAll(true);
     }
 
@@ -162,7 +177,11 @@ public final class MarkdownPane extends JTextPane {
             try {
                 if (msg.isTool()) {
                     fullHtml.append(
-                            ChatHtmlTemplates.renderToolLog(msg.role(), msg.content().toString()));
+                            ChatHtmlTemplates.renderToolLog(
+                                    msg.role(),
+                                    msg.content().toString(),
+                                    msg.success(),
+                                    msg.error()));
                 } else {
                     String renderedMarkdown =
                             renderer.render(parser.parse(msg.content().toString()));

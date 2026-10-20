@@ -335,7 +335,7 @@ public final class ChatController {
                     if (model.isTurnCancelled()) return;
                     String toolName = "";
                     String output = JexlToHtmlConverter.convert(event.script());
-                    view.appendToolLog(toolName, output);
+                    view.appendToolLog(toolName, output, event.success(), event.error());
                 });
     }
 

@@ -98,12 +98,27 @@ public class ChatHtmlTemplates {
     }
 
     public static String renderToolLog(String toolName, String output) {
+        return renderToolLog(toolName, output, true, null);
+    }
+
+    public static String renderToolLog(
+            String toolName, String output, boolean success, String error) {
         String header =
                 (toolName == null || toolName.trim().isEmpty())
                         ? ""
                         : "<div class='tool-header'>"
                                 + SwingHtmlUtils.escapeHtml(toolName)
                                 + "</div>";
+        String statusHtml;
+        if (success) {
+            statusHtml = "<div class=\"tool-result\">&#10003; Executed successfully</div>";
+        } else {
+            String safeError =
+                    (error == null || error.trim().isEmpty())
+                            ? "Unknown error"
+                            : SwingHtmlUtils.escapeHtml(error);
+            statusHtml = "<div class=\"tool-error\">&#10007; Error: " + safeError + "</div>";
+        }
         String template =
                 """
 				<table class="tool-call" width="100%" cellpadding="8" cellspacing="0" border="0">
@@ -112,6 +127,7 @@ public class ChatHtmlTemplates {
 				        <td class="tool-body-container">
 				            ${header}
 				            <pre class="tool-body">${output}</pre>
+				            ${statusHtml}
 				        </td>
 				    </tr>
 				</table>
@@ -120,7 +136,14 @@ public class ChatHtmlTemplates {
 				</table>
 				""";
 
-        Map<String, String> values = Map.of("header", header, "output", output);
+        Map<String, String> values =
+                Map.of(
+                        "header",
+                        header,
+                        "output",
+                        output != null ? output : "",
+                        "statusHtml",
+                        statusHtml);
 
         return StringSubstitutor.replace(template, values);
     }

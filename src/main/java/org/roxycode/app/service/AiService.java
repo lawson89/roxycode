@@ -87,7 +87,7 @@ public class AiService {
                         .build();
     }
 
-    ToolCallingManager createReturnDirectToolCallingManager(ToolCallingManager delegate) {
+    final ToolCallingManager createReturnDirectToolCallingManager(ToolCallingManager delegate) {
         return new ToolCallingManager() {
             @Override
             public List<ToolDefinition> resolveToolDefinitions(ToolCallingChatOptions chatOptions) {

@@ -24,4 +24,24 @@ public class JexlToolNotificationTest {
         tool.executeJexl("1 + 1");
         assertTrue(called.get());
     }
+
+    @Test
+    public void testSyntaxErrorListenerNotification() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlTool tool = new JexlTool(registry, WorkflowPhase.EXPLORE);
+        AtomicBoolean called = new AtomicBoolean(false);
+
+        tool.addListener(
+                event -> {
+                    called.set(true);
+                    assertEquals("if (", event.script());
+                    assertNull(event.result());
+                    assertFalse(event.success());
+                    assertNotNull(event.error());
+                    assertTrue(event.error().startsWith("Syntax Error: "));
+                });
+
+        tool.executeJexl("if (");
+        assertTrue(called.get(), "Listener should be notified on JEXL syntax error");
+    }
 }

@@ -85,4 +85,38 @@ class ChatControllerTest {
         assertEquals(0, panel.getModel().getCurrentTurn());
         assertTrue(panel.getOutputArea().getText().contains("Session reset."));
     }
+
+    @Test
+    void testOnToolExecutionRendersSuccessAndErrorStatus() throws Exception {
+        AiService aiService = mock(AiService.class);
+        WorkflowService workflowService = mock(WorkflowService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+
+        ChatPanel panel =
+                new ChatPanel(
+                        aiService,
+                        workflowService,
+                        turnEventBridge,
+                        chatMemory,
+                        "task",
+                        null,
+                        true);
+
+        panel.getController()
+                .onToolExecution(
+                        new org.roxycode.app.events.ToolExecutionEvent(
+                                "task:default", "1 + 1", 2, true, null));
+        panel.getController()
+                .onToolExecution(
+                        new org.roxycode.app.events.ToolExecutionEvent(
+                                "task:default", "if (", null, false, "Syntax Error: <bad>"));
+        SwingUtilities.invokeAndWait(() -> {});
+
+        String html = panel.getOutputArea().getText();
+        assertTrue(html.contains("Executed successfully"));
+        assertTrue(html.contains("Error: Syntax Error: &lt;bad&gt;"));
+        assertFalse(html.contains("<bad>"));
+    }
 }
