@@ -1,6 +1,8 @@
 package org.roxycode.app.events;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import org.springframework.context.ApplicationEventPublisher;
@@ -10,66 +12,61 @@ import org.springframework.stereotype.Component;
 @Component
 public class TurnEventBridge {
     private final ApplicationEventPublisher publisher;
-    private final List<Consumer<AgentTurnEvent>> turnListeners = new CopyOnWriteArrayList<>();
-    private final List<Consumer<AgentTurnCompleteEvent>> completeListeners =
-            new CopyOnWriteArrayList<>();
-    private final List<Consumer<UserMessageEvent>> userMessageListeners =
-            new CopyOnWriteArrayList<>();
-    private final List<Consumer<ToolExecutionEvent>> toolExecutionListeners =
-            new CopyOnWriteArrayList<>();
-    private final List<Consumer<AutonomousTransitionEvent>> autonomousTransitionListeners =
-            new CopyOnWriteArrayList<>();
-    private final List<Consumer<FileChangedEvent>> fileChangedListeners =
-            new CopyOnWriteArrayList<>();
+    private final Map<Class<?>, List<Consumer<?>>> listeners = new ConcurrentHashMap<>();
 
     public TurnEventBridge(ApplicationEventPublisher publisher) {
         this.publisher = publisher;
     }
 
-    public void addTurnListener(String conversationId, Consumer<AgentTurnEvent> listener) {
-        turnListeners.add(
+    public <T> void subscribe(Class<T> eventType, Consumer<T> listener) {
+        listeners.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>()).add(listener);
+    }
+
+    public <T extends ConversationEvent> void subscribe(
+            Class<T> eventType, String conversationId, Consumer<T> listener) {
+        subscribe(
+                eventType,
                 event -> {
                     if (event.conversationId().equals(conversationId)) {
                         listener.accept(event);
                     }
                 });
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> void dispatch(T event) {
+        if (event == null) {
+            return;
+        }
+        for (Consumer<?> raw : listeners.getOrDefault(event.getClass(), List.of())) {
+            ((Consumer<T>) raw).accept(event);
+        }
+    }
+
+    public void addTurnListener(String conversationId, Consumer<AgentTurnEvent> listener) {
+        subscribe(AgentTurnEvent.class, conversationId, listener);
     }
 
     public void addCompleteListener(
             String conversationId, Consumer<AgentTurnCompleteEvent> listener) {
-        completeListeners.add(
-                event -> {
-                    if (event.conversationId().equals(conversationId)) {
-                        listener.accept(event);
-                    }
-                });
+        subscribe(AgentTurnCompleteEvent.class, conversationId, listener);
     }
 
     public void addUserMessageListener(String conversationId, Consumer<UserMessageEvent> listener) {
-        userMessageListeners.add(
-                event -> {
-                    if (event.conversationId().equals(conversationId)) {
-                        listener.accept(event);
-                    }
-                });
+        subscribe(UserMessageEvent.class, conversationId, listener);
     }
 
     public void addToolExecutionListener(
             String conversationId, Consumer<ToolExecutionEvent> listener) {
-        toolExecutionListeners.add(
-                event -> {
-                    if (event.conversationId().equals(conversationId)) {
-                        listener.accept(event);
-                    }
-                });
+        subscribe(ToolExecutionEvent.class, conversationId, listener);
     }
 
     public void addAutonomousTransitionListener(Consumer<AutonomousTransitionEvent> listener) {
-        autonomousTransitionListeners.add(listener);
+        subscribe(AutonomousTransitionEvent.class, listener);
     }
 
     public void addFileChangedListener(Consumer<FileChangedEvent> listener) {
-        fileChangedListeners.add(listener);
+        subscribe(FileChangedEvent.class, listener);
     }
 
     public void publishUserMessage(String conversationId, String user, String message) {
@@ -78,31 +75,31 @@ public class TurnEventBridge {
 
     @EventListener
     public void handleTurn(AgentTurnEvent event) {
-        turnListeners.forEach(l -> l.accept(event));
+        dispatch(event);
     }
 
     @EventListener
     public void handleComplete(AgentTurnCompleteEvent event) {
-        completeListeners.forEach(l -> l.accept(event));
+        dispatch(event);
     }
 
     @EventListener
     public void handleUserMessage(UserMessageEvent event) {
-        userMessageListeners.forEach(l -> l.accept(event));
+        dispatch(event);
     }
 
     @EventListener
     public void handleToolExecution(ToolExecutionEvent event) {
-        toolExecutionListeners.forEach(l -> l.accept(event));
+        dispatch(event);
     }
 
     @EventListener
     public void handleAutonomousTransition(AutonomousTransitionEvent event) {
-        autonomousTransitionListeners.forEach(l -> l.accept(event));
+        dispatch(event);
     }
 
     @EventListener
     public void handleFileChanged(FileChangedEvent event) {
-        fileChangedListeners.forEach(l -> l.accept(event));
+        dispatch(event);
     }
 }

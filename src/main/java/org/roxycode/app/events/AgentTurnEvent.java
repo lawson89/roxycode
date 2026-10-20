@@ -1,4 +1,5 @@
 package org.roxycode.app.events;
 
 public record AgentTurnEvent(
-        String conversationId, String agentName, int turnNumber, String phase) {}
+        String conversationId, String agentName, int turnNumber, String phase)
+        implements ConversationEvent {}
