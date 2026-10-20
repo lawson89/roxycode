@@ -110,7 +110,7 @@ public class ChatPanelTest {
     }
 
     @Test
-    public void testAutonomousTransitionSuppressesTurnForPlanAndExplore() throws Exception {
+    public void testAutonomousTransitionSuppressesTurnForPlan() throws Exception {
         AiService aiService = mock(AiService.class);
         WorkflowService workflowService = mock(WorkflowService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -136,13 +136,6 @@ public class ChatPanelTest {
         Thread.sleep(300);
 
         // chat should NOT be called for PLAN
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
-
-        // Transition to EXPLORE
-        turnEventBridge.handleAutonomousTransition(
-                new AutonomousTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.EXPLORE, "Test reason"));
-        Thread.sleep(300);
         verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
 
         // Transition to REVIEW (should trigger turn)

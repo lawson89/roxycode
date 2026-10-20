@@ -305,11 +305,7 @@ public final class ChatController {
                                     + "**. Reason: "
                                     + event.reason());
 
-                    if (event.to() == WorkflowPhase.EXPLORE) {
-                        view.appendMessage(
-                                ROLE_SYSTEM,
-                                "Task complete. We are back in Explore mode. Please enter a new question or task.");
-                    } else if (event.to() == WorkflowPhase.PLAN) {
+                    if (event.to() == WorkflowPhase.PLAN) {
                         view.appendMessage(
                                 ROLE_SYSTEM,
                                 "Task complete. What is the next feature you would like to work on?");
