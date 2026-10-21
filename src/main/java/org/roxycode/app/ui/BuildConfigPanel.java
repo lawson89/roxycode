@@ -13,13 +13,12 @@ import org.fife.ui.rtextarea.RTextScrollPane;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -38,15 +37,6 @@ public final class BuildConfigPanel extends JPanel {
             GenericBuildToolService buildToolService,
             SettingsService settingsService,
             ProjectService projectService) {
-        this(buildToolService, settingsService, projectService, null);
-    }
-
-    @Autowired
-    public BuildConfigPanel(
-            GenericBuildToolService buildToolService,
-            SettingsService settingsService,
-            ProjectService projectService,
-            TurnEventBridge turnEventBridge) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow][]"));
@@ -84,11 +74,16 @@ public final class BuildConfigPanel extends JPanel {
         statusTimer.setRepeats(false);
 
         loadConfig();
+    }
 
-        if (turnEventBridge != null) {
-            turnEventBridge.subscribe(SettingsChangedEvent.class, event -> updateTextAreaTheme());
-            turnEventBridge.subscribe(ProjectChangedEvent.class, event -> loadConfig());
-        }
+    @EventListener
+    public void onSettingsChanged(SettingsChangedEvent event) {
+        SwingUtilities.invokeLater(this::updateTextAreaTheme);
+    }
+
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
+        SwingUtilities.invokeLater(this::loadConfig);
     }
 
     private void loadConfig() {

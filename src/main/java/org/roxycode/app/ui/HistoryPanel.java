@@ -9,28 +9,26 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.UserMessageEvent;
 import org.roxycode.app.util.TokenUtils;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
+import org.springframework.context.event.EventListener;
 
 /** Panel for displaying a persistent history of all AI interactions and tool executions. */
-public final class HistoryPanel extends JPanel {
+public class HistoryPanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    private static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
     private final transient ChatMemory chatMemory;
     private final HistoryTableModel tableModel;
     private final JTable table;
     private final JLabel statsLabel;
-    private final String sessionPrefix;
+    private final String conversationId;
 
-    public HistoryPanel(
-            TurnEventBridge turnEventBridge, ChatMemory chatMemory, String sessionPrefix) {
+    public HistoryPanel(ChatMemory chatMemory, String sessionPrefix) {
         this.chatMemory = chatMemory;
-        this.sessionPrefix = sessionPrefix;
+        this.conversationId = ChatModel.defaultConversationId(sessionPrefix);
         this.tableModel = new HistoryTableModel();
         this.table = new JTable(tableModel);
 
@@ -127,19 +125,39 @@ public final class HistoryPanel extends JPanel {
                         refresh();
                     }
                 });
-        String conversationId = sessionPrefix + DEFAULT_CONVERSATION_SUFFIX;
-        turnEventBridge.subscribe(UserMessageEvent.class, conversationId, event -> refresh());
-        turnEventBridge.subscribe(AgentTurnCompleteEvent.class, conversationId, event -> refresh());
-        turnEventBridge.subscribe(ToolExecutionEvent.class, conversationId, event -> refresh());
 
         refresh();
+    }
+
+    @EventListener
+    public void onUserMessage(UserMessageEvent event) {
+        if (event != null && conversationId.equals(event.conversationId())) {
+            refresh();
+        }
+    }
+
+    @EventListener
+    public void onAgentTurnComplete(AgentTurnCompleteEvent event) {
+        if (event != null && conversationId.equals(event.conversationId())) {
+            refresh();
+        }
+    }
+
+    @EventListener
+    public void onToolExecution(ToolExecutionEvent event) {
+        if (event != null && conversationId.equals(event.conversationId())) {
+            refresh();
+        }
+    }
+
+    String getConversationId() {
+        return conversationId;
     }
 
     public void refresh() {
         SwingUtilities.invokeLater(
                 () -> {
-                    List<Message> messages =
-                            chatMemory.get(sessionPrefix + DEFAULT_CONVERSATION_SUFFIX);
+                    List<Message> messages = chatMemory.get(conversationId);
                     if (messages == null) {
                         messages = new ArrayList<>();
                     }
@@ -228,7 +246,6 @@ public final class HistoryPanel extends JPanel {
                 case 3:
                     String content = msg.getText();
                     if (content == null) return "";
-                    content = content.replace('\n', ' ').replace('\r', ' ');
                     final int maxPreviewLength = 100;
                     if (content.length() > maxPreviewLength) {
                         return content.substring(0, maxPreviewLength - 3) + "...";

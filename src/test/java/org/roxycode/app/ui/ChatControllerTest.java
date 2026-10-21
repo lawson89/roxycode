@@ -8,7 +8,8 @@ import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.events.UserMessageEvent;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -21,7 +22,6 @@ class ChatControllerTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
         SettingsService settingsService = mock(SettingsService.class);
 
@@ -30,16 +30,9 @@ class ChatControllerTest {
         when(aiService.chat(anyString(), any(), anyString(), any(), any()))
                 .thenReturn("Let's revise the plan.");
 
-        ChatPanel panel =
-                new ChatPanel(
-                        aiService,
-                        planService,
-                        turnEventBridge,
-                        chatMemory,
-                        "task",
-                        null,
-                        true,
-                        settingsService);
+        FeatureChatPanel panel =
+                new FeatureChatPanel(
+                        aiService, planService, publisher, chatMemory, settingsService);
 
         panel.getController().rejectPhase();
         Thread.sleep(300);
@@ -61,12 +54,10 @@ class ChatControllerTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel panel =
-                new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "task", null, true);
+        FeatureChatPanel panel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
         panel.getModel().setCurrentTurn(3);
         panel.getController().performResetSession();
@@ -82,26 +73,41 @@ class ChatControllerTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel panel =
-                new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "task", null, true);
+        FeatureChatPanel panel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
-        panel.getController()
-                .onToolExecution(
-                        new org.roxycode.app.events.ToolExecutionEvent(
-                                "task:default", "1 + 1", 2, true, null));
-        panel.getController()
-                .onToolExecution(
-                        new org.roxycode.app.events.ToolExecutionEvent(
-                                "task:default", "if (", null, false, "Syntax Error: <bad>"));
+        panel.onToolExecution(
+                new ToolExecutionEvent("task:default", "1 + 1", 2, true, null));
+        panel.onToolExecution(
+                new ToolExecutionEvent(
+                        "task:default", "if (", null, false, "Syntax Error: <bad>"));
+        // Event for another conversation should be ignored
+        panel.onToolExecution(
+                new ToolExecutionEvent("qa:default", "ignoredCall()", null, true, null));
         SwingUtilities.invokeAndWait(() -> {});
 
         String html = panel.getOutputArea().getText();
         assertTrue(html.contains("Executed successfully"));
         assertTrue(html.contains("Error: Syntax Error: &lt;bad&gt;"));
         assertFalse(html.contains("<bad>"));
+        assertFalse(html.contains("ignoredCall"));
+    }
+
+    @Test
+    void testSendMessagePublishesUserMessageEvent() {
+        AiService aiService = mock(AiService.class);
+        PlanService planService = mock(PlanService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+
+        ExploreChatPanel panel =
+                new ExploreChatPanel(aiService, planService, publisher, chatMemory, null);
+
+        panel.getController().sendMessage("Hello mentor");
+
+        verify(publisher)
+                .publishEvent(new UserMessageEvent("qa:default", "user", "Hello mentor"));
     }
 }

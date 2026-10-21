@@ -14,7 +14,7 @@ import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
-import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.UserMessageEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
@@ -24,6 +24,7 @@ import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.context.ApplicationEventPublisher;
 
 /** Controller coordinating chat turns, service events, and workflow transitions. */
 @SuppressWarnings("PMD.NullAssignment")
@@ -36,7 +37,7 @@ public final class ChatController {
     private final ChatModel model;
     private final ChatPanel view;
     private final AiService aiService;
-    private final TurnEventBridge turnEventBridge;
+    private final ApplicationEventPublisher eventPublisher;
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
     private final PlanService planService;
@@ -50,43 +51,16 @@ public final class ChatController {
             ChatPanel view,
             AiService aiService,
             PlanService planService,
-            TurnEventBridge turnEventBridge,
+            ApplicationEventPublisher eventPublisher,
             ChatMemory chatMemory,
             SettingsService settingsService) {
         this.model = model;
         this.view = view;
         this.aiService = aiService;
         this.planService = planService;
-        this.turnEventBridge = turnEventBridge;
+        this.eventPublisher = eventPublisher;
         this.chatMemory = chatMemory;
         this.settingsService = settingsService;
-    }
-
-    public void registerListeners() {
-        String conversationId = model.getConversationId();
-        turnEventBridge.subscribe(AgentTurnEvent.class, conversationId, this::onAgentTurn);
-        if (model.isTaskMode()) {
-            turnEventBridge.subscribe(WorkflowTransitionEvent.class, this::onWorkflowTransition);
-            turnEventBridge.subscribe(
-                    PhaseChangedEvent.class, event -> onPhaseChanged(event.phase()));
-            turnEventBridge.subscribe(
-                    PlanUpdatedEvent.class,
-                    event -> SwingUtilities.invokeLater(view::updateTurnLabel));
-        }
-        turnEventBridge.subscribe(ToolExecutionEvent.class, conversationId, this::onToolExecution);
-        turnEventBridge.subscribe(
-                AgentTurnCompleteEvent.class,
-                conversationId,
-                event ->
-                        SwingUtilities.invokeLater(
-                                () -> {
-                                    if (!isTurnActive()) {
-                                        view.setLoading(false);
-                                    }
-                                }));
-        turnEventBridge.subscribe(
-                SettingsChangedEvent.class,
-                event -> SwingUtilities.invokeLater(view::updateTurnLabel));
     }
 
     public boolean isTurnActive() {
@@ -112,7 +86,10 @@ public final class ChatController {
         String text = rawText.trim();
         if (text.isEmpty()) return;
 
-        turnEventBridge.publishUserMessage(model.getConversationId(), ROLE_USER, text);
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(
+                    new UserMessageEvent(model.getConversationId(), ROLE_USER, text));
+        }
         view.appendMessage(ROLE_USER, text);
         view.clearInputText();
         triggerTurn(text);
@@ -294,7 +271,7 @@ public final class ChatController {
     }
 
     void onWorkflowTransition(WorkflowTransitionEvent event) {
-        if (!model.isTaskMode()) return;
+        if (event == null || !model.isTaskMode()) return;
         if (!event.autonomous() && event.to() == null) {
             pendingTransition = null;
             SwingUtilities.invokeLater(view::hideTransitionBanner);
@@ -332,7 +309,11 @@ public final class ChatController {
     }
 
     void onAgentTurn(AgentTurnEvent event) {
-        if (model.isTurnCancelled()) return;
+        if (event == null
+                || !model.getConversationId().equals(event.conversationId())
+                || model.isTurnCancelled()) {
+            return;
+        }
         SwingUtilities.invokeLater(
                 () -> {
                     if (model.isTurnCancelled()) return;
@@ -342,7 +323,11 @@ public final class ChatController {
     }
 
     void onToolExecution(ToolExecutionEvent event) {
-        if (model.isTurnCancelled()) return;
+        if (event == null
+                || !model.getConversationId().equals(event.conversationId())
+                || model.isTurnCancelled()) {
+            return;
+        }
         SwingUtilities.invokeLater(
                 () -> {
                     if (model.isTurnCancelled()) return;
@@ -350,6 +335,33 @@ public final class ChatController {
                     String output = JexlToHtmlConverter.convert(event.script());
                     view.appendToolLog(toolName, output, event.success(), event.error());
                 });
+    }
+
+    void onAgentTurnComplete(AgentTurnCompleteEvent event) {
+        if (event == null || !model.getConversationId().equals(event.conversationId())) {
+            return;
+        }
+        SwingUtilities.invokeLater(
+                () -> {
+                    if (!isTurnActive()) {
+                        view.setLoading(false);
+                    }
+                });
+    }
+
+    void onSettingsChanged(SettingsChangedEvent event) {
+        SwingUtilities.invokeLater(view::updateTurnLabel);
+    }
+
+    void onPlanUpdated(PlanUpdatedEvent event) {
+        if (!model.isTaskMode()) return;
+        SwingUtilities.invokeLater(view::updateTurnLabel);
+    }
+
+    void onPhaseChanged(PhaseChangedEvent event) {
+        if (event != null) {
+            onPhaseChanged(event.phase());
+        }
     }
 
     void onPhaseChanged(WorkflowPhase phase) {

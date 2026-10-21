@@ -13,15 +13,23 @@ class ChatModelTest {
 
     @Test
     void testConfigurationAndResolveActivePhase() {
-        ChatModel taskModel = new ChatModel("task", null, true);
+        assertEquals("qa", ChatModel.QA_SESSION_PREFIX);
+        assertEquals("task", ChatModel.TASK_SESSION_PREFIX);
+        assertEquals(":default", ChatModel.DEFAULT_CONVERSATION_SUFFIX);
+        assertEquals("qa:default", ChatModel.QA_CONVERSATION_ID);
+        assertEquals("task:default", ChatModel.TASK_CONVERSATION_ID);
+        assertEquals("custom:default", ChatModel.defaultConversationId("custom"));
+
+        ChatModel taskModel = new ChatModel(ChatModel.TASK_SESSION_PREFIX, null, true);
         assertEquals("task", taskModel.getSessionPrefix());
-        assertEquals("task:default", taskModel.getConversationId());
+        assertEquals(ChatModel.TASK_CONVERSATION_ID, taskModel.getConversationId());
         assertNull(taskModel.getLockedPhase());
         assertTrue(taskModel.isTaskMode());
         assertEquals(WorkflowPhase.CODE, taskModel.resolveActivePhase(WorkflowPhase.CODE));
 
-        ChatModel qaModel = new ChatModel("qa", WorkflowPhase.EXPLORE, false);
-        assertEquals("qa:default", qaModel.getConversationId());
+        ChatModel qaModel =
+                new ChatModel(ChatModel.QA_SESSION_PREFIX, WorkflowPhase.EXPLORE, false);
+        assertEquals(ChatModel.QA_CONVERSATION_ID, qaModel.getConversationId());
         assertEquals(WorkflowPhase.EXPLORE, qaModel.getLockedPhase());
         assertFalse(qaModel.isTaskMode());
         assertEquals(WorkflowPhase.EXPLORE, qaModel.resolveActivePhase(WorkflowPhase.CODE));

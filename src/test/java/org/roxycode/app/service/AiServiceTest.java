@@ -20,9 +20,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.ReturnDirectToolCallingManager;
+import org.roxycode.app.ai.RoxyToolExecutionExceptionProcessor;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
@@ -43,6 +45,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
+import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
 import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,6 +69,8 @@ class AiServiceTest {
 
     @Mock private ChatMemory chatMemory;
 
+    @Mock private ToolCallingManager toolCallingManager;
+
     @Mock private ApplicationEventPublisher eventPublisher;
 
     private JexlTool jexlTool;
@@ -79,10 +84,12 @@ class AiServiceTest {
         lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
         lenient().when(requestSpec.tools(any(Object[].class))).thenReturn(requestSpec);
 
-        when(chatClientBuilder.defaultAdvisors(
-                        any(org.springframework.ai.chat.client.advisor.api.Advisor[].class)))
+        lenient()
+                .when(
+                        chatClientBuilder.defaultAdvisors(
+                                any(org.springframework.ai.chat.client.advisor.api.Advisor[].class)))
                 .thenReturn(chatClientBuilder);
-        when(chatClientBuilder.build()).thenReturn(chatClient);
+        lenient().when(chatClientBuilder.build()).thenReturn(chatClient);
 
         jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher);
         aiService =
@@ -93,7 +100,19 @@ class AiServiceTest {
                         jexlTool,
                         planService,
                         chatMemory,
+                        toolCallingManager,
                         eventPublisher);
+    }
+
+    @Test
+    void testAiConfigCreatesToolExecutionExceptionProcessorAndToolCallingManagerBeans() {
+        AiConfig config = new AiConfig();
+        ToolExecutionExceptionProcessor processor = config.toolExecutionExceptionProcessor();
+        assertInstanceOf(RoxyToolExecutionExceptionProcessor.class, processor);
+
+        ToolCallingManager manager =
+                config.toolCallingManager(processor, settingsService, planService, eventPublisher);
+        assertInstanceOf(ReturnDirectToolCallingManager.class, manager);
     }
 
     @Test
@@ -187,7 +206,13 @@ class AiServiceTest {
         verify(requestSpec).system(systemPromptCaptor.capture());
         assertEquals("REVIEW SYSTEM PROMPT", systemPromptCaptor.getValue());
         verify(requestSpec).tools(jexlTool, planService);
-        verify(requestSpec).advisors(any(Consumer.class));
+
+        ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorCaptor =
+                ArgumentCaptor.forClass(Consumer.class);
+        verify(requestSpec).advisors(advisorCaptor.capture());
+        ChatClient.AdvisorSpec advisorSpec = mock(ChatClient.AdvisorSpec.class);
+        advisorCaptor.getValue().accept(advisorSpec);
+        verify(advisorSpec).param(ChatMemory.CONVERSATION_ID, "custom-conv");
     }
 
     @Test

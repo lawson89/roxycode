@@ -20,15 +20,20 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.roxycode.app.events.AgentTurnEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 
 /** Panel for the chat interface, including output display and user input area. */
-public final class ChatPanel extends JPanel {
+public class ChatPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
@@ -54,26 +59,7 @@ public final class ChatPanel extends JPanel {
     public ChatPanel(
             AiService aiService,
             PlanService planService,
-            TurnEventBridge turnEventBridge,
-            ChatMemory chatMemory,
-            String sessionPrefix,
-            WorkflowPhase lockedPhase,
-            boolean isTaskMode) {
-        this(
-                aiService,
-                planService,
-                turnEventBridge,
-                chatMemory,
-                sessionPrefix,
-                lockedPhase,
-                isTaskMode,
-                null);
-    }
-
-    public ChatPanel(
-            AiService aiService,
-            PlanService planService,
-            TurnEventBridge turnEventBridge,
+            ApplicationEventPublisher eventPublisher,
             ChatMemory chatMemory,
             String sessionPrefix,
             WorkflowPhase lockedPhase,
@@ -86,7 +72,7 @@ public final class ChatPanel extends JPanel {
                         this,
                         aiService,
                         planService,
-                        turnEventBridge,
+                        eventPublisher,
                         chatMemory,
                         settingsService);
 
@@ -217,11 +203,30 @@ public final class ChatPanel extends JPanel {
         add(splitPane, BorderLayout.CENTER);
 
         sendButton.addActionListener(this::sendMessage);
-        controller.registerListeners();
 
         setupInputContextMenu();
         setupUndoRedo();
         setupKeyboardShortcuts();
+    }
+
+    @EventListener
+    public void onAgentTurn(AgentTurnEvent event) {
+        controller.onAgentTurn(event);
+    }
+
+    @EventListener
+    public void onToolExecution(ToolExecutionEvent event) {
+        controller.onToolExecution(event);
+    }
+
+    @EventListener
+    public void onAgentTurnComplete(AgentTurnCompleteEvent event) {
+        controller.onAgentTurnComplete(event);
+    }
+
+    @EventListener
+    public void onSettingsChanged(SettingsChangedEvent event) {
+        controller.onSettingsChanged(event);
     }
 
     void updateTurnLabel() {

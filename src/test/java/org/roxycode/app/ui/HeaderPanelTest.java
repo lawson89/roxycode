@@ -12,11 +12,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
-import org.springframework.context.ApplicationEventPublisher;
 
 class HeaderPanelTest {
     @TempDir Path tempDir;
@@ -39,17 +37,16 @@ class HeaderPanelTest {
     void testHeaderPanelInstantiation() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
-        TurnEventBridge bridge = new TurnEventBridge(mock(ApplicationEventPublisher.class));
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss, bridge);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
         assertNotNull(header);
 
         Path newRoot = tempDir.resolve("updated-proj");
         ps.setCurrentProjectRoot(newRoot);
-        bridge.dispatch(new ProjectChangedEvent(newRoot));
+        header.onProjectChanged(new ProjectChangedEvent(newRoot));
 
         AppSettings updatedSettings = ss.getSettings();
         updatedSettings.setGeminiModel("gemini-4-argon");
-        bridge.dispatch(new SettingsChangedEvent(updatedSettings));
+        header.onSettingsChanged(new SettingsChangedEvent(updatedSettings));
 
         Component projLabel =
                 findComponent(

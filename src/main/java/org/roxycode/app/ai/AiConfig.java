@@ -3,9 +3,15 @@ package org.roxycode.app.ai;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.util.Map;
+import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.service.SettingsService;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /** Configuration for AI-related beans. */
 @Configuration
@@ -25,6 +31,26 @@ public class AiConfig {
     @Bean
     public TomlMapper tomlMapper() {
         return SHARED_TOML_MAPPER;
+    }
+
+    @Bean
+    public ToolExecutionExceptionProcessor toolExecutionExceptionProcessor() {
+        return new RoxyToolExecutionExceptionProcessor();
+    }
+
+    @Bean
+    @Primary
+    public ToolCallingManager toolCallingManager(
+            ToolExecutionExceptionProcessor toolExecutionExceptionProcessor,
+            SettingsService settingsService,
+            PlanService planService,
+            ApplicationEventPublisher eventPublisher) {
+        ToolCallingManager delegate =
+                ToolCallingManager.builder()
+                        .toolExecutionExceptionProcessor(toolExecutionExceptionProcessor)
+                        .build();
+        return new ReturnDirectToolCallingManager(
+                delegate, settingsService, planService, eventPublisher);
     }
 
     @Bean

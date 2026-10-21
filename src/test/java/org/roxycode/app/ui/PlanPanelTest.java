@@ -15,9 +15,7 @@ import javax.swing.text.html.InlineView;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.ImplementationPlan;
-import org.springframework.context.ApplicationEventPublisher;
 
 class PlanPanelTest {
 
@@ -119,31 +117,41 @@ class PlanPanelTest {
                                 new ImplementationPlan.LogEntry(
                                         "2026-04-06T12:05:30.123",
                                         "Architect",
-                                        "Created plan | verified\ndetails")));
+                                        "Created plan | verified" + (char) 10 + "details")));
 
         String md = PlanPanel.buildPlanMarkdown(plan);
 
         assertTrue(md.contains("# Implementation Plan: Visibility Feature"));
         assertTrue(md.contains("**Goal:** Improve visibility"));
-        assertTrue(md.contains("## Requirements\n- Show turns\n- Export markdown"));
         assertTrue(
                 md.contains(
-                        "## Technical Steps\n- [x] 0. Update ChatPanel\n- [ ] 1. Update PlanPanel"));
+                        "## Requirements"
+                                + (char) 10
+                                + "- Show turns"
+                                + (char) 10
+                                + "- Export markdown"));
+        assertTrue(
+                md.contains(
+                        "## Technical Steps"
+                                + (char) 10
+                                + "- [x] 0. Update ChatPanel"
+                                + (char) 10
+                                + "- [ ] 1. Update PlanPanel"));
         assertTrue(md.contains("## Handoff Log"));
         assertTrue(md.contains("| Timestamp | User | Message |"));
         assertTrue(
                 md.contains(
-                        "| 2026-04-06 12:05:30 | Architect | Created plan \\| verified details |"));
+                        "| 2026-04-06 12:05:30 | Architect | Created plan "
+                                + (char) 92
+                                + "| verified details |"));
     }
 
     @Test
     void testCopyMarkdownButtonStateAndAction() throws Exception {
         PlanService planService = mock(PlanService.class);
-        TurnEventBridge turnEventBridge =
-                new TurnEventBridge(mock(ApplicationEventPublisher.class));
 
         when(planService.getCurrentPlan()).thenReturn(null);
-        PlanPanel panel = new PlanPanel(planService, turnEventBridge);
+        PlanPanel panel = new PlanPanel(planService);
         SwingUtilities.invokeAndWait(() -> {});
 
         assertFalse(
@@ -162,7 +170,7 @@ class PlanPanelTest {
                         null,
                         List.of());
         when(planService.getCurrentPlan()).thenReturn(plan);
-        turnEventBridge.dispatch(new PlanUpdatedEvent(plan));
+        panel.onPlanUpdated(new PlanUpdatedEvent(plan));
         SwingUtilities.invokeAndWait(() -> {});
 
         assertTrue(

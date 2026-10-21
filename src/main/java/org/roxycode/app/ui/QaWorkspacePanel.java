@@ -11,7 +11,6 @@ import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.WorkflowPhase;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -20,13 +19,13 @@ import org.springframework.stereotype.Component;
 @Lazy
 public final class QaWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    private static final String SESSION_PREFIX = "qa";
     private static final String LAYOUT_CENTER = "center";
 
     private final JTabbedPane qaTabs;
-    private final ChatPanel qaChatPanel;
+    private final ExploreChatPanel qaChatPanel;
 
-    public QaWorkspacePanel(ChatPanelFactory chatPanelFactory) {
+    public QaWorkspacePanel(
+            ExploreChatPanel exploreChatPanel, ExploreHistoryPanel exploreHistoryPanel) {
         super(new BorderLayout());
 
         JPanel qaHeaderBar =
@@ -44,10 +43,9 @@ public final class QaWorkspacePanel extends JPanel {
         qaHeaderBar.add(mentorModeLabel, LAYOUT_CENTER);
 
         this.qaTabs = new JTabbedPane();
-        this.qaChatPanel =
-                chatPanelFactory.createChatPanel(SESSION_PREFIX, WorkflowPhase.EXPLORE, false);
+        this.qaChatPanel = exploreChatPanel;
         qaTabs.addTab("Chat", qaChatPanel);
-        qaTabs.addTab("History", chatPanelFactory.createHistoryPanel(SESSION_PREFIX));
+        qaTabs.addTab("History", exploreHistoryPanel);
         qaTabs.addChangeListener(
                 e -> {
                     if (qaChatPanel.equals(qaTabs.getSelectedComponent())) {

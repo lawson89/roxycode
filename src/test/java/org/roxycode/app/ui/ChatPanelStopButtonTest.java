@@ -14,7 +14,6 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -26,12 +25,19 @@ public class ChatPanelStopButtonTest {
     public void testStopButtonEnablement() {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
-        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+                        aiService,
+                        planService,
+                        publisher,
+                        chatMemory,
+                        "test",
+                        null,
+                        true,
+                        null);
         JButton stopButton = chatPanel.getStopButton();
         JButton sendButton = chatPanel.getSendButton();
         JTextArea inputArea = chatPanel.getInputArea();
@@ -56,7 +62,6 @@ public class ChatPanelStopButtonTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
@@ -79,9 +84,8 @@ public class ChatPanelStopButtonTest {
                             return "Late AI response";
                         });
 
-        ChatPanel chatPanel =
-                new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+        FeatureChatPanel chatPanel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
         chatPanel.getInputArea().setText("Start coding");
         chatPanel.getSendButton().doClick();
@@ -91,7 +95,7 @@ public class ChatPanelStopButtonTest {
                 "Background worker should start aiService.chat");
 
         // Simulate an event queued before Stop is clicked
-        turnEventBridge.dispatch(
+        chatPanel.onWorkflowTransition(
                 new WorkflowTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop transition", true));
         SwingUtilities.invokeAndWait(() -> {});
@@ -102,12 +106,12 @@ public class ChatPanelStopButtonTest {
 
         // Now simulate late events from the dying background thread after Stop was
         // clicked
-        turnEventBridge.dispatch(
+        chatPanel.onWorkflowTransition(
                 new WorkflowTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
-        turnEventBridge.dispatch(
-                new ToolExecutionEvent("test:default", "lateToolCall()", "ok", true, null));
-        turnEventBridge.dispatch(new AgentTurnEvent("test:default", "Roxy", 99, "CODE"));
+        chatPanel.onToolExecution(
+                new ToolExecutionEvent("task:default", "lateToolCall()", "ok", true, null));
+        chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 99, "CODE"));
 
         allowExit.countDown();
         Thread.sleep(200);

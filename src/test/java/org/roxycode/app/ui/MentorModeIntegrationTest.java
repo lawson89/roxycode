@@ -17,7 +17,6 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.PhaseChangedEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
@@ -35,7 +34,6 @@ class MentorModeIntegrationTest {
     private SettingsService settingsService;
     private ProjectService projectService;
     private PlanService planService;
-    private TurnEventBridge turnEventBridge;
     private QaWorkspacePanel qaWorkspacePanel;
     private TaskWorkspacePanel taskWorkspacePanel;
     private MainFrame mainFrame;
@@ -58,25 +56,34 @@ class MentorModeIntegrationTest {
         EnvironmentService envService = mock(EnvironmentService.class);
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
         when(jexlServiceRegistry.getDocumentation(any())).thenReturn("");
-        turnEventBridge = new TurnEventBridge(mock(ApplicationEventPublisher.class));
+        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
         RepoMapPackerService packerService = mock(RepoMapPackerService.class);
         ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
         PromptService promptService = mock(PromptService.class);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanelFactory chatPanelFactory =
-                new ChatPanelFactory(
-                        aiService, planService, turnEventBridge, chatMemory, settingsService);
+        ExploreChatPanel exploreChatPanel =
+                new ExploreChatPanel(
+                        aiService, planService, eventPublisher, chatMemory, settingsService);
+        ExploreHistoryPanel exploreHistoryPanel = new ExploreHistoryPanel(chatMemory);
+        FeatureChatPanel featureChatPanel =
+                new FeatureChatPanel(
+                        aiService, planService, eventPublisher, chatMemory, settingsService);
+        FeatureHistoryPanel featureHistoryPanel = new FeatureHistoryPanel(chatMemory);
 
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
         StatusPanel statusPanel = new StatusPanel(envService);
-        qaWorkspacePanel = new QaWorkspacePanel(chatPanelFactory);
+        qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel, exploreHistoryPanel);
         PlanPanel planPanel = new PlanPanel(planService);
         GitChangesPanel gitChangesPanel = new GitChangesPanel(gitService);
         taskWorkspacePanel =
                 new TaskWorkspacePanel(
-                        chatPanelFactory, planService, turnEventBridge, planPanel, gitChangesPanel);
+                        featureChatPanel,
+                        featureHistoryPanel,
+                        planService,
+                        planPanel,
+                        gitChangesPanel);
         CodebaseCachePanel codebaseCachePanel =
                 new CodebaseCachePanel(packerService, cacheMetaService, promptService);
         JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
@@ -153,7 +160,7 @@ class MentorModeIntegrationTest {
         assertEquals(
                 5,
                 progressTracker.getComponentCount(),
-                "Progress tracker should have 3 indicators and 2 connector lines");
+                "Progress tracker should have 3 indicators and 2 wizard connector lines");
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(0));
         assertFalse(progressTracker.getComponent(1) instanceof WorkflowPhaseIndicator);
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(2));
@@ -230,7 +237,7 @@ class MentorModeIntegrationTest {
         assertNotNull(sidebar, "MainFrame should contain a SidebarPanel");
         assertFalse(sidebar.isTaskWaitingApproval());
 
-        turnEventBridge.dispatch(
+        taskWorkspacePanel.onWorkflowTransition(
                 new WorkflowTransitionEvent(
                         WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code", false));
         SwingUtilities.invokeAndWait(() -> {});
@@ -239,7 +246,7 @@ class MentorModeIntegrationTest {
                 "Sidebar should show waiting approval when transition is requested");
 
         when(planService.getPendingPhase()).thenReturn(null);
-        turnEventBridge.dispatch(new PhaseChangedEvent(WorkflowPhase.CODE));
+        taskWorkspacePanel.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
         SwingUtilities.invokeAndWait(() -> {});
         assertFalse(
                 sidebar.isTaskWaitingApproval(),

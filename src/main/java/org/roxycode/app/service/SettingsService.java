@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.slf4j.Logger;
@@ -25,7 +26,7 @@ public class SettingsService {
     private final ApplicationEventPublisher eventPublisher;
 
     public SettingsService() {
-        this(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER, event -> {});
+        this(AiConfig.SHARED_TOML_MAPPER, event -> {});
     }
 
     public SettingsService(TomlMapper mapper) {
@@ -33,17 +34,47 @@ public class SettingsService {
     }
 
     public SettingsService(ApplicationEventPublisher eventPublisher) {
-        this(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER, eventPublisher);
+        this(AiConfig.SHARED_TOML_MAPPER, eventPublisher);
     }
 
     @Autowired
     public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
-        this.mapper = mapper != null ? mapper : org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER;
+        this.mapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
         this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {};
     }
 
     private AppSettings settings;
     private Path settingsPathOverride;
+
+    /** Returns the default user settings file path (~/.roxycode/settings.toml). */
+    public static Path getDefaultSettingsPath() {
+        String userHome = System.getProperty("user.home");
+        return Paths.get(userHome, SETTINGS_DIR, SETTINGS_FILE);
+    }
+
+    /**
+     * Loads {@link AppSettings} from the default settings path using {@link
+     * AiConfig#SHARED_TOML_MAPPER}, falling back to default settings if missing or unreadable.
+     */
+    public static AppSettings loadFromDisk() {
+        return loadFromDisk(getDefaultSettingsPath(), AiConfig.SHARED_TOML_MAPPER);
+    }
+
+    /**
+     * Loads {@link AppSettings} from the given path using the provided {@link TomlMapper}, falling
+     * back to default settings if missing or unreadable.
+     */
+    public static AppSettings loadFromDisk(Path path, TomlMapper mapper) {
+        TomlMapper effectiveMapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
+        if (path != null && Files.exists(path)) {
+            try {
+                return effectiveMapper.readValue(path.toFile(), AppSettings.class);
+            } catch (IOException e) {
+                log.error("Failed to load settings from {}: {}", path, e.getMessage(), e);
+            }
+        }
+        return new AppSettings();
+    }
 
     /**
      * Gets the current application settings.
@@ -83,24 +114,13 @@ public class SettingsService {
     }
 
     private void loadSettings() {
-        Path path = getSettingsPath();
-        if (Files.exists(path)) {
-            try {
-                settings = mapper.readValue(path.toFile(), AppSettings.class);
-            } catch (IOException e) {
-                log.error("Failed to load settings from {}: {}", path, e.getMessage(), e);
-                settings = new AppSettings();
-            }
-        } else {
-            settings = new AppSettings();
-        }
+        settings = loadFromDisk(getSettingsPath(), mapper);
     }
 
     private Path getSettingsPath() {
         if (settingsPathOverride != null) {
             return settingsPathOverride;
         }
-        String userHome = System.getProperty("user.home");
-        return Paths.get(userHome, SETTINGS_DIR, SETTINGS_FILE);
+        return getDefaultSettingsPath();
     }
 }

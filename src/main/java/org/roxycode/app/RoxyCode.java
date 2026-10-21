@@ -1,12 +1,10 @@
 package org.roxycode.app;
 
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.awt.GraphicsEnvironment;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.SwingUtilities;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MainFrame;
 import org.roxycode.app.ui.SettingsPanel;
 import org.roxycode.app.ui.SplashScreenWindow;
@@ -26,22 +24,16 @@ public class RoxyCode {
 
         // Pre-load settings to set system properties for Spring AI auto-configuration and UI theme
         try {
-            String userHome = System.getProperty("user.home");
-            Path path = Paths.get(userHome, ".roxycode", "settings.toml");
-            if (path.toFile().exists()) {
-                TomlMapper mapper = new TomlMapper();
-                AppSettings settings = mapper.readValue(path.toFile(), AppSettings.class);
-                if (settings.getGeminiApiKey() != null && !settings.getGeminiApiKey().isEmpty()) {
-                    System.setProperty(
-                            "spring.ai.google.genai.api-key", settings.getGeminiApiKey());
-                }
-                if (settings.getGeminiModel() != null && !settings.getGeminiModel().isEmpty()) {
-                    System.setProperty(
-                            "spring.ai.google.genai.chat.options.model", settings.getGeminiModel());
-                }
-                if (settings.getTheme() != null && !settings.getTheme().isBlank()) {
-                    theme = settings.getTheme();
-                }
+            AppSettings settings = SettingsService.loadFromDisk();
+            if (settings.getGeminiApiKey() != null && !settings.getGeminiApiKey().isEmpty()) {
+                System.setProperty("spring.ai.google.genai.api-key", settings.getGeminiApiKey());
+            }
+            if (settings.getGeminiModel() != null && !settings.getGeminiModel().isEmpty()) {
+                System.setProperty(
+                        "spring.ai.google.genai.chat.options.model", settings.getGeminiModel());
+            }
+            if (settings.getTheme() != null && !settings.getTheme().isBlank()) {
+                theme = settings.getTheme();
             }
         } catch (Exception e) {
             log.warn("Failed to pre-load settings for Spring AI configuration: {}", e.getMessage());

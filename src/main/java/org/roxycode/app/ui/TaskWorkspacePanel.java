@@ -18,10 +18,10 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /** Workspace panel for Task mode (Plan, Code, Review phases). */
@@ -29,28 +29,27 @@ import org.springframework.stereotype.Component;
 @Lazy
 public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    private static final String SESSION_PREFIX = "task";
     private static final String LAYOUT_CENTER = "center";
 
     private final transient PlanService planService;
-    private final transient TurnEventBridge turnEventBridge;
     private final GitChangesPanel gitChangesPanel;
-    private final ChatPanel taskChatPanel;
+    private final FeatureChatPanel taskChatPanel;
     private final JTabbedPane taskTabs;
     private final JLabel planLabel;
     private final JPanel progressTracker;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
+    private SidebarPanel sidebar;
 
     public TaskWorkspacePanel(
-            ChatPanelFactory chatPanelFactory,
+            FeatureChatPanel taskChatPanel,
+            FeatureHistoryPanel taskHistoryPanel,
             PlanService planService,
-            TurnEventBridge turnEventBridge,
             PlanPanel planPanel,
             GitChangesPanel gitChangesPanel) {
         super(new BorderLayout());
         this.planService = planService;
-        this.turnEventBridge = turnEventBridge;
         this.gitChangesPanel = gitChangesPanel;
+        this.taskChatPanel = taskChatPanel;
 
         JPanel taskHeaderBar =
                 new JPanel(new MigLayout("insets 6 20 6 20, fillx", "[grow]", LAYOUT_CENTER));
@@ -73,26 +72,13 @@ public final class TaskWorkspacePanel extends JPanel {
                 FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
         taskHeaderBar.add(planLabel, "gapleft 16, center, hidemode 3");
 
-        if (turnEventBridge != null) {
-            turnEventBridge.subscribe(
-                    PhaseChangedEvent.class, event -> updateActivePhase(event.phase()));
-            turnEventBridge.subscribe(
-                    PlanUpdatedEvent.class,
-                    event -> updateActivePhase(planService.getCurrentPhase()));
-        }
         updateActivePhase(planService.getCurrentPhase());
 
         this.taskTabs = new JTabbedPane();
-        this.taskChatPanel = chatPanelFactory.createChatPanel(SESSION_PREFIX, null, true);
         taskTabs.addTab("Chat", taskChatPanel);
         taskTabs.addTab("Plan", planPanel);
-        if (turnEventBridge != null && gitChangesPanel != null) {
-            turnEventBridge.subscribe(
-                    FileChangedEvent.class,
-                    event -> SwingUtilities.invokeLater(gitChangesPanel::refresh));
-        }
         taskTabs.addTab("Git", gitChangesPanel);
-        taskTabs.addTab("History", chatPanelFactory.createHistoryPanel(SESSION_PREFIX));
+        taskTabs.addTab("History", taskHistoryPanel);
         taskTabs.addChangeListener(
                 e -> {
                     if (taskChatPanel.equals(taskTabs.getSelectedComponent())) {
@@ -108,23 +94,35 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     public void bindSidebar(SidebarPanel sidebar) {
+        this.sidebar = sidebar;
         this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
-        if (turnEventBridge != null) {
-            turnEventBridge.subscribe(
-                    WorkflowTransitionEvent.class,
-                    event -> {
-                        if (!event.autonomous()) {
-                            SwingUtilities.invokeLater(
-                                    () -> sidebar.setTaskWaitingApproval(event.to() != null));
-                        }
-                    });
-            turnEventBridge.subscribe(
-                    PhaseChangedEvent.class,
-                    event ->
-                            SwingUtilities.invokeLater(
-                                    () ->
-                                            sidebar.setTaskWaitingApproval(
-                                                    planService.getPendingPhase() != null)));
+    }
+
+    @EventListener
+    public void onPhaseChanged(PhaseChangedEvent event) {
+        updateActivePhase(event.phase());
+        if (sidebar != null) {
+            SwingUtilities.invokeLater(
+                    () -> sidebar.setTaskWaitingApproval(planService.getPendingPhase() != null));
+        }
+    }
+
+    @EventListener
+    public void onPlanUpdated(PlanUpdatedEvent event) {
+        updateActivePhase(planService.getCurrentPhase());
+    }
+
+    @EventListener
+    public void onFileChanged(FileChangedEvent event) {
+        if (gitChangesPanel != null) {
+            SwingUtilities.invokeLater(gitChangesPanel::refresh);
+        }
+    }
+
+    @EventListener
+    public void onWorkflowTransition(WorkflowTransitionEvent event) {
+        if (sidebar != null && !event.autonomous()) {
+            SwingUtilities.invokeLater(() -> sidebar.setTaskWaitingApproval(event.to() != null));
         }
     }
 

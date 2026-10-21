@@ -5,18 +5,21 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.awt.Component;
+import java.lang.reflect.Method;
+import java.util.Arrays;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 
 public class ChatPanelTest {
 
@@ -25,12 +28,11 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null);
         assertNotNull(chatPanel.getOutputArea(), "Output area should be initialized");
         assertNotNull(chatPanel.getInputArea(), "Input area should be initialized");
         assertTrue(
@@ -55,12 +57,11 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null);
         assertTrue(
                 chatPanel.getInputArea().getMouseListeners().length > 0,
                 "Input area should have mouse listeners for context menu");
@@ -74,12 +75,11 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null);
 
         // Simulate keyboard shortcut which previously passed null
         javax.swing.Action sendMessageAction =
@@ -98,15 +98,13 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel chatPanel =
-                new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+        FeatureChatPanel chatPanel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
         // Transition to PLAN
-        turnEventBridge.dispatch(
+        chatPanel.onWorkflowTransition(
                 new WorkflowTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
 
@@ -117,10 +115,10 @@ public class ChatPanelTest {
         verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
 
         // Transition to REVIEW (should trigger turn)
-        turnEventBridge.dispatch(
+        chatPanel.onWorkflowTransition(
                 new WorkflowTransitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
-        Thread.sleep(600); // Give it more time for SwingWorker
+        Thread.sleep(600);
 
         verify(aiService, atLeastOnce()).chat(anyString(), any(), anyString(), isNull(), any());
     }
@@ -130,18 +128,16 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel chatPanel =
-                new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+        FeatureChatPanel chatPanel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(aiService.chat(anyString(), any(), anyString(), any(), any()))
                 .thenAnswer(
                         inv -> {
-                            turnEventBridge.dispatch(
+                            chatPanel.onWorkflowTransition(
                                     new WorkflowTransitionEvent(
                                             WorkflowPhase.PLAN,
                                             WorkflowPhase.CODE,
@@ -174,12 +170,11 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null);
 
         chatPanel.getInputArea().setText("Existing text in input");
         chatPanel.getInputArea().setCaretPosition(0);
@@ -198,12 +193,11 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "test", null, true);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null);
 
         assertTrue(
                 chatPanel.getOutputArea().getScrollableTracksViewportWidth(),
@@ -235,26 +229,44 @@ public class ChatPanelTest {
     }
 
     @Test
-    public void testNonTaskChatPanelDoesNotRegisterWorkflowListeners() {
+    public void testExploreAndFeatureChatPanelBeansAndWorkflowListeners() throws Exception {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
-        TurnEventBridge turnEventBridge = mock(TurnEventBridge.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel qaChatPanel =
-                new ChatPanel(
-                        aiService,
-                        planService,
-                        turnEventBridge,
-                        chatMemory,
-                        "qa",
-                        WorkflowPhase.EXPLORE,
-                        false);
-        assertNotNull(qaChatPanel);
+        ExploreChatPanel qaChatPanel =
+                new ExploreChatPanel(aiService, planService, publisher, chatMemory, null);
+        assertEquals("qa", qaChatPanel.getModel().getSessionPrefix());
+        assertEquals(WorkflowPhase.EXPLORE, qaChatPanel.getModel().getLockedPhase());
+        assertFalse(qaChatPanel.getModel().isTaskMode());
 
-        verify(turnEventBridge, never()).subscribe(eq(PhaseChangedEvent.class), any());
-        verify(turnEventBridge, never()).subscribe(eq(WorkflowTransitionEvent.class), any());
-        verify(turnEventBridge, never()).subscribe(eq(PlanUpdatedEvent.class), any());
+        FeatureChatPanel featureChatPanel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
+        assertEquals("task", featureChatPanel.getModel().getSessionPrefix());
+        assertNull(featureChatPanel.getModel().getLockedPhase());
+        assertTrue(featureChatPanel.getModel().isTaskMode());
+
+        // ExploreChatPanel should not declare @EventListener for workflow events
+        Method[] exploreDeclared = ExploreChatPanel.class.getDeclaredMethods();
+        assertFalse(
+                Arrays.stream(exploreDeclared)
+                        .anyMatch(m -> m.isAnnotationPresent(EventListener.class)),
+                "ExploreChatPanel should not declare task workflow @EventListener methods");
+
+        // FeatureChatPanel should declare @EventListener for WorkflowTransitionEvent, PhaseChangedEvent, PlanUpdatedEvent
+        assertTrue(
+                FeatureChatPanel.class
+                        .getDeclaredMethod("onWorkflowTransition", WorkflowTransitionEvent.class)
+                        .isAnnotationPresent(EventListener.class));
+        assertTrue(
+                FeatureChatPanel.class
+                        .getDeclaredMethod("onPhaseChanged", PhaseChangedEvent.class)
+                        .isAnnotationPresent(EventListener.class));
+        assertTrue(
+                FeatureChatPanel.class
+                        .getDeclaredMethod("onPlanUpdated", PlanUpdatedEvent.class)
+                        .isAnnotationPresent(EventListener.class));
     }
 
     @Test
@@ -262,12 +274,10 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel chatPanel =
-                new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "task", null, true);
+        FeatureChatPanel chatPanel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
         java.lang.reflect.Field approveBtnField = ChatPanel.class.getDeclaredField("approveButton");
         approveBtnField.setAccessible(true);
@@ -320,12 +330,10 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel chatPanel =
-                new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "task", null, true);
+        FeatureChatPanel chatPanel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
         java.lang.reflect.Field approveBtnField = ChatPanel.class.getDeclaredField("approveButton");
         approveBtnField.setAccessible(true);
@@ -375,12 +383,10 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ChatPanel chatPanel =
-                new ChatPanel(
-                        aiService, planService, turnEventBridge, chatMemory, "task", null, true);
+        FeatureChatPanel chatPanel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
         java.util.List<Boolean> states = new java.util.ArrayList<>();
         chatPanel.addLoadingListener(states::add);
@@ -400,7 +406,6 @@ public class ChatPanelTest {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        TurnEventBridge turnEventBridge = new TurnEventBridge(publisher);
         ChatMemory chatMemory = mock(ChatMemory.class);
         org.roxycode.app.service.SettingsService settingsService =
                 mock(org.roxycode.app.service.SettingsService.class);
@@ -408,16 +413,9 @@ public class ChatPanelTest {
         appSettings.setMaxAgentToolTurns(5);
         when(settingsService.getSettings()).thenReturn(appSettings);
 
-        ChatPanel chatPanel =
-                new ChatPanel(
-                        aiService,
-                        planService,
-                        turnEventBridge,
-                        chatMemory,
-                        "task",
-                        null,
-                        true,
-                        settingsService);
+        FeatureChatPanel chatPanel =
+                new FeatureChatPanel(
+                        aiService, planService, publisher, chatMemory, settingsService);
 
         assertEquals("Turns: 0 / 5", chatPanel.getTurnLabel().getText());
 
@@ -440,8 +438,7 @@ public class ChatPanelTest {
                         java.util.List.of());
         when(planService.getCurrentPlan()).thenReturn(plan);
 
-        turnEventBridge.dispatch(
-                new org.roxycode.app.events.AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
+        chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
         javax.swing.SwingUtilities.invokeAndWait(() -> {});
 
         assertEquals("Turns: 2 / 5 | Plan: 1/3 steps", chatPanel.getTurnLabel().getText());
@@ -465,7 +462,7 @@ public class ChatPanelTest {
                         null,
                         java.util.List.of());
         when(planService.getCurrentPlan()).thenReturn(updatedPlan);
-        turnEventBridge.dispatch(new PlanUpdatedEvent(updatedPlan));
+        chatPanel.onPlanUpdated(new PlanUpdatedEvent(updatedPlan));
         javax.swing.SwingUtilities.invokeAndWait(() -> {});
 
         assertEquals("Turns: 2 / 5 | Plan: 2/3 steps", chatPanel.getTurnLabel().getText());

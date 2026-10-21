@@ -3,7 +3,6 @@ package org.roxycode.app.service;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.roxycode.app.ai.JexlTool;
-import org.roxycode.app.ai.ReturnDirectToolCallingManager;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
@@ -35,20 +34,19 @@ public class AiService {
             JexlTool jexlTool,
             PlanService planService,
             ChatMemory chatMemory,
+            ToolCallingManager toolCallingManager,
             ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
         this.promptService = promptService;
         this.jexlTool = jexlTool;
         this.planService = planService;
         this.eventPublisher = eventPublisher;
-        ToolCallingManager returnDirectToolCallingManager =
-                new ReturnDirectToolCallingManager(settingsService, planService, eventPublisher);
         this.chatClient =
                 chatClientBuilder
                         .defaultAdvisors(
                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                                 ToolCallingAdvisor.builder()
-                                        .toolCallingManager(returnDirectToolCallingManager)
+                                        .toolCallingManager(toolCallingManager)
                                         .build())
                         .build();
     }
@@ -93,7 +91,7 @@ public class AiService {
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
             content =
                     promptSpec
-                            .advisors(a -> a.param("chat_memory_conversation_id", convId))
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId))
                             .call()
                             .content();
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");

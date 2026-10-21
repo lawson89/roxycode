@@ -1,13 +1,16 @@
 package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 
@@ -32,6 +35,31 @@ class SettingsServiceTest {
         assertEquals("Darcula", service2.getSettings().getTheme());
         assertEquals("test-api-key", service2.getSettings().getGeminiApiKey());
         assertTrue(Files.exists(settingsFile));
+
+        // Verify static loadFromDisk helper
+        AppSettings staticLoaded =
+                SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
+        assertEquals("Darcula", staticLoaded.getTheme());
+        assertEquals("test-api-key", staticLoaded.getGeminiApiKey());
+    }
+
+    @Test
+    void testLoadFromDiskFallbacksAndDefaultPath() throws IOException {
+        Path defaultPath = SettingsService.getDefaultSettingsPath();
+        assertNotNull(defaultPath);
+        assertTrue(defaultPath.endsWith(Path.of(".roxycode", "settings.toml")));
+
+        Path missingFile = tempDir.resolve("missing.toml");
+        AppSettings fromMissing =
+                SettingsService.loadFromDisk(missingFile, AiConfig.SHARED_TOML_MAPPER);
+        assertNotNull(fromMissing);
+        assertEquals("FlatLaf Light", fromMissing.getTheme());
+
+        Path corruptFile = tempDir.resolve("corrupt.toml");
+        Files.writeString(corruptFile, "invalid = [toml");
+        AppSettings fromCorrupt = SettingsService.loadFromDisk(corruptFile, null);
+        assertNotNull(fromCorrupt);
+        assertEquals("FlatLaf Light", fromCorrupt.getTheme());
     }
 
     @Test

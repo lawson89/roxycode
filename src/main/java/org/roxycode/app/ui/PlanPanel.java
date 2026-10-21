@@ -8,10 +8,9 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.model.ImplementationPlan;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /** UI panel for displaying the current project plan and specifications. */
@@ -29,11 +28,6 @@ public final class PlanPanel extends JPanel {
     private String lastCopiedMarkdown;
 
     public PlanPanel(PlanService planManagerService) {
-        this(planManagerService, null);
-    }
-
-    @Autowired
-    public PlanPanel(PlanService planManagerService, TurnEventBridge turnEventBridge) {
         this.planManagerService = planManagerService;
         this.setLayout(new BorderLayout());
 
@@ -57,12 +51,16 @@ public final class PlanPanel extends JPanel {
 
         SwingHtmlUtils.installTextContextMenu(displayArea);
         updateTheme();
-        if (turnEventBridge != null) {
-            turnEventBridge.subscribe(PlanUpdatedEvent.class, event -> updateDisplay(event.plan()));
-            turnEventBridge.subscribe(
-                    PhaseChangedEvent.class,
-                    event -> updateDisplay(planManagerService.getCurrentPlan()));
-        }
+        updateDisplay(planManagerService.getCurrentPlan());
+    }
+
+    @EventListener
+    public void onPlanUpdated(PlanUpdatedEvent event) {
+        updateDisplay(event.plan());
+    }
+
+    @EventListener
+    public void onPhaseChanged(PhaseChangedEvent event) {
         updateDisplay(planManagerService.getCurrentPlan());
     }
 

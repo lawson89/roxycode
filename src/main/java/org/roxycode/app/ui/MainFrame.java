@@ -6,7 +6,6 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.events.ProjectChangedEvent;
-import org.roxycode.app.events.TurnEventBridge;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
@@ -14,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /** Main application window for RoxyCode. */
@@ -34,43 +34,13 @@ public final class MainFrame extends JFrame {
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
+    private final transient ChatMemory chatMemory;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
     private final HeaderPanel header;
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
-
-    public MainFrame(
-            SettingsService settingsService,
-            ProjectService projectService,
-            ChatMemory chatMemory,
-            HeaderPanel header,
-            StatusPanel statusBar,
-            QaWorkspacePanel qaWorkspacePanel,
-            TaskWorkspacePanel taskWorkspacePanel,
-            CodebaseCachePanel codebaseCachePanel,
-            JexlApiPanel jexlApiPanel,
-            SystemToolsPanel systemToolsPanel,
-            SettingsPanel settingsPanel,
-            BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel) {
-        this(
-                settingsService,
-                projectService,
-                chatMemory,
-                header,
-                statusBar,
-                qaWorkspacePanel,
-                taskWorkspacePanel,
-                codebaseCachePanel,
-                jexlApiPanel,
-                systemToolsPanel,
-                settingsPanel,
-                buildConfigPanel,
-                contextManagerPanel,
-                null);
-    }
 
     @Autowired
     public MainFrame(
@@ -86,10 +56,10 @@ public final class MainFrame extends JFrame {
             SystemToolsPanel systemToolsPanel,
             SettingsPanel settingsPanel,
             BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel,
-            TurnEventBridge turnEventBridge) {
+            ContextManagerPanel contextManagerPanel) {
         this.settingsService = settingsService;
         this.projectService = projectService;
+        this.chatMemory = chatMemory;
         this.header = header;
         this.qaWorkspacePanel = qaWorkspacePanel;
         this.taskWorkspacePanel = taskWorkspacePanel;
@@ -104,17 +74,21 @@ public final class MainFrame extends JFrame {
                 settingsPanel,
                 buildConfigPanel,
                 contextManagerPanel);
-        if (turnEventBridge != null) {
-            turnEventBridge.subscribe(
-                    ProjectChangedEvent.class,
-                    event -> {
-                        updateTitle();
-                        chatMemory.clear("qa:default");
-                        chatMemory.clear("task:default");
-                        if (taskWorkspacePanel != null) {
-                            taskWorkspacePanel.refreshGitChanges();
-                        }
-                    });
+    }
+
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
+        updateTitle();
+        chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
+        chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
+        if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {
+            qaWorkspacePanel.getQaChatPanel().clearOutput();
+        }
+        if (taskWorkspacePanel != null) {
+            if (taskWorkspacePanel.getTaskChatPanel() != null) {
+                taskWorkspacePanel.getTaskChatPanel().clearOutput();
+            }
+            taskWorkspacePanel.refreshGitChanges();
         }
     }
 

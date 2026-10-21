@@ -18,7 +18,13 @@ import org.slf4j.LoggerFactory;
 /** Model encapsulating the state and configuration of a chat session. */
 public final class ChatModel {
     private static final Logger log = LoggerFactory.getLogger(ChatModel.class);
-    private static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
+    public static final String QA_SESSION_PREFIX = "qa";
+    public static final String TASK_SESSION_PREFIX = "task";
+    public static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
+    public static final String QA_CONVERSATION_ID =
+            QA_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
+    public static final String TASK_CONVERSATION_ID =
+            TASK_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
 
     private final String sessionPrefix;
     private final String conversationId;
@@ -33,9 +39,13 @@ public final class ChatModel {
 
     public ChatModel(String sessionPrefix, WorkflowPhase lockedPhase, boolean taskMode) {
         this.sessionPrefix = sessionPrefix;
-        this.conversationId = sessionPrefix + DEFAULT_CONVERSATION_SUFFIX;
+        this.conversationId = defaultConversationId(sessionPrefix);
         this.lockedPhase = lockedPhase;
         this.taskMode = taskMode;
+    }
+
+    public static String defaultConversationId(String sessionPrefix) {
+        return sessionPrefix + DEFAULT_CONVERSATION_SUFFIX;
     }
 
     public String getSessionPrefix() {
