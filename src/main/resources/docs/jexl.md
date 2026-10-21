@@ -87,6 +87,17 @@ When accumulating results dynamically, do not initialize empty collections with 
   ];
   ```
 
+### JEXL Batching & Literal Syntax Rules
+
+1. **Map Literals MUST use curly braces `{ ... }`**:
+   When returning multiple named results in `executeJexl`, ALWAYS wrap `"key": value` pairs in `{ ... }`:
+   ```javascript
+   {
+     "FileA": fileReadService.readFile("path/to/FileA.java"),
+     "FileB": fileReadService.readFile("path/to/FileB.java")
+   }
+NEVER use square brackets [ ... ] with colons ("key": value): [ "key": value ] is invalid JEXL syntax and will fail with parsing error in '['. Square brackets [ val1, val2 ] are strictly for unkeyed Lists/Arrays.
+
 ### ❌ FORBIDDEN: Arbitrary Java Class Instantiation
 Do NOT attempt to instantiate arbitrary Java classes using `new('com.example.ClassName')` or attempt to call static methods on native Java classes. 
 - The JEXL environment is sandboxed. You ONLY have access to the specific service variables listed in the provided **JEXL API Documentation**.

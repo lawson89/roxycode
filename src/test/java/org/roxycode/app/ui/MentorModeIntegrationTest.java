@@ -17,8 +17,8 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.PhaseChangedEvent;
-import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
@@ -231,8 +231,8 @@ class MentorModeIntegrationTest {
         assertFalse(sidebar.isTaskWaitingApproval());
 
         turnEventBridge.dispatch(
-                new TransitionRequestedEvent(
-                        WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code"));
+                new WorkflowTransitionEvent(
+                        WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code", false));
         SwingUtilities.invokeAndWait(() -> {});
         assertTrue(
                 sidebar.isTaskWaitingApproval(),

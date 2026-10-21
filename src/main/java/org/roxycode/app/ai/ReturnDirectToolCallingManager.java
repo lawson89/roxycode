@@ -2,7 +2,6 @@ package org.roxycode.app.ai;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
@@ -21,19 +20,12 @@ import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Decorator {@link ToolCallingManager} that enforces maximum tool turns, publishes turn and tool
- * execution events, handles tool execution errors, and post-processes {@code returnDirect}
- * transition results.
+ * execution events, and post-processes {@code returnDirect} transition results.
  */
 public class ReturnDirectToolCallingManager implements ToolCallingManager {
 
-    public static final String TOOL_CONTEXT_CONVERSATION_ID = JexlTool.TOOL_CONTEXT_CONVERSATION_ID;
-    public static final String TOOL_CONTEXT_PHASE = JexlTool.TOOL_CONTEXT_PHASE;
-    public static final String TOOL_CONTEXT_TURN_COUNTER = "turnCounter";
-
-    private static final String DEFAULT_CONVERSATION_ID = "default";
     private static final String AGENT_NAME = "Roxy";
     private static final String JEXL_TOOL_NAME = "executeJexl";
-    private static final String ERROR_PREFIX = RoxyToolExecutionExceptionProcessor.ERROR_PREFIX;
     private static final String MAX_TURNS_EXCEEDED_PREFIX =
             "Autonomous execution stopped: Maximum tool turns (";
 
@@ -73,32 +65,24 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
 
     @Override
     public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
-        Map<String, Object> toolContext = extractToolContext(prompt);
-        String conversationId = resolveConversationId(toolContext);
-        WorkflowPhase phase = resolvePhase(toolContext);
-        AtomicInteger turnCounter = resolveTurnCounter(toolContext);
+        TurnToolContext ctx = TurnToolContext.fromPrompt(prompt, planService.getCurrentPhase());
+        String conversationId = ctx.conversationId();
+        WorkflowPhase phase = ctx.phase();
+        AtomicInteger turnCounter = ctx.turnCounter();
 
         int maxTurns =
                 settingsService.getSettings() != null
                         ? settingsService.getSettings().getMaxAgentToolTurns()
                         : 0;
         if (maxTurns > 0 && turnCounter.get() >= maxTurns) {
-            String stopMsg = formatMaxTurnsExceededMessage(maxTurns);
-            return buildSyntheticToolResult(prompt, chatResponse, stopMsg, true);
+            return buildMaxTurnsExceededResult(prompt, chatResponse, maxTurns);
         }
 
         int currentTurn = turnCounter.incrementAndGet();
         eventPublisher.publishEvent(
                 new AgentTurnEvent(conversationId, AGENT_NAME, currentTurn, phase.name()));
 
-        ToolExecutionResult result;
-        try {
-            result = delegate.executeToolCalls(prompt, chatResponse);
-        } catch (Exception e) {
-            String formattedErr = RoxyToolExecutionExceptionProcessor.formatException(e);
-            result = buildSyntheticToolResult(prompt, chatResponse, formattedErr, false);
-        }
-
+        ToolExecutionResult result = delegate.executeToolCalls(prompt, chatResponse);
         return postProcessToolExecutionResult(conversationId, chatResponse, result);
     }
 
@@ -114,7 +98,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
             for (ToolResponseMessage.ToolResponse tr : toolMsg.getResponses()) {
                 String rawData = tr.responseData();
                 String unquoted = unquoteIfJsonString(rawData);
-                boolean isError = isErrorResponse(unquoted);
+                boolean isError = RoxyToolExecutionExceptionProcessor.isErrorResponse(unquoted);
                 if (isError) {
                     hasValidationError = true;
                 }
@@ -128,7 +112,10 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
                                     scriptDesc,
                                     isError ? null : unquoted,
                                     !isError,
-                                    isError ? stripErrorPrefix(unquoted) : null));
+                                    isError
+                                            ? RoxyToolExecutionExceptionProcessor.stripErrorPrefix(
+                                                    unquoted)
+                                            : null));
                 }
 
                 if (result.returnDirect() && !isError && !unquoted.equals(rawData)) {
@@ -154,25 +141,6 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
                     .build();
         }
         return result;
-    }
-
-    private static boolean isErrorResponse(String responseText) {
-        if (responseText == null) {
-            return false;
-        }
-        String trimmed = responseText.trim();
-        return trimmed.startsWith(ERROR_PREFIX) || trimmed.startsWith("Method '");
-    }
-
-    private static String stripErrorPrefix(String responseText) {
-        if (responseText == null) {
-            return "Unknown error";
-        }
-        String trimmed = responseText.trim();
-        if (trimmed.startsWith(ERROR_PREFIX)) {
-            return trimmed.substring(ERROR_PREFIX.length()).trim();
-        }
-        return trimmed;
     }
 
     private static String unquoteIfJsonString(String raw) {
@@ -206,8 +174,9 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
         return "";
     }
 
-    private static ToolExecutionResult buildSyntheticToolResult(
-            Prompt prompt, ChatResponse chatResponse, String responseData, boolean returnDirect) {
+    private static ToolExecutionResult buildMaxTurnsExceededResult(
+            Prompt prompt, ChatResponse chatResponse, int maxTurns) {
+        String stopMsg = MAX_TURNS_EXCEEDED_PREFIX + maxTurns + ") exceeded.";
         List<Message> history =
                 prompt != null && prompt.getInstructions() != null
                         ? new ArrayList<>(prompt.getInstructions())
@@ -222,53 +191,17 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
             if (assistantMsg.getToolCalls() != null && !assistantMsg.getToolCalls().isEmpty()) {
                 for (AssistantMessage.ToolCall tc : assistantMsg.getToolCalls()) {
                     responses.add(
-                            new ToolResponseMessage.ToolResponse(tc.id(), tc.name(), responseData));
+                            new ToolResponseMessage.ToolResponse(tc.id(), tc.name(), stopMsg));
                 }
             }
         }
         if (responses.isEmpty()) {
-            responses.add(
-                    new ToolResponseMessage.ToolResponse("call-1", JEXL_TOOL_NAME, responseData));
+            responses.add(new ToolResponseMessage.ToolResponse("call-1", JEXL_TOOL_NAME, stopMsg));
         }
         history.add(ToolResponseMessage.builder().responses(responses).build());
         return ToolExecutionResult.builder()
                 .conversationHistory(history)
-                .returnDirect(returnDirect)
+                .returnDirect(true)
                 .build();
-    }
-
-    private static Map<String, Object> extractToolContext(Prompt prompt) {
-        if (prompt != null
-                && prompt.getOptions() instanceof ToolCallingChatOptions options
-                && options.getToolContext() != null) {
-            return options.getToolContext();
-        }
-        return Map.of();
-    }
-
-    private static String resolveConversationId(Map<String, Object> toolContext) {
-        if (toolContext.get(TOOL_CONTEXT_CONVERSATION_ID) instanceof String s && !s.isBlank()) {
-            return s;
-        }
-        return DEFAULT_CONVERSATION_ID;
-    }
-
-    private WorkflowPhase resolvePhase(Map<String, Object> toolContext) {
-        if (toolContext.get(TOOL_CONTEXT_PHASE) instanceof WorkflowPhase wp) {
-            return wp;
-        }
-        WorkflowPhase current = planService.getCurrentPhase();
-        return current != null ? current : WorkflowPhase.EXPLORE;
-    }
-
-    private static AtomicInteger resolveTurnCounter(Map<String, Object> toolContext) {
-        if (toolContext.get(TOOL_CONTEXT_TURN_COUNTER) instanceof AtomicInteger counter) {
-            return counter;
-        }
-        return new AtomicInteger(0);
-    }
-
-    private static String formatMaxTurnsExceededMessage(int maxTurns) {
-        return MAX_TURNS_EXCEEDED_PREFIX + maxTurns + ") exceeded.";
     }
 }

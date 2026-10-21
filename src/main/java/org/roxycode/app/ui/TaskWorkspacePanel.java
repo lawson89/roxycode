@@ -18,8 +18,8 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -111,12 +111,13 @@ public final class TaskWorkspacePanel extends JPanel {
         this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
         if (turnEventBridge != null) {
             turnEventBridge.subscribe(
-                    TransitionRequestedEvent.class,
-                    event ->
+                    WorkflowTransitionEvent.class,
+                    event -> {
+                        if (!event.autonomous()) {
                             SwingUtilities.invokeLater(
-                                    () ->
-                                            sidebar.setTaskWaitingApproval(
-                                                    event.requested() != null)));
+                                    () -> sidebar.setTaskWaitingApproval(event.to() != null));
+                        }
+                    });
             turnEventBridge.subscribe(
                     PhaseChangedEvent.class,
                     event ->

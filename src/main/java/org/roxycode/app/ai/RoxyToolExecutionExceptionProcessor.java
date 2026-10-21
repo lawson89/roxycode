@@ -30,4 +30,21 @@ public class RoxyToolExecutionExceptionProcessor implements ToolExecutionExcepti
                         : (cause != null ? cause.toString() : "Unknown error");
         return msg.startsWith(ERROR_PREFIX) ? msg : ERROR_PREFIX + " " + msg;
     }
+
+    /** Returns {@code true} if the given tool response text starts with {@link #ERROR_PREFIX}. */
+    public static boolean isErrorResponse(String responseText) {
+        return responseText != null && responseText.trim().startsWith(ERROR_PREFIX);
+    }
+
+    /** Strips {@link #ERROR_PREFIX} from a formatted error response string. */
+    public static String stripErrorPrefix(String responseText) {
+        if (responseText == null) {
+            return "Unknown error";
+        }
+        String trimmed = responseText.trim();
+        if (trimmed.startsWith(ERROR_PREFIX)) {
+            return trimmed.substring(ERROR_PREFIX.length()).trim();
+        }
+        return trimmed;
+    }
 }

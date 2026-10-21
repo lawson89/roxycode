@@ -2,7 +2,6 @@ package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.events.ToolExecutionEvent;
@@ -31,11 +30,7 @@ public class JexlToolNotificationTest {
         tool.executeJexl(
                 "1 + 1",
                 new ToolContext(
-                        Map.of(
-                                JexlTool.TOOL_CONTEXT_CONVERSATION_ID,
-                                "qa:default",
-                                JexlTool.TOOL_CONTEXT_PHASE,
-                                WorkflowPhase.EXPLORE)));
+                        new TurnToolContext("qa:default", WorkflowPhase.EXPLORE, null).toMap()));
         assertTrue(called.get());
     }
 

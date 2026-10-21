@@ -1,10 +1,10 @@
 package org.roxycode.app.service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.ReturnDirectToolCallingManager;
+import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
@@ -19,14 +19,6 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class AiService {
-    public static final String TOOL_CONTEXT_CONVERSATION_ID =
-            ReturnDirectToolCallingManager.TOOL_CONTEXT_CONVERSATION_ID;
-    public static final String TOOL_CONTEXT_PHASE =
-            ReturnDirectToolCallingManager.TOOL_CONTEXT_PHASE;
-    public static final String TOOL_CONTEXT_TURN_COUNTER =
-            ReturnDirectToolCallingManager.TOOL_CONTEXT_TURN_COUNTER;
-
-    private static final String DEFAULT_CONVERSATION_ID = "default";
     private static final String AGENT_NAME = "Roxy";
 
     private final ChatClient chatClient;
@@ -62,11 +54,21 @@ public class AiService {
     }
 
     public String chat(String message) {
-        return chat(DEFAULT_CONVERSATION_ID, planService.getCurrentPhase(), message, null, null);
+        return chat(
+                TurnToolContext.DEFAULT_CONVERSATION_ID,
+                planService.getCurrentPhase(),
+                message,
+                null,
+                null);
     }
 
     public String chat(String message, List<byte[]> images) {
-        return chat(DEFAULT_CONVERSATION_ID, planService.getCurrentPhase(), message, null, images);
+        return chat(
+                TurnToolContext.DEFAULT_CONVERSATION_ID,
+                planService.getCurrentPhase(),
+                message,
+                null,
+                images);
     }
 
     public String chat(
@@ -76,21 +78,18 @@ public class AiService {
             String systemPromptText,
             List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
-        AtomicInteger turnCounter = new AtomicInteger(0);
-        WorkflowPhase currentPhase = (phase != null) ? phase : planService.getCurrentPhase();
-        if (currentPhase == null) {
-            currentPhase = WorkflowPhase.EXPLORE;
-        }
-        String convId =
-                (conversationId != null && !conversationId.isBlank())
-                        ? conversationId
-                        : DEFAULT_CONVERSATION_ID;
+        TurnToolContext turnContext =
+                new TurnToolContext(
+                        conversationId,
+                        phase != null ? phase : planService.getCurrentPhase(),
+                        new AtomicInteger(0));
+        String convId = turnContext.conversationId();
+        AtomicInteger turnCounter = turnContext.turnCounter();
 
         String content;
         try {
             ChatClient.ChatClientRequestSpec promptSpec =
-                    buildPrompt(
-                            convId, currentPhase, message, systemPromptText, images, turnCounter);
+                    buildPrompt(turnContext, message, systemPromptText, images);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
             content =
                     promptSpec
@@ -113,14 +112,12 @@ public class AiService {
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(
-            String conversationId,
-            WorkflowPhase phase,
+            TurnToolContext turnContext,
             String message,
             String systemPromptText,
-            List<byte[]> images,
-            AtomicInteger turnCounter) {
+            List<byte[]> images) {
         String activeModel = settingsService.getSettings().getGeminiModel();
-        WorkflowPhase currentPhase = (phase != null) ? phase : planService.getCurrentPhase();
+        WorkflowPhase currentPhase = turnContext.phase();
         String systemPrompt = promptService.buildSystemPrompt(currentPhase, systemPromptText);
 
         ChatClient.ChatClientRequestSpec promptSpec =
@@ -148,14 +145,7 @@ public class AiService {
         } else {
             promptSpec.tools(jexlTool, planService);
         }
-        promptSpec.toolContext(
-                Map.of(
-                        TOOL_CONTEXT_CONVERSATION_ID,
-                        conversationId,
-                        TOOL_CONTEXT_PHASE,
-                        currentPhase,
-                        TOOL_CONTEXT_TURN_COUNTER,
-                        turnCounter));
+        promptSpec.toolContext(turnContext.toMap());
         return promptSpec;
     }
 

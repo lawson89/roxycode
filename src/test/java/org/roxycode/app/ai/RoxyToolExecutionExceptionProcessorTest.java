@@ -1,7 +1,9 @@
 package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import java.util.concurrent.CancellationException;
@@ -41,5 +43,19 @@ class RoxyToolExecutionExceptionProcessorTest {
                 new ToolExecutionException(toolDef, new CancellationException("User stopped"));
 
         assertThrows(CancellationException.class, () -> processor.process(ex));
+    }
+
+    @Test
+    void testIsErrorResponseAndStripErrorPrefix() {
+        assertTrue(RoxyToolExecutionExceptionProcessor.isErrorResponse("Error: Plan is missing"));
+        assertTrue(RoxyToolExecutionExceptionProcessor.isErrorResponse("  Error: Invalid step"));
+        assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse("Method 'submitPlan'"));
+        assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse("Success"));
+        assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse(null));
+
+        assertEquals(
+                "Plan is missing",
+                RoxyToolExecutionExceptionProcessor.stripErrorPrefix("Error: Plan is missing"));
+        assertEquals("Unknown error", RoxyToolExecutionExceptionProcessor.stripErrorPrefix(null));
     }
 }

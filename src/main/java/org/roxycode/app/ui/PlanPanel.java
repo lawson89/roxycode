@@ -139,68 +139,7 @@ public final class PlanPanel extends JPanel {
     }
 
     static String buildPlanMarkdown(ImplementationPlan plan) {
-        if (plan == null) {
-            return "";
-        }
-        StringBuilder md = new StringBuilder();
-        md.append(
-                """
-                # Implementation Plan: %s
-
-                **Goal:** %s
-
-                ## Requirements
-                """
-                        .formatted(
-                                plan.title() != null ? plan.title() : "",
-                                plan.goal() != null ? plan.goal() : ""));
-
-        for (String req : plan.requirements()) {
-            md.append("- ").append(req).append("\n");
-        }
-        md.append("\n## Technical Steps\n");
-        int index = 0;
-        for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
-            md.append(step.completed() ? "- [x] " : "- [ ] ")
-                    .append(index)
-                    .append(". ")
-                    .append(step.description())
-                    .append("\n");
-            index++;
-        }
-
-        if (plan.handoffLog() != null && !plan.handoffLog().isEmpty()) {
-            md.append(
-                    """
-
-                    ## Handoff Log
-                    | Timestamp | User | Message |
-                    | :--- | :--- | :--- |
-                    """);
-            for (ImplementationPlan.LogEntry entry : plan.handoffLog()) {
-                String ts = entry.timestamp() != null ? entry.timestamp() : "";
-                final int timestampLength = 19;
-                if (ts.length() > timestampLength) {
-                    ts = ts.substring(0, timestampLength).replace('T', ' ');
-                }
-                md.append("| ")
-                        .append(escapeMarkdownTableCell(ts))
-                        .append(" | ")
-                        .append(escapeMarkdownTableCell(entry.user()))
-                        .append(" | ")
-                        .append(escapeMarkdownTableCell(entry.message()))
-                        .append(" |\n");
-            }
-        }
-
-        return md.toString();
-    }
-
-    private static String escapeMarkdownTableCell(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("|", "\\|").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
+        return plan != null ? plan.toMarkdown(true) : "";
     }
 
     static String buildPlanHtml(ImplementationPlan plan) {

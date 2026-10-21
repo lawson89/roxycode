@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.ReturnDirectToolCallingManager;
+import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
@@ -131,11 +132,11 @@ class AiServiceTest {
                                         "default"
                                                         .equals(
                                                                 ctx.get(
-                                                                        AiService
-                                                                                .TOOL_CONTEXT_CONVERSATION_ID))
+                                                                        TurnToolContext
+                                                                                .CONVERSATION_ID_KEY))
                                                 && WorkflowPhase.CODE
-                                                        == ctx.get(AiService.TOOL_CONTEXT_PHASE)
-                                                && ctx.get(AiService.TOOL_CONTEXT_TURN_COUNTER)
+                                                        == ctx.get(TurnToolContext.PHASE_KEY)
+                                                && ctx.get(TurnToolContext.TURN_COUNTER_KEY)
                                                         instanceof AtomicInteger));
     }
 
@@ -329,13 +330,11 @@ class AiServiceTest {
         ToolCallingChatOptions options =
                 ToolCallingChatOptions.builder()
                         .toolContext(
-                                Map.of(
-                                        AiService.TOOL_CONTEXT_CONVERSATION_ID,
-                                        "task:default",
-                                        AiService.TOOL_CONTEXT_PHASE,
-                                        WorkflowPhase.PLAN,
-                                        AiService.TOOL_CONTEXT_TURN_COUNTER,
-                                        new AtomicInteger(0)))
+                                new TurnToolContext(
+                                                "task:default",
+                                                WorkflowPhase.PLAN,
+                                                new AtomicInteger(0))
+                                        .toMap())
                         .build();
         Prompt prompt = new Prompt(List.of(new UserMessage("Transition")), options);
         AssistantMessage.ToolCall tc =
@@ -349,12 +348,28 @@ class AiServiceTest {
                 AssistantMessage.builder().content("").toolCalls(List.of(tc)).build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
-        // Case 1: Transition tool fails validation (e.g. throws IllegalStateException or returns
-        // Error: ...) -> returnDirect becomes false so agent can self-correct
-        when(delegate.executeToolCalls(prompt, chatResponse))
-                .thenThrow(
-                        new IllegalStateException(
-                                "Error: Cannot advance to CODE. Implementation Plan is missing."));
+        // Case 1: Transition tool fails validation (processed by
+        // RoxyToolExecutionExceptionProcessor
+        // into "Error: ...") -> returnDirect becomes false so agent can self-correct
+        doReturn(
+                        ToolExecutionResult.builder()
+                                .conversationHistory(
+                                        List.of(
+                                                new UserMessage("Transition"),
+                                                assistantMsg,
+                                                ToolResponseMessage.builder()
+                                                        .responses(
+                                                                List.of(
+                                                                        new ToolResponseMessage
+                                                                                .ToolResponse(
+                                                                                "call-1",
+                                                                                "requestDevelopment",
+                                                                                "Error: Cannot advance to CODE. Implementation Plan is missing.")))
+                                                        .build()))
+                                .returnDirect(true)
+                                .build())
+                .when(delegate)
+                .executeToolCalls(prompt, chatResponse);
 
         ToolExecutionResult failedResult = manager.executeToolCalls(prompt, chatResponse);
         assertFalse(

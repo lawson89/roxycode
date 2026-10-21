@@ -16,8 +16,8 @@ import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.springframework.ai.tool.annotation.Tool;
@@ -271,7 +271,12 @@ class PlanServiceTest {
                 "Expected autonomous transition message but got: " + response);
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
-        verify(eventPublisher).publishEvent(any(AutonomousTransitionEvent.class));
+        verify(eventPublisher)
+                .publishEvent(
+                        argThat(
+                                (Object ev) ->
+                                        ev instanceof WorkflowTransitionEvent wte
+                                                && wte.autonomous()));
         assertEquals(initialLogSize + 1, service.getCurrentPlan().handoffLog().size());
     }
 

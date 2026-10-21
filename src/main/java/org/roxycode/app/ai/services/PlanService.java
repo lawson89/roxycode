@@ -7,12 +7,12 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.TransitionRequestedEvent;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.springframework.ai.tool.annotation.Tool;
@@ -27,6 +27,23 @@ public class PlanService {
 
     private static final String PHASE_DEVELOP = "DEVELOP";
     private static final String PHASE_CODE = "CODE";
+
+    private record TransitionKey(WorkflowPhase from, WorkflowPhase to) {}
+
+    private record TransitionRule(boolean autonomous, boolean requiresApprovedPlan) {}
+
+    private static final Map<TransitionKey, TransitionRule> TRANSITION_RULES =
+            Map.of(
+                    new TransitionKey(WorkflowPhase.PLAN, WorkflowPhase.CODE),
+                    new TransitionRule(false, false),
+                    new TransitionKey(WorkflowPhase.CODE, WorkflowPhase.REVIEW),
+                    new TransitionRule(true, true),
+                    new TransitionKey(WorkflowPhase.CODE, WorkflowPhase.PLAN),
+                    new TransitionRule(false, false),
+                    new TransitionKey(WorkflowPhase.REVIEW, WorkflowPhase.CODE),
+                    new TransitionRule(true, true),
+                    new TransitionKey(WorkflowPhase.REVIEW, WorkflowPhase.PLAN),
+                    new TransitionRule(false, true));
 
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
@@ -194,13 +211,7 @@ public class PlanService {
     }
 
     private void updateStepStatus(int index, boolean completed) {
-        if (currentPlan == null || index < 0 || index >= currentPlan.technicalSteps().size()) {
-            return;
-        }
-        List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
-        ImplementationPlan.TechStep step = steps.get(index);
-        steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
-        setCurrentPlan(currentPlan.withTechnicalSteps(steps));
+        updateStepsStatus(List.of(index), completed);
     }
 
     private void updateStepsStatus(List<Integer> indices, boolean completed) {
@@ -244,7 +255,7 @@ public class PlanService {
             @ToolParam(description = "The reason for requesting transition to the CODE phase.")
                     String reason) {
         requirePhase("requestDevelopment", WorkflowPhase.PLAN);
-        return routeToPhase("CODE", reason);
+        return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
     /** Transitions the workflow to the review phase. */
@@ -253,7 +264,7 @@ public class PlanService {
             @ToolParam(description = "The reason for requesting transition to the REVIEW phase.")
                     String reason) {
         requirePhase("requestReview", WorkflowPhase.CODE);
-        return routeToPhase("REVIEW", reason);
+        return routeToPhase(WorkflowPhase.REVIEW, reason);
     }
 
     /** Transitions the workflow back to development (CODE) to address fixes. */
@@ -264,7 +275,7 @@ public class PlanService {
             @ToolParam(description = "The reason for requesting transition back to the CODE phase.")
                     String reason) {
         requirePhase("requestFixes", WorkflowPhase.REVIEW);
-        return routeToPhase("CODE", reason);
+        return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
     /** Signals completion of the current cycle and returns to planning. */
@@ -275,7 +286,7 @@ public class PlanService {
             @ToolParam(description = "The reason for completing the current cycle.")
                     String reason) {
         requirePhase("requestCompletion", WorkflowPhase.REVIEW);
-        return routeToPhase("PLAN", reason);
+        return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
     /** Transitions the workflow back to planning (PLAN) to address technical blockers. */
@@ -286,10 +297,10 @@ public class PlanService {
     public String requestPlanRevision(
             @ToolParam(description = "The reason for requesting a plan revision.") String reason) {
         requirePhase("requestPlanRevision", WorkflowPhase.CODE);
-        return routeToPhase("PLAN", reason);
+        return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-    /** Routes the workflow to the target phase. Internal method. */
+    /** Routes the workflow to the target phase by name. */
     public String routeToPhase(String phaseName, String reason) {
         if (phaseName == null || phaseName.isBlank()) {
             throw new IllegalArgumentException(
@@ -297,12 +308,12 @@ public class PlanService {
                             + phaseName
                             + ". Valid phases are: PLAN, CODE, REVIEW.");
         }
-        WorkflowPhase nextPhase;
         String normalizedName = phaseName.toUpperCase(Locale.ROOT);
         if (PHASE_DEVELOP.equals(normalizedName)) {
             normalizedName = PHASE_CODE;
         }
 
+        WorkflowPhase nextPhase;
         try {
             nextPhase = WorkflowPhase.valueOf(normalizedName);
         } catch (IllegalArgumentException e) {
@@ -312,18 +323,25 @@ public class PlanService {
                             + ". Valid phases are: PLAN, CODE, REVIEW.",
                     e);
         }
+        return routeToPhase(nextPhase, reason);
+    }
 
+    /** Routes the workflow to the target phase. */
+    public String routeToPhase(WorkflowPhase nextPhase, String reason) {
+        if (nextPhase == null) {
+            throw new IllegalArgumentException(
+                    "Error: Invalid phase name: null. Valid phases are: PLAN, CODE, REVIEW.");
+        }
         if (nextPhase == currentPhase) {
             throw new IllegalStateException("Already in phase: " + nextPhase);
         }
-
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException(
                     "Error: You must provide a descriptive 'reason' for requesting a phase transition.");
         }
 
-        // Enforce strict single-step adjacent transitions for task flow
-        if (!isAdjacent(currentPhase, nextPhase)) {
+        TransitionRule rule = TRANSITION_RULES.get(new TransitionKey(currentPhase, nextPhase));
+        if (rule == null) {
             throw new IllegalStateException(
                     "Error: Cannot jump from "
                             + currentPhase
@@ -332,7 +350,6 @@ public class PlanService {
                             + ". Only single-step transitions to adjacent phases are allowed.");
         }
 
-        // Check prerequisites for specific transitions
         if (currentPhase == WorkflowPhase.PLAN && nextPhase == WorkflowPhase.CODE) {
             if (currentPlan == null) {
                 throw new IllegalStateException(
@@ -340,26 +357,20 @@ public class PlanService {
             }
         }
 
-        if ((currentPhase == WorkflowPhase.CODE && nextPhase == WorkflowPhase.REVIEW)
-                || (currentPhase == WorkflowPhase.REVIEW
-                        && (nextPhase == WorkflowPhase.CODE || nextPhase == WorkflowPhase.PLAN))) {
-            if (currentPlan == null || !currentPlan.userApproved()) {
-                throw new IllegalStateException(
-                        "Error: Cannot transition from "
-                                + currentPhase
-                                + " to "
-                                + nextPhase
-                                + ". An approved Implementation Plan is required.");
-            }
+        if (rule.requiresApprovedPlan() && (currentPlan == null || !currentPlan.userApproved())) {
+            throw new IllegalStateException(
+                    "Error: Cannot transition from "
+                            + currentPhase
+                            + " to "
+                            + nextPhase
+                            + ". An approved Implementation Plan is required.");
         }
 
-        // Autonomous transition logic
-        if (isAutonomous(currentPhase, nextPhase)) {
+        if (rule.autonomous()) {
             WorkflowPhase oldPhase = currentPhase;
             String timestamp = OffsetDateTime.now().toString();
-            String user = "System";
             String message = String.format("%s -> %s: %s", oldPhase, nextPhase, reason);
-            addHandoffLogEntry(timestamp, user, message);
+            addHandoffLogEntry(timestamp, "System", message);
 
             handleCompletionMetadata(oldPhase, nextPhase, timestamp);
 
@@ -369,12 +380,13 @@ public class PlanService {
 
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(
-                        new AutonomousTransitionEvent(oldPhase, nextPhase, reason));
+                        new WorkflowTransitionEvent(oldPhase, nextPhase, reason, true));
             }
             return String.format(
                     "Autonomous transition from %s to %s successful. Reason: %s",
                     oldPhase, nextPhase, reason);
         }
+
         this.pendingPhase = nextPhase;
         this.pendingReason = reason;
         publishTransitionRequested();
@@ -387,39 +399,7 @@ public class PlanService {
                 **Reason:** %s"""
                         .formatted(
                                 currentPhase.getDisplayName(), nextPhase.getDisplayName(), reason);
-        // Yield execution turn immediately for user approval
-        String newlineDouble = String.valueOf((char) 10) + (char) 10;
-        return (summary != null && !summary.isBlank())
-                ? summary + newlineDouble + message
-                : message;
-    }
-
-    private boolean isAdjacent(WorkflowPhase current, WorkflowPhase next) {
-        // EXPLORE is decoupled from linear task flow
-        if (next == WorkflowPhase.EXPLORE || current == WorkflowPhase.EXPLORE) {
-            return false;
-        }
-
-        switch (current) {
-            case PLAN:
-                return next == WorkflowPhase.CODE;
-            case CODE:
-                return next == WorkflowPhase.REVIEW || next == WorkflowPhase.PLAN;
-            case REVIEW:
-                return next == WorkflowPhase.CODE || next == WorkflowPhase.PLAN;
-            default:
-                return false;
-        }
-    }
-
-    private boolean isAutonomous(WorkflowPhase from, WorkflowPhase to) {
-        if (from == WorkflowPhase.CODE && to == WorkflowPhase.REVIEW) {
-            return true;
-        }
-        if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.CODE) {
-            return true;
-        }
-        return false;
+        return (summary != null && !summary.isBlank()) ? summary + "\n\n" + message : message;
     }
 
     private void handleCompletionMetadata(WorkflowPhase from, WorkflowPhase to, String timestamp) {
@@ -499,7 +479,7 @@ public class PlanService {
     private void publishTransitionRequested() {
         if (eventPublisher != null) {
             eventPublisher.publishEvent(
-                    new TransitionRequestedEvent(currentPhase, pendingPhase, pendingReason));
+                    new WorkflowTransitionEvent(currentPhase, pendingPhase, pendingReason, false));
         }
     }
 
@@ -513,37 +493,7 @@ public class PlanService {
         if (plan == null) {
             return "";
         }
-        char nl = 10;
-        String wsRegex = "[" + (char) 92 + "s]+";
-        StringBuilder sb = new StringBuilder();
-        sb.append(
-                """
-                PLAN SUMMARY:
-
-                ### %s
-                **Goal:** %s
-
-                """
-                        .formatted(
-                                plan.title().trim(), plan.goal().replaceAll(wsRegex, " ").trim()));
-
-        if (!plan.requirements().isEmpty()) {
-            sb.append("#### Requirements").append(nl);
-            for (String req : plan.requirements()) {
-                sb.append("* ").append(req.replaceAll(wsRegex, " ").trim()).append(nl);
-            }
-            sb.append(nl);
-        }
-
-        if (!plan.technicalSteps().isEmpty()) {
-            sb.append("#### Technical Steps").append(nl);
-            for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                sb.append(step.completed() ? "* [x] " : "* [ ] ")
-                        .append(step.description().replaceAll(wsRegex, " ").trim())
-                        .append(nl);
-            }
-        }
-        return sb.toString();
+        return "PLAN SUMMARY:\n\n" + plan.toMarkdown(false).trim();
     }
 
     private void requirePhase(String methodName, WorkflowPhase... allowedPhases) {

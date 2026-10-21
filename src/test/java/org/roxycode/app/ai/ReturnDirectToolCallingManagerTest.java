@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,13 +72,8 @@ class ReturnDirectToolCallingManagerTest {
         ToolCallingChatOptions options =
                 ToolCallingChatOptions.builder()
                         .toolContext(
-                                Map.of(
-                                        ReturnDirectToolCallingManager.TOOL_CONTEXT_CONVERSATION_ID,
-                                        "conv-1",
-                                        ReturnDirectToolCallingManager.TOOL_CONTEXT_PHASE,
-                                        WorkflowPhase.CODE,
-                                        ReturnDirectToolCallingManager.TOOL_CONTEXT_TURN_COUNTER,
-                                        turnCounter))
+                                new TurnToolContext("conv-1", WorkflowPhase.CODE, turnCounter)
+                                        .toMap())
                         .build();
         Prompt prompt = new Prompt(List.of(new UserMessage("Hi")), options);
         AssistantMessage.ToolCall tc =
@@ -130,17 +124,15 @@ class ReturnDirectToolCallingManagerTest {
     }
 
     @Test
-    void testExecuteToolCallsCatchesExceptionAndLogsPlanToolFailure() {
+    void testExecuteToolCallsSuppressesReturnDirectAndLogsPlanToolFailure() {
         ToolCallingChatOptions options =
                 ToolCallingChatOptions.builder()
                         .toolContext(
-                                Map.of(
-                                        ReturnDirectToolCallingManager.TOOL_CONTEXT_CONVERSATION_ID,
-                                        "task:default",
-                                        ReturnDirectToolCallingManager.TOOL_CONTEXT_PHASE,
-                                        WorkflowPhase.PLAN,
-                                        ReturnDirectToolCallingManager.TOOL_CONTEXT_TURN_COUNTER,
-                                        new AtomicInteger(0)))
+                                new TurnToolContext(
+                                                "task:default",
+                                                WorkflowPhase.PLAN,
+                                                new AtomicInteger(0))
+                                        .toMap())
                         .build();
         Prompt prompt = new Prompt(List.of(new UserMessage("Transition")), options);
         AssistantMessage.ToolCall tc =
@@ -154,8 +146,24 @@ class ReturnDirectToolCallingManagerTest {
                 AssistantMessage.builder().content("").toolCalls(List.of(tc)).build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
-        when(delegate.executeToolCalls(prompt, chatResponse))
-                .thenThrow(new IllegalStateException("Error: Plan missing"));
+        ToolExecutionResult errorToolResult =
+                ToolExecutionResult.builder()
+                        .conversationHistory(
+                                List.of(
+                                        new UserMessage("Transition"),
+                                        assistantMsg,
+                                        ToolResponseMessage.builder()
+                                                .responses(
+                                                        List.of(
+                                                                new ToolResponseMessage
+                                                                        .ToolResponse(
+                                                                        "call-1",
+                                                                        "requestDevelopment",
+                                                                        "Error: Plan missing")))
+                                                .build()))
+                        .returnDirect(true)
+                        .build();
+        doReturn(errorToolResult).when(delegate).executeToolCalls(prompt, chatResponse);
 
         ToolExecutionResult result = manager.executeToolCalls(prompt, chatResponse);
         assertFalse(result.returnDirect());

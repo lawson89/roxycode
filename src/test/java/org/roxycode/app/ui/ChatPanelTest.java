@@ -10,11 +10,10 @@ import javax.swing.JTextArea;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.TransitionRequestedEvent;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -108,8 +107,8 @@ public class ChatPanelTest {
 
         // Transition to PLAN
         turnEventBridge.dispatch(
-                new AutonomousTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason"));
+                new WorkflowTransitionEvent(
+                        WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
 
         // Give SwingUtilities.invokeLater a moment to run
         Thread.sleep(300);
@@ -119,8 +118,8 @@ public class ChatPanelTest {
 
         // Transition to REVIEW (should trigger turn)
         turnEventBridge.dispatch(
-                new AutonomousTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason"));
+                new WorkflowTransitionEvent(
+                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
         Thread.sleep(600); // Give it more time for SwingWorker
 
         verify(aiService, atLeastOnce()).chat(anyString(), any(), anyString(), isNull(), any());
@@ -143,8 +142,11 @@ public class ChatPanelTest {
                 .thenAnswer(
                         inv -> {
                             turnEventBridge.dispatch(
-                                    new TransitionRequestedEvent(
-                                            WorkflowPhase.PLAN, WorkflowPhase.CODE, "Plan ready"));
+                                    new WorkflowTransitionEvent(
+                                            WorkflowPhase.PLAN,
+                                            WorkflowPhase.CODE,
+                                            "Plan ready",
+                                            false));
                             return "FINAL_PLAN_SUMMARY";
                         });
 
@@ -251,8 +253,7 @@ public class ChatPanelTest {
         assertNotNull(qaChatPanel);
 
         verify(turnEventBridge, never()).subscribe(eq(PhaseChangedEvent.class), any());
-        verify(turnEventBridge, never()).subscribe(eq(TransitionRequestedEvent.class), any());
-        verify(turnEventBridge, never()).subscribe(eq(AutonomousTransitionEvent.class), any());
+        verify(turnEventBridge, never()).subscribe(eq(WorkflowTransitionEvent.class), any());
         verify(turnEventBridge, never()).subscribe(eq(PlanUpdatedEvent.class), any());
     }
 

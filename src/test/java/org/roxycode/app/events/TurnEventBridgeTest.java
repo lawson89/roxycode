@@ -89,10 +89,9 @@ class TurnEventBridgeTest {
         AtomicReference<AgentTurnCompleteEvent> completeRef = new AtomicReference<>();
         AtomicReference<UserMessageEvent> userRef = new AtomicReference<>();
         AtomicReference<ToolExecutionEvent> toolRef = new AtomicReference<>();
-        AtomicReference<AutonomousTransitionEvent> transitionRef = new AtomicReference<>();
+        AtomicReference<WorkflowTransitionEvent> transitionRef = new AtomicReference<>();
         AtomicReference<FileChangedEvent> fileRef = new AtomicReference<>();
         AtomicReference<PhaseChangedEvent> phaseRef = new AtomicReference<>();
-        AtomicReference<TransitionRequestedEvent> reqRef = new AtomicReference<>();
         AtomicReference<PlanUpdatedEvent> planRef = new AtomicReference<>();
         AtomicReference<SettingsChangedEvent> settingsRef = new AtomicReference<>();
         AtomicReference<ProjectChangedEvent> projectRef = new AtomicReference<>();
@@ -102,10 +101,9 @@ class TurnEventBridgeTest {
         bridge.subscribe(AgentTurnCompleteEvent.class, convId, completeRef::set);
         bridge.subscribe(UserMessageEvent.class, convId, userRef::set);
         bridge.subscribe(ToolExecutionEvent.class, convId, toolRef::set);
-        bridge.subscribe(AutonomousTransitionEvent.class, transitionRef::set);
+        bridge.subscribe(WorkflowTransitionEvent.class, transitionRef::set);
         bridge.subscribe(FileChangedEvent.class, fileRef::set);
         bridge.subscribe(PhaseChangedEvent.class, phaseRef::set);
-        bridge.subscribe(TransitionRequestedEvent.class, reqRef::set);
         bridge.subscribe(PlanUpdatedEvent.class, planRef::set);
         bridge.subscribe(SettingsChangedEvent.class, settingsRef::set);
         bridge.subscribe(ProjectChangedEvent.class, projectRef::set);
@@ -127,13 +125,11 @@ class TurnEventBridgeTest {
                 new AgentTurnCompleteEvent(convId, "Agent", 1, "Result");
         UserMessageEvent userEvent = new UserMessageEvent(convId, "User", "Msg");
         ToolExecutionEvent toolEvent = new ToolExecutionEvent(convId, "1+1", 2, true, null);
-        AutonomousTransitionEvent transitionEvent =
-                new AutonomousTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Ready for review");
+        WorkflowTransitionEvent transitionEvent =
+                new WorkflowTransitionEvent(
+                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Ready for review", true);
         FileChangedEvent fileEvent = new FileChangedEvent("pom.xml");
         PhaseChangedEvent phaseEvent = new PhaseChangedEvent(WorkflowPhase.CODE);
-        TransitionRequestedEvent reqEvent =
-                new TransitionRequestedEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready");
         PlanUpdatedEvent planEvent = new PlanUpdatedEvent(null);
         SettingsChangedEvent settingsEvent = new SettingsChangedEvent(new AppSettings());
         ProjectChangedEvent projectEvent = new ProjectChangedEvent(Paths.get("."));
@@ -145,7 +141,6 @@ class TurnEventBridgeTest {
         bridge.handleApplicationEvent(transitionEvent);
         bridge.dispatch(fileEvent);
         bridge.handleApplicationEvent(phaseEvent);
-        bridge.handleApplicationEvent(reqEvent);
         bridge.handleApplicationEvent(planEvent);
         bridge.handleApplicationEvent(settingsEvent);
         bridge.handleApplicationEvent(projectEvent);
@@ -157,10 +152,14 @@ class TurnEventBridgeTest {
         assertSame(transitionEvent, transitionRef.get());
         assertSame(fileEvent, fileRef.get());
         assertSame(phaseEvent, phaseRef.get());
-        assertSame(reqEvent, reqRef.get());
         assertSame(planEvent, planRef.get());
         assertSame(settingsEvent, settingsRef.get());
         assertSame(projectEvent, projectRef.get());
+
+        WorkflowTransitionEvent reqEvent =
+                new WorkflowTransitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready", false);
+        bridge.handleApplicationEvent(reqEvent);
+        assertSame(reqEvent, transitionRef.get());
 
         assertInstanceOf(ConversationEvent.class, turnEvent);
         assertInstanceOf(ConversationEvent.class, completeEvent);

@@ -84,4 +84,70 @@ public record ImplementationPlan(
         updatedLog.add(new LogEntry(timestamp, user, message));
         return withHandoffLog(updatedLog);
     }
+
+    /**
+     * Formats the implementation plan as Markdown.
+     *
+     * @param includeHandoffLog whether to include the handoff log table if non-empty
+     * @return the Markdown representation of this plan
+     */
+    public String toMarkdown(boolean includeHandoffLog) {
+        StringBuilder md = new StringBuilder();
+        md.append(
+                """
+                # Implementation Plan: %s
+
+                **Goal:** %s
+
+                ## Requirements
+                """
+                        .formatted(title != null ? title : "", goal != null ? goal : ""));
+
+        for (String req : requirements) {
+            md.append("- ").append(req).append("\n");
+        }
+        md.append("\n## Technical Steps\n");
+        int index = 0;
+        for (TechStep step : technicalSteps) {
+            md.append(step.completed() ? "- [x] " : "- [ ] ")
+                    .append(index)
+                    .append(". ")
+                    .append(step.description())
+                    .append("\n");
+            index++;
+        }
+
+        if (includeHandoffLog && !handoffLog.isEmpty()) {
+            md.append(
+                    """
+
+                    ## Handoff Log
+                    | Timestamp | User | Message |
+                    | :--- | :--- | :--- |
+                    """);
+            for (LogEntry entry : handoffLog) {
+                String ts = entry.timestamp() != null ? entry.timestamp() : "";
+                final int timestampLength = 19;
+                if (ts.length() > timestampLength) {
+                    ts = ts.substring(0, timestampLength).replace('T', ' ');
+                }
+                md.append("| ")
+                        .append(escapeMarkdownTableCell(ts))
+                        .append(" | ")
+                        .append(escapeMarkdownTableCell(entry.user()))
+                        .append(" | ")
+                        .append(escapeMarkdownTableCell(entry.message()))
+                        .append(" |\n");
+            }
+        }
+
+        return md.toString();
+    }
+
+    private static String escapeMarkdownTableCell(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("|", "\\|").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
+    }
 }

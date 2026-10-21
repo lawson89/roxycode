@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
-import org.roxycode.app.events.AutonomousTransitionEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.TurnEventBridge;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -92,8 +92,8 @@ public class ChatPanelStopButtonTest {
 
         // Simulate an event queued before Stop is clicked
         turnEventBridge.dispatch(
-                new AutonomousTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop transition"));
+                new WorkflowTransitionEvent(
+                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop transition", true));
         SwingUtilities.invokeAndWait(() -> {});
 
         // Click Stop on EDT
@@ -103,8 +103,8 @@ public class ChatPanelStopButtonTest {
         // Now simulate late events from the dying background thread after Stop was
         // clicked
         turnEventBridge.dispatch(
-                new AutonomousTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition"));
+                new WorkflowTransitionEvent(
+                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
         turnEventBridge.dispatch(
                 new ToolExecutionEvent("test:default", "lateToolCall()", "ok", true, null));
         turnEventBridge.dispatch(new AgentTurnEvent("test:default", "Roxy", 99, "CODE"));

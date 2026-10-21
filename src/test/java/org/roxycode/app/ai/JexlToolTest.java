@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
-import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -100,11 +99,7 @@ public class JexlToolTest {
         // Passing CODE phase and conversationId via ToolContext allows access and publishes event
         ToolContext toolContext =
                 new ToolContext(
-                        Map.of(
-                                JexlTool.TOOL_CONTEXT_CONVERSATION_ID,
-                                "task:default",
-                                JexlTool.TOOL_CONTEXT_PHASE,
-                                WorkflowPhase.CODE));
+                        new TurnToolContext("task:default", WorkflowPhase.CODE, null).toMap());
         String codeRes = tool.executeJexl("codeOnlyService.writeData()", toolContext);
         assertTrue(codeRes.contains("written"));
         assertNotNull(capturedEvent.get());

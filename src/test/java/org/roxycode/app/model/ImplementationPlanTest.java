@@ -128,4 +128,38 @@ class ImplementationPlanTest {
         assertEquals(2, completed.technicalSteps().size());
         assertEquals(1, completed.handoffLog().size());
     }
+
+    @Test
+    void testToMarkdownWithAndWithoutHandoffLog() {
+        ImplementationPlan plan =
+                new ImplementationPlan(
+                        "Feature Plan",
+                        "Deliver feature",
+                        List.of("Req A"),
+                        List.of(
+                                new ImplementationPlan.TechStep("Step 0", true),
+                                new ImplementationPlan.TechStep("Step 1", false)),
+                        true,
+                        "2026-04-06T12:00:00",
+                        "user",
+                        null,
+                        List.of(
+                                new ImplementationPlan.LogEntry(
+                                        "2026-04-06T12:05:30.123",
+                                        "Architect",
+                                        "Created plan | verified\ndetails")));
+
+        String withoutLog = plan.toMarkdown(false);
+        assertTrue(withoutLog.contains("# Implementation Plan: Feature Plan"));
+        assertTrue(withoutLog.contains("**Goal:** Deliver feature"));
+        assertTrue(withoutLog.contains("## Requirements\n- Req A"));
+        assertTrue(withoutLog.contains("## Technical Steps\n- [x] 0. Step 0\n- [ ] 1. Step 1"));
+        assertFalse(withoutLog.contains("## Handoff Log"));
+
+        String withLog = plan.toMarkdown(true);
+        assertTrue(withLog.contains("## Handoff Log"));
+        assertTrue(
+                withLog.contains(
+                        "| 2026-04-06 12:05:30 | Architect | Created plan \\| verified details |"));
+    }
 }

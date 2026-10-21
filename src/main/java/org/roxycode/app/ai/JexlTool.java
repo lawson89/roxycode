@@ -26,12 +26,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class JexlTool {
 
-    public static final String TOOL_CONTEXT_CONVERSATION_ID = "conversationId";
-    public static final String TOOL_CONTEXT_PHASE = "phase";
-
     private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
     private static final String ERROR_KEY = "error";
-    private static final String DEFAULT_CONVERSATION_ID = "default";
     private static final ObjectMapper MAPPER = AiConfig.SHARED_OBJECT_MAPPER;
 
     private final JexlEngine jexl;
@@ -81,8 +77,9 @@ public class JexlTool {
             @ToolParam(description = "The Jexl script to execute.") String script,
             ToolContext toolContext) {
         ExceptionUtils.checkInterrupted("Execution interrupted before start");
-        String conversationId = resolveConversationId(toolContext);
-        WorkflowPhase phase = resolvePhase(toolContext);
+        TurnToolContext ctx = TurnToolContext.fromToolContext(toolContext);
+        String conversationId = ctx.conversationId();
+        WorkflowPhase phase = ctx.phase();
         log.info("Executing JEXL script in phase {}: {}", phase, script);
 
         JexlScript jexlScript;
@@ -130,33 +127,6 @@ public class JexlTool {
             publishToolEvent(conversationId, script, null, false, error);
             return toJsonError(error);
         }
-    }
-
-    private String resolveConversationId(ToolContext toolContext) {
-        if (toolContext != null && toolContext.getContext() != null) {
-            Object convId = toolContext.getContext().get(TOOL_CONTEXT_CONVERSATION_ID);
-            if (convId instanceof String s && !s.isBlank()) {
-                return s;
-            }
-        }
-        return DEFAULT_CONVERSATION_ID;
-    }
-
-    private WorkflowPhase resolvePhase(ToolContext toolContext) {
-        if (toolContext != null && toolContext.getContext() != null) {
-            Object phaseObj = toolContext.getContext().get(TOOL_CONTEXT_PHASE);
-            if (phaseObj instanceof WorkflowPhase wp) {
-                return wp;
-            }
-            if (phaseObj instanceof String s) {
-                try {
-                    return WorkflowPhase.valueOf(s);
-                } catch (IllegalArgumentException ignored) {
-                    // Fallback to default
-                }
-            }
-        }
-        return WorkflowPhase.EXPLORE;
     }
 
     private void publishToolEvent(
