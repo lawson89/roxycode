@@ -23,12 +23,7 @@ public final class NavButton extends JButton {
         setHorizontalAlignment(SwingConstants.LEFT);
         setFocusPainted(false);
         setContentAreaFilled(false);
-        setBorder(
-                BorderFactory.createEmptyBorder(
-                        VERTICAL_PADDING,
-                        HORIZONTAL_PADDING,
-                        VERTICAL_PADDING,
-                        HORIZONTAL_PADDING));
+        updatePaddingBorder();
         putClientProperty(
                 FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         putClientProperty("JButton.arc", 8);
@@ -74,15 +69,19 @@ public final class NavButton extends JButton {
         } else {
             statusIcon = null;
         }
-        int rightInset =
+        updatePaddingBorder();
+        revalidate();
+        repaint();
+    }
+
+    private void updatePaddingBorder() {
+        int rightPadding =
                 statusIcon != null
                         ? HORIZONTAL_PADDING + statusIcon.getIconWidth() + STATUS_ICON_GAP
                         : HORIZONTAL_PADDING;
         setBorder(
                 BorderFactory.createEmptyBorder(
-                        VERTICAL_PADDING, HORIZONTAL_PADDING, VERTICAL_PADDING, rightInset));
-        revalidate();
-        repaint();
+                        VERTICAL_PADDING, HORIZONTAL_PADDING, VERTICAL_PADDING, rightPadding));
     }
 
     @Override

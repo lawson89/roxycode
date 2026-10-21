@@ -130,7 +130,7 @@ public final class MainFrame extends JFrame {
             SettingsPanel settingsPanel,
             BuildConfigPanel buildConfigPanel,
             ContextManagerPanel contextManagerPanel) {
-        setLayout(new MigLayout("fill, insets 0", "[220!]0[fill, grow]", "[fill, grow]"));
+        setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
         // Sidebar
         SidebarPanel sidebar = new SidebarPanel(this::showCard);
@@ -154,7 +154,7 @@ public final class MainFrame extends JFrame {
         workspace.add(contentArea, "grow, wrap");
         workspace.add(statusBar, "h 30!");
 
-        add(sidebar, "growy");
+        add(sidebar, "grow");
         add(workspace, "grow");
 
         // Default to QA View

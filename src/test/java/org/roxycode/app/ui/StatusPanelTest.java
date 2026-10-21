@@ -12,7 +12,7 @@ class StatusPanelTest {
     void testStatusPanelInstantiation() {
         EnvironmentService envService = new EnvironmentService();
         StatusPanel status = new StatusPanel(envService);
-                assertNotNull(status);
+        assertNotNull(status);
         assertEquals(3, status.getComponentCount());
         status.updateUI();
         assertEquals(

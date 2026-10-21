@@ -40,10 +40,10 @@ public class ChatHtmlTemplates {
 
         String template =
                 """
-				<table class="chat-entry ${entryClass}" width="100%" cellpadding="10" cellspacing="0" border="0">
+								<table class="${entryClass}" width="100%" cellpadding="10" cellspacing="0" border="0">
 				    <tr>
-				        <td class="accent-bar ${accentClass}" width="4">&nbsp;</td>
-				        <td class="message-body">
+				        <td class="${accentClass}" width="4">&nbsp;</td>
+				        <td class="message-body" width="100%">
 				            <table width="100%" cellpadding="0" cellspacing="0" border="0">
 				                <tr>
 				                    <td align="left" valign="middle">${indicator}&nbsp;&nbsp;<span class="timestamp">${timestamp}</span></td>
@@ -97,10 +97,10 @@ public class ChatHtmlTemplates {
         }
         String template =
                 """
-				<table class="tool-call" width="100%" cellpadding="8" cellspacing="0" border="0">
+								<table class="tool-call" width="100%" cellpadding="8" cellspacing="0" border="0">
 				    <tr>
-				        <td class="accent-bar tool-accent" width="4">&nbsp;</td>
-				        <td class="tool-body-container">
+				        <td class="tool-accent" width="4">&nbsp;</td>
+				        <td class="tool-body-container" width="100%">
 				            ${header}
 				            <pre class="tool-body">${output}</pre>
 				            ${statusHtml}

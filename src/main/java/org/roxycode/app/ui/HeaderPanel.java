@@ -41,7 +41,7 @@ public final class HeaderPanel extends JPanel {
         // 2-column layout: Left (Project), Right (Utils)
         setLayout(new MigLayout("insets 2 15 2 15, fillx", "[left]push[right]", LAYOUT_CENTER));
 
-                putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
+        putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
         // --- LEFT SECTION: Project Info ---
@@ -85,7 +85,7 @@ public final class HeaderPanel extends JPanel {
         }
     }
 
-        @Override
+    @Override
     public void updateUI() {
         super.updateUI();
         updateBorder();

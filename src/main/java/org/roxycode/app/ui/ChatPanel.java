@@ -147,7 +147,7 @@ public class ChatPanel extends JPanel {
         inlineActionPanel.add(approveButton);
         inlineActionPanel.add(rejectButton);
 
-                outputScrollPane = new JScrollPane(outputArea);
+        outputScrollPane = new JScrollPane(outputArea);
         outputScrollPane.setHorizontalScrollBarPolicy(
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         updateOutputScrollPaneBorder();
@@ -175,7 +175,7 @@ public class ChatPanel extends JPanel {
             topComponent = outputScrollPane;
         }
 
-                // Input section
+        // Input section
         JPanel inputSection =
                 new JPanel(
                         new MigLayout(
@@ -231,7 +231,7 @@ public class ChatPanel extends JPanel {
         inputSection.add(inputAreaContainer, "grow");
         inputSection.add(buttonPanel, "aligny bottom");
 
-                JSplitPane splitPane =
+        JSplitPane splitPane =
                 new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
         splitPane.setResizeWeight(0.8);
         splitPane.setBorder(BorderFactory.createEmptyBorder());
@@ -245,7 +245,7 @@ public class ChatPanel extends JPanel {
         setupKeyboardShortcuts();
     }
 
-        @Override
+    @Override
     public void updateUI() {
         super.updateUI();
         if (outputScrollPane != null) {

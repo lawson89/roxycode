@@ -100,6 +100,15 @@ class MainFrameTest {
         assertEquals(1, MainFrame.class.getDeclaredConstructors().length);
         assertEquals("RoxyCode - [OldProject]", mainFrame.getTitle());
 
+        net.miginfocom.swing.MigLayout rootLayout =
+                assertInstanceOf(
+                        net.miginfocom.swing.MigLayout.class,
+                        mainFrame.getContentPane().getLayout());
+        assertEquals("[210!, fill]0[fill, grow]", rootLayout.getColumnConstraints());
+        java.awt.Component sidebarComp = mainFrame.getContentPane().getComponent(0);
+        assertInstanceOf(SidebarPanel.class, sidebarComp);
+        assertEquals("grow", rootLayout.getComponentConstraints(sidebarComp));
+
         when(projectService.getProjectName()).thenReturn("NewProject");
         mainFrame.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new")));
 

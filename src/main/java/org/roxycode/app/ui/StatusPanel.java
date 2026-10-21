@@ -19,7 +19,7 @@ public final class StatusPanel extends JPanel {
         this.envService = envService;
         setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push []", "center"));
 
-                // Use theme-aware styling
+        // Use theme-aware styling
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
@@ -47,7 +47,7 @@ public final class StatusPanel extends JPanel {
         timer.start();
     }
 
-        @Override
+    @Override
     public void updateUI() {
         super.updateUI();
         updateBorder();

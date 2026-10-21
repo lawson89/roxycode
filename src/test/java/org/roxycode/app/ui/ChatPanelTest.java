@@ -217,7 +217,7 @@ public class ChatPanelTest {
                 scrollPane.getHorizontalScrollBarPolicy(),
                 "Horizontal scrollbar policy should be HORIZONTAL_SCROLLBAR_NEVER");
 
-                assertInstanceOf(
+        assertInstanceOf(
                 javax.swing.border.MatteBorder.class,
                 scrollPane.getBorder(),
                 "outputScrollPane should use a bottom-only MatteBorder");
@@ -238,8 +238,7 @@ public class ChatPanelTest {
 
         JSplitPane splitPane =
                 (JSplitPane)
-                        javax.swing.SwingUtilities.getAncestorOfClass(
-                                JSplitPane.class, scrollPane);
+                        javax.swing.SwingUtilities.getAncestorOfClass(JSplitPane.class, scrollPane);
         assertNotNull(splitPane, "outputScrollPane should be inside JSplitPane");
         assertEquals(
                 new java.awt.Insets(0, 0, 0, 0),

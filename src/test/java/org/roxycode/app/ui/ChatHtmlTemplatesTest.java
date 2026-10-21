@@ -13,7 +13,11 @@ class ChatHtmlTemplatesTest {
         String timestamp = "12:00:00";
         String result = ChatHtmlTemplates.renderChatEntry(role, content, timestamp, -1, false);
 
-        assertTrue(result.contains("user-entry"));
+        assertTrue(result.contains("<table class=\"user-entry\""));
+        assertTrue(result.contains("<td class=\"user-accent\" width=\"4\">&nbsp;</td>"));
+        assertTrue(result.contains("<td class=\"message-body\" width=\"100%\">"));
+        assertFalse(result.contains("chat-entry"));
+        assertFalse(result.contains("accent-bar"));
         assertTrue(result.contains("role-user"));
         assertTrue(result.contains("margin-top: 4px;"));
         assertTrue(result.contains("<p>Hello</p>"));
@@ -60,7 +64,10 @@ class ChatHtmlTemplatesTest {
         String output = "diff output";
         String result = ChatHtmlTemplates.renderToolLog(toolName, output, true, null);
 
-        assertTrue(result.contains("tool-call"));
+        assertTrue(result.contains("<table class=\"tool-call\""));
+        assertTrue(result.contains("<td class=\"tool-accent\" width=\"4\">&nbsp;</td>"));
+        assertTrue(result.contains("<td class=\"tool-body-container\" width=\"100%\">"));
+        assertFalse(result.contains("accent-bar"));
         assertTrue(result.contains("git"));
         assertTrue(result.contains("diff output"));
         assertTrue(

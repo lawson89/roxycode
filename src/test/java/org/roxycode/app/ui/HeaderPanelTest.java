@@ -114,7 +114,7 @@ class HeaderPanelTest {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
-                net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
+        net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
         Object constraints = layout.getLayoutConstraints();
         assertTrue(constraints.toString().contains("insets 2 15 2 15"));
         header.updateUI();
