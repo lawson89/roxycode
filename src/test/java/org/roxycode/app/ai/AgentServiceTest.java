@@ -54,7 +54,7 @@ class AgentServiceTest {
         assertArrayEquals(new String[] {"*"}, annotation.phases());
     }
 
-        @Test
+    @Test
     void testAgentServicesDoNotHaveRedundantServiceAnnotation() {
         List<Class<?>> agentServiceClasses =
                 List.of(

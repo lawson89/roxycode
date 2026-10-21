@@ -74,7 +74,7 @@ public final class MainFrame extends JFrame {
                 contextManagerPanel);
     }
 
-        @EventListener
+    @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         updateTitle();
         if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {

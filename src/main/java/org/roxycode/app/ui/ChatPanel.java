@@ -179,11 +179,10 @@ public class ChatPanel extends JPanel {
             topComponent = outputScrollPane;
         }
 
-                // Input section
+        // Input section
         JPanel inputSection =
                 new JPanel(
-                        new MigLayout(
-                                "fill, insets 6 10 10 10", "[grow, fill][]", "[grow, fill]"));
+                        new MigLayout("fill, insets 6 10 10 10", "[grow, fill][]", "[grow, fill]"));
         inputSection.setMinimumSize(new Dimension(0, 85));
 
         inputArea = new JTextArea();

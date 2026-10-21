@@ -81,7 +81,7 @@ public class ProjectCacheMetaServiceTest {
         assertTrue(loadedRepo.isPresent());
         assertEquals("Legacy repo content", loadedRepo.get());
 
-                // Ensure legacy files moved to .roxycode/tmp
+        // Ensure legacy files moved to .roxycode/tmp
         assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp/cache_meta.toml")));
         assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp/repo_cache.txt")));
         assertFalse(Files.exists(roxyDir.resolve("cache_meta.toml")));
@@ -104,8 +104,7 @@ public class ProjectCacheMetaServiceTest {
         verify(spyMapper, never()).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
 
         // saveMeta updates in-memory cache so subsequent loadMeta does not hit disk
-        ProjectCacheMeta meta =
-                new ProjectCacheMeta("CachedProject", LocalDateTime.now(), 4200L);
+        ProjectCacheMeta meta = new ProjectCacheMeta("CachedProject", LocalDateTime.now(), 4200L);
         service.saveMeta(meta);
 
         Optional<ProjectCacheMeta> cached1 = service.loadMeta();

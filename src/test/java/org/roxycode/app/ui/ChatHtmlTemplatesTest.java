@@ -188,8 +188,7 @@ class ChatHtmlTemplatesTest {
                         + "</body></html>");
 
         ViewFactory factory = pane.getEditorKit().getViewFactory();
-        Element accentTd =
-                findTdByClass(pane.getDocument().getDefaultRootElement(), "ai-accent");
+        Element accentTd = findTdByClass(pane.getDocument().getDefaultRootElement(), "ai-accent");
         assertNotNull(accentTd, "Should find ai-accent td element");
         View tdView = factory.create(accentTd);
         assertTrue(

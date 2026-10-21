@@ -32,7 +32,7 @@ import org.springframework.context.ApplicationEventPublisher;
 @SuppressWarnings("PMD.NullAssignment")
 public final class ChatController implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
-        static final String ROLE_SYSTEM = "system";
+    static final String ROLE_SYSTEM = "system";
     static final String ROLE_USER = "user";
     static final String ROLE_AI = "ai";
     static final String IMAGE_REQUIRES_TEXT_MESSAGE =
@@ -124,7 +124,7 @@ public final class ChatController implements AutoCloseable {
                         && deferredTransitionEvent.to() != null);
     }
 
-        public void sendMessage(String rawText) {
+    public void sendMessage(String rawText) {
         if (rawText == null) return;
         String text = rawText.trim();
         if (text.isEmpty()) {
@@ -221,7 +221,7 @@ public final class ChatController implements AutoCloseable {
         if (model.isTaskMode()) {
             planService.resetWorkflow();
         }
-                model.clearPendingImages();
+        model.clearPendingImages();
         view.clearAttachments();
         model.setCurrentTurn(0);
         view.updateTurnLabel();

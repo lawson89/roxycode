@@ -260,7 +260,7 @@ class MentorModeIntegrationTest {
                 sidebar.isTaskWaitingApproval(),
                 "Sidebar should show waiting approval when transition is requested");
 
-                when(planService.getPendingPhase()).thenReturn(null);
+        when(planService.getPendingPhase()).thenReturn(null);
         taskWorkspacePanel.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
         SwingUtilities.invokeAndWait(() -> {});
         assertFalse(

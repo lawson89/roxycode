@@ -99,7 +99,7 @@ public final class TaskWorkspacePanel extends JPanel {
         this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
     }
 
-        @EventListener
+    @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
         Runnable update =
                 () -> {

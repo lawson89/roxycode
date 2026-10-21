@@ -138,7 +138,7 @@ class ChatControllerTest {
         ExploreChatPanel panel =
                 new ExploreChatPanel(
                         aiService, planService, publisher, chatMemory, null, executorService);
-                panel.getController().close();
+        panel.getController().close();
         assertTrue(executorService.isShutdown());
     }
 

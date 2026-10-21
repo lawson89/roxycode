@@ -251,7 +251,7 @@ public class ChatPanelTest {
                 0.001,
                 "splitPane resizeWeight should be 1.0 so chat output gets extra vertical space");
 
-                javax.swing.JPanel inputSection = (javax.swing.JPanel) splitPane.getBottomComponent();
+        javax.swing.JPanel inputSection = (javax.swing.JPanel) splitPane.getBottomComponent();
         java.awt.Container buttonPanel = chatPanel.getSendButton().getParent();
         assertFalse(
                 inputSection.isPreferredSizeSet(),

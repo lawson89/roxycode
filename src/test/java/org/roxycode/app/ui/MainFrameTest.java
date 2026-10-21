@@ -109,11 +109,10 @@ class MainFrameTest {
         assertInstanceOf(SidebarPanel.class, sidebarComp);
         assertEquals("grow", rootLayout.getComponentConstraints(sidebarComp));
 
-                // Simulate active turns and pending images on both panels before switching project
+        // Simulate active turns and pending images on both panels before switching project
         java.util.concurrent.CountDownLatch turnStarted =
                 new java.util.concurrent.CountDownLatch(2);
-        java.util.concurrent.CountDownLatch blockTurn =
-                new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch blockTurn = new java.util.concurrent.CountDownLatch(1);
         when(aiService.chat(anyString(), any(), anyString(), any()))
                 .thenAnswer(
                         inv -> {

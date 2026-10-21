@@ -77,7 +77,7 @@ public class ProjectCacheMetaService {
         }
     }
 
-        @EventListener
+    @EventListener
     public synchronized void onProjectChanged(ProjectChangedEvent event) {
         invalidateCache();
     }
