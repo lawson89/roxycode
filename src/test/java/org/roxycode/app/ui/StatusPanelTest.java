@@ -20,6 +20,11 @@ class StatusPanelTest {
                 status.getBorder().getBorderInsets(status),
                 "StatusPanel should maintain a 1px top MatteBorder across updateUI()");
 
+        JLabel memLabel = (JLabel) status.getComponent(2);
+        assertTrue(memLabel.getText().contains("Mem:"));
+        assertFalse(memLabel.getText().contains("Repo Map:"));
+        assertFalse(memLabel.getText().contains("Messages:"));
+
         for (Component comp : status.getComponents()) {
             if (comp instanceof JLabel label) {
                 assertFalse(

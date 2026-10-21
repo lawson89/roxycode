@@ -7,7 +7,7 @@ import org.roxycode.app.service.EnvironmentService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
-/** Bottom status bar with system info. */
+/** Bottom status bar displaying system and memory info. */
 @Component
 @Lazy
 public final class StatusPanel extends JPanel {
@@ -59,7 +59,7 @@ public final class StatusPanel extends JPanel {
                         1, 0, 0, 0, UIManager.getColor("Component.borderColor")));
     }
 
-    private void updateStats() {
+    void updateStats() {
         memLabel.setText(
                 "Mem: "
                         + envService.getMemoryUsageMb()

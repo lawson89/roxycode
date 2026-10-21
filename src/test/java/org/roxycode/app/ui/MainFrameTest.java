@@ -109,10 +109,53 @@ class MainFrameTest {
         assertInstanceOf(SidebarPanel.class, sidebarComp);
         assertEquals("grow", rootLayout.getComponentConstraints(sidebarComp));
 
+                // Simulate active turns and pending images on both panels before switching project
+        java.util.concurrent.CountDownLatch turnStarted =
+                new java.util.concurrent.CountDownLatch(2);
+        java.util.concurrent.CountDownLatch blockTurn =
+                new java.util.concurrent.CountDownLatch(1);
+        when(aiService.chat(anyString(), any(), anyString(), any()))
+                .thenAnswer(
+                        inv -> {
+                            turnStarted.countDown();
+                            blockTurn.await();
+                            return "Done";
+                        });
+
+        exploreChatPanel.getController().triggerTurn("QA in progress");
+        featureChatPanel.getController().triggerTurn("Task in progress");
+        try {
+            assertTrue(
+                    turnStarted.await(5, java.util.concurrent.TimeUnit.SECONDS),
+                    "Both turns should start");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            fail("Interrupted waiting for turns to start");
+        }
+        assertTrue(exploreChatPanel.getController().isTurnActive());
+        assertTrue(featureChatPanel.getController().isTurnActive());
+
+        exploreChatPanel
+                .getModel()
+                .addPendingImage(
+                        new java.awt.image.BufferedImage(
+                                4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB));
+        featureChatPanel
+                .getModel()
+                .addPendingImage(
+                        new java.awt.image.BufferedImage(
+                                4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB));
+
         when(projectService.getProjectName()).thenReturn("NewProject");
         mainFrame.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new")));
+        blockTurn.countDown();
 
         assertEquals("RoxyCode - [NewProject]", mainFrame.getTitle());
+        assertFalse(exploreChatPanel.getController().isTurnActive());
+        assertFalse(featureChatPanel.getController().isTurnActive());
+        assertFalse(exploreChatPanel.getModel().hasPendingImages());
+        assertFalse(featureChatPanel.getModel().hasPendingImages());
+        verify(planService).resetWorkflow();
         verify(chatMemory).clear(ChatModel.QA_CONVERSATION_ID);
         verify(chatMemory).clear(ChatModel.TASK_CONVERSATION_ID);
     }

@@ -74,20 +74,20 @@ public final class MainFrame extends JFrame {
                 contextManagerPanel);
     }
 
-    @EventListener
+        @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         updateTitle();
-        chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
-        chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
         if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {
-            qaWorkspacePanel.getQaChatPanel().clearOutput();
+            qaWorkspacePanel.getQaChatPanel().getController().resetForProjectChange();
         }
         if (taskWorkspacePanel != null) {
             if (taskWorkspacePanel.getTaskChatPanel() != null) {
-                taskWorkspacePanel.getTaskChatPanel().clearOutput();
+                taskWorkspacePanel.getTaskChatPanel().getController().resetForProjectChange();
             }
             taskWorkspacePanel.refreshGitChanges();
         }
+        chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
+        chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
     }
 
     private void setupLaf() {

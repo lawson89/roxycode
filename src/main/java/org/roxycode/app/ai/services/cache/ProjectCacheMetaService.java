@@ -7,14 +7,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Objects;
 import java.util.Optional;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 @Service
+@SuppressWarnings("PMD.NullAssignment")
 public class ProjectCacheMetaService {
     private static final Logger log = LoggerFactory.getLogger(ProjectCacheMetaService.class);
     private static final String ROXY_DIR = ".roxycode";
@@ -28,6 +32,8 @@ public class ProjectCacheMetaService {
 
     private final ProjectService projectService;
     private final ObjectMapper mapper;
+    private Path cachedProjectRoot;
+    private Optional<ProjectCacheMeta> cachedMeta;
 
     public ProjectCacheMetaService(ProjectService projectService) {
         this(projectService, org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
@@ -71,27 +77,56 @@ public class ProjectCacheMetaService {
         }
     }
 
-    public Optional<ProjectCacheMeta> loadMeta() {
-        if (!projectService.hasActiveProject()) return Optional.empty();
+        @EventListener
+    public synchronized void onProjectChanged(ProjectChangedEvent event) {
+        invalidateCache();
+    }
+
+    public synchronized void invalidateCache() {
+        cachedProjectRoot = null;
+        cachedMeta = null;
+    }
+
+    public synchronized Optional<ProjectCacheMeta> loadMeta() {
+        if (!projectService.hasActiveProject()) {
+            invalidateCache();
+            return Optional.empty();
+        }
+        Path currentRoot = projectService.getCurrentProjectRoot();
+        if (cachedMeta != null && Objects.equals(cachedProjectRoot, currentRoot)) {
+            return cachedMeta;
+        }
+
         migrateLegacyFiles();
-        Path metaPath = projectService.getCurrentProjectRoot().resolve(CACHE_FILE);
+        Path metaPath = currentRoot.resolve(CACHE_FILE);
         File file = metaPath.toFile();
-        if (!file.exists()) return Optional.empty();
+        if (!file.exists()) {
+            cachedProjectRoot = currentRoot;
+            cachedMeta = Optional.empty();
+            return cachedMeta;
+        }
 
         try {
-            return Optional.of(mapper.readValue(file, ProjectCacheMeta.class));
+            Optional<ProjectCacheMeta> loaded =
+                    Optional.ofNullable(mapper.readValue(file, ProjectCacheMeta.class));
+            cachedProjectRoot = currentRoot;
+            cachedMeta = loaded;
+            return loaded;
         } catch (IOException e) {
             log.error("Failed to load cache meta: {}", e.getMessage());
             return Optional.empty();
         }
     }
 
-    public void saveMeta(ProjectCacheMeta meta) {
+    public synchronized void saveMeta(ProjectCacheMeta meta) {
         if (!projectService.hasActiveProject()) return;
         ensureTmpDir();
-        Path metaPath = projectService.getCurrentProjectRoot().resolve(CACHE_FILE);
+        Path currentRoot = projectService.getCurrentProjectRoot();
+        Path metaPath = currentRoot.resolve(CACHE_FILE);
         try {
             mapper.writeValue(metaPath.toFile(), meta);
+            cachedProjectRoot = currentRoot;
+            cachedMeta = Optional.ofNullable(meta);
         } catch (IOException e) {
             log.error("Failed to save cache meta: {}", e.getMessage());
         }

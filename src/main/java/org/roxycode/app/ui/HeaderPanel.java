@@ -11,6 +11,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
@@ -28,15 +29,18 @@ public final class HeaderPanel extends JPanel {
     private static final String LAYOUT_CENTER = "center";
     private final transient ProjectService projectService;
     private final transient GitService gitService;
+    private final transient SettingsService settingsService;
 
     private final JLabel projectLabel;
     private final JLabel branchLabel;
     private final JLabel modelLabel;
+    private final JButton themeToggleButton;
 
     public HeaderPanel(
             ProjectService projectService, GitService gitService, SettingsService settingsService) {
         this.projectService = projectService;
         this.gitService = gitService;
+        this.settingsService = settingsService;
 
         // 2-column layout: Left (Project), Right (Utils)
         setLayout(new MigLayout("insets 2 15 2 15, fillx", "[left]push[right]", LAYOUT_CENTER));
@@ -66,7 +70,7 @@ public final class HeaderPanel extends JPanel {
         add(leftPanel, "left");
 
         // --- RIGHT SECTION: Model & Utils ---
-        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]", LAYOUT_CENTER));
+        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]8[]", LAYOUT_CENTER));
         rightPanel.setOpaque(false);
 
         modelLabel = new JLabel();
@@ -74,7 +78,12 @@ public final class HeaderPanel extends JPanel {
                 FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
 
+        themeToggleButton =
+                createIconButton(
+                        Codicons.COLOR_MODE, "Toggle Light/Dark Theme", e -> toggleTheme());
+
         rightPanel.add(modelLabel);
+        rightPanel.add(themeToggleButton);
         add(rightPanel, "right");
 
         if (projectService.getCurrentProjectRoot() != null) {
@@ -112,6 +121,15 @@ public final class HeaderPanel extends JPanel {
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
         updateModelDisplay(event.settings().getGeminiModel());
+    }
+
+    private void toggleTheme() {
+        AppSettings settings = settingsService.getSettings();
+        String currentTheme = settings.getTheme();
+        String newTheme = "FlatLaf Dark".equals(currentTheme) ? "FlatLaf Light" : "FlatLaf Dark";
+        settings.setTheme(newTheme);
+        SettingsPanel.applyTheme(newTheme);
+        settingsService.saveSettings();
     }
 
     private JButton createIconButton(
@@ -183,6 +201,10 @@ public final class HeaderPanel extends JPanel {
 
     JLabel getBranchLabel() {
         return branchLabel;
+    }
+
+    JButton getThemeToggleButton() {
+        return themeToggleButton;
     }
 
     private void updateModelDisplay(String modelName) {

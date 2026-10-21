@@ -138,7 +138,39 @@ class ChatControllerTest {
         ExploreChatPanel panel =
                 new ExploreChatPanel(
                         aiService, planService, publisher, chatMemory, null, executorService);
-        panel.getController().close();
+                panel.getController().close();
         assertTrue(executorService.isShutdown());
+    }
+
+    @Test
+    void testSendMessageWithEmptyTextAndPendingImageShowsFeedbackAndPreservesImage() {
+        AiService aiService = mock(AiService.class);
+        PlanService planService = mock(PlanService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        Executor directExecutor = Runnable::run;
+
+        ExploreChatPanel panel =
+                new ExploreChatPanel(
+                        aiService, planService, publisher, chatMemory, null, directExecutor);
+
+        panel.getModel()
+                .addPendingImage(
+                        new java.awt.image.BufferedImage(
+                                8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB));
+        assertTrue(panel.getModel().hasPendingImages());
+
+        panel.getController().sendMessage("   ");
+
+        assertTrue(
+                panel.getModel().hasPendingImages(),
+                "Pending image must be preserved when prompt text is empty");
+        assertTrue(
+                panel.getOutputArea()
+                        .getText()
+                        .contains(ChatController.IMAGE_REQUIRES_TEXT_MESSAGE),
+                "System feedback message should be displayed when sending image without text");
+        verifyNoInteractions(publisher);
+        verifyNoInteractions(aiService);
     }
 }

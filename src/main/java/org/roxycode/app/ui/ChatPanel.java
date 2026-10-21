@@ -9,12 +9,15 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
 import net.miginfocom.swing.MigLayout;
@@ -47,6 +50,7 @@ public class ChatPanel extends JPanel {
     private final JTextArea inputArea;
     private final JButton sendButton;
     private final JButton stopButton;
+    private final JButton attachImageButton;
     private final JButton approveButton;
     private final JButton rejectButton;
     private final JButton resetSessionButton;
@@ -175,19 +179,21 @@ public class ChatPanel extends JPanel {
             topComponent = outputScrollPane;
         }
 
-        // Input section
+                // Input section
         JPanel inputSection =
                 new JPanel(
                         new MigLayout(
-                                "fill, insets 6 10 10 10", "[grow, fill][][][]", "[grow, fill]"));
+                                "fill, insets 6 10 10 10", "[grow, fill][]", "[grow, fill]"));
+        inputSection.setMinimumSize(new Dimension(0, 85));
 
         inputArea = new JTextArea();
+        inputArea.setRows(3);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         inputArea.setMargin(new Insets(8, 10, 8, 10));
         inputArea.putClientProperty(
                 FlatClientProperties.PLACEHOLDER_TEXT,
-                "Ask Roxy... (Enter to send, Shift+Enter for new line)");
+                "Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)");
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
 
         JPanel inputAreaContainer = new JPanel(new BorderLayout());
@@ -207,6 +213,15 @@ public class ChatPanel extends JPanel {
         stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
         stopButton.addActionListener(e -> controller.stopTurn());
 
+        attachImageButton = new JButton("Attach Image", FontIcon.of(Codicons.FILE_MEDIA, 16));
+        attachImageButton.setToolTipText("Attach Image");
+        attachImageButton.setMargin(new Insets(4, 10, 4, 10));
+        attachImageButton.putClientProperty(
+                FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        attachImageButton.putClientProperty(
+                FlatClientProperties.STYLE, "arc: 8; foreground: $Label.disabledForeground");
+        attachImageButton.addActionListener(e -> chooseImageAttachment());
+
         resetSessionButton = new JButton("Reset Session", FontIcon.of(Codicons.REFRESH, 16));
         resetSessionButton.setMargin(new Insets(4, 10, 4, 10));
         resetSessionButton.putClientProperty(
@@ -225,15 +240,16 @@ public class ChatPanel extends JPanel {
         buttonPanel.setOpaque(false);
         buttonPanel.add(sendButton, "growx, wrap");
         buttonPanel.add(stopButton, "growx, wrap");
+        buttonPanel.add(attachImageButton, "growx, wrap");
         buttonPanel.add(resetSessionButton, "growx, wrap");
         buttonPanel.add(turnLabel, "center");
 
         inputSection.add(inputAreaContainer, "grow");
-        inputSection.add(buttonPanel, "aligny bottom");
+        inputSection.add(buttonPanel, "aligny top");
 
         JSplitPane splitPane =
                 new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
-        splitPane.setResizeWeight(0.8);
+        splitPane.setResizeWeight(1.0);
         splitPane.setBorder(BorderFactory.createEmptyBorder());
 
         add(splitPane, BorderLayout.CENTER);
@@ -347,6 +363,32 @@ public class ChatPanel extends JPanel {
         controller.sendMessage(inputArea.getText());
     }
 
+    private void chooseImageAttachment() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(
+                new FileNameExtensionFilter(
+                        "Image Files (png, jpg, jpeg, gif, bmp)",
+                        "png",
+                        "jpg",
+                        "jpeg",
+                        "gif",
+                        "bmp"));
+        int returnVal = chooser.showOpenDialog(this);
+        if (returnVal == JFileChooser.APPROVE_OPTION) {
+            File file = chooser.getSelectedFile();
+            if (file != null) {
+                try {
+                    BufferedImage img = ImageIO.read(file);
+                    if (img != null) {
+                        addPendingImage(img);
+                    }
+                } catch (Exception ex) {
+                    log.error("Failed to load attached image", ex);
+                }
+            }
+        }
+    }
+
     private void addPendingImage(Image img) {
         BufferedImage bimage = model.addPendingImage(img);
 
@@ -385,6 +427,7 @@ public class ChatPanel extends JPanel {
             stopButton.setEnabled(true);
             SwingUtilities.invokeLater(stopButton::requestFocusInWindow);
             sendButton.setEnabled(false);
+            attachImageButton.setEnabled(false);
             inputArea.setEnabled(false);
             if (model.isTaskMode()) {
                 approveButton.setEnabled(false);
@@ -392,6 +435,7 @@ public class ChatPanel extends JPanel {
             }
         } else {
             sendButton.setEnabled(true);
+            attachImageButton.setEnabled(true);
             inputArea.setEnabled(true);
             if (model.isTaskMode()) {
                 boolean hasPending = controller.hasPendingPhase();
@@ -427,6 +471,10 @@ public class ChatPanel extends JPanel {
 
     public JButton getStopButton() {
         return stopButton;
+    }
+
+    public JButton getAttachImageButton() {
+        return attachImageButton;
     }
 
     public void focusInput() {

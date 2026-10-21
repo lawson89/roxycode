@@ -38,3 +38,6 @@ code { font-family: monospace; background-color: #1e1e1e; color: #d4d4d4; }
 .tool-error { color: #f44336; margin-top: 4px; }
 .copy-action { font-family: sans-serif; font-size: 10px; color: #888888; text-decoration: none; }
 .copy-feedback { font-family: sans-serif; font-size: 10px; color: #4caf50; font-weight: bold; }
+.welcome-card { background-color: #252526; }
+.welcome-title { font-family: monospace; font-size: 12px; font-weight: bold; color: #4caf50; }
+.welcome-hint { font-size: 12px; color: #aaaaaa; }

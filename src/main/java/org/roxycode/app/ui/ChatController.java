@@ -32,9 +32,11 @@ import org.springframework.context.ApplicationEventPublisher;
 @SuppressWarnings("PMD.NullAssignment")
 public final class ChatController implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
-    static final String ROLE_SYSTEM = "system";
+        static final String ROLE_SYSTEM = "system";
     static final String ROLE_USER = "user";
     static final String ROLE_AI = "ai";
+    static final String IMAGE_REQUIRES_TEXT_MESSAGE =
+            "Please enter a prompt message to accompany the attached image.";
 
     private final ChatModel model;
     private final ChatPanel view;
@@ -122,10 +124,15 @@ public final class ChatController implements AutoCloseable {
                         && deferredTransitionEvent.to() != null);
     }
 
-    public void sendMessage(String rawText) {
+        public void sendMessage(String rawText) {
         if (rawText == null) return;
         String text = rawText.trim();
-        if (text.isEmpty()) return;
+        if (text.isEmpty()) {
+            if (model.hasPendingImages()) {
+                view.appendMessage(ROLE_SYSTEM, IMAGE_REQUIRES_TEXT_MESSAGE);
+            }
+            return;
+        }
 
         if (eventPublisher != null) {
             eventPublisher.publishEvent(
@@ -214,11 +221,42 @@ public final class ChatController implements AutoCloseable {
         if (model.isTaskMode()) {
             planService.resetWorkflow();
         }
+                model.clearPendingImages();
+        view.clearAttachments();
         model.setCurrentTurn(0);
         view.updateTurnLabel();
         chatMemory.clear(model.getConversationId());
         view.clearOutput();
         view.appendMessage(ROLE_SYSTEM, "Session reset.");
+    }
+
+    public void resetForProjectChange() {
+        model.setTurnCancelled(true);
+        deferredTransitionEvent = null;
+        activeTurnId = 0;
+        Future<?> futureToCancel = activeTurnFuture;
+        if (futureToCancel != null) {
+            activeTurnFuture = null;
+            futureToCancel.cancel(true);
+        }
+        if (model.isTaskMode() && planService != null) {
+            planService.resetWorkflow();
+        }
+        model.clearPendingImages();
+        model.setCurrentTurn(0);
+        Runnable uiUpdate =
+                () -> {
+                    view.clearAttachments();
+                    view.hideTransitionBanner();
+                    view.setLoading(false);
+                    view.updateTurnLabel();
+                    view.clearOutput();
+                };
+        if (SwingUtilities.isEventDispatchThread()) {
+            uiUpdate.run();
+        } else {
+            SwingUtilities.invokeLater(uiUpdate);
+        }
     }
 
     public void triggerTurn(String text) {

@@ -81,10 +81,49 @@ public class ProjectCacheMetaServiceTest {
         assertTrue(loadedRepo.isPresent());
         assertEquals("Legacy repo content", loadedRepo.get());
 
-        // Ensure legacy files moved to .roxycode/tmp
+                // Ensure legacy files moved to .roxycode/tmp
         assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp/cache_meta.toml")));
         assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp/repo_cache.txt")));
         assertFalse(Files.exists(roxyDir.resolve("cache_meta.toml")));
         assertFalse(Files.exists(roxyDir.resolve("repo_cache.txt")));
+    }
+
+    @Test
+    public void testInMemoryCacheAndInvalidationOnProjectChange() throws IOException {
+        ProjectService projectService = mock(ProjectService.class);
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+
+        com.fasterxml.jackson.dataformat.toml.TomlMapper spyMapper =
+                spy(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
+        ProjectCacheMetaService service = new ProjectCacheMetaService(projectService, spyMapper);
+
+        // First load when no file exists caches empty result
+        assertTrue(service.loadMeta().isEmpty());
+        assertTrue(service.loadMeta().isEmpty());
+        verify(spyMapper, never()).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
+
+        // saveMeta updates in-memory cache so subsequent loadMeta does not hit disk
+        ProjectCacheMeta meta =
+                new ProjectCacheMeta("CachedProject", LocalDateTime.now(), 4200L);
+        service.saveMeta(meta);
+
+        Optional<ProjectCacheMeta> cached1 = service.loadMeta();
+        Optional<ProjectCacheMeta> cached2 = service.loadMeta();
+        assertTrue(cached1.isPresent());
+        assertEquals("CachedProject", cached1.get().projectName());
+        assertSame(cached1.get(), cached2.get());
+        verify(spyMapper, never()).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
+
+        // ProjectChangedEvent invalidates the in-memory cache so next loadMeta reads from disk
+        service.onProjectChanged(new org.roxycode.app.events.ProjectChangedEvent(tempDir));
+        Optional<ProjectCacheMeta> reloaded = service.loadMeta();
+        assertTrue(reloaded.isPresent());
+        assertEquals("CachedProject", reloaded.get().projectName());
+        verify(spyMapper, times(1)).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
+
+        // Subsequent loadMeta uses cache again
+        service.loadMeta();
+        verify(spyMapper, times(1)).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
     }
 }

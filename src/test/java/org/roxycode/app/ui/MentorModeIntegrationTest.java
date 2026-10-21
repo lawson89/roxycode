@@ -134,6 +134,16 @@ class MentorModeIntegrationTest {
         assertSame(qaWorkspacePanel.getQaHeaderBar(), qaHeaderBar);
         JLabel mentorModeLabel = (JLabel) qaHeaderBar.getComponent(0);
         assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
+        assertFalse(
+                mentorModeLabel.isOpaque(),
+                "mentorModeLabel should not be opaque so pill badge renders cleanly");
+        String mentorStyle =
+                (String)
+                        mentorModeLabel.getClientProperty(
+                                com.formdev.flatlaf.FlatClientProperties.STYLE);
+        assertNotNull(mentorStyle);
+        assertTrue(mentorStyle.contains("arc: 12"));
+        assertTrue(mentorStyle.contains("border: 3,10,3,10"));
 
         JPanel progressTracker = taskWorkspacePanel.getProgressTracker();
         JLabel planLabel = taskWorkspacePanel.getPlanLabel();
@@ -250,11 +260,55 @@ class MentorModeIntegrationTest {
                 sidebar.isTaskWaitingApproval(),
                 "Sidebar should show waiting approval when transition is requested");
 
-        when(planService.getPendingPhase()).thenReturn(null);
+                when(planService.getPendingPhase()).thenReturn(null);
         taskWorkspacePanel.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
         SwingUtilities.invokeAndWait(() -> {});
         assertFalse(
                 sidebar.isTaskWaitingApproval(),
                 "Sidebar waiting approval should clear when pending phase is null on phase change");
+    }
+
+    @Test
+    void testOnPhaseChangedAndOnPlanUpdatedOffEdtDispatchToEdt() throws Exception {
+        ImplementationPlan plan =
+                new ImplementationPlan(
+                        "Off EDT Plan",
+                        "Goal",
+                        List.of(),
+                        List.of(),
+                        false,
+                        null,
+                        null,
+                        null,
+                        List.of());
+        when(planService.getCurrentPlan()).thenReturn(plan);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
+
+        SidebarPanel sidebar = null;
+        for (java.awt.Component comp : mainFrame.getContentPane().getComponents()) {
+            if (comp instanceof SidebarPanel sp) {
+                sidebar = sp;
+                break;
+            }
+        }
+        assertNotNull(sidebar);
+
+        Thread bgThread =
+                new Thread(
+                        () -> {
+                            taskWorkspacePanel.onPlanUpdated(
+                                    new org.roxycode.app.events.PlanUpdatedEvent(plan));
+                            taskWorkspacePanel.onPhaseChanged(
+                                    new PhaseChangedEvent(WorkflowPhase.REVIEW));
+                        });
+        bgThread.start();
+        bgThread.join();
+
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertTrue(taskWorkspacePanel.getPlanLabel().isVisible());
+        assertEquals("OFF EDT PLAN", taskWorkspacePanel.getPlanLabel().getText());
+        assertTrue(sidebar.isTaskWaitingApproval());
     }
 }

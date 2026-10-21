@@ -8,8 +8,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import org.roxycode.app.ai.AgentDoc;
-import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -23,15 +21,13 @@ import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Service;
 
 /**
  * Service to generate a token-optimized map of the repository. Uses ripgrep for tree generation and
  * ctags for skeletonization. Implements lazy evaluation to avoid redundant processing.
  */
-@AgentService(
-        value = "repoMapPackerService",
-        phases = {"*"})
-@AgentDoc("Generates a token-optimized map of the repository using ripgrep and universal-ctags.")
+@Service
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
     private static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB

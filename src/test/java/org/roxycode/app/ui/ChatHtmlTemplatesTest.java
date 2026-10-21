@@ -2,6 +2,11 @@ package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import javax.swing.JEditorPane;
+import javax.swing.text.Element;
+import javax.swing.text.View;
+import javax.swing.text.ViewFactory;
+import javax.swing.text.html.HTML;
 import org.junit.jupiter.api.Test;
 
 class ChatHtmlTemplatesTest {
@@ -13,9 +18,22 @@ class ChatHtmlTemplatesTest {
         String timestamp = "12:00:00";
         String result = ChatHtmlTemplates.renderChatEntry(role, content, timestamp, -1, false);
 
-        assertTrue(result.contains("<table class=\"user-entry\""));
-        assertTrue(result.contains("<td class=\"user-accent\" width=\"4\">&nbsp;</td>"));
-        assertTrue(result.contains("<td class=\"message-body\" width=\"100%\">"));
+        assertTrue(
+                result.contains(
+                        """
+                <table class="user-entry" width="100%" cellpadding="0" cellspacing="0" border="0">"""));
+        assertTrue(
+                result.contains(
+                        """
+                <td class="user-accent" width="4" nowrap="nowrap">&nbsp;</td>"""));
+        assertTrue(
+                result.contains(
+                        """
+                <td class="message-body" width="100%" style="padding: 8px 12px;">"""));
+        assertTrue(
+                result.contains(
+                        """
+                <tr><td height="8">&nbsp;</td></tr>"""));
         assertFalse(result.contains("chat-entry"));
         assertFalse(result.contains("accent-bar"));
         assertTrue(result.contains("role-user"));
@@ -33,7 +51,8 @@ class ChatHtmlTemplatesTest {
         assertTrue(result.contains("ai-entry"));
         assertTrue(result.contains("href='copy:2'"));
         assertTrue(result.contains("copy-action"));
-        assertTrue(result.contains("&#128203; Copy"));
+        assertTrue(result.contains("[Copy]"));
+        assertFalse(result.contains("&#128203;"));
         assertFalse(result.contains("copy-feedback"));
     }
 
@@ -64,9 +83,22 @@ class ChatHtmlTemplatesTest {
         String output = "diff output";
         String result = ChatHtmlTemplates.renderToolLog(toolName, output, true, null);
 
-        assertTrue(result.contains("<table class=\"tool-call\""));
-        assertTrue(result.contains("<td class=\"tool-accent\" width=\"4\">&nbsp;</td>"));
-        assertTrue(result.contains("<td class=\"tool-body-container\" width=\"100%\">"));
+        assertTrue(
+                result.contains(
+                        """
+                <table class="tool-call" width="100%" cellpadding="0" cellspacing="0" border="0">"""));
+        assertTrue(
+                result.contains(
+                        """
+                <td class="tool-accent" width="4" nowrap="nowrap">&nbsp;</td>"""));
+        assertTrue(
+                result.contains(
+                        """
+                <td class="tool-body-container" width="100%" style="padding: 8px 12px;">"""));
+        assertTrue(
+                result.contains(
+                        """
+                <tr><td height="8">&nbsp;</td></tr>"""));
         assertFalse(result.contains("accent-bar"));
         assertTrue(result.contains("git"));
         assertTrue(result.contains("diff output"));
@@ -125,5 +157,59 @@ class ChatHtmlTemplatesTest {
         assertTrue(entryResult.contains("user&lt;bad&gt;-entry"));
         assertTrue(entryResult.contains("12:00&lt;img src=x&gt;"));
         assertFalse(entryResult.contains("<img src=x>"));
+    }
+
+    @Test
+    void testRenderWelcomeCard() {
+        String welcomeHtml = ChatHtmlTemplates.renderWelcomeCard();
+        assertTrue(
+                welcomeHtml.contains(
+                        """
+                <table class="welcome-card" width="100%" cellpadding="0" cellspacing="0" border="0">"""));
+        assertTrue(
+                welcomeHtml.contains(
+                        """
+                <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>"""));
+        assertTrue(welcomeHtml.contains("welcome-title"));
+        assertTrue(welcomeHtml.contains("welcome-hint"));
+        assertTrue(welcomeHtml.contains("Enter"));
+        assertTrue(welcomeHtml.contains("Shift+Enter"));
+        assertTrue(welcomeHtml.contains("Attach Image"));
+    }
+
+    @Test
+    void testAccentCellRetainsPositiveMinimumSpanWithWrappingEditorKit() {
+        JEditorPane pane = new JEditorPane();
+        pane.setContentType("text/html");
+        SwingHtmlUtils.applyTheme(pane, 10);
+        pane.setText(
+                "<html><body>"
+                        + ChatHtmlTemplates.renderChatEntry("ai", "<p>Hi</p>", "12:00", 0, false)
+                        + "</body></html>");
+
+        ViewFactory factory = pane.getEditorKit().getViewFactory();
+        Element accentTd =
+                findTdByClass(pane.getDocument().getDefaultRootElement(), "ai-accent");
+        assertNotNull(accentTd, "Should find ai-accent td element");
+        View tdView = factory.create(accentTd);
+        assertTrue(
+                tdView.getMinimumSpan(View.X_AXIS) > 0,
+                "Accent td with nowrap should retain positive horizontal minimum span");
+    }
+
+    private Element findTdByClass(Element elem, String className) {
+        if ("td".equalsIgnoreCase(elem.getName())) {
+            Object cls = elem.getAttributes().getAttribute(HTML.Attribute.CLASS);
+            if (cls != null && className.equals(cls.toString())) {
+                return elem;
+            }
+        }
+        for (int i = 0; i < elem.getElementCount(); i++) {
+            Element found = findTdByClass(elem.getElement(i), className);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 }

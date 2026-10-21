@@ -245,13 +245,44 @@ public class ChatPanelTest {
                 splitPane.getInsets(),
                 "JSplitPane should have zero outer insets so it sits flush with sidebar and tab bar");
 
-        javax.swing.JPanel inputSection = (javax.swing.JPanel) splitPane.getBottomComponent();
+        assertEquals(
+                1.0,
+                splitPane.getResizeWeight(),
+                0.001,
+                "splitPane resizeWeight should be 1.0 so chat output gets extra vertical space");
+
+                javax.swing.JPanel inputSection = (javax.swing.JPanel) splitPane.getBottomComponent();
+        java.awt.Container buttonPanel = chatPanel.getSendButton().getParent();
+        assertFalse(
+                inputSection.isPreferredSizeSet(),
+                "inputSection should not have a hardcoded preferredSize that clips buttonPanel");
+        assertTrue(
+                inputSection.getPreferredSize().height >= buttonPanel.getPreferredSize().height,
+                "inputSection preferred height should be at least as tall as buttonPanel preferred height");
+        assertEquals(
+                new java.awt.Dimension(0, 85),
+                inputSection.getMinimumSize(),
+                "inputSection should have compact minimum height of 85px");
+        assertEquals(3, chatPanel.getInputArea().getRows(), "inputArea should have 3 rows");
+        assertEquals(
+                "Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)",
+                chatPanel
+                        .getInputArea()
+                        .getClientProperty(
+                                com.formdev.flatlaf.FlatClientProperties.PLACEHOLDER_TEXT));
+        assertNotNull(chatPanel.getAttachImageButton(), "attachImageButton should be initialized");
+        assertEquals("Attach Image", chatPanel.getAttachImageButton().getToolTipText());
+
         assertInstanceOf(net.miginfocom.swing.MigLayout.class, inputSection.getLayout());
         net.miginfocom.swing.MigLayout inputLayout =
                 (net.miginfocom.swing.MigLayout) inputSection.getLayout();
         assertTrue(
                 inputLayout.getLayoutConstraints().toString().contains("insets 6 10 10 10"),
                 "inputSection should have internal padding insets 6 10 10 10");
+        assertEquals(
+                "aligny top",
+                inputLayout.getComponentConstraints(chatPanel.getSendButton().getParent()),
+                "buttonPanel should be anchored at aligny top");
     }
 
     @Test

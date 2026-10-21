@@ -54,12 +54,11 @@ class AgentServiceTest {
         assertArrayEquals(new String[] {"*"}, annotation.phases());
     }
 
-    @Test
+        @Test
     void testAgentServicesDoNotHaveRedundantServiceAnnotation() {
         List<Class<?>> agentServiceClasses =
                 List.of(
                         GenericBuildToolService.class,
-                        RepoMapPackerService.class,
                         GitService.class,
                         GrepService.class,
                         FileReadService.class,
@@ -74,6 +73,13 @@ class AgentServiceTest {
                     clazz.getSimpleName()
                             + " should not declare redundant @Service alongside @AgentService");
         }
+
+        assertNull(
+                RepoMapPackerService.class.getDeclaredAnnotation(AgentService.class),
+                "RepoMapPackerService should not be exposed as an @AgentService");
+        assertNotNull(
+                RepoMapPackerService.class.getDeclaredAnnotation(Service.class),
+                "RepoMapPackerService should be annotated with @Service");
     }
 
     @Test

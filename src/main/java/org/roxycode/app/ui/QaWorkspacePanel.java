@@ -33,8 +33,10 @@ public final class QaWorkspacePanel extends JPanel {
         qaHeaderBar.setOpaque(false);
 
         JLabel mentorModeLabel = new JLabel("READ-ONLY MENTOR MODE");
+        mentorModeLabel.setOpaque(false);
         mentorModeLabel.putClientProperty(
-                FlatClientProperties.STYLE, "font: bold -1; foreground: $Label.disabledForeground");
+                FlatClientProperties.STYLE,
+                "font: bold -1; foreground: $Label.disabledForeground; background: darken($Panel.background, 4%); arc: 12; border: 3,10,3,10");
         mentorModeLabel.setIcon(
                 FontIcon.of(Codicons.SEARCH, 16, UIManager.getColor("Label.disabledForeground")));
         qaHeaderBar.add(mentorModeLabel, "right, center");

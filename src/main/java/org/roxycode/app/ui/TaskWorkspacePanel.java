@@ -99,18 +99,30 @@ public final class TaskWorkspacePanel extends JPanel {
         this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
     }
 
-    @EventListener
+        @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
-        updateActivePhase(event.phase());
-        if (sidebar != null) {
-            SwingUtilities.invokeLater(
-                    () -> sidebar.setTaskWaitingApproval(planService.getPendingPhase() != null));
+        Runnable update =
+                () -> {
+                    updateActivePhase(event.phase());
+                    if (sidebar != null) {
+                        sidebar.setTaskWaitingApproval(planService.getPendingPhase() != null);
+                    }
+                };
+        if (SwingUtilities.isEventDispatchThread()) {
+            update.run();
+        } else {
+            SwingUtilities.invokeLater(update);
         }
     }
 
     @EventListener
     public void onPlanUpdated(PlanUpdatedEvent event) {
-        updateActivePhase(planService.getCurrentPhase());
+        Runnable update = () -> updateActivePhase(planService.getCurrentPhase());
+        if (SwingUtilities.isEventDispatchThread()) {
+            update.run();
+        } else {
+            SwingUtilities.invokeLater(update);
+        }
     }
 
     @EventListener

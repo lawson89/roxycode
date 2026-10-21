@@ -160,31 +160,35 @@ public final class MarkdownPane extends JTextPane {
     private void renderAll(boolean scrollToBottom) {
         int savedCaret = getCaretPosition();
         StringBuilder fullHtml = new StringBuilder("<html><body>");
-        for (int i = 0; i < messages.size(); i++) {
-            Message msg = messages.get(i);
-            try {
-                if (msg.isTool()) {
-                    fullHtml.append(
-                            ChatHtmlTemplates.renderToolLog(
-                                    msg.role(),
-                                    msg.content().toString(),
-                                    msg.success(),
-                                    msg.error()));
-                } else {
-                    String renderedMarkdown =
-                            renderer.render(parser.parse(msg.content().toString()));
-                    String highlightedHtml =
-                            JexlToHtmlConverter.highlightCodeBlocks(renderedMarkdown);
-                    fullHtml.append(
-                            ChatHtmlTemplates.renderChatEntry(
-                                    msg.role().toLowerCase(Locale.ROOT),
-                                    highlightedHtml,
-                                    msg.timestamp(),
-                                    i,
-                                    i == copiedMessageIndex));
+        if (messages.isEmpty()) {
+            fullHtml.append(ChatHtmlTemplates.renderWelcomeCard());
+        } else {
+            for (int i = 0; i < messages.size(); i++) {
+                Message msg = messages.get(i);
+                try {
+                    if (msg.isTool()) {
+                        fullHtml.append(
+                                ChatHtmlTemplates.renderToolLog(
+                                        msg.role(),
+                                        msg.content().toString(),
+                                        msg.success(),
+                                        msg.error()));
+                    } else {
+                        String renderedMarkdown =
+                                renderer.render(parser.parse(msg.content().toString()));
+                        String highlightedHtml =
+                                JexlToHtmlConverter.highlightCodeBlocks(renderedMarkdown);
+                        fullHtml.append(
+                                ChatHtmlTemplates.renderChatEntry(
+                                        msg.role().toLowerCase(Locale.ROOT),
+                                        highlightedHtml,
+                                        msg.timestamp(),
+                                        i,
+                                        i == copiedMessageIndex));
+                    }
+                } catch (Exception e) {
+                    fullHtml.append("<div>Error rendering message</div>");
                 }
-            } catch (Exception e) {
-                fullHtml.append("<div>Error rendering message</div>");
             }
         }
         fullHtml.append("</body></html>");

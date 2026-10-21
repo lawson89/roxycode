@@ -110,6 +110,32 @@ class HeaderPanelTest {
     }
 
     @Test
+    void testThemeToggleButtonSwitchesAndSavesTheme() {
+        SettingsService ss = spy(createSettingsService());
+        ProjectService ps = createProjectService(ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+
+        JButton themeButton =
+                (JButton)
+                        findComponent(
+                                header,
+                                JButton.class,
+                                c ->
+                                        "Toggle Light/Dark Theme"
+                                                .equals(((JButton) c).getToolTipText()));
+        assertNotNull(themeButton, "Theme toggle button should be present in HeaderPanel");
+        assertEquals("FlatLaf Light", ss.getSettings().getTheme());
+
+        themeButton.doClick();
+        assertEquals("FlatLaf Dark", ss.getSettings().getTheme());
+        verify(ss, times(1)).saveSettings();
+
+        themeButton.doClick();
+        assertEquals("FlatLaf Light", ss.getSettings().getTheme());
+        verify(ss, times(2)).saveSettings();
+    }
+
+    @Test
     void testHeaderLayoutInsetsAndInlineLeftSection() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);

@@ -31,19 +31,17 @@ public class ChatHtmlTemplates {
             String actionContent =
                     copied
                             ? "<span class='copy-feedback'>&#10003; Copied!</span>"
-                            : "<a class='copy-action' href='copy:"
-                                    + messageIndex
-                                    + "'>&#128203; Copy</a>";
+                            : "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
             actionCell =
                     "<td align='right' valign='middle' nowrap='nowrap'>" + actionContent + "</td>";
         }
 
         String template =
                 """
-								<table class="${entryClass}" width="100%" cellpadding="10" cellspacing="0" border="0">
+				<table class="${entryClass}" width="100%" cellpadding="0" cellspacing="0" border="0">
 				    <tr>
-				        <td class="${accentClass}" width="4">&nbsp;</td>
-				        <td class="message-body" width="100%">
+				        <td class="${accentClass}" width="4" nowrap="nowrap">&nbsp;</td>
+				        <td class="message-body" width="100%" style="padding: 8px 12px;">
 				            <table width="100%" cellpadding="0" cellspacing="0" border="0">
 				                <tr>
 				                    <td align="left" valign="middle">${indicator}&nbsp;&nbsp;<span class="timestamp">${timestamp}</span></td>
@@ -55,7 +53,7 @@ public class ChatHtmlTemplates {
 				    </tr>
 				</table>
 				<table width="100%" cellpadding="0" cellspacing="0" border="0">
-				    <tr><td height="4">&nbsp;</td></tr>
+				    <tr><td height="8">&nbsp;</td></tr>
 				</table>
 				""";
 
@@ -87,20 +85,20 @@ public class ChatHtmlTemplates {
                                 + "</div>";
         String statusHtml;
         if (success) {
-            statusHtml = "<div class=\"tool-result\">&#10003; Executed successfully</div>";
+            statusHtml = "<div class='tool-result'>&#10003; Executed successfully</div>";
         } else {
             String safeError =
                     (error == null || error.trim().isEmpty())
                             ? "Unknown error"
                             : SwingHtmlUtils.escapeHtml(error);
-            statusHtml = "<div class=\"tool-error\">&#10007; Error: " + safeError + "</div>";
+            statusHtml = "<div class='tool-error'>&#10007; Error: " + safeError + "</div>";
         }
         String template =
                 """
-								<table class="tool-call" width="100%" cellpadding="8" cellspacing="0" border="0">
+				<table class="tool-call" width="100%" cellpadding="0" cellspacing="0" border="0">
 				    <tr>
-				        <td class="tool-accent" width="4">&nbsp;</td>
-				        <td class="tool-body-container" width="100%">
+				        <td class="tool-accent" width="4" nowrap="nowrap">&nbsp;</td>
+				        <td class="tool-body-container" width="100%" style="padding: 8px 12px;">
 				            ${header}
 				            <pre class="tool-body">${output}</pre>
 				            ${statusHtml}
@@ -108,7 +106,7 @@ public class ChatHtmlTemplates {
 				    </tr>
 				</table>
 				<table width="100%" cellpadding="0" cellspacing="0" border="0">
-				    <tr><td height="4">&nbsp;</td></tr>
+				    <tr><td height="8">&nbsp;</td></tr>
 				</table>
 				""";
 
@@ -122,5 +120,29 @@ public class ChatHtmlTemplates {
                         statusHtml);
 
         return StringSubstitutor.replace(template, values);
+    }
+
+    public static String renderWelcomeCard() {
+        return """
+				<table class="welcome-card" width="100%" cellpadding="0" cellspacing="0" border="0">
+				    <tr>
+				        <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
+				        <td width="100%" style="padding: 12px 16px;">
+				            <div class="welcome-title">ROXY /\\_/\\ &mdash; Ready to Assist</div>
+				            <div class="welcome-hint" style="margin-top: 6px;">
+				                Ask questions about your codebase, plan architectural changes, or implement features with automated build &amp; test verification.
+				            </div>
+				            <table width="100%" cellpadding="2" cellspacing="0" border="0" style="margin-top: 8px;">
+				                <tr>
+				                    <td class="welcome-hint">&bull; <b>Enter</b> to send message, <b>Shift+Enter</b> for new line</td>
+				                </tr>
+				                <tr>
+				                    <td class="welcome-hint">&bull; <b>Ctrl+V</b> or click <b>Attach Image</b> to include screenshots &amp; diagrams</td>
+				                </tr>
+				            </table>
+				        </td>
+				    </tr>
+				</table>
+				""";
     }
 }
