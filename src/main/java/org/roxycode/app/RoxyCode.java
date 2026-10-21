@@ -1,6 +1,8 @@
 package org.roxycode.app;
 
 import java.awt.GraphicsEnvironment;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.SwingUtilities;
 import org.roxycode.app.model.AppSettings;
@@ -12,40 +14,35 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MapPropertySource;
 
 @SpringBootApplication
 public class RoxyCode {
 
     private static final Logger log = LoggerFactory.getLogger(RoxyCode.class);
+    static final String SETTINGS_PROPERTY_SOURCE = "roxycodeSettingsProperties";
+    static final String PROP_GEMINI_API_KEY = "spring.ai.google.genai.api-key";
+    static final String PROP_GEMINI_MODEL = "spring.ai.google.genai.chat.options.model";
+    static final String DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
 
     public static void main(String[] args) {
         String theme = "FlatLaf Dark";
+        AppSettings settings = null;
 
-        // Pre-load settings to set system properties for Spring AI auto-configuration and UI theme
         try {
-            AppSettings settings = SettingsService.loadFromDisk();
-            if (settings.getGeminiApiKey() != null && !settings.getGeminiApiKey().isEmpty()) {
-                System.setProperty("spring.ai.google.genai.api-key", settings.getGeminiApiKey());
-            }
-            if (settings.getGeminiModel() != null && !settings.getGeminiModel().isEmpty()) {
-                System.setProperty(
-                        "spring.ai.google.genai.chat.options.model", settings.getGeminiModel());
-            }
+            settings = SettingsService.loadFromDisk();
             if (settings.getTheme() != null && !settings.getTheme().isBlank()) {
                 theme = settings.getTheme();
             }
         } catch (Exception e) {
             log.warn("Failed to pre-load settings for Spring AI configuration: {}", e.getMessage());
-            // Ignore, default to application.properties
-        }
-
-        // Fallback for model if not set via settings
-        if (System.getProperty("spring.ai.google.genai.chat.options.model") == null) {
-            System.setProperty("spring.ai.google.genai.chat.options.model", "gemini-1.5-flash");
         }
 
         final String initialTheme = theme;
+        final AppSettings initialSettings = settings;
         AtomicReference<SplashScreenWindow> splashRef = new AtomicReference<>();
 
         if (!GraphicsEnvironment.isHeadless()) {
@@ -65,7 +62,11 @@ public class RoxyCode {
         @SuppressWarnings("PMD.CloseResource")
         ConfigurableApplicationContext context;
         try {
-            context = new SpringApplicationBuilder(RoxyCode.class).headless(false).run(args);
+            context =
+                    new SpringApplicationBuilder(RoxyCode.class)
+                            .headless(false)
+                            .initializers(createSettingsInitializer(initialSettings))
+                            .run(args);
             Runtime.getRuntime().addShutdownHook(new Thread(context::close));
         } catch (RuntimeException e) {
             disposeSplash(splashRef.get());
@@ -86,6 +87,28 @@ public class RoxyCode {
                         disposeSplash(splash);
                     }
                 });
+    }
+
+    public static ApplicationContextInitializer<ConfigurableApplicationContext>
+            createSettingsInitializer(AppSettings settings) {
+        return applicationContext -> {
+            ConfigurableEnvironment env = applicationContext.getEnvironment();
+            Map<String, Object> props = new HashMap<>();
+            if (settings != null
+                    && settings.getGeminiApiKey() != null
+                    && !settings.getGeminiApiKey().isEmpty()) {
+                props.put(PROP_GEMINI_API_KEY, settings.getGeminiApiKey());
+            }
+            String model =
+                    (settings != null
+                                    && settings.getGeminiModel() != null
+                                    && !settings.getGeminiModel().isEmpty())
+                            ? settings.getGeminiModel()
+                            : DEFAULT_GEMINI_MODEL;
+            props.put(PROP_GEMINI_MODEL, model);
+            env.getPropertySources()
+                    .addFirst(new MapPropertySource(SETTINGS_PROPERTY_SOURCE, props));
+        };
     }
 
     private static void disposeSplash(SplashScreenWindow splash) {

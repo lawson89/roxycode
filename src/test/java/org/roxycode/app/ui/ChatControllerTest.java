@@ -4,8 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.ToolExecutionEvent;
@@ -24,18 +27,25 @@ class ChatControllerTest {
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         SettingsService settingsService = mock(SettingsService.class);
+        Executor directExecutor = Runnable::run;
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
-        when(aiService.chat(anyString(), any(), anyString(), any(), any()))
+        when(aiService.chat(anyString(), any(), anyString(), any()))
                 .thenReturn("Let's revise the plan.");
 
         FeatureChatPanel panel =
                 new FeatureChatPanel(
-                        aiService, planService, publisher, chatMemory, settingsService);
+                        aiService,
+                        planService,
+                        publisher,
+                        chatMemory,
+                        settingsService,
+                        directExecutor);
+
+        assertSame(directExecutor, panel.getController().getTurnExecutor());
 
         panel.getController().rejectPhase();
-        Thread.sleep(300);
         SwingUtilities.invokeAndWait(() -> {});
 
         verify(planService).rejectTransition();
@@ -44,8 +54,8 @@ class ChatControllerTest {
                         eq("task:default"),
                         eq(WorkflowPhase.PLAN),
                         contains("I have rejected the transition to Code"),
-                        isNull(),
                         any());
+        assertEquals(0L, panel.getController().getActiveTurnId());
         assertTrue(panel.getOutputArea().getText().contains("Transition to"));
     }
 
@@ -65,6 +75,7 @@ class ChatControllerTest {
         verify(planService).resetWorkflow();
         verify(chatMemory).clear("task:default");
         assertEquals(0, panel.getModel().getCurrentTurn());
+        assertEquals(0L, panel.getController().getActiveTurnId());
         assertTrue(panel.getOutputArea().getText().contains("Session reset."));
     }
 
@@ -99,12 +110,35 @@ class ChatControllerTest {
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
+        Executor directExecutor = Runnable::run;
 
         ExploreChatPanel panel =
-                new ExploreChatPanel(aiService, planService, publisher, chatMemory, null);
+                new ExploreChatPanel(
+                        aiService, planService, publisher, chatMemory, null, directExecutor);
+
+        assertSame(directExecutor, panel.getController().getTurnExecutor());
 
         panel.getController().sendMessage("Hello mentor");
 
         verify(publisher).publishEvent(new UserMessageEvent("qa:default", "user", "Hello mentor"));
+    }
+
+    @Test
+    void testCloseAndManagedChatTurnExecutorLifecycle() {
+        AiConfig config = new AiConfig();
+        ExecutorService executorService = config.chatTurnExecutor();
+        assertNotNull(executorService);
+        assertFalse(executorService.isShutdown());
+
+        AiService aiService = mock(AiService.class);
+        PlanService planService = mock(PlanService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+
+        ExploreChatPanel panel =
+                new ExploreChatPanel(
+                        aiService, planService, publisher, chatMemory, null, executorService);
+        panel.getController().close();
+        assertTrue(executorService.isShutdown());
     }
 }

@@ -289,8 +289,10 @@ class PlanServiceTest {
                         IllegalStateException.class, () -> service.routeToPhase("EXPLORE", "Jump"));
         assertTrue(ex.getMessage().contains("Error: Cannot jump from CODE to EXPLORE"));
 
+        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.CODE));
         service.resetWorkflow();
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+        assertEquals(java.util.Set.of(WorkflowPhase.PLAN), service.getVisitedPhases());
     }
 
     @Test

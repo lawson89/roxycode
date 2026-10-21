@@ -2,10 +2,13 @@ package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.AgentDoc;
+import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.events.ProjectChangedEvent;
 
 class ProjectServiceTest {
@@ -67,5 +70,21 @@ class ProjectServiceTest {
                 projectPath.resolve("sub/file.txt").toAbsolutePath().normalize(),
                 projectService.resolvePath("sub/file.txt"));
         assertThrows(SecurityException.class, () -> projectService.resolvePath("../escape.txt"));
+    }
+
+    @Test
+    void testNotAnnotatedWithAgentServiceOrAgentDoc() {
+        assertNull(
+                ProjectService.class.getAnnotation(AgentService.class),
+                "ProjectService must not be exposed as an @AgentService");
+        assertNull(
+                ProjectService.class.getAnnotation(AgentDoc.class),
+                "ProjectService class must not have @AgentDoc");
+
+        for (Method method : ProjectService.class.getDeclaredMethods()) {
+            assertNull(
+                    method.getAnnotation(AgentDoc.class),
+                    "Method " + method.getName() + " must not have @AgentDoc");
+        }
     }
 }

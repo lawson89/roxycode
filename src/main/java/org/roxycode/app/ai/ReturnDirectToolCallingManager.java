@@ -65,10 +65,11 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
 
     @Override
     public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
-        TurnToolContext ctx = TurnToolContext.fromPrompt(prompt, planService.getCurrentPhase());
-        String conversationId = ctx.conversationId();
-        WorkflowPhase phase = ctx.phase();
-        AtomicInteger turnCounter = ctx.turnCounter();
+        TurnToolContext turnContext =
+                TurnToolContext.fromPrompt(prompt, planService.getCurrentPhase());
+        String conversationId = turnContext.conversationId();
+        WorkflowPhase phase = turnContext.phase();
+        AtomicInteger turnCounter = turnContext.turnCounter();
 
         int maxTurns =
                 settingsService.getSettings() != null
@@ -83,64 +84,121 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
                 new AgentTurnEvent(conversationId, AGENT_NAME, currentTurn, phase.name()));
 
         ToolExecutionResult result = delegate.executeToolCalls(prompt, chatResponse);
-        return postProcessToolExecutionResult(conversationId, chatResponse, result);
+        return postProcessToolExecutionResult(turnContext, chatResponse, result);
     }
 
+    /**
+     * Post-processes tool execution responses.
+     *
+     * <p>When a Spring AI tool is annotated with {@code returnDirect = true}, its serialized result
+     * is returned directly to the caller instead of being sent back to the model. However, if a
+     * {@code returnDirect} tool (such as {@code requestDevelopment} when no plan has been
+     * submitted) fails validation and returns an {@code "Error: ..."} message via {@link
+     * RoxyToolExecutionExceptionProcessor}, {@code effectiveReturnDirect} is overridden to {@code
+     * false} so control returns to the LLM to self-correct.
+     */
     private ToolExecutionResult postProcessToolExecutionResult(
-            String conversationId, ChatResponse chatResponse, ToolExecutionResult result) {
-        List<Message> history = new ArrayList<>(result.conversationHistory());
-        boolean hasValidationError = false;
+            TurnToolContext turnContext, ChatResponse chatResponse, ToolExecutionResult result) {
+        List<Message> history = result.conversationHistory();
+        boolean returnDirect = result.returnDirect();
+        boolean anyError = false;
         boolean historyModified = false;
 
         if (!history.isEmpty()
                 && history.get(history.size() - 1) instanceof ToolResponseMessage toolMsg) {
-            List<ToolResponseMessage.ToolResponse> updatedResponses = new ArrayList<>();
+            List<ToolResponseMessage.ToolResponse> updatedResponses =
+                    new ArrayList<>(toolMsg.getResponses().size());
             for (ToolResponseMessage.ToolResponse tr : toolMsg.getResponses()) {
-                String rawData = tr.responseData();
-                String unquoted = unquoteIfJsonString(rawData);
-                boolean isError = RoxyToolExecutionExceptionProcessor.isErrorResponse(unquoted);
-                if (isError) {
-                    hasValidationError = true;
+                String unquoted = unquoteIfJsonString(tr.responseData());
+                if (RoxyToolExecutionExceptionProcessor.isErrorResponse(unquoted)) {
+                    anyError = true;
                 }
-
-                if (!JEXL_TOOL_NAME.equals(tr.name())) {
-                    String args = findToolCallArguments(chatResponse, tr);
-                    String scriptDesc = "planService." + tr.name() + "(" + args + ")";
-                    eventPublisher.publishEvent(
-                            new ToolExecutionEvent(
-                                    conversationId,
-                                    scriptDesc,
-                                    isError ? null : unquoted,
-                                    !isError,
-                                    isError
-                                            ? RoxyToolExecutionExceptionProcessor.stripErrorPrefix(
-                                                    unquoted)
-                                            : null));
-                }
-
-                if (result.returnDirect() && !isError && !unquoted.equals(rawData)) {
-                    updatedResponses.add(
-                            new ToolResponseMessage.ToolResponse(tr.id(), tr.name(), unquoted));
+                ToolResponseMessage.ToolResponse processed =
+                        processSingleToolResponse(tr, chatResponse, turnContext, returnDirect);
+                if (processed != tr) {
                     historyModified = true;
-                } else {
-                    updatedResponses.add(tr);
                 }
+                updatedResponses.add(processed);
             }
             if (historyModified) {
-                history.set(
-                        history.size() - 1,
-                        ToolResponseMessage.builder().responses(updatedResponses).build());
+                history = replaceLastToolResponseMessage(history, toolMsg, updatedResponses);
             }
         }
 
-        boolean effectiveReturnDirect = result.returnDirect() && !hasValidationError;
-        if (effectiveReturnDirect != result.returnDirect() || historyModified) {
+        // Guard: if any tool failed validation, suppress returnDirect so the LLM can self-correct.
+        boolean effectiveReturnDirect = returnDirect && !anyError;
+        if (effectiveReturnDirect != returnDirect || historyModified) {
             return ToolExecutionResult.builder()
                     .conversationHistory(history)
                     .returnDirect(effectiveReturnDirect)
                     .build();
         }
         return result;
+    }
+
+    /**
+     * Unquotes the tool response if {@code returnDirect} is active and the call succeeded, and
+     * publishes a synthetic {@link ToolExecutionEvent} for non-JEXL ({@link PlanService}) tools.
+     */
+    private ToolResponseMessage.ToolResponse processSingleToolResponse(
+            ToolResponseMessage.ToolResponse tr,
+            ChatResponse chatResponse,
+            TurnToolContext turnContext,
+            boolean returnDirect) {
+        String rawData = tr.responseData();
+        String unquoted = unquoteIfJsonString(rawData);
+        boolean failed = RoxyToolExecutionExceptionProcessor.isErrorResponse(unquoted);
+
+        if (!JEXL_TOOL_NAME.equals(tr.name())) {
+            publishPlanToolExecutionEvent(tr, chatResponse, turnContext, unquoted, failed);
+        }
+
+        if (returnDirect && !failed && !unquoted.equals(rawData)) {
+            return new ToolResponseMessage.ToolResponse(tr.id(), tr.name(), unquoted);
+        }
+        return tr;
+    }
+
+    /**
+     * Formats {@code "planService.<toolName>(<args>)"} and publishes a {@link ToolExecutionEvent}
+     * so dedicated {@link PlanService} tool invocations appear in the UI tool log.
+     */
+    private void publishPlanToolExecutionEvent(
+            ToolResponseMessage.ToolResponse tr,
+            ChatResponse chatResponse,
+            TurnToolContext turnContext,
+            String unquotedResponse,
+            boolean failed) {
+        String args = findToolCallArguments(chatResponse, tr);
+        String scriptDesc = "planService." + tr.name() + "(" + args + ")";
+        eventPublisher.publishEvent(
+                new ToolExecutionEvent(
+                        turnContext.conversationId(),
+                        scriptDesc,
+                        failed ? null : unquotedResponse,
+                        !failed,
+                        failed
+                                ? RoxyToolExecutionExceptionProcessor.stripErrorPrefix(
+                                        unquotedResponse)
+                                : null));
+    }
+
+    /**
+     * Replaces the trailing {@link ToolResponseMessage} in the conversation history when tool
+     * responses were unquoted for direct return.
+     */
+    private static List<Message> replaceLastToolResponseMessage(
+            List<Message> history,
+            ToolResponseMessage original,
+            List<ToolResponseMessage.ToolResponse> updatedResponses) {
+        List<Message> updatedHistory = new ArrayList<>(history);
+        updatedHistory.set(
+                updatedHistory.size() - 1,
+                ToolResponseMessage.builder()
+                        .responses(updatedResponses)
+                        .metadata(original.getMetadata())
+                        .build());
+        return updatedHistory;
     }
 
     private static String unquoteIfJsonString(String raw) {

@@ -23,13 +23,11 @@ import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Service;
 
 /**
  * Service to generate a token-optimized map of the repository. Uses ripgrep for tree generation and
  * ctags for skeletonization. Implements lazy evaluation to avoid redundant processing.
  */
-@Service
 @AgentService(
         value = "repoMapPackerService",
         phases = {"*"})

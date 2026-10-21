@@ -11,7 +11,6 @@ import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 
 /** Service providing safe file editing capabilities within the project sandbox. */
@@ -27,7 +26,6 @@ public class FileEditorService {
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
 
-    @Autowired
     public FileEditorService(
             ProjectService projectService, ApplicationEventPublisher eventPublisher) {
         this.projectService = projectService;

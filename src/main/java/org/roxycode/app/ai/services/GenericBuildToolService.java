@@ -22,15 +22,12 @@ import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Service;
 
 /**
  * Service for interacting with arbitrary build tools via .roxycode/build.toml. Provides methods for
  * compilation, testing, and cleaning.
  */
-@Service
 @AgentService(
         value = "buildToolService",
         phases = {"CODE", "EXPLORE", "PLAN", "REVIEW"})
@@ -43,7 +40,6 @@ public class GenericBuildToolService {
     private final ProjectService projectService;
     private final TomlMapper tomlMapper;
 
-    @Autowired
     public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper) {
         this.projectService = projectService;
         this.tomlMapper = tomlMapper;

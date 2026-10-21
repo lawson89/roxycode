@@ -70,10 +70,15 @@ public class AiService {
     }
 
     public String chat(
+            String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
+        return chat(conversationId, phase, message, null, images);
+    }
+
+    public String chat(
             String conversationId,
             WorkflowPhase phase,
             String message,
-            String systemPromptText,
+            String additionalInstructions,
             List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
         TurnToolContext turnContext =
@@ -84,17 +89,18 @@ public class AiService {
         String convId = turnContext.conversationId();
         AtomicInteger turnCounter = turnContext.turnCounter();
 
-        String content;
         try {
             ChatClient.ChatClientRequestSpec promptSpec =
-                    buildPrompt(turnContext, message, systemPromptText, images);
+                    buildPrompt(turnContext, message, additionalInstructions, images);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-            content =
+            String content =
                     promptSpec
                             .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId))
                             .call()
                             .content();
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
+            publishTurnComplete(convId, turnCounter.get(), content);
+            return content;
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, "Chat turn cancelled");
             publishError(convId, turnCounter.get(), e);
@@ -103,20 +109,16 @@ public class AiService {
             }
             throw new RuntimeException("Unexpected error during chat turn", e);
         }
-
-        eventPublisher.publishEvent(
-                new AgentTurnCompleteEvent(convId, AGENT_NAME, turnCounter.get(), content));
-        return content;
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(
             TurnToolContext turnContext,
             String message,
-            String systemPromptText,
+            String additionalInstructions,
             List<byte[]> images) {
         String activeModel = settingsService.getSettings().getGeminiModel();
         WorkflowPhase currentPhase = turnContext.phase();
-        String systemPrompt = promptService.buildSystemPrompt(currentPhase, systemPromptText);
+        String systemPrompt = promptService.buildSystemPrompt(currentPhase, additionalInstructions);
 
         ChatClient.ChatClientRequestSpec promptSpec =
                 chatClient
@@ -147,9 +149,12 @@ public class AiService {
         return promptSpec;
     }
 
-    private void publishError(String conversationId, int turnCount, Exception e) {
+    private void publishTurnComplete(String conversationId, int totalTurns, String result) {
         eventPublisher.publishEvent(
-                new AgentTurnCompleteEvent(
-                        conversationId, AGENT_NAME, turnCount, "Error: " + e.getMessage()));
+                new AgentTurnCompleteEvent(conversationId, AGENT_NAME, totalTurns, result));
+    }
+
+    private void publishError(String conversationId, int turnCount, Exception e) {
+        publishTurnComplete(conversationId, turnCount, "Error: " + e.getMessage());
     }
 }

@@ -12,10 +12,8 @@ import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 /** Service for read-only Git operations. */
-@Service
 @AgentService(
         value = "gitService",
         phases = {"*"})

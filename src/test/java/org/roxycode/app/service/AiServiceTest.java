@@ -175,8 +175,7 @@ class AiServiceTest {
         when(requestSpec.call()).thenReturn(responseSpec);
         when(responseSpec.content()).thenReturn("Explore Response");
 
-        String result =
-                aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null, null);
+        String result = aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null);
 
         assertEquals("Explore Response", result);
         verify(requestSpec).tools(jexlTool);

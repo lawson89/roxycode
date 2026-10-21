@@ -47,11 +47,11 @@ public class PlanService {
 
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
-    private ImplementationPlan currentPlan;
-    private WorkflowPhase currentPhase = WorkflowPhase.PLAN;
+    private volatile ImplementationPlan currentPlan;
+    private volatile WorkflowPhase currentPhase = WorkflowPhase.PLAN;
     private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.PLAN);
-    private WorkflowPhase pendingPhase;
-    private String pendingReason;
+    private volatile WorkflowPhase pendingPhase;
+    private volatile String pendingReason;
 
     public PlanService(
             EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
@@ -65,7 +65,7 @@ public class PlanService {
      * @param plan the implementation plan to submit
      * @return a success message
      */
-    public String submitPlan(ImplementationPlan plan) {
+    public synchronized String submitPlan(ImplementationPlan plan) {
         requirePhase("submitPlan", WorkflowPhase.PLAN);
         if (plan == null) {
             throw new IllegalArgumentException("Error: Plan cannot be null.");
@@ -112,7 +112,7 @@ public class PlanService {
     @Tool(
             description =
                     "Submits a project plan covering both functional requirements and technical implementation steps.")
-    public String submitPlan(
+    public synchronized String submitPlan(
             @ToolParam(description = "The title of the project or feature plan.") String title,
             @ToolParam(description = "The high-level goal of the plan.") String goal,
             @ToolParam(description = "List of functional requirements.") List<String> requirements,
@@ -148,7 +148,7 @@ public class PlanService {
     }
 
     /** Approves the current plan. Internal lifecycle method. */
-    public void approvePlan(String user, String timestamp) {
+    public synchronized void approvePlan(String user, String timestamp) {
         if (currentPlan == null) {
             return;
         }
@@ -157,7 +157,7 @@ public class PlanService {
     }
 
     /** Marks the current plan as completed. Internal lifecycle method. */
-    public void completePlan(String timestamp) {
+    public synchronized void completePlan(String timestamp) {
         if (currentPlan == null) {
             return;
         }
@@ -169,7 +169,7 @@ public class PlanService {
     @Tool(
             description =
                     "Marks a specific technical implementation step as completed using its 0-based index.")
-    public void markStepCompleted(
+    public synchronized void markStepCompleted(
             @ToolParam(
                             description =
                                     "The index of the step (0-based). Must be valid for the current plan.")
@@ -182,7 +182,7 @@ public class PlanService {
     @Tool(
             description =
                     "Marks multiple technical implementation steps as completed using their 0-based indices.")
-    public void markStepsCompleted(
+    public synchronized void markStepsCompleted(
             @ToolParam(description = "List of 0-based step indices to mark as completed.")
                     List<Integer> indices) {
         requirePhase("markStepsCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
@@ -193,7 +193,7 @@ public class PlanService {
     @Tool(
             description =
                     "Marks a technical implementation step as incomplete using its 0-based index.")
-    public void markStepIncomplete(
+    public synchronized void markStepIncomplete(
             @ToolParam(description = "The index of the step (0-based).") int index) {
         requirePhase("markStepIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         updateStepStatus(index, false);
@@ -203,18 +203,18 @@ public class PlanService {
     @Tool(
             description =
                     "Marks multiple technical implementation steps as incomplete using their 0-based indices.")
-    public void markStepsIncomplete(
+    public synchronized void markStepsIncomplete(
             @ToolParam(description = "List of 0-based step indices to mark as incomplete.")
                     List<Integer> indices) {
         requirePhase("markStepsIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         updateStepsStatus(indices, false);
     }
 
-    private void updateStepStatus(int index, boolean completed) {
+    private synchronized void updateStepStatus(int index, boolean completed) {
         updateStepsStatus(List.of(index), completed);
     }
 
-    private void updateStepsStatus(List<Integer> indices, boolean completed) {
+    private synchronized void updateStepsStatus(List<Integer> indices, boolean completed) {
         if (currentPlan == null || indices == null || indices.isEmpty()) {
             return;
         }
@@ -238,20 +238,20 @@ public class PlanService {
     }
 
     /** Sets the current implementation plan and publishes PlanUpdatedEvent. */
-    public void setCurrentPlan(ImplementationPlan plan) {
+    public synchronized void setCurrentPlan(ImplementationPlan plan) {
         this.currentPlan = plan;
         publishPlanUpdated();
     }
 
     /** Clears the existing plan. Internal lifecycle method. */
-    public void clearPlan() {
+    public synchronized void clearPlan() {
         this.currentPlan = null;
         publishPlanUpdated();
     }
 
     /** Transitions the workflow to the development (CODE) phase. */
     @Tool(description = "Requests transition to the development (CODE) phase.", returnDirect = true)
-    public String requestDevelopment(
+    public synchronized String requestDevelopment(
             @ToolParam(description = "The reason for requesting transition to the CODE phase.")
                     String reason) {
         requirePhase("requestDevelopment", WorkflowPhase.PLAN);
@@ -260,7 +260,7 @@ public class PlanService {
 
     /** Transitions the workflow to the review phase. */
     @Tool(description = "Requests transition to the review phase.", returnDirect = true)
-    public String requestReview(
+    public synchronized String requestReview(
             @ToolParam(description = "The reason for requesting transition to the REVIEW phase.")
                     String reason) {
         requirePhase("requestReview", WorkflowPhase.CODE);
@@ -271,7 +271,7 @@ public class PlanService {
     @Tool(
             description = "Requests transition back to development to address fixes.",
             returnDirect = true)
-    public String requestFixes(
+    public synchronized String requestFixes(
             @ToolParam(description = "The reason for requesting transition back to the CODE phase.")
                     String reason) {
         requirePhase("requestFixes", WorkflowPhase.REVIEW);
@@ -282,7 +282,7 @@ public class PlanService {
     @Tool(
             description = "Signals completion of the current cycle and returns to planning.",
             returnDirect = true)
-    public String requestCompletion(
+    public synchronized String requestCompletion(
             @ToolParam(description = "The reason for completing the current cycle.")
                     String reason) {
         requirePhase("requestCompletion", WorkflowPhase.REVIEW);
@@ -294,14 +294,14 @@ public class PlanService {
             description =
                     "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.",
             returnDirect = true)
-    public String requestPlanRevision(
+    public synchronized String requestPlanRevision(
             @ToolParam(description = "The reason for requesting a plan revision.") String reason) {
         requirePhase("requestPlanRevision", WorkflowPhase.CODE);
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
     /** Routes the workflow to the target phase by name. */
-    public String routeToPhase(String phaseName, String reason) {
+    public synchronized String routeToPhase(String phaseName, String reason) {
         if (phaseName == null || phaseName.isBlank()) {
             throw new IllegalArgumentException(
                     "Error: Invalid phase name: "
@@ -327,7 +327,7 @@ public class PlanService {
     }
 
     /** Routes the workflow to the target phase. */
-    public String routeToPhase(WorkflowPhase nextPhase, String reason) {
+    public synchronized String routeToPhase(WorkflowPhase nextPhase, String reason) {
         if (nextPhase == null) {
             throw new IllegalArgumentException(
                     "Error: Invalid phase name: null. Valid phases are: PLAN, CODE, REVIEW.");
@@ -423,7 +423,7 @@ public class PlanService {
         return pendingReason;
     }
 
-    public void approveTransition() {
+    public synchronized void approveTransition() {
         if (pendingPhase != null) {
             String timestamp = OffsetDateTime.now().toString();
             String user = environmentService != null ? environmentService.getCurrentUser() : "User";
@@ -449,17 +449,17 @@ public class PlanService {
         }
     }
 
-    public void rejectTransition() {
+    public synchronized void rejectTransition() {
         this.pendingPhase = null;
         this.pendingReason = null;
         publishTransitionRequested();
     }
 
-    public Set<WorkflowPhase> getVisitedPhases() {
-        return Collections.unmodifiableSet(visitedPhases);
+    public synchronized Set<WorkflowPhase> getVisitedPhases() {
+        return Collections.unmodifiableSet(EnumSet.copyOf(visitedPhases));
     }
 
-    public void resetWorkflow() {
+    public synchronized void resetWorkflow() {
         this.pendingPhase = null;
         this.pendingReason = null;
         this.currentPhase = WorkflowPhase.PLAN;
@@ -513,7 +513,7 @@ public class PlanService {
     }
 
     /** Adds an entry to the handoff log. Internal lifecycle method. */
-    public void addHandoffLogEntry(String timestamp, String user, String message) {
+    public synchronized void addHandoffLogEntry(String timestamp, String user, String message) {
         if (currentPlan == null) {
             return;
         }
@@ -523,7 +523,7 @@ public class PlanService {
 
     /** Adds an entry to the handoff log. */
     @Tool(description = "Adds a high-level summary entry to the handoff log.")
-    public void addHandoffLogEntry(
+    public synchronized void addHandoffLogEntry(
             @ToolParam(description = "The summary entry to add to the handoff log.") String entry) {
         requirePhase(
                 "addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);

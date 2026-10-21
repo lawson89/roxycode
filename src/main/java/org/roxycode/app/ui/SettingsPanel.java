@@ -13,6 +13,7 @@ import java.awt.*;
 import java.util.List;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.GeminiModels;
 import org.roxycode.app.service.SettingsService;
@@ -29,6 +30,12 @@ public final class SettingsPanel extends JPanel {
 
     private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
     private static final String MIG_WRAP = "wrap";
+    static final String RESTART_LEGEND_TEXT =
+            "(*) Restart required for Gemini API Key and Max Chat History Messages";
+    static final String SAVED_RESTART_REQUIRED_TEXT =
+            "Settings saved. Please restart RoxyCode for API Key / Chat History changes to take effect.";
+    static final String SAVED_APPLIED_TEXT = "Settings saved and applied.";
+
     private final transient SettingsService settingsService;
     private final JComboBox<String> themeCombo;
     private final JComboBox<GeminiModelConfig> modelCombo;
@@ -36,6 +43,7 @@ public final class SettingsPanel extends JPanel {
     private final JPasswordField geminiApiKeyField;
     private final JSpinner maxAgentToolTurnsSpinner;
     private final JButton saveButton;
+    private final JLabel legendLabel;
     private final JLabel statusLabel;
     private final Timer statusTimer;
 
@@ -90,11 +98,15 @@ public final class SettingsPanel extends JPanel {
                                 5));
         add(maxMessagesSpinner, MIG_WRAP);
 
+        legendLabel = new JLabel(RESTART_LEGEND_TEXT);
+        legendLabel.setFont(legendLabel.getFont().deriveFont(Font.ITALIC, 11f));
+        add(legendLabel, "span, gaptop 5, " + MIG_WRAP);
+
         saveButton = new JButton("Save Settings");
         saveButton.addActionListener(e -> saveSettings());
-        add(saveButton, "span, split 2, gaptop 20");
+        add(saveButton, "span, split 2, gaptop 15");
 
-        statusLabel = new JLabel("(*) Restart required for marked settings");
+        statusLabel = new JLabel("");
         statusLabel.setFont(statusLabel.getFont().deriveFont(11f));
         statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Actions.Green");
         add(statusLabel, "gapleft 10");
@@ -140,27 +152,50 @@ public final class SettingsPanel extends JPanel {
     }
 
     private void saveSettings() {
-        settingsService.getSettings().setGeminiApiKey(new String(geminiApiKeyField.getPassword()));
+        AppSettings settings = settingsService.getSettings();
+        String oldApiKey = settings.getGeminiApiKey() != null ? settings.getGeminiApiKey() : "";
+        String newApiKey = new String(geminiApiKeyField.getPassword());
+        int oldMaxMessages = settings.getMaxChatMemoryMessages();
+        int newMaxMessages = (Integer) maxMessagesSpinner.getValue();
+
+        boolean restartRequiredChanged =
+                !oldApiKey.equals(newApiKey) || oldMaxMessages != newMaxMessages;
+
+        settings.setGeminiApiKey(newApiKey);
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
         if (selectedModel != null) {
-            settingsService.getSettings().setGeminiModel(selectedModel.apiName());
+            settings.setGeminiModel(selectedModel.apiName());
         }
-        settingsService
-                .getSettings()
-                .setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
-        settingsService
-                .getSettings()
-                .setMaxChatMemoryMessages((Integer) maxMessagesSpinner.getValue());
+        settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
+        settings.setMaxChatMemoryMessages(newMaxMessages);
         settingsService.saveSettings();
-        if (selectedModel != null) {
-            statusLabel.setText(
-                    "Model switched to: "
-                            + selectedModel.name()
-                            + ". Restart required for some changes.");
+
+        if (restartRequiredChanged) {
+            statusLabel.setText(SAVED_RESTART_REQUIRED_TEXT);
         } else {
-            statusLabel.setText("Settings saved. Restart required for some changes.");
+            statusLabel.setText(SAVED_APPLIED_TEXT);
         }
         statusTimer.restart();
+    }
+
+    JLabel getLegendLabel() {
+        return legendLabel;
+    }
+
+    JLabel getStatusLabel() {
+        return statusLabel;
+    }
+
+    Timer getStatusTimer() {
+        return statusTimer;
+    }
+
+    JSpinner getMaxMessagesSpinner() {
+        return maxMessagesSpinner;
+    }
+
+    JSpinner getMaxAgentToolTurnsSpinner() {
+        return maxAgentToolTurnsSpinner;
     }
 
     public static void applyTheme(String themeName) {

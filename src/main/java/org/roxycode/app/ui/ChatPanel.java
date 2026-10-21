@@ -11,6 +11,8 @@ import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
@@ -65,6 +67,28 @@ public class ChatPanel extends JPanel {
             WorkflowPhase lockedPhase,
             boolean isTaskMode,
             SettingsService settingsService) {
+        this(
+                aiService,
+                planService,
+                eventPublisher,
+                chatMemory,
+                sessionPrefix,
+                lockedPhase,
+                isTaskMode,
+                settingsService,
+                Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    public ChatPanel(
+            AiService aiService,
+            PlanService planService,
+            ApplicationEventPublisher eventPublisher,
+            ChatMemory chatMemory,
+            String sessionPrefix,
+            WorkflowPhase lockedPhase,
+            boolean isTaskMode,
+            SettingsService settingsService,
+            Executor turnExecutor) {
         this.model = new ChatModel(sessionPrefix, lockedPhase, isTaskMode);
         this.controller =
                 new ChatController(
@@ -74,7 +98,8 @@ public class ChatPanel extends JPanel {
                         planService,
                         eventPublisher,
                         chatMemory,
-                        settingsService);
+                        settingsService,
+                        turnExecutor);
 
         attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         attachmentPanel.setOpaque(false);

@@ -2,7 +2,18 @@ package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.lang.reflect.Constructor;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.FileEditorService;
+import org.roxycode.app.ai.services.FileReadService;
+import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.ui.MainFrame;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 class AgentServiceTest {
 
@@ -41,5 +52,42 @@ class AgentServiceTest {
         assertNotNull(annotation);
         assertEquals("wildcardService", annotation.value());
         assertArrayEquals(new String[] {"*"}, annotation.phases());
+    }
+
+    @Test
+    void testAgentServicesDoNotHaveRedundantServiceAnnotation() {
+        List<Class<?>> agentServiceClasses =
+                List.of(
+                        GenericBuildToolService.class,
+                        RepoMapPackerService.class,
+                        GitService.class,
+                        GrepService.class,
+                        FileReadService.class,
+                        FileEditorService.class);
+
+        for (Class<?> clazz : agentServiceClasses) {
+            assertNotNull(
+                    clazz.getDeclaredAnnotation(AgentService.class),
+                    clazz.getSimpleName() + " should have @AgentService");
+            assertNull(
+                    clazz.getDeclaredAnnotation(Service.class),
+                    clazz.getSimpleName()
+                            + " should not declare redundant @Service alongside @AgentService");
+        }
+    }
+
+    @Test
+    void testSingleConstructorBeansDoNotHaveRedundantAutowired() {
+        List<Class<?>> singleCtorClasses =
+                List.of(GenericBuildToolService.class, FileEditorService.class, MainFrame.class);
+
+        for (Class<?> clazz : singleCtorClasses) {
+            Constructor<?>[] constructors = clazz.getDeclaredConstructors();
+            assertEquals(1, constructors.length, clazz.getSimpleName() + " should have 1 ctor");
+            assertNull(
+                    constructors[0].getDeclaredAnnotation(Autowired.class),
+                    clazz.getSimpleName()
+                            + " single constructor should not have redundant @Autowired");
+        }
     }
 }

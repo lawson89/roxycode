@@ -3,6 +3,8 @@ package org.roxycode.app.ai;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.model.tool.ToolCallingManager;
@@ -61,5 +63,10 @@ public class AiConfig {
             registry.register(bean);
         }
         return registry;
+    }
+
+    @Bean(destroyMethod = "close")
+    public ExecutorService chatTurnExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
     }
 }

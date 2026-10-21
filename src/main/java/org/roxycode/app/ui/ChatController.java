@@ -1,10 +1,12 @@
 package org.roxycode.app.ui;
 
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.SwingUtilities;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
@@ -28,7 +30,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 /** Controller coordinating chat turns, service events, and workflow transitions. */
 @SuppressWarnings("PMD.NullAssignment")
-public final class ChatController {
+public final class ChatController implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
     static final String ROLE_SYSTEM = "system";
     static final String ROLE_USER = "user";
@@ -41,8 +43,10 @@ public final class ChatController {
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
     private final PlanService planService;
-    private final ExecutorService turnExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final Executor turnExecutor;
+    private final AtomicLong turnSequence = new AtomicLong();
 
+    private volatile long activeTurnId = 0;
     private volatile Future<?> activeTurnFuture;
     private volatile WorkflowTransitionEvent pendingTransition;
 
@@ -54,6 +58,26 @@ public final class ChatController {
             ApplicationEventPublisher eventPublisher,
             ChatMemory chatMemory,
             SettingsService settingsService) {
+        this(
+                model,
+                view,
+                aiService,
+                planService,
+                eventPublisher,
+                chatMemory,
+                settingsService,
+                Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    public ChatController(
+            ChatModel model,
+            ChatPanel view,
+            AiService aiService,
+            PlanService planService,
+            ApplicationEventPublisher eventPublisher,
+            ChatMemory chatMemory,
+            SettingsService settingsService,
+            Executor turnExecutor) {
         this.model = model;
         this.view = view;
         this.aiService = aiService;
@@ -61,10 +85,27 @@ public final class ChatController {
         this.eventPublisher = eventPublisher;
         this.chatMemory = chatMemory;
         this.settingsService = settingsService;
+        this.turnExecutor =
+                turnExecutor != null ? turnExecutor : Executors.newVirtualThreadPerTaskExecutor();
+    }
+
+    Executor getTurnExecutor() {
+        return turnExecutor;
+    }
+
+    long getActiveTurnId() {
+        return activeTurnId;
+    }
+
+    @Override
+    public void close() {
+        if (turnExecutor instanceof ExecutorService executorService) {
+            executorService.close();
+        }
     }
 
     public boolean isTurnActive() {
-        return activeTurnFuture != null;
+        return activeTurnId != 0 && activeTurnFuture != null;
     }
 
     public String formatCurrentTurnStatus() {
@@ -98,6 +139,7 @@ public final class ChatController {
     public void stopTurn() {
         model.setTurnCancelled(true);
         pendingTransition = null;
+        activeTurnId = 0;
         Future<?> futureToCancel = activeTurnFuture;
         if (futureToCancel != null) {
             activeTurnFuture = null;
@@ -162,6 +204,7 @@ public final class ChatController {
     void performResetSession() {
         model.setTurnCancelled(true);
         pendingTransition = null;
+        activeTurnId = 0;
         Future<?> futureToCancel = activeTurnFuture;
         if (futureToCancel != null) {
             activeTurnFuture = null;
@@ -190,6 +233,9 @@ public final class ChatController {
             previousFuture.cancel(true);
         }
 
+        long turnId = turnSequence.incrementAndGet();
+        activeTurnId = turnId;
+
         view.setLoading(true);
         view.clearThoughts();
         model.setCurrentTurn(0);
@@ -198,33 +244,28 @@ public final class ChatController {
         List<byte[]> imageBytes = model.drainPendingImagesAsPngBytes();
         view.clearAttachments();
 
-        Future<?>[] taskRef = new Future<?>[1];
         FutureTask<Void> task =
                 new FutureTask<>(
                         () -> {
-                            Future<?> thisFuture = taskRef[0];
                             try {
-                                WorkflowPhase phase =
+                                WorkflowPhase activePhase =
                                         model.resolveActivePhase(planService.getCurrentPhase());
                                 String response =
                                         aiService.chat(
                                                 model.getConversationId(),
-                                                phase,
+                                                activePhase,
                                                 text,
-                                                null,
                                                 imageBytes);
                                 if (Thread.currentThread().isInterrupted()
                                         || model.isTurnCancelled()) {
-                                    SwingUtilities.invokeLater(
-                                            () -> finishTurnCancelled(thisFuture));
+                                    SwingUtilities.invokeLater(() -> finishTurnCancelled(turnId));
                                     return;
                                 }
                                 SwingUtilities.invokeLater(
-                                        () -> finishTurnSuccess(thisFuture, response));
+                                        () -> finishTurnSuccess(turnId, response));
                             } catch (Exception ex) {
                                 if (ExceptionUtils.isCancellation(ex) || model.isTurnCancelled()) {
-                                    SwingUtilities.invokeLater(
-                                            () -> finishTurnCancelled(thisFuture));
+                                    SwingUtilities.invokeLater(() -> finishTurnCancelled(turnId));
                                     return;
                                 }
                                 log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
@@ -234,19 +275,19 @@ public final class ChatController {
                                                         ? ex.getMessage()
                                                         : ex.getClass().getSimpleName());
                                 SwingUtilities.invokeLater(
-                                        () -> finishTurnSuccess(thisFuture, errorMsg));
+                                        () -> finishTurnSuccess(turnId, errorMsg));
                             }
                         },
                         null);
-        taskRef[0] = task;
         activeTurnFuture = task;
         turnExecutor.execute(task);
     }
 
-    private void finishTurnSuccess(Future<?> thisFuture, String response) {
-        if (activeTurnFuture != thisFuture || model.isTurnCancelled()) {
+    private void finishTurnSuccess(long turnId, String response) {
+        if (activeTurnId != turnId || model.isTurnCancelled()) {
             return;
         }
+        activeTurnId = 0;
         activeTurnFuture = null;
         WorkflowTransitionEvent transition = pendingTransition;
         pendingTransition = null;
@@ -259,10 +300,11 @@ public final class ChatController {
         }
     }
 
-    private void finishTurnCancelled(Future<?> thisFuture) {
-        if (activeTurnFuture != thisFuture) {
+    private void finishTurnCancelled(long turnId) {
+        if (activeTurnId != turnId) {
             return;
         }
+        activeTurnId = 0;
         activeTurnFuture = null;
         model.setTurnCancelled(true);
         pendingTransition = null;

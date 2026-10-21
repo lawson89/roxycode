@@ -2,7 +2,6 @@ package org.roxycode.app.service;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Service;
 
 /** Service for managing the active project root directory. */
 @Service
-@AgentDoc("Manages the current active project root directory and handles its persistence.")
 @SuppressWarnings("PMD.NullAssignment")
 public class ProjectService {
     private final SettingsService settingsService;
@@ -37,17 +35,14 @@ public class ProjectService {
         }
     }
 
-    @AgentDoc("Returns the current active project root path.")
     public Path getCurrentProjectRoot() {
         return currentProjectRoot;
     }
 
-    @AgentDoc("Returns true if there is an active project root set.")
     public boolean hasActiveProject() {
         return currentProjectRoot != null;
     }
 
-    @AgentDoc("Sets the active project root path and persists it in settings.")
     public void setCurrentProjectRoot(Path newRoot) {
         if (newRoot != null) {
             this.currentProjectRoot = newRoot;
@@ -58,7 +53,6 @@ public class ProjectService {
         }
     }
 
-    @AgentDoc("Returns the name of the current project (the last element of the path).")
     public String getProjectName() {
         if (currentProjectRoot == null) {
             return "No Project";

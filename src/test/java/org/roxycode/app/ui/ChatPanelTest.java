@@ -112,7 +112,7 @@ public class ChatPanelTest {
         Thread.sleep(300);
 
         // chat should NOT be called for PLAN
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
         // Transition to REVIEW (should trigger turn)
         chatPanel.onWorkflowTransition(
@@ -120,7 +120,7 @@ public class ChatPanelTest {
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
         Thread.sleep(600);
 
-        verify(aiService, atLeastOnce()).chat(anyString(), any(), anyString(), isNull(), any());
+        verify(aiService, atLeastOnce()).chat(anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -134,7 +134,7 @@ public class ChatPanelTest {
                 new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-        when(aiService.chat(anyString(), any(), anyString(), any(), any()))
+        when(aiService.chat(anyString(), any(), anyString(), any()))
                 .thenAnswer(
                         inv -> {
                             chatPanel.onWorkflowTransition(
@@ -305,7 +305,6 @@ public class ChatPanelTest {
                         eq("task:default"),
                         eq(WorkflowPhase.PLAN),
                         contains("I approve the transition to Plan"),
-                        isNull(),
                         any());
         verify(chatMemory, never()).clear(anyString());
         assertFalse(chatPanel.getOutputArea().getText().contains("Task complete"));
@@ -321,7 +320,7 @@ public class ChatPanelTest {
         Thread.sleep(300);
         javax.swing.SwingUtilities.invokeAndWait(() -> {});
 
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
         verify(chatMemory).clear("task:default");
         assertTrue(chatPanel.getOutputArea().getText().contains("Task complete"));
     }

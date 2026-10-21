@@ -11,10 +11,8 @@ import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 /** Service for searching text in the codebase using RipGrep. */
-@Service
 @AgentService(
         value = "grepService",
         phases = {"*"})

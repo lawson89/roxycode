@@ -63,7 +63,7 @@ public class ChatPanelStopButtonTest {
         CountDownLatch allowExit = new CountDownLatch(1);
         AtomicInteger chatCalls = new AtomicInteger(0);
 
-        when(aiService.chat(anyString(), any(), anyString(), any(), any()))
+        when(aiService.chat(anyString(), any(), anyString(), any()))
                 .thenAnswer(
                         inv -> {
                             chatCalls.incrementAndGet();
