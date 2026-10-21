@@ -38,6 +38,10 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.DefaultUsage;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.model.ToolContext;
@@ -106,6 +110,19 @@ class AiServiceTest {
                         eventPublisher);
     }
 
+    private static ChatResponse buildChatResponse(String text, String finishReason, Usage usage) {
+        ChatGenerationMetadata genMeta =
+                finishReason != null
+                        ? ChatGenerationMetadata.builder().finishReason(finishReason).build()
+                        : ChatGenerationMetadata.NULL;
+        Generation generation = new Generation(new AssistantMessage(text), genMeta);
+        ChatResponseMetadata responseMeta =
+                usage != null
+                        ? ChatResponseMetadata.builder().usage(usage).build()
+                        : new ChatResponseMetadata();
+        return new ChatResponse(List.of(generation), responseMeta);
+    }
+
     @Test
     void testAiConfigCreatesToolExecutionExceptionProcessorAndToolCallingManagerBeans() {
         AiConfig config = new AiConfig();
@@ -132,7 +149,8 @@ class AiServiceTest {
 
         when(requestSpec.options(any())).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
-        when(responseSpec.content()).thenReturn("AI Response");
+        when(responseSpec.chatResponse())
+                .thenReturn(buildChatResponse("AI Response", "STOP", null));
 
         String result = aiService.chat("Hello");
 
@@ -173,7 +191,8 @@ class AiServiceTest {
         when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.options(any())).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
-        when(responseSpec.content()).thenReturn("Explore Response");
+        when(responseSpec.chatResponse())
+                .thenReturn(buildChatResponse("Explore Response", "STOP", null));
 
         String result = aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null);
 
@@ -195,7 +214,8 @@ class AiServiceTest {
 
         when(requestSpec.options(any())).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
-        when(responseSpec.content()).thenReturn("AI Response");
+        when(responseSpec.chatResponse())
+                .thenReturn(buildChatResponse("AI Response", "STOP", null));
 
         String result =
                 aiService.chat(
@@ -278,7 +298,7 @@ class AiServiceTest {
                         });
 
         when(requestSpec.call()).thenReturn(responseSpec);
-        when(responseSpec.content())
+        when(responseSpec.chatResponse())
                 .thenAnswer(
                         inv -> {
                             ToolCallingChatOptions options =
@@ -301,7 +321,8 @@ class AiServiceTest {
                             assertEquals(assistantMessage, history.get(1));
                             ToolResponseMessage stopToolMsg =
                                     assertInstanceOf(ToolResponseMessage.class, history.get(2));
-                            return stopToolMsg.getResponses().get(0).responseData();
+                            String stopText = stopToolMsg.getResponses().get(0).responseData();
+                            return buildChatResponse(stopText, "STOP", null);
                         });
 
         String result = aiService.chat("Hello");
@@ -339,11 +360,160 @@ class AiServiceTest {
 
                 Transition Request""";
         when(requestSpec.call()).thenReturn(responseSpec);
-        when(responseSpec.content()).thenReturn(expectedMarkdown);
+        when(responseSpec.chatResponse())
+                .thenReturn(buildChatResponse(expectedMarkdown, "STOP", null));
 
         String result = aiService.chat("Create plan");
 
         assertEquals(expectedMarkdown, result);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testNormalNonBlankResponseWithStopFinishReasonReturnsContentUnchanged() {
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null)).thenReturn("CODE PROMPT");
+
+        Usage usage = new DefaultUsage(100, 50, 150);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.chatResponse())
+                .thenReturn(buildChatResponse("Complete answer.", "STOP", usage));
+
+        String result = aiService.chat("Question");
+
+        assertEquals("Complete answer.", result);
+        verify(requestSpec, times(1)).call();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testNonBlankResponseWithMaxTokensAppendsTruncationNotice() {
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null)).thenReturn("CODE PROMPT");
+
+        Usage usage = new DefaultUsage(1200, 8192, 9392);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.chatResponse())
+                .thenReturn(buildChatResponse("Partial output here...", "MAX_TOKENS", usage));
+
+        String result = aiService.chat("Generate long code");
+
+        assertTrue(result.startsWith("Partial output here..."));
+        assertTrue(result.contains("MAX_TOKENS"));
+        assertTrue(result.contains("promptTokens=1200, completionTokens=8192, totalTokens=9392"));
+        assertTrue(result.toLowerCase().contains("continue"));
+        verify(requestSpec, times(1)).call();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testBlankResponseWithMaxTokensReturnsTokenLimitDiagnosticMessage() {
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null)).thenReturn("CODE PROMPT");
+
+        Usage usage = new DefaultUsage(4000, 8192, 12192);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.chatResponse()).thenReturn(buildChatResponse("   ", "MAX_TOKENS", usage));
+
+        String result = aiService.chat("Complex reasoning task");
+
+        assertFalse(result.isBlank());
+        assertTrue(result.contains("MAX_TOKENS"));
+        assertTrue(result.contains("promptTokens=4000, completionTokens=8192, totalTokens=12192"));
+        assertTrue(result.toLowerCase().contains("continue"));
+        verify(requestSpec, times(1)).call();
+
+        ArgumentCaptor<AgentTurnCompleteEvent> completeCaptor =
+                ArgumentCaptor.forClass(AgentTurnCompleteEvent.class);
+        verify(eventPublisher).publishEvent(completeCaptor.capture());
+        assertEquals(result, completeCaptor.getValue().result());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testBlankResponseAfterToolExecutionWithStopReturnsDiagnosticMessage() {
+        AtomicReference<Map<String, Object>> capturedToolContext = new AtomicReference<>();
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.toolContext(anyMap()))
+                .thenAnswer(
+                        inv -> {
+                            capturedToolContext.set(inv.getArgument(0));
+                            return requestSpec;
+                        });
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
+        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null))
+                .thenReturn("EXPLORE PROMPT");
+
+        Usage usage = new DefaultUsage(2500, 300, 2800);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.chatResponse())
+                .thenAnswer(
+                        inv -> {
+                            AtomicInteger counter =
+                                    (AtomicInteger)
+                                            capturedToolContext
+                                                    .get()
+                                                    .get(TurnToolContext.TURN_COUNTER_KEY);
+                            counter.set(3);
+                            return buildChatResponse("", "STOP", usage);
+                        });
+
+        String result = aiService.chat("Analyze project");
+
+        assertFalse(result.isBlank());
+        assertTrue(result.contains("STOP"));
+        assertTrue(result.contains("3"));
+        assertTrue(result.contains("promptTokens=2500, completionTokens=300, totalTokens=2800"));
+        assertTrue(result.toLowerCase().contains("continue"));
+        verify(requestSpec, times(1)).call();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testBlankResponseWithAbnormalFinishReasonDisplaysDiagnosticReason() {
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null)).thenReturn("CODE PROMPT");
+
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(responseSpec.chatResponse())
+                .thenReturn(buildChatResponse(null, "MALFORMED_FUNCTION_CALL", null));
+
+        String malformedResult = aiService.chat("Run tool");
+
+        assertFalse(malformedResult.isBlank());
+        assertTrue(malformedResult.contains("MALFORMED_FUNCTION_CALL"));
+        assertTrue(malformedResult.contains("blocked or aborted"));
+
+        when(responseSpec.chatResponse()).thenReturn(buildChatResponse("", "SAFETY", null));
+        String safetyResult = aiService.chat("Another prompt");
+
+        assertFalse(safetyResult.isBlank());
+        assertTrue(safetyResult.contains("SAFETY"));
+        assertTrue(safetyResult.contains("blocked or aborted"));
     }
 
     @Test
@@ -453,11 +623,12 @@ class AiServiceTest {
         when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null)).thenReturn("CODE PROMPT");
 
         when(requestSpec.call()).thenReturn(responseSpec);
-        when(responseSpec.content())
+        when(responseSpec.chatResponse())
                 .thenAnswer(
                         inv -> {
                             Thread.currentThread().interrupt();
-                            return "Should be discarded due to interrupt";
+                            return buildChatResponse(
+                                    "Should be discarded due to interrupt", "STOP", null);
                         });
 
         try {

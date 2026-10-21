@@ -12,6 +12,9 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class AiService {
     private static final String AGENT_NAME = "Roxy";
+    private static final String FINISH_REASON_UNKNOWN = "UNKNOWN";
 
     private final ChatClient chatClient;
     private final SettingsService settingsService;
@@ -84,12 +88,13 @@ public class AiService {
             ChatClient.ChatClientRequestSpec promptSpec =
                     buildPrompt(turnContext, message, additionalInstructions, images);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-            String content =
+            ChatResponse chatResponse =
                     promptSpec
                             .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId))
                             .call()
-                            .content();
+                            .chatResponse();
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
+            String content = formatChatResponse(chatResponse, turnCounter.get());
             publishTurnComplete(convId, turnCounter.get(), content);
             return content;
         } catch (Exception e) {
@@ -100,6 +105,117 @@ public class AiService {
             }
             throw new RuntimeException("Unexpected error during chat turn", e);
         }
+    }
+
+    String formatChatResponse(ChatResponse chatResponse, int toolTurns) {
+        String content = null;
+        String rawFinishReason = null;
+        Usage usage = null;
+
+        if (chatResponse != null) {
+            Generation result = chatResponse.getResult();
+            if (result != null) {
+                if (result.getOutput() != null) {
+                    content = result.getOutput().getText();
+                }
+                if (result.getMetadata() != null) {
+                    rawFinishReason = result.getMetadata().getFinishReason();
+                }
+            }
+            if (chatResponse.getMetadata() != null) {
+                usage = chatResponse.getMetadata().getUsage();
+            }
+        }
+
+        String finishReason =
+                (rawFinishReason != null && !rawFinishReason.isBlank())
+                        ? rawFinishReason.trim()
+                        : FINISH_REASON_UNKNOWN;
+        String usageSummary = formatUsageSummary(usage);
+        boolean hasVisibleContent = content != null && !content.isBlank();
+
+        if (isTokenLimitFinishReason(finishReason)) {
+            if (hasVisibleContent) {
+                StringBuilder sb = new StringBuilder(content);
+                sb.append("\n\n---\n")
+                        .append("> ⚠️ **Response Truncated (finishReason: ")
+                        .append(finishReason)
+                        .append(
+                                ")**: The response was cut off because it reached the maximum output token limit.");
+                if (!usageSummary.isEmpty()) {
+                    sb.append(" (Token usage: ").append(usageSummary).append(")");
+                }
+                sb.append(" Reply **'continue'** so Roxy can resume where she left off.");
+                return sb.toString();
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("⚠️ **No Visible Response (finishReason: ")
+                    .append(finishReason)
+                    .append(")**\n\n")
+                    .append(
+                            "Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
+            sb.append("\n- **Finish reason:** ").append(finishReason);
+            sb.append("\n- **Tool turns executed:** ").append(toolTurns);
+            if (!usageSummary.isEmpty()) {
+                sb.append("\n- **Token usage:** ").append(usageSummary);
+            }
+            sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.");
+            return sb.toString();
+        }
+
+        if (!hasVisibleContent) {
+            boolean normalStop =
+                    "STOP".equalsIgnoreCase(finishReason)
+                            || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
+            StringBuilder sb = new StringBuilder();
+            sb.append("⚠️ **Empty Response Returned (finishReason: ")
+                    .append(finishReason)
+                    .append(")**\n\n");
+            if (normalStop) {
+                sb.append("Roxy completed the turn without generating a visible text message.");
+            } else {
+                sb.append("Generation was blocked or aborted by the model (")
+                        .append(finishReason)
+                        .append(").");
+            }
+            sb.append("\n- **Finish reason:** ").append(finishReason);
+            sb.append("\n- **Tool turns executed:** ").append(toolTurns);
+            if (!usageSummary.isEmpty()) {
+                sb.append("\n- **Token usage:** ").append(usageSummary);
+            }
+            if (normalStop) {
+                sb.append(
+                        "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response.");
+            } else {
+                sb.append(
+                        "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
+            }
+            return sb.toString();
+        }
+
+        return content;
+    }
+
+    private static boolean isTokenLimitFinishReason(String finishReason) {
+        return "MAX_TOKENS".equalsIgnoreCase(finishReason)
+                || "LENGTH".equalsIgnoreCase(finishReason);
+    }
+
+    private static String formatUsageSummary(Usage usage) {
+        if (usage == null) {
+            return "";
+        }
+        int promptTokens = usage.getPromptTokens() != null ? usage.getPromptTokens() : 0;
+        int completionTokens =
+                usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
+        int totalTokens = usage.getTotalTokens() != null ? usage.getTotalTokens() : 0;
+        if (promptTokens <= 0 && completionTokens <= 0 && totalTokens <= 0) {
+            return "";
+        }
+        return String.format(
+                "promptTokens=%d, completionTokens=%d, totalTokens=%d",
+                promptTokens, completionTokens, totalTokens);
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(
