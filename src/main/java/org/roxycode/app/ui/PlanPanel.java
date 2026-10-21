@@ -120,12 +120,9 @@ public final class PlanPanel extends JPanel {
         SwingHtmlUtils.applyTheme(displayArea, 15);
     }
 
-    private void updateDisplay(ImplementationPlan plan) {
+        private void updateDisplay(ImplementationPlan plan) {
         String html = buildPlanHtml(plan);
         boolean hasPlan = plan != null;
-        if (copyMarkdownButton != null) {
-            copyMarkdownButton.setEnabled(hasPlan);
-        }
         SwingUtilities.invokeLater(
                 () -> {
                     if (copyMarkdownButton != null) {
@@ -210,12 +207,7 @@ public final class PlanPanel extends JPanel {
         if (logs == null || logs.isEmpty()) return "";
 
         StringBuilder rows = new StringBuilder();
-        for (ImplementationPlan.LogEntry entry : logs) {
-            String ts = entry.timestamp();
-            final int timestampLength = 19;
-            if (ts.length() > timestampLength)
-                ts = ts.substring(0, timestampLength).replace('T', ' ');
-
+                for (ImplementationPlan.LogEntry entry : logs) {
             rows.append(
                     """
                     <tr>
@@ -225,7 +217,7 @@ public final class PlanPanel extends JPanel {
                     </tr>
                     """
                             .formatted(
-                                    SwingHtmlUtils.escapeHtml(ts),
+                                    SwingHtmlUtils.escapeHtml(entry.formattedTimestamp()),
                                     SwingHtmlUtils.escapeHtml(entry.user()),
                                     SwingHtmlUtils.escapeHtml(entry.message())));
         }

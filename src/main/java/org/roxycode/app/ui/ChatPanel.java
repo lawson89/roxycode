@@ -43,8 +43,7 @@ public class ChatPanel extends JPanel {
     private final transient ChatModel model;
     private final transient ChatController controller;
 
-    private final MarkdownPane outputArea;
-    private final ThoughtPanel thoughtPanel;
+        private final MarkdownPane outputArea;
     private final JTextArea inputArea;
     private final JButton sendButton;
     private final JButton stopButton;
@@ -166,13 +165,14 @@ public class ChatPanel extends JPanel {
                     }
                 });
 
-        thoughtPanel = new ThoughtPanel();
-
-        JPanel outputWrapper = new JPanel(new BorderLayout());
-        outputWrapper.add(thoughtPanel, BorderLayout.NORTH);
-        outputWrapper.add(outputScrollPane, BorderLayout.CENTER);
+                Component topComponent;
         if (isTaskMode) {
-            outputWrapper.add(inlineActionPanel, BorderLayout.SOUTH);
+            JPanel taskOutputPanel = new JPanel(new BorderLayout());
+            taskOutputPanel.add(outputScrollPane, BorderLayout.CENTER);
+            taskOutputPanel.add(inlineActionPanel, BorderLayout.SOUTH);
+            topComponent = taskOutputPanel;
+        } else {
+            topComponent = outputScrollPane;
         }
 
         // Input section
@@ -220,8 +220,8 @@ public class ChatPanel extends JPanel {
         inputSection.add(inputAreaContainer, "grow");
         inputSection.add(buttonPanel, "aligny bottom");
 
-        JSplitPane splitPane =
-                new JSplitPane(JSplitPane.VERTICAL_SPLIT, outputWrapper, inputSection);
+                JSplitPane splitPane =
+                new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
         splitPane.setResizeWeight(0.8);
         splitPane.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -274,20 +274,12 @@ public class ChatPanel extends JPanel {
         outputArea.appendMessage(role, content);
     }
 
-    void appendToolLog(String toolName, String output) {
-        outputArea.appendToolLog(toolName, output);
-    }
-
-    void appendToolLog(String toolName, String output, boolean success, String error) {
+        void appendToolLog(String toolName, String output, boolean success, String error) {
         outputArea.appendToolLog(toolName, output, success, error);
     }
 
     void clearOutput() {
         outputArea.clear();
-    }
-
-    void clearThoughts() {
-        thoughtPanel.clear();
     }
 
     void clearInputText() {

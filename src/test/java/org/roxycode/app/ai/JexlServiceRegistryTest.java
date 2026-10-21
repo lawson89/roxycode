@@ -19,6 +19,9 @@ class JexlServiceRegistryTest {
             phases = {"*"})
     static class Service2 {}
 
+    @AgentService("emptyPhasesService")
+    static class EmptyPhasesService {}
+
     @Test
     void testCaching() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
@@ -37,14 +40,24 @@ class JexlServiceRegistryTest {
     }
 
     @Test
+    void testEmptyPhasesDisallowsAllPhases() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        EmptyPhasesService emptyService = new EmptyPhasesService();
+        registry.register(emptyService);
+
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            assertFalse(
+                    registry.getServices(phase).containsValue(emptyService),
+                    "Service with empty phases array should not be exposed in " + phase);
+        }
+        assertFalse(registry.getServices(null).containsValue(emptyService));
+    }
+
+    @Test
     void testFileEditorServiceFiltering() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         FileEditorService editor = mock(FileEditorService.class);
         registry.register(editor);
-
-        // FileEditorService has @AgentService(value = "fileEditorService", phases =
-        // {"CODE"})
-        // It should be available in CODE but not in PLAN/EXPLORE
 
         assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(editor));
         assertFalse(registry.getServices(WorkflowPhase.PLAN).containsValue(editor));

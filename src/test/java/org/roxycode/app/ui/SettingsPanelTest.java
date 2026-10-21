@@ -147,8 +147,8 @@ class SettingsPanelTest {
                     env.getPropertySources()
                             .get("roxycodeSettingsProperties")
                             .getProperty("spring.ai.google.genai.api-key"));
-            assertEquals(
-                    "gemini-1.5-flash",
+                        assertEquals(
+                    "gemini-3.5-flash",
                     env.getProperty("spring.ai.google.genai.chat.options.model"));
         }
     }

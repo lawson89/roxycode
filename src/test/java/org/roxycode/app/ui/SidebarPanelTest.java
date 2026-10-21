@@ -62,9 +62,24 @@ class SidebarPanelTest {
                 if (pref.width == 128 && pref.height == 128) {
                     foundLogoPanel = true;
                     c.setSize(128, 128);
-                    BufferedImage img = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
+                                                            BufferedImage img = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
                     Graphics2D g2 = img.createGraphics();
-                    assertDoesNotThrow(() -> c.paintAll(g2));
+                    assertInstanceOf(RoundedImagePanel.class, c);
+                    RoundedImagePanel rounded = (RoundedImagePanel) c;
+                    assertDoesNotThrow(() -> rounded.paintComponent(g2));
+                    BufferedImage firstCached = rounded.getCachedBuffer();
+                    assertNotNull(firstCached, "RoundedImagePanel should cache scaled BufferedImage");
+                    assertDoesNotThrow(() -> rounded.paintComponent(g2));
+                    assertSame(
+                            firstCached,
+                            rounded.getCachedBuffer(),
+                            "RoundedImagePanel should reuse cached BufferedImage for same size");
+                    c.setSize(64, 64);
+                    assertDoesNotThrow(() -> rounded.paintComponent(g2));
+                    assertNotSame(
+                            firstCached,
+                            rounded.getCachedBuffer(),
+                            "RoundedImagePanel should recreate cached BufferedImage on resize");
                     g2.dispose();
                 }
             } else if (c instanceof JLabel) {

@@ -1,29 +1,23 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.net.URL;
+import java.awt.Font;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import javax.imageio.ImageIO;
-import javax.swing.*;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** Sidebar panel containing branding and navigation. */
 public final class SidebarPanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    private static final Logger log = LoggerFactory.getLogger(SidebarPanel.class);
+    private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
     private final Consumer<String> navigationAction;
     private final List<NavButton> navButtons = new ArrayList<>();
     private NavButton taskBtn;
-    private transient Image logoImage;
 
     public SidebarPanel(Consumer<String> navigationAction) {
         this.navigationAction = navigationAction;
@@ -67,97 +61,7 @@ public final class SidebarPanel extends JPanel {
                 new JPanel(new MigLayout("fillx, insets 20, wrap 1", "[center]", "[]15[]"));
         brandingPanel.setOpaque(false);
 
-        try {
-            URL url = getClass().getResource("/static/images/roxy.png");
-            if (url != null) {
-                logoImage = ImageIO.read(url);
-            }
-        } catch (IOException e) {
-            log.warn("Failed to load logo image: {}", e.getMessage());
-        }
-
-        JPanel logoPanel =
-                new JPanel() {
-                    private static final long serialVersionUID = 1L;
-
-                    @Override
-                    protected void paintComponent(Graphics g) {
-                        super.paintComponent(g);
-                        Graphics2D g2 = (Graphics2D) g.create();
-                        try {
-                            g2.setRenderingHint(
-                                    RenderingHints.KEY_ANTIALIASING,
-                                    RenderingHints.VALUE_ANTIALIAS_ON);
-                            g2.setRenderingHint(
-                                    RenderingHints.KEY_INTERPOLATION,
-                                    RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-                            g2.setRenderingHint(
-                                    RenderingHints.KEY_RENDERING,
-                                    RenderingHints.VALUE_RENDER_QUALITY);
-
-                            int width = getWidth();
-                            int height = getHeight();
-                            int arc = 32;
-                            int inset = 2;
-
-                            if (logoImage != null) {
-                                BufferedImage buffer =
-                                        new BufferedImage(
-                                                width, height, BufferedImage.TYPE_INT_ARGB);
-                                Graphics2D gBuffer = buffer.createGraphics();
-                                try {
-                                    gBuffer.setRenderingHint(
-                                            RenderingHints.KEY_ANTIALIASING,
-                                            RenderingHints.VALUE_ANTIALIAS_ON);
-                                    gBuffer.setColor(Color.BLACK);
-                                    gBuffer.fillRoundRect(
-                                            inset,
-                                            inset,
-                                            width - (2 * inset),
-                                            height - (2 * inset),
-                                            arc,
-                                            arc);
-
-                                    gBuffer.setComposite(AlphaComposite.SrcIn);
-                                    gBuffer.drawImage(logoImage, 0, 0, width, height, null);
-                                } finally {
-                                    gBuffer.dispose();
-                                }
-                                g2.drawImage(buffer, 0, 0, null);
-                            } else {
-                                g2.setColor(UIManager.getColor("Component.accentColor"));
-                                if (g2.getColor() == null) {
-                                    g2.setColor(new Color(100, 100, 255));
-                                }
-                                g2.fillRoundRect(
-                                        inset,
-                                        inset,
-                                        width - (2 * inset),
-                                        height - (2 * inset),
-                                        arc,
-                                        arc);
-                            }
-
-                            Color borderColor = UIManager.getColor("Component.borderColor");
-                            if (borderColor == null) {
-                                borderColor = new Color(80, 80, 80);
-                            }
-                            g2.setColor(borderColor);
-                            g2.setStroke(new BasicStroke(1.5f));
-                            g2.drawRoundRect(
-                                    inset,
-                                    inset,
-                                    width - (2 * inset) - 1,
-                                    height - (2 * inset) - 1,
-                                    arc,
-                                    arc);
-                        } finally {
-                            g2.dispose();
-                        }
-                    }
-                };
-        logoPanel.setPreferredSize(new Dimension(128, 128));
-        logoPanel.setOpaque(false);
+        JPanel logoPanel = new RoundedImagePanel(LOGO_RESOURCE_PATH, 128, 32);
 
         JLabel titleLabel = new JLabel("RoxyCode");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));

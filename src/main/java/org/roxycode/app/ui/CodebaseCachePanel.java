@@ -7,12 +7,14 @@ import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.PromptService;
 import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -50,7 +52,12 @@ public final class CodebaseCachePanel extends JPanel {
         this.metaService = metaService;
         this.promptService = promptService;
 
-        initComponents();
+                initComponents();
+        refreshStatus();
+    }
+
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
         refreshStatus();
     }
 
@@ -71,12 +78,11 @@ public final class CodebaseCachePanel extends JPanel {
 
         add(statusPanel, "growx, wrap");
 
-        repoMapArea.setEditable(false);
-        repoMapArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        stableContextArea.setEditable(false);
-        stableContextArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        sessionContextArea.setEditable(false);
-        sessionContextArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+                Font monoFont = new Font(Font.MONOSPACED, Font.PLAIN, 12);
+        for (JTextArea area : getTextAreas()) {
+            area.setEditable(false);
+            area.setFont(monoFont);
+        }
 
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Repo Map (Dynamic)", new JScrollPane(repoMapArea));
@@ -99,16 +105,19 @@ public final class CodebaseCachePanel extends JPanel {
         }
     }
 
-    public void updateTheme() {
-        repoMapArea.setBackground(UIManager.getColor("TextArea.background"));
-        repoMapArea.setForeground(UIManager.getColor("TextArea.foreground"));
-        repoMapArea.setCaretColor(UIManager.getColor("TextArea.caretForeground"));
-        stableContextArea.setBackground(UIManager.getColor("TextArea.background"));
-        stableContextArea.setForeground(UIManager.getColor("TextArea.foreground"));
-        stableContextArea.setCaretColor(UIManager.getColor("TextArea.caretForeground"));
-        sessionContextArea.setBackground(UIManager.getColor("TextArea.background"));
-        sessionContextArea.setForeground(UIManager.getColor("TextArea.foreground"));
-        sessionContextArea.setCaretColor(UIManager.getColor("TextArea.caretForeground"));
+        public void updateTheme() {
+        Color bg = UIManager.getColor("TextArea.background");
+        Color fg = UIManager.getColor("TextArea.foreground");
+        Color caret = UIManager.getColor("TextArea.caretForeground");
+        for (JTextArea area : getTextAreas()) {
+            area.setBackground(bg);
+            area.setForeground(fg);
+            area.setCaretColor(caret);
+        }
+    }
+
+    private JTextArea[] getTextAreas() {
+        return new JTextArea[] {repoMapArea, stableContextArea, sessionContextArea};
     }
 
     SwingWorker<CacheStatusData, Void> refreshStatus() {

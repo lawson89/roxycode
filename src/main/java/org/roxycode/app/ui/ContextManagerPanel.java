@@ -6,10 +6,12 @@ import javax.swing.*;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.PromptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -71,8 +73,26 @@ public final class ContextManagerPanel extends JPanel {
         splitPane.setDividerLocation(250);
         add(splitPane, BorderLayout.CENTER);
 
-        setupListeners();
+                setupListeners();
         refreshFileList(null);
+    }
+
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
+        Runnable update =
+                () -> {
+                    currentFile = null; // NOPMD
+                    fileList.clearSelection();
+                    textArea.setText("");
+                    btnDelete.setEnabled(false);
+                    btnSave.setEnabled(false);
+                    refreshFileList(null);
+                };
+        if (SwingUtilities.isEventDispatchThread()) {
+            update.run();
+        } else {
+            SwingUtilities.invokeLater(update);
+        }
     }
 
     private void setupListeners() {

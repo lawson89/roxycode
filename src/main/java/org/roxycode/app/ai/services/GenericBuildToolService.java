@@ -289,32 +289,27 @@ public class GenericBuildToolService {
             errors.add(sw.toString());
         }
 
-        if (errorRegex != null && !errorRegex.isBlank()) {
-            try {
-                Pattern p = Pattern.compile(errorRegex);
-                Matcher m = p.matcher(fullOutput);
-                while (m.find()) {
-                    errors.add(m.group(m.groupCount() > 0 ? 1 : 0));
-                }
-            } catch (Exception e) {
-                log.error("Failed to parse errors with regex: {}", errorRegex, e);
-            }
-        }
-
-        if (testFailureRegex != null && !testFailureRegex.isBlank()) {
-            try {
-                Pattern p = Pattern.compile(testFailureRegex);
-                Matcher m = p.matcher(fullOutput);
-                while (m.find()) {
-                    failedTests.add(m.group(m.groupCount() > 0 ? 1 : 0));
-                }
-            } catch (Exception e) {
-                log.error("Failed to parse test failures with regex: {}", testFailureRegex, e);
-            }
-        }
+                errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
+        failedTests.addAll(extractRegexMatches(fullOutput, testFailureRegex, "test failures"));
 
         boolean success = exitCode == 0 && errors.isEmpty();
         return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
+    }
+
+    private List<String> extractRegexMatches(String output, String regex, String patternType) {
+        List<String> matches = new ArrayList<>();
+        if (regex != null && !regex.isBlank()) {
+            try {
+                Pattern p = Pattern.compile(regex);
+                Matcher m = p.matcher(output);
+                while (m.find()) {
+                    matches.add(m.group(m.groupCount() > 0 ? 1 : 0));
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse {} with regex: {}", patternType, regex, e);
+            }
+        }
+        return matches;
     }
 
     public String getConfigContent() throws IOException {

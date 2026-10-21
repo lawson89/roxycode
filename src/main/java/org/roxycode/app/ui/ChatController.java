@@ -48,7 +48,7 @@ public final class ChatController implements AutoCloseable {
 
     private volatile long activeTurnId = 0;
     private volatile Future<?> activeTurnFuture;
-    private volatile WorkflowTransitionEvent pendingTransition;
+    private volatile WorkflowTransitionEvent deferredTransitionEvent;
 
     public ChatController(
             ChatModel model,
@@ -117,9 +117,9 @@ public final class ChatController implements AutoCloseable {
 
     public boolean hasPendingPhase() {
         return (planService != null && planService.getPendingPhase() != null)
-                || (pendingTransition != null
-                        && !pendingTransition.autonomous()
-                        && pendingTransition.to() != null);
+                || (deferredTransitionEvent != null
+                        && !deferredTransitionEvent.autonomous()
+                        && deferredTransitionEvent.to() != null);
     }
 
     public void sendMessage(String rawText) {
@@ -138,7 +138,7 @@ public final class ChatController implements AutoCloseable {
 
     public void stopTurn() {
         model.setTurnCancelled(true);
-        pendingTransition = null;
+        deferredTransitionEvent = null;
         activeTurnId = 0;
         Future<?> futureToCancel = activeTurnFuture;
         if (futureToCancel != null) {
@@ -162,7 +162,7 @@ public final class ChatController implements AutoCloseable {
         WorkflowPhase requested = planService.getPendingPhase();
         if (requested != null) {
             model.setTurnCancelled(false);
-            pendingTransition = null;
+            deferredTransitionEvent = null;
             planService.approveTransition();
             view.appendMessage(
                     ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** approved.");
@@ -184,7 +184,7 @@ public final class ChatController implements AutoCloseable {
         WorkflowPhase requested = planService.getPendingPhase();
         if (requested != null) {
             model.setTurnCancelled(false);
-            pendingTransition = null;
+            deferredTransitionEvent = null;
             planService.rejectTransition();
             view.appendMessage(
                     ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
@@ -203,7 +203,7 @@ public final class ChatController implements AutoCloseable {
 
     void performResetSession() {
         model.setTurnCancelled(true);
-        pendingTransition = null;
+        deferredTransitionEvent = null;
         activeTurnId = 0;
         Future<?> futureToCancel = activeTurnFuture;
         if (futureToCancel != null) {
@@ -225,7 +225,7 @@ public final class ChatController implements AutoCloseable {
         if (text == null || text.trim().isEmpty()) return;
 
         model.setTurnCancelled(false);
-        pendingTransition = null;
+        deferredTransitionEvent = null;
 
         Future<?> previousFuture = activeTurnFuture;
         if (previousFuture != null) {
@@ -236,8 +236,7 @@ public final class ChatController implements AutoCloseable {
         long turnId = turnSequence.incrementAndGet();
         activeTurnId = turnId;
 
-        view.setLoading(true);
-        view.clearThoughts();
+                view.setLoading(true);
         model.setCurrentTurn(0);
         view.updateTurnLabel();
 
@@ -289,8 +288,8 @@ public final class ChatController implements AutoCloseable {
         }
         activeTurnId = 0;
         activeTurnFuture = null;
-        WorkflowTransitionEvent transition = pendingTransition;
-        pendingTransition = null;
+        WorkflowTransitionEvent transition = deferredTransitionEvent;
+        deferredTransitionEvent = null;
 
         view.appendMessage(ROLE_AI, response);
         view.setLoading(false);
@@ -307,7 +306,7 @@ public final class ChatController implements AutoCloseable {
         activeTurnId = 0;
         activeTurnFuture = null;
         model.setTurnCancelled(true);
-        pendingTransition = null;
+        deferredTransitionEvent = null;
         view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
         view.setLoading(false);
     }
@@ -315,7 +314,7 @@ public final class ChatController implements AutoCloseable {
     void onWorkflowTransition(WorkflowTransitionEvent event) {
         if (event == null || !model.isTaskMode()) return;
         if (!event.autonomous() && event.to() == null) {
-            pendingTransition = null;
+            deferredTransitionEvent = null;
             SwingUtilities.invokeLater(view::hideTransitionBanner);
             return;
         }
@@ -324,7 +323,7 @@ public final class ChatController implements AutoCloseable {
                 () -> {
                     if (model.isTurnCancelled()) return;
                     if (isTurnActive()) {
-                        pendingTransition = event;
+                        deferredTransitionEvent = event;
                     } else {
                         applyWorkflowTransition(event);
                     }

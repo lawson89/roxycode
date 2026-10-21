@@ -52,31 +52,21 @@ public class ProjectCacheMetaService {
         }
     }
 
-    private void migrateLegacyFiles() {
+        private void migrateLegacyFiles() {
         if (!projectService.hasActiveProject()) return;
         Path root = projectService.getCurrentProjectRoot();
-        Path legacyMeta = root.resolve(LEGACY_CACHE_FILE);
-        Path targetMeta = root.resolve(CACHE_FILE);
+        migrateFileIfNeeded(root.resolve(LEGACY_CACHE_FILE), root.resolve(CACHE_FILE));
+        migrateFileIfNeeded(root.resolve(LEGACY_REPO_CACHE_FILE), root.resolve(REPO_CACHE_FILE));
+    }
 
-        if (Files.exists(legacyMeta) && !Files.exists(targetMeta)) {
+    private void migrateFileIfNeeded(Path legacyPath, Path targetPath) {
+        if (Files.exists(legacyPath) && !Files.exists(targetPath)) {
             try {
                 ensureTmpDir();
-                Files.move(legacyMeta, targetMeta, StandardCopyOption.REPLACE_EXISTING);
-                log.info("Migrated legacy cache meta to {}", targetMeta);
+                Files.move(legacyPath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                log.info("Migrated legacy cache file to {}", targetPath);
             } catch (IOException e) {
-                log.warn("Failed to migrate legacy cache meta: {}", e.getMessage());
-            }
-        }
-
-        Path legacyRepo = root.resolve(LEGACY_REPO_CACHE_FILE);
-        Path targetRepo = root.resolve(REPO_CACHE_FILE);
-        if (Files.exists(legacyRepo) && !Files.exists(targetRepo)) {
-            try {
-                ensureTmpDir();
-                Files.move(legacyRepo, targetRepo, StandardCopyOption.REPLACE_EXISTING);
-                log.info("Migrated legacy repo cache to {}", targetRepo);
-            } catch (IOException e) {
-                log.warn("Failed to migrate legacy repo cache: {}", e.getMessage());
+                log.warn("Failed to migrate legacy cache file {}: {}", legacyPath, e.getMessage());
             }
         }
     }

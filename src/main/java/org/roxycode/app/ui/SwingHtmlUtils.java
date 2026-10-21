@@ -1,10 +1,17 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatLaf;
+import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
+import com.vladsch.flexmark.ext.tables.TablesExtension;
+import com.vladsch.flexmark.html.HtmlRenderer;
+import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.util.data.DataHolder;
+import com.vladsch.flexmark.util.data.MutableDataSet;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URL;
+import java.util.Arrays;
 import javax.swing.*;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.DefaultEditorKit;
@@ -26,7 +33,31 @@ import javax.swing.text.html.StyleSheet;
  */
 public final class SwingHtmlUtils {
 
+        private static final DataHolder FLEXMARK_OPTIONS =
+            new MutableDataSet()
+                    .set(
+                            Parser.EXTENSIONS,
+                            Arrays.asList(
+                                    TablesExtension.create(), StrikethroughExtension.create()))
+                    .toImmutable();
+    private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
+    private static final HtmlRenderer MARKDOWN_RENDERER =
+            HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
+
     private SwingHtmlUtils() {}
+
+    /** Returns the shared Flexmark {@link Parser} configured with GFM tables and strikethrough. */
+    public static Parser markdownParser() {
+        return MARKDOWN_PARSER;
+    }
+
+    /**
+     * Returns the shared Flexmark {@link HtmlRenderer} configured with GFM tables and
+     * strikethrough.
+     */
+    public static HtmlRenderer markdownRenderer() {
+        return MARKDOWN_RENDERER;
+    }
 
     /**
      * Applies theme-aware stylesheet and editor kit to a JEditorPane or JTextPane.

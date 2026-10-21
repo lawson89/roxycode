@@ -141,19 +141,9 @@ public class FileEditorService {
                     "Invalid line range: " + startLine + " to " + endLine);
         }
 
-        List<String> newLines = new ArrayList<>();
-        // Add lines before the range
-        for (int i = 0; i < startLine - 1; i++) {
-            newLines.add(lines.get(i));
-        }
-
-        // Add the replacement text
-        newLines.addAll(splitLines(replacementText));
-
-        // Add lines after the range
-        for (int i = endLine; i < lines.size(); i++) {
-            newLines.add(lines.get(i));
-        }
+                List<String> newLines = new ArrayList<>(lines);
+        newLines.subList(startLine - 1, endLine).clear();
+        newLines.addAll(startLine - 1, splitLines(replacementText));
 
         Files.write(path, newLines);
 

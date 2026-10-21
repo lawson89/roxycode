@@ -26,10 +26,10 @@ public class RoxyCode {
     static final String SETTINGS_PROPERTY_SOURCE = "roxycodeSettingsProperties";
     static final String PROP_GEMINI_API_KEY = "spring.ai.google.genai.api-key";
     static final String PROP_GEMINI_MODEL = "spring.ai.google.genai.chat.options.model";
-    static final String DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
+        static final String DEFAULT_GEMINI_MODEL = AppSettings.DEFAULT_GEMINI_MODEL;
 
     public static void main(String[] args) {
-        String theme = "FlatLaf Dark";
+        String theme = AppSettings.DEFAULT_THEME;
         AppSettings settings = null;
 
         try {

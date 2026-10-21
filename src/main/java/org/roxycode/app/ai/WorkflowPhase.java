@@ -2,7 +2,6 @@ package org.roxycode.app.ai;
 
 import org.kordamp.ikonli.codicons.Codicons;
 
-@AgentDoc("Defines the current phase of the development workflow.")
 public enum WorkflowPhase {
     EXPLORE(
             "Explore",

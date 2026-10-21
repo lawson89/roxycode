@@ -13,7 +13,6 @@ import org.fife.ui.rtextarea.RTextScrollPane;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
-import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,10 +32,8 @@ public final class BuildConfigPanel extends JPanel {
     private final JLabel statusLabel;
     private final Timer statusTimer;
 
-    public BuildConfigPanel(
-            GenericBuildToolService buildToolService,
-            SettingsService settingsService,
-            ProjectService projectService) {
+        public BuildConfigPanel(
+            GenericBuildToolService buildToolService, SettingsService settingsService) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow][]"));

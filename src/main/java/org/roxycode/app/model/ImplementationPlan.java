@@ -2,9 +2,7 @@ package org.roxycode.app.model;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.roxycode.app.ai.AgentDoc;
 
-@AgentDoc("Immutable structure for the project implementation plan.")
 public record ImplementationPlan(
         String title,
         String goal,
@@ -17,8 +15,19 @@ public record ImplementationPlan(
         List<LogEntry> handoffLog) {
     public record TechStep(String description, boolean completed) {}
 
-    @AgentDoc("A structured log entry for the implementation history.")
-    public record LogEntry(String timestamp, String user, String message) {}
+        public record LogEntry(String timestamp, String user, String message) {
+        private static final int TIMESTAMP_LENGTH = 19;
+
+        public String formattedTimestamp() {
+            if (timestamp == null) {
+                return "";
+            }
+            if (timestamp.length() > TIMESTAMP_LENGTH) {
+                return timestamp.substring(0, TIMESTAMP_LENGTH).replace('T', ' ');
+            }
+            return timestamp;
+        }
+    }
 
     public ImplementationPlan {
         requirements = requirements != null ? List.copyOf(requirements) : List.of();
@@ -125,14 +134,9 @@ public record ImplementationPlan(
                     | Timestamp | User | Message |
                     | :--- | :--- | :--- |
                     """);
-            for (LogEntry entry : handoffLog) {
-                String ts = entry.timestamp() != null ? entry.timestamp() : "";
-                final int timestampLength = 19;
-                if (ts.length() > timestampLength) {
-                    ts = ts.substring(0, timestampLength).replace('T', ' ');
-                }
+                        for (LogEntry entry : handoffLog) {
                 md.append("| ")
-                        .append(escapeMarkdownTableCell(ts))
+                        .append(escapeMarkdownTableCell(entry.formattedTimestamp()))
                         .append(" | ")
                         .append(escapeMarkdownTableCell(entry.user()))
                         .append(" | ")

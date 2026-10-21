@@ -1,16 +1,12 @@
 package org.roxycode.app.ui;
 
-import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
-import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
-import com.vladsch.flexmark.util.data.MutableDataSet;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import javax.swing.*;
@@ -47,12 +43,8 @@ public final class MarkdownPane extends JTextPane {
         setOpaque(true);
         putClientProperty("JEditorPane.honorDisplayProperties", true);
 
-        MutableDataSet options = new MutableDataSet();
-        options.set(
-                Parser.EXTENSIONS,
-                Arrays.asList(TablesExtension.create(), StrikethroughExtension.create()));
-        parser = Parser.builder(options).build();
-        renderer = HtmlRenderer.builder(options).build();
+                parser = SwingHtmlUtils.markdownParser();
+        renderer = SwingHtmlUtils.markdownRenderer();
 
         addHyperlinkListener(
                 e -> {
@@ -104,11 +96,7 @@ public final class MarkdownPane extends JTextPane {
         renderAll(true);
     }
 
-    public void appendToolLog(String toolName, String output) {
-        appendToolLog(toolName, output, true, null);
-    }
-
-    public void appendToolLog(String toolName, String output, boolean success, String error) {
+        public void appendToolLog(String toolName, String output, boolean success, String error) {
         String safeOutput = output != null ? output : "";
         messages.add(
                 new Message(

@@ -2,10 +2,13 @@ package org.roxycode.app.model;
 
 /** Model representing application settings. */
 public class AppSettings {
-    private String theme = "FlatLaf Light";
+        public static final String DEFAULT_THEME = "FlatLaf Light";
+    public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
+
+    private String theme = DEFAULT_THEME;
     private String geminiApiKey = "";
     private String currentProjectPath = "";
-    private String geminiModel = "gemini-1.5-flash";
+    private String geminiModel = DEFAULT_GEMINI_MODEL;
     private int maxAgentToolTurns = 5;
     private int maxChatMemoryMessages = 50;
 

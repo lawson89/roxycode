@@ -10,11 +10,7 @@ public class ChatHtmlTemplates {
     private static final String ROLE_USER = "user";
     private static final String ROLE_SYSTEM = "system";
 
-    public static String renderChatEntry(String role, String content, String timestamp) {
-        return renderChatEntry(role, content, timestamp, -1, false);
-    }
-
-    public static String renderChatEntry(
+        public static String renderChatEntry(
             String role, String content, String timestamp, int messageIndex, boolean copied) {
         String safeRole = SwingHtmlUtils.escapeHtml(role != null ? role : "");
         String entryClass = safeRole + "-entry";
@@ -83,24 +79,6 @@ public class ChatHtmlTemplates {
 
         return StringSubstitutor.replace(template, values);
     }
-
-    public static String renderDivider() {
-        return "<hr class='chat-divider'/>";
-    }
-
-    public static String renderTimestamp(String timestamp) {
-        String safeTimestamp = SwingHtmlUtils.escapeHtml(timestamp != null ? timestamp : "");
-        String template =
-                """
-				<div class="chat-timestamp">${timestamp}</div>
-				""";
-        return StringSubstitutor.replace(template, Map.of("timestamp", safeTimestamp));
-    }
-
-    public static String renderToolLog(String toolName, String output) {
-        return renderToolLog(toolName, output, true, null);
-    }
-
     public static String renderToolLog(
             String toolName, String output, boolean success, String error) {
         String header =

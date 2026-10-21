@@ -46,20 +46,14 @@ public class JexlToHtmlConverter {
         "throw",
         "NaN",
         "assert",
-        // Services
+                // Services
         "gitService",
         "buildToolService",
         "planService",
         "fileReadService",
         "fileEditorService",
-        "workflowService",
         "grepService",
         "repoMapPackerService",
-        "projectService",
-        "settingsService",
-        "promptService",
-        "toolService",
-        "envService",
         // Java API Keywords & Types
         "public",
         "private",

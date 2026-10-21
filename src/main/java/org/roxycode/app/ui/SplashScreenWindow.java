@@ -1,19 +1,10 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.AlphaComposite;
-import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
 import java.awt.Image;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.net.URL;
-import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -22,13 +13,11 @@ import javax.swing.JWindow;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** Theme-aware startup splash screen window. */
 public final class SplashScreenWindow extends JWindow {
     private static final long serialVersionUID = 1L;
-    private static final Logger log = LoggerFactory.getLogger(SplashScreenWindow.class);
+    private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
 
     private final JLabel statusLabel;
     private final JProgressBar progressBar;
@@ -41,7 +30,7 @@ public final class SplashScreenWindow extends JWindow {
     }
 
     private void initComponents() {
-        loadLogoImage();
+        logoImage = RoundedImagePanel.loadClasspathImage(LOGO_RESOURCE_PATH);
 
         JPanel rootPanel =
                 new JPanel(
@@ -56,7 +45,7 @@ public final class SplashScreenWindow extends JWindow {
         }
         rootPanel.setBorder(BorderFactory.createLineBorder(borderColor, 1));
 
-        JPanel logoPanel = createLogoPanel();
+        JPanel logoPanel = new RoundedImagePanel(logoImage, 80, 22);
 
         JLabel titleLabel = new JLabel("RoxyCode");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 20f));
@@ -82,103 +71,6 @@ public final class SplashScreenWindow extends JWindow {
         setSize(420, 240);
         setMinimumSize(new Dimension(420, 240));
         setLocationRelativeTo(null);
-    }
-
-    private void loadLogoImage() {
-        try {
-            URL url = getClass().getResource("/static/images/roxy.png");
-            if (url != null) {
-                logoImage = ImageIO.read(url);
-            }
-        } catch (IOException e) {
-            log.warn("Failed to load splash logo image: {}", e.getMessage());
-        }
-    }
-
-    private JPanel createLogoPanel() {
-        JPanel logoPanel =
-                new JPanel() {
-                    private static final long serialVersionUID = 1L;
-
-                    @Override
-                    protected void paintComponent(Graphics g) {
-                        super.paintComponent(g);
-                        Graphics2D g2 = (Graphics2D) g.create();
-                        try {
-                            g2.setRenderingHint(
-                                    RenderingHints.KEY_ANTIALIASING,
-                                    RenderingHints.VALUE_ANTIALIAS_ON);
-                            g2.setRenderingHint(
-                                    RenderingHints.KEY_INTERPOLATION,
-                                    RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-                            g2.setRenderingHint(
-                                    RenderingHints.KEY_RENDERING,
-                                    RenderingHints.VALUE_RENDER_QUALITY);
-
-                            int width = getWidth();
-                            int height = getHeight();
-                            int arc = 22;
-                            int inset = 2;
-
-                            if (logoImage != null) {
-                                BufferedImage buffer =
-                                        new BufferedImage(
-                                                width, height, BufferedImage.TYPE_INT_ARGB);
-                                Graphics2D gBuffer = buffer.createGraphics();
-                                try {
-                                    gBuffer.setRenderingHint(
-                                            RenderingHints.KEY_ANTIALIASING,
-                                            RenderingHints.VALUE_ANTIALIAS_ON);
-                                    gBuffer.setColor(Color.BLACK);
-                                    gBuffer.fillRoundRect(
-                                            inset,
-                                            inset,
-                                            width - (2 * inset),
-                                            height - (2 * inset),
-                                            arc,
-                                            arc);
-
-                                    gBuffer.setComposite(AlphaComposite.SrcIn);
-                                    gBuffer.drawImage(logoImage, 0, 0, width, height, null);
-                                } finally {
-                                    gBuffer.dispose();
-                                }
-                                g2.drawImage(buffer, 0, 0, null);
-                            } else {
-                                g2.setColor(UIManager.getColor("Component.accentColor"));
-                                if (g2.getColor() == null) {
-                                    g2.setColor(new Color(100, 100, 255));
-                                }
-                                g2.fillRoundRect(
-                                        inset,
-                                        inset,
-                                        width - (2 * inset),
-                                        height - (2 * inset),
-                                        arc,
-                                        arc);
-                            }
-
-                            Color borderColor = UIManager.getColor("Component.borderColor");
-                            if (borderColor == null) {
-                                borderColor = new Color(80, 80, 80);
-                            }
-                            g2.setColor(borderColor);
-                            g2.setStroke(new BasicStroke(1.5f));
-                            g2.drawRoundRect(
-                                    inset,
-                                    inset,
-                                    width - (2 * inset) - 1,
-                                    height - (2 * inset) - 1,
-                                    arc,
-                                    arc);
-                        } finally {
-                            g2.dispose();
-                        }
-                    }
-                };
-        logoPanel.setPreferredSize(new Dimension(80, 80));
-        logoPanel.setOpaque(false);
-        return logoPanel;
     }
 
     public void setStatus(String status) {

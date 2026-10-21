@@ -7,6 +7,13 @@ import org.junit.jupiter.api.Test;
 public class AppSettingsTest {
 
     @Test
+    void testDefaults() {
+        AppSettings settings = new AppSettings();
+        assertEquals("FlatLaf Light", settings.getTheme());
+        assertEquals("gemini-3.5-flash", settings.getGeminiModel());
+    }
+
+    @Test
     void testMaxAgentToolTurns() {
         AppSettings settings = new AppSettings();
         assertEquals(5, settings.getMaxAgentToolTurns());

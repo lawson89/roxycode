@@ -29,10 +29,9 @@ public class JexlServiceRegistry {
             AgentService ann =
                     AnnotationUtils.findAnnotation(service.getClass(), AgentService.class);
 
-            if (ann != null) {
+                        if (ann != null) {
                 String[] phases = ann.phases();
                 if (phases.length == 0) {
-                    filtered.put(entry.getKey(), service);
                     continue;
                 }
 

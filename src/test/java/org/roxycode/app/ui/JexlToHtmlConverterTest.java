@@ -70,12 +70,13 @@ public class JexlToHtmlConverterTest {
         assertTrue(html.contains("<span class='tk-rw'>planService</span>"));
     }
 
-    @Test
+        @Test
     public void testNewServiceHighlighting() {
-        String script = "fileReadService.readFile(); workflowService.status();";
+        String script = "fileReadService.readFile(); grepService.grep(); workflowService.status();";
         String html = JexlToHtmlConverter.convert(script);
         assertTrue(html.contains("<span class='tk-rw'>fileReadService</span>"));
-        assertTrue(html.contains("<span class='tk-rw'>workflowService</span>"));
+        assertTrue(html.contains("<span class='tk-rw'>grepService</span>"));
+        assertFalse(html.contains("<span class='tk-rw'>workflowService</span>"));
     }
 
     @Test

@@ -26,16 +26,9 @@ public class ProcessRunner {
     private static final Logger log = LoggerFactory.getLogger(ProcessRunner.class);
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
-    /** Result of executing an external process. */
-    public record ProcessResult(int exitCode, String output, String errorOutput, boolean timedOut) {
-        public ProcessResult(int exitCode, String output, boolean timedOut) {
-            this(exitCode, output, "", timedOut);
-        }
-    }
-
-    public static ProcessResult run(List<String> command, Path workingDir) throws IOException {
-        return run(command, workingDir, Map.of(), DEFAULT_TIMEOUT, true);
-    }
+        /** Result of executing an external process. */
+    public record ProcessResult(
+            int exitCode, String output, String errorOutput, boolean timedOut) {}
 
     public static ProcessResult run(
             List<String> command, Path workingDir, boolean redirectErrorStream) throws IOException {

@@ -51,22 +51,13 @@ public class AiService {
                         .build();
     }
 
-    public String chat(String message) {
+        public String chat(String message) {
         return chat(
                 TurnToolContext.DEFAULT_CONVERSATION_ID,
                 planService.getCurrentPhase(),
                 message,
                 null,
                 null);
-    }
-
-    public String chat(String message, List<byte[]> images) {
-        return chat(
-                TurnToolContext.DEFAULT_CONVERSATION_ID,
-                planService.getCurrentPhase(),
-                message,
-                null,
-                images);
     }
 
     public String chat(

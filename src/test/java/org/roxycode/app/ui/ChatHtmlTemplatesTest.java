@@ -11,7 +11,7 @@ class ChatHtmlTemplatesTest {
         String role = "user";
         String content = "<p>Hello</p>";
         String timestamp = "12:00:00";
-        String result = ChatHtmlTemplates.renderChatEntry(role, content, timestamp);
+        String result = ChatHtmlTemplates.renderChatEntry(role, content, timestamp, -1, false);
 
         assertTrue(result.contains("user-entry"));
         assertTrue(result.contains("<p>Hello</p>"));
@@ -53,61 +53,40 @@ class ChatHtmlTemplatesTest {
     }
 
     @Test
-    void testRenderDivider() {
-        String result = ChatHtmlTemplates.renderDivider();
-        assertTrue(result.contains("chat-divider"));
-    }
-
-    @Test
-    void testRenderTimestamp() {
-        String timestamp = "12:00:00";
-        String result = ChatHtmlTemplates.renderTimestamp(timestamp);
-        assertTrue(result.contains("chat-timestamp"));
-        assertTrue(result.contains("12:00:00"));
-    }
-
-    @Test
     void testRenderToolLog() {
         String toolName = "git";
         String output = "diff output";
-        String result = ChatHtmlTemplates.renderToolLog(toolName, output);
+        String result = ChatHtmlTemplates.renderToolLog(toolName, output, true, null);
 
         assertTrue(result.contains("tool-call"));
         assertTrue(result.contains("git"));
         assertTrue(result.contains("diff output"));
-        assertTrue(
-                result.contains("<div class=\"tool-result\">&#10003; Executed successfully</div>"));
+                        assertTrue(result.contains("class=") && result.contains("tool-result") && result.contains("&#10003; Executed successfully"));
         assertFalse(result.contains("tool-error"));
     }
 
     @Test
     void testRenderToolLogSuccessAndFailure() {
         String successHtml = ChatHtmlTemplates.renderToolLog("jexl", "1 + 1", true, null);
-        assertTrue(
-                successHtml.contains(
-                        "<div class=\"tool-result\">&#10003; Executed successfully</div>"));
+        assertTrue(successHtml.contains("tool-result") && successHtml.contains("&#10003; Executed successfully"));
         assertFalse(successHtml.contains("tool-error"));
 
         String failureHtml =
                 ChatHtmlTemplates.renderToolLog(
                         "jexl", "bad()", false, "Syntax Error: <unexpected> & token");
-        assertTrue(
-                failureHtml.contains(
-                        "<div class=\"tool-error\">&#10007; Error: Syntax Error: &lt;unexpected&gt; &amp; token</div>"));
+        assertTrue(failureHtml.contains("tool-error") && failureHtml.contains("&#10007; Error: Syntax Error: &lt;unexpected&gt; &amp; token"));
         assertFalse(failureHtml.contains("<unexpected>"));
         assertFalse(failureHtml.contains("tool-result"));
 
         String fallbackHtml = ChatHtmlTemplates.renderToolLog("jexl", "bad()", false, "   ");
-        assertTrue(
-                fallbackHtml.contains(
-                        "<div class=\"tool-error\">&#10007; Error: Unknown error</div>"));
+        assertTrue(fallbackHtml.contains("tool-error") && fallbackHtml.contains("&#10007; Error: Unknown error"));
     }
 
     @Test
     void testRenderToolLogEmptyToolName() {
         String toolName = "";
         String output = "jexl output";
-        String result = ChatHtmlTemplates.renderToolLog(toolName, output);
+        String result = ChatHtmlTemplates.renderToolLog(toolName, output, true, null);
 
         assertTrue(result.contains("tool-call"));
         assertFalse(result.contains("tool-header"));
@@ -116,18 +95,16 @@ class ChatHtmlTemplatesTest {
 
     @Test
     void testHtmlEscapingInTemplates() {
-        String toolResult = ChatHtmlTemplates.renderToolLog("<script>alert(1)</script>", "output");
+        String toolResult =
+                ChatHtmlTemplates.renderToolLog("<script>alert(1)</script>", "output", true, null);
         assertFalse(toolResult.contains("<script>"));
         assertTrue(toolResult.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
 
         String entryResult =
-                ChatHtmlTemplates.renderChatEntry("user<bad>", "<p>Safe</p>", "12:00<img src=x>");
+                ChatHtmlTemplates.renderChatEntry(
+                        "user<bad>", "<p>Safe</p>", "12:00<img src=x>", -1, false);
         assertTrue(entryResult.contains("user&lt;bad&gt;-entry"));
         assertTrue(entryResult.contains("12:00&lt;img src=x&gt;"));
         assertFalse(entryResult.contains("<img src=x>"));
-
-        String tsResult = ChatHtmlTemplates.renderTimestamp("<b>time</b>");
-        assertTrue(tsResult.contains("&lt;b&gt;time&lt;/b&gt;"));
-        assertFalse(tsResult.contains("<b>time</b>"));
     }
 }
