@@ -11,6 +11,9 @@ import org.kordamp.ikonli.swing.FontIcon;
 /** Styled navigation button for the sidebar. */
 public final class NavButton extends JButton {
     private static final long serialVersionUID = 1L;
+    private static final int VERTICAL_PADDING = 8;
+    private static final int HORIZONTAL_PADDING = 12;
+    private static final int STATUS_ICON_GAP = 8;
     private boolean busy;
     private boolean waitingApproval;
     private transient FontIcon statusIcon;
@@ -20,7 +23,12 @@ public final class NavButton extends JButton {
         setHorizontalAlignment(SwingConstants.LEFT);
         setFocusPainted(false);
         setContentAreaFilled(false);
-        setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+        setBorder(
+                BorderFactory.createEmptyBorder(
+                        VERTICAL_PADDING,
+                        HORIZONTAL_PADDING,
+                        VERTICAL_PADDING,
+                        HORIZONTAL_PADDING));
         putClientProperty(
                 FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         putClientProperty("JButton.arc", 8);
@@ -33,7 +41,6 @@ public final class NavButton extends JButton {
         }
         this.busy = busy;
         updateStatusIcon();
-        repaint();
     }
 
     public boolean isBusy() {
@@ -46,7 +53,6 @@ public final class NavButton extends JButton {
         }
         this.waitingApproval = waitingApproval;
         updateStatusIcon();
-        repaint();
     }
 
     public boolean isWaitingApproval() {
@@ -68,6 +74,15 @@ public final class NavButton extends JButton {
         } else {
             statusIcon = null;
         }
+        int rightInset =
+                statusIcon != null
+                        ? HORIZONTAL_PADDING + statusIcon.getIconWidth() + STATUS_ICON_GAP
+                        : HORIZONTAL_PADDING;
+        setBorder(
+                BorderFactory.createEmptyBorder(
+                        VERTICAL_PADDING, HORIZONTAL_PADDING, VERTICAL_PADDING, rightInset));
+        revalidate();
+        repaint();
     }
 
     @Override
@@ -122,7 +137,7 @@ public final class NavButton extends JButton {
             if (color != null) {
                 statusIcon.setIconColor(color);
             }
-            int x = getWidth() - statusIcon.getIconWidth() - 12;
+            int x = getWidth() - statusIcon.getIconWidth() - HORIZONTAL_PADDING;
             int y = (getHeight() - statusIcon.getIconHeight()) / 2;
             statusIcon.paintIcon(this, g, x, y);
         }

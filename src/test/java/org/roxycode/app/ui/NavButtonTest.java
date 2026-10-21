@@ -60,19 +60,30 @@ class NavButtonTest {
 
     @Test
     void testBusyAndWaitingApprovalStatusIconsAndPainting() {
-        NavButton btn = new NavButton("Feature Request", null);
-        btn.setSize(160, 32);
+        FontIcon leadIcon = FontIcon.of(Codicons.GIT_PULL_REQUEST, 16);
+        NavButton btn = new NavButton("Feature Request", leadIcon);
+        btn.setSize(195, 32);
 
         assertFalse(btn.isBusy());
         assertFalse(btn.isWaitingApproval());
         assertNull(btn.getStatusIcon());
+        assertEquals(12, btn.getBorder().getBorderInsets(btn).right);
+        int basePrefWidth = btn.getPreferredSize().width;
 
-        // Busy shows hourglass
+        // Busy shows hourglass and reserves right border space
         btn.setBusy(true);
         assertTrue(btn.isBusy());
         assertNotNull(btn.getStatusIcon());
         assertEquals(FontAwesomeSolid.HOURGLASS_HALF, btn.getStatusIcon().getIkon());
         assertEquals(13, btn.getStatusIcon().getIconSize());
+        int expectedBusyRightInset = 12 + btn.getStatusIcon().getIconWidth() + 8;
+        assertEquals(expectedBusyRightInset, btn.getBorder().getBorderInsets(btn).right);
+        assertTrue(
+                btn.getPreferredSize().width > basePrefWidth,
+                "Preferred width should increase when status icon is present");
+        assertTrue(
+                btn.getPreferredSize().width <= 195,
+                "Feature Request button with status icon should fit within 195px sidebar button width");
 
         // Busy takes precedence over waitingApproval
         btn.setWaitingApproval(true);
@@ -81,7 +92,7 @@ class NavButtonTest {
 
         java.awt.image.BufferedImage img =
                 new java.awt.image.BufferedImage(
-                        160, 32, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                        195, 32, java.awt.image.BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2 = img.createGraphics();
         assertDoesNotThrow(() -> btn.paintComponent(g2));
 
@@ -92,14 +103,19 @@ class NavButtonTest {
         assertNotNull(btn.getStatusIcon());
         assertEquals(Codicons.QUESTION, btn.getStatusIcon().getIkon());
         assertEquals(14, btn.getStatusIcon().getIconSize());
+        int expectedApprovalRightInset = 12 + btn.getStatusIcon().getIconWidth() + 8;
+        assertEquals(expectedApprovalRightInset, btn.getBorder().getBorderInsets(btn).right);
+        assertTrue(btn.getPreferredSize().width > basePrefWidth);
 
         btn.setSelected(true);
         assertDoesNotThrow(() -> btn.paintComponent(g2));
         g2.dispose();
 
-        // Clearing waitingApproval removes trailing icon
+        // Clearing waitingApproval removes trailing icon and resets right inset
         btn.setWaitingApproval(false);
         assertFalse(btn.isWaitingApproval());
         assertNull(btn.getStatusIcon());
+        assertEquals(12, btn.getBorder().getBorderInsets(btn).right);
+        assertEquals(basePrefWidth, btn.getPreferredSize().width);
     }
 }

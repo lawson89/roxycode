@@ -130,7 +130,7 @@ public final class MainFrame extends JFrame {
             SettingsPanel settingsPanel,
             BuildConfigPanel buildConfigPanel,
             ContextManagerPanel contextManagerPanel) {
-        setLayout(new MigLayout("fill, insets 0", "[200!]0[fill, grow]", "[fill, grow]"));
+        setLayout(new MigLayout("fill, insets 0", "[220!]0[fill, grow]", "[fill, grow]"));
 
         // Sidebar
         SidebarPanel sidebar = new SidebarPanel(this::showCard);

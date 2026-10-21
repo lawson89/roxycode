@@ -30,7 +30,7 @@ public final class SidebarPanel extends JPanel {
     private void initComponents() {
         setLayout(
                 new MigLayout(
-                        "wrap, fillx, insets 15",
+                        "wrap, fillx, insets 15 12 15 12",
                         "[fill, grow]",
                         "[]20[]5[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
 
