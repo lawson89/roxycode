@@ -254,7 +254,8 @@ public class ChatPanelTest {
                         .anyMatch(m -> m.isAnnotationPresent(EventListener.class)),
                 "ExploreChatPanel should not declare task workflow @EventListener methods");
 
-        // FeatureChatPanel should declare @EventListener for WorkflowTransitionEvent, PhaseChangedEvent, PlanUpdatedEvent
+        // FeatureChatPanel should declare @EventListener for WorkflowTransitionEvent,
+        // PhaseChangedEvent, PlanUpdatedEvent
         assertTrue(
                 FeatureChatPanel.class
                         .getDeclaredMethod("onWorkflowTransition", WorkflowTransitionEvent.class)

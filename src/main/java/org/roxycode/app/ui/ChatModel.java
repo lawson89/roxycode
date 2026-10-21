@@ -21,8 +21,7 @@ public final class ChatModel {
     public static final String QA_SESSION_PREFIX = "qa";
     public static final String TASK_SESSION_PREFIX = "task";
     public static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
-    public static final String QA_CONVERSATION_ID =
-            QA_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
+    public static final String QA_CONVERSATION_ID = QA_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
     public static final String TASK_CONVERSATION_ID =
             TASK_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
 

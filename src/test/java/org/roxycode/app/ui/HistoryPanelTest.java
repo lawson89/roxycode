@@ -28,10 +28,8 @@ public class HistoryPanelTest {
 
         // Events for matching conversationId should trigger refresh
         qaHistory.onUserMessage(new UserMessageEvent("qa:default", "user", "hi"));
-        qaHistory.onAgentTurnComplete(
-                new AgentTurnCompleteEvent("qa:default", "Roxy", 1, "done"));
-        qaHistory.onToolExecution(
-                new ToolExecutionEvent("qa:default", "1+1", 2, true, null));
+        qaHistory.onAgentTurnComplete(new AgentTurnCompleteEvent("qa:default", "Roxy", 1, "done"));
+        qaHistory.onToolExecution(new ToolExecutionEvent("qa:default", "1+1", 2, true, null));
         // Events for different conversationId should be ignored
         qaHistory.onUserMessage(new UserMessageEvent("task:default", "user", "other"));
         SwingUtilities.invokeAndWait(() -> {});

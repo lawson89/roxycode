@@ -78,11 +78,9 @@ class ChatControllerTest {
         FeatureChatPanel panel =
                 new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
 
+        panel.onToolExecution(new ToolExecutionEvent("task:default", "1 + 1", 2, true, null));
         panel.onToolExecution(
-                new ToolExecutionEvent("task:default", "1 + 1", 2, true, null));
-        panel.onToolExecution(
-                new ToolExecutionEvent(
-                        "task:default", "if (", null, false, "Syntax Error: <bad>"));
+                new ToolExecutionEvent("task:default", "if (", null, false, "Syntax Error: <bad>"));
         // Event for another conversation should be ignored
         panel.onToolExecution(
                 new ToolExecutionEvent("qa:default", "ignoredCall()", null, true, null));
@@ -107,7 +105,6 @@ class ChatControllerTest {
 
         panel.getController().sendMessage("Hello mentor");
 
-        verify(publisher)
-                .publishEvent(new UserMessageEvent("qa:default", "user", "Hello mentor"));
+        verify(publisher).publishEvent(new UserMessageEvent("qa:default", "user", "Hello mentor"));
     }
 }

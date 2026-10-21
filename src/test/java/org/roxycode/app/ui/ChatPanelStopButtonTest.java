@@ -30,14 +30,7 @@ public class ChatPanelStopButtonTest {
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService,
-                        planService,
-                        publisher,
-                        chatMemory,
-                        "test",
-                        null,
-                        true,
-                        null);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null);
         JButton stopButton = chatPanel.getStopButton();
         JButton sendButton = chatPanel.getSendButton();
         JTextArea inputArea = chatPanel.getInputArea();

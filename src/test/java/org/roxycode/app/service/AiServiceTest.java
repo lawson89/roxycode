@@ -87,7 +87,9 @@ class AiServiceTest {
         lenient()
                 .when(
                         chatClientBuilder.defaultAdvisors(
-                                any(org.springframework.ai.chat.client.advisor.api.Advisor[].class)))
+                                any(
+                                        org.springframework.ai.chat.client.advisor.api.Advisor[]
+                                                .class)))
                 .thenReturn(chatClientBuilder);
         lenient().when(chatClientBuilder.build()).thenReturn(chatClient);
 
