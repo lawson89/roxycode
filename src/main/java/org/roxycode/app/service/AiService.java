@@ -51,7 +51,7 @@ public class AiService {
                         .build();
     }
 
-        public String chat(String message) {
+    public String chat(String message) {
         return chat(
                 TurnToolContext.DEFAULT_CONVERSATION_ID,
                 planService.getCurrentPhase(),

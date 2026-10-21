@@ -6,7 +6,6 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
@@ -35,6 +34,7 @@ public final class TaskWorkspacePanel extends JPanel {
     private final GitChangesPanel gitChangesPanel;
     private final FeatureChatPanel taskChatPanel;
     private final JTabbedPane taskTabs;
+    private final JPanel topBar;
     private final JLabel planLabel;
     private final JPanel progressTracker;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
@@ -51,11 +51,9 @@ public final class TaskWorkspacePanel extends JPanel {
         this.gitChangesPanel = gitChangesPanel;
         this.taskChatPanel = taskChatPanel;
 
-        JPanel taskHeaderBar =
-                new JPanel(new MigLayout("insets 6 20 6 20, fillx", "[grow]", LAYOUT_CENTER));
-        taskHeaderBar.setBorder(
-                BorderFactory.createMatteBorder(
-                        0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
+        topBar =
+                new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
+        topBar.setOpaque(false);
 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 4", "[]", LAYOUT_CENTER));
         progressTracker.setOpaque(false);
@@ -65,16 +63,20 @@ public final class TaskWorkspacePanel extends JPanel {
             }
             indicators.add(new WorkflowPhaseIndicator(phase, "font: bold -1"));
         }
-        taskHeaderBar.add(progressTracker, "split 2, center");
+        topBar.add(progressTracker, "split 2, right, center");
 
         planLabel = new JLabel();
         planLabel.putClientProperty(
                 FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
-        taskHeaderBar.add(planLabel, "gapleft 16, center, hidemode 3");
+        topBar.add(planLabel, "gapleft 16, right, center, hidemode 3");
 
         updateActivePhase(planService.getCurrentPhase());
 
         this.taskTabs = new JTabbedPane();
+        taskTabs.putClientProperty(
+                FlatClientProperties.TABBED_PANE_TAB_TYPE,
+                FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
+        taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, topBar);
         taskTabs.addTab("Chat", taskChatPanel);
         taskTabs.addTab("Plan", planPanel);
         taskTabs.addTab("Git", gitChangesPanel);
@@ -89,7 +91,6 @@ public final class TaskWorkspacePanel extends JPanel {
                     }
                 });
 
-        add(taskHeaderBar, BorderLayout.NORTH);
         add(taskTabs, BorderLayout.CENTER);
     }
 
@@ -185,6 +186,10 @@ public final class TaskWorkspacePanel extends JPanel {
 
     JTabbedPane getTaskTabs() {
         return taskTabs;
+    }
+
+    JPanel getTopBar() {
+        return topBar;
     }
 
     ChatPanel getTaskChatPanel() {

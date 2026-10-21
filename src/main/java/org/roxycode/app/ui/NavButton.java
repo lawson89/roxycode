@@ -23,7 +23,7 @@ public final class NavButton extends JButton {
         setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
         putClientProperty(
                 FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-        putClientProperty("JButton.arc", 6);
+        putClientProperty("JButton.arc", 8);
         setIconTextGap(10);
     }
 

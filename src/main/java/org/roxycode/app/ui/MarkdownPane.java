@@ -43,7 +43,7 @@ public final class MarkdownPane extends JTextPane {
         setOpaque(true);
         putClientProperty("JEditorPane.honorDisplayProperties", true);
 
-                parser = SwingHtmlUtils.markdownParser();
+        parser = SwingHtmlUtils.markdownParser();
         renderer = SwingHtmlUtils.markdownRenderer();
 
         addHyperlinkListener(
@@ -96,7 +96,7 @@ public final class MarkdownPane extends JTextPane {
         renderAll(true);
     }
 
-        public void appendToolLog(String toolName, String output, boolean success, String error) {
+    public void appendToolLog(String toolName, String output, boolean success, String error) {
         String safeOutput = output != null ? output : "";
         messages.add(
                 new Message(

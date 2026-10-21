@@ -141,7 +141,7 @@ public class FileEditorService {
                     "Invalid line range: " + startLine + " to " + endLine);
         }
 
-                List<String> newLines = new ArrayList<>(lines);
+        List<String> newLines = new ArrayList<>(lines);
         newLines.subList(startLine - 1, endLine).clear();
         newLines.addAll(startLine - 1, splitLines(replacementText));
 

@@ -43,7 +43,7 @@ public class ChatPanel extends JPanel {
     private final transient ChatModel model;
     private final transient ChatController controller;
 
-        private final MarkdownPane outputArea;
+    private final MarkdownPane outputArea;
     private final JTextArea inputArea;
     private final JButton sendButton;
     private final JButton stopButton;
@@ -147,10 +147,10 @@ public class ChatPanel extends JPanel {
         inlineActionPanel.add(approveButton);
         inlineActionPanel.add(rejectButton);
 
-        outputScrollPane = new JScrollPane(outputArea);
+                outputScrollPane = new JScrollPane(outputArea);
         outputScrollPane.setHorizontalScrollBarPolicy(
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        outputScrollPane.setBorder(BorderFactory.createTitledBorder("Roxy"));
+        updateOutputScrollPaneBorder();
 
         // Autoscroll to bottom
         outputArea.addComponentListener(
@@ -165,7 +165,7 @@ public class ChatPanel extends JPanel {
                     }
                 });
 
-                Component topComponent;
+        Component topComponent;
         if (isTaskMode) {
             JPanel taskOutputPanel = new JPanel(new BorderLayout());
             taskOutputPanel.add(outputScrollPane, BorderLayout.CENTER);
@@ -175,13 +175,19 @@ public class ChatPanel extends JPanel {
             topComponent = outputScrollPane;
         }
 
-        // Input section
+                // Input section
         JPanel inputSection =
-                new JPanel(new MigLayout("fill, insets 0", "[grow, fill][][][]", "[grow, fill]"));
+                new JPanel(
+                        new MigLayout(
+                                "fill, insets 6 10 10 10", "[grow, fill][][][]", "[grow, fill]"));
 
         inputArea = new JTextArea();
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
+        inputArea.setMargin(new Insets(8, 10, 8, 10));
+        inputArea.putClientProperty(
+                FlatClientProperties.PLACEHOLDER_TEXT,
+                "Ask Roxy... (Enter to send, Shift+Enter for new line)");
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
 
         JPanel inputAreaContainer = new JPanel(new BorderLayout());
@@ -190,18 +196,23 @@ public class ChatPanel extends JPanel {
         inputAreaContainer.add(inputScrollPane, BorderLayout.CENTER);
 
         sendButton = new JButton("Send", FontIcon.of(Codicons.CHEVRON_RIGHT, 16));
+        sendButton.setMargin(new Insets(6, 14, 6, 14));
         sendButton.putClientProperty(
                 FlatClientProperties.STYLE,
-                "arc: 999; background: $Component.accentColor; foreground: $List.selectionForeground");
+                "arc: 8; background: $Component.accentColor; foreground: $List.selectionForeground");
 
         stopButton = new JButton("Stop", FontIcon.of(Codicons.DEBUG_STOP, 16));
         stopButton.setEnabled(false);
-        stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 999");
+        stopButton.setMargin(new Insets(6, 14, 6, 14));
+        stopButton.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
         stopButton.addActionListener(e -> controller.stopTurn());
 
         resetSessionButton = new JButton("Reset Session", FontIcon.of(Codicons.REFRESH, 16));
+        resetSessionButton.setMargin(new Insets(4, 10, 4, 10));
         resetSessionButton.putClientProperty(
-                FlatClientProperties.STYLE, "arc: 999; foreground: $Label.disabledForeground");
+                FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        resetSessionButton.putClientProperty(
+                FlatClientProperties.STYLE, "arc: 8; foreground: $Label.disabledForeground");
         resetSessionButton.addActionListener(e -> controller.resetSession());
 
         turnLabel = new JLabel();
@@ -223,7 +234,7 @@ public class ChatPanel extends JPanel {
                 JSplitPane splitPane =
                 new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
         splitPane.setResizeWeight(0.8);
-        splitPane.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        splitPane.setBorder(BorderFactory.createEmptyBorder());
 
         add(splitPane, BorderLayout.CENTER);
 
@@ -232,6 +243,20 @@ public class ChatPanel extends JPanel {
         setupInputContextMenu();
         setupUndoRedo();
         setupKeyboardShortcuts();
+    }
+
+        @Override
+    public void updateUI() {
+        super.updateUI();
+        if (outputScrollPane != null) {
+            updateOutputScrollPaneBorder();
+        }
+    }
+
+    private void updateOutputScrollPaneBorder() {
+        outputScrollPane.setBorder(
+                BorderFactory.createMatteBorder(
+                        0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
     }
 
     @EventListener
@@ -274,7 +299,7 @@ public class ChatPanel extends JPanel {
         outputArea.appendMessage(role, content);
     }
 
-        void appendToolLog(String toolName, String output, boolean success, String error) {
+    void appendToolLog(String toolName, String output, boolean success, String error) {
         outputArea.appendToolLog(toolName, output, success, error);
     }
 

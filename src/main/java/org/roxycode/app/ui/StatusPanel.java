@@ -19,11 +19,9 @@ public final class StatusPanel extends JPanel {
         this.envService = envService;
         setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push []", "center"));
 
-        // Use theme-aware styling
+                // Use theme-aware styling
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
-        setBorder(
-                BorderFactory.createMatteBorder(
-                        1, 0, 0, 0, UIManager.getColor("Component.borderColor")));
+        updateBorder();
 
         JLabel osLabel = new JLabel(envService.getOsName());
         osLabel.setIcon(envService.getOsIcon());
@@ -47,6 +45,18 @@ public final class StatusPanel extends JPanel {
         // Update memory usage every 5 seconds
         Timer timer = new Timer(5000, e -> updateStats());
         timer.start();
+    }
+
+        @Override
+    public void updateUI() {
+        super.updateUI();
+        updateBorder();
+    }
+
+    private void updateBorder() {
+        setBorder(
+                BorderFactory.createMatteBorder(
+                        1, 0, 0, 0, UIManager.getColor("Component.borderColor")));
     }
 
     private void updateStats() {

@@ -114,9 +114,14 @@ class HeaderPanelTest {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
-        net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
+                net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
         Object constraints = layout.getLayoutConstraints();
         assertTrue(constraints.toString().contains("insets 2 15 2 15"));
+        header.updateUI();
+        assertEquals(
+                new java.awt.Insets(0, 0, 1, 0),
+                header.getBorder().getBorderInsets(header),
+                "HeaderPanel should maintain a 1px bottom MatteBorder across updateUI()");
 
         JButton openButton =
                 (JButton)

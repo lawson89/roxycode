@@ -177,4 +177,82 @@ class ReturnDirectToolCallingManagerTest {
                                 false,
                                 "Plan missing"));
     }
+
+    @Test
+    void testParallelToolCallsWithEmptyIdsLogMatchingArgumentsPerTool() {
+        ToolCallingChatOptions options =
+                ToolCallingChatOptions.builder()
+                        .toolContext(
+                                new TurnToolContext(
+                                                "task:default",
+                                                WorkflowPhase.CODE,
+                                                new AtomicInteger(0))
+                                        .toMap())
+                        .build();
+        Prompt prompt = new Prompt(List.of(new UserMessage("Complete and review")), options);
+        AssistantMessage.ToolCall tcMark =
+                new AssistantMessage.ToolCall(
+                        "",
+                        "function",
+                        "markStepsCompleted",
+                        """
+                        {"indices":[3,4]}""");
+        AssistantMessage.ToolCall tcReview =
+                new AssistantMessage.ToolCall(
+                        "",
+                        "function",
+                        "requestReview",
+                        """
+                        {"reason":"All steps verified"}""");
+        AssistantMessage assistantMsg =
+                AssistantMessage.builder().content("").toolCalls(List.of(tcMark, tcReview)).build();
+        ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
+
+        ToolExecutionResult parallelToolResult =
+                ToolExecutionResult.builder()
+                        .conversationHistory(
+                                List.of(
+                                        new UserMessage("Complete and review"),
+                                        assistantMsg,
+                                        ToolResponseMessage.builder()
+                                                .responses(
+                                                        List.of(
+                                                                new ToolResponseMessage
+                                                                        .ToolResponse(
+                                                                        "",
+                                                                        "markStepsCompleted",
+                                                                        "null"),
+                                                                new ToolResponseMessage
+                                                                        .ToolResponse(
+                                                                        "",
+                                                                        "requestReview",
+                                                                        """
+                                                                        "Transitioned to REVIEW"\
+                                                                        """)))
+                                                .build()))
+                        .returnDirect(true)
+                        .build();
+        doReturn(parallelToolResult).when(delegate).executeToolCalls(prompt, chatResponse);
+
+        ToolExecutionResult result = manager.executeToolCalls(prompt, chatResponse);
+        assertTrue(result.returnDirect());
+        verify(eventPublisher)
+                .publishEvent(
+                        new ToolExecutionEvent(
+                                "task:default",
+                                """
+                                planService.markStepsCompleted({"indices":[3,4]})""",
+                                "null",
+                                true,
+                                null));
+        verify(eventPublisher)
+                .publishEvent(
+                        new ToolExecutionEvent(
+                                "task:default",
+                                """
+                                planService.requestReview({"reason":"All steps verified"})""",
+                                "Transitioned to REVIEW",
+                                true,
+                                null));
+    }
 }

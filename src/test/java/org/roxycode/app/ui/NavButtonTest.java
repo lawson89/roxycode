@@ -41,7 +41,7 @@ class NavButtonTest {
     @Test
     void testArcProperty() {
         NavButton btn = new NavButton("Test", null);
-        assertEquals(6, btn.getClientProperty("JButton.arc"));
+        assertEquals(8, btn.getClientProperty("JButton.arc"));
     }
 
     @Test

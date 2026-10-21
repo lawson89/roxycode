@@ -236,7 +236,7 @@ public final class ChatController implements AutoCloseable {
         long turnId = turnSequence.incrementAndGet();
         activeTurnId = turnId;
 
-                view.setLoading(true);
+        view.setLoading(true);
         model.setCurrentTurn(0);
         view.updateTurnLabel();
 

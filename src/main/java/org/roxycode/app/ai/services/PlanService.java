@@ -168,7 +168,7 @@ public class PlanService {
     /** Marks a specific technical implementation step as completed using its 0-based index. */
     @Tool(
             description =
-                    "Marks a specific technical implementation step as completed using its 0-based index.")
+                    "Marks a specific technical implementation step as completed using its 0-based index. Call this immediately after a step is verified rather than deferring to the end of the phase.")
     public synchronized void markStepCompleted(
             @ToolParam(
                             description =
@@ -181,7 +181,7 @@ public class PlanService {
     /** Marks multiple technical implementation steps as completed using their 0-based indices. */
     @Tool(
             description =
-                    "Marks multiple technical implementation steps as completed using their 0-based indices.")
+                    "Marks multiple technical implementation steps as completed using their 0-based indices. Call this immediately after a batch of steps is verified rather than deferring to the end of the phase.")
     public synchronized void markStepsCompleted(
             @ToolParam(description = "List of 0-based step indices to mark as completed.")
                     List<Integer> indices) {

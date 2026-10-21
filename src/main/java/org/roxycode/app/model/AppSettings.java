@@ -2,7 +2,7 @@ package org.roxycode.app.model;
 
 /** Model representing application settings. */
 public class AppSettings {
-        public static final String DEFAULT_THEME = "FlatLaf Light";
+    public static final String DEFAULT_THEME = "FlatLaf Light";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 
     private String theme = DEFAULT_THEME;

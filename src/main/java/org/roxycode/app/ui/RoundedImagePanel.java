@@ -85,8 +85,7 @@ final class RoundedImagePanel extends JPanel {
             } else {
                 Color accentColor = UIManager.getColor("Component.accentColor");
                 g2.setColor(accentColor != null ? accentColor : new Color(100, 100, 255));
-                g2.fillRoundRect(
-                        INSET, INSET, width - (2 * INSET), height - (2 * INSET), arc, arc);
+                g2.fillRoundRect(INSET, INSET, width - (2 * INSET), height - (2 * INSET), arc, arc);
             }
 
             Color borderColor = UIManager.getColor("Component.borderColor");

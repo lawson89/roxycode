@@ -217,6 +217,15 @@ public class ChatPanelTest {
                 scrollPane.getHorizontalScrollBarPolicy(),
                 "Horizontal scrollbar policy should be HORIZONTAL_SCROLLBAR_NEVER");
 
+                assertInstanceOf(
+                javax.swing.border.MatteBorder.class,
+                scrollPane.getBorder(),
+                "outputScrollPane should use a bottom-only MatteBorder");
+        assertEquals(
+                new java.awt.Insets(0, 0, 1, 0),
+                scrollPane.getBorder().getBorderInsets(scrollPane),
+                "outputScrollPane border insets should be bottom-only (0, 0, 1, 0)");
+
         java.awt.Container outputWrapper = scrollPane.getParent();
         assertNotNull(outputWrapper, "outputScrollPane should have an outputWrapper parent");
         assertTrue(
@@ -226,6 +235,24 @@ public class ChatPanelTest {
         assertNotNull(
                 layout.getLayoutComponent(java.awt.BorderLayout.SOUTH),
                 "inlineActionPanel should be attached at BorderLayout.SOUTH of outputWrapper in task mode");
+
+        JSplitPane splitPane =
+                (JSplitPane)
+                        javax.swing.SwingUtilities.getAncestorOfClass(
+                                JSplitPane.class, scrollPane);
+        assertNotNull(splitPane, "outputScrollPane should be inside JSplitPane");
+        assertEquals(
+                new java.awt.Insets(0, 0, 0, 0),
+                splitPane.getInsets(),
+                "JSplitPane should have zero outer insets so it sits flush with sidebar and tab bar");
+
+        javax.swing.JPanel inputSection = (javax.swing.JPanel) splitPane.getBottomComponent();
+        assertInstanceOf(net.miginfocom.swing.MigLayout.class, inputSection.getLayout());
+        net.miginfocom.swing.MigLayout inputLayout =
+                (net.miginfocom.swing.MigLayout) inputSection.getLayout();
+        assertTrue(
+                inputLayout.getLayoutConstraints().toString().contains("insets 6 10 10 10"),
+                "inputSection should have internal padding insets 6 10 10 10");
     }
 
     @Test

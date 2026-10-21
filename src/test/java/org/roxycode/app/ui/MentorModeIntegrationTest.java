@@ -89,8 +89,7 @@ class MentorModeIntegrationTest {
         JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
         SystemToolsPanel systemToolsPanel = new SystemToolsPanel(toolService);
         SettingsPanel settingsPanel = new SettingsPanel(settingsService);
-                BuildConfigPanel buildConfigPanel =
-                new BuildConfigPanel(buildToolService, settingsService);
+        BuildConfigPanel buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService);
         ContextManagerPanel contextManagerPanel = new ContextManagerPanel(promptService);
 
         mainFrame =
@@ -122,27 +121,33 @@ class MentorModeIntegrationTest {
                 "Main header bar should have a compact height constraint of h 36!");
 
         JTabbedPane qaTabs = qaWorkspacePanel.getQaTabs();
-        JPanel qaHeaderBar = (JPanel) qaTabs.getParent().getComponent(0);
+        assertEquals(
+                com.formdev.flatlaf.FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
+                qaTabs.getClientProperty(
+                        com.formdev.flatlaf.FlatClientProperties.TABBED_PANE_TAB_TYPE));
+        JPanel qaHeaderBar =
+                (JPanel)
+                        qaTabs.getClientProperty(
+                                com.formdev.flatlaf.FlatClientProperties
+                                        .TABBED_PANE_TRAILING_COMPONENT);
+        assertNotNull(qaHeaderBar);
+        assertSame(qaWorkspacePanel.getQaHeaderBar(), qaHeaderBar);
         JLabel mentorModeLabel = (JLabel) qaHeaderBar.getComponent(0);
+        assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
 
         JPanel progressTracker = taskWorkspacePanel.getProgressTracker();
         JLabel planLabel = taskWorkspacePanel.getPlanLabel();
         JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
-
-        // Verify mentorModeLabel is inside the QA view wrapper (same parent container
-        // as qaTabs)
-        Container qaViewPanel = qaTabs.getParent();
-        assertNotNull(qaViewPanel);
-        assertSame(qaViewPanel, mentorModeLabel.getParent().getParent());
-        assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
-
-        // Verify progressTracker and planLabel are inside the Task view wrapper (same
-        // parent container
-        // as taskTabs)
-        Container taskViewPanel = taskTabs.getParent();
-        assertNotNull(taskViewPanel);
+        assertEquals(
+                com.formdev.flatlaf.FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
+                taskTabs.getClientProperty(
+                        com.formdev.flatlaf.FlatClientProperties.TABBED_PANE_TAB_TYPE));
         Container taskHeaderBar = progressTracker.getParent();
-        assertSame(taskViewPanel, taskHeaderBar.getParent());
+        assertSame(
+                taskHeaderBar,
+                taskTabs.getClientProperty(
+                        com.formdev.flatlaf.FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT));
+        assertSame(taskWorkspacePanel.getTopBar(), taskHeaderBar);
         assertSame(
                 taskHeaderBar,
                 planLabel.getParent(),

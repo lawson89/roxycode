@@ -10,7 +10,7 @@ public class ChatHtmlTemplates {
     private static final String ROLE_USER = "user";
     private static final String ROLE_SYSTEM = "system";
 
-        public static String renderChatEntry(
+    public static String renderChatEntry(
             String role, String content, String timestamp, int messageIndex, boolean copied) {
         String safeRole = SwingHtmlUtils.escapeHtml(role != null ? role : "");
         String entryClass = safeRole + "-entry";
@@ -19,14 +19,11 @@ public class ChatHtmlTemplates {
 
         String indicator = "&nbsp;";
         if (ROLE_AI.equals(role)) {
-            indicator =
-                    "<span style='font-family: monospace; color: #888888; font-size: 10px;'>ROXY /\\_/\\</span>";
+            indicator = "<span class='role-ai'>ROXY /\\_/\\</span>";
         } else if (ROLE_USER.equals(role)) {
-            indicator =
-                    "<span style='font-family: monospace; color: #888888; font-size: 10px;'>USER</span>";
+            indicator = "<span class='role-user'>USER</span>";
         } else if (ROLE_SYSTEM.equals(role)) {
-            indicator =
-                    "<span style='font-family: monospace; color: #888888; font-size: 10px;'>SYSTEM</span>";
+            indicator = "<span class='role-system'>SYSTEM</span>";
         }
 
         String actionCell = "";
@@ -49,11 +46,11 @@ public class ChatHtmlTemplates {
 				        <td class="message-body">
 				            <table width="100%" cellpadding="0" cellspacing="0" border="0">
 				                <tr>
-				                    <td align="left" valign="middle"><span class="timestamp">${timestamp}</span>&nbsp;&nbsp;${indicator}</td>
+				                    <td align="left" valign="middle">${indicator}&nbsp;&nbsp;<span class="timestamp">${timestamp}</span></td>
 				                    ${actionCell}
 				                </tr>
 				            </table>
-				            <div class="content">${content}</div>
+				            <div class="content" style="margin-top: 4px;">${content}</div>
 				        </td>
 				    </tr>
 				</table>
@@ -79,6 +76,7 @@ public class ChatHtmlTemplates {
 
         return StringSubstitutor.replace(template, values);
     }
+
     public static String renderToolLog(
             String toolName, String output, boolean success, String error) {
         String header =

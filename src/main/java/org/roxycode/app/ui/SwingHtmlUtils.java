@@ -33,7 +33,7 @@ import javax.swing.text.html.StyleSheet;
  */
 public final class SwingHtmlUtils {
 
-        private static final DataHolder FLEXMARK_OPTIONS =
+    private static final DataHolder FLEXMARK_OPTIONS =
             new MutableDataSet()
                     .set(
                             Parser.EXTENSIONS,

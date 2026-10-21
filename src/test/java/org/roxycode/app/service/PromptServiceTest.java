@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,7 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.ImplementationPlan;
 
 @ExtendWith(MockitoExtension.class)
 class PromptServiceTest {
@@ -226,5 +228,35 @@ class PromptServiceTest {
         assertTrue(fullSystemPrompt.contains("REPO MAP CONTENT"));
         assertTrue(fullSystemPrompt.contains(session));
         assertTrue(fullSystemPrompt.contains("EXTRA INSTRUCTIONS"));
+        assertFalse(session.contains("## CURRENT PLAN PROGRESS"));
+    }
+
+    @Test
+    void testGetSessionContextIncludesCurrentPlanProgressWithZeroBasedIndices() {
+        when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
+        when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
+        when(gitService.getStatus()).thenReturn("");
+
+        ImplementationPlan plan =
+                new ImplementationPlan(
+                        "Test Plan",
+                        "Goal",
+                        List.of("Req 1"),
+                        List.of(
+                                new ImplementationPlan.TechStep("Update prompts", true),
+                                new ImplementationPlan.TechStep("Update PlanService", false),
+                                new ImplementationPlan.TechStep("Update PromptService", false)),
+                        true,
+                        null,
+                        null,
+                        null,
+                        null);
+        when(planService.getCurrentPlan()).thenReturn(plan);
+
+        String session = promptService.getSessionContext(WorkflowPhase.CODE);
+        assertTrue(session.contains("## CURRENT PLAN PROGRESS"));
+        assertTrue(session.contains("- [x] 0. Update prompts"));
+        assertTrue(session.contains("- [ ] 1. Update PlanService"));
+        assertTrue(session.contains("- [ ] 2. Update PromptService"));
     }
 }

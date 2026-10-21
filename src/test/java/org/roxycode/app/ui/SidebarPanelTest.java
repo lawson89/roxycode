@@ -59,16 +59,17 @@ class SidebarPanelTest {
         for (Component c : brandingPanel.getComponents()) {
             if (c instanceof JPanel) {
                 Dimension pref = c.getPreferredSize();
-                if (pref.width == 128 && pref.height == 128) {
+                if (pref.width == 88 && pref.height == 88) {
                     foundLogoPanel = true;
-                    c.setSize(128, 128);
-                                                            BufferedImage img = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
+                    c.setSize(88, 88);
+                    BufferedImage img = new BufferedImage(88, 88, BufferedImage.TYPE_INT_ARGB);
                     Graphics2D g2 = img.createGraphics();
                     assertInstanceOf(RoundedImagePanel.class, c);
                     RoundedImagePanel rounded = (RoundedImagePanel) c;
                     assertDoesNotThrow(() -> rounded.paintComponent(g2));
                     BufferedImage firstCached = rounded.getCachedBuffer();
-                    assertNotNull(firstCached, "RoundedImagePanel should cache scaled BufferedImage");
+                    assertNotNull(
+                            firstCached, "RoundedImagePanel should cache scaled BufferedImage");
                     assertDoesNotThrow(() -> rounded.paintComponent(g2));
                     assertSame(
                             firstCached,
@@ -91,7 +92,8 @@ class SidebarPanelTest {
             }
         }
 
-        assertTrue(foundLogoPanel, "Should have a 128x128 logo panel in branding header");
+        assertTrue(foundLogoPanel, "Should have an 88x88 logo panel in branding header");
+        assertNotNull(sidebar.getBorder(), "Sidebar should have a right separator border");
         assertTrue(foundTitleLabel, "Should have 'RoxyCode' title label in branding header");
         assertEquals(
                 1,

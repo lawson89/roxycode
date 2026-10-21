@@ -32,7 +32,7 @@ public final class BuildConfigPanel extends JPanel {
     private final JLabel statusLabel;
     private final Timer statusTimer;
 
-        public BuildConfigPanel(
+    public BuildConfigPanel(
             GenericBuildToolService buildToolService, SettingsService settingsService) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;

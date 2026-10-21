@@ -52,7 +52,7 @@ public class ProjectCacheMetaService {
         }
     }
 
-        private void migrateLegacyFiles() {
+    private void migrateLegacyFiles() {
         if (!projectService.hasActiveProject()) return;
         Path root = projectService.getCurrentProjectRoot();
         migrateFileIfNeeded(root.resolve(LEGACY_CACHE_FILE), root.resolve(CACHE_FILE));

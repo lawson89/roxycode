@@ -26,7 +26,7 @@ public class ProcessRunner {
     private static final Logger log = LoggerFactory.getLogger(ProcessRunner.class);
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
-        /** Result of executing an external process. */
+    /** Result of executing an external process. */
     public record ProcessResult(
             int exitCode, String output, String errorOutput, boolean timedOut) {}
 

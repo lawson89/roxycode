@@ -15,7 +15,7 @@ public record ImplementationPlan(
         List<LogEntry> handoffLog) {
     public record TechStep(String description, boolean completed) {}
 
-        public record LogEntry(String timestamp, String user, String message) {
+    public record LogEntry(String timestamp, String user, String message) {
         private static final int TIMESTAMP_LENGTH = 19;
 
         public String formattedTimestamp() {
@@ -134,7 +134,7 @@ public record ImplementationPlan(
                     | Timestamp | User | Message |
                     | :--- | :--- | :--- |
                     """);
-                        for (LogEntry entry : handoffLog) {
+            for (LogEntry entry : handoffLog) {
                 md.append("| ")
                         .append(escapeMarkdownTableCell(entry.formattedTimestamp()))
                         .append(" | ")

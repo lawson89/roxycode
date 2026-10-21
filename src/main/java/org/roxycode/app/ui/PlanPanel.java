@@ -120,7 +120,7 @@ public final class PlanPanel extends JPanel {
         SwingHtmlUtils.applyTheme(displayArea, 15);
     }
 
-        private void updateDisplay(ImplementationPlan plan) {
+    private void updateDisplay(ImplementationPlan plan) {
         String html = buildPlanHtml(plan);
         boolean hasPlan = plan != null;
         SwingUtilities.invokeLater(
@@ -207,7 +207,7 @@ public final class PlanPanel extends JPanel {
         if (logs == null || logs.isEmpty()) return "";
 
         StringBuilder rows = new StringBuilder();
-                for (ImplementationPlan.LogEntry entry : logs) {
+        for (ImplementationPlan.LogEntry entry : logs) {
             rows.append(
                     """
                     <tr>

@@ -48,9 +48,9 @@ The workflow follows a structured sequence:
 * **Objective:** Precise implementation and automated verification of the approved plan.
 * **Access Mode:** Full editing capabilities enabled. `fileEditorService` is exclusively unlocked in `executeJexl` during this phase.
 * **Execution Loop:**
-  1. Implement changes using `fileEditorService` (`writeFile`, `replaceBlock`, `replaceLines`, `insertAtLine`) inside `executeJexl`.
-  2. Immediately verify every change with `buildToolService.compile()` and `buildToolService.runTests()` (or `runSingleTest()`) inside `executeJexl`.
-  3. Mark verified implementation steps as completed using the native `markStepCompleted(index)` or `markStepsCompleted(indices)` tools.
+  1. Aggressively batch multiple related implementation steps using `fileEditorService` (`writeFile`, `replaceBlock`, `replaceLines`, `insertAtLine`) inside a single `executeJexl` turn.
+  2. Immediately verify every batch of changes with `buildToolService.compile()` and `buildToolService.runTests()` (or `runSingleTest()`) inside `executeJexl`.
+  3. Immediately check off whichever steps were completed in that turn using the native `markStepCompleted(index)` or `markStepsCompleted(indices)` tools (either in parallel or at the start of the very next turn) rather than waiting until all work is finished at the end of the phase.
 * **Zero Broken Builds:** Never proceed with failing tests or broken compilation.
 * **Transition:** Once all technical steps are verified and marked complete, call the native `requestReview(reason)` tool to autonomously transition to the REVIEW phase.
 

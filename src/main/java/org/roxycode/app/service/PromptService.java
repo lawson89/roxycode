@@ -13,6 +13,7 @@ import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.model.ImplementationPlan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -36,6 +37,7 @@ public class PromptService {
     private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
     private static final String HEADER_SESSION_CONTEXT = "\n\n## SESSION CONTEXT\n";
     private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
+    private static final String HEADER_CURRENT_PLAN_PROGRESS = "## CURRENT PLAN PROGRESS\n";
     private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
 
     private final ProjectService projectService;
@@ -96,6 +98,21 @@ public class PromptService {
         String gitStatus = gitService.getStatus();
         if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
             sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
+        }
+
+        ImplementationPlan currentPlan = planService.getCurrentPlan();
+        if (currentPlan != null) {
+            sb.append(HEADER_CURRENT_PLAN_PROGRESS);
+            var steps = currentPlan.technicalSteps();
+            for (int i = 0; i < steps.size(); i++) {
+                ImplementationPlan.TechStep step = steps.get(i);
+                sb.append(step.completed() ? "- [x] " : "- [ ] ")
+                        .append(i)
+                        .append(". ")
+                        .append(step.description())
+                        .append("\n");
+            }
+            sb.append("\n");
         }
         return sb.toString();
     }

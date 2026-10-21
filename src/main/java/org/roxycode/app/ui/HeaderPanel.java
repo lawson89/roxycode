@@ -41,10 +41,8 @@ public final class HeaderPanel extends JPanel {
         // 2-column layout: Left (Project), Right (Utils)
         setLayout(new MigLayout("insets 2 15 2 15, fillx", "[left]push[right]", LAYOUT_CENTER));
 
-        putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
-        setBorder(
-                BorderFactory.createMatteBorder(
-                        0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
+                putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
+        updateBorder();
 
         // --- LEFT SECTION: Project Info ---
         JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]5[]12[]", LAYOUT_CENTER));
@@ -85,6 +83,18 @@ public final class HeaderPanel extends JPanel {
         } else {
             projectLabel.setToolTipText("No project selected");
         }
+    }
+
+        @Override
+    public void updateUI() {
+        super.updateUI();
+        updateBorder();
+    }
+
+    private void updateBorder() {
+        setBorder(
+                BorderFactory.createMatteBorder(
+                        0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
     }
 
     @EventListener

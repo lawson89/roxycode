@@ -14,6 +14,8 @@ class ChatHtmlTemplatesTest {
         String result = ChatHtmlTemplates.renderChatEntry(role, content, timestamp, -1, false);
 
         assertTrue(result.contains("user-entry"));
+        assertTrue(result.contains("role-user"));
+        assertTrue(result.contains("margin-top: 4px;"));
         assertTrue(result.contains("<p>Hello</p>"));
         assertTrue(result.contains("12:00:00"));
         assertFalse(result.contains("copy-action"));
@@ -61,25 +63,35 @@ class ChatHtmlTemplatesTest {
         assertTrue(result.contains("tool-call"));
         assertTrue(result.contains("git"));
         assertTrue(result.contains("diff output"));
-                        assertTrue(result.contains("class=") && result.contains("tool-result") && result.contains("&#10003; Executed successfully"));
+        assertTrue(
+                result.contains("class=")
+                        && result.contains("tool-result")
+                        && result.contains("&#10003; Executed successfully"));
         assertFalse(result.contains("tool-error"));
     }
 
     @Test
     void testRenderToolLogSuccessAndFailure() {
         String successHtml = ChatHtmlTemplates.renderToolLog("jexl", "1 + 1", true, null);
-        assertTrue(successHtml.contains("tool-result") && successHtml.contains("&#10003; Executed successfully"));
+        assertTrue(
+                successHtml.contains("tool-result")
+                        && successHtml.contains("&#10003; Executed successfully"));
         assertFalse(successHtml.contains("tool-error"));
 
         String failureHtml =
                 ChatHtmlTemplates.renderToolLog(
                         "jexl", "bad()", false, "Syntax Error: <unexpected> & token");
-        assertTrue(failureHtml.contains("tool-error") && failureHtml.contains("&#10007; Error: Syntax Error: &lt;unexpected&gt; &amp; token"));
+        assertTrue(
+                failureHtml.contains("tool-error")
+                        && failureHtml.contains(
+                                "&#10007; Error: Syntax Error: &lt;unexpected&gt; &amp; token"));
         assertFalse(failureHtml.contains("<unexpected>"));
         assertFalse(failureHtml.contains("tool-result"));
 
         String fallbackHtml = ChatHtmlTemplates.renderToolLog("jexl", "bad()", false, "   ");
-        assertTrue(fallbackHtml.contains("tool-error") && fallbackHtml.contains("&#10007; Error: Unknown error"));
+        assertTrue(
+                fallbackHtml.contains("tool-error")
+                        && fallbackHtml.contains("&#10007; Error: Unknown error"));
     }
 
     @Test

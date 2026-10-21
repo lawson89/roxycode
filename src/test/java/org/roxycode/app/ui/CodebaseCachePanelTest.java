@@ -78,13 +78,14 @@ class CodebaseCachePanelTest {
             Thread.sleep(20);
         }
 
-                assertTrue(panel.getStatusLabel().getText().contains("Total: 503"));
+        assertTrue(panel.getStatusLabel().getText().contains("Total: 503"));
         assertEquals("cached repo map", panel.getRepoMapArea().getText());
         assertEquals("stable prompt", panel.getStableContextArea().getText());
         assertEquals("session prompt", panel.getSessionContextArea().getText());
 
         when(metaService.loadRepoCache()).thenReturn(Optional.of("new project repo map"));
-        panel.onProjectChanged(new org.roxycode.app.events.ProjectChangedEvent(java.nio.file.Path.of("/tmp")));
+        panel.onProjectChanged(
+                new org.roxycode.app.events.ProjectChangedEvent(java.nio.file.Path.of("/tmp")));
         for (int i = 0; i < 50; i++) {
             SwingUtilities.invokeAndWait(() -> {});
             if ("new project repo map".equals(panel.getRepoMapArea().getText())) {

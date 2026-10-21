@@ -70,7 +70,7 @@ public class JexlToHtmlConverterTest {
         assertTrue(html.contains("<span class='tk-rw'>planService</span>"));
     }
 
-        @Test
+    @Test
     public void testNewServiceHighlighting() {
         String script = "fileReadService.readFile(); grepService.grep(); workflowService.status();";
         String html = JexlToHtmlConverter.convert(script);
@@ -123,6 +123,17 @@ public class JexlToHtmlConverterTest {
         assertTrue(
                 result.contains(
                         "<span class='tk-rw'>int</span> b = <span class='tk-nm'>2</span>;"));
+    }
+
+    @Test
+    public void testHighlightCodeBlocksSkipsProseFormats() {
+        String mdHtml =
+                "<pre><code class='language-markdown'>Use var x = 1; and return true in default text</code></pre>";
+        assertEquals(mdHtml, JexlToHtmlConverter.highlightCodeBlocks(mdHtml));
+
+        String txtHtml =
+                "<pre><code class='language-plaintext'>public class PlainText { int n = 42; }</code></pre>";
+        assertEquals(txtHtml, JexlToHtmlConverter.highlightCodeBlocks(txtHtml));
     }
 
     @Test

@@ -52,7 +52,7 @@ public final class CodebaseCachePanel extends JPanel {
         this.metaService = metaService;
         this.promptService = promptService;
 
-                initComponents();
+        initComponents();
         refreshStatus();
     }
 
@@ -78,7 +78,7 @@ public final class CodebaseCachePanel extends JPanel {
 
         add(statusPanel, "growx, wrap");
 
-                Font monoFont = new Font(Font.MONOSPACED, Font.PLAIN, 12);
+        Font monoFont = new Font(Font.MONOSPACED, Font.PLAIN, 12);
         for (JTextArea area : getTextAreas()) {
             area.setEditable(false);
             area.setFont(monoFont);
@@ -105,7 +105,7 @@ public final class CodebaseCachePanel extends JPanel {
         }
     }
 
-        public void updateTheme() {
+    public void updateTheme() {
         Color bg = UIManager.getColor("TextArea.background");
         Color fg = UIManager.getColor("TextArea.foreground");
         Color caret = UIManager.getColor("TextArea.caretForeground");

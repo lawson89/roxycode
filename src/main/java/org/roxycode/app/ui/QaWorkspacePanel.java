@@ -2,7 +2,6 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
-import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
@@ -23,26 +22,28 @@ public final class QaWorkspacePanel extends JPanel {
 
     private final JTabbedPane qaTabs;
     private final ExploreChatPanel qaChatPanel;
+    private final JPanel qaHeaderBar;
 
     public QaWorkspacePanel(
             ExploreChatPanel exploreChatPanel, ExploreHistoryPanel exploreHistoryPanel) {
         super(new BorderLayout());
 
-        JPanel qaHeaderBar =
-                new JPanel(
-                        new MigLayout("insets 8 20 8 20, fillx", "[center, grow]", LAYOUT_CENTER));
-        qaHeaderBar.setBorder(
-                BorderFactory.createMatteBorder(
-                        0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
+        qaHeaderBar =
+                new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
+        qaHeaderBar.setOpaque(false);
 
         JLabel mentorModeLabel = new JLabel("READ-ONLY MENTOR MODE");
         mentorModeLabel.putClientProperty(
                 FlatClientProperties.STYLE, "font: bold -1; foreground: $Label.disabledForeground");
         mentorModeLabel.setIcon(
                 FontIcon.of(Codicons.SEARCH, 16, UIManager.getColor("Label.disabledForeground")));
-        qaHeaderBar.add(mentorModeLabel, LAYOUT_CENTER);
+        qaHeaderBar.add(mentorModeLabel, "right, center");
 
         this.qaTabs = new JTabbedPane();
+        qaTabs.putClientProperty(
+                FlatClientProperties.TABBED_PANE_TAB_TYPE,
+                FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
+        qaTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, qaHeaderBar);
         this.qaChatPanel = exploreChatPanel;
         qaTabs.addTab("Chat", qaChatPanel);
         qaTabs.addTab("History", exploreHistoryPanel);
@@ -53,7 +54,6 @@ public final class QaWorkspacePanel extends JPanel {
                     }
                 });
 
-        add(qaHeaderBar, BorderLayout.NORTH);
         add(qaTabs, BorderLayout.CENTER);
     }
 
@@ -66,6 +66,10 @@ public final class QaWorkspacePanel extends JPanel {
 
     JTabbedPane getQaTabs() {
         return qaTabs;
+    }
+
+    JPanel getQaHeaderBar() {
+        return qaHeaderBar;
     }
 
     ChatPanel getQaChatPanel() {

@@ -289,7 +289,7 @@ public class GenericBuildToolService {
             errors.add(sw.toString());
         }
 
-                errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
+        errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
         failedTests.addAll(extractRegexMatches(fullOutput, testFailureRegex, "test failures"));
 
         boolean success = exitCode == 0 && errors.isEmpty();

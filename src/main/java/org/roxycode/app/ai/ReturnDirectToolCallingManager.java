@@ -106,15 +106,18 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
 
         if (!history.isEmpty()
                 && history.get(history.size() - 1) instanceof ToolResponseMessage toolMsg) {
+            List<ToolResponseMessage.ToolResponse> responses = toolMsg.getResponses();
             List<ToolResponseMessage.ToolResponse> updatedResponses =
-                    new ArrayList<>(toolMsg.getResponses().size());
-            for (ToolResponseMessage.ToolResponse tr : toolMsg.getResponses()) {
+                    new ArrayList<>(responses.size());
+            for (int responseIndex = 0; responseIndex < responses.size(); responseIndex++) {
+                ToolResponseMessage.ToolResponse tr = responses.get(responseIndex);
                 String unquoted = unquoteIfJsonString(tr.responseData());
                 if (RoxyToolExecutionExceptionProcessor.isErrorResponse(unquoted)) {
                     anyError = true;
                 }
                 ToolResponseMessage.ToolResponse processed =
-                        processSingleToolResponse(tr, chatResponse, turnContext, returnDirect);
+                        processSingleToolResponse(
+                                tr, responseIndex, chatResponse, turnContext, returnDirect);
                 if (processed != tr) {
                     historyModified = true;
                 }
@@ -142,6 +145,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
      */
     private ToolResponseMessage.ToolResponse processSingleToolResponse(
             ToolResponseMessage.ToolResponse tr,
+            int responseIndex,
             ChatResponse chatResponse,
             TurnToolContext turnContext,
             boolean returnDirect) {
@@ -150,7 +154,8 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
         boolean failed = RoxyToolExecutionExceptionProcessor.isErrorResponse(unquoted);
 
         if (!JEXL_TOOL_NAME.equals(tr.name())) {
-            publishPlanToolExecutionEvent(tr, chatResponse, turnContext, unquoted, failed);
+            publishPlanToolExecutionEvent(
+                    tr, responseIndex, chatResponse, turnContext, unquoted, failed);
         }
 
         if (returnDirect && !failed && !unquoted.equals(rawData)) {
@@ -165,11 +170,12 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
      */
     private void publishPlanToolExecutionEvent(
             ToolResponseMessage.ToolResponse tr,
+            int responseIndex,
             ChatResponse chatResponse,
             TurnToolContext turnContext,
             String unquotedResponse,
             boolean failed) {
-        String args = findToolCallArguments(chatResponse, tr);
+        String args = findToolCallArguments(chatResponse, tr, responseIndex);
         String scriptDesc = "planService." + tr.name() + "(" + args + ")";
         eventPublisher.publishEvent(
                 new ToolExecutionEvent(
@@ -216,16 +222,38 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
     }
 
     private static String findToolCallArguments(
-            ChatResponse chatResponse, ToolResponseMessage.ToolResponse tr) {
+            ChatResponse chatResponse, ToolResponseMessage.ToolResponse tr, int responseIndex) {
         if (chatResponse != null
                 && chatResponse.getResult() != null
                 && chatResponse.getResult().getOutput() != null
                 && chatResponse.getResult().getOutput().getToolCalls() != null) {
-            for (AssistantMessage.ToolCall tc :
-                    chatResponse.getResult().getOutput().getToolCalls()) {
-                if ((tr.id() != null && tr.id().equals(tc.id()))
-                        || (tr.name() != null && tr.name().equals(tc.name()))) {
-                    return tc.arguments() != null ? tc.arguments() : "";
+            List<AssistantMessage.ToolCall> toolCalls =
+                    chatResponse.getResult().getOutput().getToolCalls();
+
+            // Step 1: Non-blank ID match (with optional tool name verification)
+            if (tr.id() != null && !tr.id().isBlank()) {
+                for (AssistantMessage.ToolCall tc : toolCalls) {
+                    if (tr.id().equals(tc.id())
+                            && (tr.name() == null || tr.name().equals(tc.name()))) {
+                        return tc.arguments() != null ? tc.arguments() : "";
+                    }
+                }
+            }
+
+            // Step 2: Positional index + name match
+            if (responseIndex >= 0 && responseIndex < toolCalls.size()) {
+                AssistantMessage.ToolCall indexed = toolCalls.get(responseIndex);
+                if (tr.name() != null && tr.name().equals(indexed.name())) {
+                    return indexed.arguments() != null ? indexed.arguments() : "";
+                }
+            }
+
+            // Step 3: Fallback name match
+            if (tr.name() != null) {
+                for (AssistantMessage.ToolCall tc : toolCalls) {
+                    if (tr.name().equals(tc.name())) {
+                        return tc.arguments() != null ? tc.arguments() : "";
+                    }
                 }
             }
         }

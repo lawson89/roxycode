@@ -46,7 +46,7 @@ public class JexlToHtmlConverter {
         "throw",
         "NaN",
         "assert",
-                // Services
+        // Services
         "gitService",
         "buildToolService",
         "planService",
@@ -116,6 +116,9 @@ public class JexlToHtmlConverter {
             Pattern.compile("<pre([^>]*)>(.*?)</pre>", Pattern.DOTALL);
     private static final Pattern CODE_PATTERN =
             Pattern.compile("^\\s*<code([^>]*)>(.*?)</code>\\s*$", Pattern.DOTALL);
+    private static final Pattern PROSE_LANG_PATTERN =
+            Pattern.compile(
+                    "\\blanguage-(?:markdown|md|text|plaintext|txt)\\b", Pattern.CASE_INSENSITIVE);
 
     /**
      * Converts a raw JEXL or code script into highlighted HTML with CSS classes.
@@ -188,7 +191,8 @@ public class JexlToHtmlConverter {
             if (codeMatcher.matches()) {
                 String codeAttrs = codeMatcher.group(1);
                 String codeContent = codeMatcher.group(2);
-                String highlighted = highlightHtml(codeContent);
+                String highlighted =
+                        isProseLanguage(codeAttrs) ? codeContent : highlightHtml(codeContent);
                 sb.append("<pre")
                         .append(preAttrs)
                         .append("><code")
@@ -209,5 +213,9 @@ public class JexlToHtmlConverter {
         sb.append(html.substring(lastEnd));
 
         return sb.toString();
+    }
+
+    private static boolean isProseLanguage(String codeAttrs) {
+        return codeAttrs != null && PROSE_LANG_PATTERN.matcher(codeAttrs).find();
     }
 }

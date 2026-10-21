@@ -73,7 +73,7 @@ public final class ContextManagerPanel extends JPanel {
         splitPane.setDividerLocation(250);
         add(splitPane, BorderLayout.CENTER);
 
-                setupListeners();
+        setupListeners();
         refreshFileList(null);
     }
 

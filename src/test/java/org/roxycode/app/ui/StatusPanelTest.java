@@ -12,8 +12,13 @@ class StatusPanelTest {
     void testStatusPanelInstantiation() {
         EnvironmentService envService = new EnvironmentService();
         StatusPanel status = new StatusPanel(envService);
-        assertNotNull(status);
+                assertNotNull(status);
         assertEquals(3, status.getComponentCount());
+        status.updateUI();
+        assertEquals(
+                new java.awt.Insets(1, 0, 0, 0),
+                status.getBorder().getBorderInsets(status),
+                "StatusPanel should maintain a 1px top MatteBorder across updateUI()");
 
         for (Component comp : status.getComponents()) {
             if (comp instanceof JLabel label) {

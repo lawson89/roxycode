@@ -11,8 +11,11 @@ body { font-family: sans-serif; font-size: 13px; color: #cccccc; margin: 10px; b
 .tool-header { font-size: 11px; color: #e5a00d; font-weight: bold; margin-bottom: 4px; }
 .tool-body { font-family: monospace; color: #aaaaaa; background-color: transparent; border: none; padding: 0; margin: 0; }
 
+.role-ai { font-family: monospace; font-size: 11px; font-weight: bold; color: #4caf50; }
+.role-user { font-family: monospace; font-size: 11px; font-weight: bold; color: #3794ff; }
+.role-system { font-family: monospace; font-size: 11px; font-weight: bold; color: #aaaaaa; }
 .timestamp { font-size: 9px; color: #888888; }
-.content { color: #cccccc; }
+.content { color: #cccccc; margin-top: 4px; }
 
 h1 { font-size: 15px; font-weight: bold; color: #ffffff; margin-top: 8px; margin-bottom: 4px; }
 h2 { font-size: 14px; font-weight: bold; color: #569cd6; margin-top: 6px; margin-bottom: 4px; }
@@ -21,8 +24,8 @@ h4, h5, h6 { font-size: 12px; font-weight: bold; color: #9cdcfe; margin-top: 4px
 blockquote { color: #9cdcfe; margin-left: 10px; }
 a { color: #3794ff; text-decoration: none; }
 
-pre { background-color: #1e1e1e; color: #d4d4d4; padding: 4px; margin: 4px 0px 4px 0px; }
-code { font-family: monospace; background-color: #2d2d2d; color: #d4d4d4; }
+pre { background-color: #1e1e1e; color: #d4d4d4; padding: 8px; margin: 4px 0px 4px 0px; }
+code { font-family: monospace; background-color: #1e1e1e; color: #d4d4d4; }
 
 .spec-functional-header { color: #2196F3; }
 .spec-technical-header { color: #4CAF50; }
