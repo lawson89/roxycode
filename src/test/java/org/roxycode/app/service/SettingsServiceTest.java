@@ -74,9 +74,18 @@ class SettingsServiceTest {
                         });
         service.setSettingsPathOverride(tempDir.resolve("test_listener.toml"));
 
-        service.saveSettings();
+                service.saveSettings();
         assertTrue(
                 listenerCalled.get(),
                 "SettingsChangedEvent should be published when settings are saved");
+    }
+
+    @Test
+    void testGetAvailableModelsLoadsFromClasspathToml() {
+        SettingsService service = new SettingsService();
+        var models = service.getAvailableModels();
+        assertNotNull(models);
+        assertTrue(!models.isEmpty(), "Available models from /models.toml should not be empty");
+        assertTrue(models.stream().anyMatch(m -> "gemini-3.5-flash".equals(m.apiName())));
     }
 }

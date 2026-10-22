@@ -2,12 +2,16 @@ package org.roxycode.app.service;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.GeminiModels;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,6 +78,27 @@ public class SettingsService {
             }
         }
         return new AppSettings();
+    }
+
+        /**
+     * Loads the available Gemini model configurations from {@code /models.toml}.
+     *
+     * @return list of available model configurations
+     */
+    public List<GeminiModelConfig> getAvailableModels() {
+        try (InputStream is = SettingsService.class.getResourceAsStream("/models.toml")) {
+            if (is == null) {
+                log.error("Could not find /models.toml on classpath");
+                return List.of();
+            }
+            GeminiModels geminiModels = mapper.readValue(is, GeminiModels.class);
+            return geminiModels != null && geminiModels.models() != null
+                    ? geminiModels.models()
+                    : List.of();
+        } catch (IOException e) {
+            log.error("Failed to load Gemini models: {}", e.getMessage(), e);
+            return List.of();
+        }
     }
 
     /**

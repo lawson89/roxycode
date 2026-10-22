@@ -1,5 +1,6 @@
 package org.roxycode.app.ai;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,10 +30,11 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
     private static final String MAX_TURNS_EXCEEDED_PREFIX =
             "Autonomous execution stopped: Maximum tool turns (";
 
-    private final ToolCallingManager delegate;
+        private final ToolCallingManager delegate;
     private final SettingsService settingsService;
     private final PlanService planService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
     public ReturnDirectToolCallingManager(
             SettingsService settingsService,
@@ -44,7 +46,8 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
                         .build(),
                 settingsService,
                 planService,
-                eventPublisher);
+                eventPublisher,
+                AiConfig.SHARED_OBJECT_MAPPER);
     }
 
     public ReturnDirectToolCallingManager(
@@ -52,10 +55,25 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
             SettingsService settingsService,
             PlanService planService,
             ApplicationEventPublisher eventPublisher) {
+        this(
+                delegate,
+                settingsService,
+                planService,
+                eventPublisher,
+                AiConfig.SHARED_OBJECT_MAPPER);
+    }
+
+    public ReturnDirectToolCallingManager(
+            ToolCallingManager delegate,
+            SettingsService settingsService,
+            PlanService planService,
+            ApplicationEventPublisher eventPublisher,
+            ObjectMapper objectMapper) {
         this.delegate = delegate;
         this.settingsService = settingsService;
         this.planService = planService;
         this.eventPublisher = eventPublisher;
+        this.objectMapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
     }
 
     @Override
@@ -207,13 +225,13 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
         return updatedHistory;
     }
 
-    private static String unquoteIfJsonString(String raw) {
+        private String unquoteIfJsonString(String raw) {
         if (raw != null
                 && raw.length() >= 2
                 && raw.charAt(0) == '"'
                 && raw.charAt(raw.length() - 1) == '"') {
             try {
-                return AiConfig.SHARED_OBJECT_MAPPER.readValue(raw, String.class);
+                return objectMapper.readValue(raw, String.class);
             } catch (Exception ignored) {
                 // Keep original if not valid JSON string literal
             }

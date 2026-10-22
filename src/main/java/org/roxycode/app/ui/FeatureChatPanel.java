@@ -8,7 +8,6 @@ import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
@@ -21,24 +20,6 @@ import org.springframework.stereotype.Component;
 public final class FeatureChatPanel extends ChatPanel {
     private static final long serialVersionUID = 1L;
 
-    public FeatureChatPanel(
-            AiService aiService,
-            PlanService planService,
-            ApplicationEventPublisher eventPublisher,
-            ChatMemory chatMemory,
-            SettingsService settingsService) {
-        super(
-                aiService,
-                planService,
-                eventPublisher,
-                chatMemory,
-                ChatModel.TASK_SESSION_PREFIX,
-                null,
-                true,
-                settingsService);
-    }
-
-    @Autowired
     public FeatureChatPanel(
             AiService aiService,
             PlanService planService,

@@ -407,12 +407,11 @@ public final class ChatController implements AutoCloseable {
                 || model.isTurnCancelled()) {
             return;
         }
-        SwingUtilities.invokeLater(
+                SwingUtilities.invokeLater(
                 () -> {
                     if (model.isTurnCancelled()) return;
-                    String toolName = "";
                     String output = JexlToHtmlConverter.convert(event.script());
-                    view.appendToolLog(toolName, output, event.success(), event.error());
+                    view.appendToolLog(output, event.success(), event.error());
                 });
     }
 

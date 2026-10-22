@@ -75,14 +75,7 @@ public class ChatHtmlTemplates {
         return StringSubstitutor.replace(template, values);
     }
 
-    public static String renderToolLog(
-            String toolName, String output, boolean success, String error) {
-        String header =
-                (toolName == null || toolName.trim().isEmpty())
-                        ? ""
-                        : "<div class='tool-header'>"
-                                + SwingHtmlUtils.escapeHtml(toolName)
-                                + "</div>";
+    public static String renderToolLog(String output, boolean success, String error) {
         String statusHtml;
         if (success) {
             statusHtml = "<div class='tool-result'>&#10003; Executed successfully</div>";
@@ -99,7 +92,6 @@ public class ChatHtmlTemplates {
 				    <tr>
 				        <td class="tool-accent" width="4" nowrap="nowrap">&nbsp;</td>
 				        <td class="tool-body-container" width="100%" style="padding: 8px 12px;">
-				            ${header}
 				            <pre class="tool-body">${output}</pre>
 				            ${statusHtml}
 				        </td>
@@ -112,8 +104,6 @@ public class ChatHtmlTemplates {
 
         Map<String, String> values =
                 Map.of(
-                        "header",
-                        header,
                         "output",
                         output != null ? output : "",
                         "statusHtml",

@@ -5,7 +5,6 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
@@ -39,7 +38,8 @@ public class FileReadService {
     public String readFile(String relativePath) throws IOException {
         Path path = projectService.resolvePath(relativePath);
         if (!Files.isRegularFile(path)) {
-            return "Error: Path is not a regular file or does not exist.";
+            throw new IllegalArgumentException(
+                    "Error: Path is not a regular file or does not exist: " + relativePath);
         }
         return Files.readString(path);
     }
@@ -58,7 +58,8 @@ public class FileReadService {
     public List<String> listDirectory(String relativePath) throws IOException {
         Path path = projectService.resolvePath(relativePath);
         if (!Files.isDirectory(path)) {
-            return Collections.singletonList("Error: Path is not a directory or does not exist.");
+            throw new IllegalArgumentException(
+                    "Error: Path is not a directory or does not exist: " + relativePath);
         }
         try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(path)) {
             List<String> entries = new ArrayList<>();

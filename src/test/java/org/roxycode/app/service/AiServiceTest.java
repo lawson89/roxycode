@@ -129,8 +129,13 @@ class AiServiceTest {
         ToolExecutionExceptionProcessor processor = config.toolExecutionExceptionProcessor();
         assertInstanceOf(RoxyToolExecutionExceptionProcessor.class, processor);
 
-        ToolCallingManager manager =
-                config.toolCallingManager(processor, settingsService, planService, eventPublisher);
+                ToolCallingManager manager =
+                config.toolCallingManager(
+                        processor,
+                        settingsService,
+                        planService,
+                        eventPublisher,
+                        config.objectMapper());
         assertInstanceOf(ReturnDirectToolCallingManager.class, manager);
     }
 
@@ -152,7 +157,7 @@ class AiServiceTest {
         when(responseSpec.chatResponse())
                 .thenReturn(buildChatResponse("AI Response", "STOP", null));
 
-        String result = aiService.chat("Hello");
+        String result = aiService.chat("default", null, "Hello", null);
 
         assertEquals("AI Response", result);
 
@@ -325,7 +330,7 @@ class AiServiceTest {
                             return buildChatResponse(stopText, "STOP", null);
                         });
 
-        String result = aiService.chat("Hello");
+        String result = aiService.chat("default", null, "Hello", null);
 
         assertEquals("Autonomous execution stopped: Maximum tool turns (2) exceeded.", result);
         // Delegate is only invoked 2 times because the 3rd call short-circuits in the turn manager
@@ -363,7 +368,7 @@ class AiServiceTest {
         when(responseSpec.chatResponse())
                 .thenReturn(buildChatResponse(expectedMarkdown, "STOP", null));
 
-        String result = aiService.chat("Create plan");
+        String result = aiService.chat("default", null, "Create plan", null);
 
         assertEquals(expectedMarkdown, result);
     }
@@ -384,7 +389,7 @@ class AiServiceTest {
         when(responseSpec.chatResponse())
                 .thenReturn(buildChatResponse("Complete answer.", "STOP", usage));
 
-        String result = aiService.chat("Question");
+        String result = aiService.chat("default", null, "Question", null);
 
         assertEquals("Complete answer.", result);
         verify(requestSpec, times(1)).call();
@@ -406,7 +411,7 @@ class AiServiceTest {
         when(responseSpec.chatResponse())
                 .thenReturn(buildChatResponse("Partial output here...", "MAX_TOKENS", usage));
 
-        String result = aiService.chat("Generate long code");
+        String result = aiService.chat("default", null, "Generate long code", null);
 
         assertTrue(result.startsWith("Partial output here..."));
         assertTrue(result.contains("MAX_TOKENS"));
@@ -430,7 +435,7 @@ class AiServiceTest {
         when(requestSpec.call()).thenReturn(responseSpec);
         when(responseSpec.chatResponse()).thenReturn(buildChatResponse("   ", "MAX_TOKENS", usage));
 
-        String result = aiService.chat("Complex reasoning task");
+        String result = aiService.chat("default", null, "Complex reasoning task", null);
 
         assertFalse(result.isBlank());
         assertTrue(result.contains("MAX_TOKENS"));
@@ -477,7 +482,7 @@ class AiServiceTest {
                             return buildChatResponse("", "STOP", usage);
                         });
 
-        String result = aiService.chat("Analyze project");
+        String result = aiService.chat("default", null, "Analyze project", null);
 
         assertFalse(result.isBlank());
         assertTrue(result.contains("STOP"));
@@ -502,14 +507,14 @@ class AiServiceTest {
         when(responseSpec.chatResponse())
                 .thenReturn(buildChatResponse(null, "MALFORMED_FUNCTION_CALL", null));
 
-        String malformedResult = aiService.chat("Run tool");
+        String malformedResult = aiService.chat("default", null, "Run tool", null);
 
         assertFalse(malformedResult.isBlank());
         assertTrue(malformedResult.contains("MALFORMED_FUNCTION_CALL"));
         assertTrue(malformedResult.contains("blocked or aborted"));
 
         when(responseSpec.chatResponse()).thenReturn(buildChatResponse("", "SAFETY", null));
-        String safetyResult = aiService.chat("Another prompt");
+        String safetyResult = aiService.chat("default", null, "Another prompt", null);
 
         assertFalse(safetyResult.isBlank());
         assertTrue(safetyResult.contains("SAFETY"));
@@ -631,13 +636,33 @@ class AiServiceTest {
                                     "Should be discarded due to interrupt", "STOP", null);
                         });
 
-        try {
-            assertThrows(CancellationException.class, () -> aiService.chat("Run code"));
+                try {
+            assertThrows(CancellationException.class, () -> aiService.chat("default", null, "Run code", null));
             assertTrue(
                     Thread.currentThread().isInterrupted(),
                     "Interrupt flag should be preserved when chat is cancelled");
         } finally {
             Thread.interrupted();
         }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testChatExceptionRethrowsWithoutPublishingTurnCompleteEvent() {
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+        when(requestSpec.options(any())).thenReturn(requestSpec);
+
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+        when(promptService.buildSystemPrompt(WorkflowPhase.CODE, null)).thenReturn("CODE PROMPT");
+
+        when(requestSpec.call()).thenThrow(new IllegalStateException("API failure"));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> aiService.chat("default", null, "Trigger error", null));
+        verify(eventPublisher, never()).publishEvent(any(AgentTurnCompleteEvent.class));
     }
 }

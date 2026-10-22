@@ -25,9 +25,6 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("PMD.NullAssignment")
 public class PlanService {
 
-    private static final String PHASE_DEVELOP = "DEVELOP";
-    private static final String PHASE_CODE = "CODE";
-
     private record TransitionKey(WorkflowPhase from, WorkflowPhase to) {}
 
     private record TransitionRule(boolean autonomous, boolean requiresApprovedPlan) {}
@@ -300,33 +297,7 @@ public class PlanService {
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-    /** Routes the workflow to the target phase by name. */
-    public synchronized String routeToPhase(String phaseName, String reason) {
-        if (phaseName == null || phaseName.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Error: Invalid phase name: "
-                            + phaseName
-                            + ". Valid phases are: PLAN, CODE, REVIEW.");
-        }
-        String normalizedName = phaseName.toUpperCase(Locale.ROOT);
-        if (PHASE_DEVELOP.equals(normalizedName)) {
-            normalizedName = PHASE_CODE;
-        }
-
-        WorkflowPhase nextPhase;
-        try {
-            nextPhase = WorkflowPhase.valueOf(normalizedName);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException(
-                    "Error: Invalid phase name: "
-                            + phaseName
-                            + ". Valid phases are: PLAN, CODE, REVIEW.",
-                    e);
-        }
-        return routeToPhase(nextPhase, reason);
-    }
-
-    /** Routes the workflow to the target phase. */
+        /** Routes the workflow to the target phase. */
     public synchronized String routeToPhase(WorkflowPhase nextPhase, String reason) {
         if (nextPhase == null) {
             throw new IllegalArgumentException(

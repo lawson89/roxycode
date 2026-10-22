@@ -96,11 +96,11 @@ public final class MarkdownPane extends JTextPane {
         renderAll(true);
     }
 
-    public void appendToolLog(String toolName, String output, boolean success, String error) {
+        public void appendToolLog(String output, boolean success, String error) {
         String safeOutput = output != null ? output : "";
         messages.add(
                 new Message(
-                        toolName,
+                        null,
                         new StringBuilder(safeOutput),
                         LocalDateTime.now().format(TIME_FORMATTER),
                         true,
@@ -166,10 +166,9 @@ public final class MarkdownPane extends JTextPane {
             for (int i = 0; i < messages.size(); i++) {
                 Message msg = messages.get(i);
                 try {
-                    if (msg.isTool()) {
+                                        if (msg.isTool()) {
                         fullHtml.append(
                                 ChatHtmlTemplates.renderToolLog(
-                                        msg.role(),
                                         msg.content().toString(),
                                         msg.success(),
                                         msg.error()));

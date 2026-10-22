@@ -67,7 +67,7 @@ public class FileReadServiceTest {
                 });
     }
 
-    @Test
+        @Test
     void testReadFileOutsideRoot() throws IOException {
         Path outsideFile = tempDir.getParent().resolve("outside.txt");
         // We don't actually create it, just test the path resolution
@@ -76,5 +76,30 @@ public class FileReadServiceTest {
                 () -> {
                     fileReadService.readFile("../" + outsideFile.getFileName());
                 });
+    }
+
+    @Test
+    void testReadFileNonExistentOrDirectoryThrowsIllegalArgumentException() throws IOException {
+        Files.createDirectory(tempDir.resolve("adir"));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> fileReadService.readFile("missing.txt"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> fileReadService.readFile("adir"));
+    }
+
+    @Test
+    void testListDirectoryNonExistentOrRegularFileThrowsIllegalArgumentException()
+            throws IOException {
+        Files.writeString(tempDir.resolve("afile.txt"), "data");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> fileReadService.listDirectory("missing-dir"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> fileReadService.listDirectory("afile.txt"));
     }
 }

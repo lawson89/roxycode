@@ -27,10 +27,13 @@ class SettingsPanelTest {
     private SettingsPanel settingsPanel;
     private AppSettings settings;
 
-    @BeforeEach
+        @BeforeEach
     void setUp() {
         settings = new AppSettings();
         lenient().when(settingsService.getSettings()).thenReturn(settings);
+        lenient()
+                .when(settingsService.getAvailableModels())
+                .thenReturn(new SettingsService().getAvailableModels());
 
         settingsPanel = new SettingsPanel(settingsService);
     }

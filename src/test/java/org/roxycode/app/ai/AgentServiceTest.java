@@ -11,6 +11,8 @@ import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.ui.ExploreChatPanel;
+import org.roxycode.app.ui.FeatureChatPanel;
 import org.roxycode.app.ui.MainFrame;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -84,8 +86,13 @@ class AgentServiceTest {
 
     @Test
     void testSingleConstructorBeansDoNotHaveRedundantAutowired() {
-        List<Class<?>> singleCtorClasses =
-                List.of(GenericBuildToolService.class, FileEditorService.class, MainFrame.class);
+                List<Class<?>> singleCtorClasses =
+                List.of(
+                        GenericBuildToolService.class,
+                        FileEditorService.class,
+                        MainFrame.class,
+                        ExploreChatPanel.class,
+                        FeatureChatPanel.class);
 
         for (Class<?> clazz : singleCtorClasses) {
             Constructor<?>[] constructors = clazz.getDeclaredConstructors();

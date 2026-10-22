@@ -14,17 +14,17 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 /**
  * Shared utility for safe external process execution. Prevents stderr buffer deadlocks, enforces
  * timeouts, closes stdin, cleans up descendant processes on timeout or interruption, and preserves
  * thread interruption status.
  */
-@Component
-public class ProcessRunner {
+public final class ProcessRunner {
     private static final Logger log = LoggerFactory.getLogger(ProcessRunner.class);
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+
+    private ProcessRunner() {}
 
     /** Result of executing an external process. */
     public record ProcessResult(

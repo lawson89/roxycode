@@ -61,8 +61,8 @@ class MarkdownPaneTest {
     @Test
     void testAppendToolLogRendersSuccessAndErrorStatus() {
         MarkdownPane pane = new MarkdownPane();
-        pane.appendToolLog("", "var x = 1;", true, null);
-        pane.appendToolLog("", "if (", false, "Syntax Error: <eof>");
+                pane.appendToolLog("var x = 1;", true, null);
+        pane.appendToolLog("if (", false, "Syntax Error: <eof>");
 
         String html = pane.getText();
         assertTrue(html.contains("Executed successfully"));

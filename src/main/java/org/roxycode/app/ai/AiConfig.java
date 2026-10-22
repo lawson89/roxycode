@@ -40,19 +40,20 @@ public class AiConfig {
         return new RoxyToolExecutionExceptionProcessor();
     }
 
-    @Bean
+        @Bean
     @Primary
     public ToolCallingManager toolCallingManager(
             ToolExecutionExceptionProcessor toolExecutionExceptionProcessor,
             SettingsService settingsService,
             PlanService planService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            ObjectMapper objectMapper) {
         ToolCallingManager delegate =
                 ToolCallingManager.builder()
                         .toolExecutionExceptionProcessor(toolExecutionExceptionProcessor)
                         .build();
         return new ReturnDirectToolCallingManager(
-                delegate, settingsService, planService, eventPublisher);
+                delegate, settingsService, planService, eventPublisher, objectMapper);
     }
 
     @Bean

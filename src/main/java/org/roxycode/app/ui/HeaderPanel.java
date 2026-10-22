@@ -106,21 +106,34 @@ public final class HeaderPanel extends JPanel {
                         0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
     }
 
-    @EventListener
+        @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        Path newRoot = event.projectRoot();
-        projectLabel.setText(projectService.getProjectName());
-        if (newRoot != null) {
-            projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
+        Runnable updateTask =
+                () -> {
+                    Path newRoot = event.projectRoot();
+                    projectLabel.setText(projectService.getProjectName());
+                    if (newRoot != null) {
+                        projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
+                    } else {
+                        projectLabel.setToolTipText("No project selected");
+                    }
+                    updateBranchLabel();
+                };
+        if (SwingUtilities.isEventDispatchThread()) {
+            updateTask.run();
         } else {
-            projectLabel.setToolTipText("No project selected");
+            SwingUtilities.invokeLater(updateTask);
         }
-        updateBranchLabel();
     }
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        updateModelDisplay(event.settings().getGeminiModel());
+        Runnable updateTask = () -> updateModelDisplay(event.settings().getGeminiModel());
+        if (SwingUtilities.isEventDispatchThread()) {
+            updateTask.run();
+        } else {
+            SwingUtilities.invokeLater(updateTask);
+        }
     }
 
     private void toggleTheme() {

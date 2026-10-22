@@ -77,8 +77,8 @@ public class ChatPanelStopButtonTest {
                             return "Late AI response";
                         });
 
-        FeatureChatPanel chatPanel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
+                FeatureChatPanel chatPanel =
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
 
         chatPanel.getInputArea().setText("Start coding");
         chatPanel.getSendButton().doClick();

@@ -33,8 +33,8 @@ class HeaderPanelTest {
         return new GitService(ps);
     }
 
-    @Test
-    void testHeaderPanelInstantiation() {
+        @Test
+    void testHeaderPanelInstantiation() throws Exception {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
@@ -42,21 +42,56 @@ class HeaderPanelTest {
 
         Path newRoot = tempDir.resolve("updated-proj");
         ps.setCurrentProjectRoot(newRoot);
-        header.onProjectChanged(new ProjectChangedEvent(newRoot));
+        SwingUtilities.invokeAndWait(
+                () -> header.onProjectChanged(new ProjectChangedEvent(newRoot)));
 
         AppSettings updatedSettings = ss.getSettings();
         updatedSettings.setGeminiModel("gemini-4-argon");
-        header.onSettingsChanged(new SettingsChangedEvent(updatedSettings));
+        SwingUtilities.invokeAndWait(
+                () -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
 
         Component projLabel =
                 findComponent(
                         header, JLabel.class, c -> "updated-proj".equals(((JLabel) c).getText()));
         assertNotNull(projLabel, "Project label should update on ProjectChangedEvent");
 
-        Component modelLabel =
+                Component modelLabel =
                 findComponent(
                         header, JLabel.class, c -> "gemini-4-argon".equals(((JLabel) c).getText()));
         assertNotNull(modelLabel, "Model label should update on SettingsChangedEvent");
+    }
+
+    @Test
+    void testOnProjectChangedAndOnSettingsChangedOffEdtDispatchToEdt() throws Exception {
+        SettingsService ss = createSettingsService();
+        ProjectService ps = createProjectService(ss);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+
+        Path newRoot = tempDir.resolve("off-edt-proj");
+        ps.setCurrentProjectRoot(newRoot);
+        AppSettings updatedSettings = ss.getSettings();
+        updatedSettings.setGeminiModel("gemini-off-edt");
+
+        Thread backgroundThread =
+                new Thread(
+                        () -> {
+                            header.onProjectChanged(new ProjectChangedEvent(newRoot));
+                            header.onSettingsChanged(new SettingsChangedEvent(updatedSettings));
+                        });
+        backgroundThread.start();
+        backgroundThread.join(5000);
+
+        SwingUtilities.invokeAndWait(() -> {});
+
+        Component projLabel =
+                findComponent(
+                        header, JLabel.class, c -> "off-edt-proj".equals(((JLabel) c).getText()));
+        assertNotNull(projLabel, "Project label should update on EDT when triggered off-EDT");
+
+        Component modelLabel =
+                findComponent(
+                        header, JLabel.class, c -> "gemini-off-edt".equals(((JLabel) c).getText()));
+        assertNotNull(modelLabel, "Model label should update on EDT when triggered off-EDT");
     }
 
     @Test

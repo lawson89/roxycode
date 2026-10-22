@@ -101,7 +101,7 @@ public class ChatPanelTest {
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         FeatureChatPanel chatPanel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
 
         // Transition to PLAN
         chatPanel.onWorkflowTransition(
@@ -131,7 +131,7 @@ public class ChatPanelTest {
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         FeatureChatPanel chatPanel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(aiService.chat(anyString(), any(), anyString(), any()))
@@ -293,13 +293,13 @@ public class ChatPanelTest {
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ExploreChatPanel qaChatPanel =
-                new ExploreChatPanel(aiService, planService, publisher, chatMemory, null);
+                new ExploreChatPanel(aiService, planService, publisher, chatMemory, null, null);
         assertEquals("qa", qaChatPanel.getModel().getSessionPrefix());
         assertEquals(WorkflowPhase.EXPLORE, qaChatPanel.getModel().getLockedPhase());
         assertFalse(qaChatPanel.getModel().isTaskMode());
 
         FeatureChatPanel featureChatPanel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
         assertEquals("task", featureChatPanel.getModel().getSessionPrefix());
         assertNull(featureChatPanel.getModel().getLockedPhase());
         assertTrue(featureChatPanel.getModel().isTaskMode());
@@ -335,7 +335,7 @@ public class ChatPanelTest {
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         FeatureChatPanel chatPanel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
 
         java.lang.reflect.Field approveBtnField = ChatPanel.class.getDeclaredField("approveButton");
         approveBtnField.setAccessible(true);
@@ -390,7 +390,7 @@ public class ChatPanelTest {
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         FeatureChatPanel chatPanel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
 
         java.lang.reflect.Field approveBtnField = ChatPanel.class.getDeclaredField("approveButton");
         approveBtnField.setAccessible(true);
@@ -443,7 +443,7 @@ public class ChatPanelTest {
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         FeatureChatPanel chatPanel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null);
+                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
 
         java.util.List<Boolean> states = new java.util.ArrayList<>();
         chatPanel.addLoadingListener(states::add);
@@ -472,7 +472,7 @@ public class ChatPanelTest {
 
         FeatureChatPanel chatPanel =
                 new FeatureChatPanel(
-                        aiService, planService, publisher, chatMemory, settingsService);
+                        aiService, planService, publisher, chatMemory, settingsService, null);
 
         assertEquals("Turns: 0 / 5", chatPanel.getTurnLabel().getText());
 

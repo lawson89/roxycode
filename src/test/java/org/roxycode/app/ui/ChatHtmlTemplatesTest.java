@@ -77,11 +77,10 @@ class ChatHtmlTemplatesTest {
         assertFalse(result.contains("href='copy:0'"));
     }
 
-    @Test
+        @Test
     void testRenderToolLog() {
-        String toolName = "git";
         String output = "diff output";
-        String result = ChatHtmlTemplates.renderToolLog(toolName, output, true, null);
+        String result = ChatHtmlTemplates.renderToolLog(output, true, null);
 
         assertTrue(
                 result.contains(
@@ -100,7 +99,7 @@ class ChatHtmlTemplatesTest {
                         """
                 <tr><td height="8">&nbsp;</td></tr>"""));
         assertFalse(result.contains("accent-bar"));
-        assertTrue(result.contains("git"));
+        assertFalse(result.contains("tool-header"));
         assertTrue(result.contains("diff output"));
         assertTrue(
                 result.contains("class=")
@@ -111,7 +110,7 @@ class ChatHtmlTemplatesTest {
 
     @Test
     void testRenderToolLogSuccessAndFailure() {
-        String successHtml = ChatHtmlTemplates.renderToolLog("jexl", "1 + 1", true, null);
+        String successHtml = ChatHtmlTemplates.renderToolLog("1 + 1", true, null);
         assertTrue(
                 successHtml.contains("tool-result")
                         && successHtml.contains("&#10003; Executed successfully"));
@@ -119,7 +118,7 @@ class ChatHtmlTemplatesTest {
 
         String failureHtml =
                 ChatHtmlTemplates.renderToolLog(
-                        "jexl", "bad()", false, "Syntax Error: <unexpected> & token");
+                        "bad()", false, "Syntax Error: <unexpected> & token");
         assertTrue(
                 failureHtml.contains("tool-error")
                         && failureHtml.contains(
@@ -127,27 +126,16 @@ class ChatHtmlTemplatesTest {
         assertFalse(failureHtml.contains("<unexpected>"));
         assertFalse(failureHtml.contains("tool-result"));
 
-        String fallbackHtml = ChatHtmlTemplates.renderToolLog("jexl", "bad()", false, "   ");
+        String fallbackHtml = ChatHtmlTemplates.renderToolLog("bad()", false, "   ");
         assertTrue(
                 fallbackHtml.contains("tool-error")
                         && fallbackHtml.contains("&#10007; Error: Unknown error"));
     }
 
     @Test
-    void testRenderToolLogEmptyToolName() {
-        String toolName = "";
-        String output = "jexl output";
-        String result = ChatHtmlTemplates.renderToolLog(toolName, output, true, null);
-
-        assertTrue(result.contains("tool-call"));
-        assertFalse(result.contains("tool-header"));
-        assertTrue(result.contains("jexl output"));
-    }
-
-    @Test
     void testHtmlEscapingInTemplates() {
         String toolResult =
-                ChatHtmlTemplates.renderToolLog("<script>alert(1)</script>", "output", true, null);
+                ChatHtmlTemplates.renderToolLog("output", false, "<script>alert(1)</script>");
         assertFalse(toolResult.contains("<script>"));
         assertTrue(toolResult.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
 

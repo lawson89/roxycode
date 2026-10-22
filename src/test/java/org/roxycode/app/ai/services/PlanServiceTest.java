@@ -284,9 +284,10 @@ class PlanServiceTest {
     void testExploreDecoupling() {
         setupCodePhase();
         // Transition to EXPLORE should fail now because it's decoupled
-        IllegalStateException ex =
+                IllegalStateException ex =
                 assertThrows(
-                        IllegalStateException.class, () -> service.routeToPhase("EXPLORE", "Jump"));
+                        IllegalStateException.class,
+                        () -> service.routeToPhase(WorkflowPhase.EXPLORE, "Jump"));
         assertTrue(ex.getMessage().contains("Error: Cannot jump from CODE to EXPLORE"));
 
         assertTrue(service.getVisitedPhases().contains(WorkflowPhase.CODE));

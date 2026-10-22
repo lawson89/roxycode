@@ -1,6 +1,5 @@
 package org.roxycode.app.ui;
 
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatDarculaLaf;
 import com.formdev.flatlaf.FlatDarkLaf;
@@ -15,7 +14,6 @@ import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
-import org.roxycode.app.model.GeminiModels;
 import org.roxycode.app.service.SettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,26 +118,21 @@ public final class SettingsPanel extends JPanel {
         statusTimer.setRepeats(false);
     }
 
-    private void loadModels() {
-        try {
-            TomlMapper mapper = org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER;
-            GeminiModels geminiModels =
-                    mapper.readValue(
-                            getClass().getResourceAsStream("/models.toml"), GeminiModels.class);
-            List<GeminiModelConfig> modelList = geminiModels.models();
-            DefaultComboBoxModel<GeminiModelConfig> model =
-                    new DefaultComboBoxModel<>(modelList.toArray(new GeminiModelConfig[0]));
-            modelCombo.setModel(model);
+        private void loadModels() {
+        List<GeminiModelConfig> modelList = settingsService.getAvailableModels();
+        if (modelList == null) {
+            modelList = List.of();
+        }
+        DefaultComboBoxModel<GeminiModelConfig> model =
+                new DefaultComboBoxModel<>(modelList.toArray(new GeminiModelConfig[0]));
+        modelCombo.setModel(model);
 
-            String currentModelId = settingsService.getSettings().getGeminiModel();
-            for (int i = 0; i < modelCombo.getItemCount(); i++) {
-                if (modelCombo.getItemAt(i).apiName().equals(currentModelId)) {
-                    modelCombo.setSelectedIndex(i);
-                    break;
-                }
+        String currentModelId = settingsService.getSettings().getGeminiModel();
+        for (int i = 0; i < modelCombo.getItemCount(); i++) {
+            if (modelCombo.getItemAt(i).apiName().equals(currentModelId)) {
+                modelCombo.setSelectedIndex(i);
+                break;
             }
-        } catch (Exception e) {
-            log.error("Failed to load Gemini models: {}", e.getMessage(), e);
         }
     }
 

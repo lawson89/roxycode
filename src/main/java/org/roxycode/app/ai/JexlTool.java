@@ -26,21 +26,28 @@ import org.springframework.stereotype.Component;
 @Component
 public class JexlTool {
 
-    private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
+        private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
     private static final String ERROR_KEY = "error";
-    private static final ObjectMapper MAPPER = AiConfig.SHARED_OBJECT_MAPPER;
 
     private final JexlEngine jexl;
     private final JexlServiceRegistry registry;
     private final ApplicationEventPublisher eventPublisher;
+    private final ObjectMapper mapper;
 
     public JexlTool(JexlServiceRegistry registry) {
-        this(registry, null);
+        this(registry, null, AiConfig.SHARED_OBJECT_MAPPER);
+    }
+
+    public JexlTool(
+            JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher) {
+        this(registry, eventPublisher, AiConfig.SHARED_OBJECT_MAPPER);
     }
 
     @Autowired
     public JexlTool(
-            JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher) {
+            JexlServiceRegistry registry,
+            @Nullable ApplicationEventPublisher eventPublisher,
+            @Nullable ObjectMapper objectMapper) {
         this.jexl =
                 new JexlBuilder()
                         .permissions(AgentJexlPermissions.INSTANCE)
@@ -50,6 +57,7 @@ public class JexlTool {
                         .create();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
+        this.mapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
     }
 
     /**
@@ -99,15 +107,15 @@ public class JexlTool {
 
             publishToolEvent(conversationId, script, result, true, null);
 
-            if (result instanceof Map) {
-                return MAPPER.writeValueAsString(result);
+                        if (result instanceof Map) {
+                return mapper.writeValueAsString(result);
             }
 
             String output = result == null ? "null" : result.toString();
             if (output.trim().isEmpty()) {
                 output = "<empty result>";
             }
-            return MAPPER.writeValueAsString(Map.of("result", output));
+            return mapper.writeValueAsString(Map.of("result", output));
         } catch (Exception e) {
             if (ExceptionUtils.isCancellation(e)) {
                 try {
@@ -137,9 +145,9 @@ public class JexlTool {
         }
     }
 
-    private String toJsonError(String message) {
+        private String toJsonError(String message) {
         try {
-            return MAPPER.writeValueAsString(
+            return mapper.writeValueAsString(
                     Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
         } catch (Exception ex) {
             return "{error: Internal Error during error serialization}";
