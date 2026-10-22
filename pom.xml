@@ -150,7 +150,7 @@
                     <!-- Prints the specific errors in the console output -->
                     <printFailingErrors>true</printFailingErrors>
                     <rulesets>
-                        <ruleset>${project.basedir}/.roxycode/pmd-rules.xml</ruleset>
+                        <ruleset>${project.basedir}/pmd-rules.xml</ruleset>
                     </rulesets>
                 </configuration>
                 <executions>
