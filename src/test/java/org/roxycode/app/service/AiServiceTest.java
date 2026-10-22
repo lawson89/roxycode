@@ -129,7 +129,7 @@ class AiServiceTest {
         ToolExecutionExceptionProcessor processor = config.toolExecutionExceptionProcessor();
         assertInstanceOf(RoxyToolExecutionExceptionProcessor.class, processor);
 
-                ToolCallingManager manager =
+        ToolCallingManager manager =
                 config.toolCallingManager(
                         processor,
                         settingsService,
@@ -636,8 +636,10 @@ class AiServiceTest {
                                     "Should be discarded due to interrupt", "STOP", null);
                         });
 
-                try {
-            assertThrows(CancellationException.class, () -> aiService.chat("default", null, "Run code", null));
+        try {
+            assertThrows(
+                    CancellationException.class,
+                    () -> aiService.chat("default", null, "Run code", null));
             assertTrue(
                     Thread.currentThread().isInterrupted(),
                     "Interrupt flag should be preserved when chat is cancelled");

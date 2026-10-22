@@ -40,7 +40,7 @@ public class AiConfig {
         return new RoxyToolExecutionExceptionProcessor();
     }
 
-        @Bean
+    @Bean
     @Primary
     public ToolCallingManager toolCallingManager(
             ToolExecutionExceptionProcessor toolExecutionExceptionProcessor,

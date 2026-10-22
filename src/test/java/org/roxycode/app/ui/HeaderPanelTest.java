@@ -33,7 +33,7 @@ class HeaderPanelTest {
         return new GitService(ps);
     }
 
-        @Test
+    @Test
     void testHeaderPanelInstantiation() throws Exception {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
@@ -55,7 +55,7 @@ class HeaderPanelTest {
                         header, JLabel.class, c -> "updated-proj".equals(((JLabel) c).getText()));
         assertNotNull(projLabel, "Project label should update on ProjectChangedEvent");
 
-                Component modelLabel =
+        Component modelLabel =
                 findComponent(
                         header, JLabel.class, c -> "gemini-4-argon".equals(((JLabel) c).getText()));
         assertNotNull(modelLabel, "Model label should update on SettingsChangedEvent");

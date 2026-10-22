@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class JexlTool {
 
-        private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
+    private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
     private static final String ERROR_KEY = "error";
 
     private final JexlEngine jexl;
@@ -107,7 +107,7 @@ public class JexlTool {
 
             publishToolEvent(conversationId, script, result, true, null);
 
-                        if (result instanceof Map) {
+            if (result instanceof Map) {
                 return mapper.writeValueAsString(result);
             }
 
@@ -145,7 +145,7 @@ public class JexlTool {
         }
     }
 
-        private String toJsonError(String message) {
+    private String toJsonError(String message) {
         try {
             return mapper.writeValueAsString(
                     Map.of(ERROR_KEY, message != null ? message : "Unknown error"));

@@ -118,7 +118,7 @@ public final class SettingsPanel extends JPanel {
         statusTimer.setRepeats(false);
     }
 
-        private void loadModels() {
+    private void loadModels() {
         List<GeminiModelConfig> modelList = settingsService.getAvailableModels();
         if (modelList == null) {
             modelList = List.of();

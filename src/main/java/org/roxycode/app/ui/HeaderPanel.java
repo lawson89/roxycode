@@ -106,7 +106,7 @@ public final class HeaderPanel extends JPanel {
                         0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
     }
 
-        @EventListener
+    @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Runnable updateTask =
                 () -> {

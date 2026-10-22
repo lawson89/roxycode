@@ -30,7 +30,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
     private static final String MAX_TURNS_EXCEEDED_PREFIX =
             "Autonomous execution stopped: Maximum tool turns (";
 
-        private final ToolCallingManager delegate;
+    private final ToolCallingManager delegate;
     private final SettingsService settingsService;
     private final PlanService planService;
     private final ApplicationEventPublisher eventPublisher;
@@ -55,12 +55,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
             SettingsService settingsService,
             PlanService planService,
             ApplicationEventPublisher eventPublisher) {
-        this(
-                delegate,
-                settingsService,
-                planService,
-                eventPublisher,
-                AiConfig.SHARED_OBJECT_MAPPER);
+        this(delegate, settingsService, planService, eventPublisher, AiConfig.SHARED_OBJECT_MAPPER);
     }
 
     public ReturnDirectToolCallingManager(
@@ -225,7 +220,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
         return updatedHistory;
     }
 
-        private String unquoteIfJsonString(String raw) {
+    private String unquoteIfJsonString(String raw) {
         if (raw != null
                 && raw.length() >= 2
                 && raw.charAt(0) == '"'

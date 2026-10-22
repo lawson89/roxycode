@@ -66,7 +66,7 @@ class ChatControllerTest {
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-                FeatureChatPanel panel =
+        FeatureChatPanel panel =
                 new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
 
         panel.getModel().setCurrentTurn(3);
@@ -86,7 +86,7 @@ class ChatControllerTest {
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-                FeatureChatPanel panel =
+        FeatureChatPanel panel =
                 new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
 
         panel.onToolExecution(new ToolExecutionEvent("task:default", "1 + 1", 2, true, null));

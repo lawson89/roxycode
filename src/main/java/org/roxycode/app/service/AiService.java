@@ -55,7 +55,7 @@ public class AiService {
                         .build();
     }
 
-        public String chat(
+    public String chat(
             String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
         return chat(conversationId, phase, message, null, images);
     }
@@ -88,7 +88,7 @@ public class AiService {
             String content = formatChatResponse(chatResponse, turnCounter.get());
             publishTurnComplete(convId, turnCounter.get(), content);
             return content;
-                } catch (Exception e) {
+        } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, "Chat turn cancelled");
             if (e instanceof RuntimeException re) {
                 throw re;
@@ -246,7 +246,7 @@ public class AiService {
         return promptSpec;
     }
 
-        private void publishTurnComplete(String conversationId, int totalTurns, String result) {
+    private void publishTurnComplete(String conversationId, int totalTurns, String result) {
         eventPublisher.publishEvent(
                 new AgentTurnCompleteEvent(conversationId, AGENT_NAME, totalTurns, result));
     }

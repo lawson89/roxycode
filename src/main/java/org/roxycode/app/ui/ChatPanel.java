@@ -314,7 +314,7 @@ public class ChatPanel extends JPanel {
         outputArea.appendMessage(role, content);
     }
 
-        void appendToolLog(String output, boolean success, String error) {
+    void appendToolLog(String output, boolean success, String error) {
         outputArea.appendToolLog(output, success, error);
     }
 

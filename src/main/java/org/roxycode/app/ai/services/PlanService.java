@@ -297,7 +297,7 @@ public class PlanService {
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-        /** Routes the workflow to the target phase. */
+    /** Routes the workflow to the target phase. */
     public synchronized String routeToPhase(WorkflowPhase nextPhase, String reason) {
         if (nextPhase == null) {
             throw new IllegalArgumentException(

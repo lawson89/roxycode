@@ -103,11 +103,7 @@ public class ChatHtmlTemplates {
 				""";
 
         Map<String, String> values =
-                Map.of(
-                        "output",
-                        output != null ? output : "",
-                        "statusHtml",
-                        statusHtml);
+                Map.of("output", output != null ? output : "", "statusHtml", statusHtml);
 
         return StringSubstitutor.replace(template, values);
     }

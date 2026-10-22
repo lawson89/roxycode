@@ -86,7 +86,7 @@ class AgentServiceTest {
 
     @Test
     void testSingleConstructorBeansDoNotHaveRedundantAutowired() {
-                List<Class<?>> singleCtorClasses =
+        List<Class<?>> singleCtorClasses =
                 List.of(
                         GenericBuildToolService.class,
                         FileEditorService.class,

@@ -80,7 +80,7 @@ public class SettingsService {
         return new AppSettings();
     }
 
-        /**
+    /**
      * Loads the available Gemini model configurations from {@code /models.toml}.
      *
      * @return list of available model configurations

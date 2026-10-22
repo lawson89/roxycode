@@ -77,7 +77,7 @@ class ChatHtmlTemplatesTest {
         assertFalse(result.contains("href='copy:0'"));
     }
 
-        @Test
+    @Test
     void testRenderToolLog() {
         String output = "diff output";
         String result = ChatHtmlTemplates.renderToolLog(output, true, null);

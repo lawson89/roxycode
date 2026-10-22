@@ -63,7 +63,7 @@ class MentorModeIntegrationTest {
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-                ExploreChatPanel exploreChatPanel =
+        ExploreChatPanel exploreChatPanel =
                 new ExploreChatPanel(
                         aiService, planService, eventPublisher, chatMemory, settingsService, null);
         ExploreHistoryPanel exploreHistoryPanel = new ExploreHistoryPanel(chatMemory);
