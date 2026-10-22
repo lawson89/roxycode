@@ -23,6 +23,7 @@ import org.testcontainers.utility.DockerImageName;
  * including container configuration parsing, lifecycle management, and identifiable naming.
  */
 @Service
+@SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
 public class BuildContainerService {
 
     private static final Logger log = LoggerFactory.getLogger(BuildContainerService.class);

@@ -27,9 +27,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 
 /**
- * Service for interacting with arbitrary build tools via .roxycode/build.toml. Provides methods for
- * compilation, testing, and cleaning, either on the host or inside a warm reusable Testcontainers
- * Docker container managed by {@link BuildContainerService}.
+ * Service for interacting with arbitrary build tools via per-project build.toml. Provides methods
+ * for compilation, testing, and cleaning, either on the host or inside a warm reusable
+ * Testcontainers Docker container managed by {@link BuildContainerService}.
  */
 @AgentService(
         value = "buildToolService",
@@ -37,7 +37,7 @@ import org.springframework.context.event.EventListener;
 public class GenericBuildToolService {
 
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
-    private static final String CONFIG_PATH = ".roxycode/build.toml";
+    private static final String CONFIG_FILE = "build.toml";
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
 
     private final ProjectService projectService;
@@ -83,13 +83,13 @@ public class GenericBuildToolService {
     }
 
     @AgentDoc(
-            value = "Checks if a generic build configuration exists (.roxycode/build.toml)",
+            value = "Checks if a generic build configuration exists (build.toml)",
             examples = "buildToolService.detect()")
     public boolean detect() {
         if (!projectService.hasActiveProject()) {
             return false;
         }
-        return Files.exists(projectService.getCurrentProjectRoot().resolve(CONFIG_PATH));
+        return Files.exists(getConfigPath());
     }
 
     @AgentDoc(
@@ -190,8 +190,12 @@ public class GenericBuildToolService {
         }
     }
 
+    private Path getConfigPath() {
+        return projectService.resolveProjectDataPath(CONFIG_FILE);
+    }
+
     private void ensureConfig() {
-        Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
+        Path configPath = getConfigPath();
         if (Files.exists(configPath)) {
             return;
         }
@@ -243,7 +247,7 @@ public class GenericBuildToolService {
     }
 
     private Map<String, Object> loadConfig() throws IOException {
-        Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
+        Path configPath = getConfigPath();
         return tomlMapper.readValue(configPath.toFile(), Map.class);
     }
 
@@ -280,6 +284,7 @@ public class GenericBuildToolService {
         return buildContainerService.parseContainerConfig(config);
     }
 
+    @SuppressWarnings("PMD.PreserveStackTrace")
     private BuildResult executeInContainer(
             String command,
             ContainerConfig containerConfig,
@@ -290,7 +295,7 @@ public class GenericBuildToolService {
             stopActiveContainer();
             String msg =
                     "Docker was not detected or the Docker daemon is not running. "
-                            + "Cannot run isolated build in Testcontainers. Please start Docker or set [container] enabled = false in .roxycode/build.toml.";
+                            + "Cannot run isolated build in Testcontainers. Please start Docker or set [container] enabled = false in build.toml.";
             return new BuildResult(false, -1, msg, List.of(msg), List.of(), msg);
         }
 
@@ -298,7 +303,7 @@ public class GenericBuildToolService {
         List<String> errors = new ArrayList<>();
         List<String> failedTests = new ArrayList<>();
         int exitCode = -1;
-        String fullOutput = "";
+        String fullOutput;
 
         try {
             ContainerExecResult result =
@@ -392,7 +397,7 @@ public class GenericBuildToolService {
         if (!projectService.hasActiveProject()) {
             return "";
         }
-        Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
+        Path configPath = getConfigPath();
         if (!Files.exists(configPath)) {
             ensureConfig();
         }
@@ -404,7 +409,7 @@ public class GenericBuildToolService {
             return;
         }
         stopActiveContainer();
-        Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
+        Path configPath = getConfigPath();
         Files.createDirectories(configPath.getParent());
         Files.writeString(configPath, content, StandardCharsets.UTF_8);
     }

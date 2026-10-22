@@ -29,7 +29,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.ApplicationEventPublisher;
 
 /** Controller coordinating chat turns, service events, and workflow transitions. */
-@SuppressWarnings("PMD.NullAssignment")
+@SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
 public final class ChatController implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
     static final String ROLE_SYSTEM = "system";

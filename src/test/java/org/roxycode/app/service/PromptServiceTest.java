@@ -155,19 +155,24 @@ class PromptServiceTest {
     }
 
     @Test
-    void testLoadProjectContext() throws IOException {
+    void testLoadProjectContextAndCrudOperations() throws IOException {
+        Path projectDataDir = tempDir.resolve("project-data");
         when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        when(projectService.resolveProjectDataPath(anyString()))
+                .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
 
-        // Case 1: no .roxycode/context directory
+        // Case 1: no context directory yet
         assertEquals("", promptService.loadProjectContext());
+        assertTrue(promptService.listContextFiles().isEmpty());
 
-        // Case 2: .roxycode/context with markdown files
-        Path contextDir = tempDir.resolve(".roxycode/context");
-        Files.createDirectories(contextDir);
-        Files.writeString(contextDir.resolve("b_architecture.md"), "Architecture guidelines");
-        Files.writeString(contextDir.resolve("a_rules.md"), "Project rules");
+        // Case 2: save context files and non-markdown file in projectDataDir/context
+        promptService.saveContextFile("b_architecture.md", "Architecture guidelines");
+        promptService.saveContextFile("a_rules.md", "Project rules");
+        Path contextDir = projectDataDir.resolve("context");
         Files.writeString(contextDir.resolve("ignore.txt"), "Ignore me");
+
+        assertEquals(List.of("a_rules.md", "b_architecture.md"), promptService.listContextFiles());
+        assertEquals("Project rules", promptService.readContextFile("a_rules.md"));
 
         String context = promptService.loadProjectContext();
         assertTrue(context.contains("## Project Context: a_rules.md"));
@@ -180,6 +185,11 @@ class PromptServiceTest {
         int idxA = context.indexOf("a_rules.md");
         int idxB = context.indexOf("b_architecture.md");
         assertTrue(idxA < idxB, "Context files should be sorted alphabetically");
+
+        // Delete a context file
+        promptService.deleteContextFile("a_rules.md");
+        assertEquals(List.of("b_architecture.md"), promptService.listContextFiles());
+        assertEquals("", promptService.readContextFile("a_rules.md"));
     }
 
     @Test
@@ -197,9 +207,11 @@ class PromptServiceTest {
 
     @Test
     void testGetStableSessionAndSystemPrompt() throws IOException {
+        Path projectDataDir = tempDir.resolve("project-data");
         when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-        Path contextDir = tempDir.resolve(".roxycode/context");
+        when(projectService.resolveProjectDataPath(anyString()))
+                .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
+        Path contextDir = projectDataDir.resolve("context");
         Files.createDirectories(contextDir);
         Files.writeString(contextDir.resolve("rules.md"), "CUSTOM RULES");
 

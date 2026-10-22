@@ -15,6 +15,10 @@ public class SystemToolService {
     private static final Logger log = LoggerFactory.getLogger(SystemToolService.class);
     private static final String JAVA = "Java";
     private static final String DOCKER = "Docker";
+    private static final String ARG_VERSION = "--version";
+    private static final String STATUS_DETECTED = "Detected";
+    private static final String STATUS_MISSING = "Missing";
+    private static final String VERSION_NOT_FOUND = "Not found";
     private static final String DOCKER_DESCRIPTION =
             "Required for isolated build and test execution via Testcontainers.";
 
@@ -26,19 +30,19 @@ public class SystemToolService {
                             detectTool(
                                     "Ripgrep",
                                     "rg",
-                                    "--version",
+                                    ARG_VERSION,
                                     "Required for fast file searching."));
                     tools.add(
                             detectTool(
                                     "Git",
                                     "git",
-                                    "--version",
+                                    ARG_VERSION,
                                     "Required for version control integration."));
                     tools.add(
                             detectTool(
                                     "Universal Ctags",
                                     "ctags",
-                                    "--version",
+                                    ARG_VERSION,
                                     "Required for code navigation and symbol extraction."));
                     tools.add(
                             detectTool(
@@ -62,16 +66,17 @@ public class SystemToolService {
      * Synchronously checks whether the Docker CLI is installed and the Docker daemon is reachable.
      */
     public boolean checkDockerAvailable() {
-        return "Detected".equals(detectDockerTool().status());
+        return STATUS_DETECTED.equals(detectDockerTool().status());
     }
 
     SystemTool detectDockerTool() {
         try {
             ProcessResult versionResult =
-                    ProcessRunner.run(List.of("docker", "--version"), null, true);
+                    ProcessRunner.run(List.of("docker", ARG_VERSION), null, true);
             if (versionResult.timedOut() || versionResult.exitCode() != 0) {
                 log.warn("Docker CLI detection failed with exit code {}", versionResult.exitCode());
-                return new SystemTool(DOCKER, "Not found", "Missing", DOCKER_DESCRIPTION);
+                return new SystemTool(
+                        DOCKER, VERSION_NOT_FOUND, STATUS_MISSING, DOCKER_DESCRIPTION);
             }
 
             String cliVersion = parseVersion(versionResult.output(), DOCKER);
@@ -87,16 +92,17 @@ public class SystemToolService {
                         !serverVersion.isEmpty()
                                 ? "Docker " + serverVersion + " (Daemon Running)"
                                 : cliVersion + " (Daemon Running)";
-                return new SystemTool(DOCKER, versionDisplay, "Detected", DOCKER_DESCRIPTION);
+                return new SystemTool(DOCKER, versionDisplay, STATUS_DETECTED, DOCKER_DESCRIPTION);
             } else {
                 log.warn("Docker daemon is not reachable (exit code {})", infoResult.exitCode());
-                return new SystemTool(DOCKER, "Daemon not running", "Missing", DOCKER_DESCRIPTION);
+                return new SystemTool(
+                        DOCKER, "Daemon not running", STATUS_MISSING, DOCKER_DESCRIPTION);
             }
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
             log.error("Exception during Docker detection: {}", e.getMessage());
-            return new SystemTool(DOCKER, "Not found", "Missing", DOCKER_DESCRIPTION);
+            return new SystemTool(DOCKER, VERSION_NOT_FOUND, STATUS_MISSING, DOCKER_DESCRIPTION);
         }
     }
 
@@ -106,16 +112,16 @@ public class SystemToolService {
             ProcessResult result = ProcessRunner.run(List.of(command, versionArg), null, true);
             if (!result.timedOut() && result.exitCode() == 0) {
                 String version = parseVersion(result.output(), name);
-                return new SystemTool(name, version, "Detected", description);
+                return new SystemTool(name, version, STATUS_DETECTED, description);
             } else {
                 log.warn("Tool {} detection failed with exit code {}", name, result.exitCode());
-                return new SystemTool(name, "Not found", "Missing", description);
+                return new SystemTool(name, VERSION_NOT_FOUND, STATUS_MISSING, description);
             }
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
             log.error("Exception during tool {} detection: {}", name, e.getMessage());
-            return new SystemTool(name, "Not found", "Missing", description);
+            return new SystemTool(name, VERSION_NOT_FOUND, STATUS_MISSING, description);
         }
     }
 

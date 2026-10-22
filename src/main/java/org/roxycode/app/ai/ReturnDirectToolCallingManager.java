@@ -131,7 +131,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
                 ToolResponseMessage.ToolResponse processed =
                         processSingleToolResponse(
                                 tr, responseIndex, chatResponse, turnContext, returnDirect);
-                if (processed != tr) {
+                if (!processed.equals(tr)) {
                     historyModified = true;
                 }
                 updatedResponses.add(processed);

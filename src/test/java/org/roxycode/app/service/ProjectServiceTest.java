@@ -73,6 +73,49 @@ class ProjectServiceTest {
     }
 
     @Test
+    void testGetProjectDataDirAndResolveProjectDataPath() {
+        SettingsService settingsService = new SettingsService();
+        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
+
+        ProjectService projectService = new ProjectService(settingsService);
+        assertThrows(IllegalStateException.class, projectService::getProjectDataDir);
+        assertThrows(
+                IllegalStateException.class,
+                () -> projectService.resolveProjectDataPath("build.toml"));
+
+        Path projectA = tempDir.resolve("workspaceA").resolve("My Cool Project!");
+        projectService.setCurrentProjectRoot(projectA);
+
+        Path dataDirA = projectService.getProjectDataDir();
+        assertEquals(tempDir.resolve("projects"), dataDirA.getParent());
+        String dirNameA = dataDirA.getFileName().toString();
+        assertTrue(
+                dirNameA.matches("^my-cool-project-[0-9a-f]{8}$"),
+                "Expected sanitized name + 8-char hex hash, got: " + dirNameA);
+
+        // Same folder name in a different parent directory produces a distinct hash
+        Path projectB = tempDir.resolve("workspaceB").resolve("My Cool Project!");
+        projectService.setCurrentProjectRoot(projectB);
+        Path dataDirB = projectService.getProjectDataDir();
+        assertNotEquals(dataDirA, dataDirB);
+        assertTrue(
+                dataDirB.getFileName().toString().startsWith("my-cool-project-"),
+                "Both should share sanitized prefix");
+
+        // Sandbox resolution within project data dir
+        assertEquals(dataDirB, projectService.resolveProjectDataPath(null));
+        assertEquals(
+                dataDirB.resolve("build.toml"),
+                projectService.resolveProjectDataPath("build.toml"));
+        assertEquals(
+                dataDirB.resolve("context/rules.md"),
+                projectService.resolveProjectDataPath("context/rules.md"));
+        assertThrows(
+                SecurityException.class,
+                () -> projectService.resolveProjectDataPath("../other-project/build.toml"));
+    }
+
+    @Test
     void testNotAnnotatedWithAgentServiceOrAgentDoc() {
         assertNull(
                 ProjectService.class.getAnnotation(AgentService.class),

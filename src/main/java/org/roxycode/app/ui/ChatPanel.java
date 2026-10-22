@@ -38,10 +38,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
 /** Panel for the chat interface, including output display and user input area. */
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public class ChatPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
+    private static final String MIG_GROWX_WRAP = "growx, wrap";
 
     private final transient ChatModel model;
     private final transient ChatController controller;
@@ -237,10 +239,10 @@ public class ChatPanel extends JPanel {
 
         JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[]"));
         buttonPanel.setOpaque(false);
-        buttonPanel.add(sendButton, "growx, wrap");
-        buttonPanel.add(stopButton, "growx, wrap");
-        buttonPanel.add(attachImageButton, "growx, wrap");
-        buttonPanel.add(resetSessionButton, "growx, wrap");
+        buttonPanel.add(sendButton, MIG_GROWX_WRAP);
+        buttonPanel.add(stopButton, MIG_GROWX_WRAP);
+        buttonPanel.add(attachImageButton, MIG_GROWX_WRAP);
+        buttonPanel.add(resetSessionButton, MIG_GROWX_WRAP);
         buttonPanel.add(turnLabel, "center");
 
         inputSection.add(inputAreaContainer, "grow");

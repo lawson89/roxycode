@@ -44,6 +44,19 @@ class SettingsServiceTest {
     }
 
     @Test
+    void testGetRoxyHomeDirDefaultAndOverride() {
+        SettingsService service = new SettingsService();
+        Path defaultHome = service.getRoxyHomeDir();
+        assertNotNull(defaultHome);
+        assertTrue(defaultHome.endsWith(".roxycode"));
+        assertEquals(SettingsService.getDefaultRoxyHomeDir(), defaultHome);
+
+        Path customSettings = tempDir.resolve("custom-roxy").resolve("settings.toml");
+        service.setSettingsPathOverride(customSettings);
+        assertEquals(tempDir.resolve("custom-roxy"), service.getRoxyHomeDir());
+    }
+
+    @Test
     void testLoadFromDiskFallbacksAndDefaultPath() throws IOException {
         Path defaultPath = SettingsService.getDefaultSettingsPath();
         assertNotNull(defaultPath);

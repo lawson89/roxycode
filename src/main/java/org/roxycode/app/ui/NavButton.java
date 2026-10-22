@@ -5,7 +5,6 @@ import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
 import javax.swing.*;
 import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 
 /** Styled navigation button for the sidebar. */
@@ -14,7 +13,6 @@ public final class NavButton extends JButton {
     private static final int VERTICAL_PADDING = 8;
     private static final int HORIZONTAL_PADDING = 12;
     private static final int STATUS_ICON_GAP = 8;
-    private static final int BUSY_ANIMATION_DELAY_MS = 500;
     private static final int ROW_ARC = 8;
     private static final int ACCENT_PILL_WIDTH = 3;
     private static final int BADGE_SIZE = 18;
@@ -22,20 +20,15 @@ public final class NavButton extends JButton {
     private static final Color AMBER_DARK = new Color(0xf5, 0x9e, 0x0b);
     private static final Color AMBER_TINT_LIGHT = new Color(245, 158, 11, 30);
     private static final Color AMBER_TINT_DARK = new Color(245, 158, 11, 45);
-    private static final FontAwesomeSolid[] HOURGLASS_FRAMES = {
-        FontAwesomeSolid.HOURGLASS_START,
-        FontAwesomeSolid.HOURGLASS_HALF,
-        FontAwesomeSolid.HOURGLASS_END
-    };
 
     static final String BUSY_TOOLTIP = "Agent is working in the background...";
     static final String WAITING_APPROVAL_TOOLTIP = "Waiting for your approval to continue";
 
+    private final transient HourglassAnimator hourglassAnimator =
+            new HourglassAnimator(this::repaint);
     private boolean busy;
     private boolean waitingApproval;
     private transient FontIcon statusIcon;
-    private Timer busyTimer;
-    private int hourglassFrameIndex = 1;
 
     public NavButton(String text, Icon icon) {
         super(text, icon);
@@ -78,37 +71,24 @@ public final class NavButton extends JButton {
     }
 
     Timer getBusyTimer() {
-        return busyTimer;
+        return hourglassAnimator.getTimer();
+    }
+
+    HourglassAnimator getHourglassAnimator() {
+        return hourglassAnimator;
     }
 
     void advanceBusyFrame() {
         if (!busy || statusIcon == null) {
-            stopBusyTimer();
+            hourglassAnimator.stop();
             return;
         }
-        hourglassFrameIndex = (hourglassFrameIndex + 1) % HOURGLASS_FRAMES.length;
-        statusIcon.setIkon(HOURGLASS_FRAMES[hourglassFrameIndex]);
-        repaint();
-    }
-
-    private void startBusyTimer() {
-        if (busyTimer == null) {
-            busyTimer = new Timer(BUSY_ANIMATION_DELAY_MS, e -> advanceBusyFrame());
-        }
-        if (!busyTimer.isRunning()) {
-            busyTimer.start();
-        }
-    }
-
-    private void stopBusyTimer() {
-        if (busyTimer != null && busyTimer.isRunning()) {
-            busyTimer.stop();
-        }
+        hourglassAnimator.advanceFrame();
     }
 
     @Override
     public void removeNotify() {
-        stopBusyTimer();
+        hourglassAnimator.stop();
         super.removeNotify();
     }
 
@@ -117,16 +97,14 @@ public final class NavButton extends JButton {
     })
     private void updateStatusIcon() {
         if (busy) {
-            hourglassFrameIndex = 1;
-            statusIcon = FontIcon.of(HOURGLASS_FRAMES[hourglassFrameIndex], 13);
+            statusIcon = hourglassAnimator.start();
             setToolTipText(BUSY_TOOLTIP);
-            startBusyTimer();
         } else if (waitingApproval) {
-            stopBusyTimer();
+            hourglassAnimator.stop();
             statusIcon = FontIcon.of(Codicons.BELL_DOT, 14);
             setToolTipText(WAITING_APPROVAL_TOOLTIP);
         } else {
-            stopBusyTimer();
+            hourglassAnimator.stop();
             statusIcon = null;
             setToolTipText(null);
         }

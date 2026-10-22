@@ -30,7 +30,7 @@ public class PromptService {
     private static final String REVIEW_PROMPT_PATH = "prompts/review_phase.md";
     private static final String PLAN_PROMPT_PATH = "prompts/plan_phase.md";
     private static final String CODE_PROMPT_PATH = "prompts/code_phase.md";
-    private static final String CONTEXT_DIR = ".roxycode/context";
+    private static final String CONTEXT_DIR = "context";
 
     private static final String NEWLINE_DOUBLE = "\n\n";
     private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
@@ -178,7 +178,7 @@ public class PromptService {
         if (!projectService.hasActiveProject()) {
             return "";
         }
-        Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
+        Path contextDir = projectService.resolveProjectDataPath(CONTEXT_DIR);
         if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
             return "";
         }
@@ -218,7 +218,7 @@ public class PromptService {
         if (!projectService.hasActiveProject()) {
             return java.util.Collections.emptyList();
         }
-        Path contextDir = projectService.getCurrentProjectRoot().resolve(CONTEXT_DIR);
+        Path contextDir = projectService.resolveProjectDataPath(CONTEXT_DIR);
         if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
             return java.util.Collections.emptyList();
         }
@@ -238,7 +238,7 @@ public class PromptService {
         if (!projectService.hasActiveProject()) {
             return "";
         }
-        Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
+        Path file = projectService.resolveProjectDataPath(CONTEXT_DIR + "/" + filename);
         if (Files.exists(file)) {
             try {
                 return Files.readString(file, StandardCharsets.UTF_8);
@@ -253,7 +253,7 @@ public class PromptService {
         if (!projectService.hasActiveProject()) {
             throw new IllegalStateException("No active project");
         }
-        Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
+        Path file = projectService.resolveProjectDataPath(CONTEXT_DIR + "/" + filename);
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, content, StandardCharsets.UTF_8);
@@ -267,7 +267,7 @@ public class PromptService {
         if (!projectService.hasActiveProject()) {
             return;
         }
-        Path file = projectService.resolvePath(CONTEXT_DIR + "/" + filename);
+        Path file = projectService.resolveProjectDataPath(CONTEXT_DIR + "/" + filename);
         try {
             Files.deleteIfExists(file);
         } catch (IOException e) {

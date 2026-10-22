@@ -59,6 +59,12 @@ public final class QaWorkspacePanel extends JPanel {
         add(qaTabs, BorderLayout.CENTER);
     }
 
+    public void bindSidebar(SidebarPanel sidebar) {
+        if (sidebar != null && qaChatPanel != null) {
+            qaChatPanel.addLoadingListener(sidebar::setQaBusy);
+        }
+    }
+
     public void focusChatInput() {
         if (qaChatPanel != null) {
             qaTabs.setSelectedComponent(qaChatPanel);

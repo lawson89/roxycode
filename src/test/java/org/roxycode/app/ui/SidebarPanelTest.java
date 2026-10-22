@@ -138,10 +138,18 @@ class SidebarPanelTest {
     }
 
     @Test
-    void testSetTaskBusyAndWaitingApprovalUpdatesFeatureRequestButton() {
+    void testSetQaAndTaskBusyAndWaitingApprovalUpdatesSidebarButtons() {
         SidebarPanel sidebar = new SidebarPanel(card -> {});
+        assertFalse(sidebar.isQaBusy());
         assertFalse(sidebar.isTaskBusy());
         assertFalse(sidebar.isTaskWaitingApproval());
+
+        sidebar.setQaBusy(true);
+        assertTrue(sidebar.isQaBusy());
+        assertFalse(sidebar.isTaskBusy());
+
+        sidebar.setQaBusy(false);
+        assertFalse(sidebar.isQaBusy());
 
         sidebar.setTaskBusy(true);
         assertTrue(sidebar.isTaskBusy());

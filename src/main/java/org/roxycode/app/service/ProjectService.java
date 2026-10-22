@@ -1,7 +1,12 @@
 package org.roxycode.app.service;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.Locale;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +17,8 @@ import org.springframework.stereotype.Service;
 @Service
 @SuppressWarnings("PMD.NullAssignment")
 public class ProjectService {
+    private static final String PROJECTS_SUBDIR = "projects";
+
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
     private Path currentProjectRoot;
@@ -57,7 +64,8 @@ public class ProjectService {
         if (currentProjectRoot == null) {
             return "No Project";
         }
-        return currentProjectRoot.getFileName().toString();
+        Path fileName = currentProjectRoot.getFileName();
+        return fileName != null ? fileName.toString() : currentProjectRoot.toString();
     }
 
     /**
@@ -74,7 +82,46 @@ public class ProjectService {
         if (projectRoot == null) {
             throw new IllegalStateException("Project root is not set.");
         }
-        Path root = projectRoot.toAbsolutePath().normalize();
+        return resolveWithinSandbox(projectRoot, relativePath);
+    }
+
+    /**
+     * Returns the per-project data directory under {@code <roxyHomeDir>/projects/<name>-<hash>} for
+     * the active project.
+     *
+     * @return the normalized absolute path to the project data directory
+     * @throws IllegalStateException if no active project root is set
+     */
+    public Path getProjectDataDir() {
+        Path projectRoot = getCurrentProjectRoot();
+        if (projectRoot == null) {
+            throw new IllegalStateException("Project root is not set.");
+        }
+        Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
+        String dirName =
+                sanitizeProjectDirName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
+        Path roxyHome = settingsService.getRoxyHomeDir();
+        if (roxyHome == null) {
+            roxyHome = SettingsService.getDefaultRoxyHomeDir();
+        }
+        return roxyHome.toAbsolutePath().normalize().resolve(PROJECTS_SUBDIR).resolve(dirName);
+    }
+
+    /**
+     * Resolves a path relative to the per-project data directory ({@link #getProjectDataDir()}) and
+     * validates that it stays within that directory sandbox.
+     *
+     * @param relativePath the path relative to the project data directory (null defaults to ".")
+     * @return the normalized absolute path within the project data directory
+     * @throws IllegalStateException if no active project root is set
+     * @throws SecurityException if the resolved path escapes the project data directory
+     */
+    public Path resolveProjectDataPath(String relativePath) {
+        return resolveWithinSandbox(getProjectDataDir(), relativePath);
+    }
+
+    private static Path resolveWithinSandbox(Path sandboxRoot, String relativePath) {
+        Path root = sandboxRoot.toAbsolutePath().normalize();
         Path resolved =
                 root.resolve(relativePath != null ? relativePath : ".")
                         .toAbsolutePath()
@@ -83,5 +130,26 @@ public class ProjectService {
             throw new SecurityException("Path traversal attempt detected: " + relativePath);
         }
         return resolved;
+    }
+
+    static String sanitizeProjectDirName(Path normalizedRoot) {
+        Path fileName = normalizedRoot.getFileName();
+        String rawName = fileName != null ? fileName.toString() : "project";
+        String sanitized =
+                rawName.toLowerCase(Locale.ROOT)
+                        .replaceAll("[^a-z0-9._-]+", "-")
+                        .replaceAll("(^-+|-+$)", "");
+        return sanitized.isEmpty() ? "project" : sanitized;
+    }
+
+    static String computeProjectHash(Path normalizedRoot) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes =
+                    digest.digest(normalizedRoot.toString().getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashBytes, 0, 4);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
     }
 }

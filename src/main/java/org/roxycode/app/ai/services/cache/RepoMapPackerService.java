@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -12,12 +11,10 @@ import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
-import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.ExceptionUtils;
-import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -31,6 +28,7 @@ import org.springframework.stereotype.Service;
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
     private static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB
+    private static final String CANCELLED_MSG = "Repo map operation cancelled";
 
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
@@ -111,7 +109,7 @@ public class RepoMapPackerService {
                     }
                 }
             } catch (Exception e) {
-                ExceptionUtils.rethrowIfCancelled(e, "Repo map operation cancelled");
+                ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
                 sb.append("[Error processing file: ").append(e.getMessage()).append("]\n");
             }
             sb.append("\n\n");
@@ -119,10 +117,7 @@ public class RepoMapPackerService {
 
         this.cachedMap = sb.toString();
         this.needsUpdate = false;
-        long tokens = TokenUtils.estimateTokens(cachedMap);
         metaService.saveRepoCache(cachedMap);
-        metaService.saveMeta(
-                new ProjectCacheMeta(projectService.getProjectName(), LocalDateTime.now(), tokens));
         return new EditorResult(true, cachedMap, null);
     }
 
@@ -157,7 +152,7 @@ public class RepoMapPackerService {
                             tags.add(new Tag(nameNode.asText(), lineNode.asInt()));
                         }
                     } catch (Exception e) {
-                        ExceptionUtils.rethrowIfCancelled(e, "Repo map operation cancelled");
+                        ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
                         log.trace("Skip unparseable line: {}", line);
                     }
                 }
@@ -178,7 +173,7 @@ public class RepoMapPackerService {
             }
             return skeleton.toString();
         } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, "Repo map operation cancelled");
+            ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
             log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
             return null;
         }
@@ -205,7 +200,7 @@ public class RepoMapPackerService {
                 }
             }
         } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, "Repo map operation cancelled");
+            ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
             log.warn("Could not determine if file is binary: {}", path, e);
         }
         return false;

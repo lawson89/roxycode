@@ -50,10 +50,26 @@ public class SettingsService {
     private AppSettings settings;
     private Path settingsPathOverride;
 
+    /** Returns the default RoxyCode home directory (~/.roxycode). */
+    public static Path getDefaultRoxyHomeDir() {
+        String userHome = System.getProperty("user.home");
+        return Paths.get(userHome, SETTINGS_DIR);
+    }
+
     /** Returns the default user settings file path (~/.roxycode/settings.toml). */
     public static Path getDefaultSettingsPath() {
-        String userHome = System.getProperty("user.home");
-        return Paths.get(userHome, SETTINGS_DIR, SETTINGS_FILE);
+        return getDefaultRoxyHomeDir().resolve(SETTINGS_FILE);
+    }
+
+    /**
+     * Returns the active RoxyCode home directory (~/.roxycode by default, or the parent directory
+     * of {@code settingsPathOverride} when overridden in tests).
+     */
+    public Path getRoxyHomeDir() {
+        if (settingsPathOverride != null && settingsPathOverride.getParent() != null) {
+            return settingsPathOverride.getParent();
+        }
+        return getDefaultRoxyHomeDir();
     }
 
     /**

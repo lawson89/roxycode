@@ -170,4 +170,50 @@ class NavButtonTest {
         btn.removeNotify();
         assertFalse(btn.getBusyTimer().isRunning());
     }
+
+    @Test
+    void testHourglassAnimatorStandaloneLifecycleAndFrameCycling() {
+        java.util.concurrent.atomic.AtomicInteger frameCallbacks =
+                new java.util.concurrent.atomic.AtomicInteger(0);
+        HourglassAnimator animator = new HourglassAnimator(frameCallbacks::incrementAndGet);
+
+        assertFalse(animator.isRunning());
+        assertNull(animator.getIcon());
+
+        // Calling advanceFrame before start is a safe no-op
+        animator.advanceFrame();
+        assertEquals(0, frameCallbacks.get());
+
+        FontIcon icon = animator.start();
+        assertNotNull(icon);
+        assertSame(icon, animator.getIcon());
+        assertEquals(HourglassAnimator.DEFAULT_ICON_SIZE, icon.getIconSize());
+        assertEquals(FontAwesomeSolid.HOURGLASS_HALF, icon.getIkon());
+        assertTrue(animator.isRunning());
+        assertEquals(HourglassAnimator.ANIMATION_DELAY_MS, animator.getTimer().getDelay());
+
+        animator.advanceFrame();
+        assertEquals(FontAwesomeSolid.HOURGLASS_END, icon.getIkon());
+        assertEquals(1, frameCallbacks.get());
+
+        animator.advanceFrame();
+        assertEquals(FontAwesomeSolid.HOURGLASS_START, icon.getIkon());
+        assertEquals(2, frameCallbacks.get());
+
+        animator.advanceFrame();
+        assertEquals(FontAwesomeSolid.HOURGLASS_HALF, icon.getIkon());
+        assertEquals(3, frameCallbacks.get());
+
+        animator.stop();
+        assertFalse(animator.isRunning());
+
+        // Restarting reuses the FontIcon and resets frame to HOURGLASS_HALF
+        animator.advanceFrame();
+        assertEquals(FontAwesomeSolid.HOURGLASS_END, icon.getIkon());
+        FontIcon restartedIcon = animator.start();
+        assertSame(icon, restartedIcon);
+        assertEquals(FontAwesomeSolid.HOURGLASS_HALF, restartedIcon.getIkon());
+        assertTrue(animator.isRunning());
+        animator.stop();
+    }
 }

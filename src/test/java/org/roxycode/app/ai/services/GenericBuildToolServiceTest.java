@@ -26,6 +26,8 @@ class GenericBuildToolServiceTest {
 
     @TempDir Path tempDir;
 
+    private Path projectRoot;
+    private Path projectDataDir;
     private ProjectService projectService;
     private TomlMapper tomlMapper;
     private SystemToolService systemToolService;
@@ -33,7 +35,11 @@ class GenericBuildToolServiceTest {
     private GenericBuildToolService buildToolService;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
+        projectRoot = tempDir.resolve("workspace");
+        projectDataDir = tempDir.resolve("roxy-home/projects/workspace-12345678");
+        Files.createDirectories(projectRoot);
+
         projectService = mock(ProjectService.class);
         tomlMapper = new TomlMapper();
         systemToolService = mock(SystemToolService.class);
@@ -42,8 +48,11 @@ class GenericBuildToolServiceTest {
         buildToolService =
                 new GenericBuildToolService(projectService, tomlMapper, buildContainerService);
 
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        lenient().when(projectService.hasActiveProject()).thenReturn(true);
+        lenient().when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
+        lenient()
+                .when(projectService.resolveProjectDataPath(anyString()))
+                .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
     }
 
     @Test
@@ -53,24 +62,26 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testDetectWithConfig() throws IOException {
-        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.createDirectories(projectDataDir);
         Files.writeString(
-                tempDir.resolve(".roxycode/build.toml"),
+                projectDataDir.resolve("build.toml"),
                 """
                 [build]
                 compile = 'echo hi'
                 """);
         assertTrue(buildToolService.detect());
+        assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
     }
 
     @Test
     void testEnsureConfigAutoDetectionMavenIncludesContainerSection() throws IOException {
-        Files.writeString(tempDir.resolve("pom.xml"), "<project></project>");
+        Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
 
         buildToolService.compile();
 
-        Path configPath = tempDir.resolve(".roxycode/build.toml");
+        Path configPath = projectDataDir.resolve("build.toml");
         assertTrue(Files.exists(configPath));
+        assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
         String content = Files.readString(configPath);
         assertTrue(content.contains("compile"));
         assertTrue(content.contains("[container]"));
@@ -79,9 +90,9 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testCommandPlaceholders() throws IOException {
-        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.createDirectories(projectDataDir);
         Files.writeString(
-                tempDir.resolve(".roxycode/build.toml"),
+                projectDataDir.resolve("build.toml"),
                 """
                 [test]
                 run_single = 'echo {testName}'
@@ -93,9 +104,9 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testRegexParsing() throws IOException {
-        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.createDirectories(projectDataDir);
         Files.writeString(
-                tempDir.resolve(".roxycode/build.toml"),
+                projectDataDir.resolve("build.toml"),
                 """
                 [build]
                 compile = 'echo [ERROR] Compilation failed'
@@ -110,9 +121,9 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testEnvironmentVariables() throws IOException {
-        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.createDirectories(projectDataDir);
         Files.writeString(
-                tempDir.resolve(".roxycode/build.toml"),
+                projectDataDir.resolve("build.toml"),
                 """
                 [build]
                 compile = 'echo test'
@@ -129,9 +140,9 @@ class GenericBuildToolServiceTest {
         when(systemToolService.isDockerAvailable())
                 .thenReturn(CompletableFuture.completedFuture(false));
 
-        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.createDirectories(projectDataDir);
         Files.writeString(
-                tempDir.resolve(".roxycode/build.toml"),
+                projectDataDir.resolve("build.toml"),
                 """
                 [build]
                 compile = './mvnw compile'
@@ -182,7 +193,7 @@ class GenericBuildToolServiceTest {
                     };
                 });
 
-        Files.createDirectories(tempDir.resolve(".roxycode"));
+        Files.createDirectories(projectDataDir);
         String toml =
                 """
                 [build]
@@ -196,7 +207,7 @@ class GenericBuildToolServiceTest {
                 image = 'eclipse-temurin:25-jdk'
                 workdir = '/workspace'
                 """;
-        Files.writeString(tempDir.resolve(".roxycode/build.toml"), toml);
+        Files.writeString(projectDataDir.resolve("build.toml"), toml);
 
         BuildResult compileRes = buildToolService.compile();
         assertTrue(compileRes.isSuccess());
@@ -223,7 +234,7 @@ class GenericBuildToolServiceTest {
         assertFalse(sessionClosed.get());
 
         // Switching project stops active container
-        buildToolService.handleProjectChanged(new ProjectChangedEvent(tempDir));
+        buildToolService.handleProjectChanged(new ProjectChangedEvent(projectRoot));
         assertTrue(sessionClosed.get(), "Switching project should stop active warm container");
     }
 }

@@ -60,6 +60,7 @@ public class AiService {
         return chat(conversationId, phase, message, null, images);
     }
 
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public String chat(
             String conversationId,
             WorkflowPhase phase,

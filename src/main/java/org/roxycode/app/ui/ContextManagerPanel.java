@@ -49,7 +49,7 @@ public final class ContextManagerPanel extends JPanel {
 
         JPanel leftPanel = new JPanel(new BorderLayout(0, 5));
         leftPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        leftPanel.add(new JLabel("Context Files (.roxycode/context/)"), BorderLayout.NORTH);
+        leftPanel.add(new JLabel("Context Files (context/)"), BorderLayout.NORTH);
         leftPanel.add(listScroll, BorderLayout.CENTER);
         leftPanel.add(leftButtons, BorderLayout.SOUTH);
 

@@ -267,6 +267,28 @@ class MentorModeIntegrationTest {
         assertFalse(
                 sidebar.isTaskWaitingApproval(),
                 "Sidebar waiting approval should clear when pending phase is null on phase change");
+
+        // Verify both QaWorkspacePanel and TaskWorkspacePanel loading states update SidebarPanel
+        assertFalse(sidebar.isQaBusy());
+        assertFalse(sidebar.isTaskBusy());
+
+        qaWorkspacePanel.getQaChatPanel().setLoading(true);
+        assertTrue(
+                sidebar.isQaBusy(),
+                "Sidebar Codebase Q&A button should show busy indicator when Q&A chat is loading");
+        assertFalse(sidebar.isTaskBusy());
+
+        qaWorkspacePanel.getQaChatPanel().setLoading(false);
+        assertFalse(
+                sidebar.isQaBusy(),
+                "Sidebar Codebase Q&A button should clear busy indicator when Q&A chat finishes loading");
+
+        taskWorkspacePanel.getTaskChatPanel().setLoading(true);
+        assertTrue(
+                sidebar.isTaskBusy(),
+                "Sidebar Feature Request button should show busy indicator when task chat is loading");
+        taskWorkspacePanel.getTaskChatPanel().setLoading(false);
+        assertFalse(sidebar.isTaskBusy());
     }
 
     @Test

@@ -10,6 +10,7 @@ import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ui.ExploreChatPanel;
 import org.roxycode.app.ui.FeatureChatPanel;
@@ -89,6 +90,7 @@ class AgentServiceTest {
         List<Class<?>> singleCtorClasses =
                 List.of(
                         GenericBuildToolService.class,
+                        ProjectCacheMetaService.class,
                         FileEditorService.class,
                         MainFrame.class,
                         ExploreChatPanel.class,

@@ -134,6 +134,7 @@ public final class MainFrame extends JFrame {
 
         // Sidebar
         SidebarPanel sidebar = new SidebarPanel(this::showCard);
+        qaWorkspacePanel.bindSidebar(sidebar);
         taskWorkspacePanel.bindSidebar(sidebar);
 
         // Main Workspace

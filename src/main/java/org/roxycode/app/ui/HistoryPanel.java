@@ -18,6 +18,7 @@ import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.context.event.EventListener;
 
 /** Panel for displaying a persistent history of all AI interactions and tool executions. */
+@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
 public class HistoryPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private final transient ChatMemory chatMemory;

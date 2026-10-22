@@ -64,7 +64,7 @@ public final class BuildConfigPanel extends JPanel {
         setLayout(new MigLayout("fill, insets 20", "[grow]", "[][][grow][]"));
         setOpaque(true);
 
-        JLabel title = new JLabel("Build Configuration (.roxycode/build.toml)");
+        JLabel title = new JLabel("Build Configuration (build.toml)");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
         add(title, "wrap, gapbottom 10");
 
@@ -300,6 +300,7 @@ public final class BuildConfigPanel extends JPanel {
         return false;
     }
 
+    @SuppressWarnings("PMD.UnusedAssignment")
     void setContainerEnabledInToml(boolean enabled) {
         String current = textArea.getText();
         String updated = updateContainerEnabledInToml(current, enabled);
@@ -317,10 +318,8 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     static String updateContainerEnabledInToml(String toml, boolean enabled) {
-        if (toml == null) {
-            toml = "";
-        }
-        java.util.List<String> lines = toml.lines().toList();
+        String safeToml = toml != null ? toml : "";
+        java.util.List<String> lines = safeToml.lines().toList();
         boolean foundContainerSection = false;
         boolean updatedEnabledLine = false;
         int containerSectionIndex = -1;
@@ -359,10 +358,10 @@ public final class BuildConfigPanel extends JPanel {
                     workdir = '/workspace'
                     """
                             .formatted(enabled);
-            if (toml.isEmpty()) {
+            if (safeToml.isEmpty()) {
                 return section;
             }
-            return toml.stripTrailing()
+            return safeToml.stripTrailing()
                     + """
 
 
@@ -389,6 +388,7 @@ public final class BuildConfigPanel extends JPanel {
         return afterKey.startsWith("=");
     }
 
+    @SuppressWarnings("PMD.UnusedAssignment")
     private void loadConfig() {
         updatingTextProgrammatically = true;
         try {

@@ -20,6 +20,7 @@ public final class SidebarPanel extends JPanel {
     static final int LOGO_SIZE = 88;
     private final Consumer<String> navigationAction;
     private final List<NavButton> navButtons = new ArrayList<>();
+    private NavButton qaBtn;
     private NavButton taskBtn;
 
     public SidebarPanel(Consumer<String> navigationAction) {
@@ -41,7 +42,7 @@ public final class SidebarPanel extends JPanel {
 
         add(createSectionHeader("WORKSPACES"), "gaptop 10");
 
-        NavButton qaBtn = createNavButton("Codebase Q&A", "QA_VIEW", Codicons.COMMENT_DISCUSSION);
+        qaBtn = createNavButton("Codebase Q&A", "QA_VIEW", Codicons.COMMENT_DISCUSSION);
         add(qaBtn);
 
         taskBtn = createNavButton("Feature Request", "TASK_VIEW", Codicons.GIT_PULL_REQUEST);
@@ -87,6 +88,16 @@ public final class SidebarPanel extends JPanel {
         brandingPanel.add(titleLabel);
 
         return brandingPanel;
+    }
+
+    public void setQaBusy(boolean busy) {
+        if (qaBtn != null) {
+            qaBtn.setBusy(busy);
+        }
+    }
+
+    public boolean isQaBusy() {
+        return qaBtn != null && qaBtn.isBusy();
     }
 
     public void setTaskBusy(boolean busy) {

@@ -6,127 +6,92 @@ import static org.mockito.Mockito.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.TokenUtils;
 
 public class ProjectCacheMetaServiceTest {
 
     @TempDir Path tempDir;
 
-    @Test
-    public void testSaveAndLoadMeta() throws IOException {
-        ProjectService projectService = mock(ProjectService.class);
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    private Path projectRoot;
+    private Path projectDataDir;
+    private ProjectService projectService;
 
-        ProjectCacheMetaService service = new ProjectCacheMetaService(projectService);
+    @BeforeEach
+    void setUp() throws IOException {
+        projectRoot = tempDir.resolve("workspace");
+        projectDataDir = tempDir.resolve("roxy-home/projects/workspace-12345678");
+        Files.createDirectories(projectRoot);
 
-        LocalDateTime now = LocalDateTime.now();
-        ProjectCacheMeta meta = new ProjectCacheMeta("TestProject", now, 5000);
-
-        service.saveMeta(meta);
-
-        Optional<ProjectCacheMeta> loaded = service.loadMeta();
-        assertTrue(loaded.isPresent());
-        assertEquals("TestProject", loaded.get().projectName());
-        assertEquals(5000, loaded.get().estimatedTokens());
-
-        // Check that .roxycode/tmp directory was created
-        assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp")));
-        assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp/cache_meta.toml")));
+        projectService = mock(ProjectService.class);
+        lenient().when(projectService.hasActiveProject()).thenReturn(true);
+        lenient().when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
+        lenient().when(projectService.getProjectName()).thenReturn("TestProject");
+        lenient()
+                .when(projectService.resolveProjectDataPath(anyString()))
+                .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
     }
 
     @Test
-    public void testRepoCache() throws IOException {
-        ProjectService projectService = mock(ProjectService.class);
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-
+    public void testSaveRepoCacheAndDeriveMetaWithoutTomlFile() throws IOException {
         ProjectCacheMetaService service = new ProjectCacheMetaService(projectService);
-        String content = "Packed content";
 
+        String content = "Packed repository map content for testing token estimation";
         service.saveRepoCache(content);
-
-        Optional<String> loaded = service.loadRepoCache();
-        assertTrue(loaded.isPresent());
-        assertEquals(content, loaded.get());
-        assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp/repo_cache.txt")));
-    }
-
-    @Test
-    public void testMigrateLegacyFiles() throws IOException {
-        ProjectService projectService = mock(ProjectService.class);
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-
-        Path roxyDir = tempDir.resolve(".roxycode");
-        Files.createDirectories(roxyDir);
-        String legacyToml =
-                """
-                projectName = 'LegacyProject'
-                estimatedTokens = 1234
-                lastUpdated = '2026-01-01T00:00:00'
-                """;
-        Files.writeString(roxyDir.resolve("cache_meta.toml"), legacyToml);
-        Files.writeString(roxyDir.resolve("repo_cache.txt"), "Legacy repo content");
-
-        ProjectCacheMetaService service = new ProjectCacheMetaService(projectService);
-
-        Optional<ProjectCacheMeta> loadedMeta = service.loadMeta();
-        assertTrue(loadedMeta.isPresent());
-        assertEquals("LegacyProject", loadedMeta.get().projectName());
-        assertEquals(1234, loadedMeta.get().estimatedTokens());
 
         Optional<String> loadedRepo = service.loadRepoCache();
         assertTrue(loadedRepo.isPresent());
-        assertEquals("Legacy repo content", loadedRepo.get());
+        assertEquals(content, loadedRepo.get());
 
-        // Ensure legacy files moved to .roxycode/tmp
-        assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp/cache_meta.toml")));
-        assertTrue(Files.exists(tempDir.resolve(".roxycode/tmp/repo_cache.txt")));
-        assertFalse(Files.exists(roxyDir.resolve("cache_meta.toml")));
-        assertFalse(Files.exists(roxyDir.resolve("repo_cache.txt")));
+        Optional<ProjectCacheMeta> loadedMeta = service.loadMeta();
+        assertTrue(loadedMeta.isPresent());
+        assertEquals("TestProject", loadedMeta.get().projectName());
+        assertEquals(TokenUtils.estimateTokens(content), loadedMeta.get().estimatedTokens());
+        assertNotNull(loadedMeta.get().lastUpdated());
+
+        // Verify only tmp/repo_cache.txt exists under projectDataDir and no cache_meta.toml
+        assertTrue(Files.exists(projectDataDir.resolve("tmp/repo_cache.txt")));
+        assertFalse(Files.exists(projectDataDir.resolve("tmp/cache_meta.toml")));
+        assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
     }
 
     @Test
     public void testInMemoryCacheAndInvalidationOnProjectChange() throws IOException {
-        ProjectService projectService = mock(ProjectService.class);
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-
-        com.fasterxml.jackson.dataformat.toml.TomlMapper spyMapper =
-                spy(org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
-        ProjectCacheMetaService service = new ProjectCacheMetaService(projectService, spyMapper);
+        ProjectCacheMetaService service = new ProjectCacheMetaService(projectService);
 
         // First load when no file exists caches empty result
         assertTrue(service.loadMeta().isEmpty());
         assertTrue(service.loadMeta().isEmpty());
-        verify(spyMapper, never()).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
+        verify(projectService, times(1)).resolveProjectDataPath("tmp/repo_cache.txt");
 
-        // saveMeta updates in-memory cache so subsequent loadMeta does not hit disk
-        ProjectCacheMeta meta = new ProjectCacheMeta("CachedProject", LocalDateTime.now(), 4200L);
-        service.saveMeta(meta);
+        // saveRepoCache populates in-memory meta cache so subsequent loadMeta does not hit disk
+        String content = "Cached repository map content";
+        service.saveRepoCache(content);
+        clearInvocations(projectService);
 
         Optional<ProjectCacheMeta> cached1 = service.loadMeta();
         Optional<ProjectCacheMeta> cached2 = service.loadMeta();
         assertTrue(cached1.isPresent());
-        assertEquals("CachedProject", cached1.get().projectName());
+        assertEquals("TestProject", cached1.get().projectName());
         assertSame(cached1.get(), cached2.get());
-        verify(spyMapper, never()).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
+        verify(projectService, never()).resolveProjectDataPath("tmp/repo_cache.txt");
 
-        // ProjectChangedEvent invalidates the in-memory cache so next loadMeta reads from disk
-        service.onProjectChanged(new org.roxycode.app.events.ProjectChangedEvent(tempDir));
+        // ProjectChangedEvent invalidates the in-memory cache so next loadMeta derives from disk
+        service.onProjectChanged(new ProjectChangedEvent(projectRoot));
         Optional<ProjectCacheMeta> reloaded = service.loadMeta();
         assertTrue(reloaded.isPresent());
-        assertEquals("CachedProject", reloaded.get().projectName());
-        verify(spyMapper, times(1)).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
+        assertEquals("TestProject", reloaded.get().projectName());
+        assertEquals(TokenUtils.estimateTokens(content), reloaded.get().estimatedTokens());
+        verify(projectService, times(1)).resolveProjectDataPath("tmp/repo_cache.txt");
 
-        // Subsequent loadMeta uses cache again
+        // Subsequent loadMeta uses in-memory cache again
         service.loadMeta();
-        verify(spyMapper, times(1)).readValue(any(java.io.File.class), eq(ProjectCacheMeta.class));
+        verify(projectService, times(1)).resolveProjectDataPath("tmp/repo_cache.txt");
     }
 }
