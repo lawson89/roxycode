@@ -110,7 +110,9 @@ public class GenericBuildToolService {
             value =
                     "Runs a single test using the configured run_single command. {testName} is replaced with the argument.",
             examples = "buildToolService.runSingleTest('com.example.TestClass')")
-    public BuildResult runSingleTest(String testName) {
+    public BuildResult runSingleTest(
+            @AgentDoc("The name of the test class or method (e.g., MyTest or MyTest#myMethod)")
+                    String testName) {
         return runCommand("run_single", Map.of("testName", testName));
     }
 

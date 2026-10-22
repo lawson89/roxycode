@@ -2,14 +2,18 @@ package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.BuildResult;
+import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.context.ApplicationEventPublisher;
@@ -25,6 +29,22 @@ public class JexlToolTest {
         @AgentDoc("Greets a user by name.")
         public String hello(String name) {
             return "Hello, " + name;
+        }
+
+        @AgentDoc("Returns a sample BuildResult.")
+        public BuildResult sampleBuildResult() {
+            return new BuildResult(
+                    false,
+                    1,
+                    "Compilation failed",
+                    List.of("App.java:10: error"),
+                    List.of("AppTest#testFoo"),
+                    "Full build log");
+        }
+
+        @AgentDoc("Returns a sample EditorResult.")
+        public EditorResult sampleEditorResult() {
+            return new EditorResult(true, "matched content", null);
         }
 
         @AgentDoc("Signals that a background loop has started.")
@@ -75,6 +95,73 @@ public class JexlToolTest {
 
         String result = tool.executeJexl("testService.hello('Roxy')");
         assertTrue(result.contains("Hello, Roxy"));
+    }
+
+    @Test
+    public void testExecuteJexlSerializesBuildResultAndEditorResultAsStructuredJson()
+            throws Exception {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        registry.register(new TestService());
+        JexlTool tool = new JexlTool(registry);
+
+        String buildJson = tool.executeJexl("testService.sampleBuildResult()");
+        JsonNode buildRoot = AiConfig.SHARED_OBJECT_MAPPER.readTree(buildJson);
+        JsonNode buildNode = buildRoot.get("result");
+        assertNotNull(buildNode);
+        assertTrue(buildNode.isObject(), "BuildResult should serialize as a JSON object");
+        assertFalse(buildNode.get("success").asBoolean());
+        assertEquals(1, buildNode.get("exitCode").asInt());
+        assertEquals("Compilation failed", buildNode.get("output").asText());
+        assertEquals("App.java:10: error", buildNode.get("errors").get(0).asText());
+        assertEquals("AppTest#testFoo", buildNode.get("failedTests").get(0).asText());
+        assertEquals("Full build log", buildNode.get("log").asText());
+
+        String editorJson = tool.executeJexl("testService.sampleEditorResult()");
+        JsonNode editorRoot = AiConfig.SHARED_OBJECT_MAPPER.readTree(editorJson);
+        JsonNode editorNode = editorRoot.get("result");
+        assertNotNull(editorNode);
+        assertTrue(editorNode.isObject(), "EditorResult should serialize as a JSON object");
+        assertTrue(editorNode.get("success").asBoolean());
+        assertEquals("matched content", editorNode.get("content").asText());
+        assertTrue(editorNode.get("errorHint").isNull());
+    }
+
+    @Test
+    public void testBuildResultSupportsBothRecordAndBeanAccessorsInJexl() throws Exception {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        registry.register(new TestService());
+        JexlTool tool = new JexlTool(registry);
+
+        String script =
+                """
+                var res = testService.sampleBuildResult();
+                {
+                  "recordSuccess": res.success(),
+                  "beanIsSuccess": res.isSuccess(),
+                  "propSuccess": res.success,
+                  "recordExitCode": res.exitCode(),
+                  "beanExitCode": res.getExitCode(),
+                  "recordErrors": res.errors(),
+                  "beanErrors": res.getErrors(),
+                  "recordFailedTests": res.failedTests(),
+                  "beanFailedTests": res.getFailedTests()
+                }
+                """;
+        String json = tool.executeJexl(script);
+        JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(json);
+        assertFalse(node.get("recordSuccess").asBoolean());
+        assertFalse(node.get("beanIsSuccess").asBoolean());
+        assertFalse(node.get("propSuccess").asBoolean());
+        assertEquals(1, node.get("recordExitCode").asInt());
+        assertEquals(1, node.get("beanExitCode").asInt());
+        assertEquals("App.java:10: error", node.get("recordErrors").get(0).asText());
+        assertEquals("App.java:10: error", node.get("beanErrors").get(0).asText());
+        assertEquals("AppTest#testFoo", node.get("recordFailedTests").get(0).asText());
+        assertEquals("AppTest#testFoo", node.get("beanFailedTests").get(0).asText());
+
+        BuildResult nullListResult = new BuildResult(true, 0, "ok", null, null, "");
+        assertTrue(nullListResult.errors().isEmpty());
+        assertTrue(nullListResult.failedTests().isEmpty());
     }
 
     @Test

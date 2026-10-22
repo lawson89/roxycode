@@ -2,9 +2,13 @@ package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.service.ProjectService;
 
 class LLMDocGeneratorTest {
 
@@ -21,6 +25,32 @@ class LLMDocGeneratorTest {
         assertTrue(doc.contains("interface MockAgentService"));
         assertTrue(doc.contains("doSomething(input: string): string;"));
         assertTrue(doc.contains("This is a mock service"));
+    }
+
+    @Test
+    void testParameterAgentDocAndBuildResultSupportingRecordSchema() {
+        LLMDocGenerator generator = new LLMDocGenerator();
+        MockAgentService mockService = new MockAgentService();
+        ProjectService projectService = mock(ProjectService.class);
+        when(projectService.hasActiveProject()).thenReturn(false);
+        GenericBuildToolService buildToolService =
+                new GenericBuildToolService(projectService, null, null);
+
+        String doc = generator.generateDoc(List.of(mockService, buildToolService));
+
+        assertTrue(doc.contains("* @param input The input string to process"));
+        assertTrue(
+                doc.contains(
+                        "* @param testName The name of the test class or method (e.g., MyTest or MyTest#myMethod)"));
+        assertTrue(
+                doc.contains("// Java Record: access fields via method calls, e.g. obj.field()"));
+        assertTrue(doc.contains("interface BuildResult {"));
+        assertTrue(doc.contains("success: boolean;"));
+        assertTrue(doc.contains("exitCode: number;"));
+        assertTrue(doc.contains("output: string;"));
+        assertTrue(doc.contains("errors: List;"));
+        assertTrue(doc.contains("failedTests: List;"));
+        assertTrue(doc.contains("log: string;"));
     }
 
     @Test
@@ -65,7 +95,7 @@ class LLMDocGeneratorTest {
     @AgentDoc("This is a mock service")
     public static class MockAgentService {
         @AgentDoc("Does something")
-        public String doSomething(String input) {
+        public String doSomething(@AgentDoc("The input string to process") String input) {
             return input;
         }
     }

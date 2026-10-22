@@ -88,13 +88,23 @@ public class LLMDocGenerator {
             if (doc == null) continue;
             sb.append("    /**\n");
             sb.append("     * ").append(doc.value()).append("\n");
+            Parameter[] params = m.getParameters();
+            for (Parameter p : params) {
+                AgentDoc paramDoc = p.getAnnotation(AgentDoc.class);
+                if (paramDoc != null && !paramDoc.value().isBlank()) {
+                    sb.append("     * @param ")
+                            .append(p.getName())
+                            .append(" ")
+                            .append(paramDoc.value())
+                            .append("\n");
+                }
+            }
             for (String example : doc.examples()) {
                 sb.append("     * Example: ").append(example).append("\n");
             }
             sb.append("     */\n");
             sb.append("    ").append(m.getName()).append("(");
 
-            Parameter[] params = m.getParameters();
             boolean first = true;
             for (Parameter p : params) {
                 if (!first) {
@@ -148,6 +158,7 @@ public class LLMDocGenerator {
             }
             sb.append("\n}\n");
         } else if (type.isRecord()) {
+            sb.append("// Java Record: access fields via method calls, e.g. obj.field()\n");
             sb.append("interface ").append(type.getSimpleName()).append(" {\n");
             for (RecordComponent comp : type.getRecordComponents()) {
                 sb.append("    ")
@@ -159,16 +170,19 @@ public class LLMDocGenerator {
             sb.append("}\n");
         } else {
             sb.append("interface ").append(type.getSimpleName()).append(" {\n");
-            for (Field f : type.getDeclaredFields()) {
-                if (Modifier.isPublic(f.getModifiers())) {
-                    sb.append("    ")
-                            .append(f.getName())
-                            .append(": ")
-                            .append(getTypeName(f.getType(), extraTypes))
-                            .append(";\n");
+            Map<String, String> properties = new TreeMap<>();
+
+            Field[] fields = type.getDeclaredFields();
+            Arrays.sort(fields, Comparator.comparing(Field::getName));
+            for (Field f : fields) {
+                if (Modifier.isPublic(f.getModifiers()) && !Modifier.isStatic(f.getModifiers())) {
+                    properties.putIfAbsent(f.getName(), getTypeName(f.getType(), extraTypes));
                 }
             }
-            for (Method m : type.getDeclaredMethods()) {
+
+            Method[] methods = type.getDeclaredMethods();
+            Arrays.sort(methods, Comparator.comparing(Method::getName));
+            for (Method m : methods) {
                 if (Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers())) {
                     String name = m.getName();
                     if (m.getParameterCount() == 0 && m.getReturnType() != void.class) {
@@ -187,14 +201,19 @@ public class LLMDocGenerator {
                             propName = decapitalize(name, 3);
                         }
                         if (propName != null) {
-                            sb.append("    ")
-                                    .append(propName)
-                                    .append(": ")
-                                    .append(getTypeName(m.getReturnType(), extraTypes))
-                                    .append(";\n");
+                            properties.putIfAbsent(
+                                    propName, getTypeName(m.getReturnType(), extraTypes));
                         }
                     }
                 }
+            }
+
+            for (Map.Entry<String, String> entry : properties.entrySet()) {
+                sb.append("    ")
+                        .append(entry.getKey())
+                        .append(": ")
+                        .append(entry.getValue())
+                        .append(";\n");
             }
             sb.append("}\n");
         }

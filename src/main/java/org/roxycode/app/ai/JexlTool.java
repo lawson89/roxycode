@@ -28,6 +28,7 @@ public class JexlTool {
 
     private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
     private static final String ERROR_KEY = "error";
+    private static final String RESULT_KEY = "result";
 
     private final JexlEngine jexl;
     private final JexlServiceRegistry registry;
@@ -107,15 +108,7 @@ public class JexlTool {
 
             publishToolEvent(conversationId, script, result, true, null);
 
-            if (result instanceof Map) {
-                return mapper.writeValueAsString(result);
-            }
-
-            String output = result == null ? "null" : result.toString();
-            if (output.trim().isEmpty()) {
-                output = "<empty result>";
-            }
-            return mapper.writeValueAsString(Map.of("result", output));
+            return serializeResult(result);
         } catch (Exception e) {
             if (ExceptionUtils.isCancellation(e)) {
                 try {
@@ -135,6 +128,37 @@ public class JexlTool {
             publishToolEvent(conversationId, script, null, false, error);
             return toJsonError(error);
         }
+    }
+
+    private String serializeResult(@Nullable Object result) throws Exception {
+        if (result == null) {
+            return mapper.writeValueAsString(Map.of(RESULT_KEY, "null"));
+        }
+        if (result instanceof Map) {
+            return mapper.writeValueAsString(result);
+        }
+        if (isScalarResult(result) || AgentJexlPermissions.isAgentServiceClass(result.getClass())) {
+            return serializeStringResult(result.toString());
+        }
+        try {
+            return mapper.writeValueAsString(Map.of(RESULT_KEY, result));
+        } catch (Exception ex) {
+            return serializeStringResult(result.toString());
+        }
+    }
+
+    private static boolean isScalarResult(Object result) {
+        return result instanceof CharSequence
+                || result instanceof Number
+                || result instanceof Boolean
+                || result instanceof Character
+                || result instanceof Enum<?>;
+    }
+
+    private String serializeStringResult(String rawOutput) throws Exception {
+        String output =
+                rawOutput == null || rawOutput.trim().isEmpty() ? "<empty result>" : rawOutput;
+        return mapper.writeValueAsString(Map.of(RESULT_KEY, output));
     }
 
     private void publishToolEvent(

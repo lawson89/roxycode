@@ -40,7 +40,7 @@ JEXL supports distinct syntax for creating native arrays versus `java.util.List`
   ```
 
 ### Handling Java Records
-For Java records (like `EditorResult`), you **must** use the exact property name as a method call.
+For Java records (like `EditorResult` and `BuildResult`), you **must** use the exact property name as a method call.
 ```javascript
 var result = grepService.grep('pattern', 'src', '*.java');
 
@@ -48,6 +48,12 @@ if (result.success() == false) {
     result.errorHint();
 } else {
     result.content();
+}
+
+var build = buildToolService.buildAndTest();
+if (build.success() == false) {
+    build.errors();
+    build.failedTests();
 }
 ```
 *Note: Do NOT use standard JavaBean getters like `getSuccess()` on records.*
