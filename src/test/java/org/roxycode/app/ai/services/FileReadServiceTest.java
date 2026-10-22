@@ -10,6 +10,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.AgentJexlPermissions;
+import org.roxycode.app.ai.LLMDocGenerator;
 import org.roxycode.app.service.ProjectService;
 
 public class FileReadServiceTest {
@@ -46,16 +48,67 @@ public class FileReadServiceTest {
     }
 
     @Test
+    void testReadLinesReadFileNumberedAndGetLineCount() throws IOException {
+        Path emptyFile = tempDir.resolve("empty.txt");
+        Files.writeString(emptyFile, "");
+        assertEquals(0, fileReadService.getLineCount("empty.txt"));
+        assertEquals("", fileReadService.readFileNumbered("empty.txt"));
+        assertEquals("", fileReadService.readLines("empty.txt", 1, 5));
+
+        Path singleFile = tempDir.resolve("single.txt");
+        Files.writeString(singleFile, "only line");
+        assertEquals(1, fileReadService.getLineCount("single.txt"));
+        assertEquals("1: only line", fileReadService.readFileNumbered("single.txt"));
+        assertEquals("1: only line", fileReadService.readLines("single.txt", 1, 10));
+        assertEquals("", fileReadService.readLines("single.txt", 2, 5));
+
+        Path multiFile = tempDir.resolve("multi.txt");
+        Files.writeString(multiFile, "alpha\nbeta\ngamma\ndelta\n");
+        assertEquals(4, fileReadService.getLineCount("multi.txt"));
+        assertEquals(
+                "1: alpha\n2: beta\n3: gamma\n4: delta",
+                fileReadService.readFileNumbered("multi.txt"));
+        assertEquals("2: beta\n3: gamma", fileReadService.readLines("multi.txt", 2, 3));
+        assertEquals("3: gamma\n4: delta", fileReadService.readLines("multi.txt", 3, 99));
+
+        assertThrows(
+                IllegalArgumentException.class, () -> fileReadService.readLines("multi.txt", 0, 2));
+        assertThrows(
+                IllegalArgumentException.class, () -> fileReadService.readLines("multi.txt", 3, 2));
+    }
+
+    @Test
+    void testNewMethodsExposedInJexlPermissionsAndLlmDocGenerator() throws Exception {
+        assertTrue(
+                AgentJexlPermissions.INSTANCE.allow(
+                        FileReadService.class,
+                        FileReadService.class.getMethod(
+                                "readLines", String.class, int.class, int.class)));
+        assertTrue(
+                AgentJexlPermissions.INSTANCE.allow(
+                        FileReadService.class,
+                        FileReadService.class.getMethod("readFileNumbered", String.class)));
+        assertTrue(
+                AgentJexlPermissions.INSTANCE.allow(
+                        FileReadService.class,
+                        FileReadService.class.getMethod("getLineCount", String.class)));
+
+        String doc = new LLMDocGenerator().generateDoc(List.of(fileReadService));
+        assertTrue(
+                doc.contains(
+                        "readLines(relativePath: string, startLine: number, endLine: number): string;"));
+        assertTrue(doc.contains("readFileNumbered(relativePath: string): string;"));
+        assertTrue(doc.contains("getLineCount(relativePath: string): number;"));
+    }
+
+    @Test
     void testListDirectory() throws IOException {
-        Files.createFile(tempDir.resolve("file1.txt"));
         Files.createFile(tempDir.resolve("file2.txt"));
+        Files.createFile(tempDir.resolve("file1.txt"));
         Files.createDirectory(tempDir.resolve("subdir"));
 
         List<String> contents = fileReadService.listDirectory(".");
-        assertTrue(contents.contains("file1.txt"));
-        assertTrue(contents.contains("file2.txt"));
-        assertTrue(contents.contains("subdir"));
-        assertEquals(3, contents.size());
+        assertEquals(List.of("file1.txt", "file2.txt", "subdir/"), contents);
     }
 
     @Test
