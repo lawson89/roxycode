@@ -49,7 +49,12 @@ class FileEditorServiceTest {
     @Test
     void testReplaceBlockSuccess() throws IOException {
         Path filePath = tempDir.resolve("test.java");
-        Files.writeString(filePath, "public class Test {\n // TODO\n }");
+        Files.writeString(
+                filePath,
+                """
+                public class Test {
+                 // TODO
+                 }""");
 
         EditorResult result = fileEditorService.replaceBlock("test.java", "// TODO", "// Done");
 
@@ -78,7 +83,11 @@ class FileEditorServiceTest {
     @Test
     void testReplaceBlockWithNewlinesAndTabs() throws IOException {
         Path filePath = tempDir.resolve("test_whitespace.java");
-        Files.writeString(filePath, "public\nvoid\tmyMethod() { }");
+        Files.writeString(
+                filePath,
+                """
+                public
+                void	myMethod() { }""");
 
         // Should match despite newlines and tabs
         EditorResult result =
@@ -93,7 +102,11 @@ class FileEditorServiceTest {
     @Test
     void testReplaceBlockNotUniqueReturnsFailure() throws IOException {
         Path filePath = tempDir.resolve("test.java");
-        Files.writeString(filePath, "// TODO\n // TODO");
+        Files.writeString(
+                filePath,
+                """
+                // TODO
+                 // TODO""");
 
         IllegalArgumentException ex =
                 assertThrows(
@@ -124,7 +137,14 @@ class FileEditorServiceTest {
         Files.write(filePath, List.of("Line 1", "Line 2", "Line 3", "Line 4"));
 
         EditorResult result =
-                fileEditorService.replaceLines("test.txt", 2, 3, "Replaced 2\nReplaced 3\n");
+                fileEditorService.replaceLines(
+                        "test.txt",
+                        2,
+                        3,
+                        """
+                        Replaced 2
+                        Replaced 3
+                        """);
 
         assertTrue(result.success());
         List<String> lines = Files.readAllLines(filePath);
@@ -150,7 +170,14 @@ class FileEditorServiceTest {
         Path filePath = tempDir.resolve("test.txt");
         Files.write(filePath, List.of("Line 1", "Line 4"));
 
-        EditorResult result = fileEditorService.insertAtLine("test.txt", 2, "Line 2\r\nLine 3\n");
+        EditorResult result =
+                fileEditorService.insertAtLine(
+                        "test.txt",
+                        2,
+                        """
+                        Line 2
+                        Line 3
+                        """);
 
         assertTrue(result.success());
         List<String> lines = Files.readAllLines(filePath);

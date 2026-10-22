@@ -382,8 +382,8 @@ public final class ChatController implements AutoCloseable {
                                 + ". Please proceed with the tasks in the new phase.");
             }
         } else {
-            String path = event.from().getDisplayName() + " → " + event.to().getDisplayName();
-            view.showTransitionBanner(path);
+            String label = PlanService.formatApprovalLabel(event.from(), event.to());
+            view.showTransitionBanner(label);
         }
     }
 

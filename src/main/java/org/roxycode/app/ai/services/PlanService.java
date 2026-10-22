@@ -25,9 +25,35 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("PMD.NullAssignment")
 public class PlanService {
 
+    public static final String APPROVAL_PLAN_TO_CODE = "Approve Plan and proceed to Code";
+    public static final String APPROVAL_REVIEW_TO_PLAN = "Approve Feature Request as complete";
+    public static final String APPROVAL_CODE_TO_PLAN = "Approve Plan Revision and return to Plan";
+
     private record TransitionKey(WorkflowPhase from, WorkflowPhase to) {}
 
     private record TransitionRule(boolean autonomous, boolean requiresApprovedPlan) {}
+
+    /**
+     * Returns the semantic Human-in-the-Loop (HITL) approval label for a phase transition.
+     *
+     * @param from the source workflow phase
+     * @param to the target workflow phase
+     * @return the semantic approval label
+     */
+    public static String formatApprovalLabel(WorkflowPhase from, WorkflowPhase to) {
+        if (from == WorkflowPhase.PLAN && to == WorkflowPhase.CODE) {
+            return APPROVAL_PLAN_TO_CODE;
+        }
+        if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.PLAN) {
+            return APPROVAL_REVIEW_TO_PLAN;
+        }
+        if (from == WorkflowPhase.CODE && to == WorkflowPhase.PLAN) {
+            return APPROVAL_CODE_TO_PLAN;
+        }
+        String fromName = from != null ? from.getDisplayName() : "";
+        String toName = to != null ? to.getDisplayName() : "";
+        return fromName + " → " + toName;
+    }
 
     private static final Map<TransitionKey, TransitionRule> TRANSITION_RULES =
             Map.of(
@@ -363,14 +389,13 @@ public class PlanService {
         publishTransitionRequested();
 
         String summary = formatPlanSummary(currentPlan);
+        String approvalLabel = formatApprovalLabel(currentPhase, nextPhase);
         String message =
-                """
-                **Transition Request (%s → %s)**
-
-                **Reason:** %s"""
-                        .formatted(
-                                currentPhase.getDisplayName(), nextPhase.getDisplayName(), reason);
-        return (summary != null && !summary.isBlank()) ? summary + "\n\n" + message : message;
+                String.format(
+                        "**Transition Request: %s**%n%n**Reason:** %s", approvalLabel, reason);
+        return (summary != null && !summary.isBlank())
+                ? String.format("%s%n%n%s", summary, message)
+                : message;
     }
 
     private void handleCompletionMetadata(WorkflowPhase from, WorkflowPhase to, String timestamp) {

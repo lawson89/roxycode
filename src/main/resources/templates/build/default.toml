@@ -12,3 +12,8 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '(?m)^ERROR: (.*)$'
 test_failure_regex = '(?m)^FAIL: (.*)$'
+
+[container]
+enabled = false
+image = "ubuntu:24.04"
+workdir = "/workspace"

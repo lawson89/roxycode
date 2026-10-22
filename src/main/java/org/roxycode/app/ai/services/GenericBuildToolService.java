@@ -16,6 +16,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.ai.services.BuildContainerService.ContainerConfig;
+import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -26,7 +28,8 @@ import org.springframework.context.event.EventListener;
 
 /**
  * Service for interacting with arbitrary build tools via .roxycode/build.toml. Provides methods for
- * compilation, testing, and cleaning.
+ * compilation, testing, and cleaning, either on the host or inside a warm reusable Testcontainers
+ * Docker container managed by {@link BuildContainerService}.
  */
 @AgentService(
         value = "buildToolService",
@@ -39,10 +42,15 @@ public class GenericBuildToolService {
 
     private final ProjectService projectService;
     private final TomlMapper tomlMapper;
+    private final BuildContainerService buildContainerService;
 
-    public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper) {
+    public GenericBuildToolService(
+            ProjectService projectService,
+            TomlMapper tomlMapper,
+            BuildContainerService buildContainerService) {
         this.projectService = projectService;
         this.tomlMapper = tomlMapper;
+        this.buildContainerService = buildContainerService;
         if (this.projectService.hasActiveProject()) {
             ensureConfig();
         }
@@ -50,9 +58,14 @@ public class GenericBuildToolService {
 
     @EventListener
     public void handleProjectChanged(ProjectChangedEvent event) {
+        stopActiveContainer();
         if (this.projectService.hasActiveProject()) {
             ensureConfig();
         }
+    }
+
+    public void stopActiveContainer() {
+        buildContainerService.stopActiveContainer();
     }
 
     @AgentDoc(
@@ -119,10 +132,13 @@ public class GenericBuildToolService {
         return new BuildResult(
                 testResult.isSuccess(),
                 testResult.getExitCode(),
-                "COMPILE OUTPUT:\n"
-                        + compileResult.getOutput()
-                        + "\n\nTEST OUTPUT:\n"
-                        + testResult.getOutput(),
+                """
+                COMPILE OUTPUT:
+                %s
+
+                TEST OUTPUT:
+                %s"""
+                        .formatted(compileResult.getOutput(), testResult.getOutput()),
                 testResult.getErrors(),
                 testResult.getFailedTests(),
                 testResult.getLog());
@@ -157,7 +173,14 @@ public class GenericBuildToolService {
             String testFailureRegex = getParseRegex(config, "test_failure_regex");
 
             Map<String, String> env = getEnv(config);
-            return execute(command, env, errorRegex, testFailureRegex);
+            ContainerConfig containerConfig = getContainerConfig(config);
+            if (containerConfig.enabled()) {
+                return executeInContainer(
+                        command, containerConfig, env, errorRegex, testFailureRegex);
+            } else {
+                stopActiveContainer();
+                return execute(command, env, errorRegex, testFailureRegex);
+            }
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
@@ -183,7 +206,9 @@ public class GenericBuildToolService {
                 } else {
                     Files.writeString(
                             configPath,
-                            "[build]\ncompile = 'echo No build command'",
+                            """
+                            [build]
+                            compile = 'echo No build command'""",
                             StandardCharsets.UTF_8);
                 }
             }
@@ -249,6 +274,57 @@ public class GenericBuildToolService {
             env.put(entry.getKey(), String.valueOf(entry.getValue()));
         }
         return env;
+    }
+
+    ContainerConfig getContainerConfig(Map<String, Object> config) {
+        return buildContainerService.parseContainerConfig(config);
+    }
+
+    private BuildResult executeInContainer(
+            String command,
+            ContainerConfig containerConfig,
+            Map<String, String> env,
+            String errorRegex,
+            String testFailureRegex) {
+        if (!buildContainerService.isDockerAvailable()) {
+            stopActiveContainer();
+            String msg =
+                    "Docker was not detected or the Docker daemon is not running. "
+                            + "Cannot run isolated build in Testcontainers. Please start Docker or set [container] enabled = false in .roxycode/build.toml.";
+            return new BuildResult(false, -1, msg, List.of(msg), List.of(), msg);
+        }
+
+        log.info("Executing build command in container ({}): {}", containerConfig.image(), command);
+        List<String> errors = new ArrayList<>();
+        List<String> failedTests = new ArrayList<>();
+        int exitCode = -1;
+        String fullOutput = "";
+
+        try {
+            ContainerExecResult result =
+                    buildContainerService.executeCommand(
+                            projectService.getCurrentProjectRoot(), containerConfig, env, command);
+            fullOutput = result.combinedOutput();
+            exitCode = result.exitCode();
+        } catch (CancellationException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("Container build command interrupted");
+        } catch (Exception e) {
+            log.error("Container execution failed", e);
+            stopActiveContainer();
+            String errorMsg =
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            errors.add("Container execution failed: " + errorMsg);
+            fullOutput = errorMsg;
+        }
+
+        errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
+        failedTests.addAll(extractRegexMatches(fullOutput, testFailureRegex, "test failures"));
+
+        boolean success = exitCode == 0 && errors.isEmpty();
+        return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
     }
 
     private BuildResult execute(
@@ -327,6 +403,7 @@ public class GenericBuildToolService {
         if (!projectService.hasActiveProject()) {
             return;
         }
+        stopActiveContainer();
         Path configPath = projectService.getCurrentProjectRoot().resolve(CONFIG_PATH);
         Files.createDirectories(configPath.getParent());
         Files.writeString(configPath, content, StandardCharsets.UTF_8);

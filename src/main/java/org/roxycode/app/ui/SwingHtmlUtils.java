@@ -60,6 +60,45 @@ public final class SwingHtmlUtils {
     }
 
     /**
+     * Decorates Flexmark-rendered Markdown table tags ({@code <table>}, {@code <th>}, {@code <td>})
+     * with Swing HTML 3.2 / CSS 1.0 classes and attributes without affecting structural layout
+     * tables.
+     *
+     * @param html the Flexmark-rendered HTML fragment
+     * @return the HTML fragment with Markdown table classes and attributes applied
+     */
+    public static String styleMarkdownTables(String html) {
+        if (html == null || html.isEmpty() || !html.contains("<table")) {
+            return html == null ? "" : html;
+        }
+        return html.replace(
+                        "<table>",
+                        """
+                        <table class="md-table" cellpadding="6" cellspacing="0" border="0">"""
+                                .strip())
+                .replace(
+                        "<th>",
+                        """
+                        <th class="md-th">"""
+                                .strip())
+                .replace(
+                        "<th align=",
+                        """
+                        <th class="md-th" align="""
+                                .strip())
+                .replace(
+                        "<td>",
+                        """
+                        <td class="md-td">"""
+                                .strip())
+                .replace(
+                        "<td align=",
+                        """
+                        <td class="md-td" align="""
+                                .strip());
+    }
+
+    /**
      * Applies theme-aware stylesheet and editor kit to a JEditorPane or JTextPane.
      *
      * @param textPane the text pane to style
@@ -208,7 +247,12 @@ public final class SwingHtmlUtils {
         return text.replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
-                .replace(String.valueOf((char) 34), "&quot;")
+                .replace(
+                        """
+                        "
+                        """
+                                .strip(),
+                        "&quot;")
                 .replace("'", "&#39;");
     }
 }

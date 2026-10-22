@@ -12,3 +12,8 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '(?m)^E\\s+(.*)$'
 test_failure_regex = '(?m)^FAILED (.*)$'
+
+[container]
+enabled = false
+image = "python:3.12"
+workdir = "/workspace"

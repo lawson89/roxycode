@@ -66,7 +66,11 @@ public class ProjectCacheMetaServiceTest {
         Path roxyDir = tempDir.resolve(".roxycode");
         Files.createDirectories(roxyDir);
         String legacyToml =
-                "projectName = 'LegacyProject'\nestimatedTokens = 1234\nlastUpdated = '2026-01-01T00:00:00'\n";
+                """
+                projectName = 'LegacyProject'
+                estimatedTokens = 1234
+                lastUpdated = '2026-01-01T00:00:00'
+                """;
         Files.writeString(roxyDir.resolve("cache_meta.toml"), legacyToml);
         Files.writeString(roxyDir.resolve("repo_cache.txt"), "Legacy repo content");
 

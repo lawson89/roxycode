@@ -163,6 +163,25 @@ public class ChatPanelTest {
         inlinePanelField.setAccessible(true);
         javax.swing.JPanel inlinePanel = (javax.swing.JPanel) inlinePanelField.get(chatPanel);
         assertTrue(inlinePanel.isVisible(), "Transition banner should be visible after turn");
+
+        java.lang.reflect.Field transitionLabelField =
+                ChatPanel.class.getDeclaredField("transitionLabel");
+        transitionLabelField.setAccessible(true);
+        javax.swing.JLabel transitionLabel =
+                (javax.swing.JLabel) transitionLabelField.get(chatPanel);
+        assertEquals("Approve Plan and proceed to Code", transitionLabel.getText());
+
+        chatPanel.onWorkflowTransition(
+                new WorkflowTransitionEvent(
+                        WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All done", false));
+        javax.swing.SwingUtilities.invokeAndWait(() -> {});
+        assertEquals("Approve Feature Request as complete", transitionLabel.getText());
+
+        chatPanel.onWorkflowTransition(
+                new WorkflowTransitionEvent(
+                        WorkflowPhase.CODE, WorkflowPhase.PLAN, "Need revision", false));
+        javax.swing.SwingUtilities.invokeAndWait(() -> {});
+        assertEquals("Approve Plan Revision and return to Plan", transitionLabel.getText());
     }
 
     @Test

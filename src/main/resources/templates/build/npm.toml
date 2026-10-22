@@ -12,3 +12,8 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '(?m)^error (.*)$'
 test_failure_regex = '(?m)^\\s*✖ (.*)$'
+
+[container]
+enabled = false
+image = "node:22"
+workdir = "/workspace"

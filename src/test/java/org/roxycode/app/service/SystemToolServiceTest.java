@@ -10,7 +10,7 @@ import org.roxycode.app.model.SystemTool;
 class SystemToolServiceTest {
 
     @Test
-    void testDetectTools() throws Exception {
+    void testDetectToolsIncludesDockerAndJava() throws Exception {
         SystemToolService service = new SystemToolService();
         CompletableFuture<List<SystemTool>> future = service.detectTools();
         List<SystemTool> tools = future.get();
@@ -19,6 +19,7 @@ class SystemToolServiceTest {
         assertFalse(tools.isEmpty());
 
         assertTrue(tools.stream().anyMatch(t -> t.name().equals("Java")));
+        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Docker")));
 
         for (SystemTool tool : tools) {
             assertNotNull(tool.name());
@@ -26,5 +27,9 @@ class SystemToolServiceTest {
             assertNotNull(tool.version());
             assertNotNull(tool.description());
         }
+
+        Boolean dockerAvailable = service.isDockerAvailable().get();
+        assertNotNull(dockerAvailable);
+        assertEquals(service.checkDockerAvailable(), dockerAvailable);
     }
 }

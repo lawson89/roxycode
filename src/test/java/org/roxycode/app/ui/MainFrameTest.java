@@ -78,7 +78,8 @@ class MainFrameTest {
         JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
         SystemToolsPanel systemToolsPanel = new SystemToolsPanel(toolService);
         SettingsPanel settingsPanel = new SettingsPanel(settingsService);
-        BuildConfigPanel buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService);
+        BuildConfigPanel buildConfigPanel =
+                new BuildConfigPanel(buildToolService, settingsService, toolService);
         ContextManagerPanel contextManagerPanel = new ContextManagerPanel(promptService);
 
         MainFrame mainFrame =

@@ -21,7 +21,52 @@ class SwingHtmlUtilsTest {
         assertEquals("", SwingHtmlUtils.escapeHtml(""));
         assertEquals(
                 "&lt;div&gt;&quot;Hello &amp; World&#39;&quot;&lt;/div&gt;",
-                SwingHtmlUtils.escapeHtml("<div>\"Hello & World'\"</div>"));
+                SwingHtmlUtils.escapeHtml(
+                        """
+                        <div>"Hello & World'"</div>"""
+                                .strip()));
+    }
+
+    @Test
+    void testStyleMarkdownTables() {
+        assertEquals("", SwingHtmlUtils.styleMarkdownTables(null));
+        assertEquals("", SwingHtmlUtils.styleMarkdownTables(""));
+        assertEquals("<p>No table</p>", SwingHtmlUtils.styleMarkdownTables("<p>No table</p>"));
+
+        String markdown =
+                """
+                | Col A | Col B |
+                | :--- | ---: |
+                | Val 1 | Val 2 |
+                """;
+        String rendered =
+                SwingHtmlUtils.markdownRenderer()
+                        .render(SwingHtmlUtils.markdownParser().parse(markdown));
+        String styled = SwingHtmlUtils.styleMarkdownTables(rendered);
+
+        assertTrue(
+                styled.contains(
+                        """
+                        <table class="md-table" cellpadding="6" cellspacing="0" border="0">"""
+                                .strip()));
+        assertTrue(
+                styled.contains(
+                        """
+                        class="md-th"
+                        """
+                                .strip()));
+        assertTrue(
+                styled.contains(
+                        """
+                        class="md-td"
+                        """
+                                .strip()));
+        assertTrue(
+                styled.contains(
+                        """
+                        align="right"
+                        """
+                                .strip()));
     }
 
     @Test

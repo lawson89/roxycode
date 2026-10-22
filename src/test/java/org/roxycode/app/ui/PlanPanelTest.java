@@ -117,7 +117,9 @@ class PlanPanelTest {
                                 new ImplementationPlan.LogEntry(
                                         "2026-04-06T12:05:30.123",
                                         "Architect",
-                                        "Created plan | verified" + (char) 10 + "details")));
+                                        """
+                                        Created plan | verified
+                                        details""")));
 
         String md = PlanPanel.buildPlanMarkdown(plan);
 
@@ -125,25 +127,21 @@ class PlanPanelTest {
         assertTrue(md.contains("**Goal:** Improve visibility"));
         assertTrue(
                 md.contains(
-                        "## Requirements"
-                                + (char) 10
-                                + "- Show turns"
-                                + (char) 10
-                                + "- Export markdown"));
+                        """
+                        ## Requirements
+                        - Show turns
+                        - Export markdown"""));
         assertTrue(
                 md.contains(
-                        "## Technical Steps"
-                                + (char) 10
-                                + "- [x] 0. Update ChatPanel"
-                                + (char) 10
-                                + "- [ ] 1. Update PlanPanel"));
+                        """
+                        ## Technical Steps
+                        - [x] 0. Update ChatPanel
+                        - [ ] 1. Update PlanPanel"""));
         assertTrue(md.contains("## Handoff Log"));
         assertTrue(md.contains("| Timestamp | User | Message |"));
         assertTrue(
-                md.contains(
-                        "| 2026-04-06 12:05:30 | Architect | Created plan "
-                                + (char) 92
-                                + "| verified details |"));
+                md.contains("| 2026-04-06 12:05:30 | Architect | Created plan ")
+                        && md.contains("| verified details |"));
     }
 
     @Test

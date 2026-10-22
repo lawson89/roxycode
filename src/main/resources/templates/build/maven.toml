@@ -12,3 +12,8 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '(?m)^\[ERROR\] (.*)$'
 test_failure_regex = '(?m)^\[ERROR\] Failures:\\s+\\n\[ERROR\]\\s+([\\w.#]+)'
+
+[container]
+enabled = false
+image = "eclipse-temurin:25-jdk"
+workdir = "/workspace"

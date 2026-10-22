@@ -147,15 +147,25 @@ class ImplementationPlanTest {
                                 new ImplementationPlan.LogEntry(
                                         "2026-04-06T12:05:30.123",
                                         "Architect",
-                                        "Created plan | verified\ndetails")));
+                                        """
+                                        Created plan | verified
+                                        details""")));
 
         String withoutLog = plan.toMarkdown(false);
         assertTrue(withoutLog.contains("# Implementation Plan: Feature Plan"));
         assertTrue(withoutLog.contains("**Goal:** Deliver feature"));
-        assertTrue(withoutLog.contains("## Requirements\n- Req A"));
-        assertTrue(withoutLog.contains("## Technical Steps\n- [x] 0. Step 0\n- [ ] 1. Step 1"));
+        assertTrue(
+                withoutLog.contains(
+                        """
+                        ## Requirements
+                        - Req A"""));
+        assertTrue(
+                withoutLog.contains(
+                        """
+                        ## Technical Steps
+                        - [x] 0. Step 0
+                        - [ ] 1. Step 1"""));
         assertFalse(withoutLog.contains("## Handoff Log"));
-
         String withLog = plan.toMarkdown(true);
         assertTrue(withLog.contains("## Handoff Log"));
         assertTrue(

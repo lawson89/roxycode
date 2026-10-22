@@ -10,7 +10,12 @@ public class GeminiModelsTest {
     @Test
     public void testTomlParsing() throws Exception {
         String toml =
-                "[[models]]\napiName = \"test-id\"\nname = \"Test Name\"\ndescription = \"Test Desc\"";
+                """
+                [[models]]
+                apiName = "test-id"
+                name = "Test Name"
+                description = "Test Desc"
+                """;
         TomlMapper mapper = new TomlMapper();
         GeminiModels models = mapper.readValue(toml, GeminiModels.class);
 

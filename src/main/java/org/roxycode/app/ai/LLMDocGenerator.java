@@ -14,15 +14,21 @@ public class LLMDocGenerator {
 
     public String generateDoc(Collection<Object> services) {
         StringBuilder sb = new StringBuilder();
-        sb.append("### JEXL API Documentation\n\n");
+        sb.append(
+                """
+                ### JEXL API Documentation
+
+                """);
         sb.append("```typescript\n");
-        sb.append("/**\n");
         sb.append(
-                " * ⚠️ INTEROP WARNING: These services return Java objects in Apache Commons JEXL.\n");
-        sb.append(
-                " * Always return objects as the last expression of your script to inspect them.\n");
-        sb.append(" * Note: Code must be written in Apache Commons JEXL 3 syntax.\n");
-        sb.append(DOC_END).append("\n");
+                """
+                /**
+                 * ⚠️ INTEROP WARNING: These services return Java objects in Apache Commons JEXL.
+                 * Always return objects as the last expression of your script to inspect them.
+                 * Note: Code must be written in Apache Commons JEXL 3 syntax.
+                 */
+
+                """);
 
         Set<Class<?>> extraTypes = new LinkedHashSet<>();
 

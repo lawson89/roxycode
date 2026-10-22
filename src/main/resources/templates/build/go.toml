@@ -12,3 +12,8 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '(?m)^# (.*)\\n(.*):(\\d+):(\\d+): (.*)$'
 test_failure_regex = '(?m)^--- FAIL: (.*)$'
+
+[container]
+enabled = false
+image = "golang:1.23"
+workdir = "/workspace"

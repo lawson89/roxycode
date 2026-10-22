@@ -12,18 +12,27 @@ class GitChangesPanelTest {
     @Test
     void testPanelBackgroundRefreshWithChanges() throws Exception {
         GitService gitService = mock(GitService.class);
-        when(gitService.getStatus()).thenReturn(" M src/App.java\n?? src/NewFile.java\n");
+        when(gitService.getStatus())
+                .thenReturn(
+                        """
+                         M src/App.java
+                        ?? src/NewFile.java
+                        """);
 
         GitChangesPanel panel = new GitChangesPanel(gitService);
+        String expected =
+                """
+                M src/App.java
+                ?? src/NewFile.java""";
 
         for (int i = 0; i < 50; i++) {
-            if ("M src/App.java\n?? src/NewFile.java".equals(panel.getStatusArea().getText())) {
+            if (expected.equals(panel.getStatusArea().getText())) {
                 break;
             }
             Thread.sleep(50);
         }
 
-        assertEquals("M src/App.java\n?? src/NewFile.java", panel.getStatusArea().getText());
+        assertEquals(expected, panel.getStatusArea().getText());
         assertFalse(panel.getStatusArea().isEditable());
         verify(gitService, never()).getDiff();
     }
@@ -31,7 +40,11 @@ class GitChangesPanelTest {
     @Test
     void testPanelBackgroundRefreshWhenWorkingTreeClean() throws Exception {
         GitService gitService = mock(GitService.class);
-        when(gitService.getStatus()).thenReturn("   \n  ");
+        when(gitService.getStatus())
+                .thenReturn(
+                        """
+
+                          """);
 
         GitChangesPanel panel = new GitChangesPanel(gitService);
 

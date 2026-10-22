@@ -69,4 +69,62 @@ class MarkdownPaneTest {
         assertTrue(html.contains("Error: Syntax Error: &lt;eof&gt;"));
         assertFalse(html.contains("<eof>"));
     }
+
+    @Test
+    void testMarkdownTableDecoratedWhileChatCardStructuralTablesPreserved() {
+        MarkdownPane pane = new MarkdownPane();
+        pane.appendMessage(
+                "ai",
+                """
+                | Col A | Col B |
+                |---|---|
+                | 1 | 2 |
+                """);
+
+        String html = pane.getText();
+        assertTrue(
+                html.contains(
+                        """
+                        class="md-table"
+                        """
+                                .strip()));
+        assertTrue(
+                html.contains(
+                        """
+                        cellpadding="6"
+                        """
+                                .strip()));
+        assertTrue(
+                html.contains(
+                        """
+                        cellspacing="0"
+                        """
+                                .strip()));
+        assertTrue(
+                html.contains(
+                        """
+                        class="md-th"
+                        """
+                                .strip()));
+        assertTrue(
+                html.contains(
+                        """
+                        class="md-td"
+                        """
+                                .strip()));
+        assertTrue(
+                html.contains(
+                        """
+                        class="ai-entry"
+                        """
+                                .strip()),
+                "Chat card layout table should remain intact");
+        assertTrue(
+                html.contains(
+                        """
+                        class="ai-accent"
+                        """
+                                .strip()),
+                "Chat card 4px accent bar should remain intact");
+    }
 }

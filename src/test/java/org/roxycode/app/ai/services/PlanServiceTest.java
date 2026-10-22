@@ -132,7 +132,16 @@ class PlanServiceTest {
 
         String devResponse = service.requestDevelopment("Ready to build");
         assertTrue(devResponse.contains("PLAN SUMMARY:"));
-        assertTrue(devResponse.contains("Transition Request"));
+        assertTrue(devResponse.contains("Transition Request: Approve Plan and proceed to Code"));
+        assertEquals(
+                "Approve Plan and proceed to Code",
+                PlanService.formatApprovalLabel(WorkflowPhase.PLAN, WorkflowPhase.CODE));
+        assertEquals(
+                "Approve Feature Request as complete",
+                PlanService.formatApprovalLabel(WorkflowPhase.REVIEW, WorkflowPhase.PLAN));
+        assertEquals(
+                "Approve Plan Revision and return to Plan",
+                PlanService.formatApprovalLabel(WorkflowPhase.CODE, WorkflowPhase.PLAN));
         assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
 
         when(envService.getCurrentUser()).thenReturn("testuser");
@@ -157,7 +166,8 @@ class PlanServiceTest {
         service.requestReview("Fixed");
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
         String completionRes = service.requestCompletion("All verified");
-        assertTrue(completionRes.contains("Transition Request"));
+        assertTrue(
+                completionRes.contains("Transition Request: Approve Feature Request as complete"));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
     }
 
@@ -181,7 +191,8 @@ class PlanServiceTest {
 
         // Request PLAN from CODE (plan revision) - Requires HITL approval
         String response = service.requestPlanRevision("Need architecture revision");
-        assertTrue(response.contains("Transition Request"));
+        assertTrue(
+                response.contains("Transition Request: Approve Plan Revision and return to Plan"));
         assertFalse(response.contains("Autonomous transition"));
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());

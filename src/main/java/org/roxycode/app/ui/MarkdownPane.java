@@ -172,7 +172,8 @@ public final class MarkdownPane extends JTextPane {
                                         msg.content().toString(), msg.success(), msg.error()));
                     } else {
                         String renderedMarkdown =
-                                renderer.render(parser.parse(msg.content().toString()));
+                                SwingHtmlUtils.styleMarkdownTables(
+                                        renderer.render(parser.parse(msg.content().toString())));
                         String highlightedHtml =
                                 JexlToHtmlConverter.highlightCodeBlocks(renderedMarkdown);
                         fullHtml.append(
