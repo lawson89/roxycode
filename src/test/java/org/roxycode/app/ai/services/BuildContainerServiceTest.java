@@ -171,4 +171,22 @@ class BuildContainerServiceTest {
         buildContainerService.stopActiveContainer();
         assertTrue(sessionClosed.get());
     }
+
+    @Test
+    void testExecuteCommandPropagatesTestcontainersFailureWithoutFallback() {
+        buildContainerService.setContainerSessionFactory(
+                key -> {
+                    throw new IllegalStateException(
+                            "client version 1.32 is too old. Minimum supported API version is 1.44");
+                });
+
+        ContainerConfig config = new ContainerConfig(true, "eclipse-temurin:25-jdk", "/workspace");
+        IllegalStateException thrown =
+                assertThrows(
+                        IllegalStateException.class,
+                        () ->
+                                buildContainerService.executeCommand(
+                                        tempDir, config, Map.of(), "./mvnw compile"));
+        assertTrue(thrown.getMessage().contains("client version 1.32 is too old"));
+    }
 }

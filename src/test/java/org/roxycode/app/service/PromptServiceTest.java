@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -190,6 +191,35 @@ class PromptServiceTest {
         promptService.deleteContextFile("a_rules.md");
         assertEquals(List.of("b_architecture.md"), promptService.listContextFiles());
         assertEquals("", promptService.readContextFile("a_rules.md"));
+
+        // Invalid filenames (path traversal or subdirectories) should be rejected
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> promptService.saveContextFile("../evil.md", "bad"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> promptService.saveContextFile("sub/rule.md", "bad"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> promptService.saveContextFile("sub" + (char) 92 + "rule.md", "bad"));
+        assertThrows(
+                IllegalArgumentException.class, () -> promptService.readContextFile("../evil.md"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> promptService.deleteContextFile("../evil.md"));
+
+        // IOException on readContextFile, saveContextFile, and deleteContextFile throws
+        // UncheckedIOException
+        Path dirAsFile = contextDir.resolve("dir_conflict.md");
+        Files.createDirectories(dirAsFile.resolve("nested"));
+        assertThrows(
+                UncheckedIOException.class, () -> promptService.readContextFile("dir_conflict.md"));
+        assertThrows(
+                UncheckedIOException.class,
+                () -> promptService.saveContextFile("dir_conflict.md", "content"));
+        assertThrows(
+                UncheckedIOException.class,
+                () -> promptService.deleteContextFile("dir_conflict.md"));
     }
 
     @Test

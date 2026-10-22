@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -34,10 +35,11 @@ public class RepoMapPackerService {
     private final ObjectMapper objectMapper;
     private final GrepService grepService;
     private final ProjectCacheMetaService metaService;
+    private final List<String> excludePatterns;
+    private final AtomicLong generation = new AtomicLong(1);
 
     private String cachedMap = null;
-    private boolean needsUpdate = true;
-    private List<String> excludePatterns;
+    private long cachedGeneration = 0;
 
     public RepoMapPackerService(
             ProjectService projectService,
@@ -54,27 +56,36 @@ public class RepoMapPackerService {
 
     @EventListener
     public void handleProjectChanged(ProjectChangedEvent event) {
-        this.needsUpdate = true;
+        invalidate();
         log.debug("Repo map invalidated due to project change.");
     }
 
     @EventListener
     public void handleFileChanged(FileChangedEvent event) {
-        this.needsUpdate = true;
+        invalidate();
         log.debug("Repo map invalidated due to file change: {}", event.path());
+    }
+
+    private synchronized void invalidate() {
+        generation.incrementAndGet();
+        cachedMap = null;
+        cachedGeneration = 0;
     }
 
     public EditorResult generateRepoMap() {
         ExceptionUtils.checkInterrupted("Repo map generation cancelled");
-        if (!projectService.hasActiveProject()) {
+        Path root = projectService.getCurrentProjectRoot();
+        if (root == null || !projectService.hasActiveProject()) {
             return new EditorResult(false, "", "No active project");
         }
 
-        if (!needsUpdate && cachedMap != null) {
-            return new EditorResult(true, cachedMap, null);
+        long startGeneration = generation.get();
+        synchronized (this) {
+            if (cachedMap != null && cachedGeneration == startGeneration) {
+                return new EditorResult(true, cachedMap, null);
+            }
         }
 
-        Path root = projectService.getCurrentProjectRoot();
         List<String> rawFiles = grepService.listFiles(null);
         List<String> files = new ArrayList<>();
         for (String f : rawFiles) {
@@ -115,10 +126,20 @@ public class RepoMapPackerService {
             sb.append("\n\n");
         }
 
-        this.cachedMap = sb.toString();
-        this.needsUpdate = false;
-        metaService.saveRepoCache(cachedMap);
-        return new EditorResult(true, cachedMap, null);
+        String generatedMap = sb.toString();
+        boolean cacheSaved = false;
+        synchronized (this) {
+            if (generation.get() == startGeneration
+                    && root.equals(projectService.getCurrentProjectRoot())) {
+                this.cachedMap = generatedMap;
+                this.cachedGeneration = startGeneration;
+                cacheSaved = true;
+            }
+        }
+        if (cacheSaved) {
+            metaService.saveRepoCache(generatedMap);
+        }
+        return new EditorResult(true, generatedMap, null);
     }
 
     private String getSkeleton(Path filePath) {

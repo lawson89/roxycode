@@ -65,7 +65,7 @@ public class SettingsService {
      * Returns the active RoxyCode home directory (~/.roxycode by default, or the parent directory
      * of {@code settingsPathOverride} when overridden in tests).
      */
-    public Path getRoxyHomeDir() {
+    public synchronized Path getRoxyHomeDir() {
         if (settingsPathOverride != null && settingsPathOverride.getParent() != null) {
             return settingsPathOverride.getParent();
         }
@@ -122,7 +122,7 @@ public class SettingsService {
      *
      * @return AppSettings object.
      */
-    public AppSettings getSettings() {
+    public synchronized AppSettings getSettings() {
         if (settings == null) {
             loadSettings();
         }
@@ -130,7 +130,7 @@ public class SettingsService {
     }
 
     /** Saves the current settings to the TOML file. */
-    public void saveSettings() {
+    public synchronized void saveSettings() {
         try {
             Path path = getSettingsPath();
             if (path.getParent() != null) {
@@ -149,7 +149,7 @@ public class SettingsService {
      *
      * @param path The path to use for settings.
      */
-    public void setSettingsPathOverride(Path path) {
+    public synchronized void setSettingsPathOverride(Path path) {
         this.settingsPathOverride = path;
         this.settings = null; // Force reload
     }

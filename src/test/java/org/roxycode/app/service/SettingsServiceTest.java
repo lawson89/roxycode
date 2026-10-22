@@ -2,11 +2,18 @@ package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -100,5 +107,34 @@ class SettingsServiceTest {
         assertNotNull(models);
         assertTrue(!models.isEmpty(), "Available models from /models.toml should not be empty");
         assertTrue(models.stream().anyMatch(m -> "gemini-3.5-flash".equals(m.apiName())));
+    }
+
+    @Test
+    void testConcurrentLazyInitializationReturnsSameInstance() throws Exception {
+        SettingsService service = new SettingsService();
+        service.setSettingsPathOverride(tempDir.resolve("concurrent_settings.toml"));
+
+        int threads = 8;
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<AppSettings>> futures = new ArrayList<>();
+        try (ExecutorService executor = Executors.newFixedThreadPool(threads)) {
+            for (int i = 0; i < threads; i++) {
+                futures.add(
+                        executor.submit(
+                                () -> {
+                                    ready.countDown();
+                                    start.await();
+                                    return service.getSettings();
+                                }));
+            }
+            ready.await();
+            start.countDown();
+            AppSettings expected = futures.get(0).get();
+            assertNotNull(expected);
+            for (Future<AppSettings> future : futures) {
+                assertSame(expected, future.get());
+            }
+        }
     }
 }

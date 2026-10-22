@@ -21,7 +21,7 @@ public class ProjectService {
 
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
-    private Path currentProjectRoot;
+    private volatile Path currentProjectRoot;
 
     public ProjectService(SettingsService settingsService) {
         this(settingsService, event -> {});
@@ -61,11 +61,12 @@ public class ProjectService {
     }
 
     public String getProjectName() {
-        if (currentProjectRoot == null) {
+        Path projectRoot = getCurrentProjectRoot();
+        if (projectRoot == null) {
             return "No Project";
         }
-        Path fileName = currentProjectRoot.getFileName();
-        return fileName != null ? fileName.toString() : currentProjectRoot.toString();
+        Path fileName = projectRoot.getFileName();
+        return fileName != null ? fileName.toString() : projectRoot.toString();
     }
 
     /**

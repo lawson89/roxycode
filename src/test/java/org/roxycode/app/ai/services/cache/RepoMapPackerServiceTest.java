@@ -1,6 +1,9 @@
 package org.roxycode.app.ai.services.cache;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,12 +11,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
 
 class RepoMapPackerServiceTest {
@@ -77,5 +82,46 @@ class RepoMapPackerServiceTest {
         assertTrue(result.success());
         assertTrue(result.content().contains("test.txt"));
         assertFalse(result.content().contains("test.bin"), "Binary file should be excluded");
+    }
+
+    @Test
+    void testConcurrentInvalidationDuringGenerationDoesNotCacheStaleMap() throws IOException {
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.writeString(testFile, "Version 1");
+
+        AtomicBoolean invalidateDuringList = new AtomicBoolean(true);
+        when(grepService.listFiles(null))
+                .thenAnswer(
+                        invocation -> {
+                            if (invalidateDuringList.compareAndSet(true, false)) {
+                                // Simulate a concurrent FileChangedEvent while generateRepoMap() is
+                                // mid-execution
+                                service.handleFileChanged(new FileChangedEvent("test.txt"));
+                            }
+                            return List.of("test.txt");
+                        });
+
+        EditorResult firstResult = service.generateRepoMap();
+        assertTrue(firstResult.success());
+        assertTrue(firstResult.content().contains("Version 1"));
+        // Stale generation must not be persisted to metaService
+        verify(metaService, never()).saveRepoCache(Mockito.anyString());
+
+        // Update file content; next call must regenerate instead of returning stale cache
+        Files.writeString(testFile, "Version 2");
+        EditorResult secondResult = service.generateRepoMap();
+        assertTrue(secondResult.success());
+        assertTrue(secondResult.content().contains("Version 2"));
+        verify(grepService, times(2)).listFiles(null);
+        verify(metaService, times(1)).saveRepoCache(secondResult.content());
+
+        // Third call without invalidation should use the cached map
+        EditorResult thirdResult = service.generateRepoMap();
+        assertTrue(thirdResult.success());
+        assertEquals(secondResult.content(), thirdResult.content());
+        verify(grepService, times(2)).listFiles(null);
     }
 }

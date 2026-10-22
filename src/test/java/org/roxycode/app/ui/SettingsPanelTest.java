@@ -79,14 +79,26 @@ class SettingsPanelTest {
     }
 
     @Test
-    void testThemeSelectionUpdatesSettingsButDoesNotSave() {
-        JComboBox<String> themeCombo = findCombo(settingsPanel);
-        assertNotNull(themeCombo, "Theme combo should exist");
+    void testThemeSelectionUpdatesSettingsButDoesNotSave() throws Exception {
+        try {
+            JComboBox<String> themeCombo = findCombo(settingsPanel);
+            assertNotNull(themeCombo, "Theme combo should exist");
 
-        themeCombo.setSelectedItem("FlatLaf Dark");
+            themeCombo.setSelectedItem("FlatLaf Dark");
 
-        assertEquals("FlatLaf Dark", settings.getTheme());
-        verify(settingsService, never()).saveSettings();
+            assertEquals("FlatLaf Dark", settings.getTheme());
+            verify(settingsService, never()).saveSettings();
+
+            // Verify SettingsChangedEvent synchronizes themeCombo when changed externally (e.g.
+            // HeaderPanel)
+            settings.setTheme("FlatLaf Light");
+            settingsPanel.onSettingsChanged(
+                    new org.roxycode.app.events.SettingsChangedEvent(settings));
+            SwingUtilities.invokeAndWait(() -> {});
+            assertEquals("FlatLaf Light", themeCombo.getSelectedItem());
+        } finally {
+            SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
+        }
     }
 
     @Test

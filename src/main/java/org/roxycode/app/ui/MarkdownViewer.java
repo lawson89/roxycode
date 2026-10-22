@@ -1,14 +1,10 @@
 package org.roxycode.app.ui;
 
-import com.vladsch.flexmark.html.HtmlRenderer;
-import com.vladsch.flexmark.parser.Parser;
 import javax.swing.*;
 
 /** A reusable component for viewing Markdown content with theme-aware styling. */
 public final class MarkdownViewer extends JTextPane {
     private static final long serialVersionUID = 1L;
-    private final transient Parser parser;
-    private final transient HtmlRenderer renderer;
     private String currentMarkdown = "";
 
     public MarkdownViewer() {
@@ -17,9 +13,6 @@ public final class MarkdownViewer extends JTextPane {
         setOpaque(true);
         putClientProperty("JEditorPane.honorDisplayProperties", true);
 
-        parser = SwingHtmlUtils.markdownParser();
-        renderer = SwingHtmlUtils.markdownRenderer();
-
         updateTheme();
         SwingHtmlUtils.installTextContextMenu(this);
     }
@@ -27,7 +20,7 @@ public final class MarkdownViewer extends JTextPane {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (parser != null) {
+        if (currentMarkdown != null) {
             updateTheme();
         }
     }
@@ -43,9 +36,7 @@ public final class MarkdownViewer extends JTextPane {
     }
 
     private void render() {
-        String htmlContent =
-                SwingHtmlUtils.styleMarkdownTables(renderer.render(parser.parse(currentMarkdown)));
-        String highlightedHtml = JexlToHtmlConverter.highlightCodeBlocks(htmlContent);
+        String highlightedHtml = SwingHtmlUtils.renderMarkdownToHtml(currentMarkdown);
         setText("<html><body>" + highlightedHtml + "</body></html>");
         setCaretPosition(0);
     }

@@ -2,7 +2,9 @@ package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,14 @@ import org.roxycode.app.events.ProjectChangedEvent;
 class ProjectServiceTest {
 
     @TempDir Path tempDir;
+
+    @Test
+    void testCurrentProjectRootFieldIsVolatile() throws Exception {
+        Field field = ProjectService.class.getDeclaredField("currentProjectRoot");
+        assertTrue(
+                Modifier.isVolatile(field.getModifiers()),
+                "currentProjectRoot must be declared volatile for cross-thread visibility");
+    }
 
     @Test
     void testProjectPersistence() {

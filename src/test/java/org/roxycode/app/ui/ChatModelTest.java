@@ -3,6 +3,8 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.image.BufferedImage;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -44,12 +46,26 @@ class ChatModelTest {
         BufferedImage added = model.addPendingImage(img);
         assertSame(img, added);
         assertTrue(model.hasPendingImages());
-        assertEquals(1, model.getPendingImages().size());
+
+        List<BufferedImage> snapshot = model.getPendingImages();
+        assertEquals(1, snapshot.size());
 
         List<byte[]> encoded = model.drainPendingImagesAsPngBytes();
         assertEquals(1, encoded.size());
         assertTrue(encoded.get(0).length > 0);
         assertFalse(model.hasPendingImages());
+        // Snapshot taken before drain remains intact (defensive copy)
+        assertEquals(1, snapshot.size());
+    }
+
+    @Test
+    void testVolatileFieldsForCrossThreadVisibility() throws Exception {
+        Field currentTurnField = ChatModel.class.getDeclaredField("currentTurn");
+        Field loadingField = ChatModel.class.getDeclaredField("loading");
+        assertTrue(
+                Modifier.isVolatile(currentTurnField.getModifiers()),
+                "currentTurn must be volatile");
+        assertTrue(Modifier.isVolatile(loadingField.getModifiers()), "loading must be volatile");
     }
 
     @Test

@@ -213,4 +213,44 @@ class FileEditorServiceTest {
                         () -> fileEditorService.writeFile("../outside.txt", "content"));
         assertTrue(ex.getMessage().contains("Path traversal"));
     }
+
+    @Test
+    void testWriteFileNullParentDoesNotThrowNPE() throws IOException {
+        ProjectService rootMockService = mock(ProjectService.class);
+        Path bareRelativePath = Path.of("target_bare_root_test_file.txt");
+        assertNull(bareRelativePath.getParent(), "Single-element relative Path has null parent");
+        when(rootMockService.resolvePath("target_bare_root_test_file.txt"))
+                .thenReturn(bareRelativePath);
+        FileEditorService customService = new FileEditorService(rootMockService, eventPublisher);
+        try {
+            EditorResult result =
+                    customService.writeFile("target_bare_root_test_file.txt", "root content");
+            assertTrue(result.success());
+            assertEquals("root content", Files.readString(bareRelativePath));
+        } finally {
+            Files.deleteIfExists(bareRelativePath);
+        }
+    }
+
+    @Test
+    void testReplaceLinesAndInsertAtLinePreserveCrlfAndNoTrailingNewline() throws IOException {
+        Path crlfFile = tempDir.resolve("crlf.txt");
+        Files.writeString(crlfFile, "Line 1\r\nLine 2\r\nLine 3\r\n");
+
+        fileEditorService.replaceLines("crlf.txt", 2, 2, "Updated 2");
+        assertEquals("Line 1\r\nUpdated 2\r\nLine 3\r\n", Files.readString(crlfFile));
+
+        fileEditorService.insertAtLine("crlf.txt", 2, "Inserted 1.5");
+        assertEquals(
+                "Line 1\r\nInserted 1.5\r\nUpdated 2\r\nLine 3\r\n", Files.readString(crlfFile));
+
+        Path noTrailingFile = tempDir.resolve("no_trailing.txt");
+        Files.writeString(noTrailingFile, "Alpha\nBeta\nGamma");
+
+        fileEditorService.replaceLines("no_trailing.txt", 2, 2, "BetaUpdated");
+        assertEquals("Alpha\nBetaUpdated\nGamma", Files.readString(noTrailingFile));
+
+        fileEditorService.insertAtLine("no_trailing.txt", 3, "BeforeGamma");
+        assertEquals("Alpha\nBetaUpdated\nBeforeGamma\nGamma", Files.readString(noTrailingFile));
+    }
 }

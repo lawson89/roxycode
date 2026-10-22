@@ -19,6 +19,7 @@ import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.util.Edt;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,8 @@ import org.springframework.stereotype.Component;
 public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
+    static final int MAX_PLAN_TITLE_LENGTH = 40;
+    private static final String ELLIPSIS = "...";
 
     private final transient PlanService planService;
     private final GitChangesPanel gitChangesPanel;
@@ -101,28 +104,18 @@ public final class TaskWorkspacePanel extends JPanel {
 
     @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
-        Runnable update =
+        Edt.run(
                 () -> {
                     updateActivePhase(event.phase());
                     if (sidebar != null) {
                         sidebar.setTaskWaitingApproval(planService.getPendingPhase() != null);
                     }
-                };
-        if (SwingUtilities.isEventDispatchThread()) {
-            update.run();
-        } else {
-            SwingUtilities.invokeLater(update);
-        }
+                });
     }
 
     @EventListener
     public void onPlanUpdated(PlanUpdatedEvent event) {
-        Runnable update = () -> updateActivePhase(planService.getCurrentPhase());
-        if (SwingUtilities.isEventDispatchThread()) {
-            update.run();
-        } else {
-            SwingUtilities.invokeLater(update);
-        }
+        Edt.run(() -> updateActivePhase(planService.getCurrentPhase()));
     }
 
     @EventListener
@@ -155,12 +148,27 @@ public final class TaskWorkspacePanel extends JPanel {
         }
     }
 
+    static String formatPlanTitleDisplay(String rawTitle) {
+        if (rawTitle == null || rawTitle.isBlank()) {
+            return "";
+        }
+        String normalized = rawTitle.trim().toUpperCase(Locale.ROOT);
+        if (normalized.length() > MAX_PLAN_TITLE_LENGTH) {
+            return normalized.substring(0, MAX_PLAN_TITLE_LENGTH) + ELLIPSIS;
+        }
+        return normalized;
+    }
+
     void updateActivePhase(WorkflowPhase currentPhase) {
         ImplementationPlan plan = planService.getCurrentPlan();
         if (plan != null && plan.title() != null && !plan.title().isBlank()) {
-            planLabel.setText(plan.title().toUpperCase(Locale.ROOT));
+            String trimmedTitle = plan.title().trim();
+            planLabel.setText(formatPlanTitleDisplay(trimmedTitle));
+            planLabel.setToolTipText(trimmedTitle);
             planLabel.setVisible(true);
         } else {
+            planLabel.setText("");
+            planLabel.setToolTipText(null);
             planLabel.setVisible(false);
         }
 

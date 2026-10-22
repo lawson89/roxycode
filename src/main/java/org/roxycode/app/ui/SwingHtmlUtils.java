@@ -60,6 +60,22 @@ public final class SwingHtmlUtils {
     }
 
     /**
+     * Renders Markdown into Swing-compatible HTML with GFM table styling and code block syntax
+     * highlighting applied.
+     *
+     * @param markdown the raw Markdown string
+     * @return the rendered and styled HTML fragment
+     */
+    public static String renderMarkdownToHtml(String markdown) {
+        if (markdown == null || markdown.isEmpty()) {
+            return "";
+        }
+        String html =
+                styleMarkdownTables(MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
+        return JexlToHtmlConverter.highlightCodeBlocks(html);
+    }
+
+    /**
      * Decorates Flexmark-rendered Markdown table tags ({@code <table>}, {@code <th>}, {@code <td>})
      * with Swing HTML 3.2 / CSS 1.0 classes and attributes without affecting structural layout
      * tables.

@@ -1,14 +1,20 @@
 package org.roxycode.app.service;
 
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.model.Version;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.testcontainers.DockerClientFactory;
 
 @Service
 public class SystemToolService {
@@ -16,11 +22,61 @@ public class SystemToolService {
     private static final String JAVA = "Java";
     private static final String DOCKER = "Docker";
     private static final String ARG_VERSION = "--version";
-    private static final String STATUS_DETECTED = "Detected";
-    private static final String STATUS_MISSING = "Missing";
-    private static final String VERSION_NOT_FOUND = "Not found";
+    static final String STATUS_DETECTED = "Detected";
+    static final String STATUS_ERROR = "Error";
+    static final String STATUS_MISSING = "Missing";
+    static final String VERSION_NOT_FOUND = "Not found";
+    private static final int MAX_DOCKER_ERROR_LENGTH = 120;
     private static final String DOCKER_DESCRIPTION =
             "Required for isolated build and test execution via Testcontainers.";
+
+    public record DockerVersionInfo(String version, String apiVersion) {}
+
+    @FunctionalInterface
+    interface DockerProbe {
+        DockerVersionInfo probe() throws Exception;
+    }
+
+    private DockerProbe dockerProbe;
+    private BooleanSupplier dockerCliPresentSupplier;
+
+    public SystemToolService() {
+        this(SystemToolService::probeWithTestcontainers, SystemToolService::isDockerCliInstalled);
+    }
+
+    SystemToolService(DockerProbe dockerProbe, BooleanSupplier dockerCliPresentSupplier) {
+        this.dockerProbe = dockerProbe;
+        this.dockerCliPresentSupplier = dockerCliPresentSupplier;
+    }
+
+    void setDockerProbe(DockerProbe dockerProbe) {
+        this.dockerProbe = dockerProbe;
+    }
+
+    void setDockerCliPresentSupplier(BooleanSupplier dockerCliPresentSupplier) {
+        this.dockerCliPresentSupplier = dockerCliPresentSupplier;
+    }
+
+    @SuppressWarnings("PMD.CloseResource")
+    static DockerVersionInfo probeWithTestcontainers() {
+        DockerClient client = DockerClientFactory.instance().client();
+        Version version = client.versionCmd().exec();
+        return new DockerVersionInfo(
+                version != null ? version.getVersion() : null,
+                version != null ? version.getApiVersion() : null);
+    }
+
+    static boolean isDockerCliInstalled() {
+        try {
+            ProcessResult versionResult =
+                    ProcessRunner.run(List.of("docker", ARG_VERSION), null, true);
+            return !versionResult.timedOut() && versionResult.exitCode() == 0;
+        } catch (CancellationException e) {
+            throw e;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     public CompletableFuture<List<SystemTool>> detectTools() {
         return CompletableFuture.supplyAsync(
@@ -55,55 +111,80 @@ public class SystemToolService {
                 });
     }
 
-    /**
-     * Asynchronously checks whether the Docker CLI is installed and the Docker daemon is reachable.
-     */
+    /** Asynchronously checks whether Docker is reachable and compatible with Testcontainers. */
     public CompletableFuture<Boolean> isDockerAvailable() {
         return CompletableFuture.supplyAsync(this::checkDockerAvailable);
     }
 
-    /**
-     * Synchronously checks whether the Docker CLI is installed and the Docker daemon is reachable.
-     */
+    /** Synchronously checks whether Docker is reachable and compatible with Testcontainers. */
     public boolean checkDockerAvailable() {
         return STATUS_DETECTED.equals(detectDockerTool().status());
     }
 
     SystemTool detectDockerTool() {
         try {
-            ProcessResult versionResult =
-                    ProcessRunner.run(List.of("docker", ARG_VERSION), null, true);
-            if (versionResult.timedOut() || versionResult.exitCode() != 0) {
-                log.warn("Docker CLI detection failed with exit code {}", versionResult.exitCode());
+            DockerVersionInfo info = dockerProbe.probe();
+            String serverVersion =
+                    info != null && info.version() != null && !info.version().isBlank()
+                            ? info.version().trim()
+                            : "Unknown";
+            String apiVersion =
+                    info != null && info.apiVersion() != null && !info.apiVersion().isBlank()
+                            ? info.apiVersion().trim()
+                            : "";
+            String versionDisplay =
+                    !apiVersion.isEmpty()
+                            ? "Docker " + serverVersion + " (API " + apiVersion + ")"
+                            : "Docker " + serverVersion;
+            return new SystemTool(DOCKER, versionDisplay, STATUS_DETECTED, DOCKER_DESCRIPTION);
+        } catch (Throwable t) {
+            ExceptionUtils.rethrowIfCancelled(t, "Docker detection cancelled");
+            String rootMessage = extractDiagnosticMessage(t);
+            log.warn("Testcontainers Docker detection failed: {}", rootMessage);
+            if (isGenericEnvironmentNotFound(rootMessage)
+                    && (dockerCliPresentSupplier == null
+                            || !dockerCliPresentSupplier.getAsBoolean())) {
                 return new SystemTool(
                         DOCKER, VERSION_NOT_FOUND, STATUS_MISSING, DOCKER_DESCRIPTION);
             }
-
-            String cliVersion = parseVersion(versionResult.output(), DOCKER);
-            ProcessResult infoResult =
-                    ProcessRunner.run(
-                            List.of("docker", "info", "--format", "{{.ServerVersion}}"),
-                            null,
-                            true);
-            if (!infoResult.timedOut() && infoResult.exitCode() == 0) {
-                String serverVersion =
-                        infoResult.output() != null ? infoResult.output().trim() : "";
-                String versionDisplay =
-                        !serverVersion.isEmpty()
-                                ? "Docker " + serverVersion + " (Daemon Running)"
-                                : cliVersion + " (Daemon Running)";
-                return new SystemTool(DOCKER, versionDisplay, STATUS_DETECTED, DOCKER_DESCRIPTION);
-            } else {
-                log.warn("Docker daemon is not reachable (exit code {})", infoResult.exitCode());
-                return new SystemTool(
-                        DOCKER, "Daemon not running", STATUS_MISSING, DOCKER_DESCRIPTION);
-            }
-        } catch (CancellationException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Exception during Docker detection: {}", e.getMessage());
-            return new SystemTool(DOCKER, VERSION_NOT_FOUND, STATUS_MISSING, DOCKER_DESCRIPTION);
+            return new SystemTool(
+                    DOCKER,
+                    formatDockerErrorMessage(rootMessage),
+                    STATUS_ERROR,
+                    DOCKER_DESCRIPTION);
         }
+    }
+
+    private static String extractDiagnosticMessage(Throwable t) {
+        Throwable root = ExceptionUtils.getRootCause(t);
+        if (root != null && root.getMessage() != null && !root.getMessage().isBlank()) {
+            return root.getMessage().trim();
+        }
+        if (t.getMessage() != null && !t.getMessage().isBlank()) {
+            return t.getMessage().trim();
+        }
+        return root != null ? root.getClass().getSimpleName() : t.getClass().getSimpleName();
+    }
+
+    private static boolean isGenericEnvironmentNotFound(String message) {
+        if (message == null || message.isBlank()) {
+            return true;
+        }
+        String lower = message.toLowerCase(Locale.ROOT);
+        return lower.contains("could not find a valid docker environment")
+                || lower.contains("previous attempts to find a docker environment failed")
+                || lower.equals("not found");
+    }
+
+    private static String formatDockerErrorMessage(String rawMessage) {
+        if (rawMessage == null || rawMessage.isBlank()) {
+            return "Testcontainers connection failed";
+        }
+        String normalized = rawMessage.replaceAll("\s+", " ").trim();
+        if (normalized.length() > MAX_DOCKER_ERROR_LENGTH) {
+            return normalized.substring(0, MAX_DOCKER_ERROR_LENGTH) + "...";
+        }
+        return normalized;
     }
 
     private SystemTool detectTool(

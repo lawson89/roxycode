@@ -225,10 +225,10 @@ public final class PlanPanel extends JPanel {
         return """
                 <h3>%s:</h3>
                 <table width='100%%' border='0' cellpadding='2' cellspacing='0'>
-                    <tr bgcolor='#2d2d2d'>
-                        <td width='25%%' align='left'><b><font size='2' color='#888888'>Timestamp</font></b></td>
-                        <td width='15%%' align='left'><b><font size='2' color='#888888'>User</font></b></td>
-                        <td width='60%%' align='left'><b><font size='2' color='#888888'>Message</font></b></td>
+                    <tr class='system-entry'>
+                        <td class='md-th' width='25%%' align='left'><b><font size='2' color='#888888'>Timestamp</font></b></td>
+                        <td class='md-th' width='15%%' align='left'><b><font size='2' color='#888888'>User</font></b></td>
+                        <td class='md-th' width='60%%' align='left'><b><font size='2' color='#888888'>Message</font></b></td>
                     </tr>
                 %s
                 </table>

@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
 import java.io.File;
 import java.nio.file.Path;
@@ -14,6 +15,7 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
@@ -108,7 +110,7 @@ public final class HeaderPanel extends JPanel {
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        Runnable updateTask =
+        Edt.run(
                 () -> {
                     Path newRoot = event.projectRoot();
                     projectLabel.setText(projectService.getProjectName());
@@ -118,28 +120,22 @@ public final class HeaderPanel extends JPanel {
                         projectLabel.setToolTipText("No project selected");
                     }
                     updateBranchLabel();
-                };
-        if (SwingUtilities.isEventDispatchThread()) {
-            updateTask.run();
-        } else {
-            SwingUtilities.invokeLater(updateTask);
-        }
+                });
     }
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        Runnable updateTask = () -> updateModelDisplay(event.settings().getGeminiModel());
-        if (SwingUtilities.isEventDispatchThread()) {
-            updateTask.run();
-        } else {
-            SwingUtilities.invokeLater(updateTask);
-        }
+        Edt.run(() -> updateModelDisplay(event.settings().getGeminiModel()));
     }
 
     private void toggleTheme() {
         AppSettings settings = settingsService.getSettings();
         String currentTheme = settings.getTheme();
-        String newTheme = "FlatLaf Dark".equals(currentTheme) ? "FlatLaf Light" : "FlatLaf Dark";
+        boolean isDark =
+                (currentTheme != null && !currentTheme.isBlank())
+                        ? SettingsPanel.isDarkTheme(currentTheme)
+                        : FlatLaf.isLafDark();
+        String newTheme = isDark ? "FlatLaf Light" : "FlatLaf Dark";
         settings.setTheme(newTheme);
         SettingsPanel.applyTheme(newTheme);
         settingsService.saveSettings();

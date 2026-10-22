@@ -47,6 +47,28 @@ class PlanPanelTest {
         assertTrue(
                 html.contains("<td width='100%'"),
                 "Step description cell should take 100% remaining width");
+
+        ImplementationPlan planWithLogs =
+                new ImplementationPlan(
+                        "Test Plan",
+                        "Test Goal",
+                        List.of("Requirement 1"),
+                        List.of(new ImplementationPlan.TechStep("Completed step", true)),
+                        false,
+                        null,
+                        null,
+                        null,
+                        List.of(
+                                new ImplementationPlan.LogEntry(
+                                        "2026-04-06T12:00:00", "User", "Approved")));
+        String htmlWithLogs = PlanPanel.buildPlanHtml(planWithLogs);
+        assertFalse(
+                htmlWithLogs.contains("bgcolor='#2d2d2d'"),
+                "Handoff log table header should not hardcode dark mode bgcolor='#2d2d2d'");
+        assertTrue(
+                htmlWithLogs.contains("class='system-entry'")
+                        || htmlWithLogs.contains("class='md-th'"),
+                "Handoff log table header should use theme-aware CSS classes");
     }
 
     @Test

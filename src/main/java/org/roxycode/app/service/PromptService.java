@@ -1,6 +1,7 @@
 package org.roxycode.app.service;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -234,7 +235,18 @@ public class PromptService {
         }
     }
 
+    static void validateContextFilename(String filename) {
+        if (filename == null
+                || filename.isBlank()
+                || filename.contains("/")
+                || filename.indexOf(92) >= 0
+                || filename.contains("..")) {
+            throw new IllegalArgumentException("Invalid context filename: " + filename);
+        }
+    }
+
     public String readContextFile(String filename) {
+        validateContextFilename(filename);
         if (!projectService.hasActiveProject()) {
             return "";
         }
@@ -244,26 +256,31 @@ public class PromptService {
                 return Files.readString(file, StandardCharsets.UTF_8);
             } catch (IOException e) {
                 log.error("Failed to read context file {}: {}", filename, e.getMessage());
+                throw new UncheckedIOException("Failed to read context file", e);
             }
         }
         return "";
     }
 
     public void saveContextFile(String filename, String content) {
+        validateContextFilename(filename);
         if (!projectService.hasActiveProject()) {
             throw new IllegalStateException("No active project");
         }
         Path file = projectService.resolveProjectDataPath(CONTEXT_DIR + "/" + filename);
         try {
-            Files.createDirectories(file.getParent());
+            if (file.getParent() != null) {
+                Files.createDirectories(file.getParent());
+            }
             Files.writeString(file, content, StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.error("Failed to save context file {}: {}", filename, e.getMessage());
-            throw new RuntimeException("Failed to save context file", e);
+            throw new UncheckedIOException("Failed to save context file", e);
         }
     }
 
     public void deleteContextFile(String filename) {
+        validateContextFilename(filename);
         if (!projectService.hasActiveProject()) {
             return;
         }
@@ -272,7 +289,7 @@ public class PromptService {
             Files.deleteIfExists(file);
         } catch (IOException e) {
             log.error("Failed to delete context file {}: {}", filename, e.getMessage());
-            throw new RuntimeException("Failed to delete context file", e);
+            throw new UncheckedIOException("Failed to delete context file", e);
         }
     }
 

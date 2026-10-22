@@ -10,9 +10,9 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JWindow;
-import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.util.Edt;
 
 /** Theme-aware startup splash screen window. */
 public final class SplashScreenWindow extends JWindow {
@@ -74,11 +74,7 @@ public final class SplashScreenWindow extends JWindow {
     }
 
     public void setStatus(String status) {
-        if (SwingUtilities.isEventDispatchThread()) {
-            statusLabel.setText(status);
-        } else {
-            SwingUtilities.invokeLater(() -> statusLabel.setText(status));
-        }
+        Edt.run(() -> statusLabel.setText(status));
     }
 
     JLabel getStatusLabel() {

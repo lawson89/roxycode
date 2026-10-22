@@ -168,6 +168,17 @@ class HeaderPanelTest {
         themeButton.doClick();
         assertEquals("FlatLaf Light", ss.getSettings().getTheme());
         verify(ss, times(2)).saveSettings();
+
+        // When Darcula or macOS Dark is active, clicking toggle should switch to FlatLaf Light
+        ss.getSettings().setTheme("Darcula");
+        SettingsPanel.applyTheme("Darcula");
+        themeButton.doClick();
+        assertEquals("FlatLaf Light", ss.getSettings().getTheme());
+
+        ss.getSettings().setTheme("macOS Dark");
+        SettingsPanel.applyTheme("macOS Dark");
+        themeButton.doClick();
+        assertEquals("FlatLaf Light", ss.getSettings().getTheme());
     }
 
     @Test

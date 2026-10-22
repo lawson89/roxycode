@@ -10,14 +10,18 @@ import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import java.awt.*;
 import java.util.List;
+import java.util.Locale;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /** Panel for application settings. */
@@ -44,6 +48,7 @@ public final class SettingsPanel extends JPanel {
     private final JLabel legendLabel;
     private final JLabel statusLabel;
     private final Timer statusTimer;
+    private boolean updatingFromSettings = false;
 
     public SettingsPanel(SettingsService settingsService) {
         this.settingsService = settingsService;
@@ -136,7 +141,29 @@ public final class SettingsPanel extends JPanel {
         }
     }
 
+    @EventListener
+    public void onSettingsChanged(SettingsChangedEvent event) {
+        if (event == null || event.settings() == null) {
+            return;
+        }
+        Edt.run(
+                () -> {
+                    String theme = event.settings().getTheme();
+                    if (theme != null && !theme.equals(themeCombo.getSelectedItem())) {
+                        updatingFromSettings = true;
+                        try {
+                            themeCombo.setSelectedItem(theme);
+                        } finally {
+                            updatingFromSettings = false;
+                        }
+                    }
+                });
+    }
+
     private void updateTheme() {
+        if (updatingFromSettings) {
+            return;
+        }
         String selectedTheme = (String) themeCombo.getSelectedItem();
         if (selectedTheme != null) {
             settingsService.getSettings().setTheme(selectedTheme);
@@ -189,6 +216,23 @@ public final class SettingsPanel extends JPanel {
 
     JSpinner getMaxAgentToolTurnsSpinner() {
         return maxAgentToolTurnsSpinner;
+    }
+
+    JComboBox<String> getThemeCombo() {
+        return themeCombo;
+    }
+
+    public static boolean isDarkTheme(String themeName) {
+        if (themeName != null && !themeName.isBlank()) {
+            String lower = themeName.toLowerCase(Locale.ROOT);
+            if (lower.contains("dark") || "darcula".equals(lower)) {
+                return true;
+            }
+            if (lower.contains("light") || "intellij".equals(lower)) {
+                return false;
+            }
+        }
+        return FlatLaf.isLafDark();
     }
 
     public static void applyTheme(String themeName) {

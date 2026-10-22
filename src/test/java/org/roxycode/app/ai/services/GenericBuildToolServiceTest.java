@@ -110,13 +110,70 @@ class GenericBuildToolServiceTest {
                 """
                 [build]
                 compile = 'echo [ERROR] Compilation failed'
+                [test]
+                run_all = 'echo FAIL: MyTest#broken'
                 [parse]
                 error_regex = '(?m)^.[E]RROR. (.*)$'
+                test_failure_regex = '(?m)^FAIL: (.*)$'
                 """);
 
-        BuildResult result = buildToolService.compile();
-        assertEquals(1, result.getErrors().size());
-        assertEquals("Compilation failed", result.getErrors().get(0));
+        BuildResult compileResult = buildToolService.compile();
+        assertFalse(compileResult.isSuccess());
+        assertEquals(1, compileResult.getErrors().size());
+        assertEquals("Compilation failed", compileResult.getErrors().get(0));
+
+        BuildResult testResult = buildToolService.runTests();
+        assertEquals(1, testResult.getFailedTests().size());
+        assertEquals("MyTest#broken", testResult.getFailedTests().get(0));
+    }
+
+    @Test
+    void testContainerExecutionRegexParsing() throws IOException {
+        when(systemToolService.isDockerAvailable())
+                .thenReturn(CompletableFuture.completedFuture(true));
+
+        buildContainerService.setContainerSessionFactory(
+                key ->
+                        new ContainerSession() {
+                            @Override
+                            public ContainerExecResult execInContainer(String... command) {
+                                return new ContainerExecResult(
+                                        1,
+                                        """
+                                        [ERROR] Container compile failure
+                                        FAIL: ContainerTest#fail""",
+                                        "");
+                            }
+
+                            @Override
+                            public boolean isRunning() {
+                                return true;
+                            }
+
+                            @Override
+                            public void close() {}
+                        });
+
+        Files.createDirectories(projectDataDir);
+        Files.writeString(
+                projectDataDir.resolve("build.toml"),
+                """
+                [test]
+                run_all = './mvnw test'
+                [parse]
+                error_regex = '(?m)^.[E]RROR. (.*)$'
+                test_failure_regex = '(?m)^FAIL: (.*)$'
+                [container]
+                enabled = true
+                image = 'eclipse-temurin:25-jdk'
+                workdir = '/workspace'
+                """);
+
+        BuildResult result = buildToolService.runTests();
+        assertFalse(result.isSuccess());
+        assertEquals(1, result.getExitCode());
+        assertEquals(List.of("Container compile failure"), result.getErrors());
+        assertEquals(List.of("ContainerTest#fail"), result.getFailedTests());
     }
 
     @Test
@@ -157,6 +214,41 @@ class GenericBuildToolServiceTest {
         assertEquals(-1, result.getExitCode());
         assertTrue(result.getOutput().contains("Docker was not detected"));
         assertFalse(result.getErrors().isEmpty());
+    }
+
+    @Test
+    void testContainerEnabledFailsBuildWhenTestcontainersSessionThrows() throws IOException {
+        when(systemToolService.isDockerAvailable())
+                .thenReturn(CompletableFuture.completedFuture(true));
+
+        buildContainerService.setContainerSessionFactory(
+                key -> {
+                    throw new IllegalStateException(
+                            "client version 1.32 is too old. Minimum supported API version is 1.44");
+                });
+
+        Files.createDirectories(projectDataDir);
+        Files.writeString(
+                projectDataDir.resolve("build.toml"),
+                """
+                [build]
+                compile = './mvnw compile'
+                [container]
+                enabled = true
+                image = 'eclipse-temurin:25-jdk'
+                workdir = '/workspace'
+                """);
+
+        BuildResult result = buildToolService.compile();
+        assertFalse(result.isSuccess());
+        assertEquals(-1, result.getExitCode());
+        assertTrue(result.getOutput().contains("client version 1.32 is too old"));
+        assertTrue(
+                result.getErrors().stream()
+                        .anyMatch(
+                                err ->
+                                        err.contains(
+                                                "Container execution failed: client version 1.32 is too old")));
     }
 
     @Test

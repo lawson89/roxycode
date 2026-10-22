@@ -78,7 +78,7 @@ public class BuildContainerService {
 
     public BuildContainerService(SystemToolService systemToolService) {
         this.systemToolService = systemToolService;
-        this.containerSessionFactory = BuildContainerService::createTestcontainersSession;
+        this.containerSessionFactory = BuildContainerService::createContainerSession;
     }
 
     void setContainerSessionFactory(ContainerSessionFactory containerSessionFactory) {
@@ -197,7 +197,7 @@ public class BuildContainerService {
                 .withCommand("sh", "-c", "while true; do sleep 3600; done");
     }
 
-    private static ContainerSession createTestcontainersSession(ContainerSessionKey key) {
+    private static ContainerSession createContainerSession(ContainerSessionKey key) {
         GenericContainer<?> container = createConfiguredContainer(key);
         container.start();
         return new ContainerSession() {

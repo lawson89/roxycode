@@ -31,3 +31,4 @@ build/
 
 ### VS Code ###
 .vscode/
+/target_bare_root_test.txt/

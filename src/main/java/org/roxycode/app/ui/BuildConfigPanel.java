@@ -20,6 +20,7 @@ import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
+import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
@@ -168,11 +169,7 @@ public final class BuildConfigPanel extends JPanel {
         return future.thenApply(
                 available -> {
                     boolean isAvail = Boolean.TRUE.equals(available);
-                    if (SwingUtilities.isEventDispatchThread()) {
-                        setDockerAvailable(isAvail);
-                    } else {
-                        SwingUtilities.invokeLater(() -> setDockerAvailable(isAvail));
-                    }
+                    Edt.run(() -> setDockerAvailable(isAvail));
                     return isAvail;
                 });
     }

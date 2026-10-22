@@ -22,6 +22,7 @@ import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -151,16 +152,11 @@ public final class ChatController implements AutoCloseable {
         if (futureToCancel != null) {
             activeTurnFuture = null;
             futureToCancel.cancel(true);
-            Runnable uiUpdate =
+            Edt.run(
                     () -> {
                         view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
                         view.setLoading(false);
-                    };
-            if (SwingUtilities.isEventDispatchThread()) {
-                uiUpdate.run();
-            } else {
-                SwingUtilities.invokeLater(uiUpdate);
-            }
+                    });
         }
     }
 
@@ -244,19 +240,14 @@ public final class ChatController implements AutoCloseable {
         }
         model.clearPendingImages();
         model.setCurrentTurn(0);
-        Runnable uiUpdate =
+        Edt.run(
                 () -> {
                     view.clearAttachments();
                     view.hideTransitionBanner();
                     view.setLoading(false);
                     view.updateTurnLabel();
                     view.clearOutput();
-                };
-        if (SwingUtilities.isEventDispatchThread()) {
-            uiUpdate.run();
-        } else {
-            SwingUtilities.invokeLater(uiUpdate);
-        }
+                });
     }
 
     public void triggerTurn(String text) {

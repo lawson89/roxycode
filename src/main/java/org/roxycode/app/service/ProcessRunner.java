@@ -67,8 +67,8 @@ public final class ProcessRunner {
             process.getOutputStream().close();
         } catch (IOException ignored) {
         }
-        StringBuffer stdoutBuffer = new StringBuffer();
-        StringBuffer stderrBuffer = new StringBuffer();
+        StringBuilder stdoutBuffer = new StringBuilder();
+        StringBuilder stderrBuffer = new StringBuilder();
 
         CompletableFuture<Void> stdoutFuture =
                 CompletableFuture.runAsync(
@@ -110,7 +110,7 @@ public final class ProcessRunner {
         }
     }
 
-    private static void readStream(InputStream inputStream, StringBuffer buffer) {
+    private static void readStream(InputStream inputStream, StringBuilder buffer) {
         try (BufferedReader reader =
                 new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             String line = reader.readLine();

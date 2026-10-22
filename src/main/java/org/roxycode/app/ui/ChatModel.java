@@ -5,7 +5,6 @@ import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.imageio.ImageIO;
@@ -33,8 +32,8 @@ public final class ChatModel {
     private final AtomicBoolean turnCancelled = new AtomicBoolean(false);
     private final List<BufferedImage> pendingImages = new ArrayList<>();
 
-    private int currentTurn = 0;
-    private boolean loading = false;
+    private volatile int currentTurn = 0;
+    private volatile boolean loading = false;
 
     public ChatModel(String sessionPrefix, WorkflowPhase lockedPhase, boolean taskMode) {
         this.sessionPrefix = sessionPrefix;
@@ -103,29 +102,44 @@ public final class ChatModel {
             bGr.drawImage(img, 0, 0, null);
             bGr.dispose();
         }
-        pendingImages.add(bimage);
+        synchronized (pendingImages) {
+            pendingImages.add(bimage);
+        }
         return bimage;
     }
 
     public boolean removePendingImage(BufferedImage image) {
-        return pendingImages.remove(image);
+        synchronized (pendingImages) {
+            return pendingImages.remove(image);
+        }
     }
 
     public List<BufferedImage> getPendingImages() {
-        return Collections.unmodifiableList(pendingImages);
+        synchronized (pendingImages) {
+            return List.copyOf(pendingImages);
+        }
     }
 
     public boolean hasPendingImages() {
-        return !pendingImages.isEmpty();
+        synchronized (pendingImages) {
+            return !pendingImages.isEmpty();
+        }
     }
 
     public void clearPendingImages() {
-        pendingImages.clear();
+        synchronized (pendingImages) {
+            pendingImages.clear();
+        }
     }
 
     public List<byte[]> drainPendingImagesAsPngBytes() {
-        List<byte[]> imageBytes = new ArrayList<>();
-        for (BufferedImage bimg : pendingImages) {
+        List<BufferedImage> snapshot;
+        synchronized (pendingImages) {
+            snapshot = new ArrayList<>(pendingImages);
+            pendingImages.clear();
+        }
+        List<byte[]> imageBytes = new ArrayList<>(snapshot.size());
+        for (BufferedImage bimg : snapshot) {
             try {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 ImageIO.write(bimg, "png", baos);
@@ -134,7 +148,6 @@ public final class ChatModel {
                 log.error("Failed to encode image", ex);
             }
         }
-        pendingImages.clear();
         return imageBytes;
     }
 

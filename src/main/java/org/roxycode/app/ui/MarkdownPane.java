@@ -1,7 +1,5 @@
 package org.roxycode.app.ui;
 
-import com.vladsch.flexmark.html.HtmlRenderer;
-import com.vladsch.flexmark.parser.Parser;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.time.LocalDateTime;
@@ -21,8 +19,6 @@ public final class MarkdownPane extends JTextPane {
     private static final String COPY_PREFIX = "copy:";
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
 
-    private final transient Parser parser;
-    private final transient HtmlRenderer renderer;
     private final List<Message> messages = new ArrayList<>();
     private int copiedMessageIndex = -1;
     private Timer copyFeedbackTimer;
@@ -42,9 +38,6 @@ public final class MarkdownPane extends JTextPane {
         setContentType("text/html");
         setOpaque(true);
         putClientProperty("JEditorPane.honorDisplayProperties", true);
-
-        parser = SwingHtmlUtils.markdownParser();
-        renderer = SwingHtmlUtils.markdownRenderer();
 
         addHyperlinkListener(
                 e -> {
@@ -73,7 +66,7 @@ public final class MarkdownPane extends JTextPane {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (parser != null) {
+        if (messages != null) {
             updateTheme();
         }
     }
@@ -171,11 +164,8 @@ public final class MarkdownPane extends JTextPane {
                                 ChatHtmlTemplates.renderToolLog(
                                         msg.content().toString(), msg.success(), msg.error()));
                     } else {
-                        String renderedMarkdown =
-                                SwingHtmlUtils.styleMarkdownTables(
-                                        renderer.render(parser.parse(msg.content().toString())));
                         String highlightedHtml =
-                                JexlToHtmlConverter.highlightCodeBlocks(renderedMarkdown);
+                                SwingHtmlUtils.renderMarkdownToHtml(msg.content().toString());
                         fullHtml.append(
                                 ChatHtmlTemplates.renderChatEntry(
                                         msg.role().toLowerCase(Locale.ROOT),

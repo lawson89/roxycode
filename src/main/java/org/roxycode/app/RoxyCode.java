@@ -10,6 +10,7 @@ import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MainFrame;
 import org.roxycode.app.ui.SettingsPanel;
 import org.roxycode.app.ui.SplashScreenWindow;
+import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -115,10 +116,6 @@ public class RoxyCode {
         if (splash == null) {
             return;
         }
-        if (SwingUtilities.isEventDispatchThread()) {
-            splash.dispose();
-        } else {
-            SwingUtilities.invokeLater(splash::dispose);
-        }
+        Edt.run(splash::dispose);
     }
 }

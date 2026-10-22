@@ -1,15 +1,25 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
+import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
+import java.util.function.Consumer;
 import javax.swing.*;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.fife.ui.rsyntaxtextarea.Theme;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.service.PromptService;
+import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.util.Edt;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -21,6 +31,7 @@ public final class ContextManagerPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(ContextManagerPanel.class);
 
     private final transient PromptService promptService;
+    private final transient SettingsService settingsService;
     private final JList<String> fileList;
     private final DefaultListModel<String> listModel;
     private final RSyntaxTextArea textArea;
@@ -28,9 +39,24 @@ public final class ContextManagerPanel extends JPanel {
     private final JButton btnDelete;
     private final JButton btnSave;
     private String currentFile;
+    private String lastErrorMessage;
+    private transient Consumer<String> errorDialogPresenter;
 
     public ContextManagerPanel(PromptService promptService) {
+        this(promptService, null);
+    }
+
+    @Autowired
+    public ContextManagerPanel(PromptService promptService, SettingsService settingsService) {
         this.promptService = promptService;
+        this.settingsService = settingsService;
+        this.errorDialogPresenter =
+                msg -> {
+                    if (!GraphicsEnvironment.isHeadless()) {
+                        JOptionPane.showMessageDialog(
+                                ContextManagerPanel.this, msg, "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                };
         setLayout(new BorderLayout());
 
         listModel = new DefaultListModel<>();
@@ -57,6 +83,7 @@ public final class ContextManagerPanel extends JPanel {
         textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_MARKDOWN);
         textArea.setCodeFoldingEnabled(true);
         textArea.setAntiAliasingEnabled(true);
+        updateTextAreaTheme();
         RTextScrollPane textScroll = new RTextScrollPane(textArea);
 
         btnSave = new JButton("Save Changes");
@@ -78,8 +105,18 @@ public final class ContextManagerPanel extends JPanel {
     }
 
     @EventListener
+    public void onSettingsChanged(SettingsChangedEvent event) {
+        Edt.run(
+                () ->
+                        updateTextAreaTheme(
+                                event != null && event.settings() != null
+                                        ? event.settings().getTheme()
+                                        : null));
+    }
+
+    @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        Runnable update =
+        Edt.run(
                 () -> {
                     currentFile = null; // NOPMD
                     fileList.clearSelection();
@@ -87,12 +124,67 @@ public final class ContextManagerPanel extends JPanel {
                     btnDelete.setEnabled(false);
                     btnSave.setEnabled(false);
                     refreshFileList(null);
-                };
-        if (SwingUtilities.isEventDispatchThread()) {
-            update.run();
-        } else {
-            SwingUtilities.invokeLater(update);
+                });
+    }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (textArea != null) {
+            updateTextAreaTheme();
         }
+    }
+
+    void updateTextAreaTheme() {
+        String themeName =
+                settingsService != null && settingsService.getSettings() != null
+                        ? settingsService.getSettings().getTheme()
+                        : null;
+        updateTextAreaTheme(themeName);
+    }
+
+    void updateTextAreaTheme(String themeName) {
+        boolean isDark =
+                themeName != null && !themeName.isBlank()
+                        ? (themeName.toLowerCase(Locale.ROOT).contains("dark")
+                                || "Darcula".equalsIgnoreCase(themeName))
+                        : FlatLaf.isLafDark();
+        String themePath =
+                isDark
+                        ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
+                        : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
+        try {
+            Theme theme = Theme.load(getClass().getResourceAsStream(themePath));
+            theme.apply(textArea);
+        } catch (IOException ioe) {
+            log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
+        }
+    }
+
+    static String normalizeRuleFilename(String input) {
+        if (input == null) {
+            return null;
+        }
+        String trimmed = input.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        return trimmed.endsWith(".md") ? trimmed : trimmed + ".md";
+    }
+
+    private void showError(String message) {
+        this.lastErrorMessage = message;
+        if (errorDialogPresenter != null) {
+            errorDialogPresenter.accept(message);
+        }
+    }
+
+    void setErrorDialogPresenter(Consumer<String> presenter) {
+        this.errorDialogPresenter = presenter;
+    }
+
+    String getLastErrorMessage() {
+        return lastErrorMessage;
     }
 
     private void setupListeners() {
@@ -120,8 +212,8 @@ public final class ContextManagerPanel extends JPanel {
                                     "Enter filename (e.g., rules.md):",
                                     "New Context Rule",
                                     JOptionPane.PLAIN_MESSAGE);
-                    if (input != null && !input.trim().isEmpty()) {
-                        String name = input.endsWith(".md") ? input : input + ".md";
+                    String name = normalizeRuleFilename(input);
+                    if (name != null && !name.isEmpty()) {
                         createNewFileAsync(name);
                     }
                 });
@@ -170,6 +262,12 @@ public final class ContextManagerPanel extends JPanel {
                             }
                         } catch (Exception ex) {
                             log.error("Failed to read context file {}", selected, ex);
+                            Throwable root = ExceptionUtils.getRootCause(ex);
+                            showError(
+                                    "Error reading context file "
+                                            + selected
+                                            + ": "
+                                            + (root != null ? root.getMessage() : ex.getMessage()));
                         }
                     }
                 };
@@ -193,6 +291,12 @@ public final class ContextManagerPanel extends JPanel {
                             refreshFileList(name);
                         } catch (Exception ex) {
                             log.error("Failed to create context file {}", name, ex);
+                            Throwable root = ExceptionUtils.getRootCause(ex);
+                            showError(
+                                    "Error creating context file "
+                                            + name
+                                            + ": "
+                                            + (root != null ? root.getMessage() : ex.getMessage()));
                         }
                     }
                 };
@@ -216,6 +320,12 @@ public final class ContextManagerPanel extends JPanel {
                             refreshFileList(null);
                         } catch (Exception ex) {
                             log.error("Failed to delete context file {}", filename, ex);
+                            Throwable root = ExceptionUtils.getRootCause(ex);
+                            showError(
+                                    "Error deleting context file "
+                                            + filename
+                                            + ": "
+                                            + (root != null ? root.getMessage() : ex.getMessage()));
                         }
                     }
                 };
@@ -236,13 +346,21 @@ public final class ContextManagerPanel extends JPanel {
                     protected void done() {
                         try {
                             get();
-                            JOptionPane.showMessageDialog(
-                                    ContextManagerPanel.this,
-                                    "Saved " + filename,
-                                    "Saved",
-                                    JOptionPane.INFORMATION_MESSAGE);
+                            if (!GraphicsEnvironment.isHeadless()) {
+                                JOptionPane.showMessageDialog(
+                                        ContextManagerPanel.this,
+                                        "Saved " + filename,
+                                        "Saved",
+                                        JOptionPane.INFORMATION_MESSAGE);
+                            }
                         } catch (Exception ex) {
                             log.error("Failed to save context file {}", filename, ex);
+                            Throwable root = ExceptionUtils.getRootCause(ex);
+                            showError(
+                                    "Error saving context file "
+                                            + filename
+                                            + ": "
+                                            + (root != null ? root.getMessage() : ex.getMessage()));
                         }
                     }
                 };

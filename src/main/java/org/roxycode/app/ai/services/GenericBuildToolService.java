@@ -301,7 +301,6 @@ public class GenericBuildToolService {
 
         log.info("Executing build command in container ({}): {}", containerConfig.image(), command);
         List<String> errors = new ArrayList<>();
-        List<String> failedTests = new ArrayList<>();
         int exitCode = -1;
         String fullOutput;
 
@@ -325,18 +324,13 @@ public class GenericBuildToolService {
             fullOutput = errorMsg;
         }
 
-        errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
-        failedTests.addAll(extractRegexMatches(fullOutput, testFailureRegex, "test failures"));
-
-        boolean success = exitCode == 0 && errors.isEmpty();
-        return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
+        return buildResultFromExecution(exitCode, fullOutput, errors, errorRegex, testFailureRegex);
     }
 
     private BuildResult execute(
             String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
         log.info("Executing build command: {}", command);
         List<String> errors = new ArrayList<>();
-        List<String> failedTests = new ArrayList<>();
         int exitCode = -1;
         String fullOutput = "";
 
@@ -370,9 +364,18 @@ public class GenericBuildToolService {
             errors.add(sw.toString());
         }
 
-        errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
-        failedTests.addAll(extractRegexMatches(fullOutput, testFailureRegex, "test failures"));
+        return buildResultFromExecution(exitCode, fullOutput, errors, errorRegex, testFailureRegex);
+    }
 
+    private BuildResult buildResultFromExecution(
+            int exitCode,
+            String fullOutput,
+            List<String> errors,
+            String errorRegex,
+            String testFailureRegex) {
+        errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
+        List<String> failedTests =
+                new ArrayList<>(extractRegexMatches(fullOutput, testFailureRegex, "test failures"));
         boolean success = exitCode == 0 && errors.isEmpty();
         return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
     }

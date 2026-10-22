@@ -201,6 +201,41 @@ class MentorModeIntegrationTest {
 
         assertTrue(planLabel.isVisible());
         assertEquals("MY FEATURE PLAN", planLabel.getText());
+        assertEquals("My Feature Plan", planLabel.getToolTipText());
+
+        // Verify long plan titles (> 40 chars) are truncated with ellipsis and preserve full
+        // tooltip
+        String longTitle =
+                "Consolidate EDT dispatch with Edt.run, clean up ProcessRunner buffers, and standardize PromptService I/O exceptions";
+        ImplementationPlan longPlan =
+                new ImplementationPlan(
+                        "  " + longTitle + "  ",
+                        "Goal",
+                        List.of(),
+                        List.of(),
+                        false,
+                        null,
+                        null,
+                        null,
+                        List.of());
+        when(planService.getCurrentPlan()).thenReturn(longPlan);
+
+        taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
+
+        assertTrue(planLabel.isVisible());
+        assertEquals(
+                longTitle.toUpperCase(java.util.Locale.ROOT).substring(0, 40) + "...",
+                planLabel.getText());
+        assertEquals(43, planLabel.getText().length());
+        assertEquals(longTitle, planLabel.getToolTipText());
+
+        // Verify clearing plan resets text, tooltip, and visibility
+        when(planService.getCurrentPlan()).thenReturn(null);
+        taskWorkspacePanel.updateActivePhase(WorkflowPhase.PLAN);
+
+        assertFalse(planLabel.isVisible());
+        assertEquals("", planLabel.getText());
+        assertNull(planLabel.getToolTipText());
     }
 
     @Test

@@ -46,7 +46,9 @@ public class FileEditorService {
                     "fileEditorService.writeFile('src/main/resources/config.properties', 'key=value')")
     public EditorResult writeFile(String relativePath, String content) throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        Files.createDirectories(path.getParent());
+        if (path.getParent() != null) {
+            Files.createDirectories(path.getParent());
+        }
         Files.writeString(path, content);
 
         long size = Files.size(path);
@@ -74,7 +76,7 @@ public class FileEditorService {
         Path path = projectService.resolvePath(relativePath);
         String content = Files.readString(path);
 
-        String[] parts = targetBlock.trim().split("\s+");
+        String[] parts = targetBlock.trim().split("\\s+");
         StringBuilder sb = new StringBuilder("(?s)");
         for (int i = 0; i < parts.length; i++) {
             if (parts[i].isEmpty()) {
@@ -131,7 +133,10 @@ public class FileEditorService {
             String relativePath, int startLine, int endLine, String replacementText)
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        List<String> lines = Files.readAllLines(path);
+        String rawContent = Files.readString(path);
+        String lineSeparator = detectLineSeparator(rawContent, replacementText);
+        boolean hasTrailingNewline = hasTrailingLineSeparator(rawContent);
+        List<String> lines = rawContent.isEmpty() ? new ArrayList<>() : splitLines(rawContent);
 
         if (startLine < 1
                 || startLine > lines.size()
@@ -145,7 +150,7 @@ public class FileEditorService {
         newLines.subList(startLine - 1, endLine).clear();
         newLines.addAll(startLine - 1, splitLines(replacementText));
 
-        Files.write(path, newLines);
+        writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
 
         long size = Files.size(path);
         log.info(
@@ -176,7 +181,13 @@ public class FileEditorService {
     public EditorResult insertAtLine(String relativePath, int lineNumber, String content)
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        List<String> lines = Files.readAllLines(path);
+        String rawContent = Files.readString(path);
+        String lineSeparator = detectLineSeparator(rawContent, content);
+        boolean hasTrailingNewline =
+                rawContent.isEmpty()
+                        ? hasTrailingLineSeparator(content)
+                        : hasTrailingLineSeparator(rawContent);
+        List<String> lines = rawContent.isEmpty() ? new ArrayList<>() : splitLines(rawContent);
 
         if (lineNumber < 1 || lineNumber > lines.size() + 1) {
             throw new IllegalArgumentException("Invalid line number: " + lineNumber);
@@ -185,7 +196,7 @@ public class FileEditorService {
         List<String> newLines = new ArrayList<>(lines);
         newLines.addAll(lineNumber - 1, splitLines(content));
 
-        Files.write(path, newLines);
+        writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
 
         long size = Files.size(path);
         log.info(
@@ -222,6 +233,37 @@ public class FileEditorService {
 
         eventPublisher.publishEvent(new FileChangedEvent(relativePath));
         return new EditorResult(true, "File deleted successfully: " + relativePath, null);
+    }
+
+    private static String detectLineSeparator(String rawContent, String fallbackText) {
+        if (rawContent.contains("\r\n")) {
+            return "\r\n";
+        }
+        if (rawContent.contains("\n")) {
+            return "\n";
+        }
+        if (fallbackText != null && fallbackText.contains("\r\n")) {
+            return "\r\n";
+        }
+        return "\n";
+    }
+
+    private static boolean hasTrailingLineSeparator(String text) {
+        return text != null && (text.endsWith("\n") || text.endsWith("\r"));
+    }
+
+    private static void writeLinesPreservingFormat(
+            Path path, List<String> lines, String lineSeparator, boolean hasTrailingNewline)
+            throws IOException {
+        if (lines.isEmpty()) {
+            Files.writeString(path, "");
+            return;
+        }
+        String joined = String.join(lineSeparator, lines);
+        if (hasTrailingNewline) {
+            joined += lineSeparator;
+        }
+        Files.writeString(path, joined);
     }
 
     private List<String> splitLines(String text) {

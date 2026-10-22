@@ -46,14 +46,6 @@ public class JexlToHtmlConverter {
         "throw",
         "NaN",
         "assert",
-        // Services
-        "gitService",
-        "buildToolService",
-        "planService",
-        "fileReadService",
-        "fileEditorService",
-        "grepService",
-        "repoMapPackerService",
         // Java API Keywords & Types
         "public",
         "private",
@@ -105,7 +97,10 @@ public class JexlToHtmlConverter {
         "fn"
     };
 
-    private static final String KEYWORDS_PATTERN = "(" + String.join("|", KEYWORDS) + ")";
+    private static final String SERVICE_IDENTIFIER_PATTERN =
+            "[a-zA-Z_][a-zA-Z0-9_]*[sS]ervice[a-zA-Z0-9_]*";
+    private static final String KEYWORDS_PATTERN =
+            "(" + String.join("|", KEYWORDS) + "|" + SERVICE_IDENTIFIER_PATTERN + ")";
     private static final String REGEX =
             "(//.*|##.*)|(&quot;.*?&quot;|&#39;.*?&#39;|&apos;.*?&apos;|'.*?'|`.*?`|\".*?\")|(?<![a-zA-Z0-9_])"
                     + KEYWORDS_PATTERN

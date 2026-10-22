@@ -28,6 +28,46 @@ class SwingHtmlUtilsTest {
     }
 
     @Test
+    void testRenderMarkdownToHtml() {
+        assertEquals("", SwingHtmlUtils.renderMarkdownToHtml(null));
+        assertEquals("", SwingHtmlUtils.renderMarkdownToHtml(""));
+
+        String markdown =
+                """
+                # Heading
+
+                | Name | Value |
+                | :--- | ---: |
+                | Key | 42 |
+
+                ~~~java
+                public class Demo {}
+                ~~~
+                """;
+        String html = SwingHtmlUtils.renderMarkdownToHtml(markdown);
+
+        assertTrue(html.contains("<h1>Heading</h1>"));
+        assertTrue(
+                html.contains(
+                        """
+                        <table class="md-table" cellpadding="6" cellspacing="0" border="0">"""
+                                .strip()));
+        assertTrue(
+                html.contains(
+                        """
+                        class="md-th"
+                        """
+                                .strip()));
+        assertTrue(
+                html.contains(
+                        """
+                        class="md-td" align="right"
+                        """
+                                .strip()));
+        assertTrue(html.contains("<span class='tk-rw'>public</span>"));
+    }
+
+    @Test
     void testStyleMarkdownTables() {
         assertEquals("", SwingHtmlUtils.styleMarkdownTables(null));
         assertEquals("", SwingHtmlUtils.styleMarkdownTables(""));

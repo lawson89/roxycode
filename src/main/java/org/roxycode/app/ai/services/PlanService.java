@@ -136,7 +136,10 @@ public class PlanService {
             description =
                     "Submits a project plan covering both functional requirements and technical implementation steps.")
     public synchronized String submitPlan(
-            @ToolParam(description = "The title of the project or feature plan.") String title,
+            @ToolParam(
+                            description =
+                                    "The concise title of the project or feature plan (max 50 characters).")
+                    String title,
             @ToolParam(description = "The high-level goal of the plan.") String goal,
             @ToolParam(description = "List of functional requirements.") List<String> requirements,
             @ToolParam(description = "List of technical implementation steps.")
