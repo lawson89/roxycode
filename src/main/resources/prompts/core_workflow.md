@@ -14,7 +14,7 @@ The workflow follows a structured sequence:
 
 ### Tooling Architecture: JEXL Workspace Services vs. Native Plan Tools
 - **Workspace Services (`executeJexl`)**: Workspace inspection, editing, search, git, and build operations (`fileReadService`, `fileEditorService`, `grepService`, `gitService`, `buildToolService`) are executed via the `executeJexl` tool.
-- **Native Plan & Workflow Tools (`PlanService` / `planService`)**: Plan management and phase transitions (`submitPlan`, `markStepCompleted`, `markStepsCompleted`, `markStepIncomplete`, `markStepsIncomplete`, `addHandoffLogEntry`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`) are dedicated native tools called directly—**NOT** inside JEXL scripts.
+- **Native Plan & Workflow Tools (`PlanService` / `planService`)**: Plan management and phase transitions (`submitPlan`, `addTechnicalStep`, `updateTechnicalStep`, `markStepCompleted`, `markStepsCompleted`, `markStepIncomplete`, `markStepsIncomplete`, `addHandoffLogEntry`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`) are dedicated native tools called directly—**NOT** inside JEXL scripts.
 
 ### Transition Protocol Summary
 - **EXPLORE ⇄ PLAN**: Manual user mode toggle via the UI sidebar.
