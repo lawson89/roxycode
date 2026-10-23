@@ -116,8 +116,7 @@ public class FileEditorService {
         if (exactMatchOffsets.size() == 1) {
             int start = exactMatchOffsets.get(0);
             int end = start + normalizedTarget.length();
-            return applyReplacement(
-                    path, relativePath, content, start, end, normalizedReplacement);
+            return applyReplacement(path, relativePath, content, start, end, normalizedReplacement);
         }
         if (exactMatchOffsets.size() > 1) {
             List<Integer> matchLines = offsetsToLineNumbers(content, exactMatchOffsets);
@@ -148,7 +147,7 @@ public class FileEditorService {
         Pattern pattern = Pattern.compile(sb.toString());
         Matcher matcher = pattern.matcher(content);
 
-        List< int[] > regexMatches = new ArrayList<>();
+        List<int[]> regexMatches = new ArrayList<>();
         while (matcher.find()) {
             regexMatches.add(new int[] {matcher.start(), matcher.end()});
         }
@@ -525,7 +524,7 @@ public class FileEditorService {
             }
         }
 
-        List< int[] > scoredLines = new ArrayList<>();
+        List<int[]> scoredLines = new ArrayList<>();
         for (int i = 0; i < fileLines.size(); i++) {
             String lineLower = fileLines.get(i).toLowerCase(Locale.ROOT);
             int score = 0;

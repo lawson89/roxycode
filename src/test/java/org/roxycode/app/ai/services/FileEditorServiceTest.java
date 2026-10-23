@@ -80,7 +80,8 @@ class FileEditorServiceTest {
                 """;
         Files.writeString(pyFile, initialPy);
 
-        // Pass 1: Exact match where targetBlock and replacementBlock include leading 4-space indentation
+        // Pass 1: Exact match where targetBlock and replacementBlock include leading 4-space
+        // indentation
         EditorResult exactResult =
                 fileEditorService.replaceBlock(
                         "script.py",
@@ -121,7 +122,8 @@ class FileEditorServiceTest {
                 """,
                 Files.readString(pyFile));
 
-        // YAML test: Pass 2 fallback where targetBlock has no leading spaces but replacementBlock does
+        // YAML test: Pass 2 fallback where targetBlock has no leading spaces but replacementBlock
+        // does
         Path yamlFile = tempDir.resolve("config.yaml");
         Files.writeString(
                 yamlFile,
@@ -250,10 +252,11 @@ class FileEditorServiceTest {
         assertFalse(notFound.success());
         assertNotNull(notFound.errorHint());
         assertTrue(notFound.errorHint().contains("TargetBlock not found in file: service.java"));
-        assertTrue(notFound.errorHint().contains("Line 3:     public String computeTotal(int count) {"));
+        assertTrue(
+                notFound.errorHint()
+                        .contains("Line 3:     public String computeTotal(int count) {"));
 
-        EditorResult missingFile =
-                fileEditorService.replaceBlock("nonexistent.java", "foo", "bar");
+        EditorResult missingFile = fileEditorService.replaceBlock("nonexistent.java", "foo", "bar");
         assertFalse(missingFile.success());
         assertEquals("File does not exist: nonexistent.java", missingFile.errorHint());
     }
@@ -295,8 +298,7 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testReplaceLinesAndInsertAtLineOutOfBoundsReturnStructuredErrorHints()
-            throws IOException {
+    void testReplaceLinesAndInsertAtLineOutOfBoundsReturnStructuredErrorHints() throws IOException {
         Path filePath = tempDir.resolve("bounds.txt");
         Files.write(filePath, List.of("Line 1", "Line 2", "Line 3"));
 
