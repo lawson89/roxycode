@@ -236,7 +236,11 @@ public final class ContextManagerPanel extends JPanel {
                                 onSuccess.accept(result);
                             }
                         } catch (Exception ex) {
-                            log.error("Failed to {} context file {}", logVerb, filename, ex);
+                            log.warn(
+                                    "Failed to {} context file {}: {}",
+                                    logVerb,
+                                    filename,
+                                    ex.getMessage());
                             Throwable root = ExceptionUtils.getRootCause(ex);
                             showError(
                                     "Error "

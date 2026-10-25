@@ -30,7 +30,9 @@ class HeaderPanelTest {
     }
 
     private GitService createGitService(ProjectService ps) {
-        return new GitService(ps);
+        GitService gitService = mock(GitService.class);
+        lenient().when(gitService.getCurrentBranch()).thenReturn("Not a git repository");
+        return gitService;
     }
 
     @Test

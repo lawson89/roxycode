@@ -107,7 +107,7 @@ public class JexlTool {
                 throw ExceptionUtils.asCancellationException(e, "JEXL execution cancelled");
             }
 
-            log.error("Error executing JEXL script: {}", e.getMessage(), e);
+            log.warn("Error executing JEXL script: {}", e.getMessage());
             Throwable cause = ExceptionUtils.getRootCause(e);
             String error = cause.getMessage();
             if (error == null) {

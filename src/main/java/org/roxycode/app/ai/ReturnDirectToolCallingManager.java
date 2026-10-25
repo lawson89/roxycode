@@ -84,6 +84,16 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
         WorkflowPhase phase = turnContext.phase();
         AtomicInteger turnCounter = turnContext.turnCounter();
 
+        // Accumulate text from the assistant message before executing tools
+        if (chatResponse != null
+                && chatResponse.getResult() != null
+                && chatResponse.getResult().getOutput() != null) {
+            AssistantMessage assistantMsg = chatResponse.getResult().getOutput();
+            if (org.apache.commons.lang3.StringUtils.isNotBlank(assistantMsg.getText())) {
+                turnContext.textAccumulator().get().append(assistantMsg.getText()).append("\n\n");
+            }
+        }
+
         int maxTurns =
                 settingsService.getSettings() != null
                         ? settingsService.getSettings().getMaxAgentToolTurns()

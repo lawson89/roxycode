@@ -186,7 +186,8 @@ public class JexlToolTest {
         // Passing CODE phase and conversationId via ToolContext allows access and publishes event
         ToolContext toolContext =
                 new ToolContext(
-                        new TurnToolContext("task:default", WorkflowPhase.CODE, null).toMap());
+                        new TurnToolContext("task:default", WorkflowPhase.CODE, null, null)
+                                .toMap());
         String codeRes = tool.executeJexl("codeOnlyService.writeData()", toolContext);
         assertTrue(codeRes.contains("written"));
         assertNotNull(capturedEvent.get());

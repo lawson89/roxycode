@@ -351,11 +351,8 @@ public class GitService {
 
             return out.trim();
         } catch (IOException e) {
-            log.error(
-                    "Exception executing git command {}: {}",
-                    String.join(" ", args),
-                    e.getMessage(),
-                    e);
+            log.warn(
+                    "Failed to execute git command {}: {}", String.join(" ", args), e.getMessage());
             return "Error executing git command: " + e.getMessage();
         }
     }

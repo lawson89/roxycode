@@ -534,7 +534,8 @@ class AiServiceTest {
                                 new TurnToolContext(
                                                 "task:default",
                                                 WorkflowPhase.PLAN,
-                                                new AtomicInteger(0))
+                                                new AtomicInteger(0),
+                                                null)
                                         .toMap())
                         .build();
         Prompt prompt = new Prompt(List.of(new UserMessage("Transition")), options);

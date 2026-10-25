@@ -46,9 +46,21 @@ class GitServiceTest {
     void testNotAGitRepository() {
         ProjectService projectService = createActiveProjectService();
         GitService gitService = new GitService(projectService);
-        String result = gitService.getStatus();
 
-        assertTrue(result.contains("Not a git repository") || result.contains("Error"));
+        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
+            runnerMock
+                    .when(() -> ProcessRunner.run(anyList(), any(), anyMap()))
+                    .thenReturn(
+                            new ProcessResult(
+                                    128,
+                                    "fatal: not a git repository (or any of the parent directories): .git\n",
+                                    "",
+                                    false));
+
+            String result = gitService.getStatus();
+
+            assertEquals("Not a git repository", result);
+        }
     }
 
     @Test

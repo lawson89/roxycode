@@ -76,7 +76,7 @@ public class SettingsService {
             try {
                 return effectiveMapper.readValue(path.toFile(), AppSettings.class);
             } catch (IOException e) {
-                log.error("Failed to load settings from {}: {}", path, e.getMessage(), e);
+                log.warn("Failed to load settings from {}: {}", path, e.getMessage());
             }
         }
         return new AppSettings();

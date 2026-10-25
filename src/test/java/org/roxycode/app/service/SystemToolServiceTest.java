@@ -31,7 +31,13 @@ class SystemToolServiceTest {
 
     @Test
     void testDetectToolsIncludesDockerAndJava() throws Exception {
-        SystemToolService service = new SystemToolService(null, null, null);
+        SystemToolService service =
+                new SystemToolService(
+                        null,
+                        null,
+                        null,
+                        () -> new DockerVersionInfo("27.0.3", "1.46"),
+                        () -> true);
         CompletableFuture<List<SystemTool>> future = service.detectTools();
         List<SystemTool> tools = future.get();
 

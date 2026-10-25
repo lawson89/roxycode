@@ -395,7 +395,7 @@ public class SystemToolService {
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Exception during tool {} detection: {}", name, e.getMessage());
+            log.debug("Tool {} not detected: {}", name, e.getMessage());
             return new SystemTool(name, VERSION_NOT_FOUND, STATUS_MISSING, description);
         }
     }

@@ -235,10 +235,11 @@ public class GrepService {
                 return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + error);
             }
 
-            String cappedOutput = capOutputLines(result.output().trim(), MAX_OUTPUT_LINES);
+            String strippedOutput = stripRootPrefix(result.output().trim(), root);
+            String cappedOutput = capOutputLines(strippedOutput, MAX_OUTPUT_LINES);
             return new EditorResult(true, cappedOutput, null);
         } catch (IOException e) {
-            log.error("Exception executing RipGrep: {}", e.getMessage(), e);
+            log.warn("Failed to execute ripgrep: {}", e.getMessage());
             return new EditorResult(false, "", "Error executing RipGrep: " + e.getMessage());
         }
     }
@@ -310,9 +311,13 @@ public class GrepService {
             }
             String output = result.output();
             if (output != null && !output.isEmpty()) {
+                String rootPrefix = normalizeRootPrefix(root);
                 for (String line : output.lines().toList()) {
                     if (!line.isBlank()) {
                         String normalized = line.replace((char) 92, '/');
+                        if (!rootPrefix.isEmpty() && normalized.startsWith(rootPrefix)) {
+                            normalized = normalized.substring(rootPrefix.length());
+                        }
                         if (normalized.startsWith("./")) {
                             normalized = normalized.substring(2);
                         }
@@ -321,8 +326,43 @@ public class GrepService {
                 }
             }
         } catch (IOException e) {
-            log.error("Failed to list files using RipGrep: {}", e.getMessage());
+            log.warn("Failed to list files using RipGrep: {}", e.getMessage());
         }
         return files;
+    }
+
+    private static String normalizeRootPrefix(Path root) {
+        if (root == null) {
+            return "";
+        }
+        String prefix = root.toAbsolutePath().normalize().toString().replace((char) 92, '/');
+        return prefix.endsWith("/") ? prefix : prefix + "/";
+    }
+
+    private static String stripRootPrefix(String rawOutput, Path root) {
+        if (rawOutput == null || rawOutput.isEmpty() || root == null) {
+            return rawOutput == null ? "" : rawOutput;
+        }
+        String rawRootPrefix = root.toAbsolutePath().normalize().toString();
+        String rawPrefixWithSep =
+                rawRootPrefix.endsWith(java.io.File.separator)
+                        ? rawRootPrefix
+                        : rawRootPrefix + java.io.File.separator;
+        String slashPrefix = normalizeRootPrefix(root);
+        List<String> lines = rawOutput.lines().toList();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) {
+                sb.append((char) 10);
+            }
+            String line = lines.get(i);
+            if (line.startsWith(rawPrefixWithSep)) {
+                line = line.substring(rawPrefixWithSep.length());
+            } else if (!slashPrefix.isEmpty() && line.startsWith(slashPrefix)) {
+                line = line.substring(slashPrefix.length());
+            }
+            sb.append(line);
+        }
+        return sb.toString();
     }
 }

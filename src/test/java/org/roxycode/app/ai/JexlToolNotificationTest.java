@@ -31,7 +31,8 @@ public class JexlToolNotificationTest {
         tool.executeJexl(
                 "1 + 1",
                 new ToolContext(
-                        new TurnToolContext("qa:default", WorkflowPhase.EXPLORE, null).toMap()));
+                        new TurnToolContext("qa:default", WorkflowPhase.EXPLORE, null, null)
+                                .toMap()));
         assertTrue(called.get());
     }
 

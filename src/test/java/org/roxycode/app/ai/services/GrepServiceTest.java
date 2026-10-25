@@ -36,18 +36,19 @@ class GrepServiceTest {
 
     @Test
     void testGrepSuccessAndRelativePaths() throws IOException {
-        Path src = tempDir.resolve("src");
-        Files.createDirectories(src);
-        Files.writeString(src.resolve("Hello.java"), "public class Hello {}");
+        Path testFile = tempDir.resolve("test.txt");
+        Files.writeString(testFile, "hello world");
 
-        EditorResult result = grepService.grep("class Hello", "src", "*.java");
+        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
+            runnerMock
+                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, testFile + ":1:hello world\n", "", false));
 
-        if (result.success()) {
-            assertTrue(
-                    result.content().contains("src/Hello.java")
-                            || result.content().contains("Hello.java"));
+            EditorResult result = grepService.grep("hello world", ".", "*.txt");
+
+            assertTrue(result.success());
+            assertTrue(result.content().contains("test.txt:1:hello world"));
             assertFalse(result.content().startsWith(tempDir.toAbsolutePath().toString()));
-            assertTrue(result.content().contains("class Hello"));
         }
     }
 
@@ -349,18 +350,28 @@ class GrepServiceTest {
 
     @Test
     void testListFilesReturnsProjectRelativePaths() throws IOException {
-        Path promptsDir = tempDir.resolve("src/main/resources/prompts");
-        Files.createDirectories(promptsDir);
-        Files.writeString(promptsDir.resolve("core_workflow.md"), "# Workflow");
+        Path subDir = tempDir.resolve("sub");
+        Files.createDirectories(subDir);
+        Path rootFile = tempDir.resolve("root.txt");
+        Path nestedFile = subDir.resolve("nested.txt");
+        Files.writeString(rootFile, "root");
+        Files.writeString(nestedFile, "nested");
 
-        List<String> files = grepService.listFiles(null);
+        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
+            runnerMock
+                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(
+                            new ProcessResult(0, rootFile + "\n" + nestedFile + "\n", "", false));
 
-        if (!files.isEmpty()) {
-            assertTrue(files.contains("src/main/resources/prompts/core_workflow.md"));
+            List<String> files = grepService.listFiles(null);
+
+            assertTrue(files.contains("root.txt"));
+            assertTrue(files.contains("sub/nested.txt"));
             for (String file : files) {
                 assertFalse(
                         Path.of(file).isAbsolute(),
                         "Expected relative path but got absolute: " + file);
+                assertFalse(file.startsWith(tempDir.toAbsolutePath().toString()));
             }
         }
     }

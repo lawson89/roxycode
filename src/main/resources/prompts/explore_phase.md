@@ -34,3 +34,4 @@ var main = fileReadService.readFile('src/main/java/org/roxycode/app/RoxyCode.jav
 
 ### CRITICAL INSTRUCTION: Batch Reading
 When you need to read multiple files or perform multiple searches, you **MUST** batch them into a single JEXL execution by combining the calls into a Map or List literal rather than executing separate turns.
+8. Final Summary: After completing your tool turns, you **MUST** provide a final summary of your findings to the user. Do not end a turn with a tool call result if it is the conclusion of your exploration.

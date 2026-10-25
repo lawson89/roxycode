@@ -82,7 +82,8 @@ public class AiService {
                 new TurnToolContext(
                         conversationId,
                         phase != null ? phase : planService.getCurrentPhase(),
-                        new AtomicInteger(0));
+                        new AtomicInteger(0),
+                        new java.util.concurrent.atomic.AtomicReference<>(new StringBuilder()));
         String convId = turnContext.conversationId();
         AtomicInteger turnCounter = turnContext.turnCounter();
 
@@ -96,7 +97,7 @@ public class AiService {
                             .call()
                             .chatResponse();
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
-            String content = formatChatResponse(chatResponse, turnCounter.get());
+            String content = formatChatResponse(chatResponse, turnContext);
             publishTurnComplete(convId, turnCounter.get(), content);
             return content;
         } catch (Exception e) {
@@ -108,10 +109,12 @@ public class AiService {
         }
     }
 
-    String formatChatResponse(ChatResponse chatResponse, int toolTurns) {
+    String formatChatResponse(ChatResponse chatResponse, TurnToolContext turnContext) {
         String content = null;
         String rawFinishReason = null;
         Usage usage = null;
+        int toolTurns = turnContext.turnCounter().get();
+        String accumulatedText = turnContext.textAccumulator().get().toString().trim();
 
         if (chatResponse != null) {
             Generation result = chatResponse.getResult();
@@ -136,7 +139,11 @@ public class AiService {
 
         if (isTokenLimitFinishReason(finishReason)) {
             if (hasVisibleContent) {
-                StringBuilder sb = new StringBuilder(content);
+                StringBuilder sb = new StringBuilder();
+                if (!accumulatedText.isEmpty() && !content.startsWith(accumulatedText)) {
+                    sb.append(accumulatedText).append("\n\n");
+                }
+                sb.append(content);
                 sb.append("\n\n---\n> ")
                         .append(TRUNCATED_MARKER)
                         .append(" ")
@@ -151,6 +158,9 @@ public class AiService {
             }
 
             StringBuilder sb = new StringBuilder();
+            if (!accumulatedText.isEmpty()) {
+                sb.append(accumulatedText).append("\n\n---\n\n");
+            }
             sb.append(NO_VISIBLE_RESPONSE_MARKER)
                     .append(" ")
                     .append(finishReason)
@@ -170,6 +180,11 @@ public class AiService {
             boolean normalStop =
                     "STOP".equalsIgnoreCase(finishReason)
                             || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
+
+            if (normalStop && !accumulatedText.isEmpty()) {
+                return accumulatedText;
+            }
+
             StringBuilder sb = new StringBuilder();
             sb.append(EMPTY_RESPONSE_MARKER).append(" ").append(finishReason).append(")**\n\n");
             if (normalStop) {
@@ -192,6 +207,10 @@ public class AiService {
                         "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
             }
             return sb.toString();
+        }
+
+        if (!accumulatedText.isEmpty() && !content.startsWith(accumulatedText)) {
+            return (accumulatedText + "\n\n" + content).trim();
         }
 
         return content;

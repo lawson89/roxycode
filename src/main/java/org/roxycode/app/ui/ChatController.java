@@ -39,7 +39,9 @@ public final class ChatController implements AutoCloseable {
     static final String IMAGE_REQUIRES_TEXT_MESSAGE =
             "Please enter a prompt message to accompany the attached image.";
     static final int MAX_AUTO_NUDGES = 2;
-    static final String AUTO_NUDGE_PROMPT = "continue";
+    static final String AUTO_NUDGE_PROMPT =
+            "Roxy, you completed tool turns but didn't provide a final summary or answer to the user. "
+                    + "Please review the tool outputs above and provide a concise summary of your actions and findings.";
     static final int DEFAULT_ERROR_NUDGE_DELAY_MS = 1000;
 
     private final ChatModel model;

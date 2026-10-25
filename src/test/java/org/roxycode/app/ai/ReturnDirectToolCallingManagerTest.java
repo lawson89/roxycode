@@ -72,7 +72,7 @@ class ReturnDirectToolCallingManagerTest {
         ToolCallingChatOptions options =
                 ToolCallingChatOptions.builder()
                         .toolContext(
-                                new TurnToolContext("conv-1", WorkflowPhase.CODE, turnCounter)
+                                new TurnToolContext("conv-1", WorkflowPhase.CODE, turnCounter, null)
                                         .toMap())
                         .build();
         Prompt prompt = new Prompt(List.of(new UserMessage("Hi")), options);
@@ -131,7 +131,8 @@ class ReturnDirectToolCallingManagerTest {
                                 new TurnToolContext(
                                                 "task:default",
                                                 WorkflowPhase.PLAN,
-                                                new AtomicInteger(0))
+                                                new AtomicInteger(0),
+                                                null)
                                         .toMap())
                         .build();
         Prompt prompt = new Prompt(List.of(new UserMessage("Transition")), options);
@@ -186,7 +187,8 @@ class ReturnDirectToolCallingManagerTest {
                                 new TurnToolContext(
                                                 "task:default",
                                                 WorkflowPhase.CODE,
-                                                new AtomicInteger(0))
+                                                new AtomicInteger(0),
+                                                null)
                                         .toMap())
                         .build();
         Prompt prompt = new Prompt(List.of(new UserMessage("Complete and review")), options);
@@ -252,5 +254,39 @@ class ReturnDirectToolCallingManagerTest {
                                 "Transitioned to REVIEW",
                                 true,
                                 null));
+    }
+
+    @Test
+    void testExecuteToolCallsAccumulatesAssistantText() {
+        settings.setMaxAgentToolTurns(5);
+        AtomicInteger turnCounter = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicReference<StringBuilder> accumulator =
+                new java.util.concurrent.atomic.AtomicReference<>(new StringBuilder());
+        TurnToolContext turnContext =
+                new TurnToolContext("conv-accum", WorkflowPhase.EXPLORE, turnCounter, accumulator);
+
+        ToolCallingChatOptions options =
+                ToolCallingChatOptions.builder().toolContext(turnContext.toMap()).build();
+        Prompt prompt = new Prompt(List.of(new UserMessage("Hi")), options);
+        AssistantMessage assistantMsg =
+                AssistantMessage.builder()
+                        .content("Initial thoughts.")
+                        .toolCalls(
+                                List.of(
+                                        new AssistantMessage.ToolCall(
+                                                "c1", "function", "executeJexl", "{}")))
+                        .build();
+        ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
+
+        ToolExecutionResult delegated =
+                ToolExecutionResult.builder()
+                        .conversationHistory(List.of(new UserMessage("Hi"), assistantMsg))
+                        .returnDirect(false)
+                        .build();
+        doReturn(delegated).when(delegate).executeToolCalls(prompt, chatResponse);
+
+        manager.executeToolCalls(prompt, chatResponse);
+
+        assertEquals("Initial thoughts.\n\n", accumulator.get().toString());
     }
 }
