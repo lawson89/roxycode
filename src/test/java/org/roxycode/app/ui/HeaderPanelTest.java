@@ -20,13 +20,13 @@ class HeaderPanelTest {
     @TempDir Path tempDir;
 
     private SettingsService createSettingsService() {
-        SettingsService settingsService = new SettingsService();
+        SettingsService settingsService = new SettingsService(null, null);
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
         return settingsService;
     }
 
     private ProjectService createProjectService(SettingsService ss) {
-        return new ProjectService(ss);
+        return new ProjectService(ss, null);
     }
 
     private GitService createGitService(ProjectService ps) {

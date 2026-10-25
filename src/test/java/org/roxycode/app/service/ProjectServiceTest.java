@@ -27,16 +27,16 @@ class ProjectServiceTest {
 
     @Test
     void testProjectPersistence() {
-        SettingsService settingsService = new SettingsService();
+        SettingsService settingsService = new SettingsService(null, null);
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
-        ProjectService projectService = new ProjectService(settingsService);
+        ProjectService projectService = new ProjectService(settingsService, null);
         Path projectPath = tempDir.resolve("my-project");
 
         projectService.setCurrentProjectRoot(projectPath);
 
         // Verify persistence
-        ProjectService projectService2 = new ProjectService(settingsService);
+        ProjectService projectService2 = new ProjectService(settingsService, null);
         assertEquals(
                 projectPath.toAbsolutePath().toString(),
                 projectService2.getCurrentProjectRoot().toAbsolutePath().toString());
@@ -45,7 +45,7 @@ class ProjectServiceTest {
 
     @Test
     void testProjectListener() {
-        SettingsService settingsService = new SettingsService();
+        SettingsService settingsService = new SettingsService(null, null);
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
         AtomicReference<Path> notifiedPath = new AtomicReference<>();
@@ -66,10 +66,10 @@ class ProjectServiceTest {
 
     @Test
     void testResolvePathWithinAndOutsideSandbox() {
-        SettingsService settingsService = new SettingsService();
+        SettingsService settingsService = new SettingsService(null, null);
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
-        ProjectService projectService = new ProjectService(settingsService);
+        ProjectService projectService = new ProjectService(settingsService, null);
         assertThrows(IllegalStateException.class, () -> projectService.resolvePath("file.txt"));
 
         Path projectPath = tempDir.resolve("sandbox-project");
@@ -84,10 +84,10 @@ class ProjectServiceTest {
 
     @Test
     void testGetProjectDataDirAndResolveProjectDataPath() {
-        SettingsService settingsService = new SettingsService();
+        SettingsService settingsService = new SettingsService(null, null);
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
-        ProjectService projectService = new ProjectService(settingsService);
+        ProjectService projectService = new ProjectService(settingsService, null);
         assertThrows(IllegalStateException.class, projectService::getProjectDataDir);
         assertThrows(
                 IllegalStateException.class,

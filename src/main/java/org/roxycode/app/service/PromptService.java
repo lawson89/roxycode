@@ -19,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -68,9 +67,7 @@ public class PromptService {
 
     public String getStableContext() {
         StringBuilder sb = new StringBuilder(readClasspathResource(CLASSPATH_PROMPT));
-        sb.append(loadAllPrompts());
         sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
-        sb.append(loadAllDocs());
         sb.append(loadProjectContext());
         return sb.toString();
     }
@@ -159,20 +156,6 @@ public class PromptService {
 
     public String loadJexlContext() {
         return readClasspathResource(JEXL_DOC_PATH);
-    }
-
-    public String loadAllPrompts() {
-        return loadMarkdownFromClasspath(
-                "prompts",
-                "core_workflow.md",
-                "explore_phase.md",
-                "plan_phase.md",
-                "code_phase.md",
-                "review_phase.md");
-    }
-
-    public String loadAllDocs() {
-        return loadMarkdownFromClasspath("docs", "jexl.md");
     }
 
     public String loadProjectContext() {
@@ -299,24 +282,6 @@ public class PromptService {
                 prompt, Map.of("maxTurns", settingsService.getSettings().getMaxAgentToolTurns()));
     }
 
-    private String loadMarkdownFromClasspath(String directory, String... excludeFiles) {
-        java.util.List<String> excludes = java.util.Arrays.asList(excludeFiles);
-        StringBuilder sb = new StringBuilder();
-        try {
-            PathMatchingResourcePatternResolver resolver =
-                    new PathMatchingResourcePatternResolver();
-            Resource[] resources = resolver.getResources("classpath*:" + directory + "/*.md");
-            for (Resource resource : resources) {
-                if (resource.getFilename() != null && !excludes.contains(resource.getFilename())) {
-                    sb.append("\n\n## ").append(resource.getFilename()).append("\n");
-                    sb.append(resource.getContentAsString(StandardCharsets.UTF_8));
-                }
-            }
-        } catch (IOException e) {
-            log.error("Failed to discover markdown files in {}: {}", directory, e.getMessage());
-        }
-        return sb.toString();
-    }
 
     private String readClasspathResource(String path) {
         try {

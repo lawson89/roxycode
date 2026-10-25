@@ -46,32 +46,13 @@ public final class ChatController implements AutoCloseable {
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
     private final PlanService planService;
-    private final boolean ownsTurnExecutor;
+    private final boolean turnExecutorOwned;
     private volatile Executor turnExecutor;
     private final AtomicLong turnSequence = new AtomicLong();
 
     private volatile long activeTurnId = 0;
     private volatile Future<?> activeTurnFuture;
     private volatile WorkflowTransitionEvent deferredTransitionEvent;
-
-    public ChatController(
-            ChatModel model,
-            ChatPanel view,
-            AiService aiService,
-            PlanService planService,
-            ApplicationEventPublisher eventPublisher,
-            ChatMemory chatMemory,
-            SettingsService settingsService) {
-        this(
-                model,
-                view,
-                aiService,
-                planService,
-                eventPublisher,
-                chatMemory,
-                settingsService,
-                null);
-    }
 
     public ChatController(
             ChatModel model,
@@ -89,7 +70,7 @@ public final class ChatController implements AutoCloseable {
         this.eventPublisher = eventPublisher;
         this.chatMemory = chatMemory;
         this.settingsService = settingsService;
-        this.ownsTurnExecutor = turnExecutor == null;
+        this.turnExecutorOwned = turnExecutor == null;
         this.turnExecutor =
                 turnExecutor != null ? turnExecutor : Executors.newVirtualThreadPerTaskExecutor();
     }
@@ -99,11 +80,11 @@ public final class ChatController implements AutoCloseable {
     }
 
     boolean ownsTurnExecutor() {
-        return ownsTurnExecutor;
+        return turnExecutorOwned;
     }
 
     synchronized void ensureOwnedExecutorActive() {
-        if (ownsTurnExecutor
+        if (turnExecutorOwned
                 && turnExecutor instanceof ExecutorService executorService
                 && executorService.isShutdown()) {
             turnExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -111,7 +92,7 @@ public final class ChatController implements AutoCloseable {
     }
 
     synchronized void closeOwnedExecutor() {
-        if (ownsTurnExecutor) {
+        if (turnExecutorOwned) {
             close();
         }
     }

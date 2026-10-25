@@ -18,10 +18,6 @@ public class JexlServiceRegistry {
         }
     }
 
-    public Map<String, Object> getServices() {
-        return Collections.unmodifiableMap(services);
-    }
-
     public Map<String, Object> getServices(WorkflowPhase phase) {
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : services.entrySet()) {

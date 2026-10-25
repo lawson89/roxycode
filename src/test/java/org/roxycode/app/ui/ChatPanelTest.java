@@ -32,7 +32,7 @@ public class ChatPanelTest {
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, publisher, chatMemory, "test", null, true, null);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null, null);
         assertNotNull(chatPanel.getOutputArea(), "Output area should be initialized");
         assertNotNull(chatPanel.getInputArea(), "Input area should be initialized");
         assertTrue(
@@ -61,7 +61,7 @@ public class ChatPanelTest {
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, publisher, chatMemory, "test", null, true, null);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null, null);
         assertTrue(
                 chatPanel.getInputArea().getMouseListeners().length > 0,
                 "Input area should have mouse listeners for context menu");
@@ -79,7 +79,7 @@ public class ChatPanelTest {
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, publisher, chatMemory, "test", null, true, null);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null, null);
 
         // Simulate keyboard shortcut which previously passed null
         javax.swing.Action sendMessageAction =
@@ -193,7 +193,7 @@ public class ChatPanelTest {
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, publisher, chatMemory, "test", null, true, null);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null, null);
 
         chatPanel.getInputArea().setText("Existing text in input");
         chatPanel.getInputArea().setCaretPosition(0);
@@ -216,7 +216,7 @@ public class ChatPanelTest {
 
         ChatPanel chatPanel =
                 new ChatPanel(
-                        aiService, planService, publisher, chatMemory, "test", null, true, null);
+                        aiService, planService, publisher, chatMemory, "test", null, true, null, null);
 
         assertTrue(
                 chatPanel.getOutputArea().getScrollableTracksViewportWidth(),

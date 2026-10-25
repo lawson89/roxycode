@@ -8,7 +8,6 @@ import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.html.AttributeProvider;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.html.IndependentAttributeProviderFactory;
-import com.vladsch.flexmark.html.renderer.AttributablePart;
 import com.vladsch.flexmark.html.renderer.LinkResolverContext;
 import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.ast.Node;
@@ -73,14 +72,14 @@ public final class SwingHtmlUtils {
                     new IndependentAttributeProviderFactory() {
                         @Override
                         public AttributeProvider apply(LinkResolverContext context) {
-                            return SwingHtmlUtils::setTableNodeAttributes;
+                            return (node, part, attributes) ->
+                                    setTableNodeAttributes(node, attributes);
                         }
                     });
         }
     }
 
-    private static void setTableNodeAttributes(
-            Node node, AttributablePart part, MutableAttributes attributes) {
+    private static void setTableNodeAttributes(Node node, MutableAttributes attributes) {
         if (node instanceof TableBlock) {
             attributes.addValue("class", "md-table");
             attributes.replaceValue("cellpadding", "6");

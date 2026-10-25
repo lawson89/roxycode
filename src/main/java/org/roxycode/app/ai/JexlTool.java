@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
@@ -35,16 +34,6 @@ public class JexlTool {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper mapper;
 
-    public JexlTool(JexlServiceRegistry registry) {
-        this(registry, null, AiConfig.SHARED_OBJECT_MAPPER);
-    }
-
-    public JexlTool(
-            JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher) {
-        this(registry, eventPublisher, AiConfig.SHARED_OBJECT_MAPPER);
-    }
-
-    @Autowired
     public JexlTool(
             JexlServiceRegistry registry,
             @Nullable ApplicationEventPublisher eventPublisher,

@@ -87,22 +87,6 @@ class PromptServiceTest {
     }
 
     @Test
-    void testLoadAllPrompts() {
-        String allPrompts = promptService.loadAllPrompts();
-        assertNotNull(allPrompts);
-        // core_workflow.md should NOT be in the result of loadAllPrompts
-        assertFalse(allPrompts.contains("## core_workflow.md"));
-    }
-
-    @Test
-    void testLoadAllDocs() {
-        String allDocs = promptService.loadAllDocs();
-        assertNotNull(allDocs);
-        // jexl.md should NOT be in the result of loadAllDocs
-        assertFalse(allDocs.contains("## jexl.md"));
-    }
-
-    @Test
     void testLoadReviewPrompt() {
         String prompt = promptService.loadPhasePrompt(WorkflowPhase.REVIEW);
         assertNotNull(prompt);

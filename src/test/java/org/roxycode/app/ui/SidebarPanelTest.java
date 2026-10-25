@@ -5,32 +5,22 @@ import static org.mockito.Mockito.*;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.nio.file.Path;
 import java.util.function.Consumer;
 import javax.swing.*;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.service.SettingsService;
 
 class SidebarPanelTest {
-    @TempDir Path tempDir;
 
     @Test
     void testSidebarPanelInstantiation() {
-        SettingsService settingsService = new SettingsService();
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-
         SidebarPanel sidebar = new SidebarPanel(card -> {});
         assertNotNull(sidebar);
     }
 
     @Test
     void testSidebarStructureAndBranding() {
-        SettingsService settingsService = new SettingsService();
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings_structure.toml"));
-
         SidebarPanel sidebar = new SidebarPanel(card -> {});
 
         Component[] components = sidebar.getComponents();
@@ -104,9 +94,6 @@ class SidebarPanelTest {
     @Test
     @SuppressWarnings("unchecked")
     void testSidebarNavigation() {
-        SettingsService settingsService = new SettingsService();
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings_nav.toml"));
-
         Consumer<String> navAction = mock(Consumer.class);
 
         SidebarPanel sidebar = new SidebarPanel(navAction);

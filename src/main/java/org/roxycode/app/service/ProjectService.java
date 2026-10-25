@@ -9,7 +9,6 @@ import java.util.HexFormat;
 import java.util.Locale;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AppSettings;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -23,11 +22,6 @@ public class ProjectService {
     private final ApplicationEventPublisher eventPublisher;
     private volatile Path currentProjectRoot;
 
-    public ProjectService(SettingsService settingsService) {
-        this(settingsService, event -> {});
-    }
-
-    @Autowired
     public ProjectService(
             SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;

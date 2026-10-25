@@ -509,7 +509,7 @@ class PlanServiceTest {
                 registry.getServices(WorkflowPhase.PLAN).isEmpty(),
                 "PlanService must not be registered in JexlServiceRegistry");
 
-        JexlTool jexlTool = new JexlTool(registry);
+        JexlTool jexlTool = new JexlTool(registry, null, null);
         String jexlRes = jexlTool.executeJexl("planService.submitPlan('T', 'G', [], [])");
         assertTrue(jexlRes.contains("error"));
 

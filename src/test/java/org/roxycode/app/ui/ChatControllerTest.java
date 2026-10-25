@@ -171,6 +171,7 @@ class ChatControllerTest {
                         ChatModel.QA_SESSION_PREFIX,
                         WorkflowPhase.EXPLORE,
                         false,
+                        null,
                         null);
 
         assertTrue(

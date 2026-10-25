@@ -171,7 +171,7 @@ public class RepoMapPackerService {
                         JsonNode nameNode = node.get("name");
                         JsonNode lineNode = node.get("line");
                         if (nameNode != null && lineNode != null) {
-                            tags.add(new Tag(nameNode.asText(), lineNode.asInt()));
+                            tags.add(new Tag(lineNode.asInt()));
                         }
                     } catch (Exception e) {
                         ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
@@ -228,5 +228,5 @@ public class RepoMapPackerService {
         return false;
     }
 
-    private record Tag(String name, int line) {}
+    private record Tag(int line) {}
 }

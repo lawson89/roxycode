@@ -33,7 +33,7 @@ class SettingsPanelTest {
         lenient().when(settingsService.getSettings()).thenReturn(settings);
         lenient()
                 .when(settingsService.getAvailableModels())
-                .thenReturn(new SettingsService().getAvailableModels());
+                .thenReturn(new SettingsService(null, null).getAvailableModels());
 
         settingsPanel = new SettingsPanel(settingsService);
     }

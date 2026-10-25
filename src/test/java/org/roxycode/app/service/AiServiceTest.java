@@ -97,7 +97,7 @@ class AiServiceTest {
                 .thenReturn(chatClientBuilder);
         lenient().when(chatClientBuilder.build()).thenReturn(chatClient);
 
-        jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher);
+        jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher, null);
         aiService =
                 new AiService(
                         chatClientBuilder,

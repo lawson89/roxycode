@@ -23,7 +23,7 @@ class ContextManagerPanelTest {
         when(promptService.listContextFiles()).thenReturn(List.of("old.md"));
         when(promptService.readContextFile("old.md")).thenReturn("# Old Content");
 
-        ContextManagerPanel panel = new ContextManagerPanel(promptService);
+        ContextManagerPanel panel = new ContextManagerPanel(promptService, null);
         for (int i = 0; i < 50; i++) {
             SwingUtilities.invokeAndWait(() -> {});
             if (panel.getListModel().getSize() == 1) {
@@ -70,7 +70,7 @@ class ContextManagerPanelTest {
                 .when(promptService)
                 .saveContextFile(eq("../evil.md"), anyString());
 
-        ContextManagerPanel panel = new ContextManagerPanel(promptService);
+        ContextManagerPanel panel = new ContextManagerPanel(promptService, null);
         List<String> errors = new ArrayList<>();
         panel.setErrorDialogPresenter(errors::add);
 

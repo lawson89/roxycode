@@ -14,7 +14,6 @@ import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.GeminiModels;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -29,19 +28,6 @@ public class SettingsService {
     private final TomlMapper mapper;
     private final ApplicationEventPublisher eventPublisher;
 
-    public SettingsService() {
-        this(AiConfig.SHARED_TOML_MAPPER, event -> {});
-    }
-
-    public SettingsService(TomlMapper mapper) {
-        this(mapper, event -> {});
-    }
-
-    public SettingsService(ApplicationEventPublisher eventPublisher) {
-        this(AiConfig.SHARED_TOML_MAPPER, eventPublisher);
-    }
-
-    @Autowired
     public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
         this.mapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
         this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {};

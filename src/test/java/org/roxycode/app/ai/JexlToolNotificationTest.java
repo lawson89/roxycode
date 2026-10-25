@@ -25,7 +25,8 @@ public class JexlToolNotificationTest {
                                 assertEquals(2, ((Number) tee.result()).intValue());
                                 assertTrue(tee.success());
                             }
-                        });
+                        },
+                        null);
 
         tool.executeJexl(
                 "1 + 1",
@@ -52,7 +53,8 @@ public class JexlToolNotificationTest {
                                 assertNotNull(tee.error());
                                 assertTrue(tee.error().startsWith("Syntax Error: "));
                             }
-                        });
+                        },
+                        null);
 
         tool.executeJexl("if (");
         assertTrue(

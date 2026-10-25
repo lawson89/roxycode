@@ -24,7 +24,7 @@ class SystemToolServiceTest {
 
     @Test
     void testDetectToolsIncludesDockerAndJava() throws Exception {
-        SystemToolService service = new SystemToolService();
+        SystemToolService service = new SystemToolService(null, null, null);
         CompletableFuture<List<SystemTool>> future = service.detectTools();
         List<SystemTool> tools = future.get();
 
@@ -114,7 +114,7 @@ class SystemToolServiceTest {
     @Test
     void testTomlPersistenceAndInMemoryCacheHitsVsForcedRefresh() throws Exception {
         TomlMapper mapper = AiConfig.SHARED_TOML_MAPPER;
-        SettingsService settingsService = new SettingsService(mapper);
+        SettingsService settingsService = new SettingsService(mapper, null);
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
         List<SystemToolsUpdatedEvent> publishedEvents = new ArrayList<>();
@@ -187,7 +187,7 @@ class SystemToolServiceTest {
 
     @Test
     void testConcurrentRefreshDeduplication() throws Exception {
-        SystemToolService service = new SystemToolService();
+        SystemToolService service = new SystemToolService(null, null, null);
         CountDownLatch probeStarted = new CountDownLatch(1);
         CountDownLatch releaseProbe = new CountDownLatch(1);
         AtomicInteger probeCount = new AtomicInteger(0);

@@ -71,26 +71,6 @@ public class ChatPanel extends JPanel implements AutoCloseable {
             String sessionPrefix,
             WorkflowPhase lockedPhase,
             boolean isTaskMode,
-            SettingsService settingsService) {
-        this(
-                aiService,
-                planService,
-                eventPublisher,
-                chatMemory,
-                sessionPrefix,
-                lockedPhase,
-                isTaskMode,
-                settingsService,
-                null);
-    }
-    public ChatPanel(
-            AiService aiService,
-            PlanService planService,
-            ApplicationEventPublisher eventPublisher,
-            ChatMemory chatMemory,
-            String sessionPrefix,
-            WorkflowPhase lockedPhase,
-            boolean isTaskMode,
             SettingsService settingsService,
             Executor turnExecutor) {
         this.model = new ChatModel(sessionPrefix, lockedPhase, isTaskMode);

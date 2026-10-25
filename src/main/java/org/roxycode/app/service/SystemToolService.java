@@ -53,20 +53,11 @@ public class SystemToolService {
     private final SettingsService settingsService;
     private final TomlMapper mapper;
     private final ApplicationEventPublisher eventPublisher;
-    private DockerProbe dockerProbe;
-    private BooleanSupplier dockerCliPresentSupplier;
+    private final DockerProbe dockerProbe;
+    private final BooleanSupplier dockerCliPresentSupplier;
     private Supplier<List<SystemTool>> toolProber;
     private List<SystemTool> cachedTools;
     private CompletableFuture<List<SystemTool>> inFlightRefresh;
-
-    public SystemToolService() {
-        this(
-                null,
-                AiConfig.SHARED_TOML_MAPPER,
-                event -> {},
-                SystemToolService::probeWithTestcontainers,
-                SystemToolService::isDockerCliInstalled);
-    }
 
     @Autowired
     public SystemToolService(
@@ -97,14 +88,6 @@ public class SystemToolService {
         this.dockerProbe = dockerProbe;
         this.dockerCliPresentSupplier = dockerCliPresentSupplier;
         this.toolProber = this::probeAllTools;
-    }
-
-    void setDockerProbe(DockerProbe dockerProbe) {
-        this.dockerProbe = dockerProbe;
-    }
-
-    void setDockerCliPresentSupplier(BooleanSupplier dockerCliPresentSupplier) {
-        this.dockerCliPresentSupplier = dockerCliPresentSupplier;
     }
 
     void setToolProber(Supplier<List<SystemTool>> toolProber) {

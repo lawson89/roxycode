@@ -45,6 +45,7 @@ class MentorModeIntegrationTest {
                 "Skipping JFrame test in headless environment");
         settingsService = mock(SettingsService.class);
         when(settingsService.getSettings()).thenReturn(new AppSettings());
+        projectService = mock(ProjectService.class);
         when(projectService.getProjectName()).thenReturn("TestProject");
 
         planService = mock(PlanService.class);
@@ -92,7 +93,7 @@ class MentorModeIntegrationTest {
         SettingsPanel settingsPanel = new SettingsPanel(settingsService);
         BuildConfigPanel buildConfigPanel =
                 new BuildConfigPanel(buildToolService, settingsService, toolService);
-        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(promptService);
+        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(promptService, settingsService);
 
         mainFrame =
                 new MainFrame(

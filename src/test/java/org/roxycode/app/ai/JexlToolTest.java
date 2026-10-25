@@ -88,7 +88,7 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         registry.register(new TestService());
 
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
 
         String varCheck = tool.executeJexl("testService");
         assertNotNull(varCheck);
@@ -102,7 +102,7 @@ public class JexlToolTest {
             throws Exception {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         registry.register(new TestService());
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
 
         String buildJson = tool.executeJexl("testService.sampleBuildResult()");
         JsonNode buildRoot = AiConfig.SHARED_OBJECT_MAPPER.readTree(buildJson);
@@ -130,7 +130,7 @@ public class JexlToolTest {
     public void testBuildResultSupportsBothRecordAndBeanAccessorsInJexl() throws Exception {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         registry.register(new TestService());
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
 
         String script =
                 """
@@ -177,7 +177,7 @@ public class JexlToolTest {
                     }
                 };
 
-        JexlTool tool = new JexlTool(registry, publisher);
+        JexlTool tool = new JexlTool(registry, publisher, null);
 
         // Default EXPLORE phase cannot access codeOnlyService
         String exploreRes = tool.executeJexl("codeOnlyService.writeData()");
@@ -201,7 +201,7 @@ public class JexlToolTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         registry.register(new TestService());
 
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
 
         String toStringResult = tool.executeJexl("testService.toString()");
         assertTrue(toStringResult.contains("TestService"), "Object.toString() should be allowed");
@@ -216,7 +216,7 @@ public class JexlToolTest {
     @Test
     public void testExecuteJexlSuccess() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
         String result = tool.executeJexl("1 + 1");
         assertTrue(
                 result.contains(
@@ -228,7 +228,7 @@ public class JexlToolTest {
     @Test
     public void testExecuteJexlWithVariable() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
         String result = tool.executeJexl("var x = 10; x * 2");
         assertTrue(
                 result.contains(
@@ -240,7 +240,7 @@ public class JexlToolTest {
     @Test
     public void testExecuteJexlNull() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
         String result = tool.executeJexl("null");
         assertTrue(
                 result.contains(
@@ -260,7 +260,8 @@ public class JexlToolTest {
                             if (event instanceof ToolExecutionEvent tee) {
                                 capturedEvent.set(tee);
                             }
-                        });
+                        },
+                        null);
 
         String result = tool.executeJexl("if (");
         assertTrue(result.contains("Syntax Error"));
@@ -301,7 +302,7 @@ public class JexlToolTest {
     @Test
     public void testExecuteJexlInterrupted() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
         Thread.currentThread().interrupt();
         try {
             assertThrows(CancellationException.class, () -> tool.executeJexl("1 + 1"));
@@ -324,7 +325,8 @@ public class JexlToolTest {
                             if (event instanceof ToolExecutionEvent tee) {
                                 capturedEvent.set(tee);
                             }
-                        });
+                        },
+                        null);
 
         AtomicReference<Throwable> thrownRef = new AtomicReference<>();
         AtomicBoolean interruptFlagPreserved = new AtomicBoolean(false);
@@ -365,7 +367,7 @@ public class JexlToolTest {
     public void testExecuteJexlInterruptedDuringScriptExecutionThrowsCancellationException() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         registry.register(new TestService());
-        JexlTool tool = new JexlTool(registry);
+        JexlTool tool = new JexlTool(registry, null, null);
 
         try {
             assertThrows(
@@ -391,7 +393,8 @@ public class JexlToolTest {
                             if (event instanceof ToolExecutionEvent tee) {
                                 capturedEvent.set(tee);
                             }
-                        });
+                        },
+                        null);
 
         String errorJson = tool.executeJexl("testService.throwIllegalArgument()");
         assertTrue(errorJson.contains("File does not exist: missing.txt"));

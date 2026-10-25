@@ -82,7 +82,7 @@ class MainFrameTest {
         SettingsPanel settingsPanel = new SettingsPanel(settingsService);
         BuildConfigPanel buildConfigPanel =
                 new BuildConfigPanel(buildToolService, settingsService, toolService);
-        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(promptService);
+        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(promptService, settingsService);
 
         MainFrame mainFrame =
                 new MainFrame(

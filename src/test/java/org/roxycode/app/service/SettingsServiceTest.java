@@ -27,7 +27,7 @@ class SettingsServiceTest {
 
     @Test
     void testSaveAndLoadSettings() {
-        SettingsService service = new SettingsService();
+        SettingsService service = new SettingsService(null, null);
         Path settingsFile = tempDir.resolve("settings.toml");
         service.setSettingsPathOverride(settingsFile);
 
@@ -37,7 +37,7 @@ class SettingsServiceTest {
         service.saveSettings();
 
         // New service instance to verify persistence
-        SettingsService service2 = new SettingsService();
+        SettingsService service2 = new SettingsService(null, null);
         service2.setSettingsPathOverride(settingsFile);
         assertEquals("Darcula", service2.getSettings().getTheme());
         assertEquals("test-api-key", service2.getSettings().getGeminiApiKey());
@@ -52,7 +52,7 @@ class SettingsServiceTest {
 
     @Test
     void testGetRoxyHomeDirDefaultAndOverride() {
-        SettingsService service = new SettingsService();
+        SettingsService service = new SettingsService(null, null);
         Path defaultHome = service.getRoxyHomeDir();
         assertNotNull(defaultHome);
         assertTrue(defaultHome.endsWith(".roxycode"));
@@ -87,6 +87,7 @@ class SettingsServiceTest {
         AtomicBoolean listenerCalled = new AtomicBoolean(false);
         SettingsService service =
                 new SettingsService(
+                        null,
                         event -> {
                             if (event instanceof SettingsChangedEvent) {
                                 listenerCalled.set(true);
@@ -102,7 +103,7 @@ class SettingsServiceTest {
 
     @Test
     void testGetAvailableModelsLoadsFromClasspathToml() {
-        SettingsService service = new SettingsService();
+        SettingsService service = new SettingsService(null, null);
         var models = service.getAvailableModels();
         assertNotNull(models);
         assertTrue(!models.isEmpty(), "Available models from /models.toml should not be empty");
@@ -111,7 +112,7 @@ class SettingsServiceTest {
 
     @Test
     void testConcurrentLazyInitializationReturnsSameInstance() throws Exception {
-        SettingsService service = new SettingsService();
+        SettingsService service = new SettingsService(null, null);
         service.setSettingsPathOverride(tempDir.resolve("concurrent_settings.toml"));
 
         int threads = 8;
