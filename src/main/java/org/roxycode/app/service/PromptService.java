@@ -282,7 +282,6 @@ public class PromptService {
                 prompt, Map.of("maxTurns", settingsService.getSettings().getMaxAgentToolTurns()));
     }
 
-
     private String readClasspathResource(String path) {
         try {
             Resource resource = new ClassPathResource(path);

@@ -186,6 +186,7 @@ class ChatControllerTest {
                 fallbackExecutor.isShutdown(),
                 "Fallback virtual-thread executor must be shut down when panel is removed/disposed");
     }
+
     @Test
     void testSendMessageWithEmptyTextAndPendingImageShowsFeedbackAndPreservesImage() {
         AiService aiService = mock(AiService.class);

@@ -73,6 +73,7 @@ public final class StatusPanel extends JPanel {
         super.updateUI();
         updateBorder();
     }
+
     private void updateBorder() {
         setBorder(
                 BorderFactory.createMatteBorder(

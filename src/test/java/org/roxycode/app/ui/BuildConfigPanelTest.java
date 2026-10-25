@@ -8,6 +8,7 @@ import java.util.concurrent.CompletableFuture;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.BuildContainerService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.AppSettings;
@@ -98,7 +99,7 @@ class BuildConfigPanelTest {
         SwingUtilities.invokeAndWait(() -> {});
 
         assertTrue(panel.getContainerToggleCheckBox().isSelected());
-        assertTrue(BuildConfigPanel.isContainerEnabledInToml(panel.getTextArea().getText()));
+        assertTrue(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
         assertEquals(
                 BuildConfigPanel.CONTAINER_ACTIVE_TEXT, panel.getBannerMessageLabel().getText());
 
@@ -107,7 +108,7 @@ class BuildConfigPanelTest {
         SwingUtilities.invokeAndWait(() -> {});
 
         assertFalse(panel.getContainerToggleCheckBox().isSelected());
-        assertFalse(BuildConfigPanel.isContainerEnabledInToml(panel.getTextArea().getText()));
+        assertFalse(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
         assertEquals(
                 BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT,
                 panel.getBannerMessageLabel().getText());
@@ -153,7 +154,7 @@ class BuildConfigPanelTest {
         // Clicking toggle appends [container] section when missing
         panel.getContainerToggleCheckBox().doClick();
         assertTrue(panel.getTextArea().getText().contains("[container]"));
-        assertTrue(BuildConfigPanel.isContainerEnabledInToml(panel.getTextArea().getText()));
+        assertTrue(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
     }
 
     @Test

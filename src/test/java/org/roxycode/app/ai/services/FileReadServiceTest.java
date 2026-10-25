@@ -149,4 +149,19 @@ public class FileReadServiceTest {
         assertThrows(
                 IllegalArgumentException.class, () -> fileReadService.listDirectory("afile.txt"));
     }
+
+    @Test
+    void testIsBinaryFile() throws IOException {
+        assertFalse(FileReadService.isBinaryFile(null));
+        assertFalse(FileReadService.isBinaryFile(tempDir));
+        assertFalse(FileReadService.isBinaryFile(tempDir.resolve("missing.bin")));
+
+        Path textFile = tempDir.resolve("plain.txt");
+        Files.writeString(textFile, "Hello UTF-8 text\nLine 2");
+        assertFalse(FileReadService.isBinaryFile(textFile));
+
+        Path binFile = tempDir.resolve("binary.dat");
+        Files.write(binFile, new byte[] {0x48, 0x65, 0x00, 0x6c});
+        assertTrue(FileReadService.isBinaryFile(binFile));
+    }
 }

@@ -116,6 +116,7 @@ class SwingHtmlUtilsTest {
                 rendered.contains("&lt;table&gt;"),
                 "Escaped HTML table tags inside fenced code blocks must remain untouched");
     }
+
     @Test
     void testApplyTheme() {
         JEditorPane pane = new JEditorPane();

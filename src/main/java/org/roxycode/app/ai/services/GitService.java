@@ -1,7 +1,6 @@
 package org.roxycode.app.ai.services;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -29,7 +28,6 @@ public class GitService {
     private static final String NOT_A_GIT_REPOSITORY = "Not a git repository";
     private static final String GIT_DIFF = "diff";
     private static final int MIN_PORCELAIN_LINE_LENGTH = 4;
-    private static final int BINARY_SNIFF_BYTES = 8000;
     private static final char NL = (char) 10;
     private static final char DQUOTE = (char) 34;
     private static final char BACKSLASH = (char) 92;
@@ -267,7 +265,7 @@ public class GitService {
 
     private String formatUntrackedFileDiff(String relFile, Path filePath) {
         try {
-            if (isBinaryFile(filePath)) {
+            if (FileReadService.isBinaryFile(filePath)) {
                 return "diff --git a/"
                         + relFile
                         + " b/"
@@ -298,19 +296,6 @@ public class GitService {
         } catch (IOException e) {
             log.warn("Failed to read untracked file {} for diff: {}", relFile, e.getMessage());
             return "";
-        }
-    }
-
-    private static boolean isBinaryFile(Path path) throws IOException {
-        try (InputStream in = Files.newInputStream(path)) {
-            byte[] buf = new byte[BINARY_SNIFF_BYTES];
-            int read = in.read(buf);
-            for (int i = 0; i < read; i++) {
-                if (buf[i] == 0) {
-                    return true;
-                }
-            }
-            return false;
         }
     }
 

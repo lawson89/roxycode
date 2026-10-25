@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -212,20 +213,12 @@ public class RepoMapPackerService {
 
     private boolean isBinaryFile(Path path) {
         try {
-            if (Files.exists(path)) {
-                try (java.io.InputStream is = Files.newInputStream(path)) {
-                    byte[] buffer = new byte[1024];
-                    int bytesRead = is.read(buffer);
-                    for (int i = 0; i < bytesRead; i++) {
-                        if (buffer[i] == 0) return true;
-                    }
-                }
-            }
+            return FileReadService.isBinaryFile(path);
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
             log.warn("Could not determine if file is binary: {}", path, e);
+            return false;
         }
-        return false;
     }
 
     private record Tag(int line) {}

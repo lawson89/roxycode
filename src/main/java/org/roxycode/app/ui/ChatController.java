@@ -7,7 +7,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.swing.SwingUtilities;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
@@ -107,6 +106,7 @@ public final class ChatController implements AutoCloseable {
             executorService.close();
         }
     }
+
     public boolean isTurnActive() {
         return activeTurnId != 0 && activeTurnFuture != null;
     }
@@ -286,14 +286,13 @@ public final class ChatController implements AutoCloseable {
                                                 imageBytes);
                                 if (Thread.currentThread().isInterrupted()
                                         || model.isTurnCancelled()) {
-                                    SwingUtilities.invokeLater(() -> finishTurnCancelled(turnId));
+                                    Edt.run(() -> finishTurnCancelled(turnId));
                                     return;
                                 }
-                                SwingUtilities.invokeLater(
-                                        () -> finishTurnSuccess(turnId, response));
+                                Edt.run(() -> finishTurnSuccess(turnId, response));
                             } catch (Exception ex) {
                                 if (ExceptionUtils.isCancellation(ex) || model.isTurnCancelled()) {
-                                    SwingUtilities.invokeLater(() -> finishTurnCancelled(turnId));
+                                    Edt.run(() -> finishTurnCancelled(turnId));
                                     return;
                                 }
                                 log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
@@ -302,8 +301,7 @@ public final class ChatController implements AutoCloseable {
                                                 + (ex.getMessage() != null
                                                         ? ex.getMessage()
                                                         : ex.getClass().getSimpleName());
-                                SwingUtilities.invokeLater(
-                                        () -> finishTurnSuccess(turnId, errorMsg));
+                                Edt.run(() -> finishTurnSuccess(turnId, errorMsg));
                             }
                         },
                         null);
@@ -344,11 +342,11 @@ public final class ChatController implements AutoCloseable {
         if (event == null || !model.isTaskMode()) return;
         if (!event.autonomous() && event.to() == null) {
             deferredTransitionEvent = null;
-            SwingUtilities.invokeLater(view::hideTransitionBanner);
+            Edt.run(view::hideTransitionBanner);
             return;
         }
         if (model.isTurnCancelled()) return;
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     if (model.isTurnCancelled()) return;
                     if (isTurnActive()) {
@@ -384,7 +382,7 @@ public final class ChatController implements AutoCloseable {
                 || model.isTurnCancelled()) {
             return;
         }
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     if (model.isTurnCancelled()) return;
                     model.setCurrentTurn(event.turnNumber());
@@ -398,7 +396,7 @@ public final class ChatController implements AutoCloseable {
                 || model.isTurnCancelled()) {
             return;
         }
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     if (model.isTurnCancelled()) return;
                     String output = JexlToHtmlConverter.convert(event.script());
@@ -410,7 +408,7 @@ public final class ChatController implements AutoCloseable {
         if (event == null || !model.getConversationId().equals(event.conversationId())) {
             return;
         }
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     if (!isTurnActive()) {
                         view.setLoading(false);
@@ -419,12 +417,12 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onSettingsChanged(SettingsChangedEvent event) {
-        SwingUtilities.invokeLater(view::updateTurnLabel);
+        Edt.run(view::updateTurnLabel);
     }
 
     void onPlanUpdated(PlanUpdatedEvent event) {
         if (!model.isTaskMode()) return;
-        SwingUtilities.invokeLater(view::updateTurnLabel);
+        Edt.run(view::updateTurnLabel);
     }
 
     void onPhaseChanged(PhaseChangedEvent event) {
@@ -435,7 +433,7 @@ public final class ChatController implements AutoCloseable {
 
     void onPhaseChanged(WorkflowPhase phase) {
         log.debug("Phase changed to: {}", phase);
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     if (model.isTaskMode()) {
                         view.hideTransitionBanner();

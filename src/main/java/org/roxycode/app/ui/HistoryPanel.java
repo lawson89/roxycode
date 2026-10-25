@@ -10,6 +10,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserMessageEvent;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.TokenUtils;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -156,7 +157,7 @@ public class HistoryPanel extends JPanel {
     }
 
     public void refresh() {
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     List<Message> messages = chatMemory.get(conversationId);
                     if (messages == null) {

@@ -117,6 +117,7 @@ public final class SwingHtmlUtils {
         String html = MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown));
         return JexlToHtmlConverter.highlightCodeBlocks(html);
     }
+
     /**
      * Applies theme-aware stylesheet and editor kit to a JEditorPane or JTextPane.
      *

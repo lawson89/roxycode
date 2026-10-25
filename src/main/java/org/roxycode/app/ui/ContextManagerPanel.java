@@ -1,15 +1,11 @@
 package org.roxycode.app.ui;
 
-import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
-import java.io.IOException;
 import java.util.List;
-import java.util.Locale;
 import java.util.function.Consumer;
 import javax.swing.*;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.fife.ui.rsyntaxtextarea.Theme;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -138,21 +134,7 @@ public final class ContextManagerPanel extends JPanel {
     }
 
     void updateTextAreaTheme(String themeName) {
-        boolean isDark =
-                themeName != null && !themeName.isBlank()
-                        ? (themeName.toLowerCase(Locale.ROOT).contains("dark")
-                                || "Darcula".equalsIgnoreCase(themeName))
-                        : FlatLaf.isLafDark();
-        String themePath =
-                isDark
-                        ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
-                        : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
-        try {
-            Theme theme = Theme.load(getClass().getResourceAsStream(themePath));
-            theme.apply(textArea);
-        } catch (IOException ioe) {
-            log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
-        }
+        SettingsPanel.applyRSyntaxTheme(textArea, themeName);
     }
 
     static String normalizeRuleFilename(String input) {

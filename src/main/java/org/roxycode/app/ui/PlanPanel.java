@@ -9,6 +9,7 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.util.Edt;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -123,7 +124,7 @@ public final class PlanPanel extends JPanel {
     private void updateDisplay(ImplementationPlan plan) {
         String html = buildPlanHtml(plan);
         boolean hasPlan = plan != null;
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     if (copyMarkdownButton != null) {
                         copyMarkdownButton.setEnabled(hasPlan);

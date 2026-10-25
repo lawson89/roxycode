@@ -189,4 +189,40 @@ class BuildContainerServiceTest {
                                         tempDir, config, Map.of(), "./mvnw compile"));
         assertTrue(thrown.getMessage().contains("client version 1.32 is too old"));
     }
+
+    @Test
+    void testIsAndUpdateContainerEnabledInToml() {
+        assertFalse(BuildContainerService.isContainerEnabledInToml(null));
+        assertFalse(BuildContainerService.isContainerEnabledInToml(""));
+
+        String tomlWithDisabled =
+                """
+                [build]
+                compile = "./mvnw compile"
+
+                [container]
+                enabled = false # inline comment
+                image = "eclipse-temurin:25-jdk"
+                """;
+        assertFalse(BuildContainerService.isContainerEnabledInToml(tomlWithDisabled));
+
+        String enabledToml =
+                BuildContainerService.updateContainerEnabledInToml(tomlWithDisabled, true);
+        assertTrue(BuildContainerService.isContainerEnabledInToml(enabledToml));
+        assertTrue(enabledToml.contains("enabled = true # inline comment"));
+
+        String disabledAgain =
+                BuildContainerService.updateContainerEnabledInToml(enabledToml, false);
+        assertFalse(BuildContainerService.isContainerEnabledInToml(disabledAgain));
+
+        String tomlWithoutSection =
+                """
+                [build]
+                compile = "./mvnw compile"
+                """;
+        String appended =
+                BuildContainerService.updateContainerEnabledInToml(tomlWithoutSection, true);
+        assertTrue(appended.contains("[container]"));
+        assertTrue(BuildContainerService.isContainerEnabledInToml(appended));
+    }
 }

@@ -121,14 +121,14 @@ public final class TaskWorkspacePanel extends JPanel {
     @EventListener
     public void onFileChanged(FileChangedEvent event) {
         if (gitChangesPanel != null) {
-            SwingUtilities.invokeLater(gitChangesPanel::refresh);
+            Edt.run(gitChangesPanel::refresh);
         }
     }
 
     @EventListener
     public void onWorkflowTransition(WorkflowTransitionEvent event) {
         if (sidebar != null && !event.autonomous()) {
-            SwingUtilities.invokeLater(() -> sidebar.setTaskWaitingApproval(event.to() != null));
+            Edt.run(() -> sidebar.setTaskWaitingApproval(event.to() != null));
         }
     }
 

@@ -31,7 +31,6 @@ public class FileEditorService {
     private static final int SINGLE_MATCH_COUNT = 1;
     private static final char LF = (char) 10;
     private static final String WHITESPACE_REGEX = "\\s+";
-    private static final String LINE_BREAK_REGEX = "\\R";
 
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
@@ -221,7 +220,7 @@ public class FileEditorService {
         String rawContent = Files.readString(path);
         String lineSeparator = detectLineSeparator(rawContent, replacementText);
         boolean hasTrailingNewline = hasTrailingLineSeparator(rawContent);
-        List<String> lines = rawContent.isEmpty() ? new ArrayList<>() : splitLines(rawContent);
+        List<String> lines = rawContent.lines().toList();
 
         if (startLine < 1
                 || startLine > lines.size()
@@ -243,7 +242,9 @@ public class FileEditorService {
 
         List<String> newLines = new ArrayList<>(lines);
         newLines.subList(startLine - 1, endLine).clear();
-        newLines.addAll(startLine - 1, splitLines(replacementText));
+        newLines.addAll(
+                startLine - 1,
+                replacementText.isEmpty() ? List.of("") : replacementText.lines().toList());
 
         writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
 
@@ -292,7 +293,7 @@ public class FileEditorService {
                 rawContent.isEmpty()
                         ? hasTrailingLineSeparator(content)
                         : hasTrailingLineSeparator(rawContent);
-        List<String> lines = rawContent.isEmpty() ? new ArrayList<>() : splitLines(rawContent);
+        List<String> lines = rawContent.lines().toList();
 
         int maxInsertLine = lines.size() + 1;
         if (lineNumber < 1 || lineNumber > maxInsertLine) {
@@ -309,7 +310,7 @@ public class FileEditorService {
         }
 
         List<String> newLines = new ArrayList<>(lines);
-        newLines.addAll(lineNumber - 1, splitLines(content));
+        newLines.addAll(lineNumber - 1, content.isEmpty() ? List.of("") : content.lines().toList());
 
         writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
 
@@ -504,13 +505,13 @@ public class FileEditorService {
             String relativePath, String content, String targetBlock) {
         StringBuilder hint =
                 new StringBuilder("TargetBlock not found in file: ").append(relativePath);
-        List<String> fileLines = content.isEmpty() ? List.of() : splitLines(content);
+        List<String> fileLines = content.lines().toList();
         if (fileLines.isEmpty() || targetBlock == null || targetBlock.isBlank()) {
             hint.append(" (file has ").append(fileLines.size()).append(" lines)");
             return hint.toString();
         }
 
-        List<String> targetLines = splitLines(targetBlock);
+        List<String> targetLines = targetBlock.lines().toList();
         String firstTargetLine = "";
         for (String tl : targetLines) {
             if (!tl.trim().isEmpty()) {
@@ -626,18 +627,5 @@ public class FileEditorService {
             joined += lineSeparator;
         }
         Files.writeString(path, joined);
-    }
-
-    private List<String> splitLines(String text) {
-        String[] split = text.split(LINE_BREAK_REGEX, -1);
-        int length = split.length;
-        if (length > 1 && split[length - 1].isEmpty()) {
-            length--;
-        }
-        List<String> result = new ArrayList<>(length);
-        for (int i = 0; i < length; i++) {
-            result.add(split[i]);
-        }
-        return result;
     }
 }

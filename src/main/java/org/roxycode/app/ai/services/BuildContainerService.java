@@ -4,11 +4,13 @@ import com.github.dockerjava.api.command.CreateContainerCmd;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +36,6 @@ public class BuildContainerService {
     static final String LABEL_APP = "app";
     static final String LABEL_APP_VALUE = "roxycode";
     static final String LABEL_PROJECT = "roxycode.project";
-    private static final int MAX_PROJECT_NAME_LENGTH = 40;
 
     public record ContainerConfig(boolean enabled, String image, String workdir) {}
 
@@ -164,14 +165,106 @@ public class BuildContainerService {
         return activeSession;
     }
 
-    static String sanitizeProjectName(Path projectRoot) {
-        Path fileName = projectRoot != null ? projectRoot.getFileName() : null;
-        String raw = fileName != null ? fileName.toString().toLowerCase(Locale.ROOT) : "";
-        String sanitized = raw.replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
-        if (sanitized.length() > MAX_PROJECT_NAME_LENGTH) {
-            sanitized = sanitized.substring(0, MAX_PROJECT_NAME_LENGTH).replaceAll("-+$", "");
+    public static boolean isContainerEnabledInToml(String toml) {
+        if (toml == null || toml.isBlank()) {
+            return false;
         }
-        return sanitized.isEmpty() ? "project" : sanitized;
+        List<String> lines = toml.lines().toList();
+        boolean inContainerSection = false;
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                inContainerSection = "[container]".equals(trimmed);
+                continue;
+            }
+            if (inContainerSection && isEnabledAssignment(trimmed)) {
+                int eqIdx = trimmed.indexOf('=');
+                if (eqIdx >= 0) {
+                    String val = trimmed.substring(eqIdx + 1).trim();
+                    int commentIdx = val.indexOf('#');
+                    if (commentIdx >= 0) {
+                        val = val.substring(0, commentIdx).trim();
+                    }
+                    return Boolean.parseBoolean(val);
+                }
+            }
+        }
+        return false;
+    }
+
+    public static String updateContainerEnabledInToml(String toml, boolean enabled) {
+        String safeToml = toml != null ? toml : "";
+        List<String> lines = safeToml.lines().toList();
+        boolean foundContainerSection = false;
+        boolean updatedEnabledLine = false;
+        int containerSectionIndex = -1;
+        List<String> outputLines = new ArrayList<>();
+
+        boolean inContainerSection = false;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            String trimmed = line.trim();
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                inContainerSection = "[container]".equals(trimmed);
+                if (inContainerSection) {
+                    foundContainerSection = true;
+                    containerSectionIndex = i;
+                }
+                outputLines.add(line);
+            } else if (inContainerSection && !updatedEnabledLine && isEnabledAssignment(trimmed)) {
+                int eqIdx = line.indexOf('=');
+                String prefix = line.substring(0, eqIdx + 1);
+                String rest = line.substring(eqIdx + 1);
+                int commentIdx = rest.indexOf('#');
+                String commentSuffix = commentIdx >= 0 ? " " + rest.substring(commentIdx) : "";
+                outputLines.add(prefix + " " + enabled + commentSuffix);
+                updatedEnabledLine = true;
+            } else {
+                outputLines.add(line);
+            }
+        }
+
+        if (!foundContainerSection) {
+            String section =
+                    """
+                    [container]
+                    enabled = %s
+                    image = 'eclipse-temurin:25-jdk'
+                    workdir = '/workspace'
+                    """
+                            .formatted(enabled);
+            if (safeToml.isEmpty()) {
+                return section;
+            }
+            return safeToml.stripTrailing()
+                    + """
+
+
+                    """
+                    + section;
+        }
+
+        if (!updatedEnabledLine && containerSectionIndex >= 0) {
+            outputLines.add(containerSectionIndex + 1, "enabled = " + enabled);
+        }
+
+        return String.join(
+                """
+
+                """,
+                outputLines);
+    }
+
+    private static boolean isEnabledAssignment(String trimmed) {
+        if (!trimmed.startsWith("enabled")) {
+            return false;
+        }
+        String afterKey = trimmed.substring("enabled".length()).trim();
+        return afterKey.startsWith("=");
+    }
+
+    static String sanitizeProjectName(Path projectRoot) {
+        return ProjectService.sanitizeProjectName(projectRoot);
     }
 
     static String buildContainerName(Path projectRoot) {

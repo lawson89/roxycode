@@ -120,7 +120,7 @@
             <artifactId>flexmark-all</artifactId>
             <version>0.64.8</version>
         </dependency>
-                <dependency>
+        <dependency>
             <groupId>com.fifesoft</groupId>
             <artifactId>rsyntaxtextarea</artifactId>
             <version>4.0.1</version>
@@ -171,6 +171,16 @@
                         </googleJavaFormat>
                     </java>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>auto-format</id>
+                        <!-- Bind to 'validate' so it runs at the very start of the build -->
+                        <phase>validate</phase> 
+                        <goals>
+                            <goal>apply</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

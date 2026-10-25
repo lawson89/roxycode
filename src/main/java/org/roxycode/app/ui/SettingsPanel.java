@@ -9,10 +9,14 @@ import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import java.awt.*;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Locale;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.Theme;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
@@ -234,6 +238,22 @@ public final class SettingsPanel extends JPanel {
             }
         }
         return FlatLaf.isLafDark();
+    }
+
+    public static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
+        if (textArea == null) {
+            return;
+        }
+        String themePath =
+                isDarkTheme(themeName)
+                        ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
+                        : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
+        try (InputStream in = SettingsPanel.class.getResourceAsStream(themePath)) {
+            Theme theme = Theme.load(in);
+            theme.apply(textArea);
+        } catch (IOException ioe) {
+            log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
+        }
     }
 
     public static void applyTheme(String themeName) {

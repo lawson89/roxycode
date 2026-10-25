@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import java.io.IOException;
-import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -11,10 +10,10 @@ import javax.swing.event.DocumentListener;
 import net.miginfocom.swing.MigLayout;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.fife.ui.rsyntaxtextarea.Theme;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.roxycode.app.ai.services.BuildContainerService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -142,7 +141,7 @@ public final class BuildConfigPanel extends JPanel {
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     updateTextAreaTheme();
                     updateBannerState();
@@ -151,7 +150,7 @@ public final class BuildConfigPanel extends JPanel {
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        SwingUtilities.invokeLater(
+        Edt.run(
                 () -> {
                     loadConfig();
                     updateBannerState();
@@ -248,7 +247,8 @@ public final class BuildConfigPanel extends JPanel {
 
     void updateBannerState() {
         boolean containerEnabled =
-                isContainerEnabledInToml(textArea != null ? textArea.getText() : "");
+                BuildContainerService.isContainerEnabledInToml(
+                        textArea != null ? textArea.getText() : "");
         containerToggleCheckBox.setSelected(containerEnabled);
         containerToggleCheckBox.setEnabled(dockerAvailable);
 
@@ -316,37 +316,10 @@ public final class BuildConfigPanel extends JPanel {
         return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
     }
 
-    static boolean isContainerEnabledInToml(String toml) {
-        if (toml == null || toml.isBlank()) {
-            return false;
-        }
-        java.util.List<String> lines = toml.lines().toList();
-        boolean inContainerSection = false;
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                inContainerSection = "[container]".equals(trimmed);
-                continue;
-            }
-            if (inContainerSection && isEnabledAssignment(trimmed)) {
-                int eqIdx = trimmed.indexOf('=');
-                if (eqIdx >= 0) {
-                    String val = trimmed.substring(eqIdx + 1).trim();
-                    int commentIdx = val.indexOf('#');
-                    if (commentIdx >= 0) {
-                        val = val.substring(0, commentIdx).trim();
-                    }
-                    return Boolean.parseBoolean(val);
-                }
-            }
-        }
-        return false;
-    }
-
     @SuppressWarnings("PMD.UnusedAssignment")
     void setContainerEnabledInToml(boolean enabled) {
         String current = textArea.getText();
-        String updated = updateContainerEnabledInToml(current, enabled);
+        String updated = BuildContainerService.updateContainerEnabledInToml(current, enabled);
         if (!updated.equals(current)) {
             updatingTextProgrammatically = true;
             try {
@@ -358,77 +331,6 @@ public final class BuildConfigPanel extends JPanel {
             }
         }
         updateBannerState();
-    }
-
-    static String updateContainerEnabledInToml(String toml, boolean enabled) {
-        String safeToml = toml != null ? toml : "";
-        java.util.List<String> lines = safeToml.lines().toList();
-        boolean foundContainerSection = false;
-        boolean updatedEnabledLine = false;
-        int containerSectionIndex = -1;
-        java.util.List<String> outputLines = new java.util.ArrayList<>();
-
-        boolean inContainerSection = false;
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i);
-            String trimmed = line.trim();
-            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                inContainerSection = "[container]".equals(trimmed);
-                if (inContainerSection) {
-                    foundContainerSection = true;
-                    containerSectionIndex = i;
-                }
-                outputLines.add(line);
-            } else if (inContainerSection && !updatedEnabledLine && isEnabledAssignment(trimmed)) {
-                int eqIdx = line.indexOf('=');
-                String prefix = line.substring(0, eqIdx + 1);
-                String rest = line.substring(eqIdx + 1);
-                int commentIdx = rest.indexOf('#');
-                String commentSuffix = commentIdx >= 0 ? " " + rest.substring(commentIdx) : "";
-                outputLines.add(prefix + " " + enabled + commentSuffix);
-                updatedEnabledLine = true;
-            } else {
-                outputLines.add(line);
-            }
-        }
-
-        if (!foundContainerSection) {
-            String section =
-                    """
-                    [container]
-                    enabled = %s
-                    image = 'eclipse-temurin:25-jdk'
-                    workdir = '/workspace'
-                    """
-                            .formatted(enabled);
-            if (safeToml.isEmpty()) {
-                return section;
-            }
-            return safeToml.stripTrailing()
-                    + """
-
-
-                    """
-                    + section;
-        }
-
-        if (!updatedEnabledLine && containerSectionIndex >= 0) {
-            outputLines.add(containerSectionIndex + 1, "enabled = " + enabled);
-        }
-
-        return String.join(
-                """
-
-                """,
-                outputLines);
-    }
-
-    private static boolean isEnabledAssignment(String trimmed) {
-        if (!trimmed.startsWith("enabled")) {
-            return false;
-        }
-        String afterKey = trimmed.substring("enabled".length()).trim();
-        return afterKey.startsWith("=");
     }
 
     @SuppressWarnings("PMD.UnusedAssignment")
@@ -462,20 +364,11 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     private void updateTextAreaTheme() {
-        String themeName = settingsService.getSettings().getTheme();
-        boolean isDark =
-                themeName.toLowerCase(Locale.ROOT).contains("dark")
-                        || "Darcula".equalsIgnoreCase(themeName);
-        String themePath =
-                isDark
-                        ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
-                        : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
-        try {
-            Theme theme = Theme.load(getClass().getResourceAsStream(themePath));
-            theme.apply(textArea);
-        } catch (IOException ioe) {
-            log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
-        }
+        String themeName =
+                settingsService != null && settingsService.getSettings() != null
+                        ? settingsService.getSettings().getTheme()
+                        : null;
+        SettingsPanel.applyRSyntaxTheme(textArea, themeName);
     }
 
     JPanel getBannerPanel() {

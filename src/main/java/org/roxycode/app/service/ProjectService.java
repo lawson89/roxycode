@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("PMD.NullAssignment")
 public class ProjectService {
     private static final String PROJECTS_SUBDIR = "projects";
+    private static final int MAX_PROJECT_NAME_LENGTH = 40;
 
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
@@ -127,14 +128,18 @@ public class ProjectService {
         return resolved;
     }
 
-    static String sanitizeProjectDirName(Path normalizedRoot) {
-        Path fileName = normalizedRoot.getFileName();
-        String rawName = fileName != null ? fileName.toString() : "project";
-        String sanitized =
-                rawName.toLowerCase(Locale.ROOT)
-                        .replaceAll("[^a-z0-9._-]+", "-")
-                        .replaceAll("(^-+|-+$)", "");
+    public static String sanitizeProjectName(Path projectRoot) {
+        Path fileName = projectRoot != null ? projectRoot.getFileName() : null;
+        String raw = fileName != null ? fileName.toString().toLowerCase(Locale.ROOT) : "";
+        String sanitized = raw.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
+        if (sanitized.length() > MAX_PROJECT_NAME_LENGTH) {
+            sanitized = sanitized.substring(0, MAX_PROJECT_NAME_LENGTH).replaceAll("-+$", "");
+        }
         return sanitized.isEmpty() ? "project" : sanitized;
+    }
+
+    static String sanitizeProjectDirName(Path normalizedRoot) {
+        return sanitizeProjectName(normalizedRoot);
     }
 
     static String computeProjectHash(Path normalizedRoot) {

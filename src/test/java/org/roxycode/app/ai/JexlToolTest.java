@@ -299,6 +299,7 @@ public class JexlToolTest {
         var parsed = AiConfig.SHARED_OBJECT_MAPPER.readTree(result);
         assertEquals("Internal Error during error serialization", parsed.get("error").asText());
     }
+
     @Test
     public void testExecuteJexlInterrupted() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
