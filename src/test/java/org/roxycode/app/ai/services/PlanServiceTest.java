@@ -151,8 +151,7 @@ class PlanServiceTest {
         // Step 0 should not have been mutated if validation failed on index 5
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
 
-        assertThrows(
-                IllegalArgumentException.class, () -> service.markStepsCompleted(List.of()));
+        assertThrows(IllegalArgumentException.class, () -> service.markStepsCompleted(List.of()));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> service.markStepsCompleted(Arrays.asList(0, null)));
@@ -169,7 +168,8 @@ class PlanServiceTest {
     @Test
     void testAddAndUpdateTechnicalStepsInPlanAndCodePhases() {
         service.submitPlan("T", "G", List.of(), List.of("Step 1"));
-        // Steps are: 0: Step 1, 1: Code compiles successfully, 2: Unit tests pass, 3: Automated code review passes
+        // Steps are: 0: Step 1, 1: Code compiles successfully, 2: Unit tests pass, 3: Automated
+        // code review passes
         String addRes = service.addTechnicalStep("Step 2");
         assertTrue(addRes.contains("Added technical step at index 1: 'Step 2'"));
         assertEquals(5, service.getCurrentPlan().technicalSteps().size());
@@ -199,10 +199,8 @@ class PlanServiceTest {
         assertEquals(6, service.getCurrentPlan().technicalSteps().size());
         assertEquals("Step 3", service.getCurrentPlan().technicalSteps().get(2).description());
 
-        assertThrows(
-                IllegalArgumentException.class, () -> service.addTechnicalStep("  "));
-        assertThrows(
-                IllegalArgumentException.class, () -> service.updateTechnicalStep(0, ""));
+        assertThrows(IllegalArgumentException.class, () -> service.addTechnicalStep("  "));
+        assertThrows(IllegalArgumentException.class, () -> service.updateTechnicalStep(0, ""));
         assertThrows(
                 IllegalArgumentException.class, () -> service.updateTechnicalStep(99, "Valid"));
     }
@@ -307,10 +305,7 @@ class PlanServiceTest {
                 assertThrows(
                         IllegalStateException.class,
                         () -> service.requestCompletion("All verified"));
-        assertTrue(
-                incompleteCompletionEx
-                        .getMessage()
-                        .contains("3: Automated code review passes"));
+        assertTrue(incompleteCompletionEx.getMessage().contains("3: Automated code review passes"));
 
         service.markStepCompleted(3);
         String completionRes = service.requestCompletion("All verified");
@@ -364,7 +359,8 @@ class PlanServiceTest {
         assertTrue(reviewResponse.contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
-        // Step 4 ("Automated code review passes") is still incomplete -> requestCompletion must fail
+        // Step 4 ("Automated code review passes") is still incomplete -> requestCompletion must
+        // fail
         IllegalStateException incompleteEx =
                 assertThrows(
                         IllegalStateException.class, () -> service.requestCompletion("Finalizing"));

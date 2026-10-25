@@ -18,6 +18,8 @@ import org.roxycode.app.service.ProjectService;
 @AgentDoc("Provides read-only access to files within the current project.")
 public class FileReadService {
 
+    private static final String DOC_FILE_PATH = "The file path relative to the project root";
+
     private final ProjectService projectService;
 
     public FileReadService(ProjectService projectService) {
@@ -38,9 +40,7 @@ public class FileReadService {
     @AgentDoc(
             value = "Reads the content of a file at the given path relative to the project root.",
             examples = "fileReadService.readFile('pom.xml')")
-    public String readFile(
-            @AgentDoc("The file path relative to the project root") String relativePath)
-            throws IOException {
+    public String readFile(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
         Path path = projectService.resolvePath(relativePath);
         if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException(
@@ -54,7 +54,7 @@ public class FileReadService {
                     "Reads a 1-based inclusive range of lines from a file, prefixed with line numbers.",
             examples = "fileReadService.readLines('src/main/java/Main.java', 1, 50)")
     public String readLines(
-            @AgentDoc("The file path relative to the project root") String relativePath,
+            @AgentDoc(DOC_FILE_PATH) String relativePath,
             @AgentDoc("The 1-based start line number (inclusive)") int startLine,
             @AgentDoc("The 1-based end line number (inclusive)") int endLine)
             throws IOException {
@@ -89,8 +89,7 @@ public class FileReadService {
             value =
                     "Reads the entire file with every line prefixed by its 1-based line number ('<line>: <content>').",
             examples = "fileReadService.readFileNumbered('src/main/java/Main.java')")
-    public String readFileNumbered(
-            @AgentDoc("The file path relative to the project root") String relativePath)
+    public String readFileNumbered(@AgentDoc(DOC_FILE_PATH) String relativePath)
             throws IOException {
         String content = readFile(relativePath);
         if (content.isEmpty()) {
@@ -103,9 +102,7 @@ public class FileReadService {
     @AgentDoc(
             value = "Returns the total number of lines in a file.",
             examples = "fileReadService.getLineCount('src/main/java/Main.java')")
-    public int getLineCount(
-            @AgentDoc("The file path relative to the project root") String relativePath)
-            throws IOException {
+    public int getLineCount(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
         String content = readFile(relativePath);
         if (content.isEmpty()) {
             return 0;

@@ -3,10 +3,12 @@ package org.roxycode.app;
 import java.awt.GraphicsEnvironment;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.SwingUtilities;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.ui.MainFrame;
 import org.roxycode.app.ui.SettingsPanel;
 import org.roxycode.app.ui.SplashScreenWindow;
@@ -74,6 +76,13 @@ public class RoxyCode {
             throw e;
         }
 
+        try {
+            SystemToolService systemToolService = context.getBean(SystemToolService.class);
+            initializeSystemTools(systemToolService, splashRef.get());
+        } catch (Exception e) {
+            log.warn("Failed to initialize system tools during startup: {}", e.getMessage());
+        }
+
         SwingUtilities.invokeLater(
                 () -> {
                     SplashScreenWindow splash = splashRef.get();
@@ -88,6 +97,20 @@ public class RoxyCode {
                         disposeSplash(splash);
                     }
                 });
+    }
+
+    public static void initializeSystemTools(
+            SystemToolService systemToolService, SplashScreenWindow splash) {
+        if (systemToolService == null || systemToolService.hasCachedTools()) {
+            return;
+        }
+        if (splash != null) {
+            Edt.run(() -> splash.setStatus("Checking system tools..."));
+        }
+        CompletableFuture<?> future = systemToolService.detectTools();
+        if (future != null) {
+            future.join();
+        }
     }
 
     public static ApplicationContextInitializer<ConfigurableApplicationContext>

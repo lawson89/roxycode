@@ -142,6 +142,7 @@ public final class SettingsPanel extends JPanel {
     }
 
     @EventListener
+    @SuppressWarnings("PMD.UnusedAssignment")
     public void onSettingsChanged(SettingsChangedEvent event) {
         if (event == null || event.settings() == null) {
             return;

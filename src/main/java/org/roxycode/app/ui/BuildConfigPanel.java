@@ -18,6 +18,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.Edt;
@@ -32,6 +33,8 @@ import org.springframework.stereotype.Component;
 public final class BuildConfigPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
+    static final String RECHECK_DOCKER_TEXT = "Re-check Docker";
+    static final String CHECKING_DOCKER_TEXT = "Checking...";
     static final String DOCKER_MISSING_WARNING_TEXT =
             "Docker was not detected in System Tools. Running builds in Testcontainers is unavailable — build and test commands will execute directly on your host machine and can potentially modify your system.";
     static final String CONTAINER_ACTIVE_TEXT =
@@ -77,7 +80,7 @@ public final class BuildConfigPanel extends JPanel {
         containerToggleCheckBox.addActionListener(
                 e -> setContainerEnabledInToml(containerToggleCheckBox.isSelected()));
 
-        recheckDockerButton = new JButton("Re-check Docker");
+        recheckDockerButton = new JButton(RECHECK_DOCKER_TEXT);
         recheckDockerButton.addActionListener(e -> refreshDockerStatus());
 
         bannerPanel.add(bannerIconLabel, "gapright 8");
@@ -134,7 +137,7 @@ public final class BuildConfigPanel extends JPanel {
 
         loadConfig();
         updateBannerState();
-        refreshDockerStatus();
+        loadInitialDockerStatus();
     }
 
     @EventListener
@@ -155,23 +158,66 @@ public final class BuildConfigPanel extends JPanel {
                 });
     }
 
+    @EventListener
+    public void onSystemToolsUpdated(SystemToolsUpdatedEvent event) {
+        if (event != null) {
+            Edt.run(() -> setDockerAvailable(event.dockerAvailable()));
+        }
+    }
+
+    private void loadInitialDockerStatus() {
+        if (systemToolService == null) {
+            setDockerAvailable(false);
+            return;
+        }
+        if (systemToolService.hasCachedTools()) {
+            setDockerAvailable(systemToolService.checkDockerAvailable());
+            return;
+        }
+        CompletableFuture<Boolean> future = systemToolService.isDockerAvailable();
+        if (future == null) {
+            setDockerAvailable(systemToolService.checkDockerAvailable());
+            return;
+        }
+        future.thenAccept(
+                available -> Edt.run(() -> setDockerAvailable(Boolean.TRUE.equals(available))));
+    }
+
     public CompletableFuture<Boolean> refreshDockerStatus() {
         if (systemToolService == null) {
             setDockerAvailable(false);
             return CompletableFuture.completedFuture(false);
         }
-        CompletableFuture<Boolean> future = systemToolService.isDockerAvailable();
+        Edt.run(
+                () -> {
+                    recheckDockerButton.setEnabled(false);
+                    recheckDockerButton.setText(CHECKING_DOCKER_TEXT);
+                });
+        CompletableFuture<Boolean> future = systemToolService.refreshDockerAvailable();
+        if (future == null) {
+            future = systemToolService.isDockerAvailable();
+        }
         if (future == null) {
             boolean available = systemToolService.checkDockerAvailable();
-            setDockerAvailable(available);
+            Edt.run(
+                    () -> {
+                        setDockerAvailable(available);
+                        recheckDockerButton.setText(RECHECK_DOCKER_TEXT);
+                        recheckDockerButton.setEnabled(true);
+                    });
             return CompletableFuture.completedFuture(available);
         }
-        return future.thenApply(
-                available -> {
-                    boolean isAvail = Boolean.TRUE.equals(available);
-                    Edt.run(() -> setDockerAvailable(isAvail));
-                    return isAvail;
-                });
+        return future.whenComplete(
+                        (available, ex) ->
+                                Edt.run(
+                                        () -> {
+                                            if (ex == null) {
+                                                setDockerAvailable(Boolean.TRUE.equals(available));
+                                            }
+                                            recheckDockerButton.setText(RECHECK_DOCKER_TEXT);
+                                            recheckDockerButton.setEnabled(true);
+                                        }))
+                .thenApply(Boolean.TRUE::equals);
     }
 
     void setDockerAvailable(boolean available) {

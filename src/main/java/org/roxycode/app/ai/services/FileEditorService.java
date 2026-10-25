@@ -28,6 +28,8 @@ public class FileEditorService {
 
     private static final Logger log = LoggerFactory.getLogger(FileEditorService.class);
     private static final int MAX_DIAGNOSTIC_LINES = 3;
+    private static final int SINGLE_MATCH_COUNT = 1;
+    private static final char LF = (char) 10;
     private static final String WHITESPACE_REGEX = "\\s+";
     private static final String LINE_BREAK_REGEX = "\\R";
 
@@ -113,12 +115,12 @@ public class FileEditorService {
 
         // Pass 1: Exact match with normalized line endings
         List<Integer> exactMatchOffsets = findExactMatches(content, normalizedTarget);
-        if (exactMatchOffsets.size() == 1) {
+        if (exactMatchOffsets.size() == SINGLE_MATCH_COUNT) {
             int start = exactMatchOffsets.get(0);
             int end = start + normalizedTarget.length();
             return applyReplacement(path, relativePath, content, start, end, normalizedReplacement);
         }
-        if (exactMatchOffsets.size() > 1) {
+        if (exactMatchOffsets.size() > SINGLE_MATCH_COUNT) {
             List<Integer> matchLines = offsetsToLineNumbers(content, exactMatchOffsets);
             return new EditorResult(
                     false,
@@ -156,7 +158,7 @@ public class FileEditorService {
             return new EditorResult(
                     false, "", buildTargetNotFoundHint(relativePath, content, targetBlock));
         }
-        if (regexMatches.size() > 1) {
+        if (regexMatches.size() > SINGLE_MATCH_COUNT) {
             List<Integer> offsets = new ArrayList<>(regexMatches.size());
             for (int[] match : regexMatches) {
                 offsets.add(match[0]);
@@ -471,10 +473,10 @@ public class FileEditorService {
         if (target.isEmpty()) {
             return offsets;
         }
-        int index = 0;
-        while ((index = content.indexOf(target, index)) != -1) {
+        int index = content.indexOf(target, 0);
+        while (index != -1) {
             offsets.add(index);
-            index += target.length();
+            index = content.indexOf(target, index + target.length());
         }
         return offsets;
     }
@@ -491,7 +493,7 @@ public class FileEditorService {
         int line = 1;
         int limit = Math.min(offset, content.length());
         for (int i = 0; i < limit; i++) {
-            if (content.charAt(i) == '\n') {
+            if (content.charAt(i) == LF) {
                 line++;
             }
         }

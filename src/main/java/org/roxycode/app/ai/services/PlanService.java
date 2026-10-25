@@ -223,9 +223,9 @@ public class PlanService {
             return false;
         }
         String trimmed = description.trim();
-        return trimmed.equalsIgnoreCase(STEP_COMPILE)
-                || trimmed.equalsIgnoreCase(STEP_UNIT_TESTS)
-                || trimmed.equalsIgnoreCase(STEP_CODE_REVIEW)
+        return STEP_COMPILE.equalsIgnoreCase(trimmed)
+                || STEP_UNIT_TESTS.equalsIgnoreCase(trimmed)
+                || STEP_CODE_REVIEW.equalsIgnoreCase(trimmed)
                 || isCodeReviewStep(trimmed);
     }
 
@@ -239,8 +239,7 @@ public class PlanService {
         requirePhase("addTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE);
         ensureActivePlan();
         if (description == null || description.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Error: Step description cannot be null or blank.");
+            throw new IllegalArgumentException("Error: Step description cannot be null or blank.");
         }
         String trimmed = description.trim();
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
@@ -267,8 +266,7 @@ public class PlanService {
         requirePhase("updateTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE);
         ensureActivePlan();
         if (description == null || description.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Error: Step description cannot be null or blank.");
+            throw new IllegalArgumentException("Error: Step description cannot be null or blank.");
         }
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
         validateStepIndex(index, steps.size());
@@ -673,6 +671,7 @@ public class PlanService {
         }
         return "PLAN SUMMARY:\n\n" + plan.toMarkdown(false).trim();
     }
+
     private void requirePhase(String methodName, WorkflowPhase... allowedPhases) {
         WorkflowPhase current = getCurrentPhase();
         for (WorkflowPhase allowed : allowedPhases) {
@@ -706,8 +705,7 @@ public class PlanService {
                 "addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         ensureActivePlan();
         if (entry == null || entry.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Error: Handoff log entry cannot be null or blank.");
+            throw new IllegalArgumentException("Error: Handoff log entry cannot be null or blank.");
         }
         addHandoffLogEntry(OffsetDateTime.now().toString(), "System", entry.trim());
         return "Handoff log entry added.";

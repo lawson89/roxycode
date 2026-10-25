@@ -159,7 +159,7 @@ class ReturnDirectToolCallingManagerTest {
                                                                         .ToolResponse(
                                                                         "call-1",
                                                                         "requestDevelopment",
-                                                                        "Error: Plan missing")))
+                                                                        "{\"error\":\"Plan missing\"}")))
                                                 .build()))
                         .returnDirect(true)
                         .build();
@@ -226,9 +226,7 @@ class ReturnDirectToolCallingManagerTest {
                                                                         .ToolResponse(
                                                                         "",
                                                                         "requestReview",
-                                                                        """
-                                                                        "Transitioned to REVIEW"\
-                                                                        """)))
+                                                                        "\"Transitioned to REVIEW\"")))
                                                 .build()))
                         .returnDirect(true)
                         .build();

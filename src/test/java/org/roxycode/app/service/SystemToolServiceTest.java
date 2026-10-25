@@ -2,13 +2,25 @@ package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.AiConfig;
+import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService.DockerVersionInfo;
 
 class SystemToolServiceTest {
+
+    @TempDir Path tempDir;
 
     @Test
     void testDetectToolsIncludesDockerAndJava() throws Exception {
@@ -97,5 +109,113 @@ class SystemToolServiceTest {
         assertEquals("Error", dockerTool.status());
         assertTrue(dockerTool.version().contains("Could not find a valid Docker environment"));
         assertFalse(service.checkDockerAvailable());
+    }
+
+    @Test
+    void testTomlPersistenceAndInMemoryCacheHitsVsForcedRefresh() throws Exception {
+        TomlMapper mapper = AiConfig.SHARED_TOML_MAPPER;
+        SettingsService settingsService = new SettingsService(mapper);
+        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
+
+        List<SystemToolsUpdatedEvent> publishedEvents = new ArrayList<>();
+        AtomicInteger probeCount = new AtomicInteger(0);
+
+        SystemToolService service1 =
+                new SystemToolService(
+                        settingsService,
+                        mapper,
+                        event -> {
+                            if (event instanceof SystemToolsUpdatedEvent e) {
+                                publishedEvents.add(e);
+                            }
+                        });
+        service1.setToolProber(
+                () -> {
+                    int call = probeCount.incrementAndGet();
+                    return List.of(
+                            new SystemTool("Git", "2.45." + call, "Detected", "Git VCS"),
+                            new SystemTool(
+                                    "Docker",
+                                    call == 1 ? "Not found" : "Docker 28.0.0",
+                                    call == 1 ? "Missing" : "Detected",
+                                    "Testcontainers"));
+                });
+
+        assertFalse(service1.hasCachedTools());
+        assertTrue(service1.getCachedTools().isEmpty());
+
+        // First detectTools() probes and persists to system-tools.toml
+        List<SystemTool> firstResult = service1.detectTools().get(5, TimeUnit.SECONDS);
+        assertEquals(1, probeCount.get());
+        assertEquals(2, firstResult.size());
+        assertTrue(service1.hasCachedTools());
+        assertFalse(service1.checkDockerAvailable());
+        assertFalse(service1.isDockerAvailable().get(5, TimeUnit.SECONDS));
+        assertEquals(1, probeCount.get(), "Cached calls must not re-probe");
+        assertEquals(1, publishedEvents.size());
+        assertFalse(publishedEvents.get(0).dockerAvailable());
+
+        Path tomlFile = tempDir.resolve(SystemToolService.SYSTEM_TOOLS_FILE);
+        assertTrue(Files.exists(tomlFile), "system-tools.toml should be written to Roxy home dir");
+
+        // Second service instance pointing to the same directory loads from disk without probing
+        AtomicInteger secondProbeCount = new AtomicInteger(0);
+        SystemToolService service2 = new SystemToolService(settingsService, mapper, event -> {});
+        service2.setToolProber(
+                () -> {
+                    secondProbeCount.incrementAndGet();
+                    return List.of();
+                });
+
+        assertTrue(service2.hasCachedTools(), "Should detect cached tools on disk");
+        List<SystemTool> diskLoaded = service2.getCachedTools();
+        assertEquals(2, diskLoaded.size());
+        assertEquals("2.45.1", diskLoaded.get(0).version());
+        assertEquals(0, secondProbeCount.get(), "Loading from disk must not invoke prober");
+        assertEquals(diskLoaded, service2.detectTools().get(5, TimeUnit.SECONDS));
+        assertEquals(0, secondProbeCount.get());
+
+        // Forced refreshTools() re-probes, updates cache and disk, and publishes event
+        List<SystemTool> refreshed = service1.refreshTools().get(5, TimeUnit.SECONDS);
+        assertEquals(2, probeCount.get());
+        assertEquals("2.45.2", refreshed.get(0).version());
+        assertTrue(service1.checkDockerAvailable());
+        assertTrue(service1.isDockerAvailable().get(5, TimeUnit.SECONDS));
+        assertEquals(2, publishedEvents.size());
+        assertTrue(publishedEvents.get(1).dockerAvailable());
+    }
+
+    @Test
+    void testConcurrentRefreshDeduplication() throws Exception {
+        SystemToolService service = new SystemToolService();
+        CountDownLatch probeStarted = new CountDownLatch(1);
+        CountDownLatch releaseProbe = new CountDownLatch(1);
+        AtomicInteger probeCount = new AtomicInteger(0);
+
+        service.setToolProber(
+                () -> {
+                    probeCount.incrementAndGet();
+                    probeStarted.countDown();
+                    try {
+                        releaseProbe.await(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return List.of(new SystemTool("Docker", "28.0", "Detected", "Desc"));
+                });
+
+        CompletableFuture<List<SystemTool>> f1 = service.refreshTools();
+        assertTrue(probeStarted.await(5, TimeUnit.SECONDS));
+
+        CompletableFuture<List<SystemTool>> f2 = service.refreshTools();
+        CompletableFuture<Boolean> dockerFuture = service.refreshDockerAvailable();
+
+        assertSame(f1, f2, "Concurrent refreshTools() calls should share the in-flight future");
+
+        releaseProbe.countDown();
+        assertEquals(1, f1.get(5, TimeUnit.SECONDS).size());
+        assertEquals(1, f2.get(5, TimeUnit.SECONDS).size());
+        assertTrue(dockerFuture.get(5, TimeUnit.SECONDS));
+        assertEquals(1, probeCount.get(), "Prober should only execute once for deduplicated calls");
     }
 }

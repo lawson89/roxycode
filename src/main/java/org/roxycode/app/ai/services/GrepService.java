@@ -22,6 +22,11 @@ public class GrepService {
     private static final Logger log = LoggerFactory.getLogger(GrepService.class);
     static final int MAX_OUTPUT_LINES = 200;
     static final int MAX_CONTEXT_LINES = 20;
+    private static final String DOC_REGEX_PATTERN = "The regex pattern to search for";
+    private static final String DOC_RELATIVE_PATH =
+            "The directory or file path relative to the project root";
+    private static final String DOC_FILE_PATTERN =
+            "Optional glob pattern for filtering files (e.g., '*.java')";
 
     private final ProjectService projectService;
 
@@ -33,7 +38,7 @@ public class GrepService {
     @AgentDoc(
             value = "Searches for a regex pattern in the project files using RipGrep.",
             examples = "grepService.grep('TODO')")
-    public EditorResult grep(@AgentDoc("The regex pattern to search for") String pattern) {
+    public EditorResult grep(@AgentDoc(DOC_REGEX_PATTERN) String pattern) {
         return grep(pattern, ".", null);
     }
 
@@ -42,9 +47,8 @@ public class GrepService {
             value = "Searches for a regex pattern in the project files using RipGrep.",
             examples = "grepService.grep('class GrepService', 'src')")
     public EditorResult grep(
-            @AgentDoc("The regex pattern to search for") String pattern,
-            @AgentDoc("The directory or file path relative to the project root")
-                    String relativePath) {
+            @AgentDoc(DOC_REGEX_PATTERN) String pattern,
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath) {
         return grep(pattern, relativePath, null);
     }
 
@@ -60,11 +64,9 @@ public class GrepService {
             value = "Searches for a regex pattern in the project files using RipGrep.",
             examples = "grepService.grep('import', 'src', '*.java')")
     public EditorResult grep(
-            @AgentDoc("The regex pattern to search for") String pattern,
-            @AgentDoc("The directory or file path relative to the project root")
-                    String relativePath,
-            @AgentDoc("Optional glob pattern for filtering files (e.g., '*.java')")
-                    String filePattern) {
+            @AgentDoc(DOC_REGEX_PATTERN) String pattern,
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath,
+            @AgentDoc(DOC_FILE_PATTERN) String filePattern) {
         return executeRipGrep(pattern, relativePath, filePattern, 0, false, false);
     }
 
@@ -74,7 +76,7 @@ public class GrepService {
                     "Searches for a regex pattern in the project files with surrounding context lines.",
             examples = "grepService.grepWithContext('@AgentDoc', 3)")
     public EditorResult grepWithContext(
-            @AgentDoc("The regex pattern to search for") String pattern,
+            @AgentDoc(DOC_REGEX_PATTERN) String pattern,
             @AgentDoc("Number of context lines before and after each match (0-20)")
                     int contextLines) {
         return grepWithContext(pattern, ".", null, contextLines);
@@ -86,9 +88,8 @@ public class GrepService {
                     "Searches for a regex pattern in the specified path with surrounding context lines.",
             examples = "grepService.grepWithContext('def process_', 'src', 3)")
     public EditorResult grepWithContext(
-            @AgentDoc("The regex pattern to search for") String pattern,
-            @AgentDoc("The directory or file path relative to the project root")
-                    String relativePath,
+            @AgentDoc(DOC_REGEX_PATTERN) String pattern,
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath,
             @AgentDoc("Number of context lines before and after each match (0-20)")
                     int contextLines) {
         return grepWithContext(pattern, relativePath, null, contextLines);
@@ -100,11 +101,9 @@ public class GrepService {
                     "Searches for a regex pattern in the specified path and file glob with surrounding context lines.",
             examples = "grepService.grepWithContext('public void', 'src', '*.java', 3)")
     public EditorResult grepWithContext(
-            @AgentDoc("The regex pattern to search for") String pattern,
-            @AgentDoc("The directory or file path relative to the project root")
-                    String relativePath,
-            @AgentDoc("Optional glob pattern for filtering files (e.g., '*.java')")
-                    String filePattern,
+            @AgentDoc(DOC_REGEX_PATTERN) String pattern,
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath,
+            @AgentDoc(DOC_FILE_PATTERN) String filePattern,
             @AgentDoc("Number of context lines before and after each match (0-20)")
                     int contextLines) {
         return executeRipGrep(pattern, relativePath, filePattern, contextLines, false, false);
@@ -126,8 +125,7 @@ public class GrepService {
             examples = "grepService.grepLiteral('foo(bar)', 'src')")
     public EditorResult grepLiteral(
             @AgentDoc("The literal text to search for") String text,
-            @AgentDoc("The directory or file path relative to the project root")
-                    String relativePath) {
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath) {
         return grepLiteral(text, relativePath, null);
     }
 
@@ -138,10 +136,8 @@ public class GrepService {
             examples = "grepService.grepLiteral('List<String>', 'src', '*.java')")
     public EditorResult grepLiteral(
             @AgentDoc("The literal text to search for") String text,
-            @AgentDoc("The directory or file path relative to the project root")
-                    String relativePath,
-            @AgentDoc("Optional glob pattern for filtering files (e.g., '*.java')")
-                    String filePattern) {
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath,
+            @AgentDoc(DOC_FILE_PATTERN) String filePattern) {
         return executeRipGrep(text, relativePath, filePattern, 0, true, false);
     }
 
@@ -160,8 +156,7 @@ public class GrepService {
             examples = "grepService.grepIgnoreCase('exception', 'src')")
     public EditorResult grepIgnoreCase(
             @AgentDoc("The regex pattern to search for case-insensitively") String pattern,
-            @AgentDoc("The directory or file path relative to the project root")
-                    String relativePath) {
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath) {
         return grepIgnoreCase(pattern, relativePath, null);
     }
 
@@ -172,10 +167,8 @@ public class GrepService {
             examples = "grepService.grepIgnoreCase('todo', 'src', '*.java')")
     public EditorResult grepIgnoreCase(
             @AgentDoc("The regex pattern to search for case-insensitively") String pattern,
-            @AgentDoc("The directory or file path relative to the project root")
-                    String relativePath,
-            @AgentDoc("Optional glob pattern for filtering files (e.g., '*.java')")
-                    String filePattern) {
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath,
+            @AgentDoc(DOC_FILE_PATTERN) String filePattern) {
         return executeRipGrep(pattern, relativePath, filePattern, 0, false, true);
     }
 

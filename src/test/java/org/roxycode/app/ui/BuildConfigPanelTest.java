@@ -3,12 +3,15 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 
@@ -36,6 +39,23 @@ class BuildConfigPanelTest {
                         image = 'eclipse-temurin:25-jdk'
                         workdir = '/workspace'
                         """);
+    }
+
+    @Test
+    void testCachedDockerAvailabilityOnInitializationWithoutReprobe() throws Exception {
+        when(systemToolService.hasCachedTools()).thenReturn(true);
+        when(systemToolService.checkDockerAvailable()).thenReturn(true);
+
+        BuildConfigPanel panel =
+                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertTrue(panel.isDockerAvailableState());
+        assertEquals(
+                BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT,
+                panel.getBannerMessageLabel().getText());
+        verify(systemToolService, never()).refreshDockerAvailable();
+        verify(systemToolService, never()).refreshTools();
     }
 
     @Test
@@ -101,8 +121,8 @@ class BuildConfigPanelTest {
                         """
                         [build]
                         compile = 'mvn'""");
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(false));
+        when(systemToolService.hasCachedTools()).thenReturn(true);
+        when(systemToolService.checkDockerAvailable()).thenReturn(false);
 
         BuildConfigPanel panel =
                 new BuildConfigPanel(buildToolService, settingsService, systemToolService);
@@ -110,18 +130,49 @@ class BuildConfigPanelTest {
 
         assertFalse(panel.getContainerToggleCheckBox().isEnabled());
 
-        // Simulate user starting Docker Desktop and clicking "Re-check Docker"
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(true));
-        panel.getRecheckDockerButton().doClick();
+        // Simulate user starting Docker Desktop and clicking "Re-check Docker" with async future
+        CompletableFuture<Boolean> pendingRecheck = new CompletableFuture<>();
+        when(systemToolService.refreshDockerAvailable()).thenReturn(pendingRecheck);
+
+        SwingUtilities.invokeAndWait(() -> panel.getRecheckDockerButton().doClick());
+
+        assertFalse(
+                panel.getRecheckDockerButton().isEnabled(),
+                "Re-check Docker button should be disabled while check is in flight");
+        assertEquals(
+                BuildConfigPanel.CHECKING_DOCKER_TEXT, panel.getRecheckDockerButton().getText());
+
+        pendingRecheck.complete(true);
         SwingUtilities.invokeAndWait(() -> {});
 
+        assertTrue(panel.getRecheckDockerButton().isEnabled());
+        assertEquals(
+                BuildConfigPanel.RECHECK_DOCKER_TEXT, panel.getRecheckDockerButton().getText());
         assertTrue(panel.getContainerToggleCheckBox().isEnabled());
 
         // Clicking toggle appends [container] section when missing
         panel.getContainerToggleCheckBox().doClick();
         assertTrue(panel.getTextArea().getText().contains("[container]"));
         assertTrue(BuildConfigPanel.isContainerEnabledInToml(panel.getTextArea().getText()));
+    }
+
+    @Test
+    void testOnSystemToolsUpdatedEventSynchronizesDockerAvailability() throws Exception {
+        when(systemToolService.hasCachedTools()).thenReturn(true);
+        when(systemToolService.checkDockerAvailable()).thenReturn(false);
+
+        BuildConfigPanel panel =
+                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
+        SwingUtilities.invokeAndWait(() -> {});
+        assertFalse(panel.isDockerAvailableState());
+
+        panel.onSystemToolsUpdated(
+                new SystemToolsUpdatedEvent(
+                        List.of(new SystemTool("Docker", "28.0", "Detected", "Desc")), true));
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertTrue(panel.isDockerAvailableState());
+        assertTrue(panel.getContainerToggleCheckBox().isEnabled());
     }
 
     @Test

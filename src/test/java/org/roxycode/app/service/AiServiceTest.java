@@ -565,7 +565,7 @@ class AiServiceTest {
                                                                                 .ToolResponse(
                                                                                 "call-1",
                                                                                 "requestDevelopment",
-                                                                                "Error: Cannot advance to CODE. Implementation Plan is missing.")))
+                                                                                "{\"error\":\"Cannot advance to CODE. Implementation Plan is missing.\"}")))
                                                         .build()))
                                 .returnDirect(true)
                                 .build())

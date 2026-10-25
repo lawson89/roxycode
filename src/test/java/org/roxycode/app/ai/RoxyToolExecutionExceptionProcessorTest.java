@@ -23,7 +23,7 @@ class RoxyToolExecutionExceptionProcessorTest {
                 new ToolExecutionException(
                         toolDef, new IllegalArgumentException("Invalid parameter"));
 
-        assertEquals("Error: Invalid parameter", processor.process(ex));
+        assertEquals("{\"error\":\"Invalid parameter\"}", processor.process(ex));
     }
 
     @Test
@@ -33,7 +33,7 @@ class RoxyToolExecutionExceptionProcessorTest {
                 new ToolExecutionException(
                         toolDef, new IllegalStateException("Error: Plan is missing"));
 
-        assertEquals("Error: Plan is missing", processor.process(ex));
+        assertEquals("{\"error\":\"Error: Plan is missing\"}", processor.process(ex));
     }
 
     @Test
@@ -47,15 +47,20 @@ class RoxyToolExecutionExceptionProcessorTest {
 
     @Test
     void testIsErrorResponseAndStripErrorPrefix() {
-        assertTrue(RoxyToolExecutionExceptionProcessor.isErrorResponse("Error: Plan is missing"));
-        assertTrue(RoxyToolExecutionExceptionProcessor.isErrorResponse("  Error: Invalid step"));
+        assertTrue(
+                RoxyToolExecutionExceptionProcessor.isErrorResponse(
+                        "{\"error\":\"Plan is missing\"}"));
+        assertTrue(
+                RoxyToolExecutionExceptionProcessor.isErrorResponse(
+                        "  {\"error\":\"Invalid step\"}"));
         assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse("Method 'submitPlan'"));
         assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse("Success"));
         assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse(null));
 
         assertEquals(
                 "Plan is missing",
-                RoxyToolExecutionExceptionProcessor.stripErrorPrefix("Error: Plan is missing"));
+                RoxyToolExecutionExceptionProcessor.stripErrorPrefix(
+                        "{\"error\":\"Plan is missing\"}"));
         assertEquals("Unknown error", RoxyToolExecutionExceptionProcessor.stripErrorPrefix(null));
     }
 }

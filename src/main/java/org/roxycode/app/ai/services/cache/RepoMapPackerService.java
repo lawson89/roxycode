@@ -66,6 +66,7 @@ public class RepoMapPackerService {
         log.debug("Repo map invalidated due to file change: {}", event.path());
     }
 
+    @SuppressWarnings("PMD.NullAssignment")
     private synchronized void invalidate() {
         generation.incrementAndGet();
         cachedMap = null;

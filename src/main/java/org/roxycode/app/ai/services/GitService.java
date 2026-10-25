@@ -26,6 +26,9 @@ import org.slf4j.LoggerFactory;
 public class GitService {
     private static final Logger log = LoggerFactory.getLogger(GitService.class);
     private static final String NO_ACTIVE_PROJECT = "No active project";
+    private static final String NOT_A_GIT_REPOSITORY = "Not a git repository";
+    private static final String GIT_DIFF = "diff";
+    private static final int MIN_PORCELAIN_LINE_LENGTH = 4;
     private static final int BINARY_SNIFF_BYTES = 8000;
     private static final char NL = (char) 10;
     private static final char DQUOTE = (char) 34;
@@ -126,7 +129,7 @@ public class GitService {
         }
         Set<String> files = new LinkedHashSet<>();
         for (String line : statusOutput.lines().toList()) {
-            if (line.length() < 4) {
+            if (line.length() < MIN_PORCELAIN_LINE_LENGTH) {
                 continue;
             }
             String rawPath = line.substring(3).trim();
@@ -201,26 +204,26 @@ public class GitService {
         }
         String headOut =
                 normalizedPath == null
-                        ? executeGitCommand("diff", "HEAD")
-                        : executeGitCommand("diff", "HEAD", "--", normalizedPath);
+                        ? executeGitCommand(GIT_DIFF, "HEAD")
+                        : executeGitCommand(GIT_DIFF, "HEAD", "--", normalizedPath);
         if (!isGitError(headOut)) {
             return headOut;
         }
-        if (headOut.contains("Not a git repository") || headOut.contains("Command timed out")) {
+        if (headOut.contains(NOT_A_GIT_REPOSITORY) || headOut.contains("Command timed out")) {
             return headOut;
         }
         // Fallback for unborn HEAD (initial commit not created yet)
         String staged =
                 normalizedPath == null
-                        ? executeGitCommand("diff", "--cached")
-                        : executeGitCommand("diff", "--cached", "--", normalizedPath);
+                        ? executeGitCommand(GIT_DIFF, "--cached")
+                        : executeGitCommand(GIT_DIFF, "--cached", "--", normalizedPath);
         if (isGitError(staged)) {
             return staged;
         }
         String unstaged =
                 normalizedPath == null
-                        ? executeGitCommand("diff")
-                        : executeGitCommand("diff", "--", normalizedPath);
+                        ? executeGitCommand(GIT_DIFF)
+                        : executeGitCommand(GIT_DIFF, "--", normalizedPath);
         if (isGitError(unstaged)) {
             return unstaged;
         }
@@ -313,8 +316,8 @@ public class GitService {
 
     private static boolean isGitError(String output) {
         return output != null
-                && (output.equals(NO_ACTIVE_PROJECT)
-                        || output.equals("Not a git repository")
+                && (NO_ACTIVE_PROJECT.equals(output)
+                        || NOT_A_GIT_REPOSITORY.equals(output)
                         || output.startsWith("Error"));
     }
 
