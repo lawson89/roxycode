@@ -40,10 +40,11 @@ class MentorModeIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+                java.awt.GraphicsEnvironment.isHeadless(),
+                "Skipping JFrame test in headless environment");
         settingsService = mock(SettingsService.class);
         when(settingsService.getSettings()).thenReturn(new AppSettings());
-
-        projectService = mock(ProjectService.class);
         when(projectService.getProjectName()).thenReturn("TestProject");
 
         planService = mock(PlanService.class);

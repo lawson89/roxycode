@@ -32,5 +32,20 @@ class StatusPanelTest {
                         "Status bar should not contain Messages count");
             }
         }
+
+        assertNotNull(status.getStatsTimer());
+        assertTrue(status.getStatsTimer().isRunning(), "Timer should start running initially");
+
+        status.removeNotify();
+        assertFalse(
+                status.getStatsTimer().isRunning(),
+                "Timer must be stopped when StatusPanel is removed from hierarchy");
+
+        status.addNotify();
+        assertTrue(
+                status.getStatsTimer().isRunning(),
+                "Timer should restart when StatusPanel is re-added to hierarchy");
+
+        status.removeNotify();
     }
 }

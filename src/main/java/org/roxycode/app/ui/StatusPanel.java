@@ -14,6 +14,7 @@ public final class StatusPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private final transient EnvironmentService envService;
     private final JLabel memLabel;
+    private final Timer statsTimer;
 
     public StatusPanel(EnvironmentService envService) {
         this.envService = envService;
@@ -43,8 +44,28 @@ public final class StatusPanel extends JPanel {
         add(memLabel);
 
         // Update memory usage every 5 seconds
-        Timer timer = new Timer(5000, e -> updateStats());
-        timer.start();
+        statsTimer = new Timer(5000, e -> updateStats());
+        statsTimer.start();
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (statsTimer != null && !statsTimer.isRunning()) {
+            statsTimer.start();
+        }
+    }
+
+    @Override
+    public void removeNotify() {
+        if (statsTimer != null) {
+            statsTimer.stop();
+        }
+        super.removeNotify();
+    }
+
+    Timer getStatsTimer() {
+        return statsTimer;
     }
 
     @Override
@@ -52,7 +73,6 @@ public final class StatusPanel extends JPanel {
         super.updateUI();
         updateBorder();
     }
-
     private void updateBorder() {
         setBorder(
                 BorderFactory.createMatteBorder(

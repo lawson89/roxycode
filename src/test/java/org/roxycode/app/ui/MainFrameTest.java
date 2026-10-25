@@ -28,9 +28,11 @@ import org.springframework.context.ApplicationEventPublisher;
 class MainFrameTest {
     @Test
     void testProjectChangedEventClearsQaAndTaskConversationsAndUpdatesTitle() {
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+                java.awt.GraphicsEnvironment.isHeadless(),
+                "Skipping JFrame test in headless environment");
         SettingsService settingsService = mock(SettingsService.class);
         when(settingsService.getSettings()).thenReturn(new AppSettings());
-
         ProjectService projectService = mock(ProjectService.class);
         when(projectService.getProjectName()).thenReturn("OldProject");
 

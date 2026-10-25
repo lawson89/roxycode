@@ -273,6 +273,32 @@ public class JexlToolTest {
     }
 
     @Test
+    public void testToJsonErrorFallbackProducesValidJsonRecognizedAsErrorResponse()
+            throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper failingMapper =
+                new com.fasterxml.jackson.databind.ObjectMapper() {
+                    @Override
+                    public String writeValueAsString(Object value)
+                            throws com.fasterxml.jackson.core.JsonProcessingException {
+                        throw new com.fasterxml.jackson.core.JsonGenerationException(
+                                "Simulated failure",
+                                (com.fasterxml.jackson.core.JsonGenerator) null);
+                    }
+                };
+        JexlTool tool = new JexlTool(new JexlServiceRegistry(), null, failingMapper);
+        String result = tool.executeJexl("if (");
+        assertEquals(
+                """
+                {"error":"Internal Error during error serialization"}"""
+                        .strip(),
+                result);
+        assertTrue(
+                RoxyToolExecutionExceptionProcessor.isErrorResponse(result),
+                "Fallback JSON error must be recognized by RoxyToolExecutionExceptionProcessor.isErrorResponse");
+        var parsed = AiConfig.SHARED_OBJECT_MAPPER.readTree(result);
+        assertEquals("Internal Error during error serialization", parsed.get("error").asText());
+    }
+    @Test
     public void testExecuteJexlInterrupted() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlTool tool = new JexlTool(registry);

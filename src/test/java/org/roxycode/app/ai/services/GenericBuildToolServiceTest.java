@@ -123,6 +123,11 @@ class GenericBuildToolServiceTest {
         assertEquals("Compilation failed", compileResult.getErrors().get(0));
 
         BuildResult testResult = buildToolService.runTests();
+        assertFalse(
+                testResult.isSuccess(),
+                "BuildResult must not be marked successful when failedTests is non-empty even if exitCode is 0");
+        assertEquals(0, testResult.getExitCode());
+        assertTrue(testResult.getErrors().isEmpty());
         assertEquals(1, testResult.getFailedTests().size());
         assertEquals("MyTest#broken", testResult.getFailedTests().get(0));
     }

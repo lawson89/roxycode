@@ -174,7 +174,9 @@ public class JexlTool {
             return mapper.writeValueAsString(
                     Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
         } catch (Exception ex) {
-            return "{error: Internal Error during error serialization}";
+            return """
+                    {"error":"Internal Error during error serialization"}"""
+                    .strip();
         }
     }
 }

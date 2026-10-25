@@ -37,6 +37,10 @@ class MarkdownViewerTest {
                 | Header 1 | Header 2 |
                 |---|---|
                 | Cell 1 | Cell 2 |
+
+                ~~~html
+                <table><tr><td>Code block table</td></tr></table>
+                ~~~
                 """);
         String text = viewer.getText();
         assertNotNull(text);
@@ -70,5 +74,6 @@ class MarkdownViewerTest {
                         class="md-td"
                         """
                                 .strip()));
+        assertTrue(text.contains("Code block table"));
     }
 }

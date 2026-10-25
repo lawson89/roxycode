@@ -378,7 +378,7 @@ public class GenericBuildToolService {
         errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
         List<String> failedTests =
                 new ArrayList<>(extractRegexMatches(fullOutput, testFailureRegex, "test failures"));
-        boolean success = exitCode == 0 && errors.isEmpty();
+        boolean success = exitCode == 0 && errors.isEmpty() && failedTests.isEmpty();
         return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
     }
 

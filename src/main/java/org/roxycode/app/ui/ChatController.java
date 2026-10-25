@@ -46,7 +46,8 @@ public final class ChatController implements AutoCloseable {
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
     private final PlanService planService;
-    private final Executor turnExecutor;
+    private final boolean ownsTurnExecutor;
+    private volatile Executor turnExecutor;
     private final AtomicLong turnSequence = new AtomicLong();
 
     private volatile long activeTurnId = 0;
@@ -69,7 +70,7 @@ public final class ChatController implements AutoCloseable {
                 eventPublisher,
                 chatMemory,
                 settingsService,
-                Executors.newVirtualThreadPerTaskExecutor());
+                null);
     }
 
     public ChatController(
@@ -88,12 +89,31 @@ public final class ChatController implements AutoCloseable {
         this.eventPublisher = eventPublisher;
         this.chatMemory = chatMemory;
         this.settingsService = settingsService;
+        this.ownsTurnExecutor = turnExecutor == null;
         this.turnExecutor =
                 turnExecutor != null ? turnExecutor : Executors.newVirtualThreadPerTaskExecutor();
     }
 
     Executor getTurnExecutor() {
         return turnExecutor;
+    }
+
+    boolean ownsTurnExecutor() {
+        return ownsTurnExecutor;
+    }
+
+    synchronized void ensureOwnedExecutorActive() {
+        if (ownsTurnExecutor
+                && turnExecutor instanceof ExecutorService executorService
+                && executorService.isShutdown()) {
+            turnExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        }
+    }
+
+    synchronized void closeOwnedExecutor() {
+        if (ownsTurnExecutor) {
+            close();
+        }
     }
 
     long getActiveTurnId() {
@@ -106,7 +126,6 @@ public final class ChatController implements AutoCloseable {
             executorService.close();
         }
     }
-
     public boolean isTurnActive() {
         return activeTurnId != 0 && activeTurnFuture != null;
     }

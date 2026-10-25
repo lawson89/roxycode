@@ -138,10 +138,53 @@ class ChatControllerTest {
         ExploreChatPanel panel =
                 new ExploreChatPanel(
                         aiService, planService, publisher, chatMemory, null, executorService);
-        panel.getController().close();
+        assertFalse(
+                panel.getController().ownsTurnExecutor(),
+                "Controller should not own externally supplied ExecutorService");
+
+        // Removing panel from container must not shut down shared external executor
+        javax.swing.JPanel host = new javax.swing.JPanel();
+        host.add(panel);
+        host.remove(panel);
+        panel.removeNotify();
+        assertFalse(
+                executorService.isShutdown(),
+                "Shared external ExecutorService must not be shut down on removeNotify()");
+
+        panel.close();
         assertTrue(executorService.isShutdown());
     }
 
+    @Test
+    void testFallbackDefaultExecutorOwnedAndClosedOnRemoveNotify() {
+        AiService aiService = mock(AiService.class);
+        PlanService planService = mock(PlanService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+
+        ChatPanel panel =
+                new ChatPanel(
+                        aiService,
+                        planService,
+                        publisher,
+                        chatMemory,
+                        ChatModel.QA_SESSION_PREFIX,
+                        WorkflowPhase.EXPLORE,
+                        false,
+                        null);
+
+        assertTrue(
+                panel.getController().ownsTurnExecutor(),
+                "Convenience constructor should mark fallback executor as owned");
+        ExecutorService fallbackExecutor =
+                assertInstanceOf(ExecutorService.class, panel.getController().getTurnExecutor());
+        assertFalse(fallbackExecutor.isShutdown());
+
+        panel.removeNotify();
+        assertTrue(
+                fallbackExecutor.isShutdown(),
+                "Fallback virtual-thread executor must be shut down when panel is removed/disposed");
+    }
     @Test
     void testSendMessageWithEmptyTextAndPendingImageShowsFeedbackAndPreservesImage() {
         AiService aiService = mock(AiService.class);

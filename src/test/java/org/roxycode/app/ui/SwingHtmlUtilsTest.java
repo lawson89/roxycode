@@ -61,54 +61,61 @@ class SwingHtmlUtilsTest {
         assertTrue(
                 html.contains(
                         """
-                        class="md-td" align="right"
+                        align="right" class="md-td"
                         """
                                 .strip()));
         assertTrue(html.contains("<span class='tk-rw'>public</span>"));
     }
 
     @Test
-    void testStyleMarkdownTables() {
-        assertEquals("", SwingHtmlUtils.styleMarkdownTables(null));
-        assertEquals("", SwingHtmlUtils.styleMarkdownTables(""));
-        assertEquals("<p>No table</p>", SwingHtmlUtils.styleMarkdownTables("<p>No table</p>"));
-
+    void testStyleMarkdownTablesViaFlexmarkAttributeProviderDoesNotMutateCodeOrInlineHtml() {
         String markdown =
                 """
                 | Col A | Col B |
                 | :--- | ---: |
                 | Val 1 | Val 2 |
+
+                <table><tr><td>Inline raw HTML table</td></tr></table>
+
+                ~~~html
+                <table>
+                  <tr><th>Header</th><td>Cell</td></tr>
+                </table>
+                ~~~
                 """;
-        String rendered =
-                SwingHtmlUtils.markdownRenderer()
-                        .render(SwingHtmlUtils.markdownParser().parse(markdown));
-        String styled = SwingHtmlUtils.styleMarkdownTables(rendered);
+        String rendered = SwingHtmlUtils.renderMarkdownToHtml(markdown);
 
         assertTrue(
-                styled.contains(
+                rendered.contains(
                         """
                         <table class="md-table" cellpadding="6" cellspacing="0" border="0">"""
-                                .strip()));
+                                .strip()),
+                "Markdown TableBlock AST node should receive md-table attributes");
         assertTrue(
-                styled.contains(
+                rendered.contains(
                         """
                         class="md-th"
                         """
                                 .strip()));
         assertTrue(
-                styled.contains(
+                rendered.contains(
                         """
                         class="md-td"
                         """
                                 .strip()));
         assertTrue(
-                styled.contains(
+                rendered.contains(
                         """
                         align="right"
                         """
                                 .strip()));
+        assertTrue(
+                rendered.contains("<table><tr><td>Inline raw HTML table</td></tr></table>"),
+                "Raw inline HTML tables should not be mutated by string replacement");
+        assertTrue(
+                rendered.contains("&lt;table&gt;"),
+                "Escaped HTML table tags inside fenced code blocks must remain untouched");
     }
-
     @Test
     void testApplyTheme() {
         JEditorPane pane = new JEditorPane();

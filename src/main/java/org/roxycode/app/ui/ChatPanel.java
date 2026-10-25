@@ -39,7 +39,7 @@ import org.springframework.context.event.EventListener;
 
 /** Panel for the chat interface, including output display and user input area. */
 @SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
-public class ChatPanel extends JPanel {
+public class ChatPanel extends JPanel implements AutoCloseable {
     private static final long serialVersionUID = 1L;
 
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
@@ -81,9 +81,8 @@ public class ChatPanel extends JPanel {
                 lockedPhase,
                 isTaskMode,
                 settingsService,
-                Executors.newVirtualThreadPerTaskExecutor());
+                null);
     }
-
     public ChatPanel(
             AiService aiService,
             PlanService planService,
@@ -260,6 +259,29 @@ public class ChatPanel extends JPanel {
         setupInputContextMenu();
         setupUndoRedo();
         setupKeyboardShortcuts();
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (controller != null) {
+            controller.ensureOwnedExecutorActive();
+        }
+    }
+
+    @Override
+    public void removeNotify() {
+        if (controller != null) {
+            controller.closeOwnedExecutor();
+        }
+        super.removeNotify();
+    }
+
+    @Override
+    public void close() {
+        if (controller != null) {
+            controller.close();
+        }
     }
 
     @Override
@@ -489,10 +511,12 @@ public class ChatPanel extends JPanel {
 
         InputMap inputMap = inputArea.getInputMap();
         ActionMap actionMap = inputArea.getActionMap();
+        int menuShortcutMask =
+                GraphicsEnvironment.isHeadless()
+                        ? java.awt.event.InputEvent.CTRL_DOWN_MASK
+                        : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
 
-        KeyStroke undoStroke =
-                KeyStroke.getKeyStroke(
-                        KeyEvent.VK_Z, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx());
+        KeyStroke undoStroke = KeyStroke.getKeyStroke(KeyEvent.VK_Z, menuShortcutMask);
         inputMap.put(undoStroke, "Undo");
         actionMap.put(
                 "Undo",
@@ -505,14 +529,11 @@ public class ChatPanel extends JPanel {
                     }
                 });
 
-        KeyStroke redoStrokeY =
-                KeyStroke.getKeyStroke(
-                        KeyEvent.VK_Y, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx());
+        KeyStroke redoStrokeY = KeyStroke.getKeyStroke(KeyEvent.VK_Y, menuShortcutMask);
         KeyStroke redoStrokeZ =
                 KeyStroke.getKeyStroke(
                         KeyEvent.VK_Z,
-                        Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()
-                                | java.awt.event.InputEvent.SHIFT_DOWN_MASK);
+                        menuShortcutMask | java.awt.event.InputEvent.SHIFT_DOWN_MASK);
         inputMap.put(redoStrokeY, "Redo");
         inputMap.put(redoStrokeZ, "Redo");
         actionMap.put(

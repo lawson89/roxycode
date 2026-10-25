@@ -2,11 +2,20 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatLaf;
 import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
+import com.vladsch.flexmark.ext.tables.TableBlock;
+import com.vladsch.flexmark.ext.tables.TableCell;
 import com.vladsch.flexmark.ext.tables.TablesExtension;
+import com.vladsch.flexmark.html.AttributeProvider;
 import com.vladsch.flexmark.html.HtmlRenderer;
+import com.vladsch.flexmark.html.IndependentAttributeProviderFactory;
+import com.vladsch.flexmark.html.renderer.AttributablePart;
+import com.vladsch.flexmark.html.renderer.LinkResolverContext;
 import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.DataHolder;
+import com.vladsch.flexmark.util.data.MutableDataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
+import com.vladsch.flexmark.util.html.MutableAttributes;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -38,13 +47,49 @@ public final class SwingHtmlUtils {
                     .set(
                             Parser.EXTENSIONS,
                             Arrays.asList(
-                                    TablesExtension.create(), StrikethroughExtension.create()))
+                                    TablesExtension.create(),
+                                    StrikethroughExtension.create(),
+                                    new MarkdownTableAttributeExtension()))
                     .toImmutable();
     private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
     private static final HtmlRenderer MARKDOWN_RENDERER =
             HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
 
     private SwingHtmlUtils() {}
+
+    /**
+     * Flexmark {@link HtmlRenderer.HtmlRendererExtension} that decorates AST {@link TableBlock} and
+     * {@link TableCell} nodes with Swing HTML 3.2 / CSS 1.0 classes and attributes directly during
+     * rendering without post-hoc string replacement.
+     */
+    private static final class MarkdownTableAttributeExtension
+            implements HtmlRenderer.HtmlRendererExtension {
+        @Override
+        public void rendererOptions(MutableDataHolder options) {}
+
+        @Override
+        public void extend(HtmlRenderer.Builder htmlRendererBuilder, String rendererType) {
+            htmlRendererBuilder.attributeProviderFactory(
+                    new IndependentAttributeProviderFactory() {
+                        @Override
+                        public AttributeProvider apply(LinkResolverContext context) {
+                            return SwingHtmlUtils::setTableNodeAttributes;
+                        }
+                    });
+        }
+    }
+
+    private static void setTableNodeAttributes(
+            Node node, AttributablePart part, MutableAttributes attributes) {
+        if (node instanceof TableBlock) {
+            attributes.addValue("class", "md-table");
+            attributes.replaceValue("cellpadding", "6");
+            attributes.replaceValue("cellspacing", "0");
+            attributes.replaceValue("border", "0");
+        } else if (node instanceof TableCell cell) {
+            attributes.addValue("class", cell.isHeader() ? "md-th" : "md-td");
+        }
+    }
 
     /** Returns the shared Flexmark {@link Parser} configured with GFM tables and strikethrough. */
     public static Parser markdownParser() {
@@ -70,50 +115,9 @@ public final class SwingHtmlUtils {
         if (markdown == null || markdown.isEmpty()) {
             return "";
         }
-        String html =
-                styleMarkdownTables(MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
+        String html = MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown));
         return JexlToHtmlConverter.highlightCodeBlocks(html);
     }
-
-    /**
-     * Decorates Flexmark-rendered Markdown table tags ({@code <table>}, {@code <th>}, {@code <td>})
-     * with Swing HTML 3.2 / CSS 1.0 classes and attributes without affecting structural layout
-     * tables.
-     *
-     * @param html the Flexmark-rendered HTML fragment
-     * @return the HTML fragment with Markdown table classes and attributes applied
-     */
-    public static String styleMarkdownTables(String html) {
-        if (html == null || html.isEmpty() || !html.contains("<table")) {
-            return html == null ? "" : html;
-        }
-        return html.replace(
-                        "<table>",
-                        """
-                        <table class="md-table" cellpadding="6" cellspacing="0" border="0">"""
-                                .strip())
-                .replace(
-                        "<th>",
-                        """
-                        <th class="md-th">"""
-                                .strip())
-                .replace(
-                        "<th align=",
-                        """
-                        <th class="md-th" align="""
-                                .strip())
-                .replace(
-                        "<td>",
-                        """
-                        <td class="md-td">"""
-                                .strip())
-                .replace(
-                        "<td align=",
-                        """
-                        <td class="md-td" align="""
-                                .strip());
-    }
-
     /**
      * Applies theme-aware stylesheet and editor kit to a JEditorPane or JTextPane.
      *
