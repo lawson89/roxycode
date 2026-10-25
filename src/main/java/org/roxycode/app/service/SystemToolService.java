@@ -4,6 +4,7 @@ import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.Version;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -95,13 +96,41 @@ public class SystemToolService {
         this.toolProber = toolProber != null ? toolProber : this::probeAllTools;
     }
 
-    @SuppressWarnings("PMD.CloseResource")
+    @SuppressWarnings({"PMD.CloseResource", "PMD.AvoidCatchingThrowable"})
     static DockerVersionInfo probeWithTestcontainers() {
-        DockerClient client = DockerClientFactory.instance().client();
-        Version version = client.versionCmd().exec();
-        return new DockerVersionInfo(
-                version != null ? version.getVersion() : null,
-                version != null ? version.getApiVersion() : null);
+        resetTestcontainersFailureCache();
+        try {
+            DockerClient client = DockerClientFactory.instance().client();
+            Version version = client.versionCmd().exec();
+            return new DockerVersionInfo(
+                    version != null ? version.getVersion() : null,
+                    version != null ? version.getApiVersion() : null);
+        } catch (Throwable t) {
+            resetTestcontainersClientAndFailureCache();
+            throw t;
+        }
+    }
+
+    static void resetTestcontainersFailureCache() {
+        clearDockerClientFactoryField(DockerClientFactory.instance(), "cachedClientFailure");
+    }
+
+    static void resetTestcontainersClientAndFailureCache() {
+        DockerClientFactory factory = DockerClientFactory.instance();
+        clearDockerClientFactoryField(factory, "cachedClientFailure");
+        clearDockerClientFactoryField(factory, "client");
+        clearDockerClientFactoryField(factory, "strategy");
+    }
+
+    private static void clearDockerClientFactoryField(
+            DockerClientFactory factory, String fieldName) {
+        try {
+            Field field = DockerClientFactory.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(factory, null);
+        } catch (ReflectiveOperationException | SecurityException e) {
+            log.debug("Could not reset DockerClientFactory.{}: {}", fieldName, e.getMessage());
+        }
     }
 
     static boolean isDockerCliInstalled() {

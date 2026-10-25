@@ -1,8 +1,13 @@
 package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.command.VersionCmd;
+import com.github.dockerjava.api.model.Version;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -17,6 +22,8 @@ import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService.DockerVersionInfo;
+import org.testcontainers.DockerClientFactory;
+import org.testcontainers.dockerclient.DockerClientProviderStrategy;
 
 class SystemToolServiceTest {
 
@@ -217,5 +224,77 @@ class SystemToolServiceTest {
         assertEquals(1, f2.get(5, TimeUnit.SECONDS).size());
         assertTrue(dockerFuture.get(5, TimeUnit.SECONDS));
         assertEquals(1, probeCount.get(), "Prober should only execute once for deduplicated calls");
+    }
+
+    @Test
+    void testResetTestcontainersCachesAndProbeWithTestcontainersCleanup() throws Exception {
+        DockerClientFactory factory = DockerClientFactory.instance();
+        Field failureField = DockerClientFactory.class.getDeclaredField("cachedClientFailure");
+        failureField.setAccessible(true);
+        Field clientField = DockerClientFactory.class.getDeclaredField("client");
+        clientField.setAccessible(true);
+        Field strategyField = DockerClientFactory.class.getDeclaredField("strategy");
+        strategyField.setAccessible(true);
+
+        Object origFailure = failureField.get(factory);
+        Object origClient = clientField.get(factory);
+        Object origStrategy = strategyField.get(factory);
+
+        try {
+            // 1. Verify resetTestcontainersFailureCache() clears cachedClientFailure
+            failureField.set(factory, new RuntimeException("latched failure"));
+            assertNotNull(failureField.get(factory));
+            SystemToolService.resetTestcontainersFailureCache();
+            assertNull(failureField.get(factory));
+
+            // 2. Verify resetTestcontainersClientAndFailureCache() clears all three fields
+            DockerClient mockClient = mock(DockerClient.class);
+            DockerClientProviderStrategy mockStrategy = mock(DockerClientProviderStrategy.class);
+            failureField.set(factory, new RuntimeException("latched failure"));
+            clientField.set(factory, mockClient);
+            strategyField.set(factory, mockStrategy);
+
+            SystemToolService.resetTestcontainersClientAndFailureCache();
+            assertNull(failureField.get(factory));
+            assertNull(clientField.get(factory));
+            assertNull(strategyField.get(factory));
+
+            // 3. Verify probeWithTestcontainers() clears cachedClientFailure before client() and
+            // succeeds when daemon responds
+            VersionCmd okVersionCmd = mock(VersionCmd.class);
+            Version mockVersion = mock(Version.class);
+            when(mockVersion.getVersion()).thenReturn("28.0.4");
+            when(mockVersion.getApiVersion()).thenReturn("1.48");
+            when(okVersionCmd.exec()).thenReturn(mockVersion);
+            when(mockClient.versionCmd()).thenReturn(okVersionCmd);
+
+            failureField.set(factory, new RuntimeException("stale failure before recovery"));
+            clientField.set(factory, mockClient);
+            strategyField.set(factory, mockStrategy);
+
+            DockerVersionInfo versionInfo = SystemToolService.probeWithTestcontainers();
+            assertEquals("28.0.4", versionInfo.version());
+            assertEquals("1.48", versionInfo.apiVersion());
+            assertNull(failureField.get(factory));
+            assertSame(mockClient, clientField.get(factory));
+
+            // 4. Verify probeWithTestcontainers() clears client, strategy, and cachedClientFailure
+            // when versionCmd().exec() fails
+            VersionCmd failingVersionCmd = mock(VersionCmd.class);
+            when(failingVersionCmd.exec()).thenThrow(new RuntimeException("Daemon stopped"));
+            when(mockClient.versionCmd()).thenReturn(failingVersionCmd);
+
+            RuntimeException thrown =
+                    assertThrows(
+                            RuntimeException.class, SystemToolService::probeWithTestcontainers);
+            assertEquals("Daemon stopped", thrown.getMessage());
+            assertNull(failureField.get(factory));
+            assertNull(clientField.get(factory));
+            assertNull(strategyField.get(factory));
+        } finally {
+            failureField.set(factory, origFailure);
+            clientField.set(factory, origClient);
+            strategyField.set(factory, origStrategy);
+        }
     }
 }
