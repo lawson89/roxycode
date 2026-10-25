@@ -7,6 +7,7 @@ import java.util.Locale;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserMessageEvent;
@@ -246,13 +247,7 @@ public class HistoryPanel extends JPanel {
                 case 2:
                     return TokenUtils.estimateTokens(msg.getText());
                 case 3:
-                    String content = msg.getText();
-                    if (content == null) return "";
-                    final int maxPreviewLength = 100;
-                    if (content.length() > maxPreviewLength) {
-                        return content.substring(0, maxPreviewLength - 3) + "...";
-                    }
-                    return content;
+                    return StringUtils.abbreviate(StringUtils.defaultString(msg.getText()), 100);
                 case 4:
                     return "View";
                 default:

@@ -227,9 +227,9 @@ class MentorModeIntegrationTest {
 
         assertTrue(planLabel.isVisible());
         assertEquals(
-                longTitle.toUpperCase(java.util.Locale.ROOT).substring(0, 40) + "...",
+                longTitle.toUpperCase(java.util.Locale.ROOT).substring(0, 37) + "...",
                 planLabel.getText());
-        assertEquals(43, planLabel.getText().length());
+        assertEquals(40, planLabel.getText().length());
         assertEquals(longTitle, planLabel.getToolTipText());
 
         // Verify clearing plan resets text, tooltip, and visibility

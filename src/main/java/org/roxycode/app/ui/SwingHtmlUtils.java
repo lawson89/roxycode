@@ -34,6 +34,7 @@ import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.InlineView;
 import javax.swing.text.html.ParagraphView;
 import javax.swing.text.html.StyleSheet;
+import org.apache.commons.text.StringEscapeUtils;
 
 /**
  * Shared utility for Swing HTML 3.2 and CSS 1.0 styling, theming, and common editor component
@@ -263,16 +264,6 @@ public final class SwingHtmlUtils {
      * @return HTML entity escaped text
      */
     public static String escapeHtml(String text) {
-        if (text == null) return "";
-        return text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace(
-                        """
-                        "
-                        """
-                                .strip(),
-                        "&quot;")
-                .replace("'", "&#39;");
+        return text == null ? "" : StringEscapeUtils.escapeHtml4(text);
     }
 }

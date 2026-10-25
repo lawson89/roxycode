@@ -1,8 +1,8 @@
 package org.roxycode.app.service;
 
 import java.awt.Color;
-import java.util.Locale;
 import javax.swing.UIManager;
+import org.apache.commons.lang3.SystemUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.springframework.stereotype.Service;
@@ -37,13 +37,7 @@ public class EnvironmentService {
     }
 
     public FontIcon getOsIcon() {
-        String os = getOsName().toLowerCase(Locale.ROOT);
-        Codicons icon;
-        if (os.contains("win")) {
-            icon = Codicons.WINDOW;
-        } else {
-            icon = Codicons.TERMINAL;
-        }
+        Codicons icon = SystemUtils.IS_OS_WINDOWS ? Codicons.WINDOW : Codicons.TERMINAL;
 
         FontIcon fontIcon = FontIcon.of(icon);
         fontIcon.setIconSize(14);

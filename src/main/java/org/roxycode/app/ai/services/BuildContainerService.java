@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
 import org.slf4j.Logger;
@@ -127,14 +128,14 @@ public class BuildContainerService {
                         : (enabledVal != null && Boolean.parseBoolean(String.valueOf(enabledVal)));
         Object imageVal = containerMap.get("image");
         String image =
-                imageVal != null && !String.valueOf(imageVal).isBlank()
-                        ? String.valueOf(imageVal).trim()
-                        : DEFAULT_CONTAINER_IMAGE;
+                StringUtils.defaultIfBlank(
+                        imageVal != null ? StringUtils.trim(String.valueOf(imageVal)) : null,
+                        DEFAULT_CONTAINER_IMAGE);
         Object workdirVal = containerMap.get("workdir");
         String workdir =
-                workdirVal != null && !String.valueOf(workdirVal).isBlank()
-                        ? String.valueOf(workdirVal).trim()
-                        : DEFAULT_CONTAINER_WORKDIR;
+                StringUtils.defaultIfBlank(
+                        workdirVal != null ? StringUtils.trim(String.valueOf(workdirVal)) : null,
+                        DEFAULT_CONTAINER_WORKDIR);
         return new ContainerConfig(enabled, image, workdir);
     }
 

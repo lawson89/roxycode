@@ -1,9 +1,7 @@
 package org.roxycode.app.service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -111,13 +109,8 @@ public final class ProcessRunner {
     }
 
     private static void readStream(InputStream inputStream, StringBuilder buffer) {
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-            String line = reader.readLine();
-            while (line != null) {
-                buffer.append(line).append('\n');
-                line = reader.readLine();
-            }
+        try (inputStream) {
+            buffer.append(new String(inputStream.readAllBytes(), StandardCharsets.UTF_8));
         } catch (IOException e) {
             log.debug("Stream closed or failed while reading process output", e);
         }

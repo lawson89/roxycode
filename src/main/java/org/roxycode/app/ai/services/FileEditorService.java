@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.commons.text.similarity.JaroWinklerSimilarity;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -29,6 +30,8 @@ public class FileEditorService {
     private static final Logger log = LoggerFactory.getLogger(FileEditorService.class);
     private static final int MAX_DIAGNOSTIC_LINES = 3;
     private static final int SINGLE_MATCH_COUNT = 1;
+    private static final double MIN_LINE_SIMILARITY = 0.6;
+    private static final JaroWinklerSimilarity JARO_WINKLER = new JaroWinklerSimilarity();
     private static final char LF = (char) 10;
     private static final String WHITESPACE_REGEX = "\\s+";
 
@@ -511,47 +514,41 @@ public class FileEditorService {
             return hint.toString();
         }
 
-        List<String> targetLines = targetBlock.lines().toList();
-        String firstTargetLine = "";
-        for (String tl : targetLines) {
-            if (!tl.trim().isEmpty()) {
-                firstTargetLine = tl.trim().toLowerCase(Locale.ROOT);
-                break;
-            }
-        }
-        String[] rawTokens = targetBlock.trim().split(WHITESPACE_REGEX);
-        List<String> tokens = new ArrayList<>();
-        for (String token : rawTokens) {
-            if (!token.isEmpty()) {
-                tokens.add(token.toLowerCase(Locale.ROOT));
-            }
-        }
+        String firstTargetLine =
+                targetBlock
+                        .lines()
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .findFirst()
+                        .orElse("")
+                        .toLowerCase(Locale.ROOT);
 
-        List<int[]> scoredLines = new ArrayList<>();
-        for (int i = 0; i < fileLines.size(); i++) {
-            String lineLower = fileLines.get(i).toLowerCase(Locale.ROOT);
-            int score = 0;
-            if (!firstTargetLine.isEmpty() && lineLower.contains(firstTargetLine)) {
-                score += 100;
-            }
-            for (String token : tokens) {
-                if (lineLower.contains(token)) {
-                    score += 10;
+        record ScoredLine(int lineNum, double score) {}
+        List<ScoredLine> scoredLines = new ArrayList<>();
+        if (!firstTargetLine.isEmpty()) {
+            for (int i = 0; i < fileLines.size(); i++) {
+                String lineTrimmed = fileLines.get(i).trim().toLowerCase(Locale.ROOT);
+                if (lineTrimmed.isEmpty()) {
+                    continue;
+                }
+                double similarity =
+                        lineTrimmed.contains(firstTargetLine)
+                                ? 1.0
+                                : JARO_WINKLER.apply(firstTargetLine, lineTrimmed);
+                if (similarity >= MIN_LINE_SIMILARITY) {
+                    scoredLines.add(new ScoredLine(i + 1, similarity));
                 }
             }
-            if (score > 0) {
-                scoredLines.add(new int[] {i + 1, score});
-            }
         }
 
-        scoredLines.sort((a, b) -> Integer.compare(b[1], a[1]));
+        scoredLines.sort((a, b) -> Double.compare(b.score(), a.score()));
         if (!scoredLines.isEmpty()) {
             hint.append(". Closest matching lines (file has ")
                     .append(fileLines.size())
                     .append(" lines):");
             int count = Math.min(MAX_DIAGNOSTIC_LINES, scoredLines.size());
             for (int i = 0; i < count; i++) {
-                int lineNum = scoredLines.get(i)[0];
+                int lineNum = scoredLines.get(i).lineNum();
                 hint.append("\nLine ")
                         .append(lineNum)
                         .append(": ")

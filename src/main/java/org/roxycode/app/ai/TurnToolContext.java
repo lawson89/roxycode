@@ -2,6 +2,7 @@ package org.roxycode.app.ai;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
@@ -20,10 +21,7 @@ public record TurnToolContext(
     public static final String DEFAULT_CONVERSATION_ID = "default";
 
     public TurnToolContext {
-        conversationId =
-                (conversationId != null && !conversationId.isBlank())
-                        ? conversationId
-                        : DEFAULT_CONVERSATION_ID;
+        conversationId = StringUtils.defaultIfBlank(conversationId, DEFAULT_CONVERSATION_ID);
         phase = phase != null ? phase : WorkflowPhase.EXPLORE;
         turnCounter = turnCounter != null ? turnCounter : new AtomicInteger(0);
     }
@@ -59,7 +57,7 @@ public record TurnToolContext(
         }
 
         String convId =
-                contextMap.get(CONVERSATION_ID_KEY) instanceof String s && !s.isBlank()
+                contextMap.get(CONVERSATION_ID_KEY) instanceof String s && StringUtils.isNotBlank(s)
                         ? s
                         : DEFAULT_CONVERSATION_ID;
 

@@ -2,6 +2,7 @@ package org.roxycode.app.service;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -119,11 +120,10 @@ public class AiService {
         }
 
         String finishReason =
-                (rawFinishReason != null && !rawFinishReason.isBlank())
-                        ? rawFinishReason.trim()
-                        : FINISH_REASON_UNKNOWN;
+                StringUtils.defaultIfBlank(
+                        StringUtils.trim(rawFinishReason), FINISH_REASON_UNKNOWN);
         String usageSummary = formatUsageSummary(usage);
-        boolean hasVisibleContent = content != null && !content.isBlank();
+        boolean hasVisibleContent = StringUtils.isNotBlank(content);
 
         if (isTokenLimitFinishReason(finishReason)) {
             if (hasVisibleContent) {

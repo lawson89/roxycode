@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -238,7 +239,7 @@ public class PlanService {
                     String description) {
         requirePhase("addTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE);
         ensureActivePlan();
-        if (description == null || description.isBlank()) {
+        if (StringUtils.isBlank(description)) {
             throw new IllegalArgumentException("Error: Step description cannot be null or blank.");
         }
         String trimmed = description.trim();
@@ -265,7 +266,7 @@ public class PlanService {
                     String description) {
         requirePhase("updateTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE);
         ensureActivePlan();
-        if (description == null || description.isBlank()) {
+        if (StringUtils.isBlank(description)) {
             throw new IllegalArgumentException("Error: Step description cannot be null or blank.");
         }
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
@@ -548,7 +549,7 @@ public class PlanService {
         String message =
                 String.format(
                         "**Transition Request: %s**%n%n**Reason:** %s", approvalLabel, reason);
-        return (summary != null && !summary.isBlank())
+        return StringUtils.isNotBlank(summary)
                 ? String.format("%s%n%n%s", summary, message)
                 : message;
     }
@@ -704,7 +705,7 @@ public class PlanService {
         requirePhase(
                 "addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         ensureActivePlan();
-        if (entry == null || entry.isBlank()) {
+        if (StringUtils.isBlank(entry)) {
             throw new IllegalArgumentException("Error: Handoff log entry cannot be null or blank.");
         }
         addHandoffLogEntry(OffsetDateTime.now().toString(), "System", entry.trim());

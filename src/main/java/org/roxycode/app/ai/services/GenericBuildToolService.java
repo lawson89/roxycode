@@ -9,11 +9,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.commons.lang3.SystemUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerConfig;
@@ -337,12 +337,10 @@ public class GenericBuildToolService {
         String fullOutput = "";
 
         try {
-            List<String> shellCommand;
-            if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")) {
-                shellCommand = List.of("cmd.exe", "/c", command);
-            } else {
-                shellCommand = List.of("sh", "-c", command);
-            }
+            List<String> shellCommand =
+                    SystemUtils.IS_OS_WINDOWS
+                            ? List.of("cmd.exe", "/c", command)
+                            : List.of("sh", "-c", command);
 
             ProcessResult result =
                     ProcessRunner.run(

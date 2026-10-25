@@ -13,6 +13,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
@@ -294,13 +295,11 @@ public class SystemToolService {
         try {
             DockerVersionInfo info = dockerProbe.probe();
             String serverVersion =
-                    info != null && info.version() != null && !info.version().isBlank()
-                            ? info.version().trim()
-                            : "Unknown";
+                    StringUtils.defaultIfBlank(
+                            info != null ? StringUtils.trim(info.version()) : null, "Unknown");
             String apiVersion =
-                    info != null && info.apiVersion() != null && !info.apiVersion().isBlank()
-                            ? info.apiVersion().trim()
-                            : "";
+                    StringUtils.defaultIfBlank(
+                            info != null ? StringUtils.trim(info.apiVersion()) : null, "");
             String versionDisplay =
                     !apiVersion.isEmpty()
                             ? "Docker " + serverVersion + " (API " + apiVersion + ")"
@@ -326,17 +325,17 @@ public class SystemToolService {
 
     private static String extractDiagnosticMessage(Throwable t) {
         Throwable root = ExceptionUtils.getRootCause(t);
-        if (root != null && root.getMessage() != null && !root.getMessage().isBlank()) {
+        if (root != null && StringUtils.isNotBlank(root.getMessage())) {
             return root.getMessage().trim();
         }
-        if (t.getMessage() != null && !t.getMessage().isBlank()) {
+        if (StringUtils.isNotBlank(t.getMessage())) {
             return t.getMessage().trim();
         }
         return root != null ? root.getClass().getSimpleName() : t.getClass().getSimpleName();
     }
 
     private static boolean isGenericEnvironmentNotFound(String message) {
-        if (message == null || message.isBlank()) {
+        if (StringUtils.isBlank(message)) {
             return true;
         }
         String lower = message.toLowerCase(Locale.ROOT);
@@ -346,14 +345,11 @@ public class SystemToolService {
     }
 
     private static String formatDockerErrorMessage(String rawMessage) {
-        if (rawMessage == null || rawMessage.isBlank()) {
+        if (StringUtils.isBlank(rawMessage)) {
             return "Testcontainers connection failed";
         }
         String normalized = rawMessage.replaceAll("\s+", " ").trim();
-        if (normalized.length() > MAX_DOCKER_ERROR_LENGTH) {
-            return normalized.substring(0, MAX_DOCKER_ERROR_LENGTH) + "...";
-        }
-        return normalized;
+        return StringUtils.abbreviate(normalized, MAX_DOCKER_ERROR_LENGTH);
     }
 
     private SystemTool detectTool(
@@ -376,13 +372,13 @@ public class SystemToolService {
     }
 
     private String parseVersion(String output, String toolName) {
-        if (output == null || output.isEmpty()) return "Unknown";
+        if (StringUtils.isEmpty(output)) return "Unknown";
         String fullOutput = output.trim();
         if (JAVA.equals(toolName)) {
             return fullOutput.contains("version")
                     ? fullOutput.substring(fullOutput.indexOf("version"))
                     : fullOutput;
         }
-        return fullOutput.length() > 50 ? fullOutput.substring(0, 50) + "..." : fullOutput;
+        return StringUtils.abbreviate(fullOutput, 50);
     }
 }

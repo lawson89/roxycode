@@ -6,10 +6,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.commons.lang3.SystemUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -19,7 +19,7 @@ class ProcessRunnerTest {
     @TempDir Path tempDir;
 
     private static List<String> shellCmd(String script) {
-        if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")) {
+        if (SystemUtils.IS_OS_WINDOWS) {
             return List.of("cmd.exe", "/c", script);
         }
         return List.of("sh", "-c", script);
@@ -27,10 +27,7 @@ class ProcessRunnerTest {
 
     @Test
     void testSuccessfulExecutionAndEnv() throws IOException {
-        String script =
-                System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")
-                        ? "echo %TEST_VAR%"
-                        : "echo $TEST_VAR";
+        String script = SystemUtils.IS_OS_WINDOWS ? "echo %TEST_VAR%" : "echo $TEST_VAR";
         ProcessResult result =
                 ProcessRunner.run(
                         shellCmd(script),

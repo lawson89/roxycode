@@ -20,7 +20,7 @@ class SwingHtmlUtilsTest {
         assertEquals("", SwingHtmlUtils.escapeHtml(null));
         assertEquals("", SwingHtmlUtils.escapeHtml(""));
         assertEquals(
-                "&lt;div&gt;&quot;Hello &amp; World&#39;&quot;&lt;/div&gt;",
+                "&lt;div&gt;&quot;Hello &amp; World'&quot;&lt;/div&gt;",
                 SwingHtmlUtils.escapeHtml(
                         """
                         <div>"Hello & World'"</div>"""

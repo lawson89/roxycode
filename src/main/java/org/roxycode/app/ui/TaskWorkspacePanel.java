@@ -12,6 +12,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -31,7 +32,6 @@ public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
     static final int MAX_PLAN_TITLE_LENGTH = 40;
-    private static final String ELLIPSIS = "...";
 
     private final transient PlanService planService;
     private final GitChangesPanel gitChangesPanel;
@@ -149,14 +149,11 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     static String formatPlanTitleDisplay(String rawTitle) {
-        if (rawTitle == null || rawTitle.isBlank()) {
+        if (StringUtils.isBlank(rawTitle)) {
             return "";
         }
         String normalized = rawTitle.trim().toUpperCase(Locale.ROOT);
-        if (normalized.length() > MAX_PLAN_TITLE_LENGTH) {
-            return normalized.substring(0, MAX_PLAN_TITLE_LENGTH) + ELLIPSIS;
-        }
-        return normalized;
+        return StringUtils.abbreviate(normalized, MAX_PLAN_TITLE_LENGTH);
     }
 
     void updateActivePhase(WorkflowPhase currentPhase) {
