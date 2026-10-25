@@ -16,6 +16,7 @@ import com.vladsch.flexmark.util.data.MutableDataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
 import com.vladsch.flexmark.util.html.MutableAttributes;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URL;
@@ -225,7 +226,8 @@ public final class SwingHtmlUtils {
     }
 
     /**
-     * Installs a standard context menu (Copy, Select All) on a text component.
+     * Installs a standard context menu (Cut/Paste when editable, Copy, Select All) on a text
+     * component.
      *
      * @param component the text component to attach the menu to
      */
@@ -245,9 +247,15 @@ public final class SwingHtmlUtils {
                     private void showPopup(MouseEvent e) {
                         component.requestFocusInWindow();
                         JPopupMenu menu = new JPopupMenu();
-                        JMenuItem copy = new JMenuItem(new DefaultEditorKit.CopyAction());
-                        copy.setText("Copy");
-                        menu.add(copy);
+                        if (component.isEditable()) {
+                            menu.add(new JMenuItem(new DefaultEditorKit.CutAction()))
+                                    .setText("Cut");
+                        }
+                        menu.add(new JMenuItem(new DefaultEditorKit.CopyAction())).setText("Copy");
+                        if (component.isEditable()) {
+                            menu.add(new JMenuItem(new DefaultEditorKit.PasteAction()))
+                                    .setText("Paste");
+                        }
                         menu.addSeparator();
                         JMenuItem selectAll = new JMenuItem("Select All");
                         selectAll.addActionListener(ae -> component.selectAll());
@@ -255,6 +263,24 @@ public final class SwingHtmlUtils {
                         menu.show(e.getComponent(), e.getX(), e.getY());
                     }
                 });
+    }
+
+    /**
+     * Copies the given text to the system clipboard, ignoring errors in headless or restricted
+     * environments.
+     *
+     * @param text the text to copy
+     */
+    public static void copyToClipboard(String text) {
+        if (text == null) {
+            return;
+        }
+        try {
+            StringSelection selection = new StringSelection(text);
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
+        } catch (Exception ignored) {
+            // Ignore clipboard access errors in headless or restricted environments
+        }
     }
 
     /**

@@ -100,17 +100,9 @@ public class PromptService {
 
         ImplementationPlan currentPlan = planService.getCurrentPlan();
         if (currentPlan != null) {
-            sb.append(HEADER_CURRENT_PLAN_PROGRESS);
-            var steps = currentPlan.technicalSteps();
-            for (int i = 0; i < steps.size(); i++) {
-                ImplementationPlan.TechStep step = steps.get(i);
-                sb.append(step.completed() ? "- [x] " : "- [ ] ")
-                        .append(i)
-                        .append(". ")
-                        .append(step.description())
-                        .append("\n");
-            }
-            sb.append("\n");
+            sb.append(HEADER_CURRENT_PLAN_PROGRESS)
+                    .append(currentPlan.formatStepsMarkdown())
+                    .append("\n");
         }
         return sb.toString();
     }
@@ -119,12 +111,7 @@ public class PromptService {
         WorkflowPhase currentPhase = phase != null ? phase : planService.getCurrentPhase();
 
         StringBuilder systemPrompt = new StringBuilder(getStableContext());
-
-        String phasePrompt =
-                currentPhase == WorkflowPhase.EXPLORE
-                        ? generateExploreSystemPrompt()
-                        : loadPhasePrompt(currentPhase);
-        systemPrompt.append(NEWLINE_DOUBLE).append(phasePrompt);
+        systemPrompt.append(NEWLINE_DOUBLE).append(loadPhasePrompt(currentPhase));
 
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
         if (repoMap != null && repoMap.success()) {
@@ -151,7 +138,13 @@ public class PromptService {
                     case CODE -> CODE_PROMPT_PATH;
                     case REVIEW -> REVIEW_PROMPT_PATH;
                 };
-        return readClasspathResource(path);
+        String raw = readClasspathResource(path);
+        if (phase == WorkflowPhase.EXPLORE) {
+            var settings = settingsService != null ? settingsService.getSettings() : null;
+            int maxTurns = settings != null ? settings.getMaxAgentToolTurns() : 5;
+            return StringSubstitutor.replace(raw, Map.of("maxTurns", maxTurns));
+        }
+        return raw;
     }
 
     public String loadJexlContext() {
@@ -159,42 +152,19 @@ public class PromptService {
     }
 
     public String loadProjectContext() {
-        if (!projectService.hasActiveProject()) {
+        java.util.List<String> files = listContextFiles();
+        if (files.isEmpty()) {
             return "";
         }
-        Path contextDir = projectService.resolveProjectDataPath(CONTEXT_DIR);
-        if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
-            return "";
-        }
-
         StringBuilder sb = new StringBuilder();
-        try (Stream<Path> stream = Files.list(contextDir)) {
-            stream.filter(Files::isRegularFile)
-                    .filter(p -> p.getFileName().toString().endsWith(".md"))
-                    .sorted(
-                            (p1, p2) ->
-                                    p1.getFileName()
-                                            .toString()
-                                            .compareToIgnoreCase(p2.getFileName().toString()))
-                    .forEach(
-                            p -> {
-                                try {
-                                    String content = Files.readString(p, StandardCharsets.UTF_8);
-                                    sb.append("\n\n## Project Context: ")
-                                            .append(p.getFileName().toString())
-                                            .append("\n");
-                                    sb.append(content);
-                                } catch (IOException e) {
-                                    log.error(
-                                            "Failed to read project context file {}: {}",
-                                            p,
-                                            e.getMessage());
-                                }
-                            });
-        } catch (IOException e) {
-            log.error("Failed to list project context files in {}: {}", contextDir, e.getMessage());
+        for (String filename : files) {
+            try {
+                String content = readContextFile(filename);
+                sb.append("\n\n## Project Context: ").append(filename).append("\n").append(content);
+            } catch (Exception e) {
+                log.error("Failed to read project context file {}: {}", filename, e.getMessage());
+            }
         }
-
         return sb.toString();
     }
 
@@ -210,7 +180,7 @@ public class PromptService {
             return stream.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(".md"))
                     .map(p -> p.getFileName().toString())
-                    .sorted()
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
                     .toList();
         } catch (IOException e) {
             log.error("Failed to list context files: {}", e.getMessage());
@@ -277,9 +247,7 @@ public class PromptService {
     }
 
     public String generateExploreSystemPrompt() {
-        String prompt = loadPhasePrompt(WorkflowPhase.EXPLORE);
-        return StringSubstitutor.replace(
-                prompt, Map.of("maxTurns", settingsService.getSettings().getMaxAgentToolTurns()));
+        return loadPhasePrompt(WorkflowPhase.EXPLORE);
     }
 
     private String readClasspathResource(String path) {

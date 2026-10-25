@@ -2,6 +2,7 @@ package org.roxycode.app.ui;
 
 import java.awt.*;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import javax.swing.*;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -126,11 +127,7 @@ public final class ContextManagerPanel extends JPanel {
     }
 
     void updateTextAreaTheme() {
-        String themeName =
-                settingsService != null && settingsService.getSettings() != null
-                        ? settingsService.getSettings().getTheme()
-                        : null;
-        updateTextAreaTheme(themeName);
+        SettingsPanel.applyRSyntaxTheme(textArea, settingsService);
     }
 
     void updateTextAreaTheme(String themeName) {
@@ -218,30 +215,34 @@ public final class ContextManagerPanel extends JPanel {
                 });
     }
 
-    SwingWorker<String, Void> loadSelectedFileAsync(String selected) {
-        SwingWorker<String, Void> worker =
+    private <T> SwingWorker<T, Void> executeFileOperationAsync(
+            Callable<T> backgroundTask,
+            Consumer<T> onSuccess,
+            String logVerb,
+            String errorVerb,
+            String filename) {
+        SwingWorker<T, Void> worker =
                 new SwingWorker<>() {
                     @Override
-                    protected String doInBackground() {
-                        return promptService.readContextFile(selected);
+                    protected T doInBackground() throws Exception {
+                        return backgroundTask.call();
                     }
 
                     @Override
                     protected void done() {
                         try {
-                            String content = get();
-                            if (selected.equals(currentFile)) {
-                                textArea.setText(content != null ? content : "");
-                                textArea.setCaretPosition(0);
-                                btnDelete.setEnabled(true);
-                                btnSave.setEnabled(true);
+                            T result = get();
+                            if (onSuccess != null) {
+                                onSuccess.accept(result);
                             }
                         } catch (Exception ex) {
-                            log.error("Failed to read context file {}", selected, ex);
+                            log.error("Failed to {} context file {}", logVerb, filename, ex);
                             Throwable root = ExceptionUtils.getRootCause(ex);
                             showError(
-                                    "Error reading context file "
-                                            + selected
+                                    "Error "
+                                            + errorVerb
+                                            + " context file "
+                                            + filename
                                             + ": "
                                             + (root != null ? root.getMessage() : ex.getMessage()));
                         }
@@ -249,99 +250,66 @@ public final class ContextManagerPanel extends JPanel {
                 };
         worker.execute();
         return worker;
+    }
+
+    SwingWorker<String, Void> loadSelectedFileAsync(String selected) {
+        return executeFileOperationAsync(
+                () -> promptService.readContextFile(selected),
+                content -> {
+                    if (selected.equals(currentFile)) {
+                        textArea.setText(content != null ? content : "");
+                        textArea.setCaretPosition(0);
+                        btnDelete.setEnabled(true);
+                        btnSave.setEnabled(true);
+                    }
+                },
+                "read",
+                "reading",
+                selected);
     }
 
     SwingWorker<Void, Void> createNewFileAsync(String name) {
-        SwingWorker<Void, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected Void doInBackground() {
-                        promptService.saveContextFile(name, "# " + name + "\n\n");
-                        return null;
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            get();
-                            refreshFileList(name);
-                        } catch (Exception ex) {
-                            log.error("Failed to create context file {}", name, ex);
-                            Throwable root = ExceptionUtils.getRootCause(ex);
-                            showError(
-                                    "Error creating context file "
-                                            + name
-                                            + ": "
-                                            + (root != null ? root.getMessage() : ex.getMessage()));
-                        }
-                    }
-                };
-        worker.execute();
-        return worker;
+        return executeFileOperationAsync(
+                () -> {
+                    promptService.saveContextFile(name, "# " + name + "\n\n");
+                    return null;
+                },
+                v -> refreshFileList(name),
+                "create",
+                "creating",
+                name);
     }
 
     SwingWorker<Void, Void> deleteFileAsync(String filename) {
-        SwingWorker<Void, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected Void doInBackground() {
-                        promptService.deleteContextFile(filename);
-                        return null;
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            get();
-                            refreshFileList(null);
-                        } catch (Exception ex) {
-                            log.error("Failed to delete context file {}", filename, ex);
-                            Throwable root = ExceptionUtils.getRootCause(ex);
-                            showError(
-                                    "Error deleting context file "
-                                            + filename
-                                            + ": "
-                                            + (root != null ? root.getMessage() : ex.getMessage()));
-                        }
-                    }
-                };
-        worker.execute();
-        return worker;
+        return executeFileOperationAsync(
+                () -> {
+                    promptService.deleteContextFile(filename);
+                    return null;
+                },
+                v -> refreshFileList(null),
+                "delete",
+                "deleting",
+                filename);
     }
 
     SwingWorker<Void, Void> saveFileAsync(String filename, String content) {
-        SwingWorker<Void, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected Void doInBackground() {
-                        promptService.saveContextFile(filename, content);
-                        return null;
+        return executeFileOperationAsync(
+                () -> {
+                    promptService.saveContextFile(filename, content);
+                    return null;
+                },
+                v -> {
+                    if (!GraphicsEnvironment.isHeadless()) {
+                        JOptionPane.showMessageDialog(
+                                ContextManagerPanel.this,
+                                "Saved " + filename,
+                                "Saved",
+                                JOptionPane.INFORMATION_MESSAGE);
                     }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            get();
-                            if (!GraphicsEnvironment.isHeadless()) {
-                                JOptionPane.showMessageDialog(
-                                        ContextManagerPanel.this,
-                                        "Saved " + filename,
-                                        "Saved",
-                                        JOptionPane.INFORMATION_MESSAGE);
-                            }
-                        } catch (Exception ex) {
-                            log.error("Failed to save context file {}", filename, ex);
-                            Throwable root = ExceptionUtils.getRootCause(ex);
-                            showError(
-                                    "Error saving context file "
-                                            + filename
-                                            + ": "
-                                            + (root != null ? root.getMessage() : ex.getMessage()));
-                        }
-                    }
-                };
-        worker.execute();
-        return worker;
+                },
+                "save",
+                "saving",
+                filename);
     }
 
     SwingWorker<List<String>, Void> refreshFileList(String selectAfterLoad) {

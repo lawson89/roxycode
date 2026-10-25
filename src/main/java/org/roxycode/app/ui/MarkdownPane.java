@@ -1,7 +1,5 @@
 package org.roxycode.app.ui;
 
-import java.awt.Toolkit;
-import java.awt.datatransfer.StringSelection;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -118,12 +116,7 @@ public final class MarkdownPane extends JTextPane {
         }
         String rawMarkdown = msg.content().toString();
         this.lastCopiedMarkdown = rawMarkdown;
-        try {
-            StringSelection selection = new StringSelection(rawMarkdown);
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
-        } catch (Exception ignored) {
-            // Ignore clipboard access errors in headless or restricted environments
-        }
+        SwingHtmlUtils.copyToClipboard(rawMarkdown);
 
         this.copiedMessageIndex = index;
         renderAll(false);

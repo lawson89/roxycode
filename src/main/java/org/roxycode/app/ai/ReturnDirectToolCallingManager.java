@@ -27,7 +27,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
 
     private static final String AGENT_NAME = "Roxy";
     private static final String JEXL_TOOL_NAME = "executeJexl";
-    private static final String MAX_TURNS_EXCEEDED_PREFIX =
+    public static final String MAX_TURNS_EXCEEDED_PREFIX =
             "Autonomous execution stopped: Maximum tool turns (";
 
     private final ToolCallingManager delegate;

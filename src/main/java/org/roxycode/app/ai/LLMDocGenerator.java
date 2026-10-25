@@ -2,6 +2,7 @@ package org.roxycode.app.ai;
 
 import java.lang.reflect.*;
 import java.util.*;
+import org.springframework.core.annotation.AnnotationUtils;
 
 /**
  * Generates LLM-friendly documentation for JEXL-exposed services. Uses pseudo-TypeScript syntax for
@@ -34,10 +35,10 @@ public class LLMDocGenerator {
 
         for (Object service : services) {
             Class<?> clazz = service.getClass();
-            AgentService agentService = clazz.getAnnotation(AgentService.class);
+            AgentService agentService = AnnotationUtils.findAnnotation(clazz, AgentService.class);
             if (agentService == null) continue;
 
-            AgentDoc agentDoc = clazz.getAnnotation(AgentDoc.class);
+            AgentDoc agentDoc = AnnotationUtils.findAnnotation(clazz, AgentDoc.class);
             if (agentDoc != null) {
                 sb.append("/**\n");
                 sb.append(DOC_LINE_START).append(agentDoc.value()).append("\n");
@@ -84,13 +85,13 @@ public class LLMDocGenerator {
         for (Method m : methods) {
             if (!Modifier.isPublic(m.getModifiers())) continue;
 
-            AgentDoc doc = m.getAnnotation(AgentDoc.class);
+            AgentDoc doc = AnnotationUtils.findAnnotation(m, AgentDoc.class);
             if (doc == null) continue;
             sb.append("    /**\n");
             sb.append("     * ").append(doc.value()).append("\n");
             Parameter[] params = m.getParameters();
             for (Parameter p : params) {
-                AgentDoc paramDoc = p.getAnnotation(AgentDoc.class);
+                AgentDoc paramDoc = AnnotationUtils.findAnnotation(p, AgentDoc.class);
                 if (paramDoc != null && !paramDoc.value().isBlank()) {
                     sb.append("     * @param ")
                             .append(p.getName())

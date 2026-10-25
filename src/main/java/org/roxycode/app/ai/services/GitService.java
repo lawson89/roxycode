@@ -190,20 +190,24 @@ public class GitService {
     }
 
     private String resolveRelativeSandboxPath(String relativePath) {
-        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-        Path resolved = projectService.resolvePath(relativePath.trim());
-        String rel = root.relativize(resolved).toString().replace(BACKSLASH, '/');
-        return rel.isEmpty() ? "." : rel;
+        return projectService.resolveRelativePath(relativePath);
+    }
+
+    private String executeGitCommandWithPath(String normalizedPath, String... baseArgs) {
+        if (normalizedPath == null) {
+            return executeGitCommand(baseArgs);
+        }
+        String[] fullArgs = Arrays.copyOf(baseArgs, baseArgs.length + 2);
+        fullArgs[baseArgs.length] = "--";
+        fullArgs[baseArgs.length + 1] = normalizedPath;
+        return executeGitCommand(fullArgs);
     }
 
     private String computeTrackedDiffAgainstHead(String normalizedPath) {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
-        String headOut =
-                normalizedPath == null
-                        ? executeGitCommand(GIT_DIFF, "HEAD")
-                        : executeGitCommand(GIT_DIFF, "HEAD", "--", normalizedPath);
+        String headOut = executeGitCommandWithPath(normalizedPath, GIT_DIFF, "HEAD");
         if (!isGitError(headOut)) {
             return headOut;
         }
@@ -211,17 +215,11 @@ public class GitService {
             return headOut;
         }
         // Fallback for unborn HEAD (initial commit not created yet)
-        String staged =
-                normalizedPath == null
-                        ? executeGitCommand(GIT_DIFF, "--cached")
-                        : executeGitCommand(GIT_DIFF, "--cached", "--", normalizedPath);
+        String staged = executeGitCommandWithPath(normalizedPath, GIT_DIFF, "--cached");
         if (isGitError(staged)) {
             return staged;
         }
-        String unstaged =
-                normalizedPath == null
-                        ? executeGitCommand(GIT_DIFF)
-                        : executeGitCommand(GIT_DIFF, "--", normalizedPath);
+        String unstaged = executeGitCommandWithPath(normalizedPath, GIT_DIFF);
         if (isGitError(unstaged)) {
             return unstaged;
         }
@@ -230,10 +228,8 @@ public class GitService {
 
     private String buildUntrackedDiffs(String normalizedPath) {
         String untrackedOut =
-                normalizedPath == null
-                        ? executeGitCommand("ls-files", "--others", "--exclude-standard")
-                        : executeGitCommand(
-                                "ls-files", "--others", "--exclude-standard", "--", normalizedPath);
+                executeGitCommandWithPath(
+                        normalizedPath, "ls-files", "--others", "--exclude-standard");
         if (untrackedOut.isEmpty() || isGitError(untrackedOut)) {
             return "";
         }

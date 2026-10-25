@@ -25,6 +25,7 @@ class GitServiceTest {
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveRelativePath(any())).thenCallRealMethod();
         return projectService;
     }
 

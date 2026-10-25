@@ -186,12 +186,14 @@ class SwingHtmlUtilsTest {
     }
 
     @Test
-    void testInstallTextContextMenu() {
+    void testInstallTextContextMenuAndCopyToClipboard() {
         JTextArea area = new JTextArea("Sample text");
         int initialListeners = area.getMouseListeners().length;
 
         SwingHtmlUtils.installTextContextMenu(area);
 
         assertEquals(initialListeners + 1, area.getMouseListeners().length);
+        assertDoesNotThrow(() -> SwingHtmlUtils.copyToClipboard("Copied text"));
+        assertDoesNotThrow(() -> SwingHtmlUtils.copyToClipboard(null));
     }
 }

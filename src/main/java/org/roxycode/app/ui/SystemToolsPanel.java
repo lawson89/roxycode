@@ -178,13 +178,18 @@ public final class SystemToolsPanel extends JPanel {
             super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
             String status = String.valueOf(value);
-            final String statusDetected = "Detected";
-            if (statusDetected.equals(status)) {
-                Color successColor = new Color(40, 167, 69);
+            if (SystemToolService.STATUS_DETECTED.equals(status)) {
+                Color successColor = UIManager.getColor("Actions.Green");
+                if (successColor == null) {
+                    successColor = new Color(40, 167, 69);
+                }
                 setForeground(successColor);
                 setIcon(FontIcon.of(Codicons.CHECK, 16, successColor));
             } else {
-                Color errorColor = new Color(220, 53, 69);
+                Color errorColor = UIManager.getColor("Actions.Red");
+                if (errorColor == null) {
+                    errorColor = new Color(220, 53, 69);
+                }
                 setForeground(errorColor);
                 setIcon(FontIcon.of(Codicons.ERROR, 16, errorColor));
             }
@@ -203,7 +208,7 @@ public final class SystemToolsPanel extends JPanel {
             toolTable
                     .getTableHeader()
                     .putClientProperty(
-                            com.formdev.flatlaf.FlatClientProperties.STYLE,
+                            FlatClientProperties.STYLE,
                             "background: $Table.background; foreground: $Table.foreground; font: bold");
         }
     }

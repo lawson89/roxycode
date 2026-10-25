@@ -1,5 +1,6 @@
 package org.roxycode.app.service;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -33,7 +34,7 @@ public class ProjectAnalysisService {
             // .gitignore)
             if (lastDot > lastSlash + 1 && lastDot < filePath.length() - 1) {
                 String ext = filePath.substring(lastDot).toLowerCase(Locale.ROOT);
-                extensionCounts.put(ext, extensionCounts.getOrDefault(ext, 0) + 1);
+                extensionCounts.merge(ext, 1, Integer::sum);
             }
         }
 
@@ -41,14 +42,8 @@ public class ProjectAnalysisService {
             return "Unknown";
         }
 
-        String dominantExt = "";
-        int maxCount = -1;
-        for (var entry : extensionCounts.entrySet()) {
-            if (entry.getValue() > maxCount) {
-                maxCount = entry.getValue();
-                dominantExt = entry.getKey();
-            }
-        }
+        String dominantExt =
+                Collections.max(extensionCounts.entrySet(), Map.Entry.comparingByValue()).getKey();
 
         return switch (dominantExt) {
             case ".java" -> "Java";

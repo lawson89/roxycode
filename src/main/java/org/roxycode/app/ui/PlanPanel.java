@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import java.awt.*;
-import java.awt.datatransfer.StringSelection;
 import javax.swing.*;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -72,12 +71,7 @@ public final class PlanPanel extends JPanel {
         }
         String markdown = buildPlanMarkdown(plan);
         this.lastCopiedMarkdown = markdown;
-        try {
-            StringSelection selection = new StringSelection(markdown);
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
-        } catch (Exception ignored) {
-            // Ignore clipboard access errors in headless or restricted environments
-        }
+        SwingHtmlUtils.copyToClipboard(markdown);
 
         copyMarkdownButton.setText("Copied!");
         copyMarkdownButton.setIcon(FontIcon.of(Codicons.CHECK, 14));

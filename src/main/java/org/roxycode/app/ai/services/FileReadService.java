@@ -118,12 +118,7 @@ public class FileReadService {
             examples = "fileReadService.readFileNumbered('src/main/java/Main.java')")
     public String readFileNumbered(@AgentDoc(DOC_FILE_PATH) String relativePath)
             throws IOException {
-        String content = readFile(relativePath);
-        if (content.isEmpty()) {
-            return "";
-        }
-        List<String> lines = content.lines().toList();
-        return readLines(relativePath, 1, lines.size());
+        return readLines(relativePath, 1, Integer.MAX_VALUE);
     }
 
     @AgentDoc(
@@ -131,7 +126,7 @@ public class FileReadService {
             examples = "fileReadService.getLineCount('src/main/java/Main.java')")
     public int getLineCount(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
         String content = readFile(relativePath);
-        return content.lines().toList().size();
+        return (int) content.lines().count();
     }
 
     @AgentDoc(

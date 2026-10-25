@@ -84,6 +84,7 @@ class CodebaseCachePanelTest {
         assertEquals("session prompt", panel.getSessionContextArea().getText());
 
         when(metaService.loadRepoCache()).thenReturn(Optional.of("new project repo map"));
+        org.junit.jupiter.api.Assertions.assertFalse(SwingUtilities.isEventDispatchThread());
         panel.onProjectChanged(
                 new org.roxycode.app.events.ProjectChangedEvent(java.nio.file.Path.of("/tmp")));
         for (int i = 0; i < 50; i++) {

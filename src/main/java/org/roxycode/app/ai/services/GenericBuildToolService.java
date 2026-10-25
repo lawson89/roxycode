@@ -72,14 +72,14 @@ public class GenericBuildToolService {
             value = "Cleans the project using the configured clean command",
             examples = "buildToolService.clean()")
     public BuildResult clean() {
-        return runCommand("clean");
+        return runCommand("build", "clean");
     }
 
     @AgentDoc(
             value = "Compiles the project using the configured compile command",
             examples = "buildToolService.compile()")
     public BuildResult compile() {
-        return runCommand("compile");
+        return runCommand("build", "compile");
     }
 
     @AgentDoc(
@@ -103,7 +103,7 @@ public class GenericBuildToolService {
             value = "Runs all tests using the configured test command",
             examples = "buildToolService.runTests()")
     public BuildResult runTests() {
-        return runCommand("run_all");
+        return runCommand("test", "run_all");
     }
 
     @AgentDoc(
@@ -113,11 +113,11 @@ public class GenericBuildToolService {
     public BuildResult runSingleTest(
             @AgentDoc("The name of the test class or method (e.g., MyTest or MyTest#myMethod)")
                     String testName) {
-        return runCommand("run_single", Map.of("testName", testName));
+        return runCommand("test", "run_single", Map.of("testName", testName));
     }
 
-    private BuildResult runCommand(String commandKey) {
-        return runCommand(commandKey, Map.of());
+    private BuildResult runCommand(String section, String commandKey) {
+        return runCommand(section, commandKey, Map.of());
     }
 
     @AgentDoc(
@@ -146,7 +146,8 @@ public class GenericBuildToolService {
                 testResult.getLog());
     }
 
-    private BuildResult runCommand(String commandKey, Map<String, String> placeholders) {
+    private BuildResult runCommand(
+            String section, String commandKey, Map<String, String> placeholders) {
         if (!projectService.hasActiveProject()) {
             return new BuildResult(
                     false, -1, "", List.of("No active project"), List.of(), "No active project");
@@ -156,7 +157,7 @@ public class GenericBuildToolService {
 
         try {
             Map<String, Object> config = loadConfig();
-            String command = getCommand(config, commandKey);
+            String command = getCommand(config, section, commandKey);
             if (command == null || command.isBlank()) {
                 return new BuildResult(
                         false,
@@ -253,14 +254,11 @@ public class GenericBuildToolService {
         return tomlMapper.readValue(configPath.toFile(), Map.class);
     }
 
-    private String getCommand(Map<String, Object> config, String key) {
-        if ("compile".equals(key) || "clean".equals(key)) {
-            Map<String, Object> build = (Map<String, Object>) config.get("build");
-            return build != null ? (String) build.get(key) : null;
-        }
-        if ("run_all".equals(key) || "run_single".equals(key)) {
-            Map<String, Object> test = (Map<String, Object>) config.get("test");
-            return test != null ? (String) test.get(key) : null;
+    private String getCommand(Map<String, Object> config, String section, String key) {
+        Object sectionObj = config.get(section);
+        if (sectionObj instanceof Map<?, ?> sectionMap) {
+            Object cmd = sectionMap.get(key);
+            return cmd instanceof String s ? s : null;
         }
         return null;
     }

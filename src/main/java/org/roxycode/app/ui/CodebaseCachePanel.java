@@ -10,6 +10,7 @@ import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.PromptService;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +59,7 @@ public final class CodebaseCachePanel extends JPanel {
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        refreshStatus();
+        Edt.run(this::refreshStatus);
     }
 
     private void initComponents() {

@@ -120,14 +120,14 @@ public class PlanService {
         boolean hasTests = false;
         boolean hasReview = false;
         for (ImplementationPlan.TechStep s : steps) {
-            String desc = s.description().toLowerCase(Locale.ROOT);
-            if (desc.contains("compile")) {
+            String desc = s.description();
+            if (isCompileStep(desc)) {
                 hasCompile = true;
             }
-            if (desc.contains("unit test") || desc.contains("tests pass")) {
+            if (isUnitTestStep(desc)) {
                 hasTests = true;
             }
-            if (desc.contains("code review")) {
+            if (isCodeReviewStep(desc)) {
                 hasReview = true;
             }
         }
@@ -210,24 +210,28 @@ public class PlanService {
         return description == null ? "" : description.trim().toLowerCase(Locale.ROOT);
     }
 
+    private static boolean isCompileStep(String description) {
+        String desc = normalizeStepDescription(description);
+        return desc.equals(STEP_COMPILE.toLowerCase(Locale.ROOT)) || desc.contains("compile");
+    }
+
+    private static boolean isUnitTestStep(String description) {
+        String desc = normalizeStepDescription(description);
+        return desc.equals(STEP_UNIT_TESTS.toLowerCase(Locale.ROOT))
+                || desc.contains("unit test")
+                || desc.contains("tests pass");
+    }
+
     private static boolean isCodeReviewStep(String description) {
-        if (description == null) {
-            return false;
-        }
-        String desc = description.trim().toLowerCase(Locale.ROOT);
+        String desc = normalizeStepDescription(description);
         return desc.equals(STEP_CODE_REVIEW.toLowerCase(Locale.ROOT))
                 || desc.contains("code review");
     }
 
     private static boolean isMandatoryVerificationStep(String description) {
-        if (description == null) {
-            return false;
-        }
-        String trimmed = description.trim();
-        return STEP_COMPILE.equalsIgnoreCase(trimmed)
-                || STEP_UNIT_TESTS.equalsIgnoreCase(trimmed)
-                || STEP_CODE_REVIEW.equalsIgnoreCase(trimmed)
-                || isCodeReviewStep(trimmed);
+        return isCompileStep(description)
+                || isUnitTestStep(description)
+                || isCodeReviewStep(description);
     }
 
     /** Adds a new technical implementation step to the active plan. */

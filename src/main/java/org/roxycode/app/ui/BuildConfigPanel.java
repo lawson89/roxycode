@@ -259,47 +259,43 @@ public final class BuildConfigPanel extends JPanel {
                             "Component.warning.borderColor",
                             "Actions.Yellow");
             String hex = toHex(warningColor);
-            bannerIconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warningColor));
-            bannerMessageLabel.setText(DOCKER_MISSING_WARNING_TEXT);
-            bannerPanel.putClientProperty(
-                    FlatClientProperties.STYLE,
-                    "arc: 12; border: 1,1,1,1,"
-                            + hex
-                            + ",1,12; background: fade("
-                            + hex
-                            + ", 15%)");
+            applyBannerStyle(
+                    Codicons.WARNING,
+                    warningColor,
+                    "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: fade(" + hex + ", 15%)",
+                    DOCKER_MISSING_WARNING_TEXT);
         } else if (containerEnabled) {
             Color verifiedColor = resolveColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
             String hex = toHex(verifiedColor);
-            bannerIconLabel.setIcon(FontIcon.of(Codicons.SHIELD, 18, verifiedColor));
-            bannerMessageLabel.setText(CONTAINER_ACTIVE_TEXT);
-            bannerPanel.putClientProperty(
-                    FlatClientProperties.STYLE,
-                    "arc: 12; border: 1,1,1,1,"
-                            + hex
-                            + ",1,12; background: fade("
-                            + hex
-                            + ", 15%)");
+            applyBannerStyle(
+                    Codicons.SHIELD,
+                    verifiedColor,
+                    "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: fade(" + hex + ", 15%)",
+                    CONTAINER_ACTIVE_TEXT);
         } else {
             Color infoColor =
                     resolveColor(
                             new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
             Color borderColor = resolveColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
             Color panelBg = resolveColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background");
-            String borderHex = toHex(borderColor);
-            String panelBgHex = toHex(panelBg);
-            bannerIconLabel.setIcon(FontIcon.of(Codicons.INFO, 18, infoColor));
-            bannerMessageLabel.setText(HOST_EXECUTION_ACTIVE_TEXT);
-            bannerPanel.putClientProperty(
-                    FlatClientProperties.STYLE,
+            applyBannerStyle(
+                    Codicons.INFO,
+                    infoColor,
                     "arc: 12; border: 1,1,1,1,"
-                            + borderHex
+                            + toHex(borderColor)
                             + ",1,12; background: darken("
-                            + panelBgHex
-                            + ", 3%)");
+                            + toHex(panelBg)
+                            + ", 3%)",
+                    HOST_EXECUTION_ACTIVE_TEXT);
         }
         bannerPanel.revalidate();
         bannerPanel.repaint();
+    }
+
+    private void applyBannerStyle(Codicons icon, Color iconColor, String style, String message) {
+        bannerIconLabel.setIcon(FontIcon.of(icon, 18, iconColor));
+        bannerMessageLabel.setText(message);
+        bannerPanel.putClientProperty(FlatClientProperties.STYLE, style);
     }
 
     private static Color resolveColor(Color fallback, String... uiKeys) {
@@ -364,11 +360,7 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     private void updateTextAreaTheme() {
-        String themeName =
-                settingsService != null && settingsService.getSettings() != null
-                        ? settingsService.getSettings().getTheme()
-                        : null;
-        SettingsPanel.applyRSyntaxTheme(textArea, themeName);
+        SettingsPanel.applyRSyntaxTheme(textArea, settingsService);
     }
 
     JPanel getBannerPanel() {

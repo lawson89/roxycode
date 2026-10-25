@@ -115,16 +115,7 @@ public record ImplementationPlan(
         for (String req : requirements) {
             md.append("- ").append(req).append("\n");
         }
-        md.append("\n## Technical Steps\n");
-        int index = 0;
-        for (TechStep step : technicalSteps) {
-            md.append(step.completed() ? "- [x] " : "- [ ] ")
-                    .append(index)
-                    .append(". ")
-                    .append(step.description())
-                    .append("\n");
-            index++;
-        }
+        md.append("\n## Technical Steps\n").append(formatStepsMarkdown());
 
         if (includeHandoffLog && !handoffLog.isEmpty()) {
             md.append(
@@ -146,6 +137,25 @@ public record ImplementationPlan(
         }
 
         return md.toString();
+    }
+
+    /**
+     * Formats the technical steps as a 0-based numbered Markdown checklist.
+     *
+     * @return the Markdown checklist of technical steps
+     */
+    public String formatStepsMarkdown() {
+        StringBuilder sb = new StringBuilder();
+        int index = 0;
+        for (TechStep step : technicalSteps) {
+            sb.append(step.completed() ? "- [x] " : "- [ ] ")
+                    .append(index)
+                    .append(". ")
+                    .append(step.description())
+                    .append("\n");
+            index++;
+        }
+        return sb.toString();
     }
 
     private static String escapeMarkdownTableCell(String value) {

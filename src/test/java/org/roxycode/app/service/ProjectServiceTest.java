@@ -79,7 +79,12 @@ class ProjectServiceTest {
         assertEquals(
                 projectPath.resolve("sub/file.txt").toAbsolutePath().normalize(),
                 projectService.resolvePath("sub/file.txt"));
+        assertEquals(".", projectService.resolveRelativePath(null));
+        assertEquals(".", projectService.resolveRelativePath("   "));
+        assertEquals("sub/file.txt", projectService.resolveRelativePath("sub/file.txt"));
         assertThrows(SecurityException.class, () -> projectService.resolvePath("../escape.txt"));
+        assertThrows(
+                SecurityException.class, () -> projectService.resolveRelativePath("../escape.txt"));
     }
 
     @Test

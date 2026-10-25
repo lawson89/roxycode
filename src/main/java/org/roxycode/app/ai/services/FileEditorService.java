@@ -95,11 +95,9 @@ public class FileEditorService {
             @AgentDoc("The replacement text block") String replacementBlock)
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        if (!Files.exists(path)) {
-            return new EditorResult(false, "", "File does not exist: " + relativePath);
-        }
-        if (Files.isDirectory(path)) {
-            return new EditorResult(false, "", "Path is a directory: " + relativePath);
+        EditorResult validationError = validateRegularFile(path, relativePath);
+        if (validationError != null) {
+            return validationError;
         }
 
         String content = Files.readString(path);
@@ -213,11 +211,9 @@ public class FileEditorService {
             @AgentDoc("The replacement content for the line range") String replacementText)
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        if (!Files.exists(path)) {
-            return new EditorResult(false, "", "File does not exist: " + relativePath);
-        }
-        if (Files.isDirectory(path)) {
-            return new EditorResult(false, "", "Path is a directory: " + relativePath);
+        EditorResult validationError = validateRegularFile(path, relativePath);
+        if (validationError != null) {
+            return validationError;
         }
 
         String rawContent = Files.readString(path);
@@ -283,11 +279,9 @@ public class FileEditorService {
             @AgentDoc("The content to insert") String content)
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        if (!Files.exists(path)) {
-            return new EditorResult(false, "", "File does not exist: " + relativePath);
-        }
-        if (Files.isDirectory(path)) {
-            return new EditorResult(false, "", "Path is a directory: " + relativePath);
+        EditorResult validationError = validateRegularFile(path, relativePath);
+        if (validationError != null) {
+            return validationError;
         }
 
         String rawContent = Files.readString(path);
@@ -343,11 +337,10 @@ public class FileEditorService {
             @AgentDoc("The file path relative to the project root") String relativePath)
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        if (!Files.exists(path)) {
-            return new EditorResult(false, "", "File does not exist: " + relativePath);
-        }
-        if (Files.isDirectory(path)) {
-            return new EditorResult(false, "", "Cannot delete directory: " + relativePath);
+        EditorResult validationError =
+                validateRegularFile(path, relativePath, "Cannot delete directory: ");
+        if (validationError != null) {
+            return validationError;
         }
         Files.delete(path);
         log.info("Deleted file: {} at {}", relativePath, path.toAbsolutePath());
@@ -407,11 +400,10 @@ public class FileEditorService {
             throws IOException {
         Path source = projectService.resolvePath(sourcePath);
         Path target = projectService.resolvePath(targetPath);
-        if (!Files.exists(source)) {
-            return new EditorResult(false, "", "File does not exist: " + sourcePath);
-        }
-        if (Files.isDirectory(source)) {
-            return new EditorResult(false, "", "Cannot copy directory: " + sourcePath);
+        EditorResult validationError =
+                validateRegularFile(source, sourcePath, "Cannot copy directory: ");
+        if (validationError != null) {
+            return validationError;
         }
         if (target.getParent() != null) {
             Files.createDirectories(target.getParent());
@@ -448,6 +440,21 @@ public class FileEditorService {
 
         eventPublisher.publishEvent(new FileChangedEvent(relativePath));
         return new EditorResult(true, "Directory created successfully: " + relativePath, null);
+    }
+
+    private static EditorResult validateRegularFile(Path path, String relativePath) {
+        return validateRegularFile(path, relativePath, "Path is a directory: ");
+    }
+
+    private static EditorResult validateRegularFile(
+            Path path, String relativePath, String directoryErrorPrefix) {
+        if (!Files.exists(path)) {
+            return new EditorResult(false, "", "File does not exist: " + relativePath);
+        }
+        if (Files.isDirectory(path)) {
+            return new EditorResult(false, "", directoryErrorPrefix + relativePath);
+        }
+        return null;
     }
 
     private EditorResult applyReplacement(

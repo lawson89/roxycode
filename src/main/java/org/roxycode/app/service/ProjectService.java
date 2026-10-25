@@ -82,6 +82,28 @@ public class ProjectService {
     }
 
     /**
+     * Resolves a path within the project sandbox and returns the normalized project-relative path
+     * using forward slashes ({@code "/"}), or {@code "."} when pointing to the project root.
+     *
+     * @param relativePath the path relative to the project root (null or blank defaults to ".")
+     * @return the normalized relative path string
+     * @throws IllegalStateException if no active project root is set
+     * @throws SecurityException if the resolved path escapes the project root
+     */
+    public String resolveRelativePath(String relativePath) {
+        Path projectRoot = getCurrentProjectRoot();
+        if (projectRoot == null) {
+            throw new IllegalStateException("Project root is not set.");
+        }
+        Path root = projectRoot.toAbsolutePath().normalize();
+        String target =
+                (relativePath == null || relativePath.isBlank()) ? "." : relativePath.trim();
+        Path resolved = resolveWithinSandbox(root, target);
+        String rel = root.relativize(resolved).toString().replace((char) 92, '/');
+        return rel.isEmpty() ? "." : rel;
+    }
+
+    /**
      * Returns the per-project data directory under {@code <roxyHomeDir>/projects/<name>-<hash>} for
      * the active project.
      *
@@ -95,7 +117,7 @@ public class ProjectService {
         }
         Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
         String dirName =
-                sanitizeProjectDirName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
+                sanitizeProjectName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
         Path roxyHome = settingsService.getRoxyHomeDir();
         if (roxyHome == null) {
             roxyHome = SettingsService.getDefaultRoxyHomeDir();
@@ -136,10 +158,6 @@ public class ProjectService {
             sanitized = sanitized.substring(0, MAX_PROJECT_NAME_LENGTH).replaceAll("-+$", "");
         }
         return sanitized.isEmpty() ? "project" : sanitized;
-    }
-
-    static String sanitizeProjectDirName(Path normalizedRoot) {
-        return sanitizeProjectName(normalizedRoot);
     }
 
     static String computeProjectHash(Path normalizedRoot) {

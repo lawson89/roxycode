@@ -6,8 +6,6 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
@@ -235,7 +233,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
 
         sendButton.addActionListener(this::sendMessage);
 
-        setupInputContextMenu();
+        SwingHtmlUtils.installTextContextMenu(inputArea);
         setupUndoRedo();
         setupKeyboardShortcuts();
     }
@@ -523,35 +521,6 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                         if (undoManager.canRedo()) {
                             undoManager.redo();
                         }
-                    }
-                });
-    }
-
-    private void setupInputContextMenu() {
-        inputArea.addMouseListener(
-                new MouseAdapter() {
-                    @Override
-                    public void mousePressed(MouseEvent e) {
-                        if (e.isPopupTrigger()) showPopup(e);
-                    }
-
-                    @Override
-                    public void mouseReleased(MouseEvent e) {
-                        if (e.isPopupTrigger()) showPopup(e);
-                    }
-
-                    private void showPopup(MouseEvent e) {
-                        inputArea.requestFocusInWindow();
-                        JPopupMenu menu = new JPopupMenu();
-                        menu.add(new JMenuItem(new DefaultEditorKit.CutAction())).setText("Cut");
-                        menu.add(new JMenuItem(new DefaultEditorKit.CopyAction())).setText("Copy");
-                        menu.add(new JMenuItem(new DefaultEditorKit.PasteAction()))
-                                .setText("Paste");
-                        menu.addSeparator();
-                        JMenuItem selectAll = new JMenuItem("Select All");
-                        selectAll.addActionListener(ae -> inputArea.selectAll());
-                        menu.add(selectAll);
-                        menu.show(e.getComponent(), e.getX(), e.getY());
                     }
                 });
     }

@@ -1,5 +1,6 @@
 package org.roxycode.app.ai;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.roxycode.app.util.ExceptionUtils;
 import org.springframework.ai.tool.execution.ToolExecutionException;
@@ -10,6 +11,11 @@ import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
  * root-cause tool errors as a JSON object {@code {"error": "..."}} so the LLM can self-correct.
  */
 public class RoxyToolExecutionExceptionProcessor implements ToolExecutionExceptionProcessor {
+
+    private static final String ERROR_KEY = "error";
+    private static final String ERROR_JSON_PREFIX =
+            """
+            {"error":""";
 
     @Override
     public String process(ToolExecutionException exception) {
@@ -24,18 +30,25 @@ public class RoxyToolExecutionExceptionProcessor implements ToolExecutionExcepti
                 cause != null && cause.getMessage() != null
                         ? cause.getMessage()
                         : (cause != null ? cause.toString() : "Unknown error");
+        return toJsonError(AiConfig.SHARED_OBJECT_MAPPER, msg);
+    }
 
+    /** Serializes an error message as a JSON object {@code {"error": "..."}}. */
+    public static String toJsonError(ObjectMapper mapper, String message) {
+        ObjectMapper effectiveMapper = mapper != null ? mapper : AiConfig.SHARED_OBJECT_MAPPER;
         try {
-            return AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(Map.of("error", msg));
+            return effectiveMapper.writeValueAsString(
+                    Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
         } catch (Exception e) {
-            // Minimal fallback if Jackson fails
-            return "{\"error\":\"" + msg.replace("\"", "\\\"").replace("\n", "\\n") + "\"}";
+            return """
+                    {"error":"Internal Error during error serialization"}"""
+                    .strip();
         }
     }
 
     /** Returns {@code true} if the given tool response text is a JSON error object. */
     public static boolean isErrorResponse(String responseText) {
-        return responseText != null && responseText.trim().startsWith("{\"error\":");
+        return responseText != null && responseText.trim().startsWith(ERROR_JSON_PREFIX);
     }
 
     /** Extracts the error message from a JSON error response string. */
@@ -44,9 +57,9 @@ public class RoxyToolExecutionExceptionProcessor implements ToolExecutionExcepti
             return "Unknown error";
         }
         String trimmed = responseText.trim();
-        if (trimmed.startsWith("{\"error\":")) {
+        if (trimmed.startsWith(ERROR_JSON_PREFIX)) {
             try {
-                return AiConfig.SHARED_OBJECT_MAPPER.readTree(trimmed).get("error").asText();
+                return AiConfig.SHARED_OBJECT_MAPPER.readTree(trimmed).get(ERROR_KEY).asText();
             } catch (Exception e) {
                 return trimmed;
             }

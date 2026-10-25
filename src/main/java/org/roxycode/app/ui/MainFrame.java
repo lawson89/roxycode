@@ -8,6 +8,7 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -76,18 +77,24 @@ public final class MainFrame extends JFrame {
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        updateTitle();
-        if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {
-            qaWorkspacePanel.getQaChatPanel().getController().resetForProjectChange();
-        }
-        if (taskWorkspacePanel != null) {
-            if (taskWorkspacePanel.getTaskChatPanel() != null) {
-                taskWorkspacePanel.getTaskChatPanel().getController().resetForProjectChange();
-            }
-            taskWorkspacePanel.refreshGitChanges();
-        }
-        chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
-        chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
+        Edt.run(
+                () -> {
+                    updateTitle();
+                    if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {
+                        qaWorkspacePanel.getQaChatPanel().getController().resetForProjectChange();
+                    }
+                    if (taskWorkspacePanel != null) {
+                        if (taskWorkspacePanel.getTaskChatPanel() != null) {
+                            taskWorkspacePanel
+                                    .getTaskChatPanel()
+                                    .getController()
+                                    .resetForProjectChange();
+                        }
+                        taskWorkspacePanel.refreshGitChanges();
+                    }
+                    chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
+                    chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
+                });
     }
 
     private void setupLaf() {

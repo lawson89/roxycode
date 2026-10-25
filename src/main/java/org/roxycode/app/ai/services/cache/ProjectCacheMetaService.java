@@ -73,18 +73,7 @@ public class ProjectCacheMetaService {
 
         try {
             String content = Files.readString(cachePath, StandardCharsets.UTF_8);
-            LocalDateTime lastUpdated =
-                    LocalDateTime.ofInstant(
-                            Files.getLastModifiedTime(cachePath).toInstant(),
-                            ZoneId.systemDefault());
-            long tokens = TokenUtils.estimateTokens(content);
-            Optional<ProjectCacheMeta> derived =
-                    Optional.of(
-                            new ProjectCacheMeta(
-                                    projectService.getProjectName(), lastUpdated, tokens));
-            cachedProjectRoot = currentRoot;
-            cachedMeta = derived;
-            return derived;
+            return cacheAndBuildMeta(currentRoot, cachePath, content);
         } catch (IOException e) {
             log.error("Failed to derive cache meta: {}", e.getMessage());
             return Optional.empty();
@@ -98,18 +87,24 @@ public class ProjectCacheMetaService {
         Path path = projectService.resolveProjectDataPath(REPO_CACHE_FILE);
         try {
             Files.writeString(path, content, StandardCharsets.UTF_8);
-            LocalDateTime lastUpdated =
-                    LocalDateTime.ofInstant(
-                            Files.getLastModifiedTime(path).toInstant(), ZoneId.systemDefault());
-            long tokens = TokenUtils.estimateTokens(content);
-            cachedProjectRoot = currentRoot;
-            cachedMeta =
-                    Optional.of(
-                            new ProjectCacheMeta(
-                                    projectService.getProjectName(), lastUpdated, tokens));
+            cacheAndBuildMeta(currentRoot, path, content);
         } catch (IOException e) {
             log.error("Failed to save repo cache: {}", e.getMessage());
         }
+    }
+
+    private Optional<ProjectCacheMeta> cacheAndBuildMeta(
+            Path currentRoot, Path cachePath, String content) throws IOException {
+        LocalDateTime lastUpdated =
+                LocalDateTime.ofInstant(
+                        Files.getLastModifiedTime(cachePath).toInstant(), ZoneId.systemDefault());
+        long tokens = TokenUtils.estimateTokens(content);
+        Optional<ProjectCacheMeta> derived =
+                Optional.of(
+                        new ProjectCacheMeta(projectService.getProjectName(), lastUpdated, tokens));
+        cachedProjectRoot = currentRoot;
+        cachedMeta = derived;
+        return derived;
     }
 
     public Optional<String> loadRepoCache() {

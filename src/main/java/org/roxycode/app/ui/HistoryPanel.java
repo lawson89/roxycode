@@ -166,10 +166,10 @@ public class HistoryPanel extends JPanel {
                     }
                     tableModel.setMessages(messages);
 
-                    long totalTokens = 0;
-                    for (Message m : messages) {
-                        totalTokens += TokenUtils.estimateTokens(m.getText());
-                    }
+                    long totalTokens =
+                            messages.stream()
+                                    .mapToLong(m -> TokenUtils.estimateTokens(m.getText()))
+                                    .sum();
                     statsLabel.setText(
                             messages.size() + " Messages | " + totalTokens + " Tokens (Estimated)");
                 });
@@ -229,30 +229,25 @@ public class HistoryPanel extends JPanel {
         @Override
         public Object getValueAt(int rowIndex, int columnIndex) {
             Message msg = messages.get(rowIndex);
-            switch (columnIndex) {
-                case 0:
-                    return rowIndex + 1;
-                case 1:
+            return switch (columnIndex) {
+                case 0 -> rowIndex + 1;
+                case 1 -> {
                     if (msg.getMessageType() == MessageType.ASSISTANT) {
                         AssistantMessage am = (AssistantMessage) msg;
-                        if (am.getToolCalls() != null && !am.getToolCalls().isEmpty()) {
-                            return "tool-call";
-                        }
-                        return "assistant";
+                        yield (am.getToolCalls() != null && !am.getToolCalls().isEmpty())
+                                ? "tool-call"
+                                : "assistant";
                     }
                     if (msg.getMessageType() == MessageType.TOOL) {
-                        return "tool-response";
+                        yield "tool-response";
                     }
-                    return msg.getMessageType().name().toLowerCase(Locale.ROOT);
-                case 2:
-                    return TokenUtils.estimateTokens(msg.getText());
-                case 3:
-                    return StringUtils.abbreviate(StringUtils.defaultString(msg.getText()), 100);
-                case 4:
-                    return "View";
-                default:
-                    return null;
-            }
+                    yield msg.getMessageType().name().toLowerCase(Locale.ROOT);
+                }
+                case 2 -> TokenUtils.estimateTokens(msg.getText());
+                case 3 -> StringUtils.abbreviate(StringUtils.defaultString(msg.getText()), 100);
+                case 4 -> "View";
+                default -> null;
+            };
         }
     }
 }

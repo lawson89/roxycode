@@ -27,7 +27,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 class MainFrameTest {
     @Test
-    void testProjectChangedEventClearsQaAndTaskConversationsAndUpdatesTitle() {
+    void testProjectChangedEventClearsQaAndTaskConversationsAndUpdatesTitle() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeFalse(
                 java.awt.GraphicsEnvironment.isHeadless(),
                 "Skipping JFrame test in headless environment");
@@ -150,7 +150,9 @@ class MainFrameTest {
                                 4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB));
 
         when(projectService.getProjectName()).thenReturn("NewProject");
+        assertFalse(javax.swing.SwingUtilities.isEventDispatchThread());
         mainFrame.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new")));
+        javax.swing.SwingUtilities.invokeAndWait(() -> {});
         blockTurn.countDown();
 
         assertEquals("RoxyCode - [NewProject]", mainFrame.getTitle());

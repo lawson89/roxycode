@@ -30,6 +30,7 @@ class GrepServiceTest {
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveRelativePath(any())).thenCallRealMethod();
         grepService = new GrepService(projectService);
     }
 

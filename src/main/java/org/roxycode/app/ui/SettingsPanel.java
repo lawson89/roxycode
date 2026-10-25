@@ -240,6 +240,15 @@ public final class SettingsPanel extends JPanel {
         return FlatLaf.isLafDark();
     }
 
+    public static void applyRSyntaxTheme(
+            RSyntaxTextArea textArea, SettingsService settingsService) {
+        String themeName =
+                settingsService != null && settingsService.getSettings() != null
+                        ? settingsService.getSettings().getTheme()
+                        : null;
+        applyRSyntaxTheme(textArea, themeName);
+    }
+
     public static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
         if (textArea == null) {
             return;

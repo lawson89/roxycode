@@ -34,9 +34,9 @@ public class SystemToolService {
     private static final String JAVA = "Java";
     private static final String DOCKER = "Docker";
     private static final String ARG_VERSION = "--version";
-    static final String STATUS_DETECTED = "Detected";
-    static final String STATUS_ERROR = "Error";
-    static final String STATUS_MISSING = "Missing";
+    public static final String STATUS_DETECTED = "Detected";
+    public static final String STATUS_ERROR = "Error";
+    public static final String STATUS_MISSING = "Missing";
     static final String VERSION_NOT_FOUND = "Not found";
     private static final int MAX_DOCKER_ERROR_LENGTH = 120;
     private static final String DOCKER_DESCRIPTION =

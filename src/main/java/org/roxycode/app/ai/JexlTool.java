@@ -26,7 +26,6 @@ import org.springframework.stereotype.Component;
 public class JexlTool {
 
     private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
-    private static final String ERROR_KEY = "error";
     private static final String RESULT_KEY = "result";
 
     private final JexlEngine jexl;
@@ -159,13 +158,6 @@ public class JexlTool {
     }
 
     private String toJsonError(String message) {
-        try {
-            return mapper.writeValueAsString(
-                    Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
-        } catch (Exception ex) {
-            return """
-                    {"error":"Internal Error during error serialization"}"""
-                    .strip();
-        }
+        return RoxyToolExecutionExceptionProcessor.toJsonError(mapper, message);
     }
 }

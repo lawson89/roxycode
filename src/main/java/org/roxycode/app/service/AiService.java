@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.JexlTool;
+import org.roxycode.app.ai.ReturnDirectToolCallingManager;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
@@ -24,6 +25,14 @@ import org.springframework.stereotype.Service;
 public class AiService {
     private static final String AGENT_NAME = "Roxy";
     private static final String FINISH_REASON_UNKNOWN = "UNKNOWN";
+
+    public static final String TRUNCATED_MARKER = "⚠️ **Response Truncated (finishReason:";
+    public static final String NO_VISIBLE_RESPONSE_MARKER =
+            "⚠️ **No Visible Response (finishReason:";
+    public static final String EMPTY_RESPONSE_MARKER =
+            "⚠️ **Empty Response Returned (finishReason:";
+    public static final String EMPTY_STOP_MESSAGE =
+            "Roxy completed the turn without generating a visible text message.";
 
     private final ChatClient chatClient;
     private final SettingsService settingsService;
@@ -128,8 +137,9 @@ public class AiService {
         if (isTokenLimitFinishReason(finishReason)) {
             if (hasVisibleContent) {
                 StringBuilder sb = new StringBuilder(content);
-                sb.append("\n\n---\n")
-                        .append("> ⚠️ **Response Truncated (finishReason: ")
+                sb.append("\n\n---\n> ")
+                        .append(TRUNCATED_MARKER)
+                        .append(" ")
                         .append(finishReason)
                         .append(
                                 ")**: The response was cut off because it reached the maximum output token limit.");
@@ -141,7 +151,8 @@ public class AiService {
             }
 
             StringBuilder sb = new StringBuilder();
-            sb.append("⚠️ **No Visible Response (finishReason: ")
+            sb.append(NO_VISIBLE_RESPONSE_MARKER)
+                    .append(" ")
                     .append(finishReason)
                     .append(")**\n\n")
                     .append(
@@ -160,11 +171,9 @@ public class AiService {
                     "STOP".equalsIgnoreCase(finishReason)
                             || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
             StringBuilder sb = new StringBuilder();
-            sb.append("⚠️ **Empty Response Returned (finishReason: ")
-                    .append(finishReason)
-                    .append(")**\n\n");
+            sb.append(EMPTY_RESPONSE_MARKER).append(" ").append(finishReason).append(")**\n\n");
             if (normalStop) {
-                sb.append("Roxy completed the turn without generating a visible text message.");
+                sb.append(EMPTY_STOP_MESSAGE);
             } else {
                 sb.append("Generation was blocked or aborted by the model (")
                         .append(finishReason)
@@ -186,6 +195,24 @@ public class AiService {
         }
 
         return content;
+    }
+
+    public static boolean isAutoNudgeableResponse(String response) {
+        return isAutoNudgeableResponse(response, true);
+    }
+
+    public static boolean isAutoNudgeableResponse(String response, boolean hadToolTurns) {
+        if (StringUtils.isBlank(response)) {
+            return false;
+        }
+        if (response.startsWith(ReturnDirectToolCallingManager.MAX_TURNS_EXCEEDED_PREFIX)
+                || response.contains(TRUNCATED_MARKER)
+                || response.contains(NO_VISIBLE_RESPONSE_MARKER)) {
+            return true;
+        }
+        return hadToolTurns
+                && response.contains(EMPTY_RESPONSE_MARKER)
+                && response.contains(EMPTY_STOP_MESSAGE);
     }
 
     private static boolean isTokenLimitFinishReason(String finishReason) {

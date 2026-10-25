@@ -187,9 +187,7 @@ public class GrepService {
         }
 
         Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-        Path searchDir = projectService.resolvePath(relativePath);
-        Path relSearchDir = root.relativize(searchDir);
-        String targetArg = relSearchDir.toString().isEmpty() ? "." : relSearchDir.toString();
+        String targetArg = projectService.resolveRelativePath(relativePath);
 
         int clampedContext = Math.max(0, Math.min(contextLines, MAX_CONTEXT_LINES));
 
@@ -293,15 +291,14 @@ public class GrepService {
         }
 
         Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-        Path searchDir = projectService.resolvePath(relativePath);
-        Path relSearchDir = root.relativize(searchDir);
+        String relSearchDir = projectService.resolveRelativePath(relativePath);
 
         List<String> command = new ArrayList<>();
         command.add("rg");
         command.add("--files");
         command.add("--color=never");
-        if (!relSearchDir.toString().isEmpty()) {
-            command.add(relSearchDir.toString());
+        if (!".".equals(relSearchDir)) {
+            command.add(relSearchDir);
         }
 
         List<String> files = new ArrayList<>();

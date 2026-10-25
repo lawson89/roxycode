@@ -237,23 +237,14 @@ public class BuildContainerService {
             if (safeToml.isEmpty()) {
                 return section;
             }
-            return safeToml.stripTrailing()
-                    + """
-
-
-                    """
-                    + section;
+            return safeToml.stripTrailing() + "\n\n" + section;
         }
 
         if (!updatedEnabledLine && containerSectionIndex >= 0) {
             outputLines.add(containerSectionIndex + 1, "enabled = " + enabled);
         }
 
-        return String.join(
-                """
-
-                """,
-                outputLines);
+        return String.join("\n", outputLines);
     }
 
     private static boolean isEnabledAssignment(String trimmed) {
@@ -264,18 +255,14 @@ public class BuildContainerService {
         return afterKey.startsWith("=");
     }
 
-    static String sanitizeProjectName(Path projectRoot) {
-        return ProjectService.sanitizeProjectName(projectRoot);
-    }
-
     static String buildContainerName(Path projectRoot) {
-        String projectSlug = sanitizeProjectName(projectRoot);
+        String projectSlug = ProjectService.sanitizeProjectName(projectRoot);
         String uniqueSuffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         return CONTAINER_NAME_PREFIX + projectSlug + "-" + uniqueSuffix;
     }
 
     static GenericContainer<?> createConfiguredContainer(ContainerSessionKey key) {
-        String projectName = sanitizeProjectName(key.projectRoot());
+        String projectName = ProjectService.sanitizeProjectName(key.projectRoot());
         String containerName = buildContainerName(key.projectRoot());
         Consumer<CreateContainerCmd> nameModifier = cmd -> cmd.withName(containerName);
         return new GenericContainer<>(DockerImageName.parse(key.image()))

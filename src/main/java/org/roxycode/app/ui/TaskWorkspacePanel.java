@@ -120,9 +120,7 @@ public final class TaskWorkspacePanel extends JPanel {
 
     @EventListener
     public void onFileChanged(FileChangedEvent event) {
-        if (gitChangesPanel != null) {
-            Edt.run(gitChangesPanel::refresh);
-        }
+        Edt.run(this::refreshGitChanges);
     }
 
     @EventListener
@@ -133,9 +131,7 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     public void onViewShown() {
-        if (gitChangesPanel != null) {
-            gitChangesPanel.refresh();
-        }
+        refreshGitChanges();
         if (taskChatPanel != null) {
             taskTabs.setSelectedComponent(taskChatPanel);
             SwingUtilities.invokeLater(taskChatPanel::focusInput);

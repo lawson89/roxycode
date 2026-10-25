@@ -19,6 +19,7 @@ import org.roxycode.app.ai.services.BuildContainerService.ContainerConfig;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSession;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSessionKey;
+import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
 import org.testcontainers.containers.GenericContainer;
 
@@ -38,7 +39,7 @@ class BuildContainerServiceTest {
     @Test
     void testContainerNameGenerationAndSanitization() {
         Path normalProject = Path.of("/Users/dev/My Cool Project!");
-        assertEquals("my-cool-project", BuildContainerService.sanitizeProjectName(normalProject));
+        assertEquals("my-cool-project", ProjectService.sanitizeProjectName(normalProject));
 
         String containerName = BuildContainerService.buildContainerName(normalProject);
         assertTrue(
@@ -51,10 +52,9 @@ class BuildContainerServiceTest {
                 secondName,
                 "Container names should have a unique suffix to avoid collisions");
 
-        assertEquals("project", BuildContainerService.sanitizeProjectName(Path.of("/")));
-        assertEquals("project", BuildContainerService.sanitizeProjectName(null));
-        assertEquals(
-                "project", BuildContainerService.sanitizeProjectName(Path.of("/tmp/---___---")));
+        assertEquals("project", ProjectService.sanitizeProjectName(Path.of("/")));
+        assertEquals("project", ProjectService.sanitizeProjectName(null));
+        assertEquals("project", ProjectService.sanitizeProjectName(Path.of("/tmp/---___---")));
     }
 
     @Test
