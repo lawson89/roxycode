@@ -6,11 +6,13 @@ import static org.mockito.Mockito.*;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserMessageEvent;
 import org.roxycode.app.service.AiService;
@@ -217,5 +219,178 @@ class ChatControllerTest {
                 "System feedback message should be displayed when sending image without text");
         verifyNoInteractions(publisher);
         verifyNoInteractions(aiService);
+    }
+
+    @Test
+    void testTransientErrorWhenCurrentTurnPositiveAutoNudgesWhileTurnZeroDoesNot()
+            throws Exception {
+        AiService aiService = mock(AiService.class);
+        PlanService planService = mock(PlanService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        Executor directExecutor = Runnable::run;
+
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+
+        FeatureChatPanel panel =
+                new FeatureChatPanel(
+                        aiService, planService, publisher, chatMemory, null, directExecutor);
+        panel.getController().setErrorNudgeDelayMs(0);
+
+        // Case 1: Failure on turn 0 (before any tool executes) -> NO auto-nudge
+        when(aiService.chat(anyString(), any(), eq("Bad API call"), any()))
+                .thenThrow(new RuntimeException("Failed to generate content"));
+
+        SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage("Bad API call"));
+
+        verify(aiService, times(1)).chat(anyString(), any(), anyString(), any());
+        assertEquals(0, panel.getController().getConsecutiveAutoNudges());
+        assertFalse(panel.getOutputArea().getText().contains("Auto-nudging Roxy to continue"));
+        assertFalse(panel.getModel().isLoading());
+
+        // Case 2: Failure after a tool executed (currentTurn > 0) -> auto-nudges with "continue"
+        clearInvocations(aiService);
+        AtomicInteger callCount = new AtomicInteger(0);
+        when(aiService.chat(anyString(), any(), anyString(), any()))
+                .thenAnswer(
+                        inv -> {
+                            int n = callCount.incrementAndGet();
+                            if (n == 1) {
+                                panel.onAgentTurn(
+                                        new AgentTurnEvent("task:default", "Roxy", 1, "CODE"));
+                                throw new RuntimeException("Failed to generate content");
+                            }
+                            return "Recovered and completed.";
+                        });
+
+        SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage("Implement step"));
+
+        assertEquals(2, callCount.get());
+        verify(aiService)
+                .chat(eq("task:default"), eq(WorkflowPhase.CODE), eq("Implement step"), any());
+        verify(aiService)
+                .chat(
+                        eq("task:default"),
+                        eq(WorkflowPhase.CODE),
+                        eq(ChatController.AUTO_NUDGE_PROMPT),
+                        any());
+        assertEquals(1, panel.getController().getConsecutiveAutoNudges());
+        String html = panel.getOutputArea().getText();
+        assertTrue(html.contains("Error: Failed to generate content"));
+        assertTrue(html.contains("Auto-nudging Roxy to continue (1/2)..."));
+        assertTrue(html.contains("Recovered and completed."));
+        assertFalse(panel.getModel().isLoading());
+    }
+
+    @Test
+    void testMaxToolTurnsTruncatedAndEmptyPostToolResponseAutoNudgeUpToCapAndResetOnUserAction()
+            throws Exception {
+        AiService aiService = mock(AiService.class);
+        PlanService planService = mock(PlanService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        Executor directExecutor = Runnable::run;
+
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+
+        FeatureChatPanel panel =
+                new FeatureChatPanel(
+                        aiService, planService, publisher, chatMemory, null, directExecutor);
+
+        AtomicInteger callCount = new AtomicInteger(0);
+        when(aiService.chat(anyString(), any(), anyString(), any()))
+                .thenAnswer(
+                        inv -> {
+                            int n = callCount.incrementAndGet();
+                            if (n == 1) {
+                                return "Autonomous execution stopped: Maximum tool turns (5) exceeded.";
+                            }
+                            if (n == 2) {
+                                return "Partial output\n\n---\n> ⚠️ **Response Truncated (finishReason: MAX_TOKENS)**: The response was cut off.";
+                            }
+                            return "Autonomous execution stopped: Maximum tool turns (5) exceeded.";
+                        });
+
+        SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage("Run long task"));
+
+        // Initial turn + MAX_AUTO_NUDGES (2) auto-nudges = 3 total calls, then stops at cap
+        assertEquals(3, callCount.get());
+        assertEquals(
+                ChatController.MAX_AUTO_NUDGES, panel.getController().getConsecutiveAutoNudges());
+        String html = panel.getOutputArea().getText();
+        assertTrue(html.contains("Auto-nudging Roxy to continue (1/2)..."));
+        assertTrue(html.contains("Auto-nudging Roxy to continue (2/2)..."));
+        assertFalse(html.contains("Auto-nudging Roxy to continue (3/2)..."));
+        assertFalse(panel.getModel().isLoading());
+
+        // Sending a new user message resets consecutiveAutoNudges and allows nudging on empty
+        // post-tool STOP response
+        AtomicInteger secondBatchCalls = new AtomicInteger(0);
+        when(aiService.chat(anyString(), any(), anyString(), any()))
+                .thenAnswer(
+                        inv -> {
+                            int n = secondBatchCalls.incrementAndGet();
+                            if (n == 1) {
+                                panel.onAgentTurn(
+                                        new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
+                                return "⚠️ **Empty Response Returned (finishReason: STOP)** "
+                                        + "Roxy completed the turn without generating a visible text message.";
+                            }
+                            return "Final summary after empty response nudge.";
+                        });
+
+        SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage("Next user message"));
+        assertTrue(
+                panel.getOutputArea()
+                        .getText()
+                        .contains("Final summary after empty response nudge."));
+    }
+
+    @Test
+    void testStopTurnAndPhaseActionsCancelPendingAutoNudgeTimerAndResetCounter() throws Exception {
+        AiService aiService = mock(AiService.class);
+        PlanService planService = mock(PlanService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        Executor directExecutor = Runnable::run;
+
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+
+        FeatureChatPanel panel =
+                new FeatureChatPanel(
+                        aiService, planService, publisher, chatMemory, null, directExecutor);
+        panel.getController().setErrorNudgeDelayMs(5000);
+
+        when(aiService.chat(anyString(), any(), anyString(), any()))
+                .thenAnswer(
+                        inv -> {
+                            panel.onAgentTurn(
+                                    new AgentTurnEvent("task:default", "Roxy", 1, "CODE"));
+                            throw new RuntimeException("Failed to generate content");
+                        });
+
+        SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage("Start work"));
+
+        assertEquals(1, panel.getController().getConsecutiveAutoNudges());
+        assertNotNull(panel.getController().getAutoNudgeTimer());
+        assertTrue(panel.getController().isTurnActive());
+        assertTrue(panel.getModel().isLoading());
+        assertTrue(panel.getStopButton().isEnabled());
+
+        // Stop during the pending timer delay
+        SwingUtilities.invokeAndWait(() -> panel.getController().stopTurn());
+
+        assertEquals(0, panel.getController().getConsecutiveAutoNudges());
+        assertNull(panel.getController().getAutoNudgeTimer());
+        assertFalse(panel.getController().isTurnActive());
+        assertFalse(panel.getModel().isLoading());
+        assertTrue(panel.getOutputArea().getText().contains("Request cancelled by user."));
+        verify(aiService, times(1)).chat(anyString(), any(), anyString(), any());
+
+        // Verify pending phase suppresses auto-nudge
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.REVIEW);
+        SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage("Try with pending"));
+        assertEquals(0, panel.getController().getConsecutiveAutoNudges());
+        assertNull(panel.getController().getAutoNudgeTimer());
     }
 }
