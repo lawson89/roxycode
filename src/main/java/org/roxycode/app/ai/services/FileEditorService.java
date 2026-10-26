@@ -34,7 +34,7 @@ public class FileEditorService {
     private static final int SINGLE_MATCH_COUNT = 1;
     private static final double MIN_LINE_SIMILARITY = 0.6;
     private static final JaroWinklerSimilarity JARO_WINKLER = new JaroWinklerSimilarity();
-    private static final char LF = (char) 10;
+    private static final char LF = '\n';
     private static final String WHITESPACE_REGEX = "\\s+";
 
     private final ProjectService projectService;

@@ -2,7 +2,7 @@ package org.roxycode.app.service;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -16,6 +16,7 @@ import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 /** Service for managing application settings. */
@@ -89,12 +90,10 @@ public class SettingsService {
      * @return list of available model configurations
      */
     public List<GeminiModelConfig> getAvailableModels() {
-        try (InputStream is = SettingsService.class.getResourceAsStream("/models.toml")) {
-            if (is == null) {
-                log.error("Could not find /models.toml on classpath");
-                return List.of();
-            }
-            GeminiModels geminiModels = mapper.readValue(is, GeminiModels.class);
+        ClassPathResource resource = new ClassPathResource("models.toml");
+        try {
+            String content = resource.getContentAsString(StandardCharsets.UTF_8);
+            GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
             return geminiModels != null && geminiModels.models() != null
                     ? geminiModels.models()
                     : List.of();

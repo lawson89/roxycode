@@ -95,6 +95,34 @@ class CodebaseCachePanelTest {
             Thread.sleep(20);
         }
         assertEquals("new project repo map", panel.getRepoMapArea().getText());
+
+        // When meta is empty but local repo cache is present
+        when(metaService.loadMeta()).thenReturn(Optional.empty());
+        when(metaService.loadRepoCache()).thenReturn(Optional.of("local only repo map"));
+        panel.refreshStatus().get();
+        for (int i = 0; i < 50; i++) {
+            SwingUtilities.invokeAndWait(() -> {});
+            if ("local only repo map".equals(panel.getRepoMapArea().getText())) {
+                break;
+            }
+            Thread.sleep(20);
+        }
+        assertEquals("Status: Repo Map available locally.", panel.getStatusLabel().getText());
+        assertEquals("local only repo map", panel.getRepoMapArea().getText());
+
+        // When both meta and local repo cache are empty
+        when(metaService.loadRepoCache()).thenReturn(Optional.empty());
+        panel.refreshStatus().get();
+        for (int i = 0; i < 50; i++) {
+            SwingUtilities.invokeAndWait(() -> {});
+            if ("Status: No implicit cache found.".equals(panel.getStatusLabel().getText())) {
+                break;
+            }
+            Thread.sleep(20);
+        }
+        assertEquals("Status: No implicit cache found.", panel.getStatusLabel().getText());
+        assertEquals(
+                "Repo Map will appear here after generation.", panel.getRepoMapArea().getText());
     }
 
     private JButton findButton(Container container, String text) {

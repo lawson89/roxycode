@@ -1,5 +1,6 @@
 package org.roxycode.app.ai.services;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
@@ -39,7 +40,18 @@ public class BuildContainerService {
     static final String LABEL_APP_VALUE = "roxycode";
     static final String LABEL_PROJECT = "roxycode.project";
 
-    public record ContainerConfig(boolean enabled, String image, String workdir) {}
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ContainerConfig(boolean enabled, String image, String workdir) {
+        public static final ContainerConfig DEFAULT =
+                new ContainerConfig(false, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
+
+        public ContainerConfig {
+            image = StringUtils.defaultIfBlank(StringUtils.trim(image), DEFAULT_CONTAINER_IMAGE);
+            workdir =
+                    StringUtils.defaultIfBlank(
+                            StringUtils.trim(workdir), DEFAULT_CONTAINER_WORKDIR);
+        }
+    }
 
     public record ContainerSessionKey(
             Path projectRoot, String image, String workdir, Map<String, String> env) {}
@@ -51,8 +63,8 @@ public class BuildContainerService {
                 sb.append(stdout);
             }
             if (stderr != null && !stderr.isEmpty()) {
-                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != 10) {
-                    sb.append((char) 10);
+                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n') {
+                    sb.append('\n');
                 }
                 sb.append(stderr);
             }
@@ -113,34 +125,14 @@ public class BuildContainerService {
         return systemToolService.checkDockerAvailable();
     }
 
-    public ContainerConfig parseContainerConfig(Map<String, Object> config) {
-        return parseContainerConfigFromMap(config);
+    public ContainerConfig parseContainerConfig(ContainerConfig config) {
+        return config != null ? config : ContainerConfig.DEFAULT;
     }
 
-    static ContainerConfig parseContainerConfigFromMap(Map<String, Object> config) {
-        if (config == null) {
-            return new ContainerConfig(false, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
-        }
-        Object rawContainer = config.get("container");
-        if (!(rawContainer instanceof Map<?, ?> containerMap)) {
-            return new ContainerConfig(false, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
-        }
-        Object enabledVal = containerMap.get("enabled");
-        boolean enabled =
-                enabledVal instanceof Boolean b
-                        ? b
-                        : (enabledVal != null && Boolean.parseBoolean(String.valueOf(enabledVal)));
-        Object imageVal = containerMap.get("image");
-        String image =
-                StringUtils.defaultIfBlank(
-                        imageVal != null ? StringUtils.trim(String.valueOf(imageVal)) : null,
-                        DEFAULT_CONTAINER_IMAGE);
-        Object workdirVal = containerMap.get("workdir");
-        String workdir =
-                StringUtils.defaultIfBlank(
-                        workdirVal != null ? StringUtils.trim(String.valueOf(workdirVal)) : null,
-                        DEFAULT_CONTAINER_WORKDIR);
-        return new ContainerConfig(enabled, image, workdir);
+    public ContainerConfig parseContainerConfig(GenericBuildToolService.BuildConfig config) {
+        return config != null && config.container() != null
+                ? config.container()
+                : ContainerConfig.DEFAULT;
     }
 
     public ContainerExecResult executeCommand(
@@ -170,14 +162,15 @@ public class BuildContainerService {
         return activeSession;
     }
 
-    @SuppressWarnings("unchecked")
     public static boolean isContainerEnabledInToml(String toml) {
         if (StringUtils.isBlank(toml)) {
             return false;
         }
         try {
-            Map<String, Object> parsed = AiConfig.SHARED_TOML_MAPPER.readValue(toml, Map.class);
-            return parseContainerConfigFromMap(parsed).enabled();
+            GenericBuildToolService.BuildConfig parsed =
+                    AiConfig.SHARED_TOML_MAPPER.readValue(
+                            toml, GenericBuildToolService.BuildConfig.class);
+            return parsed != null && parsed.container().enabled();
         } catch (Exception e) {
             log.debug("Failed to parse TOML when checking container.enabled flag", e);
             return false;

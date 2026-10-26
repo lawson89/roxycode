@@ -276,12 +276,6 @@ public final class SwingHtmlUtils {
     }
 
     /**
-     * Escapes text for safe inclusion in HTML bodies.
-     *
-     * @param text the raw text
-     * @return HTML entity escaped text
-     */
-    /**
      * Resolves the first non-null {@link Color} from {@link UIManager} for the given keys, or
      * returns the fallback color.
      *
@@ -311,6 +305,12 @@ public final class SwingHtmlUtils {
         return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
     }
 
+    /**
+     * Escapes text for safe inclusion in HTML bodies.
+     *
+     * @param text the raw text
+     * @return HTML entity escaped text
+     */
     public static String escapeHtml(String text) {
         return text == null ? "" : StringEscapeUtils.escapeHtml4(text);
     }

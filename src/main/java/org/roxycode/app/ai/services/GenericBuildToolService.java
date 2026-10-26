@@ -1,12 +1,17 @@
 package org.roxycode.app.ai.services;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
-import java.io.*;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +33,7 @@ import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.io.ClassPathResource;
 
 /**
  * Service for interacting with arbitrary build tools via per-project build.toml. Provides methods
@@ -42,6 +48,50 @@ public class GenericBuildToolService {
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
     private static final String CONFIG_FILE = "build.toml";
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record BuildSection(String compile, String clean) {
+        public static final BuildSection EMPTY = new BuildSection(null, null);
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TestSection(
+            @JsonProperty("run_all") String runAll, @JsonProperty("run_single") String runSingle) {
+        public static final TestSection EMPTY = new TestSection(null, null);
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ParseSection(
+            @JsonProperty("error_regex") String errorRegex,
+            @JsonProperty("test_failure_regex") String testFailureRegex) {
+        public static final ParseSection EMPTY = new ParseSection(null, null);
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record BuildConfig(
+            BuildSection build,
+            TestSection test,
+            Map<String, String> env,
+            ParseSection parse,
+            ContainerConfig container) {
+        public BuildConfig {
+            build = build != null ? build : BuildSection.EMPTY;
+            test = test != null ? test : TestSection.EMPTY;
+            if (env == null || env.isEmpty()) {
+                env = Map.of();
+            } else {
+                Map<String, String> sanitized = new HashMap<>();
+                for (Map.Entry<String, String> entry : env.entrySet()) {
+                    if (entry.getKey() != null && entry.getValue() != null) {
+                        sanitized.put(entry.getKey(), entry.getValue());
+                    }
+                }
+                env = Collections.unmodifiableMap(sanitized);
+            }
+            parse = parse != null ? parse : ParseSection.EMPTY;
+            container = container != null ? container : ContainerConfig.DEFAULT;
+        }
+    }
 
     private final ProjectService projectService;
     private final TomlMapper tomlMapper;
@@ -159,7 +209,7 @@ public class GenericBuildToolService {
         ensureConfig();
 
         try {
-            Map<String, Object> config = loadConfig();
+            BuildConfig config = loadConfig();
             String command = getCommand(config, section, commandKey);
             if (command == null || command.isBlank()) {
                 return new BuildResult(
@@ -207,15 +257,14 @@ public class GenericBuildToolService {
 
     private String loadDefaultTemplateContent() {
         String templateName = detectTemplate();
-        try (InputStream is =
-                getClass().getResourceAsStream("/templates/build/" + templateName + ".toml")) {
-            if (is != null) {
-                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            }
+        ClassPathResource resource =
+                new ClassPathResource("templates/build/" + templateName + ".toml");
+        try {
+            return resource.getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.warn("Failed to read build template: {}", templateName, e);
+            return DEFAULT_FALLBACK_TOML;
         }
-        return DEFAULT_FALLBACK_TOML;
     }
 
     private void ensureConfig() {
@@ -257,45 +306,49 @@ public class GenericBuildToolService {
         return "default";
     }
 
-    private Map<String, Object> loadConfig() throws IOException {
+    BuildConfig loadConfig() throws IOException {
         Path configPath = getConfigPath();
         if (Files.exists(configPath)) {
             try {
-                return tomlMapper.readValue(configPath.toFile(), Map.class);
-            } catch (java.nio.file.NoSuchFileException | java.io.FileNotFoundException e) {
+                return tomlMapper.readValue(configPath.toFile(), BuildConfig.class);
+            } catch (NoSuchFileException | FileNotFoundException e) {
                 log.warn("Build config file not found at {}, falling back to template", configPath);
             }
         }
-        return tomlMapper.readValue(loadDefaultTemplateContent(), Map.class);
+        return tomlMapper.readValue(loadDefaultTemplateContent(), BuildConfig.class);
     }
 
-    private String getCommand(Map<String, Object> config, String section, String key) {
-        Object sectionObj = config.get(section);
-        if (sectionObj instanceof Map<?, ?> sectionMap) {
-            Object cmd = sectionMap.get(key);
-            return cmd instanceof String s ? s : null;
-        }
-        return null;
+    private String getCommand(BuildConfig config, String section, String key) {
+        return switch (section) {
+            case "build" ->
+                    switch (key) {
+                        case "compile" -> config.build().compile();
+                        case "clean" -> config.build().clean();
+                        default -> null;
+                    };
+            case "test" ->
+                    switch (key) {
+                        case "run_all" -> config.test().runAll();
+                        case "run_single" -> config.test().runSingle();
+                        default -> null;
+                    };
+            default -> null;
+        };
     }
 
-    private String getParseRegex(Map<String, Object> config, String key) {
-        Map<String, Object> parse = (Map<String, Object>) config.get("parse");
-        return parse != null ? (String) parse.get(key) : null;
+    private String getParseRegex(BuildConfig config, String key) {
+        return switch (key) {
+            case "error_regex" -> config.parse().errorRegex();
+            case "test_failure_regex" -> config.parse().testFailureRegex();
+            default -> null;
+        };
     }
 
-    private Map<String, String> getEnv(Map<String, Object> config) {
-        Map<String, Object> envObj = (Map<String, Object>) config.get("env");
-        if (envObj == null) {
-            return Map.of();
-        }
-        Map<String, String> env = new HashMap<>();
-        for (Map.Entry<String, Object> entry : envObj.entrySet()) {
-            env.put(entry.getKey(), String.valueOf(entry.getValue()));
-        }
-        return env;
+    private Map<String, String> getEnv(BuildConfig config) {
+        return config.env();
     }
 
-    ContainerConfig getContainerConfig(Map<String, Object> config) {
+    ContainerConfig getContainerConfig(BuildConfig config) {
         return buildContainerService.parseContainerConfig(config);
     }
 

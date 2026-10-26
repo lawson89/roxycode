@@ -132,19 +132,14 @@ public final class CodebaseCachePanel extends JPanel {
                                 metaService != null
                                         ? metaService.loadRepoCache()
                                         : Optional.empty();
-                        if (meta != null && meta.isPresent()) {
+                        if (meta.isPresent()) {
                             String stableContext = getStableContextString();
                             long stableTokens = TokenUtils.estimateTokens(stableContext);
                             String sessionContext = getSessionContextString();
                             return new CacheStatusData(
                                     meta, packed, stableContext, stableTokens, sessionContext);
                         }
-                        return new CacheStatusData(
-                                meta != null ? meta : Optional.empty(),
-                                packed != null ? packed : Optional.empty(),
-                                "",
-                                0,
-                                "");
+                        return new CacheStatusData(meta, packed, "", 0, "");
                     }
 
                     @Override
@@ -174,15 +169,13 @@ public final class CodebaseCachePanel extends JPanel {
 
                                 sessionContextArea.setText(data.sessionContext());
                                 sessionContextArea.setCaretPosition(0);
+                            } else if (data.packed().isPresent()) {
+                                statusLabel.setText("Status: Repo Map available locally.");
+                                repoMapArea.setText(data.packed().get());
+                                repoMapArea.setCaretPosition(0);
                             } else {
                                 statusLabel.setText("Status: No implicit cache found.");
                                 repoMapArea.setText("Repo Map will appear here after generation.");
-
-                                if (data.packed().isPresent()) {
-                                    statusLabel.setText("Status: Repo Map available locally.");
-                                    repoMapArea.setText(data.packed().get());
-                                    repoMapArea.setCaretPosition(0);
-                                }
                             }
                         } catch (Exception e) {
                             log.error("Failed to refresh codebase cache status", e);

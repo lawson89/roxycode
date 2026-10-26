@@ -193,7 +193,7 @@ public class PromptService {
         if (filename == null
                 || filename.isBlank()
                 || filename.contains("/")
-                || filename.indexOf(92) >= 0
+                || filename.indexOf('\\') >= 0
                 || filename.contains("..")) {
             throw new IllegalArgumentException("Invalid context filename: " + filename);
         }

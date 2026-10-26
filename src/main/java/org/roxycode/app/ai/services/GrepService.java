@@ -257,11 +257,11 @@ public class GrepService {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < maxLines; i++) {
             if (i > 0) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
             sb.append(lines.get(i));
         }
-        sb.append((char) 10)
+        sb.append('\n')
                 .append("... (")
                 .append(omitted)
                 .append(
@@ -315,7 +315,7 @@ public class GrepService {
                 String rootPrefix = normalizeRootPrefix(root);
                 for (String line : output.lines().toList()) {
                     if (!line.isBlank()) {
-                        String normalized = line.replace((char) 92, '/');
+                        String normalized = line.replace('\\', '/');
                         if (!rootPrefix.isEmpty()) {
                             normalized = StringUtils.removeStart(normalized, rootPrefix);
                         }
@@ -334,7 +334,7 @@ public class GrepService {
         if (root == null) {
             return "";
         }
-        String prefix = root.toAbsolutePath().normalize().toString().replace((char) 92, '/');
+        String prefix = root.toAbsolutePath().normalize().toString().replace('\\', '/');
         return prefix.endsWith("/") ? prefix : prefix + "/";
     }
 
@@ -352,7 +352,7 @@ public class GrepService {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < lines.size(); i++) {
             if (i > 0) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
             String line = lines.get(i);
             if (line.startsWith(rawPrefixWithSep)) {

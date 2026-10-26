@@ -89,19 +89,21 @@ class BuildContainerServiceTest {
 
     @Test
     void testParseContainerConfigDefaultsAndCustomValues() {
-        ContainerConfig defaultConfig = buildContainerService.parseContainerConfig(Map.of());
+        ContainerConfig defaultConfig =
+                buildContainerService.parseContainerConfig((ContainerConfig) null);
         assertFalse(defaultConfig.enabled());
         assertEquals("ubuntu:24.04", defaultConfig.image());
         assertEquals("/workspace", defaultConfig.workdir());
 
+        ContainerConfig blankFieldsConfig =
+                buildContainerService.parseContainerConfig(new ContainerConfig(false, "  ", ""));
+        assertFalse(blankFieldsConfig.enabled());
+        assertEquals("ubuntu:24.04", blankFieldsConfig.image());
+        assertEquals("/workspace", blankFieldsConfig.workdir());
+
         ContainerConfig customConfig =
                 buildContainerService.parseContainerConfig(
-                        Map.of(
-                                "container",
-                                Map.of(
-                                        "enabled", true,
-                                        "image", "eclipse-temurin:25-jdk",
-                                        "workdir", "/app")));
+                        new ContainerConfig(true, "eclipse-temurin:25-jdk", "/app"));
         assertTrue(customConfig.enabled());
         assertEquals("eclipse-temurin:25-jdk", customConfig.image());
         assertEquals("/app", customConfig.workdir());

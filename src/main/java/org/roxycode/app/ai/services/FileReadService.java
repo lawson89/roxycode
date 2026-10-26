@@ -105,7 +105,7 @@ public class FileReadService {
         StringBuilder sb = new StringBuilder();
         for (int i = startLine; i <= clampedEnd; i++) {
             if (i > startLine) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
             sb.append(i).append(": ").append(lines.get(i - 1));
         }

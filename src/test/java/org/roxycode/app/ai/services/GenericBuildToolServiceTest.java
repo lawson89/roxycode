@@ -347,4 +347,37 @@ class GenericBuildToolServiceTest {
         assertTrue(content.contains("./mvnw compile"));
         assertTrue(content.contains("[container]"));
     }
+
+    @Test
+    void testMalformedTomlValuesHandledWithoutClassCastException() throws IOException {
+        Files.createDirectories(projectDataDir);
+        Files.writeString(
+                projectDataDir.resolve("build.toml"),
+                """
+                unknown_top_level = "ignored"
+                [build]
+                compile = 'echo hi'
+                unknown_build_key = 123
+                [env]
+                NUMBER_VAL = 42
+                BOOL_VAL = true
+                [parse]
+                error_regex = 12345
+                """);
+
+        BuildResult scalarCoercedResult = assertDoesNotThrow(() -> buildToolService.compile());
+        assertTrue(scalarCoercedResult.isSuccess());
+
+        Files.writeString(
+                projectDataDir.resolve("build.toml"),
+                """
+                parse = "not-a-section"
+                [build]
+                compile = 'echo hi'
+                """);
+
+        BuildResult malformedSectionResult = assertDoesNotThrow(() -> buildToolService.compile());
+        assertFalse(malformedSectionResult.isSuccess());
+        assertEquals(-1, malformedSectionResult.getExitCode());
+    }
 }

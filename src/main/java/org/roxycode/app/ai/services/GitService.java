@@ -29,10 +29,9 @@ public class GitService {
     private static final String NOT_A_GIT_REPOSITORY = "Not a git repository";
     private static final String GIT_DIFF = "diff";
     private static final int MIN_PORCELAIN_LINE_LENGTH = 4;
-    private static final char NL = (char) 10;
-    private static final char DQUOTE = (char) 34;
-    private static final char BACKSLASH = (char) 92;
-
+    private static final char NL = '\n';
+    private static final char DQUOTE = '"';
+    private static final char BACKSLASH = '\\';
     private final ProjectService projectService;
 
     public GitService(ProjectService projectService) {
