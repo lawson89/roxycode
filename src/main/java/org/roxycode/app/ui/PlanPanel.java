@@ -175,8 +175,8 @@ public final class PlanPanel extends JPanel {
         return """
                 <html><body>
                 <h2 class='spec-technical-header'>Implementation Plan</h2>
-                <b>Title:</b> %s<br>
-                <b>Goal:</b> %s<br>
+                <p><b>Title:</b> %s</p>
+                <p><b>Goal:</b> %s</p>
                 <h3>Requirements:</h3>
                 <ul>%s</ul>
                 <h3>Technical Steps:</h3>

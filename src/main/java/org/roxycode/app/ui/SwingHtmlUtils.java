@@ -189,7 +189,7 @@ public final class SwingHtmlUtils {
             if (isNoWrap(elem)) {
                 return view;
             }
-            if (view instanceof InlineView) {
+            if (view.getClass() == InlineView.class) {
                 return new InlineView(elem) {
                     @Override
                     public float getMinimumSpan(int axis) {

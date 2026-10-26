@@ -39,6 +39,12 @@ class PlanPanelTest {
 
         String html = PlanPanel.buildPlanHtml(plan);
 
+        assertTrue(
+                html.contains("<p><b>Title:</b> Test Plan</p>"),
+                "Title should be wrapped in a <p> element");
+        assertTrue(
+                html.contains("<p><b>Goal:</b> Test Goal</p>"),
+                "Goal should be wrapped in a <p> element");
         assertTrue(html.contains("[&nbsp;]"), "Unchecked checkbox should use non-breaking space");
         assertFalse(
                 html.contains(">[ ]<"), "Unchecked checkbox should not use regular breaking space");

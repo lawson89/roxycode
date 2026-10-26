@@ -143,7 +143,7 @@ class SwingHtmlUtilsTest {
         pane.setText(
                 "<html><body><div>"
                         + longInlineToken
-                        + "</div><pre>"
+                        + "<br>SecondLine</div><pre>"
                         + longCodeLine
                         + "</pre></body></html>");
 
@@ -160,12 +160,20 @@ class SwingHtmlUtilsTest {
                 extractedText.contains(longInlineToken),
                 "Underlying document text for inline content should remain intact");
 
-        verifyWrappingViews(doc.getDefaultRootElement(), factory);
+        boolean foundBr = verifyWrappingViews(doc.getDefaultRootElement(), factory);
+        assertTrue(foundBr, "Should find <br> element in document");
     }
 
-    private void verifyWrappingViews(Element elem, ViewFactory factory) {
+    private boolean verifyWrappingViews(Element elem, ViewFactory factory) {
+        boolean foundBr = false;
         View view = factory.create(elem);
-        if (view instanceof InlineView
+        if ("br".equalsIgnoreCase(elem.getName())) {
+            foundBr = true;
+            assertEquals(
+                    View.ForcedBreakWeight,
+                    view.getBreakWeight(View.X_AXIS, 0f, 100f),
+                    "<br> view should preserve View.ForcedBreakWeight on X_AXIS");
+        } else if (view instanceof InlineView
                 || view instanceof ParagraphView
                 || (view instanceof BlockView && !"body".equalsIgnoreCase(elem.getName()))) {
             assertEquals(
@@ -181,8 +189,11 @@ class SwingHtmlUtilsTest {
             }
         }
         for (int i = 0; i < elem.getElementCount(); i++) {
-            verifyWrappingViews(elem.getElement(i), factory);
+            if (verifyWrappingViews(elem.getElement(i), factory)) {
+                foundBr = true;
+            }
         }
+        return foundBr;
     }
 
     @Test
