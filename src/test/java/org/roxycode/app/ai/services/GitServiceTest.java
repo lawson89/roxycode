@@ -10,8 +10,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
-import org.roxycode.app.ai.AgentJexlPermissions;
-import org.roxycode.app.ai.LLMDocGenerator;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
@@ -311,34 +309,5 @@ class GitServiceTest {
         assertThrows(
                 IllegalArgumentException.class, () -> gitService.getBlame("Tracked.java", 3, 2));
         assertThrows(SecurityException.class, () -> gitService.getBlame("../outside.txt", 1, 2));
-    }
-
-    @Test
-    void testNewMethodsExposedInJexlPermissionsAndLlmDocGenerator() throws Exception {
-        ProjectService projectService = createActiveProjectService();
-        GitService gitService = new GitService(projectService);
-
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GitService.class, GitService.class.getMethod("getDiffHead")));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GitService.class, GitService.class.getMethod("getDiffHead", String.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GitService.class, GitService.class.getMethod("getChangedFiles")));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GitService.class,
-                        GitService.class.getMethod(
-                                "getBlame", String.class, int.class, int.class)));
-
-        String doc = new LLMDocGenerator().generateDoc(List.of(gitService));
-        assertTrue(doc.contains("getDiffHead(): string;"));
-        assertTrue(doc.contains("getDiffHead(relativePath: string): string;"));
-        assertTrue(doc.contains("getChangedFiles(): List;"));
-        assertTrue(
-                doc.contains(
-                        "getBlame(relativePath: string, startLine: number, endLine: number): string;"));
     }
 }

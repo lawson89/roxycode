@@ -10,8 +10,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.roxycode.app.ai.AgentJexlPermissions;
-import org.roxycode.app.ai.LLMDocGenerator;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -431,27 +429,6 @@ class FileEditorServiceTest {
                 SecurityException.class,
                 () -> fileEditorService.copyFile("moved/sub/renamed.txt", "../outside.txt"));
         assertThrows(SecurityException.class, () -> fileEditorService.mkdirs("../outside_dir"));
-    }
-
-    @Test
-    void testNewMethodsExposedInJexlPermissionsAndLlmDocGenerator() throws Exception {
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        FileEditorService.class,
-                        FileEditorService.class.getMethod("moveFile", String.class, String.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        FileEditorService.class,
-                        FileEditorService.class.getMethod("copyFile", String.class, String.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        FileEditorService.class,
-                        FileEditorService.class.getMethod("mkdirs", String.class)));
-
-        String doc = new LLMDocGenerator().generateDoc(List.of(fileEditorService));
-        assertTrue(doc.contains("moveFile(sourcePath: string, targetPath: string): EditorResult;"));
-        assertTrue(doc.contains("copyFile(sourcePath: string, targetPath: string): EditorResult;"));
-        assertTrue(doc.contains("mkdirs(relativePath: string): EditorResult;"));
     }
 
     @Test

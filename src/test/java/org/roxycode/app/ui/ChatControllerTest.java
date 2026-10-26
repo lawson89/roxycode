@@ -4,10 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.awt.image.BufferedImage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -22,28 +25,41 @@ import org.springframework.context.ApplicationEventPublisher;
 
 class ChatControllerTest {
 
+    private AiService aiService;
+    private PlanService planService;
+    private ApplicationEventPublisher publisher;
+    private ChatMemory chatMemory;
+    private SettingsService settingsService;
+    private Executor directExecutor;
+
+    @BeforeEach
+    void setUp() {
+        aiService = mock(AiService.class);
+        planService = mock(PlanService.class);
+        publisher = mock(ApplicationEventPublisher.class);
+        chatMemory = mock(ChatMemory.class);
+        settingsService = mock(SettingsService.class);
+        directExecutor = Runnable::run;
+    }
+
+    private FeatureChatPanel createFeatureChatPanel(Executor executor) {
+        return new FeatureChatPanel(
+                aiService, planService, publisher, chatMemory, settingsService, executor);
+    }
+
+    private ExploreChatPanel createExploreChatPanel(Executor executor) {
+        return new ExploreChatPanel(
+                aiService, planService, publisher, chatMemory, settingsService, executor);
+    }
+
     @Test
     void testRejectPhaseNotifiesWorkflowAndTriggersTurn() throws Exception {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-        SettingsService settingsService = mock(SettingsService.class);
-        Executor directExecutor = Runnable::run;
-
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
         when(aiService.chat(anyString(), any(), anyString(), any()))
                 .thenReturn("Let's revise the plan.");
 
-        FeatureChatPanel panel =
-                new FeatureChatPanel(
-                        aiService,
-                        planService,
-                        publisher,
-                        chatMemory,
-                        settingsService,
-                        directExecutor);
+        FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
 
         assertSame(directExecutor, panel.getController().getTurnExecutor());
 
@@ -63,13 +79,7 @@ class ChatControllerTest {
 
     @Test
     void testPerformResetSessionResetsWorkflowAndClearsMemory() throws Exception {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-
-        FeatureChatPanel panel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
+        FeatureChatPanel panel = createFeatureChatPanel(null);
 
         panel.getModel().setCurrentTurn(3);
         panel.getController().performResetSession();
@@ -84,18 +94,11 @@ class ChatControllerTest {
 
     @Test
     void testOnToolExecutionRendersSuccessAndErrorStatus() throws Exception {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-
-        FeatureChatPanel panel =
-                new FeatureChatPanel(aiService, planService, publisher, chatMemory, null, null);
+        FeatureChatPanel panel = createFeatureChatPanel(null);
 
         panel.onToolExecution(new ToolExecutionEvent("task:default", "1 + 1", 2, true, null));
         panel.onToolExecution(
                 new ToolExecutionEvent("task:default", "if (", null, false, "Syntax Error: <bad>"));
-        // Event for another conversation should be ignored
         panel.onToolExecution(
                 new ToolExecutionEvent("qa:default", "ignoredCall()", null, true, null));
         SwingUtilities.invokeAndWait(() -> {});
@@ -109,15 +112,7 @@ class ChatControllerTest {
 
     @Test
     void testSendMessagePublishesUserMessageEvent() {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-        Executor directExecutor = Runnable::run;
-
-        ExploreChatPanel panel =
-                new ExploreChatPanel(
-                        aiService, planService, publisher, chatMemory, null, directExecutor);
+        ExploreChatPanel panel = createExploreChatPanel(directExecutor);
 
         assertSame(directExecutor, panel.getController().getTurnExecutor());
 
@@ -133,20 +128,12 @@ class ChatControllerTest {
         assertNotNull(executorService);
         assertFalse(executorService.isShutdown());
 
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-
-        ExploreChatPanel panel =
-                new ExploreChatPanel(
-                        aiService, planService, publisher, chatMemory, null, executorService);
+        ExploreChatPanel panel = createExploreChatPanel(executorService);
         assertFalse(
                 panel.getController().ownsTurnExecutor(),
                 "Controller should not own externally supplied ExecutorService");
 
-        // Removing panel from container must not shut down shared external executor
-        javax.swing.JPanel host = new javax.swing.JPanel();
+        JPanel host = new JPanel();
         host.add(panel);
         host.remove(panel);
         panel.removeNotify();
@@ -160,11 +147,6 @@ class ChatControllerTest {
 
     @Test
     void testFallbackDefaultExecutorOwnedAndClosedOnRemoveNotify() {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-
         ChatPanel panel =
                 new ChatPanel(
                         aiService,
@@ -192,20 +174,9 @@ class ChatControllerTest {
 
     @Test
     void testSendMessageWithEmptyTextAndPendingImageShowsFeedbackAndPreservesImage() {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-        Executor directExecutor = Runnable::run;
+        ExploreChatPanel panel = createExploreChatPanel(directExecutor);
 
-        ExploreChatPanel panel =
-                new ExploreChatPanel(
-                        aiService, planService, publisher, chatMemory, null, directExecutor);
-
-        panel.getModel()
-                .addPendingImage(
-                        new java.awt.image.BufferedImage(
-                                8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB));
+        panel.getModel().addPendingImage(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB));
         assertTrue(panel.getModel().hasPendingImages());
 
         panel.getController().sendMessage("   ");
@@ -225,20 +196,11 @@ class ChatControllerTest {
     @Test
     void testTransientErrorWhenCurrentTurnPositiveAutoNudgesWhileTurnZeroDoesNot()
             throws Exception {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-        Executor directExecutor = Runnable::run;
-
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
 
-        FeatureChatPanel panel =
-                new FeatureChatPanel(
-                        aiService, planService, publisher, chatMemory, null, directExecutor);
+        FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
         panel.getController().setErrorNudgeDelayMs(0);
 
-        // Case 1: Failure on turn 0 (before any tool executes) -> NO auto-nudge
         when(aiService.chat(anyString(), any(), eq("Bad API call"), any()))
                 .thenThrow(new RuntimeException("Failed to generate content"));
 
@@ -249,7 +211,6 @@ class ChatControllerTest {
         assertFalse(panel.getOutputArea().getText().contains("Auto-nudging Roxy to continue"));
         assertFalse(panel.getModel().isLoading());
 
-        // Case 2: Failure after a tool executed (currentTurn > 0) -> auto-nudges with "continue"
         clearInvocations(aiService);
         AtomicInteger callCount = new AtomicInteger(0);
         when(aiService.chat(anyString(), any(), anyString(), any()))
@@ -286,17 +247,9 @@ class ChatControllerTest {
     @Test
     void testMaxToolTurnsTruncatedAndEmptyPostToolResponseAutoNudgeUpToCapAndResetOnUserAction()
             throws Exception {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-        Executor directExecutor = Runnable::run;
-
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
 
-        FeatureChatPanel panel =
-                new FeatureChatPanel(
-                        aiService, planService, publisher, chatMemory, null, directExecutor);
+        FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
 
         AtomicInteger callCount = new AtomicInteger(0);
         when(aiService.chat(anyString(), any(), anyString(), any()))
@@ -307,14 +260,17 @@ class ChatControllerTest {
                                 return "Autonomous execution stopped: Maximum tool turns (5) exceeded.";
                             }
                             if (n == 2) {
-                                return "Partial output\n\n---\n> ⚠️ **Response Truncated (finishReason: MAX_TOKENS)**: The response was cut off.";
+                                return """
+                                        Partial output
+
+                                        ---
+                                        > ⚠️ **Response Truncated (finishReason: MAX_TOKENS)**: The response was cut off.""";
                             }
                             return "Autonomous execution stopped: Maximum tool turns (5) exceeded.";
                         });
 
         SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage("Run long task"));
 
-        // Initial turn + MAX_AUTO_NUDGES (2) auto-nudges = 3 total calls, then stops at cap
         assertEquals(3, callCount.get());
         assertEquals(
                 ChatController.MAX_AUTO_NUDGES, panel.getController().getConsecutiveAutoNudges());
@@ -324,8 +280,6 @@ class ChatControllerTest {
         assertFalse(html.contains("Auto-nudging Roxy to continue (3/2)..."));
         assertFalse(panel.getModel().isLoading());
 
-        // Sending a new user message resets consecutiveAutoNudges and allows nudging on empty
-        // post-tool STOP response
         AtomicInteger secondBatchCalls = new AtomicInteger(0);
         when(aiService.chat(anyString(), any(), anyString(), any()))
                 .thenAnswer(
@@ -349,17 +303,9 @@ class ChatControllerTest {
 
     @Test
     void testStopTurnAndPhaseActionsCancelPendingAutoNudgeTimerAndResetCounter() throws Exception {
-        AiService aiService = mock(AiService.class);
-        PlanService planService = mock(PlanService.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ChatMemory chatMemory = mock(ChatMemory.class);
-        Executor directExecutor = Runnable::run;
-
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
 
-        FeatureChatPanel panel =
-                new FeatureChatPanel(
-                        aiService, planService, publisher, chatMemory, null, directExecutor);
+        FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
         panel.getController().setErrorNudgeDelayMs(5000);
 
         when(aiService.chat(anyString(), any(), anyString(), any()))
@@ -378,7 +324,6 @@ class ChatControllerTest {
         assertTrue(panel.getModel().isLoading());
         assertTrue(panel.getStopButton().isEnabled());
 
-        // Stop during the pending timer delay
         SwingUtilities.invokeAndWait(() -> panel.getController().stopTurn());
 
         assertEquals(0, panel.getController().getConsecutiveAutoNudges());
@@ -388,7 +333,6 @@ class ChatControllerTest {
         assertTrue(panel.getOutputArea().getText().contains("Request cancelled by user."));
         verify(aiService, times(1)).chat(anyString(), any(), anyString(), any());
 
-        // Verify pending phase suppresses auto-nudge
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.REVIEW);
         SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage("Try with pending"));
         assertEquals(0, panel.getController().getConsecutiveAutoNudges());

@@ -53,13 +53,13 @@ class HeaderPanelTest {
                 () -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
 
         Component projLabel =
-                findComponent(
-                        header, JLabel.class, c -> "updated-proj".equals(((JLabel) c).getText()));
+                SwingTestUtils.findComponent(
+                        header, JLabel.class, c -> "updated-proj".equals(c.getText()));
         assertNotNull(projLabel, "Project label should update on ProjectChangedEvent");
 
         Component modelLabel =
-                findComponent(
-                        header, JLabel.class, c -> "gemini-4-argon".equals(((JLabel) c).getText()));
+                SwingTestUtils.findComponent(
+                        header, JLabel.class, c -> "gemini-4-argon".equals(c.getText()));
         assertNotNull(modelLabel, "Model label should update on SettingsChangedEvent");
     }
 
@@ -86,13 +86,13 @@ class HeaderPanelTest {
         SwingUtilities.invokeAndWait(() -> {});
 
         Component projLabel =
-                findComponent(
-                        header, JLabel.class, c -> "off-edt-proj".equals(((JLabel) c).getText()));
+                SwingTestUtils.findComponent(
+                        header, JLabel.class, c -> "off-edt-proj".equals(c.getText()));
         assertNotNull(projLabel, "Project label should update on EDT when triggered off-EDT");
 
         Component modelLabel =
-                findComponent(
-                        header, JLabel.class, c -> "gemini-off-edt".equals(((JLabel) c).getText()));
+                SwingTestUtils.findComponent(
+                        header, JLabel.class, c -> "gemini-off-edt".equals(c.getText()));
         assertNotNull(modelLabel, "Model label should update on EDT when triggered off-EDT");
     }
 
@@ -124,10 +124,10 @@ class HeaderPanelTest {
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
 
-        Component toggle = findComponent(header, JToggleButton.class, c -> true);
+        Component toggle = SwingTestUtils.findComponent(header, JToggleButton.class);
         assertNull(toggle, "Mode toggle buttons should be removed from HeaderPanel");
 
-        Component indicator = findComponent(header, WorkflowPhaseIndicator.class, c -> true);
+        Component indicator = SwingTestUtils.findComponent(header, WorkflowPhaseIndicator.class);
         assertNull(indicator, "WorkflowPhaseIndicator should be removed from HeaderPanel");
     }
 
@@ -138,11 +138,8 @@ class HeaderPanelTest {
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
 
         JButton openButton =
-                (JButton)
-                        findComponent(
-                                header,
-                                JButton.class,
-                                c -> "Open Project".equals(((JButton) c).getToolTipText()));
+                SwingTestUtils.findComponent(
+                        header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
         assertNotNull(openButton);
     }
 
@@ -153,13 +150,10 @@ class HeaderPanelTest {
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
 
         JButton themeButton =
-                (JButton)
-                        findComponent(
-                                header,
-                                JButton.class,
-                                c ->
-                                        "Toggle Light/Dark Theme"
-                                                .equals(((JButton) c).getToolTipText()));
+                SwingTestUtils.findComponent(
+                        header,
+                        JButton.class,
+                        c -> "Toggle Light/Dark Theme".equals(c.getToolTipText()));
         assertNotNull(themeButton, "Theme toggle button should be present in HeaderPanel");
         assertEquals("FlatLaf Light", ss.getSettings().getTheme());
 
@@ -198,32 +192,13 @@ class HeaderPanelTest {
                 "HeaderPanel should maintain a 1px bottom MatteBorder across updateUI()");
 
         JButton openButton =
-                (JButton)
-                        findComponent(
-                                header,
-                                JButton.class,
-                                c -> "Open Project".equals(((JButton) c).getToolTipText()));
+                SwingTestUtils.findComponent(
+                        header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
         assertNotNull(openButton);
         Container leftPanel = openButton.getParent();
         assertEquals(
                 3,
                 leftPanel.getComponentCount(),
                 "leftPanel should have projectLabel, openButton, and branchLabel inline");
-    }
-
-    private Component findComponent(
-            Container container,
-            Class<?> clazz,
-            java.util.function.Predicate<Component> predicate) {
-        for (Component comp : container.getComponents()) {
-            if (clazz.isInstance(comp) && predicate.test(comp)) {
-                return comp;
-            }
-            if (comp instanceof Container) {
-                Component found = findComponent((Container) comp, clazz, predicate);
-                if (found != null) return found;
-            }
-        }
-        return null;
     }
 }

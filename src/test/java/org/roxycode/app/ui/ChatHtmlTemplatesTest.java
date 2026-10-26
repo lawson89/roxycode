@@ -176,27 +176,21 @@ class ChatHtmlTemplatesTest {
                         + "</body></html>");
 
         ViewFactory factory = pane.getEditorKit().getViewFactory();
-        Element accentTd = findTdByClass(pane.getDocument().getDefaultRootElement(), "ai-accent");
+        Element accentTd =
+                SwingTestUtils.findElement(
+                        pane.getDocument().getDefaultRootElement(),
+                        "td",
+                        elem ->
+                                "ai-accent"
+                                        .equals(
+                                                String.valueOf(
+                                                        elem.getAttributes()
+                                                                .getAttribute(
+                                                                        HTML.Attribute.CLASS))));
         assertNotNull(accentTd, "Should find ai-accent td element");
         View tdView = factory.create(accentTd);
         assertTrue(
                 tdView.getMinimumSpan(View.X_AXIS) > 0,
                 "Accent td with nowrap should retain positive horizontal minimum span");
-    }
-
-    private Element findTdByClass(Element elem, String className) {
-        if ("td".equalsIgnoreCase(elem.getName())) {
-            Object cls = elem.getAttributes().getAttribute(HTML.Attribute.CLASS);
-            if (cls != null && className.equals(cls.toString())) {
-                return elem;
-            }
-        }
-        for (int i = 0; i < elem.getElementCount(); i++) {
-            Element found = findTdByClass(elem.getElement(i), className);
-            if (found != null) {
-                return found;
-            }
-        }
-        return null;
     }
 }

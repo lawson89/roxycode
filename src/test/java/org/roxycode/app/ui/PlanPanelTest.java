@@ -284,21 +284,18 @@ class PlanPanelTest {
         return false;
     }
 
-    private Element findTdWithText(Element elem, String snippet) throws Exception {
-        if ("td".equalsIgnoreCase(elem.getName())) {
-            int start = elem.getStartOffset();
-            int end = elem.getEndOffset();
-            String text = elem.getDocument().getText(start, end - start);
-            if (text.contains(snippet)) {
-                return elem;
-            }
-        }
-        for (int i = 0; i < elem.getElementCount(); i++) {
-            Element found = findTdWithText(elem.getElement(i), snippet);
-            if (found != null) {
-                return found;
-            }
-        }
-        return null;
+    private Element findTdWithText(Element root, String snippet) {
+        return SwingTestUtils.findElement(
+                root,
+                "td",
+                elem -> {
+                    try {
+                        int start = elem.getStartOffset();
+                        int end = elem.getEndOffset();
+                        return elem.getDocument().getText(start, end - start).contains(snippet);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                });
     }
 }

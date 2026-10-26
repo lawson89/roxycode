@@ -53,7 +53,7 @@ class SettingsPanelTest {
         // Change a live setting (maxAgentToolTurns) without changing API key or max chat history
         settingsPanel.getMaxAgentToolTurnsSpinner().setValue(12);
 
-        JButton saveButton = findButton(settingsPanel, "Save Settings");
+        JButton saveButton = SwingTestUtils.findButton(settingsPanel, "Save Settings");
         assertNotNull(saveButton, "Save button should exist");
         saveButton.doClick();
 
@@ -82,7 +82,9 @@ class SettingsPanelTest {
     @Test
     void testThemeSelectionUpdatesSettingsButDoesNotSave() throws Exception {
         try {
-            JComboBox<String> themeCombo = findCombo(settingsPanel);
+            @SuppressWarnings("unchecked")
+            JComboBox<String> themeCombo =
+                    SwingTestUtils.findComponent(settingsPanel, JComboBox.class);
             assertNotNull(themeCombo, "Theme combo should exist");
 
             themeCombo.setSelectedItem("FlatLaf Dark");
@@ -166,13 +168,14 @@ class SettingsPanelTest {
 
     @Test
     void testRestartRequiredSettingsShowRestartWarningOnSave() {
-        JPasswordField apiKeyField = findPasswordField(settingsPanel);
+        JPasswordField apiKeyField =
+                SwingTestUtils.findComponent(settingsPanel, JPasswordField.class);
         assertNotNull(apiKeyField, "API key field should exist");
 
         // Case 1: Changing Gemini API Key triggers restart warning
         apiKeyField.setText("new-secret-key");
 
-        JButton saveButton = findButton(settingsPanel, "Save Settings");
+        JButton saveButton = SwingTestUtils.findButton(settingsPanel, "Save Settings");
         saveButton.doClick();
 
         assertEquals("new-secret-key", settings.getGeminiApiKey());
@@ -229,51 +232,5 @@ class SettingsPanelTest {
                     "gemini-3.5-flash",
                     env.getProperty("spring.ai.google.genai.chat.options.model"));
         }
-    }
-
-    private JButton findButton(Container container, String text) {
-        for (Component comp : container.getComponents()) {
-            if (comp instanceof JButton && text.equals(((JButton) comp).getText())) {
-                return (JButton) comp;
-            }
-            if (comp instanceof Container) {
-                JButton res = findButton((Container) comp, text);
-                if (res != null) {
-                    return res;
-                }
-            }
-        }
-        return null;
-    }
-
-    private JPasswordField findPasswordField(Container container) {
-        for (Component comp : container.getComponents()) {
-            if (comp instanceof JPasswordField) {
-                return (JPasswordField) comp;
-            }
-            if (comp instanceof Container) {
-                JPasswordField res = findPasswordField((Container) comp);
-                if (res != null) {
-                    return res;
-                }
-            }
-        }
-        return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private JComboBox<String> findCombo(Container container) {
-        for (Component comp : container.getComponents()) {
-            if (comp instanceof JComboBox) {
-                return (JComboBox<String>) comp;
-            }
-            if (comp instanceof Container) {
-                JComboBox<String> res = findCombo((Container) comp);
-                if (res != null) {
-                    return res;
-                }
-            }
-        }
-        return null;
     }
 }

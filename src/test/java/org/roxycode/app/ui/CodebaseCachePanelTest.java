@@ -39,13 +39,13 @@ class CodebaseCachePanelTest {
 
     @Test
     void testButtonsExist() {
-        JButton packButton = findButton(panel, "Update Implicit Cache");
+        JButton packButton = SwingTestUtils.findButton(panel, "Update Implicit Cache");
         assertNotNull(packButton, "Update button should exist");
     }
 
     @Test
     void testRepoMapAreaExists() {
-        JTextArea textArea = findComponent(panel, JTextArea.class);
+        JTextArea textArea = SwingTestUtils.findComponent(panel, JTextArea.class);
         assertNotNull(textArea, "JTextArea should exist for repo map content");
     }
 
@@ -123,35 +123,5 @@ class CodebaseCachePanelTest {
         assertEquals("Status: No implicit cache found.", panel.getStatusLabel().getText());
         assertEquals(
                 "Repo Map will appear here after generation.", panel.getRepoMapArea().getText());
-    }
-
-    private JButton findButton(Container container, String text) {
-        for (Component comp : container.getComponents()) {
-            if (comp instanceof JButton && text.equals(((JButton) comp).getText())) {
-                return (JButton) comp;
-            }
-            if (comp instanceof Container) {
-                JButton res = findButton((Container) comp, text);
-                if (res != null) {
-                    return res;
-                }
-            }
-        }
-        return null;
-    }
-
-    private <T> T findComponent(Container container, Class<T> clazz) {
-        for (Component comp : container.getComponents()) {
-            if (clazz.isInstance(comp)) {
-                return clazz.cast(comp);
-            }
-            if (comp instanceof Container) {
-                T res = findComponent((Container) comp, clazz);
-                if (res != null) {
-                    return res;
-                }
-            }
-        }
-        return null;
     }
 }

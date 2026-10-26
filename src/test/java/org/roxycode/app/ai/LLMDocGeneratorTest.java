@@ -6,13 +6,116 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Method;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.roxycode.app.ai.services.FileEditorService;
+import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.service.ProjectService;
 import org.springframework.aop.framework.ProxyFactory;
 
 class LLMDocGeneratorTest {
+
+    static Stream<Arguments> agentServiceProvider() {
+        ProjectService projectService = mock(ProjectService.class);
+        when(projectService.hasActiveProject()).thenReturn(false);
+        return Stream.of(
+                Arguments.of(
+                        FileReadService.class,
+                        new FileReadService(projectService),
+                        List.of(
+                                "readLines(relativePath: string, startLine: number, endLine: number): string;",
+                                "readFileNumbered(relativePath: string): string;",
+                                "getLineCount(relativePath: string): number;")),
+                Arguments.of(
+                        FileEditorService.class,
+                        new FileEditorService(projectService, null),
+                        List.of(
+                                "moveFile(sourcePath: string, targetPath: string): EditorResult;",
+                                "copyFile(sourcePath: string, targetPath: string): EditorResult;",
+                                "mkdirs(relativePath: string): EditorResult;")),
+                Arguments.of(
+                        GrepService.class,
+                        new GrepService(projectService),
+                        List.of(
+                                "grepWithContext(pattern: string, contextLines: number): EditorResult;",
+                                "grepLiteral(text: string): EditorResult;",
+                                "grepIgnoreCase(pattern: string): EditorResult;")),
+                Arguments.of(
+                        GitService.class,
+                        new GitService(projectService),
+                        List.of(
+                                "getDiffHead(): string;",
+                                "getDiffHead(relativePath: string): string;",
+                                "getChangedFiles(): List;",
+                                "getBlame(relativePath: string, startLine: number, endLine: number): string;")),
+                Arguments.of(
+                        GenericBuildToolService.class,
+                        new GenericBuildToolService(projectService, null, null),
+                        List.of(
+                                "buildAndTest(): BuildResult;",
+                                "compile(): BuildResult;",
+                                "runSingleTest(testName: string): BuildResult;",
+                                "runTests(): BuildResult;")));
+    }
+
+    @ParameterizedTest
+    @MethodSource("agentServiceProvider")
+    void testAllAgentServicesExposeAnnotatedMethodsInJexlPermissionsAndLlmDoc(
+            Class<?> serviceClass, Object serviceInstance, List<String> expectedSignatures) {
+        String doc = new LLMDocGenerator().generateDoc(List.of(serviceInstance));
+        assertTrue(
+                doc.contains("interface " + serviceClass.getSimpleName()),
+                "Generated doc should include interface for " + serviceClass.getSimpleName());
+
+        int documentedMethodCount = 0;
+        for (Method method : serviceClass.getMethods()) {
+            if (method.getDeclaringClass() == Object.class) {
+                continue;
+            }
+            if (method.isAnnotationPresent(AgentDoc.class)) {
+                documentedMethodCount++;
+                assertTrue(
+                        AgentJexlPermissions.INSTANCE.allow(serviceClass, method),
+                        "Method with @AgentDoc must be allowed by AgentJexlPermissions: "
+                                + serviceClass.getSimpleName()
+                                + "#"
+                                + method.getName());
+                assertTrue(
+                        doc.contains(method.getName() + "("),
+                        "Method with @AgentDoc must be emitted in TypeScript documentation: "
+                                + serviceClass.getSimpleName()
+                                + "#"
+                                + method.getName());
+            } else {
+                assertFalse(
+                        AgentJexlPermissions.INSTANCE.allow(serviceClass, method),
+                        "Method without @AgentDoc must not be allowed by AgentJexlPermissions: "
+                                + serviceClass.getSimpleName()
+                                + "#"
+                                + method.getName());
+            }
+        }
+        assertTrue(
+                documentedMethodCount > 0,
+                serviceClass.getSimpleName() + " should have at least one @AgentDoc method");
+
+        for (String expectedSignature : expectedSignatures) {
+            assertTrue(
+                    doc.contains(expectedSignature),
+                    "Expected TypeScript signature '"
+                            + expectedSignature
+                            + "' in doc for "
+                            + serviceClass.getSimpleName());
+        }
+    }
 
     @Test
     void testGenerateDoc() {

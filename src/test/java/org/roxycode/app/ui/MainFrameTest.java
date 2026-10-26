@@ -111,6 +111,29 @@ class MainFrameTest {
         assertInstanceOf(SidebarPanel.class, sidebarComp);
         assertEquals("grow", rootLayout.getComponentConstraints(sidebarComp));
 
+        HeaderPanel header = mainFrame.getHeader();
+        javax.swing.JPanel workspace = (javax.swing.JPanel) header.getParent();
+        net.miginfocom.swing.MigLayout workspaceLayout =
+                (net.miginfocom.swing.MigLayout) workspace.getLayout();
+        assertEquals(
+                "h 36!, wrap",
+                workspaceLayout.getComponentConstraints(header),
+                "Main header bar should have a compact height constraint of h 36!");
+
+        featureChatPanel.getInputArea().setText("Task draft");
+        featureChatPanel.getInputArea().setCaretPosition(0);
+        taskWorkspacePanel.getTaskTabs().setSelectedIndex(1);
+        mainFrame.showCard("TASK_VIEW");
+        javax.swing.SwingUtilities.invokeAndWait(() -> {});
+        assertEquals(featureChatPanel, taskWorkspacePanel.getTaskTabs().getSelectedComponent());
+        assertEquals("Task draft".length(), featureChatPanel.getInputArea().getCaretPosition());
+
+        exploreChatPanel.getInputArea().setText("QA draft");
+        exploreChatPanel.getInputArea().setCaretPosition(0);
+        mainFrame.showCard("QA_VIEW");
+        javax.swing.SwingUtilities.invokeAndWait(() -> {});
+        assertEquals("QA draft".length(), exploreChatPanel.getInputArea().getCaretPosition());
+
         // Simulate active turns and pending images on both panels before switching project
         java.util.concurrent.CountDownLatch turnStarted =
                 new java.util.concurrent.CountDownLatch(2);

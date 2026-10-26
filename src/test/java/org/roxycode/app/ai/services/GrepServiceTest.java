@@ -7,12 +7,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Function;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
-import org.roxycode.app.ai.AgentJexlPermissions;
-import org.roxycode.app.ai.LLMDocGenerator;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
@@ -42,7 +45,9 @@ class GrepServiceTest {
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
             runnerMock
                     .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, testFile + ":1:hello world\n", "", false));
+                    .thenReturn(
+                            new ProcessResult(
+                                    0, testFile + ":1:hello world" + (char) 10, "", false));
 
             EditorResult result = grepService.grep("hello world", ".", "*.txt");
 
@@ -52,220 +57,169 @@ class GrepServiceTest {
         }
     }
 
-    @Test
-    void testGrepWithContextCommandAndOutput() throws IOException {
-        Path src = tempDir.resolve("src");
-        Files.createDirectories(src);
-
-        String sampleOutput =
+    static Stream<Arguments> grepCommandVariants() {
+        String contextOutput =
                 String.join(
                         String.valueOf((char) 10),
                         "src/Sample.java-1-line 1 before",
                         "src/Sample.java-2-line 2 before",
                         "src/Sample.java:3:@AgentDoc",
                         "src/Sample.java-4-public void targetMethod() {");
-
-        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            runner.when(() -> ProcessRunner.run(anyList(), eq(tempDir), eq(true)))
-                    .thenReturn(new ProcessResult(0, sampleOutput, "", false));
-
-            EditorResult res = grepService.grepWithContext("@AgentDoc", "src", "*.java", 2);
-            assertTrue(res.success());
-            assertTrue(res.content().contains("src/Sample.java:3:@AgentDoc"));
-            assertTrue(res.content().contains("line 1 before"));
-
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "-n",
-                                                    "-C",
-                                                    "2",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "-g",
-                                                    "*.java",
-                                                    "--",
-                                                    "@AgentDoc",
-                                                    "src")),
-                                    eq(tempDir),
-                                    eq(true)));
-
-            // Verify clamping > 20 to 20 and root overload
-            grepService.grepWithContext("@AgentDoc", 50);
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "-n",
-                                                    "-C",
-                                                    "20",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "--",
-                                                    "@AgentDoc",
-                                                    ".")),
-                                    eq(tempDir),
-                                    eq(true)));
-
-            // Verify 3-arg overload
-            grepService.grepWithContext("@AgentDoc", "src", 3);
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "-n",
-                                                    "-C",
-                                                    "3",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "--",
-                                                    "@AgentDoc",
-                                                    "src")),
-                                    eq(tempDir),
-                                    eq(true)));
-        }
+        return Stream.of(
+                Arguments.of(
+                        (Function<GrepService, EditorResult>)
+                                s -> s.grepWithContext("@AgentDoc", "src", "*.java", 2),
+                        List.of(
+                                "rg",
+                                "-n",
+                                "-C",
+                                "2",
+                                "--no-heading",
+                                "--color=never",
+                                "-g",
+                                "*.java",
+                                "--",
+                                "@AgentDoc",
+                                "src"),
+                        contextOutput,
+                        "src/Sample.java:3:@AgentDoc"),
+                Arguments.of(
+                        (Function<GrepService, EditorResult>)
+                                s -> s.grepWithContext("@AgentDoc", 50),
+                        List.of(
+                                "rg",
+                                "-n",
+                                "-C",
+                                "20",
+                                "--no-heading",
+                                "--color=never",
+                                "--",
+                                "@AgentDoc",
+                                "."),
+                        contextOutput,
+                        "line 1 before"),
+                Arguments.of(
+                        (Function<GrepService, EditorResult>)
+                                s -> s.grepWithContext("@AgentDoc", "src", 3),
+                        List.of(
+                                "rg",
+                                "-n",
+                                "-C",
+                                "3",
+                                "--no-heading",
+                                "--color=never",
+                                "--",
+                                "@AgentDoc",
+                                "src"),
+                        contextOutput,
+                        "src/Sample.java:3:@AgentDoc"),
+                Arguments.of(
+                        (Function<GrepService, EditorResult>)
+                                s -> s.grepLiteral("std::vector<int>"),
+                        List.of(
+                                "rg",
+                                "--vimgrep",
+                                "--no-heading",
+                                "--color=never",
+                                "-F",
+                                "--",
+                                "std::vector<int>",
+                                "."),
+                        "src/Code.cpp:1:1:std::vector<int>",
+                        "std::vector<int>"),
+                Arguments.of(
+                        (Function<GrepService, EditorResult>)
+                                s -> s.grepLiteral("foo(bar[0])", "src"),
+                        List.of(
+                                "rg",
+                                "--vimgrep",
+                                "--no-heading",
+                                "--color=never",
+                                "-F",
+                                "--",
+                                "foo(bar[0])",
+                                "src"),
+                        "src/Code.cpp:1:1:foo(bar[0])",
+                        "foo(bar[0])"),
+                Arguments.of(
+                        (Function<GrepService, EditorResult>)
+                                s -> s.grepLiteral("-Dtest=MyTest", "src", "*.cpp"),
+                        List.of(
+                                "rg",
+                                "--vimgrep",
+                                "--no-heading",
+                                "--color=never",
+                                "-F",
+                                "-g",
+                                "*.cpp",
+                                "--",
+                                "-Dtest=MyTest",
+                                "src"),
+                        "src/Code.cpp:1:1:-Dtest=MyTest",
+                        "-Dtest=MyTest"),
+                Arguments.of(
+                        (Function<GrepService, EditorResult>) s -> s.grepIgnoreCase("fixme"),
+                        List.of(
+                                "rg",
+                                "--vimgrep",
+                                "--no-heading",
+                                "--color=never",
+                                "-i",
+                                "--",
+                                "fixme",
+                                "."),
+                        "src/Notes.java:1:1:// FIXME: urgent",
+                        "FIXME: urgent"),
+                Arguments.of(
+                        (Function<GrepService, EditorResult>)
+                                s -> s.grepIgnoreCase("urgent", "src"),
+                        List.of(
+                                "rg",
+                                "--vimgrep",
+                                "--no-heading",
+                                "--color=never",
+                                "-i",
+                                "--",
+                                "urgent",
+                                "src"),
+                        "src/Notes.java:1:1:// FIXME: urgent",
+                        "FIXME: urgent"),
+                Arguments.of(
+                        (Function<GrepService, EditorResult>)
+                                s -> s.grepIgnoreCase("urgent", "src", "*.java"),
+                        List.of(
+                                "rg",
+                                "--vimgrep",
+                                "--no-heading",
+                                "--color=never",
+                                "-i",
+                                "-g",
+                                "*.java",
+                                "--",
+                                "urgent",
+                                "src"),
+                        "src/Notes.java:1:1:// FIXME: urgent",
+                        "FIXME: urgent"));
     }
 
-    @Test
-    void testGrepLiteralPassesFixedStringsAndDelimiterFlag() throws IOException {
-        Path src = tempDir.resolve("src");
-        Files.createDirectories(src);
+    @ParameterizedTest
+    @MethodSource("grepCommandVariants")
+    void testGrepCommandVariantsAndOutput(
+            Function<GrepService, EditorResult> invocation,
+            List<String> expectedCommand,
+            String sampleStdout,
+            String expectedSnippet)
+            throws IOException {
+        Files.createDirectories(tempDir.resolve("src"));
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             runner.when(() -> ProcessRunner.run(anyList(), eq(tempDir), eq(true)))
-                    .thenReturn(
-                            new ProcessResult(0, "src/Code.cpp:1:1:std::vector<int>", "", false));
+                    .thenReturn(new ProcessResult(0, sampleStdout, "", false));
 
-            EditorResult r1 = grepService.grepLiteral("std::vector<int>");
-            assertTrue(r1.success());
-            assertTrue(r1.content().contains("std::vector<int>"));
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "--vimgrep",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "-F",
-                                                    "--",
-                                                    "std::vector<int>",
-                                                    ".")),
-                                    eq(tempDir),
-                                    eq(true)));
-
-            EditorResult r2 = grepService.grepLiteral("foo(bar[0])", "src");
-            assertTrue(r2.success());
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "--vimgrep",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "-F",
-                                                    "--",
-                                                    "foo(bar[0])",
-                                                    "src")),
-                                    eq(tempDir),
-                                    eq(true)));
-
-            EditorResult r3 = grepService.grepLiteral("-Dtest=MyTest", "src", "*.cpp");
-            assertTrue(r3.success());
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "--vimgrep",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "-F",
-                                                    "-g",
-                                                    "*.cpp",
-                                                    "--",
-                                                    "-Dtest=MyTest",
-                                                    "src")),
-                                    eq(tempDir),
-                                    eq(true)));
-        }
-    }
-
-    @Test
-    void testGrepIgnoreCasePassesIgnoreCaseFlag() throws IOException {
-        Path src = tempDir.resolve("src");
-        Files.createDirectories(src);
-
-        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            runner.when(() -> ProcessRunner.run(anyList(), eq(tempDir), eq(true)))
-                    .thenReturn(
-                            new ProcessResult(0, "src/Notes.java:1:1:// FIXME: urgent", "", false));
-
-            EditorResult r1 = grepService.grepIgnoreCase("fixme");
-            assertTrue(r1.success());
-            assertTrue(r1.content().contains("FIXME: urgent"));
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "--vimgrep",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "-i",
-                                                    "--",
-                                                    "fixme",
-                                                    ".")),
-                                    eq(tempDir),
-                                    eq(true)));
-
-            grepService.grepIgnoreCase("urgent", "src");
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "--vimgrep",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "-i",
-                                                    "--",
-                                                    "urgent",
-                                                    "src")),
-                                    eq(tempDir),
-                                    eq(true)));
-
-            grepService.grepIgnoreCase("urgent", "src", "*.java");
-            runner.verify(
-                    () ->
-                            ProcessRunner.run(
-                                    eq(
-                                            List.of(
-                                                    "rg",
-                                                    "--vimgrep",
-                                                    "--no-heading",
-                                                    "--color=never",
-                                                    "-i",
-                                                    "-g",
-                                                    "*.java",
-                                                    "--",
-                                                    "urgent",
-                                                    "src")),
-                                    eq(tempDir),
-                                    eq(true)));
+            EditorResult result = invocation.apply(grepService);
+            assertTrue(result.success());
+            assertTrue(result.content().contains(expectedSnippet));
+            runner.verify(() -> ProcessRunner.run(eq(expectedCommand), eq(tempDir), eq(true)));
         }
     }
 
@@ -294,61 +248,6 @@ class GrepServiceTest {
     }
 
     @Test
-    void testNewMethodsExposedInJexlPermissionsAndLlmDocGenerator() throws Exception {
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod("grepWithContext", String.class, int.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod(
-                                "grepWithContext", String.class, String.class, int.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod(
-                                "grepWithContext",
-                                String.class,
-                                String.class,
-                                String.class,
-                                int.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod("grepLiteral", String.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod("grepLiteral", String.class, String.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod(
-                                "grepLiteral", String.class, String.class, String.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod("grepIgnoreCase", String.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod("grepIgnoreCase", String.class, String.class)));
-        assertTrue(
-                AgentJexlPermissions.INSTANCE.allow(
-                        GrepService.class,
-                        GrepService.class.getMethod(
-                                "grepIgnoreCase", String.class, String.class, String.class)));
-
-        String doc = new LLMDocGenerator().generateDoc(List.of(grepService));
-        assertTrue(
-                doc.contains(
-                        "grepWithContext(pattern: string, contextLines: number): EditorResult;"));
-        assertTrue(doc.contains("grepLiteral(text: string): EditorResult;"));
-        assertTrue(doc.contains("grepIgnoreCase(pattern: string): EditorResult;"));
-    }
-
-    @Test
     void testListFilesReturnsProjectRelativePaths() throws IOException {
         Path subDir = tempDir.resolve("sub");
         Files.createDirectories(subDir);
@@ -361,7 +260,11 @@ class GrepServiceTest {
             runnerMock
                     .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
                     .thenReturn(
-                            new ProcessResult(0, rootFile + "\n" + nestedFile + "\n", "", false));
+                            new ProcessResult(
+                                    0,
+                                    rootFile + String.valueOf((char) 10) + nestedFile + (char) 10,
+                                    "",
+                                    false));
 
             List<String> files = grepService.listFiles(null);
 

@@ -98,15 +98,8 @@ class SidebarPanelTest {
 
         SidebarPanel sidebar = new SidebarPanel(navAction);
 
-        JButton qaBtn = null;
-        JButton taskBtn = null;
-        for (Component c : sidebar.getComponents()) {
-            if (c instanceof JButton) {
-                JButton b = (JButton) c;
-                if ("Codebase Q&A".equals(b.getText())) qaBtn = b;
-                if ("Feature Request".equals(b.getText())) taskBtn = b;
-            }
-        }
+        JButton qaBtn = SwingTestUtils.findButton(sidebar, "Codebase Q&A");
+        JButton taskBtn = SwingTestUtils.findButton(sidebar, "Feature Request");
 
         assertNotNull(qaBtn, "QA Button should be found");
         assertNotNull(taskBtn, "Task Button should be found");

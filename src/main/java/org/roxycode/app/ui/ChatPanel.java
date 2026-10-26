@@ -474,6 +474,22 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         return attachImageButton;
     }
 
+    JPanel getInlineActionPanel() {
+        return inlineActionPanel;
+    }
+
+    JLabel getTransitionLabel() {
+        return transitionLabel;
+    }
+
+    JButton getApproveButton() {
+        return approveButton;
+    }
+
+    JButton getRejectButton() {
+        return rejectButton;
+    }
+
     public void focusInput() {
         inputArea.requestFocusInWindow();
         inputArea.setCaretPosition(inputArea.getDocument().getLength());
