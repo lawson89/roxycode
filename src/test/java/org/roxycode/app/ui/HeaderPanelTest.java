@@ -3,13 +3,17 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Insets;
 import java.nio.file.Path;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -58,12 +62,22 @@ class HeaderPanelTest {
         SwingUtilities.invokeAndWait(
                 () -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
 
-        assertNotNull(
+        JLabel projectLabel =
                 SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "updated-proj".equals(c.getText())));
-        assertNotNull(
+                        header, JLabel.class, c -> "updated-proj".equals(c.getText()));
+        assertNotNull(projectLabel);
+        FontIcon repoIcon = assertInstanceOf(FontIcon.class, projectLabel.getIcon());
+        assertEquals(Codicons.REPO, repoIcon.getIkon());
+
+        JLabel modelLabel =
                 SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "gemini-4-argon".equals(c.getText())));
+                        header, JLabel.class, c -> "gemini-4-argon".equals(c.getText()));
+        assertNotNull(modelLabel);
+        FontIcon modelIcon = assertInstanceOf(FontIcon.class, modelLabel.getIcon());
+        assertEquals(Codicons.HUBOT, modelIcon.getIkon());
+        String modelStyle = (String) modelLabel.getClientProperty(FlatClientProperties.STYLE);
+        assertNotNull(modelStyle);
+        assertTrue(modelStyle.contains("arc: 10") && modelStyle.contains("border: 3,8,3,8"));
     }
 
     @Test
@@ -114,6 +128,16 @@ class HeaderPanelTest {
 
         assertEquals("feature/async-branch", header.getBranchLabel().getText());
         assertTrue(header.getBranchLabel().isVisible());
+        FontIcon branchIcon = assertInstanceOf(FontIcon.class, header.getBranchLabel().getIcon());
+        assertEquals(Codicons.SOURCE_CONTROL, branchIcon.getIkon());
+        String branchStyle =
+                (String) header.getBranchLabel().getClientProperty(FlatClientProperties.STYLE);
+        assertNotNull(branchStyle);
+        assertTrue(branchStyle.contains("arc: 10") && branchStyle.contains("border: 3,8,3,8"));
+
+        // Verify updateUI refreshes branch icon when branch text is present
+        header.updateUI();
+        assertNotNull(header.getBranchLabel().getIcon());
     }
 
     @Test
@@ -124,11 +148,21 @@ class HeaderPanelTest {
     }
 
     @Test
-    void testOpenButtonIsPresent() {
+    void testChangeProjectButtonIsPresentAndStyled() {
         HeaderPanel header = createHeader();
-        assertNotNull(
+        JButton openButton =
                 SwingTestUtils.findComponent(
-                        header, JButton.class, c -> "Open Project".equals(c.getToolTipText())));
+                        header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
+        assertNotNull(openButton);
+        assertSame(header.getChangeProjectButton(), openButton);
+        assertEquals(HeaderPanel.CHANGE_PROJECT_TEXT, openButton.getText());
+        assertEquals(Cursor.HAND_CURSOR, openButton.getCursor().getType());
+        FontIcon icon = assertInstanceOf(FontIcon.class, openButton.getIcon());
+        assertEquals(Codicons.FOLDER_OPENED, icon.getIkon());
+        String style = (String) openButton.getClientProperty(FlatClientProperties.STYLE);
+        assertNotNull(style);
+        assertTrue(style.contains("arc: 10"));
+        assertTrue(style.contains("hoverBackground:"));
     }
 
     @Test

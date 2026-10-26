@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Container;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import javax.swing.JLabel;
@@ -13,6 +14,8 @@ import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
@@ -90,11 +93,22 @@ class MentorModeIntegrationTest {
                         qaTabs.getClientProperty(
                                 FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT);
         assertSame(qaWorkspacePanel.getQaHeaderBar(), qaHeaderBar);
-        JLabel mentorModeLabel = (JLabel) qaHeaderBar.getComponent(0);
+
+        JPanel mentorBanner = assertInstanceOf(JPanel.class, qaHeaderBar.getComponent(0));
+        assertSame(qaWorkspacePanel.getMentorBanner(), mentorBanner);
+        String bannerStyle = (String) mentorBanner.getClientProperty(FlatClientProperties.STYLE);
+        assertNotNull(bannerStyle);
+        assertTrue(bannerStyle.contains("background: fade(") && bannerStyle.contains("12%)"));
+
+        JLabel mentorModeLabel = qaWorkspacePanel.getMentorModeLabel();
         assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
-        assertFalse(mentorModeLabel.isOpaque());
-        String mentorStyle = (String) mentorModeLabel.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(mentorStyle.contains("arc: 12") && mentorStyle.contains("border: 3,10,3,10"));
+        FontIcon searchIcon = assertInstanceOf(FontIcon.class, mentorModeLabel.getIcon());
+        assertEquals(Codicons.SEARCH, searchIcon.getIkon());
+        JLabel subtitleLabel = qaWorkspacePanel.getMentorSubtitleLabel();
+        assertTrue(subtitleLabel.getText().contains("Explore & Q&A"));
+
+        qaWorkspacePanel.updateUI();
+        assertNotNull(mentorModeLabel.getIcon());
 
         JPanel progressTracker = taskWorkspacePanel.getProgressTracker();
         JLabel planLabel = taskWorkspacePanel.getPlanLabel();
@@ -116,16 +130,30 @@ class MentorModeIntegrationTest {
 
         assertEquals(5, progressTracker.getComponentCount());
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(0));
-        assertFalse(progressTracker.getComponent(1) instanceof WorkflowPhaseIndicator);
+        JLabel connector1 = assertInstanceOf(JLabel.class, progressTracker.getComponent(1));
+        FontIcon chevron1 = assertInstanceOf(FontIcon.class, connector1.getIcon());
+        assertEquals(Codicons.CHEVRON_RIGHT, chevron1.getIkon());
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(2));
-        assertFalse(progressTracker.getComponent(3) instanceof WorkflowPhaseIndicator);
+        JLabel connector2 = assertInstanceOf(JLabel.class, progressTracker.getComponent(3));
+        FontIcon chevron2 = assertInstanceOf(FontIcon.class, connector2.getIcon());
+        assertEquals(Codicons.CHEVRON_RIGHT, chevron2.getIkon());
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(4));
 
+        when(planService.getVisitedPhases())
+                .thenReturn(EnumSet.of(WorkflowPhase.PLAN, WorkflowPhase.CODE));
         when(planService.getCurrentPlan()).thenReturn(planWithTitle("My Feature Plan"));
         taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
         assertTrue(planLabel.isVisible());
         assertEquals("MY FEATURE PLAN", planLabel.getText());
         assertEquals("My Feature Plan", planLabel.getToolTipText());
+        FontIcon projectIcon = assertInstanceOf(FontIcon.class, planLabel.getIcon());
+        assertEquals(Codicons.PROJECT, projectIcon.getIkon());
+        String planStyle = (String) planLabel.getClientProperty(FlatClientProperties.STYLE);
+        assertNotNull(planStyle);
+        assertTrue(planStyle.contains("fade(") && planStyle.contains("10%)"));
+
+        taskWorkspacePanel.updateUI();
+        assertNotNull(planLabel.getIcon());
 
         String longTitle =
                 "Consolidate EDT dispatch with Edt.run, clean up ProcessRunner buffers, and standardize PromptService I/O exceptions";

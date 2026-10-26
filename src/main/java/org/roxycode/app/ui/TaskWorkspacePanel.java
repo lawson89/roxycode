@@ -12,6 +12,8 @@ import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
@@ -52,7 +54,7 @@ public final class TaskWorkspacePanel extends JPanel {
                 new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
         topBar.setOpaque(false);
 
-        progressTracker = new JPanel(new MigLayout("insets 0, gapx 4", "[]", LAYOUT_CENTER));
+        progressTracker = new JPanel(new MigLayout("insets 0, gapx 6", "[]", LAYOUT_CENTER));
         progressTracker.setOpaque(false);
         for (WorkflowPhase phase : WorkflowPhase.values()) {
             if (phase == WorkflowPhase.EXPLORE) {
@@ -63,8 +65,8 @@ public final class TaskWorkspacePanel extends JPanel {
         topBar.add(progressTracker, "split 2, right, center");
 
         planLabel = new JLabel();
-        planLabel.putClientProperty(
-                FlatClientProperties.STYLE, "font: bold -2; foreground: $Component.accentColor");
+        planLabel.setIconTextGap(6);
+        applyPlanBadgeStyling();
         topBar.add(planLabel, "gapleft 16, right, center, hidemode 3");
 
         updateActivePhase(planService.getCurrentPhase());
@@ -87,6 +89,31 @@ public final class TaskWorkspacePanel extends JPanel {
                 });
 
         add(taskTabs, BorderLayout.CENTER);
+    }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (planLabel != null) {
+            applyPlanBadgeStyling();
+            if (planService != null) {
+                updateActivePhase(planService.getCurrentPhase());
+            }
+        }
+    }
+
+    void applyPlanBadgeStyling() {
+        Color accent =
+                SwingHtmlUtils.getUiColor(
+                        new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
+        String accentHex = SwingHtmlUtils.toHex(accent);
+        planLabel.setIcon(FontIcon.of(Codicons.PROJECT, 14, accent));
+        planLabel.setForeground(accent);
+        planLabel.putClientProperty(
+                FlatClientProperties.STYLE,
+                "font: bold -2; background: fade("
+                        + accentHex
+                        + ", 10%); arc: 10; border: 3,8,3,8");
     }
 
     public void bindSidebar(SidebarPanel sidebar) {
@@ -158,8 +185,7 @@ public final class TaskWorkspacePanel extends JPanel {
             indicator.setActive(isActive);
             indicator.setCompleted(isCompleted);
             if (i > 0) {
-                progressTracker.add(
-                        createConnectorLine(isActive || isCompleted), "w 24!, h 2!, center");
+                progressTracker.add(createConnectorIcon(isActive || isCompleted), LAYOUT_CENTER);
             }
             progressTracker.add(indicator);
         }
@@ -167,15 +193,16 @@ public final class TaskWorkspacePanel extends JPanel {
         progressTracker.repaint();
     }
 
-    private JPanel createConnectorLine(boolean reached) {
-        JPanel line = new JPanel();
-        line.setOpaque(true);
-        if (reached) {
-            line.setBackground(SwingHtmlUtils.getUiColor(Color.BLUE, "Component.accentColor"));
-        } else {
-            line.setBackground(SwingHtmlUtils.getUiColor(Color.GRAY, "Component.borderColor"));
-        }
-        return line;
+    private JLabel createConnectorIcon(boolean reached) {
+        Color color =
+                reached
+                        ? SwingHtmlUtils.getUiColor(
+                                new Color(0x00, 0x7a, 0xcc),
+                                "Component.accentColor",
+                                "Actions.Blue")
+                        : SwingHtmlUtils.getUiColor(
+                                Color.GRAY, "Label.disabledForeground", "Component.borderColor");
+        return new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 14, color));
     }
 
     JTabbedPane getTaskTabs() {

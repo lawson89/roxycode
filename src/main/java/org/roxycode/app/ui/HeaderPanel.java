@@ -29,11 +29,16 @@ public final class HeaderPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(HeaderPanel.class);
     private static final String LAYOUT_CENTER = "center";
+    static final String CHANGE_PROJECT_TEXT = "Change Project...";
+    private static final String PILL_STYLE =
+            "font: -1; foreground: $Label.disabledForeground; background: darken($Panel.background, 3%); arc: 10; border: 3,8,3,8";
+
     private final transient ProjectService projectService;
     private final transient GitService gitService;
     private final transient SettingsService settingsService;
 
     private final JLabel projectLabel;
+    private final JButton changeProjectButton;
     private final JLabel branchLabel;
     private final JLabel modelLabel;
     private final JButton themeToggleButton;
@@ -51,23 +56,19 @@ public final class HeaderPanel extends JPanel {
         updateBorder();
 
         // --- LEFT SECTION: Project Info ---
-        JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]5[]12[]", LAYOUT_CENTER));
+        JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]8[]12[]", LAYOUT_CENTER));
         leftPanel.setOpaque(false);
 
         projectLabel = new JLabel(projectService.getProjectName());
         projectLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
         leftPanel.add(projectLabel);
 
-        JButton openButton =
-                createIconButton(Codicons.FOLDER_OPENED, "Open Project", e -> chooseProject());
-        leftPanel.add(openButton);
+        changeProjectButton = createChangeProjectButton(e -> chooseProject());
+        leftPanel.add(changeProjectButton);
 
         branchLabel = new JLabel();
-        branchLabel.putClientProperty(
-                FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         branchLabel.setVisible(false);
         leftPanel.add(branchLabel);
-        updateBranchLabel();
 
         add(leftPanel, "left");
 
@@ -76,8 +77,6 @@ public final class HeaderPanel extends JPanel {
         rightPanel.setOpaque(false);
 
         modelLabel = new JLabel();
-        modelLabel.putClientProperty(
-                FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
 
         themeToggleButton =
@@ -87,6 +86,9 @@ public final class HeaderPanel extends JPanel {
         rightPanel.add(modelLabel);
         rightPanel.add(themeToggleButton);
         add(rightPanel, "right");
+
+        applyHeaderStyling();
+        updateBranchLabel();
 
         if (projectService.getCurrentProjectRoot() != null) {
             projectLabel.setToolTipText(
@@ -100,10 +102,65 @@ public final class HeaderPanel extends JPanel {
     public void updateUI() {
         super.updateUI();
         updateBorder();
+        if (projectLabel != null) {
+            applyHeaderStyling();
+        }
     }
 
     private void updateBorder() {
         setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
+    }
+
+    private static Color resolveAccentColor() {
+        return SwingHtmlUtils.getUiColor(
+                new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
+    }
+
+    private static Color resolveMutedColor() {
+        return SwingHtmlUtils.getUiColor(
+                new Color(0x77, 0x77, 0x77),
+                "Label.disabledForeground",
+                "Component.infoForeground");
+    }
+
+    private static Color resolveForegroundColor() {
+        return SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
+    }
+
+    void applyHeaderStyling() {
+        Color accent = resolveAccentColor();
+        Color muted = resolveMutedColor();
+        Color fg = resolveForegroundColor();
+        String accentHex = SwingHtmlUtils.toHex(accent);
+
+        projectLabel.setIcon(FontIcon.of(Codicons.REPO, 16, accent));
+
+        changeProjectButton.setIcon(FontIcon.of(Codicons.FOLDER_OPENED, 14, accent));
+        changeProjectButton.putClientProperty(
+                FlatClientProperties.STYLE,
+                "arc: 10; font: -1; margin: 2,8,2,8; "
+                        + "background: fade("
+                        + accentHex
+                        + ", 10%); "
+                        + "hoverBackground: fade("
+                        + accentHex
+                        + ", 20%); "
+                        + "pressedBackground: fade("
+                        + accentHex
+                        + ", 28%); "
+                        + "borderColor: fade("
+                        + accentHex
+                        + ", 35%)");
+
+        branchLabel.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE);
+        if (branchLabel.getText() != null && !branchLabel.getText().isEmpty()) {
+            branchLabel.setIcon(FontIcon.of(Codicons.SOURCE_CONTROL, 14, muted));
+        }
+
+        modelLabel.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE);
+        modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, muted));
+
+        themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, fg));
     }
 
     @EventListener
@@ -139,9 +196,18 @@ public final class HeaderPanel extends JPanel {
         settingsService.saveSettings();
     }
 
+    private JButton createChangeProjectButton(java.awt.event.ActionListener listener) {
+        JButton button = new JButton(CHANGE_PROJECT_TEXT);
+        button.setToolTipText("Open Project");
+        button.setFocusable(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.addActionListener(listener);
+        return button;
+    }
+
     private JButton createIconButton(
             Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
-        JButton button = new JButton(FontIcon.of(icon, 16, UIManager.getColor("Label.foreground")));
+        JButton button = new JButton(FontIcon.of(icon, 16, resolveForegroundColor()));
         button.setToolTipText(tooltip);
         button.setFocusable(false);
         button.setContentAreaFilled(false);
@@ -184,9 +250,7 @@ public final class HeaderPanel extends JPanel {
                                     && !"Not a git repository".equals(branch)) {
                                 branchLabel.setIcon(
                                         FontIcon.of(
-                                                Codicons.SOURCE_CONTROL,
-                                                14,
-                                                UIManager.getColor("Label.disabledForeground")));
+                                                Codicons.SOURCE_CONTROL, 14, resolveMutedColor()));
                                 branchLabel.setText(branch);
                                 branchLabel.setVisible(true);
                             } else {
@@ -206,8 +270,20 @@ public final class HeaderPanel extends JPanel {
         return worker;
     }
 
+    JLabel getProjectLabel() {
+        return projectLabel;
+    }
+
+    JButton getChangeProjectButton() {
+        return changeProjectButton;
+    }
+
     JLabel getBranchLabel() {
         return branchLabel;
+    }
+
+    JLabel getModelLabel() {
+        return modelLabel;
     }
 
     JButton getThemeToggleButton() {
@@ -215,8 +291,7 @@ public final class HeaderPanel extends JPanel {
     }
 
     private void updateModelDisplay(String modelName) {
-        modelLabel.setIcon(
-                FontIcon.of(Codicons.HUBOT, 16, UIManager.getColor("Label.disabledForeground")));
+        modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, resolveMutedColor()));
         modelLabel.setText(modelName != null ? modelName : "No model selected");
     }
 
