@@ -12,6 +12,8 @@ import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.util.Edt;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Component;
 @Lazy
 public final class PlanPanel extends JPanel {
     private static final long serialVersionUID = 1L;
+    private static final Logger log = LoggerFactory.getLogger(PlanPanel.class);
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final String COPY_BUTTON_TEXT = "Copy Plan as Markdown";
     static final String NO_FILES_CHANGED = "No files changed";
@@ -31,6 +34,8 @@ public final class PlanPanel extends JPanel {
     private final JButton copyMarkdownButton;
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
+    private volatile String lastGitStatus = "";
+    private transient volatile SwingWorker<String, Void> activeRefreshWorker;
 
     public PlanPanel(PlanService planManagerService, GitService gitService) {
         this.planManagerService = planManagerService;
@@ -81,6 +86,7 @@ public final class PlanPanel extends JPanel {
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
+        lastGitStatus = "";
         refresh();
     }
 
@@ -89,7 +95,9 @@ public final class PlanPanel extends JPanel {
         if (plan == null) {
             return;
         }
-        String markdown = buildPlanMarkdown(plan, getGitStatusText());
+        String gitStatus =
+                SwingUtilities.isEventDispatchThread() ? lastGitStatus : getGitStatusText();
+        String markdown = buildPlanMarkdown(plan, gitStatus);
         this.lastCopiedMarkdown = markdown;
         SwingHtmlUtils.copyToClipboard(markdown);
 
@@ -116,12 +124,22 @@ public final class PlanPanel extends JPanel {
         return lastCopiedMarkdown;
     }
 
+    String getLastGitStatus() {
+        return lastGitStatus;
+    }
+
+    SwingWorker<String, Void> getActiveRefreshWorker() {
+        return activeRefreshWorker;
+    }
+
     @Override
     public void updateUI() {
         super.updateUI();
         if (displayArea != null) {
             updateTheme();
-            refresh();
+            if (planManagerService != null) {
+                applyDisplayOnEdt(planManagerService.getCurrentPlan(), lastGitStatus);
+            }
         }
     }
 
@@ -134,16 +152,44 @@ public final class PlanPanel extends JPanel {
     }
 
     private void updateDisplay(ImplementationPlan plan) {
-        String html = buildPlanHtml(plan, getGitStatusText());
-        boolean hasPlan = plan != null;
-        Edt.run(
-                () -> {
-                    if (copyMarkdownButton != null) {
-                        copyMarkdownButton.setEnabled(hasPlan);
+        SwingWorker<String, Void> worker =
+                new SwingWorker<>() {
+                    @Override
+                    protected String doInBackground() {
+                        try {
+                            String status = getGitStatusText();
+                            String normalized = status != null ? status : "";
+                            Edt.run(() -> applyWorkerResult(this, plan, normalized));
+                            return normalized;
+                        } catch (Exception e) {
+                            log.debug("Failed to refresh git status for plan panel", e);
+                            Edt.run(() -> applyWorkerResult(this, plan, lastGitStatus));
+                            return lastGitStatus;
+                        }
                     }
-                    displayArea.setText(html);
-                    displayArea.setCaretPosition(0);
-                });
+                };
+        activeRefreshWorker = worker;
+        worker.execute();
+    }
+
+    private void applyWorkerResult(
+            SwingWorker<String, Void> worker, ImplementationPlan plan, String status) {
+        if (worker != activeRefreshWorker) {
+            return;
+        }
+        String normalized = status != null ? status : "";
+        lastGitStatus = normalized;
+        applyDisplayOnEdt(plan, normalized);
+    }
+
+    private void applyDisplayOnEdt(ImplementationPlan plan, String gitStatus) {
+        String html = buildPlanHtml(plan, gitStatus);
+        boolean hasPlan = plan != null;
+        if (copyMarkdownButton != null) {
+            copyMarkdownButton.setEnabled(hasPlan);
+        }
+        displayArea.setText(html);
+        displayArea.setCaretPosition(0);
     }
 
     static String formatChangesText(String gitStatus) {

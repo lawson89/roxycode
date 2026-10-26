@@ -9,8 +9,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.roxycode.app.ai.services.EditorResult;
@@ -34,9 +36,79 @@ import org.springframework.stereotype.Service;
 @Service
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
-    static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB
     static final int CTAGS_BATCH_SIZE = 100;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
+    private static final Set<String> KNOWN_BINARY_EXTENSIONS =
+            Set.of(
+                    "png",
+                    "jpg",
+                    "jpeg",
+                    "gif",
+                    "bmp",
+                    "ico",
+                    "webp",
+                    "tiff",
+                    "tif",
+                    "psd",
+                    "mp3",
+                    "mp4",
+                    "wav",
+                    "ogg",
+                    "flac",
+                    "avi",
+                    "mov",
+                    "mkv",
+                    "webm",
+                    "zip",
+                    "tar",
+                    "gz",
+                    "tgz",
+                    "bz2",
+                    "xz",
+                    "7z",
+                    "rar",
+                    "zst",
+                    "jar",
+                    "war",
+                    "ear",
+                    "class",
+                    "jmod",
+                    "exe",
+                    "dll",
+                    "so",
+                    "dylib",
+                    "bin",
+                    "o",
+                    "a",
+                    "lib",
+                    "obj",
+                    "pyc",
+                    "pyo",
+                    "pyd",
+                    "wasm",
+                    "pdf",
+                    "doc",
+                    "docx",
+                    "xls",
+                    "xlsx",
+                    "ppt",
+                    "pptx",
+                    "odt",
+                    "ods",
+                    "odp",
+                    "ttf",
+                    "otf",
+                    "woff",
+                    "woff2",
+                    "eot",
+                    "sqlite",
+                    "sqlite3",
+                    "db",
+                    "mdb",
+                    "parquet",
+                    "avro",
+                    "orc",
+                    "ds_store");
 
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
@@ -168,24 +240,17 @@ public class RepoMapPackerService {
             if (!Files.isRegularFile(filePath)) {
                 continue;
             }
-            sb.append("--- ").append(relPath).append(" ---\n");
             try {
-                long size = Files.size(filePath);
-                if (size < RAW_CONTENT_THRESHOLD) {
-                    sb.append(Files.readString(filePath));
-                } else {
-                    String skeleton = getSkeleton(filePath);
-                    if (skeleton == null || skeleton.isBlank()) {
-                        sb.append("[Full content omitted due to size - no skeleton available]\n");
-                    } else {
-                        sb.append(skeleton);
-                    }
+                String skeleton = getSkeleton(filePath);
+                if (skeleton != null && !skeleton.isBlank()) {
+                    sb.append("--- ").append(relPath).append(" ---\n");
+                    sb.append(skeleton);
+                    sb.append("\n\n");
                 }
             } catch (Exception e) {
                 ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-                sb.append("[Error processing file: ").append(e.getMessage()).append("]\n");
+                log.warn("Error processing file {}: {}", relPath, e.getMessage());
             }
-            sb.append("\n\n");
         }
 
         String generatedMap = sb.toString();
@@ -214,7 +279,7 @@ public class RepoMapPackerService {
             }
             try {
                 long size = Files.size(filePath);
-                if (size < RAW_CONTENT_THRESHOLD) {
+                if (size <= 0) {
                     continue;
                 }
                 long lastModified = Files.getLastModifiedTime(filePath).toMillis();
@@ -310,6 +375,9 @@ public class RepoMapPackerService {
         try {
             Path normalized = filePath.toAbsolutePath().normalize();
             long size = Files.size(normalized);
+            if (size <= 0) {
+                return null;
+            }
             long lastModified = Files.getLastModifiedTime(normalized).toMillis();
             CachedSkeleton cached = getValidCachedSkeleton(normalized, lastModified, size);
             if (cached != null) {
@@ -374,7 +442,27 @@ public class RepoMapPackerService {
         return false;
     }
 
+    static boolean hasKnownBinaryExtension(Path path) {
+        if (path == null) {
+            return false;
+        }
+        Path fileNamePath = path.getFileName();
+        if (fileNamePath == null) {
+            return false;
+        }
+        String fileName = fileNamePath.toString();
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
+            return false;
+        }
+        String ext = fileName.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
+        return KNOWN_BINARY_EXTENSIONS.contains(ext);
+    }
+
     private boolean isBinaryFile(Path path) {
+        if (hasKnownBinaryExtension(path)) {
+            return true;
+        }
         try {
             return FileReadService.isBinaryFile(path);
         } catch (Exception e) {

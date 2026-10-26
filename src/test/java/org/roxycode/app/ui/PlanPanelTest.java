@@ -5,8 +5,12 @@ import static org.mockito.Mockito.*;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.text.Element;
 import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
@@ -22,6 +26,14 @@ import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 
 class PlanPanelTest {
+
+    private static void awaitRefresh(PlanPanel panel) throws Exception {
+        SwingWorker<String, Void> worker = panel.getActiveRefreshWorker();
+        if (worker != null) {
+            worker.get(5, TimeUnit.SECONDS);
+        }
+        SwingUtilities.invokeAndWait(() -> {});
+    }
 
     @Test
     void testBuildPlanHtmlUsesNowrapAndNonBreakingCheckbox() {
@@ -124,7 +136,7 @@ class PlanPanelTest {
         when(planService.getCurrentPlan()).thenReturn(plan);
 
         PlanPanel panel = new PlanPanel(planService, gitService);
-        SwingUtilities.invokeAndWait(() -> {});
+        awaitRefresh(panel);
 
         JEditorPane editorPane = panel.getDisplayArea();
         HTMLEditorKit kit = (HTMLEditorKit) editorPane.getEditorKit();
@@ -220,10 +232,18 @@ class PlanPanelTest {
         PlanService planService = mock(PlanService.class);
         GitService gitService = mock(GitService.class);
 
+        AtomicBoolean calledOnEdt = new AtomicBoolean(false);
         when(planService.getCurrentPlan()).thenReturn(null);
-        when(gitService.getStatus()).thenReturn("");
+        when(gitService.getStatus())
+                .thenAnswer(
+                        inv -> {
+                            if (SwingUtilities.isEventDispatchThread()) {
+                                calledOnEdt.set(true);
+                            }
+                            return "";
+                        });
         PlanPanel panel = new PlanPanel(planService, gitService);
-        SwingUtilities.invokeAndWait(() -> {});
+        awaitRefresh(panel);
 
         assertFalse(
                 panel.getCopyMarkdownButton().isEnabled(),
@@ -242,23 +262,35 @@ class PlanPanelTest {
                         List.of());
         when(planService.getCurrentPlan()).thenReturn(plan);
         panel.onPlanUpdated(new PlanUpdatedEvent(plan));
-        SwingUtilities.invokeAndWait(() -> {});
+        awaitRefresh(panel);
 
         assertTrue(
                 panel.getCopyMarkdownButton().isEnabled(),
                 "Copy button should be enabled when plan is present");
         assertEquals("Copy Plan as Markdown", panel.getCopyMarkdownButton().getText());
-        assertTrue(panel.getDisplayArea().getText().contains("No files changed"));
+        assertTrue(
+                panel.getDisplayArea().getText().contains("No files changed"),
+                "Actual text: " + panel.getDisplayArea().getText());
 
-        when(gitService.getStatus()).thenReturn(" M src/Main.java\n?? src/Extra.java\n");
+        when(gitService.getStatus())
+                .thenAnswer(
+                        inv -> {
+                            if (SwingUtilities.isEventDispatchThread()) {
+                                calledOnEdt.set(true);
+                            }
+                            return " M src/Main.java\n?? src/Extra.java\n";
+                        });
         panel.onFileChanged(new FileChangedEvent("src/Main.java"));
-        SwingUtilities.invokeAndWait(() -> {});
+        awaitRefresh(panel);
 
         assertTrue(panel.getDisplayArea().getText().contains("M src/Main.java"));
         assertTrue(panel.getDisplayArea().getText().contains("?? src/Extra.java"));
 
-        panel.getCopyMarkdownButton().doClick();
+        clearInvocations(gitService);
+        SwingUtilities.invokeAndWait(() -> panel.getCopyMarkdownButton().doClick());
 
+        // Copy on the EDT must use cached lastGitStatus without spawning git status
+        verify(gitService, never()).getStatus();
         assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
         assertNotNull(panel.getLastCopiedMarkdown());
         assertTrue(panel.getLastCopiedMarkdown().contains("# Implementation Plan: Test Plan"));
@@ -266,11 +298,79 @@ class PlanPanelTest {
         assertTrue(panel.getLastCopiedMarkdown().contains("## Changes"));
         assertTrue(panel.getLastCopiedMarkdown().contains(" M src/Main.java"));
 
-        when(gitService.getStatus()).thenReturn("");
+        // updateUI() on theme changes must not trigger gitService.getStatus()
+        SwingUtilities.invokeAndWait(panel::updateUI);
+        verify(gitService, never()).getStatus();
+
+        when(gitService.getStatus())
+                .thenAnswer(
+                        inv -> {
+                            if (SwingUtilities.isEventDispatchThread()) {
+                                calledOnEdt.set(true);
+                            }
+                            return "";
+                        });
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/other")));
-        SwingUtilities.invokeAndWait(() -> {});
+        awaitRefresh(panel);
 
         assertTrue(panel.getDisplayArea().getText().contains("No files changed"));
+        assertFalse(calledOnEdt.get(), "gitService.getStatus() must never be called on the EDT");
+    }
+
+    @Test
+    void testStaleRefreshWorkerDiscarded() throws Exception {
+        PlanService planService = mock(PlanService.class);
+        GitService gitService = mock(GitService.class);
+
+        ImplementationPlan plan =
+                new ImplementationPlan(
+                        "Test Plan",
+                        "Test Goal",
+                        List.of("Req 1"),
+                        List.of(new ImplementationPlan.TechStep("Step 0", false)),
+                        false,
+                        null,
+                        null,
+                        null,
+                        List.of());
+        when(planService.getCurrentPlan()).thenReturn(plan);
+        when(gitService.getStatus()).thenReturn("");
+
+        PlanPanel panel = new PlanPanel(planService, gitService);
+        awaitRefresh(panel);
+
+        CountDownLatch slowStarted = new CountDownLatch(1);
+        CountDownLatch releaseSlow = new CountDownLatch(1);
+        AtomicBoolean firstCall = new AtomicBoolean(true);
+
+        when(gitService.getStatus())
+                .thenAnswer(
+                        inv -> {
+                            if (firstCall.compareAndSet(true, false)) {
+                                slowStarted.countDown();
+                                releaseSlow.await(5, TimeUnit.SECONDS);
+                                return " M src/StaleFile.java\n";
+                            }
+                            return " M src/FreshFile.java\n";
+                        });
+
+        panel.refresh();
+        SwingWorker<String, Void> staleWorker = panel.getActiveRefreshWorker();
+        assertTrue(slowStarted.await(5, TimeUnit.SECONDS));
+
+        // Trigger a newer refresh while the first worker is still running
+        panel.refresh();
+        SwingWorker<String, Void> freshWorker = panel.getActiveRefreshWorker();
+        assertNotSame(staleWorker, freshWorker);
+
+        freshWorker.get(5, TimeUnit.SECONDS);
+        releaseSlow.countDown();
+        staleWorker.get(5, TimeUnit.SECONDS);
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertEquals(" M src/FreshFile.java\n", panel.getLastGitStatus());
+        assertTrue(panel.getDisplayArea().getText().contains("FreshFile.java"));
+        assertFalse(panel.getDisplayArea().getText().contains("StaleFile.java"));
     }
 
     private boolean hasPositiveInlineMinSpan(Element elem, ViewFactory factory) {

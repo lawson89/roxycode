@@ -1,12 +1,12 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
-import java.awt.*;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import javax.swing.*;
@@ -50,7 +50,34 @@ class CodebaseCachePanelTest {
     }
 
     @Test
-    void testRefreshStatusRunsAsyncAndUpdatesAreas() throws Exception {
+    void testTruncateForDisplayHandlesNullShortAndOversizedStrings() {
+        assertEquals("", CodebaseCachePanel.truncateForDisplay(null));
+        assertEquals("short text", CodebaseCachePanel.truncateForDisplay("short text"));
+
+        String exactBoundary = "a".repeat(CodebaseCachePanel.MAX_DISPLAY_CHARS);
+        assertEquals(exactBoundary, CodebaseCachePanel.truncateForDisplay(exactBoundary));
+
+        int oversizedLen = CodebaseCachePanel.MAX_DISPLAY_CHARS + 50_000;
+        String oversized = "x".repeat(oversizedLen);
+        String truncated = CodebaseCachePanel.truncateForDisplay(oversized);
+
+        assertTrue(truncated.startsWith("x".repeat(100)));
+        assertTrue(
+                truncated.endsWith(
+                        String.format(
+                                "\n\n... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]",
+                                oversizedLen)));
+        assertEquals(
+                CodebaseCachePanel.MAX_DISPLAY_CHARS
+                        + String.format(
+                                        "\n\n... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]",
+                                        oversizedLen)
+                                .length(),
+                truncated.length());
+    }
+
+    @Test
+    void testRefreshStatusRunsAsyncAndUpdatesAreasAndTruncatesLargeContent() throws Exception {
         // Ensure initial constructor refreshStatus has finished before re-stubbing
         // mocks
         for (int i = 0; i < 20; i++) {
@@ -83,8 +110,20 @@ class CodebaseCachePanelTest {
         assertEquals("stable prompt", panel.getStableContextArea().getText());
         assertEquals("session prompt", panel.getSessionContextArea().getText());
 
+        // Verify oversized repo map is truncated in display document and swaps Document instance
+        String hugeRepoMap = "R".repeat(CodebaseCachePanel.MAX_DISPLAY_CHARS + 12_345);
+        when(metaService.loadRepoCache()).thenReturn(Optional.of(hugeRepoMap));
+        panel.refreshStatus().get();
+        SwingUtilities.invokeAndWait(() -> {});
+
+        String displayedRepoMap = panel.getRepoMapArea().getText();
+        assertTrue(
+                displayedRepoMap.contains(
+                        "[Display truncated at 200,000 characters for UI responsiveness;"));
+        assertEquals(0, panel.getRepoMapArea().getCaretPosition());
+
         when(metaService.loadRepoCache()).thenReturn(Optional.of("new project repo map"));
-        org.junit.jupiter.api.Assertions.assertFalse(SwingUtilities.isEventDispatchThread());
+        assertFalse(SwingUtilities.isEventDispatchThread());
         panel.onProjectChanged(
                 new org.roxycode.app.events.ProjectChangedEvent(java.nio.file.Path.of("/tmp")));
         for (int i = 0; i < 50; i++) {
