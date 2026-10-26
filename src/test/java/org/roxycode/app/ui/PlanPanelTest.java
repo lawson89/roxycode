@@ -35,44 +35,43 @@ class PlanPanelTest {
         SwingUtilities.invokeAndWait(() -> {});
     }
 
+    private static ImplementationPlan createPlan(
+            List<ImplementationPlan.TechStep> steps, List<ImplementationPlan.LogEntry> logs) {
+        return new ImplementationPlan(
+                "Test Plan",
+                "Test Goal",
+                List.of("Requirement 1"),
+                steps,
+                false,
+                null,
+                null,
+                null,
+                logs);
+    }
+
+    private static ImplementationPlan createPlan(ImplementationPlan.TechStep... steps) {
+        return createPlan(List.of(steps), List.of());
+    }
+
     @Test
     void testBuildPlanHtmlUsesNowrapAndNonBreakingCheckbox() {
         ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Test Plan",
-                        "Test Goal",
-                        List.of("Requirement 1"),
-                        List.of(
-                                new ImplementationPlan.TechStep(
-                                        "Long step description that should wrap in its column without squishing the index or checkbox.",
-                                        false),
-                                new ImplementationPlan.TechStep("Completed step", true)),
-                        false,
-                        null,
-                        null,
-                        null,
-                        List.of());
+                createPlan(
+                        new ImplementationPlan.TechStep(
+                                "Long step description that should wrap in its column without squishing the index or checkbox.",
+                                false),
+                        new ImplementationPlan.TechStep("Completed step", true));
 
         String html = PlanPanel.buildPlanHtml(plan);
-
-        assertTrue(
-                html.contains("<p><b>Title:</b> Test Plan</p>"),
-                "Title should be wrapped in a <p> element");
-        assertTrue(
-                html.contains("<p><b>Goal:</b> Test Goal</p>"),
-                "Goal should be wrapped in a <p> element");
-        assertTrue(html.contains("[&nbsp;]"), "Unchecked checkbox should use non-breaking space");
-        assertFalse(
-                html.contains(">[ ]<"), "Unchecked checkbox should not use regular breaking space");
-        assertTrue(html.contains("<b>[x]</b>"), "Completed checkbox should contain [x]");
-        assertTrue(html.contains("nowrap='nowrap'"), "Index and checkbox cells should have nowrap");
-        assertTrue(
-                html.contains("<td width='100%'"),
-                "Step description cell should take 100% remaining width");
-        assertTrue(html.contains("<h3>Changes:</h3>"), "Plan HTML should include Changes header");
-        assertTrue(
-                html.contains("No files changed"),
-                "Plan HTML should display 'No files changed' when git status is blank");
+        assertTrue(html.contains("<p><b>Title:</b> Test Plan</p>"));
+        assertTrue(html.contains("<p><b>Goal:</b> Test Goal</p>"));
+        assertTrue(html.contains("[&nbsp;]"));
+        assertFalse(html.contains(">[ ]<"));
+        assertTrue(html.contains("<b>[x]</b>"));
+        assertTrue(html.contains("nowrap='nowrap'"));
+        assertTrue(html.contains("<td width='100%'"));
+        assertTrue(html.contains("<h3>Changes:</h3>"));
+        assertTrue(html.contains("No files changed"));
 
         String htmlWithChanges =
                 PlanPanel.buildPlanHtml(plan, " M src/App.java\n?? src/NewFile.java\n");
@@ -81,36 +80,24 @@ class PlanPanelTest {
         assertFalse(htmlWithChanges.contains("No files changed"));
 
         ImplementationPlan planWithLogs =
-                new ImplementationPlan(
-                        "Test Plan",
-                        "Test Goal",
-                        List.of("Requirement 1"),
+                createPlan(
                         List.of(new ImplementationPlan.TechStep("Completed step", true)),
-                        false,
-                        null,
-                        null,
-                        null,
                         List.of(
                                 new ImplementationPlan.LogEntry(
                                         "2026-04-06T12:00:00", "User", "Approved")));
         String htmlWithLogs = PlanPanel.buildPlanHtml(planWithLogs);
-        assertFalse(
-                htmlWithLogs.contains("bgcolor='#2d2d2d'"),
-                "Handoff log table header should not hardcode dark mode bgcolor='#2d2d2d'");
+        assertFalse(htmlWithLogs.contains("bgcolor='#2d2d2d'"));
         assertFalse(
                 htmlWithLogs.contains("#888888")
                         || htmlWithLogs.contains("#569cd6")
-                        || htmlWithLogs.contains("#28a745"),
-                "Plan HTML should not hardcode dark-theme hex colors");
+                        || htmlWithLogs.contains("#28a745"));
         assertTrue(
                 htmlWithLogs.contains("class='plan-step-done'")
                         && htmlWithLogs.contains("class='plan-step-completed'")
-                        && htmlWithLogs.contains("class='plan-log-user'"),
-                "Plan HTML should use theme-aware CSS classes");
+                        && htmlWithLogs.contains("class='plan-log-user'"));
         assertTrue(
                 htmlWithLogs.contains("class='system-entry'")
-                        || htmlWithLogs.contains("class='md-th'"),
-                "Handoff log table header should use theme-aware CSS classes");
+                        || htmlWithLogs.contains("class='md-th'"));
     }
 
     @Test
@@ -118,50 +105,31 @@ class PlanPanelTest {
         PlanService planService = mock(PlanService.class);
         GitService gitService = mock(GitService.class);
 
-        ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Test Plan",
-                        "Test Goal",
-                        List.of("Req"),
-                        List.of(
+        when(planService.getCurrentPlan())
+                .thenReturn(
+                        createPlan(
                                 new ImplementationPlan.TechStep(
                                         "Update src/main/resources/prompts/plan_phase.md to remove stale planService method names and refer to the provided JEXL API documentation.",
-                                        false)),
-                        false,
-                        null,
-                        null,
-                        null,
-                        List.of());
-
-        when(planService.getCurrentPlan()).thenReturn(plan);
+                                        false)));
 
         PlanPanel panel = new PlanPanel(planService, gitService);
         awaitRefresh(panel);
 
         JEditorPane editorPane = panel.getDisplayArea();
-        HTMLEditorKit kit = (HTMLEditorKit) editorPane.getEditorKit();
-        ViewFactory factory = kit.getViewFactory();
-        HTMLDocument doc = (HTMLDocument) editorPane.getDocument();
+        ViewFactory factory = ((HTMLEditorKit) editorPane.getEditorKit()).getViewFactory();
+        Element root = ((HTMLDocument) editorPane.getDocument()).getDefaultRootElement();
 
-        Element td0 = SwingTestUtils.findTdWithText(doc.getDefaultRootElement(), "0.");
-        assertNotNull(td0, "Should find index <td> element");
-        assertTrue(
-                hasPositiveInlineMinSpan(td0, factory),
-                "Nowrap index cell inline content should preserve positive minimum X span so it does not wrap");
+        Element td0 = SwingTestUtils.findTdWithText(root, "0.");
+        assertNotNull(td0);
+        assertTrue(hasPositiveInlineMinSpan(td0, factory));
 
-        Element tdCheckbox = SwingTestUtils.findTdWithText(doc.getDefaultRootElement(), "[");
-        assertNotNull(tdCheckbox, "Should find checkbox <td> element");
-        assertTrue(
-                hasPositiveInlineMinSpan(tdCheckbox, factory),
-                "Nowrap checkbox cell inline content should preserve positive minimum X span so it does not wrap");
+        Element tdCheckbox = SwingTestUtils.findTdWithText(root, "[");
+        assertNotNull(tdCheckbox);
+        assertTrue(hasPositiveInlineMinSpan(tdCheckbox, factory));
 
-        Element tdDesc =
-                SwingTestUtils.findTdWithText(
-                        doc.getDefaultRootElement(), "Update src/main/resources");
-        assertNotNull(tdDesc, "Should find description <td> element");
-        assertFalse(
-                hasPositiveInlineMinSpan(tdDesc, factory),
-                "Description cell inline content should have 0 minimum X span to allow wrapping");
+        Element tdDesc = SwingTestUtils.findTdWithText(root, "Update src/main/resources");
+        assertNotNull(tdDesc);
+        assertFalse(hasPositiveInlineMinSpan(tdDesc, factory));
     }
 
     @Test
@@ -184,47 +152,26 @@ class PlanPanelTest {
                                 new ImplementationPlan.LogEntry(
                                         "2026-04-06T12:05:30.123",
                                         "Architect",
-                                        """
-                                        Created plan | verified
-                                        details""")));
+                                        "Created plan | verified\ndetails")));
 
         String md = PlanPanel.buildPlanMarkdown(plan);
-
         assertTrue(md.contains("# Implementation Plan: Visibility Feature"));
         assertTrue(md.contains("**Goal:** Improve visibility"));
+        assertTrue(md.contains("## Requirements\n- Show turns\n- Export markdown"));
         assertTrue(
                 md.contains(
-                        """
-                        ## Requirements
-                        - Show turns
-                        - Export markdown"""));
-        assertTrue(
-                md.contains(
-                        """
-                        ## Technical Steps
-                        - [x] 0. Update ChatPanel
-                        - [ ] 1. Update PlanPanel"""));
+                        "## Technical Steps\n- [x] 0. Update ChatPanel\n- [ ] 1. Update PlanPanel"));
         assertTrue(md.contains("## Handoff Log"));
         assertTrue(md.contains("| Timestamp | User | Message |"));
         assertTrue(
                 md.contains("| 2026-04-06 12:05:30 | Architect | Created plan ")
                         && md.contains("| verified details |"));
-        assertTrue(
-                md.contains(
-                        """
-                        ## Changes
-                        No files changed"""));
+        assertTrue(md.contains("## Changes\nNo files changed"));
 
         String mdWithChanges =
                 PlanPanel.buildPlanMarkdown(plan, " M src/App.java\n?? src/NewFile.java\n");
-        assertTrue(
-                mdWithChanges.contains(
-                        """
-                        ## Changes
-                        ```text
-                         M src/App.java
-                        ?? src/NewFile.java
-                        ```"""));
+        assertTrue(mdWithChanges.contains("## Changes"));
+        assertTrue(mdWithChanges.contains(" M src/App.java\n?? src/NewFile.java"));
     }
 
     @Test
@@ -237,47 +184,27 @@ class PlanPanelTest {
         when(gitService.getStatus())
                 .thenAnswer(
                         inv -> {
-                            if (SwingUtilities.isEventDispatchThread()) {
-                                calledOnEdt.set(true);
-                            }
+                            if (SwingUtilities.isEventDispatchThread()) calledOnEdt.set(true);
                             return "";
                         });
         PlanPanel panel = new PlanPanel(planService, gitService);
         awaitRefresh(panel);
 
-        assertFalse(
-                panel.getCopyMarkdownButton().isEnabled(),
-                "Copy button should be disabled when plan is null");
+        assertFalse(panel.getCopyMarkdownButton().isEnabled());
 
-        ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Test Plan",
-                        "Test Goal",
-                        List.of("Req 1"),
-                        List.of(new ImplementationPlan.TechStep("Step 0", true)),
-                        false,
-                        null,
-                        null,
-                        null,
-                        List.of());
+        ImplementationPlan plan = createPlan(new ImplementationPlan.TechStep("Step 0", true));
         when(planService.getCurrentPlan()).thenReturn(plan);
         panel.onPlanUpdated(new PlanUpdatedEvent(plan));
         awaitRefresh(panel);
 
-        assertTrue(
-                panel.getCopyMarkdownButton().isEnabled(),
-                "Copy button should be enabled when plan is present");
+        assertTrue(panel.getCopyMarkdownButton().isEnabled());
         assertEquals("Copy Plan as Markdown", panel.getCopyMarkdownButton().getText());
-        assertTrue(
-                panel.getDisplayArea().getText().contains("No files changed"),
-                "Actual text: " + panel.getDisplayArea().getText());
+        assertTrue(panel.getDisplayArea().getText().contains("No files changed"));
 
         when(gitService.getStatus())
                 .thenAnswer(
                         inv -> {
-                            if (SwingUtilities.isEventDispatchThread()) {
-                                calledOnEdt.set(true);
-                            }
+                            if (SwingUtilities.isEventDispatchThread()) calledOnEdt.set(true);
                             return " M src/Main.java\n?? src/Extra.java\n";
                         });
         panel.onFileChanged(new FileChangedEvent("src/Main.java"));
@@ -289,32 +216,29 @@ class PlanPanelTest {
         clearInvocations(gitService);
         SwingUtilities.invokeAndWait(() -> panel.getCopyMarkdownButton().doClick());
 
-        // Copy on the EDT must use cached lastGitStatus without spawning git status
         verify(gitService, never()).getStatus();
         assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
-        assertNotNull(panel.getLastCopiedMarkdown());
-        assertTrue(panel.getLastCopiedMarkdown().contains("# Implementation Plan: Test Plan"));
-        assertTrue(panel.getLastCopiedMarkdown().contains("- [x] 0. Step 0"));
-        assertTrue(panel.getLastCopiedMarkdown().contains("## Changes"));
-        assertTrue(panel.getLastCopiedMarkdown().contains(" M src/Main.java"));
+        String copied = panel.getLastCopiedMarkdown();
+        assertNotNull(copied);
+        assertTrue(copied.contains("# Implementation Plan: Test Plan"));
+        assertTrue(copied.contains("- [x] 0. Step 0"));
+        assertTrue(copied.contains("## Changes"));
+        assertTrue(copied.contains(" M src/Main.java"));
 
-        // updateUI() on theme changes must not trigger gitService.getStatus()
         SwingUtilities.invokeAndWait(panel::updateUI);
         verify(gitService, never()).getStatus();
 
         when(gitService.getStatus())
                 .thenAnswer(
                         inv -> {
-                            if (SwingUtilities.isEventDispatchThread()) {
-                                calledOnEdt.set(true);
-                            }
+                            if (SwingUtilities.isEventDispatchThread()) calledOnEdt.set(true);
                             return "";
                         });
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/other")));
         awaitRefresh(panel);
 
         assertTrue(panel.getDisplayArea().getText().contains("No files changed"));
-        assertFalse(calledOnEdt.get(), "gitService.getStatus() must never be called on the EDT");
+        assertFalse(calledOnEdt.get());
     }
 
     @Test
@@ -322,18 +246,8 @@ class PlanPanelTest {
         PlanService planService = mock(PlanService.class);
         GitService gitService = mock(GitService.class);
 
-        ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Test Plan",
-                        "Test Goal",
-                        List.of("Req 1"),
-                        List.of(new ImplementationPlan.TechStep("Step 0", false)),
-                        false,
-                        null,
-                        null,
-                        null,
-                        List.of());
-        when(planService.getCurrentPlan()).thenReturn(plan);
+        when(planService.getCurrentPlan())
+                .thenReturn(createPlan(new ImplementationPlan.TechStep("Step 0", false)));
         when(gitService.getStatus()).thenReturn("");
 
         PlanPanel panel = new PlanPanel(planService, gitService);
@@ -358,7 +272,6 @@ class PlanPanelTest {
         SwingWorker<String, Void> staleWorker = panel.getActiveRefreshWorker();
         assertTrue(slowStarted.await(5, TimeUnit.SECONDS));
 
-        // Trigger a newer refresh while the first worker is still running
         panel.refresh();
         SwingWorker<String, Void> freshWorker = panel.getActiveRefreshWorker();
         assertNotSame(staleWorker, freshWorker);
@@ -374,9 +287,8 @@ class PlanPanelTest {
     }
 
     private boolean hasPositiveInlineMinSpan(Element elem, ViewFactory factory) {
-        View view = factory.create(elem);
-        if (view instanceof InlineView) {
-            return view.getMinimumSpan(View.X_AXIS) > 0;
+        if (factory.create(elem) instanceof InlineView iv) {
+            return iv.getMinimumSpan(View.X_AXIS) > 0;
         }
         for (int i = 0; i < elem.getElementCount(); i++) {
             if (hasPositiveInlineMinSpan(elem.getElement(i), factory)) {

@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
-import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Insets;
@@ -46,42 +45,27 @@ public class ChatPanelTest extends ChatTestFixture {
     @Test
     public void testChatPanelInitialization() {
         ChatPanel chatPanel = createChatPanel();
-        assertNotNull(chatPanel.getOutputArea(), "Output area should be initialized");
-        assertNotNull(chatPanel.getInputArea(), "Input area should be initialized");
-        assertTrue(
-                chatPanel.getInputArea() instanceof JTextArea, "Input area should be a JTextArea");
-        assertNotNull(chatPanel.getSendButton(), "Send button should be initialized");
-        assertNotNull(chatPanel.getStopButton(), "Stop button should be initialized");
+        assertNotNull(chatPanel.getOutputArea());
+        assertInstanceOf(JTextArea.class, chatPanel.getInputArea());
+        assertNotNull(chatPanel.getSendButton());
+        assertNotNull(chatPanel.getStopButton());
         assertEquals("Send", chatPanel.getSendButton().getText());
-        assertFalse(chatPanel.getOutputArea().isEditable(), "Output area should not be editable");
-
-        boolean hasSplitPane = false;
-        for (Component comp : chatPanel.getComponents()) {
-            if (comp instanceof JSplitPane) {
-                hasSplitPane = true;
-                break;
-            }
-        }
-        assertTrue(hasSplitPane, "ChatPanel should contain a JSplitPane");
+        assertFalse(chatPanel.getOutputArea().isEditable());
+        assertTrue(Arrays.stream(chatPanel.getComponents()).anyMatch(JSplitPane.class::isInstance));
     }
 
     @Test
     public void testContextMenuListeners() {
         ChatPanel chatPanel = createChatPanel();
-        assertTrue(
-                chatPanel.getInputArea().getMouseListeners().length > 0,
-                "Input area should have mouse listeners for context menu");
-        assertTrue(
-                chatPanel.getOutputArea().getMouseListeners().length > 0,
-                "Output area should have mouse listeners for context menu");
+        assertTrue(chatPanel.getInputArea().getMouseListeners().length > 0);
+        assertTrue(chatPanel.getOutputArea().getMouseListeners().length > 0);
     }
 
     @Test
     public void testSendMessageWithNullEventDoesNotThrowNPE() {
         ChatPanel chatPanel = createChatPanel();
         Action sendMessageAction = chatPanel.getInputArea().getActionMap().get("send-message");
-        assertNotNull(sendMessageAction, "send-message action should exist");
-
+        assertNotNull(sendMessageAction);
         chatPanel.getInputArea().setText("Hello");
         assertDoesNotThrow(() -> sendMessageAction.actionPerformed(null));
     }
@@ -93,17 +77,17 @@ public class ChatPanelTest extends ChatTestFixture {
         JButton sendButton = chatPanel.getSendButton();
         JTextArea inputArea = chatPanel.getInputArea();
 
-        assertFalse(stopButton.isEnabled(), "Stop button should be disabled initially");
-        assertTrue(sendButton.isEnabled(), "Send button should be enabled initially");
+        assertFalse(stopButton.isEnabled());
+        assertTrue(sendButton.isEnabled());
 
         inputArea.setText("test message");
         for (ActionListener al : sendButton.getActionListeners()) {
             al.actionPerformed(new ActionEvent(sendButton, ActionEvent.ACTION_PERFORMED, null));
         }
 
-        assertTrue(stopButton.isEnabled(), "Stop button should be enabled while sending");
-        assertFalse(sendButton.isEnabled(), "Send button should be disabled while sending");
-        assertFalse(inputArea.isEnabled(), "Input area should be disabled while sending");
+        assertTrue(stopButton.isEnabled());
+        assertFalse(sendButton.isEnabled());
+        assertFalse(inputArea.isEnabled());
     }
 
     @Test
@@ -133,43 +117,31 @@ public class ChatPanelTest extends ChatTestFixture {
         chatPanel.getInputArea().setText("Start coding");
         chatPanel.getSendButton().doClick();
 
-        assertTrue(
-                callStarted.await(5, TimeUnit.SECONDS),
-                "Background worker should start aiService.chat");
+        assertTrue(callStarted.await(5, TimeUnit.SECONDS));
 
         chatPanel.onWorkflowTransition(
-                new WorkflowTransitionEvent(
+                transitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop transition", true));
-        SwingUtilities.invokeAndWait(() -> {});
+        flushEdt();
 
         SwingUtilities.invokeAndWait(() -> chatPanel.getStopButton().doClick());
-        SwingUtilities.invokeAndWait(() -> {});
+        flushEdt();
 
         chatPanel.onWorkflowTransition(
-                new WorkflowTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
+                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
         chatPanel.onToolExecution(
                 new ToolExecutionEvent("task:default", "lateToolCall()", "ok", true, null));
         chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 99, "CODE"));
 
         allowExit.countDown();
         Thread.sleep(200);
-        SwingUtilities.invokeAndWait(() -> {});
+        flushEdt();
 
         String html = chatPanel.getOutputArea().getText();
-        assertTrue(
-                html.contains("Request cancelled by user"),
-                "Output should contain cancellation message");
-        assertFalse(
-                html.contains("lateToolCall"),
-                "Late tool execution events after Stop must be ignored");
-        assertFalse(
-                html.contains("Late transition"),
-                "Late autonomous transition events after Stop must be ignored");
-        assertEquals(
-                1,
-                chatCalls.get(),
-                "Cancelled turn must not auto-trigger a follow-up turn from queued or late transitions");
+        assertTrue(html.contains("Request cancelled by user"));
+        assertFalse(html.contains("lateToolCall"));
+        assertFalse(html.contains("Late transition"));
+        assertEquals(1, chatCalls.get());
     }
 
     @Test
@@ -177,17 +149,13 @@ public class ChatPanelTest extends ChatTestFixture {
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
 
         chatPanel.onWorkflowTransition(
-                new WorkflowTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
+                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
         Thread.sleep(300);
-
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
         chatPanel.onWorkflowTransition(
-                new WorkflowTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
+                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
         Thread.sleep(600);
-
         verify(aiService, atLeastOnce()).chat(anyString(), any(), anyString(), any());
     }
 
@@ -200,7 +168,7 @@ public class ChatPanelTest extends ChatTestFixture {
                 .thenAnswer(
                         inv -> {
                             chatPanel.onWorkflowTransition(
-                                    new WorkflowTransitionEvent(
+                                    transitionEvent(
                                             WorkflowPhase.PLAN,
                                             WorkflowPhase.CODE,
                                             "Plan ready",
@@ -212,30 +180,23 @@ public class ChatPanelTest extends ChatTestFixture {
         chatPanel.getSendButton().doClick();
 
         Thread.sleep(500);
-        SwingUtilities.invokeAndWait(() -> {});
+        flushEdt();
 
         String renderedHtml = chatPanel.getOutputArea().getText();
-        assertTrue(renderedHtml.contains("FINAL_PLAN_SUMMARY"), "AI response should be rendered");
-        assertFalse(
-                renderedHtml.contains("Roxy requested a transition"),
-                "Duplicate system transition message should not be appended");
-
-        assertTrue(
-                chatPanel.getInlineActionPanel().isVisible(),
-                "Transition banner should be visible after turn");
+        assertTrue(renderedHtml.contains("FINAL_PLAN_SUMMARY"));
+        assertFalse(renderedHtml.contains("Roxy requested a transition"));
+        assertTrue(chatPanel.getInlineActionPanel().isVisible());
         assertEquals("Approve Plan and proceed to Code", chatPanel.getTransitionLabel().getText());
 
         chatPanel.onWorkflowTransition(
-                new WorkflowTransitionEvent(
-                        WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All done", false));
-        SwingUtilities.invokeAndWait(() -> {});
+                transitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All done", false));
+        flushEdt();
         assertEquals(
                 "Approve Feature Request as complete", chatPanel.getTransitionLabel().getText());
 
         chatPanel.onWorkflowTransition(
-                new WorkflowTransitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.PLAN, "Need revision", false));
-        SwingUtilities.invokeAndWait(() -> {});
+                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Need revision", false));
+        flushEdt();
         assertEquals(
                 "Approve Plan Revision and return to Plan",
                 chatPanel.getTransitionLabel().getText());
@@ -244,102 +205,58 @@ public class ChatPanelTest extends ChatTestFixture {
     @Test
     public void testFocusInputSetsCaretToEnd() {
         ChatPanel chatPanel = createChatPanel();
-
         chatPanel.getInputArea().setText("Existing text in input");
         chatPanel.getInputArea().setCaretPosition(0);
         assertEquals(0, chatPanel.getInputArea().getCaretPosition());
 
         chatPanel.focusInput();
-
         assertEquals(
-                "Existing text in input".length(),
-                chatPanel.getInputArea().getCaretPosition(),
-                "Caret should be moved to the end of the text");
+                "Existing text in input".length(), chatPanel.getInputArea().getCaretPosition());
     }
 
     @Test
     public void testOutputScrollPaneAndWrappingConfiguration() {
         ChatPanel chatPanel = createChatPanel();
-
-        assertTrue(
-                chatPanel.getOutputArea().getScrollableTracksViewportWidth(),
-                "MarkdownPane should track viewport width");
+        assertTrue(chatPanel.getOutputArea().getScrollableTracksViewportWidth());
 
         JScrollPane scrollPane =
                 (JScrollPane)
                         SwingUtilities.getAncestorOfClass(
                                 JScrollPane.class, chatPanel.getOutputArea());
-        assertNotNull(scrollPane, "Output area should be inside a JScrollPane");
-        assertSame(
-                chatPanel.getOutputArea(),
-                scrollPane.getViewport().getView(),
-                "Output area should be the direct viewport view of outputScrollPane");
+        assertNotNull(scrollPane);
+        assertSame(chatPanel.getOutputArea(), scrollPane.getViewport().getView());
         assertEquals(
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER,
-                scrollPane.getHorizontalScrollBarPolicy(),
-                "Horizontal scrollbar policy should be HORIZONTAL_SCROLLBAR_NEVER");
-
-        assertInstanceOf(
-                MatteBorder.class,
-                scrollPane.getBorder(),
-                "outputScrollPane should use a bottom-only MatteBorder");
-        assertEquals(
-                new Insets(0, 0, 1, 0),
-                scrollPane.getBorder().getBorderInsets(scrollPane),
-                "outputScrollPane border insets should be bottom-only (0, 0, 1, 0)");
+                scrollPane.getHorizontalScrollBarPolicy());
+        assertInstanceOf(MatteBorder.class, scrollPane.getBorder());
+        assertEquals(new Insets(0, 0, 1, 0), scrollPane.getBorder().getBorderInsets(scrollPane));
 
         Container outputWrapper = scrollPane.getParent();
-        assertNotNull(outputWrapper, "outputScrollPane should have an outputWrapper parent");
-        assertTrue(
-                outputWrapper.getLayout() instanceof BorderLayout,
-                "outputWrapper should use BorderLayout");
-        BorderLayout layout = (BorderLayout) outputWrapper.getLayout();
-        assertNotNull(
-                layout.getLayoutComponent(BorderLayout.SOUTH),
-                "inlineActionPanel should be attached at BorderLayout.SOUTH of outputWrapper in task mode");
+        assertNotNull(outputWrapper);
+        BorderLayout layout = assertInstanceOf(BorderLayout.class, outputWrapper.getLayout());
+        assertNotNull(layout.getLayoutComponent(BorderLayout.SOUTH));
 
         JSplitPane splitPane =
                 (JSplitPane) SwingUtilities.getAncestorOfClass(JSplitPane.class, scrollPane);
-        assertNotNull(splitPane, "outputScrollPane should be inside JSplitPane");
-        assertEquals(
-                new Insets(0, 0, 0, 0),
-                splitPane.getInsets(),
-                "JSplitPane should have zero outer insets so it sits flush with sidebar and tab bar");
-
-        assertEquals(
-                1.0,
-                splitPane.getResizeWeight(),
-                0.001,
-                "splitPane resizeWeight should be 1.0 so chat output gets extra vertical space");
+        assertNotNull(splitPane);
+        assertEquals(new Insets(0, 0, 0, 0), splitPane.getInsets());
+        assertEquals(1.0, splitPane.getResizeWeight(), 0.001);
 
         JPanel inputSection = (JPanel) splitPane.getBottomComponent();
         Container buttonPanel = chatPanel.getSendButton().getParent();
-        assertFalse(
-                inputSection.isPreferredSizeSet(),
-                "inputSection should not have a hardcoded preferredSize that clips buttonPanel");
-        assertTrue(
-                inputSection.getPreferredSize().height >= buttonPanel.getPreferredSize().height,
-                "inputSection preferred height should be at least as tall as buttonPanel preferred height");
-        assertEquals(
-                new Dimension(0, 85),
-                inputSection.getMinimumSize(),
-                "inputSection should have compact minimum height of 85px");
-        assertEquals(3, chatPanel.getInputArea().getRows(), "inputArea should have 3 rows");
+        assertFalse(inputSection.isPreferredSizeSet());
+        assertTrue(inputSection.getPreferredSize().height >= buttonPanel.getPreferredSize().height);
+        assertEquals(new Dimension(0, 85), inputSection.getMinimumSize());
+        assertEquals(3, chatPanel.getInputArea().getRows());
         assertEquals(
                 "Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)",
                 chatPanel.getInputArea().getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
-        assertNotNull(chatPanel.getAttachImageButton(), "attachImageButton should be initialized");
+        assertNotNull(chatPanel.getAttachImageButton());
         assertEquals("Attach Image", chatPanel.getAttachImageButton().getToolTipText());
 
-        assertInstanceOf(MigLayout.class, inputSection.getLayout());
-        MigLayout inputLayout = (MigLayout) inputSection.getLayout();
-        assertTrue(
-                inputLayout.getLayoutConstraints().toString().contains("insets 6 10 10 10"),
-                "inputSection should have internal padding insets 6 10 10 10");
-        assertEquals(
-                "aligny top",
-                inputLayout.getComponentConstraints(chatPanel.getSendButton().getParent()),
-                "buttonPanel should be anchored at aligny top");
+        MigLayout inputLayout = assertInstanceOf(MigLayout.class, inputSection.getLayout());
+        assertTrue(inputLayout.getLayoutConstraints().toString().contains("insets 6 10 10 10"));
+        assertEquals("aligny top", inputLayout.getComponentConstraints(buttonPanel));
     }
 
     @Test
@@ -357,8 +274,7 @@ public class ChatPanelTest extends ChatTestFixture {
         Method[] exploreDeclared = ExploreChatPanel.class.getDeclaredMethods();
         assertFalse(
                 Arrays.stream(exploreDeclared)
-                        .anyMatch(m -> m.isAnnotationPresent(EventListener.class)),
-                "ExploreChatPanel should not declare task workflow @EventListener methods");
+                        .anyMatch(m -> m.isAnnotationPresent(EventListener.class)));
 
         assertTrue(
                 FeatureChatPanel.class
@@ -392,7 +308,7 @@ public class ChatPanelTest extends ChatTestFixture {
         approveButton.setEnabled(true);
         approveButton.doClick();
         Thread.sleep(400);
-        SwingUtilities.invokeAndWait(() -> {});
+        flushEdt();
 
         verify(aiService, atLeastOnce())
                 .chat(
@@ -410,7 +326,7 @@ public class ChatPanelTest extends ChatTestFixture {
         approveButton.setEnabled(true);
         approveButton.doClick();
         Thread.sleep(300);
-        SwingUtilities.invokeAndWait(() -> {});
+        flushEdt();
 
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
         verify(chatMemory).clear("task:default");
@@ -423,42 +339,31 @@ public class ChatPanelTest extends ChatTestFixture {
         JButton approveButton = chatPanel.getApproveButton();
         JButton rejectButton = chatPanel.getRejectButton();
 
-        assertFalse(approveButton.isEnabled(), "approveButton should be disabled initially");
-        assertFalse(rejectButton.isEnabled(), "rejectButton should be disabled initially");
+        assertFalse(approveButton.isEnabled());
+        assertFalse(rejectButton.isEnabled());
 
         when(planService.getPendingPhase()).thenReturn(null);
         chatPanel.setLoading(false);
-        assertFalse(
-                approveButton.isEnabled(),
-                "approveButton should remain disabled when setLoading(false) and no pending phase");
-        assertFalse(
-                rejectButton.isEnabled(),
-                "rejectButton should remain disabled when setLoading(false) and no pending phase");
+        assertFalse(approveButton.isEnabled());
+        assertFalse(rejectButton.isEnabled());
 
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
         chatPanel.setLoading(true);
-        assertFalse(approveButton.isEnabled(), "approveButton should be disabled during loading");
-        assertFalse(rejectButton.isEnabled(), "rejectButton should be disabled during loading");
+        assertFalse(approveButton.isEnabled());
+        assertFalse(rejectButton.isEnabled());
 
         chatPanel.setLoading(false);
-        assertTrue(
-                approveButton.isEnabled(),
-                "approveButton should be enabled when setLoading(false) and pending phase exists");
-        assertTrue(
-                rejectButton.isEnabled(),
-                "rejectButton should be enabled when setLoading(false) and pending phase exists");
+        assertTrue(approveButton.isEnabled());
+        assertTrue(rejectButton.isEnabled());
     }
 
     @Test
     public void testLoadingListenerNotified() {
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
-
         List<Boolean> states = new ArrayList<>();
         chatPanel.addLoadingListener(states::add);
-
         chatPanel.setLoading(true);
         chatPanel.setLoading(false);
-
         assertEquals(List.of(true, false), states);
     }
 
@@ -469,48 +374,27 @@ public class ChatPanelTest extends ChatTestFixture {
         when(settingsService.getSettings()).thenReturn(appSettings);
 
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
-
         assertEquals("Turns: 0 / 5", chatPanel.getTurnLabel().getText());
 
         ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Feature X",
-                        "Build Feature X",
-                        List.of("Req 1"),
-                        List.of(
-                                new ImplementationPlan.TechStep("Step 0", true),
-                                new ImplementationPlan.TechStep("Step 1", false),
-                                new ImplementationPlan.TechStep("Step 2", false)),
-                        true,
-                        null,
-                        null,
-                        null,
-                        List.of());
+                samplePlan(
+                        new ImplementationPlan.TechStep("Step 0", true),
+                        new ImplementationPlan.TechStep("Step 1", false),
+                        new ImplementationPlan.TechStep("Step 2", false));
         when(planService.getCurrentPlan()).thenReturn(plan);
 
         chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
-        SwingUtilities.invokeAndWait(() -> {});
-
+        flushEdt();
         assertEquals("Turns: 2 / 5 | Plan: 1/3 steps", chatPanel.getTurnLabel().getText());
 
         ImplementationPlan updatedPlan =
-                new ImplementationPlan(
-                        "Feature X",
-                        "Build Feature X",
-                        List.of("Req 1"),
-                        List.of(
-                                new ImplementationPlan.TechStep("Step 0", true),
-                                new ImplementationPlan.TechStep("Step 1", true),
-                                new ImplementationPlan.TechStep("Step 2", false)),
-                        true,
-                        null,
-                        null,
-                        null,
-                        List.of());
+                samplePlan(
+                        new ImplementationPlan.TechStep("Step 0", true),
+                        new ImplementationPlan.TechStep("Step 1", true),
+                        new ImplementationPlan.TechStep("Step 2", false));
         when(planService.getCurrentPlan()).thenReturn(updatedPlan);
         chatPanel.onPlanUpdated(new PlanUpdatedEvent(updatedPlan));
-        SwingUtilities.invokeAndWait(() -> {});
-
+        flushEdt();
         assertEquals("Turns: 2 / 5 | Plan: 2/3 steps", chatPanel.getTurnLabel().getText());
     }
 }

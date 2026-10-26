@@ -3,10 +3,11 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.awt.Component;
 import java.awt.Container;
+import java.awt.Insets;
 import java.nio.file.Path;
 import javax.swing.*;
+import net.miginfocom.swing.MigLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.GitService;
@@ -35,12 +36,17 @@ class HeaderPanelTest {
         return gitService;
     }
 
+    private HeaderPanel createHeader() {
+        SettingsService ss = createSettingsService();
+        ProjectService ps = createProjectService(ss);
+        return new HeaderPanel(ps, createGitService(ps), ss);
+    }
+
     @Test
     void testHeaderPanelInstantiation() throws Exception {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
-        assertNotNull(header);
 
         Path newRoot = tempDir.resolve("updated-proj");
         ps.setCurrentProjectRoot(newRoot);
@@ -52,15 +58,12 @@ class HeaderPanelTest {
         SwingUtilities.invokeAndWait(
                 () -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
 
-        Component projLabel =
+        assertNotNull(
                 SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "updated-proj".equals(c.getText()));
-        assertNotNull(projLabel, "Project label should update on ProjectChangedEvent");
-
-        Component modelLabel =
+                        header, JLabel.class, c -> "updated-proj".equals(c.getText())));
+        assertNotNull(
                 SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "gemini-4-argon".equals(c.getText()));
-        assertNotNull(modelLabel, "Model label should update on SettingsChangedEvent");
+                        header, JLabel.class, c -> "gemini-4-argon".equals(c.getText())));
     }
 
     @Test
@@ -82,18 +85,14 @@ class HeaderPanelTest {
                         });
         backgroundThread.start();
         backgroundThread.join(5000);
-
         SwingUtilities.invokeAndWait(() -> {});
 
-        Component projLabel =
+        assertNotNull(
                 SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "off-edt-proj".equals(c.getText()));
-        assertNotNull(projLabel, "Project label should update on EDT when triggered off-EDT");
-
-        Component modelLabel =
+                        header, JLabel.class, c -> "off-edt-proj".equals(c.getText())));
+        assertNotNull(
                 SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "gemini-off-edt".equals(c.getText()));
-        assertNotNull(modelLabel, "Model label should update on EDT when triggered off-EDT");
+                        header, JLabel.class, c -> "gemini-off-edt".equals(c.getText())));
     }
 
     @Test
@@ -106,11 +105,10 @@ class HeaderPanelTest {
         HeaderPanel header = new HeaderPanel(ps, gitService, ss);
         header.updateBranchLabel().get();
 
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0;
+                i < 50 && !"feature/async-branch".equals(header.getBranchLabel().getText());
+                i++) {
             SwingUtilities.invokeAndWait(() -> {});
-            if ("feature/async-branch".equals(header.getBranchLabel().getText())) {
-                break;
-            }
             Thread.sleep(20);
         }
 
@@ -120,27 +118,17 @@ class HeaderPanelTest {
 
     @Test
     void testModeTogglesAndWorkflowIndicatorsAreRemovedFromHeader() {
-        SettingsService ss = createSettingsService();
-        ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
-
-        Component toggle = SwingTestUtils.findComponent(header, JToggleButton.class);
-        assertNull(toggle, "Mode toggle buttons should be removed from HeaderPanel");
-
-        Component indicator = SwingTestUtils.findComponent(header, WorkflowPhaseIndicator.class);
-        assertNull(indicator, "WorkflowPhaseIndicator should be removed from HeaderPanel");
+        HeaderPanel header = createHeader();
+        assertNull(SwingTestUtils.findComponent(header, JToggleButton.class));
+        assertNull(SwingTestUtils.findComponent(header, WorkflowPhaseIndicator.class));
     }
 
     @Test
     void testOpenButtonIsPresent() {
-        SettingsService ss = createSettingsService();
-        ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
-
-        JButton openButton =
+        HeaderPanel header = createHeader();
+        assertNotNull(
                 SwingTestUtils.findComponent(
-                        header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
-        assertNotNull(openButton);
+                        header, JButton.class, c -> "Open Project".equals(c.getToolTipText())));
     }
 
     @Test
@@ -154,7 +142,7 @@ class HeaderPanelTest {
                         header,
                         JButton.class,
                         c -> "Toggle Light/Dark Theme".equals(c.getToolTipText()));
-        assertNotNull(themeButton, "Theme toggle button should be present in HeaderPanel");
+        assertNotNull(themeButton);
         assertEquals("FlatLaf Light", ss.getSettings().getTheme());
 
         themeButton.doClick();
@@ -165,40 +153,27 @@ class HeaderPanelTest {
         assertEquals("FlatLaf Light", ss.getSettings().getTheme());
         verify(ss, times(2)).saveSettings();
 
-        // When Darcula or macOS Dark is active, clicking toggle should switch to FlatLaf Light
-        ss.getSettings().setTheme("Darcula");
-        SettingsPanel.applyTheme("Darcula");
-        themeButton.doClick();
-        assertEquals("FlatLaf Light", ss.getSettings().getTheme());
-
-        ss.getSettings().setTheme("macOS Dark");
-        SettingsPanel.applyTheme("macOS Dark");
-        themeButton.doClick();
-        assertEquals("FlatLaf Light", ss.getSettings().getTheme());
+        for (String darkTheme : new String[] {"Darcula", "macOS Dark"}) {
+            ss.getSettings().setTheme(darkTheme);
+            SettingsPanel.applyTheme(darkTheme);
+            themeButton.doClick();
+            assertEquals("FlatLaf Light", ss.getSettings().getTheme());
+        }
     }
 
     @Test
     void testHeaderLayoutInsetsAndInlineLeftSection() {
-        SettingsService ss = createSettingsService();
-        ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
-        net.miginfocom.swing.MigLayout layout = (net.miginfocom.swing.MigLayout) header.getLayout();
-        Object constraints = layout.getLayoutConstraints();
-        assertTrue(constraints.toString().contains("insets 2 15 2 15"));
+        HeaderPanel header = createHeader();
+        MigLayout layout = (MigLayout) header.getLayout();
+        assertTrue(layout.getLayoutConstraints().toString().contains("insets 2 15 2 15"));
         header.updateUI();
-        assertEquals(
-                new java.awt.Insets(0, 0, 1, 0),
-                header.getBorder().getBorderInsets(header),
-                "HeaderPanel should maintain a 1px bottom MatteBorder across updateUI()");
+        assertEquals(new Insets(0, 0, 1, 0), header.getBorder().getBorderInsets(header));
 
         JButton openButton =
                 SwingTestUtils.findComponent(
                         header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
         assertNotNull(openButton);
         Container leftPanel = openButton.getParent();
-        assertEquals(
-                3,
-                leftPanel.getComponentCount(),
-                "leftPanel should have projectLabel, openButton, and branchLabel inline");
+        assertEquals(3, leftPanel.getComponentCount());
     }
 }

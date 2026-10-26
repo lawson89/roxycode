@@ -42,15 +42,8 @@ class BuildContainerServiceTest {
         assertEquals("my-cool-project", ProjectService.sanitizeProjectName(normalProject));
 
         String containerName = BuildContainerService.buildContainerName(normalProject);
-        assertTrue(
-                containerName.matches("^roxycode-build-my-cool-project-[a-f0-9]{8}$"),
-                "Unexpected container name: " + containerName);
-
-        String secondName = BuildContainerService.buildContainerName(normalProject);
-        assertNotEquals(
-                containerName,
-                secondName,
-                "Container names should have a unique suffix to avoid collisions");
+        assertTrue(containerName.matches("^roxycode-build-my-cool-project-[a-f0-9]{8}$"));
+        assertNotEquals(containerName, BuildContainerService.buildContainerName(normalProject));
 
         assertEquals("project", ProjectService.sanitizeProjectName(Path.of("/")));
         assertEquals("project", ProjectService.sanitizeProjectName(null));
@@ -59,10 +52,9 @@ class BuildContainerServiceTest {
 
     @Test
     void testCreateConfiguredContainerSetsIdentifiableNameAndLabels() {
-        Path projectPath = tempDir.resolve("Roxy_Test_App");
         ContainerSessionKey key =
                 new ContainerSessionKey(
-                        projectPath,
+                        tempDir.resolve("Roxy_Test_App"),
                         "eclipse-temurin:25-jdk",
                         "/workspace",
                         Map.of("ROXY_CODE", "true"));
@@ -73,39 +65,32 @@ class BuildContainerServiceTest {
         assertEquals("true", container.getEnvMap().get("ROXY_CODE"));
         assertEquals("roxycode", container.getLabels().get("app"));
         assertEquals("roxy-test-app", container.getLabels().get("roxycode.project"));
-
         assertFalse(container.getCreateContainerCmdModifiers().isEmpty());
+
         CreateContainerCmd mockCmd = mock(CreateContainerCmd.class);
-        for (var modifier : container.getCreateContainerCmdModifiers()) {
-            modifier.modify(mockCmd);
-        }
+        container.getCreateContainerCmdModifiers().forEach(m -> m.modify(mockCmd));
 
         ArgumentCaptor<String> nameCaptor = ArgumentCaptor.forClass(String.class);
         verify(mockCmd).withName(nameCaptor.capture());
-        assertTrue(
-                nameCaptor.getValue().matches("^roxycode-build-roxy-test-app-[a-f0-9]{8}$"),
-                "Expected roxycode-build-roxy-test-app-<hex>, got: " + nameCaptor.getValue());
+        assertTrue(nameCaptor.getValue().matches("^roxycode-build-roxy-test-app-[a-f0-9]{8}$"));
     }
 
     @Test
     void testParseContainerConfigDefaultsAndCustomValues() {
-        ContainerConfig defaultConfig = buildContainerService.parseContainerConfig(null);
-        assertFalse(defaultConfig.enabled());
-        assertEquals("ubuntu:24.04", defaultConfig.image());
-        assertEquals("/workspace", defaultConfig.workdir());
+        for (ContainerConfig cfg :
+                new ContainerConfig[] {null, new ContainerConfig(false, "  ", "")}) {
+            ContainerConfig parsed = buildContainerService.parseContainerConfig(cfg);
+            assertFalse(parsed.enabled());
+            assertEquals("ubuntu:24.04", parsed.image());
+            assertEquals("/workspace", parsed.workdir());
+        }
 
-        ContainerConfig blankFieldsConfig =
-                buildContainerService.parseContainerConfig(new ContainerConfig(false, "  ", ""));
-        assertFalse(blankFieldsConfig.enabled());
-        assertEquals("ubuntu:24.04", blankFieldsConfig.image());
-        assertEquals("/workspace", blankFieldsConfig.workdir());
-
-        ContainerConfig customConfig =
+        ContainerConfig custom =
                 buildContainerService.parseContainerConfig(
                         new ContainerConfig(true, "eclipse-temurin:25-jdk", "/app"));
-        assertTrue(customConfig.enabled());
-        assertEquals("eclipse-temurin:25-jdk", customConfig.image());
-        assertEquals("/app", customConfig.workdir());
+        assertTrue(custom.enabled());
+        assertEquals("eclipse-temurin:25-jdk", custom.image());
+        assertEquals("/app", custom.workdir());
     }
 
     @Test
@@ -153,22 +138,15 @@ class BuildContainerServiceTest {
                 buildContainerService.executeCommand(
                         tempDir, config, Map.of("A", "1"), "./mvnw compile");
         assertEquals(0, res1.exitCode());
-        assertEquals(
-                """
-                out
-                err""",
-                res1.combinedOutput());
+        assertEquals("out\nerr", res1.combinedOutput());
 
-        // Same key reuses session
         buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"), "./mvnw test");
         assertEquals(1, sessionsCreated.get());
         assertEquals(2, commands.size());
 
-        // Different env or image recreates session
         buildContainerService.executeCommand(tempDir, config, Map.of("A", "2"), "./mvnw test");
         assertEquals(2, sessionsCreated.get());
 
-        // Explicit stop closes session
         buildContainerService.stopActiveContainer();
         assertTrue(sessionClosed.get());
     }
@@ -182,27 +160,24 @@ class BuildContainerServiceTest {
                 });
 
         ContainerConfig config = new ContainerConfig(true, "eclipse-temurin:25-jdk", "/workspace");
-        IllegalStateException thrown =
+        assertTrue(
                 assertThrows(
-                        IllegalStateException.class,
-                        () ->
-                                buildContainerService.executeCommand(
-                                        tempDir, config, Map.of(), "./mvnw compile"));
-        assertTrue(thrown.getMessage().contains("client version 1.32 is too old"));
+                                IllegalStateException.class,
+                                () ->
+                                        buildContainerService.executeCommand(
+                                                tempDir, config, Map.of(), "./mvnw compile"))
+                        .getMessage()
+                        .contains("client version 1.32 is too old"));
     }
 
     @Test
     void testIsAndUpdateContainerEnabledInToml() {
-        assertFalse(BuildContainerService.isContainerEnabledInToml(null));
-        assertFalse(BuildContainerService.isContainerEnabledInToml(""));
-        assertFalse(BuildContainerService.isContainerEnabledInToml("   "));
-        assertFalse(
-                BuildContainerService.isContainerEnabledInToml(
-                        """
-                        [container
-                        enabled = true
-                        """));
-        assertFalse(BuildContainerService.isContainerEnabledInToml("invalid = = toml"));
+        for (String invalid :
+                new String[] {
+                    null, "", "   ", "[container\nenabled = true\n", "invalid = = toml"
+                }) {
+            assertFalse(BuildContainerService.isContainerEnabledInToml(invalid));
+        }
 
         String tomlWithDisabled =
                 """
@@ -219,18 +194,13 @@ class BuildContainerServiceTest {
                 BuildContainerService.updateContainerEnabledInToml(tomlWithDisabled, true);
         assertTrue(BuildContainerService.isContainerEnabledInToml(enabledToml));
         assertTrue(enabledToml.contains("enabled = true # inline comment"));
+        assertFalse(
+                BuildContainerService.isContainerEnabledInToml(
+                        BuildContainerService.updateContainerEnabledInToml(enabledToml, false)));
 
-        String disabledAgain =
-                BuildContainerService.updateContainerEnabledInToml(enabledToml, false);
-        assertFalse(BuildContainerService.isContainerEnabledInToml(disabledAgain));
-
-        String tomlWithoutSection =
-                """
-                [build]
-                compile = "./mvnw compile"
-                """;
         String appended =
-                BuildContainerService.updateContainerEnabledInToml(tomlWithoutSection, true);
+                BuildContainerService.updateContainerEnabledInToml(
+                        "[build]\ncompile = './mvnw compile'\n", true);
         assertTrue(appended.contains("[container]"));
         assertTrue(
                 appended.contains(

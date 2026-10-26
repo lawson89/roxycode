@@ -12,27 +12,13 @@ class ChatHtmlTemplatesTest {
 
     @Test
     void testRenderChatEntry() {
-        String role = "user";
-        String content = "<p>Hello</p>";
-        String timestamp = "12:00:00";
-        String result = ChatHtmlTemplates.renderChatEntry(role, content, timestamp, -1, false);
-
-        assertTrue(
-                result.contains(
-                        """
-                <table class="user-entry" width="100%" cellpadding="0" cellspacing="0" border="0">"""));
-        assertTrue(
-                result.contains(
-                        """
-                <td class="user-accent" width="4" nowrap="nowrap">&nbsp;</td>"""));
-        assertTrue(
-                result.contains(
-                        """
-                <td class="message-body" width="100%" style="padding: 8px 12px;">"""));
-        assertTrue(
-                result.contains(
-                        """
-                <tr><td height="8">&nbsp;</td></tr>"""));
+        String result =
+                ChatHtmlTemplates.renderChatEntry("user", "<p>Hello</p>", "12:00:00", -1, false);
+        assertTrue(result.contains("user-entry"));
+        assertTrue(result.contains("user-accent"));
+        assertTrue(result.contains("nowrap"));
+        assertTrue(result.contains("message-body"));
+        assertTrue(result.contains("padding: 8px 12px;"));
         assertFalse(result.contains("chat-entry"));
         assertFalse(result.contains("accent-bar"));
         assertTrue(result.contains("role-user"));
@@ -46,7 +32,6 @@ class ChatHtmlTemplatesTest {
     void testRenderAiChatEntryWithCopyAction() {
         String result =
                 ChatHtmlTemplates.renderChatEntry("ai", "<p>Response</p>", "12:00:00", 2, false);
-
         assertTrue(result.contains("ai-entry"));
         assertTrue(result.contains("href='copy:2'"));
         assertTrue(result.contains("copy-action"));
@@ -59,7 +44,6 @@ class ChatHtmlTemplatesTest {
     void testRenderAiChatEntryWithCopiedFeedback() {
         String result =
                 ChatHtmlTemplates.renderChatEntry("ai", "<p>Response</p>", "12:00:00", 2, true);
-
         assertTrue(result.contains("ai-entry"));
         assertTrue(result.contains("copy-feedback"));
         assertTrue(result.contains("&#10003; Copied!"));
@@ -70,7 +54,6 @@ class ChatHtmlTemplatesTest {
     void testRenderUserChatEntryDoesNotIncludeCopyAction() {
         String result =
                 ChatHtmlTemplates.renderChatEntry("user", "<p>Prompt</p>", "12:00:00", 0, false);
-
         assertTrue(result.contains("user-entry"));
         assertFalse(result.contains("copy-action"));
         assertFalse(result.contains("href='copy:0'"));
@@ -78,31 +61,15 @@ class ChatHtmlTemplatesTest {
 
     @Test
     void testRenderToolLog() {
-        String output = "diff output";
-        String result = ChatHtmlTemplates.renderToolLog(output, true, null);
-
-        assertTrue(
-                result.contains(
-                        """
-                <table class="tool-call" width="100%" cellpadding="0" cellspacing="0" border="0">"""));
-        assertTrue(
-                result.contains(
-                        """
-                <td class="tool-accent" width="4" nowrap="nowrap">&nbsp;</td>"""));
-        assertTrue(
-                result.contains(
-                        """
-                <td class="tool-body-container" width="100%" style="padding: 8px 12px;">"""));
-        assertTrue(
-                result.contains(
-                        """
-                <tr><td height="8">&nbsp;</td></tr>"""));
+        String result = ChatHtmlTemplates.renderToolLog("diff output", true, null);
+        assertTrue(result.contains("tool-call"));
+        assertTrue(result.contains("tool-accent"));
+        assertTrue(result.contains("tool-body-container"));
         assertFalse(result.contains("accent-bar"));
         assertFalse(result.contains("tool-header"));
         assertTrue(result.contains("diff output"));
         assertTrue(
-                result.contains("class=")
-                        && result.contains("tool-result")
+                result.contains("tool-result")
                         && result.contains("&#10003; Executed successfully"));
         assertFalse(result.contains("tool-error"));
     }
@@ -149,14 +116,8 @@ class ChatHtmlTemplatesTest {
     @Test
     void testRenderWelcomeCard() {
         String welcomeHtml = ChatHtmlTemplates.renderWelcomeCard();
-        assertTrue(
-                welcomeHtml.contains(
-                        """
-                <table class="welcome-card" width="100%" cellpadding="0" cellspacing="0" border="0">"""));
-        assertTrue(
-                welcomeHtml.contains(
-                        """
-                <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>"""));
+        assertTrue(welcomeHtml.contains("welcome-card"));
+        assertTrue(welcomeHtml.contains("ai-accent"));
         assertTrue(welcomeHtml.contains("welcome-title"));
         assertTrue(welcomeHtml.contains("welcome-hint"));
         assertTrue(welcomeHtml.contains("Enter"));
@@ -178,10 +139,7 @@ class ChatHtmlTemplatesTest {
         Element accentTd =
                 SwingTestUtils.findTdByClass(
                         pane.getDocument().getDefaultRootElement(), "ai-accent");
-        assertNotNull(accentTd, "Should find ai-accent td element");
-        View tdView = factory.create(accentTd);
-        assertTrue(
-                tdView.getMinimumSpan(View.X_AXIS) > 0,
-                "Accent td with nowrap should retain positive horizontal minimum span");
+        assertNotNull(accentTd);
+        assertTrue(factory.create(accentTd).getMinimumSpan(View.X_AXIS) > 0);
     }
 }

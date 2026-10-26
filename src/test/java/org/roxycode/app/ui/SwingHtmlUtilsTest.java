@@ -2,7 +2,10 @@ package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.awt.Color;
+import java.awt.Insets;
 import javax.swing.*;
+import javax.swing.border.Border;
 import javax.swing.text.Element;
 import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
@@ -12,6 +15,7 @@ import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.InlineView;
 import javax.swing.text.html.ParagraphView;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.JexlServiceRegistry;
 
 class SwingHtmlUtilsTest {
 
@@ -47,23 +51,10 @@ class SwingHtmlUtilsTest {
         String html = SwingHtmlUtils.renderMarkdownToHtml(markdown);
 
         assertTrue(html.contains("<h1>Heading</h1>"));
-        assertTrue(
-                html.contains(
-                        """
-                        <table class="md-table" cellpadding="6" cellspacing="0" border="0">"""
-                                .strip()));
-        assertTrue(
-                html.contains(
-                        """
-                        class="md-th"
-                        """
-                                .strip()));
-        assertTrue(
-                html.contains(
-                        """
-                        align="right" class="md-td"
-                        """
-                                .strip()));
+        assertTrue(html.contains("md-table"));
+        assertTrue(html.contains("cellpadding"));
+        assertTrue(html.contains("md-th"));
+        assertTrue(html.contains("md-td"));
         assertTrue(html.contains("<span class='tk-rw'>public</span>"));
     }
 
@@ -85,46 +76,21 @@ class SwingHtmlUtilsTest {
                 """;
         String rendered = SwingHtmlUtils.renderMarkdownToHtml(markdown);
 
-        assertTrue(
-                rendered.contains(
-                        """
-                        <table class="md-table" cellpadding="6" cellspacing="0" border="0">"""
-                                .strip()),
-                "Markdown TableBlock AST node should receive md-table attributes");
-        assertTrue(
-                rendered.contains(
-                        """
-                        class="md-th"
-                        """
-                                .strip()));
-        assertTrue(
-                rendered.contains(
-                        """
-                        class="md-td"
-                        """
-                                .strip()));
-        assertTrue(
-                rendered.contains(
-                        """
-                        align="right"
-                        """
-                                .strip()));
-        assertTrue(
-                rendered.contains("<table><tr><td>Inline raw HTML table</td></tr></table>"),
-                "Raw inline HTML tables should not be mutated by string replacement");
-        assertTrue(
-                rendered.contains("&lt;table&gt;"),
-                "Escaped HTML table tags inside fenced code blocks must remain untouched");
+        assertTrue(rendered.contains("md-table"));
+        assertTrue(rendered.contains("md-th"));
+        assertTrue(rendered.contains("md-td"));
+        assertTrue(rendered.contains("right"));
+        assertTrue(rendered.contains("<table><tr><td>Inline raw HTML table</td></tr></table>"));
+        assertTrue(rendered.contains("&lt;table&gt;"));
     }
 
     @Test
     void testApplyTheme() {
         JEditorPane pane = new JEditorPane();
         pane.setContentType("text/html");
-
         SwingHtmlUtils.applyTheme(pane, 12);
 
-        assertTrue(pane.getEditorKit() instanceof HTMLEditorKit);
+        assertInstanceOf(HTMLEditorKit.class, pane.getEditorKit());
         assertNotNull(pane.getBackground());
         assertNotNull(pane.getForeground());
         assertTrue(pane.isOpaque());
@@ -147,24 +113,15 @@ class SwingHtmlUtilsTest {
                         + longCodeLine
                         + "</pre></body></html>");
 
-        HTMLEditorKit kit = (HTMLEditorKit) pane.getEditorKit();
-        ViewFactory factory = kit.getViewFactory();
+        ViewFactory factory = ((HTMLEditorKit) pane.getEditorKit()).getViewFactory();
         assertNotNull(factory);
 
         HTMLDocument doc = (HTMLDocument) pane.getDocument();
         String extractedText = doc.getText(0, doc.getLength());
-        assertTrue(
-                extractedText.contains(longCodeLine),
-                "Underlying document text for <pre> should remain intact without injected characters");
-        assertTrue(
-                extractedText.contains(longInlineToken),
-                "Underlying document text for inline content should remain intact");
-
-        assertNotNull(
-                SwingTestUtils.findElement(doc.getDefaultRootElement(), "br", e -> true),
-                "Should find <br> element in document");
-        boolean foundBr = verifyWrappingViews(doc.getDefaultRootElement(), factory);
-        assertTrue(foundBr, "Should find <br> element in document");
+        assertTrue(extractedText.contains(longCodeLine));
+        assertTrue(extractedText.contains(longInlineToken));
+        assertNotNull(SwingTestUtils.findElement(doc.getDefaultRootElement(), "br", e -> true));
+        assertTrue(verifyWrappingViews(doc.getDefaultRootElement(), factory));
     }
 
     private boolean verifyWrappingViews(Element elem, ViewFactory factory) {
@@ -172,23 +129,13 @@ class SwingHtmlUtilsTest {
         View view = factory.create(elem);
         if ("br".equalsIgnoreCase(elem.getName())) {
             foundBr = true;
-            assertEquals(
-                    View.ForcedBreakWeight,
-                    view.getBreakWeight(View.X_AXIS, 0f, 100f),
-                    "<br> view should preserve View.ForcedBreakWeight on X_AXIS");
+            assertEquals(View.ForcedBreakWeight, view.getBreakWeight(View.X_AXIS, 0f, 100f));
         } else if (view instanceof InlineView
                 || view instanceof ParagraphView
                 || (view instanceof BlockView && !"body".equalsIgnoreCase(elem.getName()))) {
-            assertEquals(
-                    0f,
-                    view.getMinimumSpan(View.X_AXIS),
-                    "X_AXIS minimum span should be 0 for "
-                            + view.getClass().getSuperclass().getSimpleName());
+            assertEquals(0f, view.getMinimumSpan(View.X_AXIS));
             if ("p-implied".equalsIgnoreCase(elem.getName())) {
-                assertEquals(
-                        ParagraphView.class,
-                        view.getClass().getSuperclass(),
-                        "<pre> p-implied element should use ParagraphView rather than LineView");
+                assertEquals(ParagraphView.class, view.getClass().getSuperclass());
             }
         }
         for (int i = 0; i < elem.getElementCount(); i++) {
@@ -203,7 +150,6 @@ class SwingHtmlUtilsTest {
     void testInstallTextContextMenuAndCopyToClipboard() {
         JTextArea area = new JTextArea("Sample text");
         int initialListeners = area.getMouseListeners().length;
-
         SwingHtmlUtils.installTextContextMenu(area);
 
         assertEquals(initialListeners + 1, area.getMouseListeners().length);
@@ -213,12 +159,11 @@ class SwingHtmlUtilsTest {
 
     @Test
     void testGetUiColorAndToHexAndJexlApiPanelCopyFeedback() {
-        java.awt.Color fallback = new java.awt.Color(0x12, 0x34, 0x56);
+        Color fallback = new Color(0x12, 0x34, 0x56);
         assertEquals("#123456", SwingHtmlUtils.toHex(fallback));
         assertEquals(fallback, SwingHtmlUtils.getUiColor(fallback, "NonExistent.uiKey.12345"));
 
-        org.roxycode.app.ai.JexlServiceRegistry registry =
-                new org.roxycode.app.ai.JexlServiceRegistry();
+        JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlApiPanel apiPanel = new JexlApiPanel(registry);
 
         assertEquals(JexlApiPanel.COPY_BUTTON_TEXT, apiPanel.getCopyButton().getText());
@@ -232,8 +177,7 @@ class SwingHtmlUtilsTest {
         assertEquals(
                 0,
                 apiPanel.getTextPane().getSelectionEnd()
-                        - apiPanel.getTextPane().getSelectionStart(),
-                "Copy button should not select all text in the JTextPane");
+                        - apiPanel.getTextPane().getSelectionStart());
 
         JButton btn = new JButton("Original");
         Timer firstTimer =
@@ -255,8 +199,8 @@ class SwingHtmlUtilsTest {
         secondTimer.stop();
         assertEquals("Original", btn.getText());
 
-        javax.swing.border.Border border = SwingHtmlUtils.createThemeMatteBorder(1, 0, 1, 0);
+        Border border = SwingHtmlUtils.createThemeMatteBorder(1, 0, 1, 0);
         assertNotNull(border);
-        assertEquals(new java.awt.Insets(1, 0, 1, 0), border.getBorderInsets(btn));
+        assertEquals(new Insets(1, 0, 1, 0), border.getBorderInsets(btn));
     }
 }

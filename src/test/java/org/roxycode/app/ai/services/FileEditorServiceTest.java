@@ -32,34 +32,40 @@ class FileEditorServiceTest {
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
     }
 
+    private String writeAndReplace(
+            String relPath, String initial, String target, String replacement) throws IOException {
+        Path file = tempDir.resolve(relPath);
+        Files.writeString(file, initial);
+        EditorResult result = fileEditorService.replaceBlock(relPath, target, replacement);
+        assertTrue(result.success());
+        return Files.readString(file);
+    }
+
+    private static void assertEditFails(EditorResult result, String... expectedHints) {
+        assertFalse(result.success());
+        assertNotNull(result.errorHint());
+        for (String hint : expectedHints) {
+            assertTrue(
+                    result.errorHint().contains(hint),
+                    "Missing '" + hint + "' in: " + result.errorHint());
+        }
+    }
+
     @Test
     void testWriteFileSuccess() throws IOException {
-        String relativePath = "test.txt";
-        String content = "Hello World";
-
-        EditorResult result = fileEditorService.writeFile(relativePath, content);
-
+        EditorResult result = fileEditorService.writeFile("test.txt", "Hello World");
         assertTrue(result.success());
-        Path filePath = tempDir.resolve(relativePath);
+        Path filePath = tempDir.resolve("test.txt");
         assertTrue(Files.exists(filePath));
-        assertEquals(content, Files.readString(filePath));
+        assertEquals("Hello World", Files.readString(filePath));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test
     void testReplaceBlockSuccess() throws IOException {
-        Path filePath = tempDir.resolve("test.java");
-        Files.writeString(
-                filePath,
-                """
-                public class Test {
-                 // TODO
-                 }""");
-
-        EditorResult result = fileEditorService.replaceBlock("test.java", "// TODO", "// Done");
-
-        assertTrue(result.success());
-        String content = Files.readString(filePath);
+        String content =
+                writeAndReplace(
+                        "test.java", "public class Test {\n // TODO\n }", "// TODO", "// Done");
         assertTrue(content.contains("// Done"));
         assertFalse(content.contains("// TODO"));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
@@ -68,172 +74,85 @@ class FileEditorServiceTest {
     @Test
     void testReplaceBlockPythonAndYamlIndentationNeverDoubledOnExactAndFallbackMatch()
             throws IOException {
-        Path pyFile = tempDir.resolve("script.py");
-        String initialPy =
-                """
-                def calculate(x):
-                    if x == 1:
-                        return 10
-                    return 0
-                """;
-        Files.writeString(pyFile, initialPy);
-
-        // Pass 1: Exact match where targetBlock and replacementBlock include leading 4-space
-        // indentation
-        EditorResult exactResult =
-                fileEditorService.replaceBlock(
-                        "script.py",
-                        "    if x == 1:\n        return 10",
-                        "    if x == 1:\n        return 100");
-        assertTrue(exactResult.success());
         assertEquals(
-                """
-                def calculate(x):
-                    if x == 1:
-                        return 100
-                    return 0
-                """,
-                Files.readString(pyFile));
-
-        // Pass 2: Whitespace-fuzzy fallback (file has extra spaces on line 2, so Pass 1 misses)
-        Files.writeString(
-                pyFile,
-                """
-                def calculate(x):
-                    if x   ==   1:
-                        return 10
-                    return 0
-                """);
-
-        EditorResult fallbackResult =
-                fileEditorService.replaceBlock(
+                "def calculate(x):\n    if x == 1:\n        return 100\n    return 0\n",
+                writeAndReplace(
                         "script.py",
+                        "def calculate(x):\n    if x == 1:\n        return 10\n    return 0\n",
                         "    if x == 1:\n        return 10",
-                        "    if x == 2:\n        return 20");
-        assertTrue(fallbackResult.success());
+                        "    if x == 1:\n        return 100"));
+
         assertEquals(
-                """
-                def calculate(x):
-                    if x == 2:
-                        return 20
-                    return 0
-                """,
-                Files.readString(pyFile));
+                "def calculate(x):\n    if x == 2:\n        return 20\n    return 0\n",
+                writeAndReplace(
+                        "script.py",
+                        "def calculate(x):\n    if x   ==   1:\n        return 10\n    return 0\n",
+                        "    if x == 1:\n        return 10",
+                        "    if x == 2:\n        return 20"));
 
-        // YAML test: Pass 2 fallback where targetBlock has no leading spaces but replacementBlock
-        // does
-        Path yamlFile = tempDir.resolve("config.yaml");
-        Files.writeString(
-                yamlFile,
-                """
-                server:
-                  host:   localhost
-                  port: 8080
-                """);
-
-        EditorResult yamlResult =
-                fileEditorService.replaceBlock(
+        assertEquals(
+                "server:\n  host: 0.0.0.0\n  port: 9090\n",
+                writeAndReplace(
                         "config.yaml",
+                        "server:\n  host:   localhost\n  port: 8080\n",
                         "host: localhost\n  port: 8080",
-                        "  host: 0.0.0.0\n  port: 9090");
-        assertTrue(yamlResult.success());
-        assertEquals(
-                """
-                server:
-                  host: 0.0.0.0
-                  port: 9090
-                """,
-                Files.readString(yamlFile));
+                        "  host: 0.0.0.0\n  port: 9090"));
     }
 
     @Test
     void testReplaceBlockCrlfNormalization() throws IOException {
-        Path crlfFile = tempDir.resolve("crlf_block.java");
-        Files.writeString(crlfFile, "class A {\r\n    int x = 1;\r\n    int y = 2;\r\n}\r\n");
-
-        EditorResult result =
-                fileEditorService.replaceBlock(
-                        "crlf_block.java",
-                        "    int x = 1;\n    int y = 2;",
-                        "    int x = 10;\n    int y = 20;");
-
-        assertTrue(result.success());
         assertEquals(
                 "class A {\r\n    int x = 10;\r\n    int y = 20;\r\n}\r\n",
-                Files.readString(crlfFile));
+                writeAndReplace(
+                        "crlf_block.java",
+                        "class A {\r\n    int x = 1;\r\n    int y = 2;\r\n}\r\n",
+                        "    int x = 1;\n    int y = 2;",
+                        "    int x = 10;\n    int y = 20;"));
     }
 
     @Test
     void testReplaceBlockWithVariableWhitespace() throws IOException {
-        Path filePath = tempDir.resolve("test.java");
-        Files.writeString(filePath, "public    void   myMethod() { }");
-
-        // Should match despite different whitespace in target block
-        EditorResult result =
-                fileEditorService.replaceBlock(
-                        "test.java", "public void myMethod", "private int newMethod");
-
-        assertTrue(result.success());
-        String content = Files.readString(filePath);
-        assertEquals("private int newMethod() { }", content);
+        assertEquals(
+                "private int newMethod() { }",
+                writeAndReplace(
+                        "test.java",
+                        "public    void   myMethod() { }",
+                        "public void myMethod",
+                        "private int newMethod"));
     }
 
     @Test
     void testReplaceBlockWithNewlinesAndTabs() throws IOException {
-        Path filePath = tempDir.resolve("test_whitespace.java");
-        Files.writeString(
-                filePath,
-                """
-                public
-                void	myMethod() { }""");
-
-        // Should match despite newlines and tabs
-        EditorResult result =
-                fileEditorService.replaceBlock(
-                        "test_whitespace.java", "public void myMethod", "private int newMethod");
-
-        assertTrue(result.success());
-        String content = Files.readString(filePath);
-        assertEquals("private int newMethod() { }", content);
+        assertEquals(
+                "private int newMethod() { }",
+                writeAndReplace(
+                        "test_whitespace.java",
+                        "public\nvoid\tmyMethod() { }",
+                        "public void myMethod",
+                        "private int newMethod"));
     }
 
     @Test
     void testReplaceBlockNotUniqueReturnsFailureWithLineNumbers() throws IOException {
         Path filePath = tempDir.resolve("test.java");
-        Files.writeString(
-                filePath,
-                """
-                // TODO
-                 // TODO""");
-
-        EditorResult exactAmbiguous =
-                fileEditorService.replaceBlock("test.java", "// TODO", "// Done");
-        assertFalse(exactAmbiguous.success());
-        assertNotNull(exactAmbiguous.errorHint());
-        assertTrue(exactAmbiguous.errorHint().contains("not unique"));
-        assertTrue(exactAmbiguous.errorHint().contains("1"));
-        assertTrue(exactAmbiguous.errorHint().contains("2"));
-
-        // Pass 2 ambiguous match
-        Files.writeString(
-                filePath,
-                """
-                int   a = 1;
-                String middle = "ok";
-                int     a   = 1;""");
-        EditorResult regexAmbiguous =
-                fileEditorService.replaceBlock("test.java", "int a = 1;", "int a = 2;");
-        assertFalse(regexAmbiguous.success());
-        assertTrue(regexAmbiguous.errorHint().contains("not unique"));
-        assertTrue(regexAmbiguous.errorHint().contains("1"));
-        assertTrue(regexAmbiguous.errorHint().contains("3"));
+        Files.writeString(filePath, "// TODO\n // TODO");
+        assertEditFails(
+                fileEditorService.replaceBlock("test.java", "// TODO", "// Done"),
+                "not unique",
+                "1",
+                "2");
+        Files.writeString(filePath, "int   a = 1;\nString middle = 'ok';\nint     a   = 1;");
+        assertEditFails(
+                fileEditorService.replaceBlock("test.java", "int a = 1;", "int a = 2;"),
+                "not unique",
+                "1",
+                "3");
     }
 
     @Test
     void testReplaceBlockNotFoundReturnsDiagnosticClosestLineHint() throws IOException {
-        Path filePath = tempDir.resolve("service.java");
         Files.writeString(
-                filePath,
+                tempDir.resolve("service.java"),
                 """
                 package example;
                 public class Service {
@@ -242,186 +161,129 @@ class FileEditorServiceTest {
                     }
                 }""");
 
-        EditorResult notFound =
+        assertEditFails(
                 fileEditorService.replaceBlock(
                         "service.java",
                         "public String computeTotal(double amount)",
-                        "public String computeTotal(long amount)");
-        assertFalse(notFound.success());
-        assertNotNull(notFound.errorHint());
-        assertTrue(notFound.errorHint().contains("TargetBlock not found in file: service.java"));
-        assertTrue(
-                notFound.errorHint()
-                        .contains("Line 3:     public String computeTotal(int count) {"));
+                        "public String computeTotal(long amount)"),
+                "TargetBlock not found in file: service.java",
+                "Line 3:     public String computeTotal(int count) {");
 
-        EditorResult missingFile = fileEditorService.replaceBlock("nonexistent.java", "foo", "bar");
-        assertFalse(missingFile.success());
-        assertEquals("File does not exist: nonexistent.java", missingFile.errorHint());
+        assertEditFails(
+                fileEditorService.replaceBlock("nonexistent.java", "foo", "bar"),
+                "File does not exist: nonexistent.java");
     }
 
     @Test
     void testReplaceLinesSuccess() throws IOException {
-        Path filePath = tempDir.resolve("test.txt");
-        Files.write(filePath, List.of("Line 1", "Line 2", "Line 3", "Line 4"));
-
-        EditorResult result = fileEditorService.replaceLines("test.txt", 2, 3, "New Content");
-
-        assertTrue(result.success());
-        List<String> lines = Files.readAllLines(filePath);
-        assertEquals(3, lines.size());
-        assertEquals("Line 1", lines.get(0));
-        assertEquals("New Content", lines.get(1));
-        assertEquals("Line 4", lines.get(2));
+        Path filePath =
+                Files.write(
+                        tempDir.resolve("test.txt"),
+                        List.of("Line 1", "Line 2", "Line 3", "Line 4"));
+        assertTrue(fileEditorService.replaceLines("test.txt", 2, 3, "New Content").success());
+        assertEquals(List.of("Line 1", "New Content", "Line 4"), Files.readAllLines(filePath));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test
     void testReplaceLinesMultiLineAndTrailingNewline() throws IOException {
-        Path filePath = tempDir.resolve("test.txt");
-        Files.write(filePath, List.of("Line 1", "Line 2", "Line 3", "Line 4"));
-
-        EditorResult result =
-                fileEditorService.replaceLines(
-                        "test.txt",
-                        2,
-                        3,
-                        """
-                        Replaced 2
-                        Replaced 3
-                        """);
-
-        assertTrue(result.success());
-        List<String> lines = Files.readAllLines(filePath);
-        assertEquals(List.of("Line 1", "Replaced 2", "Replaced 3", "Line 4"), lines);
+        Path filePath =
+                Files.write(
+                        tempDir.resolve("test.txt"),
+                        List.of("Line 1", "Line 2", "Line 3", "Line 4"));
+        assertTrue(
+                fileEditorService
+                        .replaceLines("test.txt", 2, 3, "Replaced 2\nReplaced 3\n")
+                        .success());
+        assertEquals(
+                List.of("Line 1", "Replaced 2", "Replaced 3", "Line 4"),
+                Files.readAllLines(filePath));
     }
 
     @Test
     void testReplaceLinesAndInsertAtLineOutOfBoundsReturnStructuredErrorHints() throws IOException {
-        Path filePath = tempDir.resolve("bounds.txt");
-        Files.write(filePath, List.of("Line 1", "Line 2", "Line 3"));
+        Files.write(tempDir.resolve("bounds.txt"), List.of("Line 1", "Line 2", "Line 3"));
 
-        EditorResult badRange = fileEditorService.replaceLines("bounds.txt", 2, 5, "Replacement");
-        assertFalse(badRange.success());
-        assertTrue(badRange.errorHint().contains("Invalid line range: 2 to 5"));
-        assertTrue(badRange.errorHint().contains("file has 3 lines"));
-
-        EditorResult missingReplace =
-                fileEditorService.replaceLines("missing_bounds.txt", 1, 1, "Replacement");
-        assertFalse(missingReplace.success());
-        assertEquals("File does not exist: missing_bounds.txt", missingReplace.errorHint());
-
-        EditorResult badInsert = fileEditorService.insertAtLine("bounds.txt", 6, "Inserted");
-        assertFalse(badInsert.success());
-        assertTrue(badInsert.errorHint().contains("Invalid line number: 6"));
-        assertTrue(badInsert.errorHint().contains("valid range: 1 to 4"));
-        assertTrue(badInsert.errorHint().contains("file has 3 lines"));
-
-        EditorResult missingInsert =
-                fileEditorService.insertAtLine("missing_bounds.txt", 1, "Inserted");
-        assertFalse(missingInsert.success());
-        assertEquals("File does not exist: missing_bounds.txt", missingInsert.errorHint());
+        assertEditFails(
+                fileEditorService.replaceLines("bounds.txt", 2, 5, "Replacement"),
+                "Invalid line range: 2 to 5",
+                "file has 3 lines");
+        assertEditFails(
+                fileEditorService.replaceLines("missing_bounds.txt", 1, 1, "Replacement"),
+                "File does not exist: missing_bounds.txt");
+        assertEditFails(
+                fileEditorService.insertAtLine("bounds.txt", 6, "Inserted"),
+                "Invalid line number: 6",
+                "valid range: 1 to 4",
+                "file has 3 lines");
+        assertEditFails(
+                fileEditorService.insertAtLine("missing_bounds.txt", 1, "Inserted"),
+                "File does not exist: missing_bounds.txt");
     }
 
     @Test
     void testInsertAtLineSuccess() throws IOException {
-        Path filePath = tempDir.resolve("test.txt");
-        Files.write(filePath, List.of("Line 1", "Line 3"));
-
-        EditorResult result = fileEditorService.insertAtLine("test.txt", 2, "Line 2");
-
-        assertTrue(result.success());
-        List<String> lines = Files.readAllLines(filePath);
-        assertEquals(3, lines.size());
-        assertEquals("Line 2", lines.get(1));
+        Path filePath = Files.write(tempDir.resolve("test.txt"), List.of("Line 1", "Line 3"));
+        assertTrue(fileEditorService.insertAtLine("test.txt", 2, "Line 2").success());
+        assertEquals(List.of("Line 1", "Line 2", "Line 3"), Files.readAllLines(filePath));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test
     void testInsertAtLineMultiLineAndTrailingNewline() throws IOException {
-        Path filePath = tempDir.resolve("test.txt");
-        Files.write(filePath, List.of("Line 1", "Line 4"));
-
-        EditorResult result =
-                fileEditorService.insertAtLine(
-                        "test.txt",
-                        2,
-                        """
-                        Line 2
-                        Line 3
-                        """);
-
-        assertTrue(result.success());
-        List<String> lines = Files.readAllLines(filePath);
-        assertEquals(List.of("Line 1", "Line 2", "Line 3", "Line 4"), lines);
+        Path filePath = Files.write(tempDir.resolve("test.txt"), List.of("Line 1", "Line 4"));
+        assertTrue(fileEditorService.insertAtLine("test.txt", 2, "Line 2\nLine 3\n").success());
+        assertEquals(List.of("Line 1", "Line 2", "Line 3", "Line 4"), Files.readAllLines(filePath));
     }
 
     @Test
     void testDeleteFileSuccess() throws IOException {
-        Path filePath = tempDir.resolve("to_delete.txt");
-        Files.writeString(filePath, "delete me");
-
-        EditorResult result = fileEditorService.deleteFile("to_delete.txt");
-
-        assertTrue(result.success());
+        Path filePath = Files.writeString(tempDir.resolve("to_delete.txt"), "delete me");
+        assertTrue(fileEditorService.deleteFile("to_delete.txt").success());
         assertFalse(Files.exists(filePath));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test
     void testDeleteFileNonExistentAndDirectoryReturnStructuredFailure() throws IOException {
-        EditorResult missingResult = fileEditorService.deleteFile("missing.txt");
-        assertFalse(missingResult.success());
-        assertEquals("File does not exist: missing.txt", missingResult.errorHint());
-
+        assertEditFails(
+                fileEditorService.deleteFile("missing.txt"), "File does not exist: missing.txt");
         Files.createDirectory(tempDir.resolve("some_dir"));
-        EditorResult dirResult = fileEditorService.deleteFile("some_dir");
-        assertFalse(dirResult.success());
-        assertTrue(dirResult.errorHint().contains("Cannot delete directory: some_dir"));
+        assertEditFails(
+                fileEditorService.deleteFile("some_dir"), "Cannot delete directory: some_dir");
     }
 
     @Test
     void testMoveCopyAndMkdirsOperations() throws IOException {
-        // mkdirs success & conflict with existing file
-        EditorResult mkdirResult = fileEditorService.mkdirs("nested/dir/structure");
-        assertTrue(mkdirResult.success());
+        assertTrue(fileEditorService.mkdirs("nested/dir/structure").success());
         assertTrue(Files.isDirectory(tempDir.resolve("nested/dir/structure")));
 
-        Path existingFile = tempDir.resolve("existing.txt");
-        Files.writeString(existingFile, "hello");
-        EditorResult mkdirConflict = fileEditorService.mkdirs("existing.txt");
-        assertFalse(mkdirConflict.success());
-        assertTrue(mkdirConflict.errorHint().contains("existing.txt"));
+        Path existingFile = Files.writeString(tempDir.resolve("existing.txt"), "hello");
+        assertEditFails(fileEditorService.mkdirs("existing.txt"), "existing.txt");
 
-        // copyFile success, parent creation, missing source, and directory source
-        EditorResult copySuccess =
-                fileEditorService.copyFile("existing.txt", "copied/sub/existing_copy.txt");
-        assertTrue(copySuccess.success());
+        assertTrue(
+                fileEditorService
+                        .copyFile("existing.txt", "copied/sub/existing_copy.txt")
+                        .success());
         assertEquals("hello", Files.readString(tempDir.resolve("copied/sub/existing_copy.txt")));
         assertTrue(Files.exists(existingFile));
 
-        EditorResult copyMissing = fileEditorService.copyFile("nope.txt", "copied/nope.txt");
-        assertFalse(copyMissing.success());
-        assertEquals("File does not exist: nope.txt", copyMissing.errorHint());
+        assertEditFails(
+                fileEditorService.copyFile("nope.txt", "copied/nope.txt"),
+                "File does not exist: nope.txt");
+        assertEditFails(fileEditorService.copyFile("nested", "copied/nested_copy"), "nested");
 
-        EditorResult copyDir = fileEditorService.copyFile("nested", "copied/nested_copy");
-        assertFalse(copyDir.success());
-        assertTrue(copyDir.errorHint().contains("nested"));
-
-        // moveFile success, parent creation, and missing source
         clearInvocations(eventPublisher);
-        EditorResult moveSuccess =
-                fileEditorService.moveFile("existing.txt", "moved/sub/renamed.txt");
-        assertTrue(moveSuccess.success());
+        assertTrue(fileEditorService.moveFile("existing.txt", "moved/sub/renamed.txt").success());
         assertFalse(Files.exists(existingFile));
         assertEquals("hello", Files.readString(tempDir.resolve("moved/sub/renamed.txt")));
         verify(eventPublisher).publishEvent(new FileChangedEvent("existing.txt"));
         verify(eventPublisher).publishEvent(new FileChangedEvent("moved/sub/renamed.txt"));
 
-        EditorResult moveMissing = fileEditorService.moveFile("existing.txt", "moved/again.txt");
-        assertFalse(moveMissing.success());
-        assertEquals("File does not exist: existing.txt", moveMissing.errorHint());
+        assertEditFails(
+                fileEditorService.moveFile("existing.txt", "moved/again.txt"),
+                "File does not exist: existing.txt");
 
-        // Path traversal protection on new operations
         assertThrows(
                 SecurityException.class,
                 () -> fileEditorService.moveFile("../outside.txt", "inside.txt"));
@@ -449,9 +311,10 @@ class FileEditorServiceTest {
                 .thenReturn(bareRelativePath);
         FileEditorService customService = new FileEditorService(rootMockService, eventPublisher);
         try {
-            EditorResult result =
-                    customService.writeFile("target_bare_root_test_file.txt", "root content");
-            assertTrue(result.success());
+            assertTrue(
+                    customService
+                            .writeFile("target_bare_root_test_file.txt", "root content")
+                            .success());
             assertEquals("root content", Files.readString(bareRelativePath));
         } finally {
             Files.deleteIfExists(bareRelativePath);
@@ -460,9 +323,8 @@ class FileEditorServiceTest {
 
     @Test
     void testReplaceLinesAndInsertAtLinePreserveCrlfAndNoTrailingNewline() throws IOException {
-        Path crlfFile = tempDir.resolve("crlf.txt");
-        Files.writeString(crlfFile, "Line 1\r\nLine 2\r\nLine 3\r\n");
-
+        Path crlfFile =
+                Files.writeString(tempDir.resolve("crlf.txt"), "Line 1\r\nLine 2\r\nLine 3\r\n");
         fileEditorService.replaceLines("crlf.txt", 2, 2, "Updated 2");
         assertEquals("Line 1\r\nUpdated 2\r\nLine 3\r\n", Files.readString(crlfFile));
 
@@ -470,9 +332,8 @@ class FileEditorServiceTest {
         assertEquals(
                 "Line 1\r\nInserted 1.5\r\nUpdated 2\r\nLine 3\r\n", Files.readString(crlfFile));
 
-        Path noTrailingFile = tempDir.resolve("no_trailing.txt");
-        Files.writeString(noTrailingFile, "Alpha\nBeta\nGamma");
-
+        Path noTrailingFile =
+                Files.writeString(tempDir.resolve("no_trailing.txt"), "Alpha\nBeta\nGamma");
         fileEditorService.replaceLines("no_trailing.txt", 2, 2, "BetaUpdated");
         assertEquals("Alpha\nBetaUpdated\nGamma", Files.readString(noTrailingFile));
 

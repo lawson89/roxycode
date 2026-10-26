@@ -51,127 +51,120 @@ class PromptServiceTest {
                         repoMapPackerService);
     }
 
-    @Test
-    void testLoadCoreWorkflowPrompt() {
-        String prompt = promptService.getStableContext();
-        assertNotNull(prompt);
-        assertTrue(prompt.contains("RoxyCode Workflow Protocol"));
+    private static void assertContainsAll(String text, String... expected) {
+        assertNotNull(text);
+        for (String s : expected) {
+            assertTrue(text.contains(s), "Missing '" + s + "'");
+        }
     }
 
-    /**
-     * Verifies that the core workflow prompt documents RoxyCode's 4 phases and actual services,
-     * while excluding references to external orchestrator APIs.
-     */
+    private static void assertContainsNone(String text, String... forbidden) {
+        for (String s : forbidden) {
+            assertFalse(text.contains(s), "Unexpected '" + s + "'");
+        }
+    }
+
+    @Test
+    void testLoadCoreWorkflowPrompt() {
+        assertContainsAll(promptService.getStableContext(), "RoxyCode Workflow Protocol");
+    }
+
     @Test
     void testCoreWorkflowPromptReflectsRoxyCodePhasesAndServices() {
         String prompt = promptService.getStableContext();
-        assertNotNull(prompt);
-        assertTrue(prompt.contains("EXPLORE (Technical Mentor)"));
-        assertTrue(prompt.contains("PLAN (Lead Architect)"));
-        assertTrue(prompt.contains("CODE (Senior Developer)"));
-        assertTrue(prompt.contains("REVIEW (Code Reviewer)"));
-        assertTrue(prompt.contains("requestDevelopment"));
-        assertTrue(prompt.contains("requestReview"));
-        assertTrue(prompt.contains("requestFixes"));
-        assertTrue(prompt.contains("requestCompletion"));
-        assertTrue(prompt.contains("buildToolService"));
-        assertTrue(prompt.contains("fileEditorService"));
-        assertTrue(prompt.contains("fileReadService"));
-        assertTrue(prompt.contains("grepService"));
-        assertTrue(prompt.contains("gitService"));
-        assertTrue(prompt.contains("planService"));
-        assertFalse(prompt.contains("textEditorService"));
-        assertFalse(prompt.contains("createPlan("));
-        assertFalse(prompt.contains("completeStep("));
-        assertFalse(prompt.contains("validateReadyForApproval"));
+        assertContainsAll(
+                prompt,
+                "EXPLORE (Technical Mentor)",
+                "PLAN (Lead Architect)",
+                "CODE (Senior Developer)",
+                "REVIEW (Code Reviewer)",
+                "requestDevelopment",
+                "requestReview",
+                "requestFixes",
+                "requestCompletion",
+                "buildToolService",
+                "fileEditorService",
+                "fileReadService",
+                "grepService",
+                "gitService",
+                "planService");
+        assertContainsNone(
+                prompt,
+                "textEditorService",
+                "createPlan(",
+                "completeStep(",
+                "validateReadyForApproval");
     }
 
     @Test
     void testLoadReviewPrompt() {
         String prompt = promptService.loadPhasePrompt(WorkflowPhase.REVIEW);
-        assertNotNull(prompt);
-        assertTrue(prompt.contains("REVIEW"));
-        assertTrue(prompt.contains("PHASE"));
-        assertTrue(prompt.contains("buildToolService"));
-        assertFalse(prompt.contains("genericBuildToolService"));
+        assertContainsAll(prompt, "REVIEW", "PHASE", "buildToolService");
+        assertContainsNone(prompt, "genericBuildToolService");
     }
 
     @Test
     void testLoadExplorePrompt() {
         String prompt = promptService.loadPhasePrompt(WorkflowPhase.EXPLORE);
-        assertNotNull(prompt);
-        assertTrue(prompt.contains("EXPLORE phase"));
-        assertTrue(prompt.contains("grepService"));
-        assertTrue(prompt.contains("fileReadService"));
-        assertFalse(prompt.contains("textEditorService"));
-        assertFalse(prompt.contains("readFiles"));
+        assertContainsAll(prompt, "EXPLORE phase", "grepService", "fileReadService");
+        assertContainsNone(prompt, "textEditorService", "readFiles");
     }
 
     @Test
     void testLoadPlanPrompt() {
         String prompt = promptService.loadPhasePrompt(WorkflowPhase.PLAN);
-        assertNotNull(prompt);
-        assertTrue(prompt.contains("ANALYST"));
-        assertTrue(prompt.contains("PLANNING"));
-        assertTrue(prompt.contains("Requirements Gathering & Clarification"));
-        assertTrue(prompt.contains("planService"));
-        assertTrue(prompt.contains("buildToolService"));
-        assertFalse(prompt.contains("createPlan"));
-        assertFalse(prompt.contains("addRequirement"));
-        assertFalse(prompt.contains("addConstraint"));
-        assertFalse(prompt.contains("validateReadyForApproval"));
+        assertContainsAll(
+                prompt,
+                "ANALYST",
+                "PLANNING",
+                "Requirements Gathering & Clarification",
+                "planService",
+                "buildToolService");
+        assertContainsNone(
+                prompt,
+                "createPlan",
+                "addRequirement",
+                "addConstraint",
+                "validateReadyForApproval");
     }
 
     @Test
     void testLoadCodePrompt() {
-        String prompt = promptService.loadPhasePrompt(WorkflowPhase.CODE);
-        assertNotNull(prompt);
-        assertTrue(prompt.contains("CODER"));
-        assertTrue(prompt.contains("ACTING"));
+        assertContainsAll(promptService.loadPhasePrompt(WorkflowPhase.CODE), "CODER", "ACTING");
     }
 
     @Test
     void testLoadPhasePrompt() {
         for (WorkflowPhase phase : WorkflowPhase.values()) {
-            String prompt = promptService.loadPhasePrompt(phase);
-            assertNotNull(prompt);
-            assertFalse(prompt.isBlank());
+            assertFalse(promptService.loadPhasePrompt(phase).isBlank());
         }
     }
 
     @Test
     void testGlobalAndProjectContextFoldersAndTopLevelTextDiscovery() throws IOException {
         Path projectDataDir = tempDir.resolve("project-data");
-        Path projectRoot = tempDir.resolve("project-root");
-        Files.createDirectories(projectRoot);
+        Path projectRoot = Files.createDirectories(tempDir.resolve("project-root"));
         when(projectService.hasActiveProject()).thenReturn(true);
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
         when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
+        when(settingsService.getSettings()).thenReturn(new AppSettings());
 
-        AppSettings settings = new AppSettings();
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        // Initially no folders configured
         assertEquals("", promptService.loadGlobalContext());
         assertEquals("", promptService.loadProjectContext());
         assertTrue(promptService.listGlobalContextFiles().isEmpty());
         assertTrue(promptService.listProjectContextFiles().isEmpty());
 
-        // Set up global context folder with top-level text files, hidden file, binary file, and
-        // subdir
-        Path globalDir = tempDir.resolve("global-context");
-        Files.createDirectories(globalDir);
+        Path globalDir = Files.createDirectories(tempDir.resolve("global-context"));
         Files.writeString(globalDir.resolve("b_global.txt"), "Global B text");
         Files.writeString(globalDir.resolve("a_global.md"), "Global A markdown");
         Files.writeString(globalDir.resolve(".hidden.md"), "Hidden file");
         Files.write(globalDir.resolve("binary.bin"), new byte[] {0x01, 0x00, 0x02});
-        Path nestedGlobalDir = globalDir.resolve("nested");
-        Files.createDirectories(nestedGlobalDir);
-        Files.writeString(nestedGlobalDir.resolve("sub.md"), "Nested should be ignored");
+        Files.createDirectories(globalDir.resolve("nested"));
+        Files.writeString(globalDir.resolve("nested/sub.md"), "Nested should be ignored");
 
         promptService.setGlobalContextFolders(
-                List.of("  " + globalDir.toString() + "  ", globalDir.toString()));
+                List.of("  " + globalDir + "  ", globalDir.toString()));
         verify(settingsService).saveSettings();
         assertEquals(List.of(globalDir.toString()), promptService.getGlobalContextFolders());
 
@@ -182,9 +175,7 @@ class PromptServiceTest {
         assertEquals(
                 "Global A markdown", promptService.readContextFile(globalFiles.get(0).filePath()));
 
-        // Set up project context folder (relative to projectRoot and absolute)
-        Path projDocsDir = projectRoot.resolve("docs");
-        Files.createDirectories(projDocsDir);
+        Path projDocsDir = Files.createDirectories(projectRoot.resolve("docs"));
         Files.writeString(projDocsDir.resolve("z_spec.json"), "{spec: true}");
         Files.writeString(projDocsDir.resolve("a_architecture.md"), "Architecture guidelines");
         Files.write(projDocsDir.resolve("image.png"), new byte[] {(byte) 0x89, 0x50, 0x00, 0x47});
@@ -203,35 +194,33 @@ class PromptServiceTest {
                 promptService.readContextFile(projectFiles.get(0).filePath()));
 
         String globalContext = promptService.loadGlobalContext();
-        assertTrue(globalContext.contains("## Global Context: a_global.md\nGlobal A markdown"));
-        assertTrue(globalContext.contains("## Global Context: b_global.txt\nGlobal B text"));
-        assertFalse(globalContext.contains("Hidden file"));
-        assertFalse(globalContext.contains("Nested should be ignored"));
+        assertContainsAll(
+                globalContext,
+                "## Global Context: a_global.md\nGlobal A markdown",
+                "## Global Context: b_global.txt\nGlobal B text");
+        assertContainsNone(globalContext, "Hidden file", "Nested should be ignored");
 
         String projectContext = promptService.loadProjectContext();
+        assertContainsAll(
+                projectContext,
+                "## Project Context: a_architecture.md\nArchitecture guidelines",
+                "## Project Context: z_spec.json\n{spec: true}");
+        assertContainsNone(projectContext, "Subdir ignored");
         assertTrue(
-                projectContext.contains(
-                        "## Project Context: a_architecture.md\nArchitecture guidelines"));
-        assertTrue(projectContext.contains("## Project Context: z_spec.json\n{spec: true}"));
-        assertFalse(projectContext.contains("Subdir ignored"));
+                projectContext.indexOf("a_architecture.md")
+                        < projectContext.indexOf("z_spec.json"));
 
-        // Alphabetical ordering check
-        assertTrue(
-                projectContext.indexOf("a_architecture.md") < projectContext.indexOf("z_spec.json"),
-                "Project context files should be sorted alphabetically");
-
-        // Validation on readContextFile(Path)
-        Path outsideFile = tempDir.resolve("outside.md");
-        Files.writeString(outsideFile, "Outside");
-        assertThrows(
-                IllegalArgumentException.class, () -> promptService.readContextFile(outsideFile));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> promptService.readContextFile(globalDir.resolve(".hidden.md")));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> promptService.readContextFile(globalDir.resolve("binary.bin")));
-        assertThrows(IllegalArgumentException.class, () -> promptService.readContextFile(null));
+        Path outsideFile = Files.writeString(tempDir.resolve("outside.md"), "Outside");
+        for (Path invalid :
+                new Path[] {
+                    outsideFile,
+                    globalDir.resolve(".hidden.md"),
+                    globalDir.resolve("binary.bin"),
+                    null
+                }) {
+            assertThrows(
+                    IllegalArgumentException.class, () -> promptService.readContextFile(invalid));
+        }
     }
 
     @Test
@@ -241,26 +230,21 @@ class PromptServiceTest {
         when(settingsService.getSettings()).thenReturn(settings);
 
         String prompt = promptService.loadPhasePrompt(WorkflowPhase.EXPLORE);
-
-        assertNotNull(prompt);
-        assertTrue(prompt.contains("42"));
-        assertFalse(prompt.contains("${maxTurns}"));
+        assertContainsAll(prompt, "42");
+        assertContainsNone(prompt, "$" + "{maxTurns}");
     }
 
     @Test
     void testGetStableSessionAndSystemPrompt() throws IOException {
         Path projectDataDir = tempDir.resolve("project-data");
-        Path globalDir = tempDir.resolve("global-rules");
-        Path projectRulesDir = tempDir.resolve("project-rules");
-        Files.createDirectories(globalDir);
-        Files.createDirectories(projectRulesDir);
+        Path globalDir = Files.createDirectories(tempDir.resolve("global-rules"));
+        Path projectRulesDir = Files.createDirectories(tempDir.resolve("project-rules"));
         Files.writeString(globalDir.resolve("global.md"), "GLOBAL RULES");
         Files.writeString(projectRulesDir.resolve("rules.md"), "CUSTOM RULES");
 
         AppSettings settings = new AppSettings();
         settings.setGlobalContextFolders(List.of(globalDir.toString()));
         when(settingsService.getSettings()).thenReturn(settings);
-
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
@@ -274,25 +258,27 @@ class PromptServiceTest {
                 .thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
 
         String stable = promptService.getStableContext();
-        assertTrue(stable.contains("RoxyCode Workflow Protocol"));
-        assertTrue(stable.contains("## JEXL CONTEXT"));
-        assertTrue(stable.contains("## Global Context: global.md\nGLOBAL RULES"));
-        assertTrue(stable.contains("## Project Context: rules.md\nCUSTOM RULES"));
+        assertContainsAll(
+                stable,
+                "RoxyCode Workflow Protocol",
+                "## JEXL CONTEXT",
+                "## Global Context: global.md\nGLOBAL RULES",
+                "## Project Context: rules.md\nCUSTOM RULES");
 
         String session = promptService.getSessionContext();
-        assertTrue(session.contains("DOMINANT LANGUAGE: Java"));
-        assertTrue(session.contains("CURRENT PHASE: CODE"));
-        assertTrue(session.contains("Senior Developer"));
-        assertTrue(session.contains("JEXL DOCS"));
-        assertTrue(session.contains("M file.java"));
+        assertContainsAll(
+                session,
+                "DOMINANT LANGUAGE: Java",
+                "CURRENT PHASE: CODE",
+                "Senior Developer",
+                "JEXL DOCS",
+                "M file.java");
+        assertContainsNone(session, "## CURRENT PLAN PROGRESS");
 
         String fullSystemPrompt =
                 promptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS");
-        assertTrue(fullSystemPrompt.contains(stable));
-        assertTrue(fullSystemPrompt.contains("REPO MAP CONTENT"));
-        assertTrue(fullSystemPrompt.contains(session));
-        assertTrue(fullSystemPrompt.contains("EXTRA INSTRUCTIONS"));
-        assertFalse(session.contains("## CURRENT PLAN PROGRESS"));
+        assertContainsAll(
+                fullSystemPrompt, stable, "REPO MAP CONTENT", session, "EXTRA INSTRUCTIONS");
     }
 
     @Test
@@ -317,10 +303,11 @@ class PromptServiceTest {
                         null);
         when(planService.getCurrentPlan()).thenReturn(plan);
 
-        String session = promptService.getSessionContext(WorkflowPhase.CODE);
-        assertTrue(session.contains("## CURRENT PLAN PROGRESS"));
-        assertTrue(session.contains("- [x] 0. Update prompts"));
-        assertTrue(session.contains("- [ ] 1. Update PlanService"));
-        assertTrue(session.contains("- [ ] 2. Update PromptService"));
+        assertContainsAll(
+                promptService.getSessionContext(WorkflowPhase.CODE),
+                "## CURRENT PLAN PROGRESS",
+                "- [x] 0. Update prompts",
+                "- [ ] 1. Update PlanService",
+                "- [ ] 2. Update PromptService");
     }
 }

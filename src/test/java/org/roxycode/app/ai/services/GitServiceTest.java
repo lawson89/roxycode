@@ -27,6 +27,11 @@ class GitServiceTest {
         return projectService;
     }
 
+    private void stubGit(MockedStatic<ProcessRunner> runner, int exit, String out, String... args) {
+        runner.when(() -> ProcessRunner.run(eq(List.of(args)), eq(tempDir), anyMap()))
+                .thenReturn(new ProcessResult(exit, out, exit == 0 ? "" : out, false));
+    }
+
     @Test
     void testNoProjectRoot() {
         ProjectService projectService = mock(ProjectService.class);
@@ -42,8 +47,7 @@ class GitServiceTest {
 
     @Test
     void testNotAGitRepository() {
-        ProjectService projectService = createActiveProjectService();
-        GitService gitService = new GitService(projectService);
+        GitService gitService = new GitService(createActiveProjectService());
 
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
             runnerMock
@@ -55,9 +59,7 @@ class GitServiceTest {
                                     "",
                                     false));
 
-            String result = gitService.getStatus();
-
-            assertEquals("Not a git repository", result);
+            assertEquals("Not a git repository", gitService.getStatus());
         }
     }
 
@@ -65,7 +67,6 @@ class GitServiceTest {
     void testGetDiffPerFileDelegatesOnBlankAndChecksActiveProject() {
         ProjectService projectService = mock(ProjectService.class);
         when(projectService.hasActiveProject()).thenReturn(false);
-
         GitService gitService = spy(new GitService(projectService));
 
         assertEquals("No active project", gitService.getDiff("src/App.java"));
@@ -80,131 +81,82 @@ class GitServiceTest {
 
     @Test
     void testGetDiffIncludesUnstagedStagedAndUntrackedFiles() throws IOException {
-        ProjectService projectService = createActiveProjectService();
-        GitService gitService = new GitService(projectService);
+        GitService gitService = new GitService(createActiveProjectService());
 
-        // Create an untracked file on disk so GitService can format its unified diff
-        Path subDir = tempDir.resolve("src");
-        Files.createDirectories(subDir);
+        Path subDir = Files.createDirectories(tempDir.resolve("src"));
         Files.writeString(
-                subDir.resolve("NewFeature.java"),
-                "package src;" + (char) 10 + "public class NewFeature {}" + (char) 10);
+                subDir.resolve("NewFeature.java"), "package src;\npublic class NewFeature {}\n");
 
         String headDiffOut =
                 String.join(
-                        String.valueOf((char) 10),
+                        "\n",
                         "diff --git a/Tracked.java b/Tracked.java",
                         "--- a/Tracked.java",
                         "+++ b/Tracked.java",
                         "@@ -1,2 +1,2 @@",
                         "+line 1 staged",
                         "+line 2 unstaged");
-
         String statusOut =
                 String.join(
-                        String.valueOf((char) 10),
+                        "\n",
                         "MM Tracked.java",
                         "R  OldName.java -> Renamed.java",
                         "?? src/NewFeature.java");
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(List.of("git", "diff", "HEAD")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(new ProcessResult(0, headDiffOut, "", false));
-
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(
-                                                    List.of(
-                                                            "git",
-                                                            "ls-files",
-                                                            "--others",
-                                                            "--exclude-standard")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(new ProcessResult(0, "src/NewFeature.java", "", false));
-
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(
-                                                    List.of(
-                                                            "git",
-                                                            "diff",
-                                                            "HEAD",
-                                                            "--",
-                                                            "src/NewFeature.java")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(new ProcessResult(0, "", "", false));
-
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(
-                                                    List.of(
-                                                            "git",
-                                                            "ls-files",
-                                                            "--others",
-                                                            "--exclude-standard",
-                                                            "--",
-                                                            "src/NewFeature.java")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(new ProcessResult(0, "src/NewFeature.java", "", false));
-
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(List.of("git", "status", "--porcelain", "-uall")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(new ProcessResult(0, statusOut, "", false));
+            stubGit(runner, 0, headDiffOut, "git", "diff", "HEAD");
+            stubGit(
+                    runner,
+                    0,
+                    "src/NewFeature.java",
+                    "git",
+                    "ls-files",
+                    "--others",
+                    "--exclude-standard");
+            stubGit(runner, 0, "", "git", "diff", "HEAD", "--", "src/NewFeature.java");
+            stubGit(
+                    runner,
+                    0,
+                    "src/NewFeature.java",
+                    "git",
+                    "ls-files",
+                    "--others",
+                    "--exclude-standard",
+                    "--",
+                    "src/NewFeature.java");
+            stubGit(runner, 0, statusOut, "git", "status", "--porcelain", "-uall");
 
             String fullDiff = gitService.getDiff();
-            assertTrue(fullDiff.contains("+line 1 staged"), "Should include staged changes");
-            assertTrue(fullDiff.contains("+line 2 unstaged"), "Should include unstaged changes");
-            assertTrue(
-                    fullDiff.contains("diff --git a/src/NewFeature.java b/src/NewFeature.java"),
-                    "Should include untracked file git header");
-            assertTrue(
-                    fullDiff.contains("+++ b/src/NewFeature.java"),
-                    "Should include untracked file header");
-            assertTrue(
-                    fullDiff.contains("@@ -0,0 +1,2 @@"),
-                    "Should include untracked file hunk header");
-            assertTrue(
-                    fullDiff.contains("+public class NewFeature {}"),
-                    "Should include untracked file lines");
+            for (String expected :
+                    List.of(
+                            "+line 1 staged",
+                            "+line 2 unstaged",
+                            "diff --git a/src/NewFeature.java b/src/NewFeature.java",
+                            "+++ b/src/NewFeature.java",
+                            "@@ -0,0 +1,2 @@",
+                            "+public class NewFeature {}")) {
+                assertTrue(fullDiff.contains(expected));
+            }
 
-            // Per-file diff for untracked file
             String untrackedOnlyDiff = gitService.getDiff("src/NewFeature.java");
             assertTrue(untrackedOnlyDiff.contains("+++ b/src/NewFeature.java"));
             assertTrue(untrackedOnlyDiff.contains("+public class NewFeature {}"));
             assertFalse(untrackedOnlyDiff.contains("Tracked.java"));
 
-            // getDiffHead() includes staged + unstaged tracked changes, but not untracked
             String headDiff = gitService.getDiffHead();
             assertTrue(headDiff.contains("+line 1 staged"));
             assertTrue(headDiff.contains("+line 2 unstaged"));
             assertFalse(headDiff.contains("NewFeature.java"));
 
-            // getChangedFiles() lists modified, renamed, and untracked files
-            List<String> changedFiles = gitService.getChangedFiles();
             assertEquals(
-                    List.of("Tracked.java", "Renamed.java", "src/NewFeature.java"), changedFiles);
+                    List.of("Tracked.java", "Renamed.java", "src/NewFeature.java"),
+                    gitService.getChangedFiles());
         }
     }
 
     @Test
     void testGetChangedFilesPreservesFirstLineLeadingSpaceAndUnquotesEscapedPaths() {
-        ProjectService projectService = createActiveProjectService();
-        GitService gitService = new GitService(projectService);
+        GitService gitService = new GitService(createActiveProjectService());
 
         char dq = (char) 34;
         char bs = (char) 92;
@@ -212,59 +164,31 @@ class GitServiceTest {
                 "?? " + dq + "dir with spaces/quote" + bs + dq + "file" + bs + bs + "name.txt" + dq;
         String statusOut =
                 String.join(
-                        String.valueOf((char) 10),
+                        "\n",
                         " M FirstUnstaged.java",
                         quotedEscaped,
                         "R  " + dq + "old name.txt" + dq + " -> " + dq + "new name.txt" + dq);
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(List.of("git", "status", "--porcelain", "-uall")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(new ProcessResult(0, statusOut + (char) 10, "", false));
+            stubGit(runner, 0, statusOut + "\n", "git", "status", "--porcelain", "-uall");
 
-            List<String> changedFiles = gitService.getChangedFiles();
             assertEquals(
                     List.of(
                             "FirstUnstaged.java",
                             "dir with spaces/quote" + dq + "file/name.txt",
                             "new name.txt"),
-                    changedFiles);
+                    gitService.getChangedFiles());
         }
     }
 
     @Test
     void testGetDiffHeadFallbackWhenUnbornHead() {
-        ProjectService projectService = createActiveProjectService();
-        GitService gitService = new GitService(projectService);
+        GitService gitService = new GitService(createActiveProjectService());
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(List.of("git", "diff", "HEAD")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(
-                            new ProcessResult(
-                                    128,
-                                    "fatal: ambiguous argument 'HEAD'",
-                                    "fatal: ambiguous argument 'HEAD'",
-                                    false));
-
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(List.of("git", "diff", "--cached")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(new ProcessResult(0, "+staged line", "", false));
-
-            runner.when(() -> ProcessRunner.run(eq(List.of("git", "diff")), eq(tempDir), anyMap()))
-                    .thenReturn(new ProcessResult(0, "+unstaged line", "", false));
+            stubGit(runner, 128, "fatal: ambiguous argument 'HEAD'", "git", "diff", "HEAD");
+            stubGit(runner, 0, "+staged line", "git", "diff", "--cached");
+            stubGit(runner, 0, "+unstaged line", "git", "diff");
 
             String diff = gitService.getDiffHead();
             assertTrue(diff.contains("+staged line"));
@@ -274,28 +198,12 @@ class GitServiceTest {
 
     @Test
     void testGetBlameAndValidation() {
-        ProjectService projectService = createActiveProjectService();
-        GitService gitService = new GitService(projectService);
+        GitService gitService = new GitService(createActiveProjectService());
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             String blameOut =
-                    "abcd1234 (Roxy Test 2025-01-01 1) line 1"
-                            + (char) 10
-                            + "abcd1234 (Roxy Test 2025-01-01 2) line 2";
-            runner.when(
-                            () ->
-                                    ProcessRunner.run(
-                                            eq(
-                                                    List.of(
-                                                            "git",
-                                                            "blame",
-                                                            "-L",
-                                                            "1,2",
-                                                            "--",
-                                                            "Tracked.java")),
-                                            eq(tempDir),
-                                            anyMap()))
-                    .thenReturn(new ProcessResult(0, blameOut, "", false));
+                    "abcd1234 (Roxy Test 2025-01-01 1) line 1\nabcd1234 (Roxy Test 2025-01-01 2) line 2";
+            stubGit(runner, 0, blameOut, "git", "blame", "-L", "1,2", "--", "Tracked.java");
 
             String blame = gitService.getBlame("Tracked.java", 1, 2);
             assertTrue(blame.contains("line 1"));

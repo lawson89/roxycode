@@ -29,30 +29,36 @@ class GenericBuildToolServiceTest {
     private Path projectRoot;
     private Path projectDataDir;
     private ProjectService projectService;
-    private TomlMapper tomlMapper;
     private SystemToolService systemToolService;
     private BuildContainerService buildContainerService;
     private GenericBuildToolService buildToolService;
 
     @BeforeEach
     void setUp() throws IOException {
-        projectRoot = tempDir.resolve("workspace");
+        projectRoot = Files.createDirectories(tempDir.resolve("workspace"));
         projectDataDir = tempDir.resolve("roxy-home/projects/workspace-12345678");
-        Files.createDirectories(projectRoot);
-
         projectService = mock(ProjectService.class);
-        tomlMapper = new TomlMapper();
         systemToolService = mock(SystemToolService.class);
         buildContainerService = new BuildContainerService(systemToolService);
-
         buildToolService =
-                new GenericBuildToolService(projectService, tomlMapper, buildContainerService);
+                new GenericBuildToolService(
+                        projectService, new TomlMapper(), buildContainerService);
 
         lenient().when(projectService.hasActiveProject()).thenReturn(true);
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
         lenient()
                 .when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
+    }
+
+    private void writeBuildToml(String toml) throws IOException {
+        Files.createDirectories(projectDataDir);
+        Files.writeString(projectDataDir.resolve("build.toml"), toml);
+    }
+
+    private void stubDockerAvailable(boolean available) {
+        when(systemToolService.isDockerAvailable())
+                .thenReturn(CompletableFuture.completedFuture(available));
     }
 
     @Test
@@ -62,13 +68,7 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testDetectWithConfig() throws IOException {
-        Files.createDirectories(projectDataDir);
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
-                """
-                [build]
-                compile = 'echo hi'
-                """);
+        writeBuildToml("[build]\ncompile = 'echo hi'\n");
         assertTrue(buildToolService.detect());
         assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
     }
@@ -76,7 +76,6 @@ class GenericBuildToolServiceTest {
     @Test
     void testEnsureConfigAutoDetectionMavenIncludesContainerSection() throws IOException {
         Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
-
         buildToolService.compile();
 
         Path configPath = projectDataDir.resolve("build.toml");
@@ -90,23 +89,13 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testCommandPlaceholders() throws IOException {
-        Files.createDirectories(projectDataDir);
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
-                """
-                [test]
-                run_single = 'echo {testName}'
-                """);
-
-        BuildResult result = buildToolService.runSingleTest("MyTest");
-        assertTrue(result.getLog().contains("MyTest"));
+        writeBuildToml("[test]\nrun_single = 'echo {testName}'\n");
+        assertTrue(buildToolService.runSingleTest("MyTest").getLog().contains("MyTest"));
     }
 
     @Test
     void testRegexParsing() throws IOException {
-        Files.createDirectories(projectDataDir);
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
+        writeBuildToml(
                 """
                 [build]
                 compile = 'echo [ERROR] Compilation failed'
@@ -119,24 +108,18 @@ class GenericBuildToolServiceTest {
 
         BuildResult compileResult = buildToolService.compile();
         assertFalse(compileResult.isSuccess());
-        assertEquals(1, compileResult.getErrors().size());
-        assertEquals("Compilation failed", compileResult.getErrors().get(0));
+        assertEquals(List.of("Compilation failed"), compileResult.getErrors());
 
         BuildResult testResult = buildToolService.runTests();
-        assertFalse(
-                testResult.isSuccess(),
-                "BuildResult must not be marked successful when failedTests is non-empty even if exitCode is 0");
+        assertFalse(testResult.isSuccess());
         assertEquals(0, testResult.getExitCode());
         assertTrue(testResult.getErrors().isEmpty());
-        assertEquals(1, testResult.getFailedTests().size());
-        assertEquals("MyTest#broken", testResult.getFailedTests().get(0));
+        assertEquals(List.of("MyTest#broken"), testResult.getFailedTests());
     }
 
     @Test
     void testContainerExecutionRegexParsing() throws IOException {
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(true));
-
+        stubDockerAvailable(true);
         buildContainerService.setContainerSessionFactory(
                 key ->
                         new ContainerSession() {
@@ -144,9 +127,7 @@ class GenericBuildToolServiceTest {
                             public ContainerExecResult execInContainer(String... command) {
                                 return new ContainerExecResult(
                                         1,
-                                        """
-                                        [ERROR] Container compile failure
-                                        FAIL: ContainerTest#fail""",
+                                        "[ERROR] Container compile failure\nFAIL: ContainerTest#fail",
                                         "");
                             }
 
@@ -159,9 +140,7 @@ class GenericBuildToolServiceTest {
                             public void close() {}
                         });
 
-        Files.createDirectories(projectDataDir);
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
+        writeBuildToml(
                 """
                 [test]
                 run_all = './mvnw test'
@@ -183,28 +162,14 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testEnvironmentVariables() throws IOException {
-        Files.createDirectories(projectDataDir);
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
-                """
-                [build]
-                compile = 'echo test'
-                [env]
-                TEST_VAR = 'hello-env'
-                """);
-
-        BuildResult result = buildToolService.compile();
-        assertTrue(result.isSuccess());
+        writeBuildToml("[build]\ncompile = 'echo test'\n[env]\nTEST_VAR = 'hello-env'\n");
+        assertTrue(buildToolService.compile().isSuccess());
     }
 
     @Test
     void testContainerEnabledFailsFastWhenDockerUnavailable() throws IOException {
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(false));
-
-        Files.createDirectories(projectDataDir);
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
+        stubDockerAvailable(false);
+        writeBuildToml(
                 """
                 [build]
                 compile = './mvnw compile'
@@ -223,18 +188,13 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testContainerEnabledFailsBuildWhenTestcontainersSessionThrows() throws IOException {
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(true));
-
+        stubDockerAvailable(true);
         buildContainerService.setContainerSessionFactory(
                 key -> {
                     throw new IllegalStateException(
                             "client version 1.32 is too old. Minimum supported API version is 1.44");
                 });
-
-        Files.createDirectories(projectDataDir);
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
+        writeBuildToml(
                 """
                 [build]
                 compile = './mvnw compile'
@@ -258,9 +218,7 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testWarmContainerSessionReusedAndStoppedOnConfigOrProjectChange() throws IOException {
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(true));
-
+        stubDockerAvailable(true);
         AtomicInteger sessionsCreated = new AtomicInteger(0);
         AtomicBoolean sessionClosed = new AtomicBoolean(false);
         List<String[]> executedCommands = new ArrayList<>();
@@ -290,7 +248,6 @@ class GenericBuildToolServiceTest {
                     };
                 });
 
-        Files.createDirectories(projectDataDir);
         String toml =
                 """
                 [build]
@@ -304,7 +261,7 @@ class GenericBuildToolServiceTest {
                 image = 'eclipse-temurin:25-jdk'
                 workdir = '/workspace'
                 """;
-        Files.writeString(projectDataDir.resolve("build.toml"), toml);
+        writeBuildToml(toml);
 
         BuildResult compileRes = buildToolService.compile();
         assertTrue(compileRes.isSuccess());
@@ -315,31 +272,25 @@ class GenericBuildToolServiceTest {
         assertEquals("true", sessionKeys.get(0).env().get("ROXY_CODE"));
         assertArrayEquals(new String[] {"sh", "-c", "./mvnw compile"}, executedCommands.get(0));
 
-        // Second command reuses warm container session
-        BuildResult testRes = buildToolService.runTests();
-        assertTrue(testRes.isSuccess());
-        assertEquals(1, sessionsCreated.get(), "Warm container session should be reused");
+        assertTrue(buildToolService.runTests().isSuccess());
+        assertEquals(1, sessionsCreated.get());
         assertArrayEquals(new String[] {"sh", "-c", "./mvnw test"}, executedCommands.get(1));
 
-        // Saving config stops active container
         buildToolService.saveConfigContent(toml);
-        assertTrue(sessionClosed.get(), "Saving config should stop active warm container");
+        assertTrue(sessionClosed.get());
 
-        // Next command starts a new container session
         buildToolService.compile();
         assertEquals(2, sessionsCreated.get());
         assertFalse(sessionClosed.get());
 
-        // Switching project stops active container
         buildToolService.handleProjectChanged(new ProjectChangedEvent(projectRoot));
-        assertTrue(sessionClosed.get(), "Switching project should stop active warm container");
+        assertTrue(sessionClosed.get());
     }
 
     @Test
     void testGetConfigContentAndCompileFallbackWhenEnsureConfigCannotWriteToDisk()
             throws IOException {
         Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
-        // Make projectDataDir a regular file so ensureConfig() cannot create build.toml inside it
         Files.createDirectories(projectDataDir.getParent());
         Files.writeString(projectDataDir, "not a directory");
 
@@ -350,9 +301,7 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testMalformedTomlValuesHandledWithoutClassCastException() throws IOException {
-        Files.createDirectories(projectDataDir);
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
+        writeBuildToml(
                 """
                 unknown_top_level = "ignored"
                 [build]
@@ -364,18 +313,9 @@ class GenericBuildToolServiceTest {
                 [parse]
                 error_regex = 12345
                 """);
+        assertTrue(assertDoesNotThrow(() -> buildToolService.compile()).isSuccess());
 
-        BuildResult scalarCoercedResult = assertDoesNotThrow(() -> buildToolService.compile());
-        assertTrue(scalarCoercedResult.isSuccess());
-
-        Files.writeString(
-                projectDataDir.resolve("build.toml"),
-                """
-                parse = "not-a-section"
-                [build]
-                compile = 'echo hi'
-                """);
-
+        writeBuildToml("parse = 'not-a-section'\n[build]\ncompile = 'echo hi'\n");
         BuildResult malformedSectionResult = assertDoesNotThrow(() -> buildToolService.compile());
         assertFalse(malformedSectionResult.isSuccess());
         assertEquals(-1, malformedSectionResult.getExitCode());

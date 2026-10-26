@@ -3,9 +3,13 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.BuildContainerService;
@@ -42,15 +46,19 @@ class BuildConfigPanelTest {
                         """);
     }
 
+    private BuildConfigPanel createPanelOnEdt() throws Exception {
+        BuildConfigPanel panel =
+                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
+        SwingUtilities.invokeAndWait(() -> {});
+        return panel;
+    }
+
     @Test
     void testCachedDockerAvailabilityOnInitializationWithoutReprobe() throws Exception {
         when(systemToolService.hasCachedTools()).thenReturn(true);
         when(systemToolService.checkDockerAvailable()).thenReturn(true);
 
-        BuildConfigPanel panel =
-                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
-        SwingUtilities.invokeAndWait(() -> {});
-
+        BuildConfigPanel panel = createPanelOnEdt();
         assertTrue(panel.isDockerAvailableState());
         assertEquals(
                 BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT,
@@ -64,17 +72,12 @@ class BuildConfigPanelTest {
         when(systemToolService.isDockerAvailable())
                 .thenReturn(CompletableFuture.completedFuture(false));
 
-        BuildConfigPanel panel =
-                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
-        SwingUtilities.invokeAndWait(() -> {});
-
+        BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(panel.isDockerAvailableState());
         assertEquals(
                 BuildConfigPanel.DOCKER_MISSING_WARNING_TEXT,
                 panel.getBannerMessageLabel().getText());
-        assertFalse(
-                panel.getContainerToggleCheckBox().isEnabled(),
-                "Container toggle should be disabled when Docker is unavailable");
+        assertFalse(panel.getContainerToggleCheckBox().isEnabled());
         assertFalse(panel.getContainerToggleCheckBox().isSelected());
     }
 
@@ -83,10 +86,7 @@ class BuildConfigPanelTest {
         when(systemToolService.isDockerAvailable())
                 .thenReturn(CompletableFuture.completedFuture(true));
 
-        BuildConfigPanel panel =
-                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
-        SwingUtilities.invokeAndWait(() -> {});
-
+        BuildConfigPanel panel = createPanelOnEdt();
         assertTrue(panel.isDockerAvailableState());
         assertEquals(
                 BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT,
@@ -94,19 +94,15 @@ class BuildConfigPanelTest {
         assertTrue(panel.getContainerToggleCheckBox().isEnabled());
         assertFalse(panel.getContainerToggleCheckBox().isSelected());
 
-        // Toggle checkbox on -> updates TOML and banner to CONTAINER_ACTIVE_TEXT
         panel.getContainerToggleCheckBox().doClick();
         SwingUtilities.invokeAndWait(() -> {});
-
         assertTrue(panel.getContainerToggleCheckBox().isSelected());
         assertTrue(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
         assertEquals(
                 BuildConfigPanel.CONTAINER_ACTIVE_TEXT, panel.getBannerMessageLabel().getText());
 
-        // Toggle checkbox off -> updates TOML and banner back to HOST_EXECUTION_ACTIVE_TEXT
         panel.getContainerToggleCheckBox().doClick();
         SwingUtilities.invokeAndWait(() -> {});
-
         assertFalse(panel.getContainerToggleCheckBox().isSelected());
         assertFalse(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
         assertEquals(
@@ -117,29 +113,18 @@ class BuildConfigPanelTest {
     @Test
     void testRecheckDockerButtonUpdatesAvailabilityAndAppendsContainerSectionIfMissing()
             throws Exception {
-        when(buildToolService.getConfigContent())
-                .thenReturn(
-                        """
-                        [build]
-                        compile = 'mvn'""");
+        when(buildToolService.getConfigContent()).thenReturn("[build]\ncompile = 'mvn'");
         when(systemToolService.hasCachedTools()).thenReturn(true);
         when(systemToolService.checkDockerAvailable()).thenReturn(false);
 
-        BuildConfigPanel panel =
-                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
-        SwingUtilities.invokeAndWait(() -> {});
-
+        BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(panel.getContainerToggleCheckBox().isEnabled());
 
-        // Simulate user starting Docker Desktop and clicking "Re-check Docker" with async future
         CompletableFuture<Boolean> pendingRecheck = new CompletableFuture<>();
         when(systemToolService.refreshDockerAvailable()).thenReturn(pendingRecheck);
 
         SwingUtilities.invokeAndWait(() -> panel.getRecheckDockerButton().doClick());
-
-        assertFalse(
-                panel.getRecheckDockerButton().isEnabled(),
-                "Re-check Docker button should be disabled while check is in flight");
+        assertFalse(panel.getRecheckDockerButton().isEnabled());
         assertEquals(
                 BuildConfigPanel.CHECKING_DOCKER_TEXT, panel.getRecheckDockerButton().getText());
 
@@ -151,7 +136,6 @@ class BuildConfigPanelTest {
                 BuildConfigPanel.RECHECK_DOCKER_TEXT, panel.getRecheckDockerButton().getText());
         assertTrue(panel.getContainerToggleCheckBox().isEnabled());
 
-        // Clicking toggle appends [container] section when missing
         panel.getContainerToggleCheckBox().doClick();
         assertTrue(panel.getTextArea().getText().contains("[container]"));
         assertTrue(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
@@ -162,9 +146,7 @@ class BuildConfigPanelTest {
         when(systemToolService.hasCachedTools()).thenReturn(true);
         when(systemToolService.checkDockerAvailable()).thenReturn(false);
 
-        BuildConfigPanel panel =
-                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
-        SwingUtilities.invokeAndWait(() -> {});
+        BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(panel.isDockerAvailableState());
 
         panel.onSystemToolsUpdated(
@@ -178,32 +160,24 @@ class BuildConfigPanelTest {
 
     @Test
     void testFlatLafStyleParsingAcrossAllBannerStatesAndThemes() throws Exception {
-        javax.swing.LookAndFeel previousLaf = javax.swing.UIManager.getLookAndFeel();
+        LookAndFeel previousLaf = UIManager.getLookAndFeel();
         try {
-            com.formdev.flatlaf.FlatLightLaf.setup();
+            FlatLightLaf.setup();
             when(systemToolService.isDockerAvailable())
                     .thenReturn(CompletableFuture.completedFuture(false));
 
-            BuildConfigPanel panel =
-                    assertDoesNotThrow(
-                            () ->
-                                    new BuildConfigPanel(
-                                            buildToolService, settingsService, systemToolService));
-            SwingUtilities.invokeAndWait(() -> {});
+            BuildConfigPanel panel = assertDoesNotThrow(this::createPanelOnEdt);
             assertNotNull(panel.getBannerPanel().getBorder());
 
-            // Transition to Docker available (host execution)
             panel.setDockerAvailable(true);
             assertNotNull(panel.getBannerPanel().getBorder());
 
-            // Transition to container enabled
             panel.setContainerEnabledInToml(true);
             assertNotNull(panel.getBannerPanel().getBorder());
 
-            // Switch to FlatDarkLaf and verify updateUI() and all states succeed
             SwingUtilities.invokeAndWait(
                     () -> {
-                        com.formdev.flatlaf.FlatDarkLaf.setup();
+                        FlatDarkLaf.setup();
                         SwingUtilities.updateComponentTreeUI(panel);
                     });
             assertNotNull(panel.getBannerPanel().getBorder());
@@ -215,7 +189,7 @@ class BuildConfigPanelTest {
                 SwingUtilities.invokeAndWait(
                         () -> {
                             try {
-                                javax.swing.UIManager.setLookAndFeel(previousLaf);
+                                UIManager.setLookAndFeel(previousLaf);
                             } catch (Exception ignored) {
                             }
                         });

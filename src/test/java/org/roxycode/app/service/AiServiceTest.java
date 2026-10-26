@@ -1,9 +1,6 @@
 package org.roxycode.app.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -79,7 +76,6 @@ class AiServiceTest {
         lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
         lenient().when(requestSpec.tools(any(Object[].class))).thenReturn(requestSpec);
         lenient().when(requestSpec.call()).thenReturn(responseSpec);
-
         lenient()
                 .when(chatClientBuilder.defaultAdvisors(any(Advisor[].class)))
                 .thenReturn(chatClientBuilder);
@@ -116,12 +112,41 @@ class AiServiceTest {
                 finishReason != null
                         ? ChatGenerationMetadata.builder().finishReason(finishReason).build()
                         : ChatGenerationMetadata.NULL;
-        Generation generation = new Generation(new AssistantMessage(text), genMeta);
         ChatResponseMetadata responseMeta =
                 usage != null
                         ? ChatResponseMetadata.builder().usage(usage).build()
                         : new ChatResponseMetadata();
-        return new ChatResponse(List.of(generation), responseMeta);
+        return new ChatResponse(
+                List.of(new Generation(new AssistantMessage(text), genMeta)), responseMeta);
+    }
+
+    private void stubToolTurnsAndResponse(
+            int turns, String responseText, String finishReason, Usage usage) {
+        AtomicReference<Map<String, Object>> capturedToolContext = new AtomicReference<>();
+        when(requestSpec.toolContext(anyMap()))
+                .thenAnswer(
+                        inv -> {
+                            capturedToolContext.set(inv.getArgument(0));
+                            return requestSpec;
+                        });
+        stubChatResponse(WorkflowPhase.EXPLORE, "EXPLORE PROMPT", responseText, finishReason, null);
+        when(responseSpec.chatResponse())
+                .thenAnswer(
+                        inv -> {
+                            ((AtomicInteger)
+                                            capturedToolContext
+                                                    .get()
+                                                    .get(TurnToolContext.TURN_COUNTER_KEY))
+                                    .set(turns);
+                            return buildChatResponse(responseText, finishReason, usage);
+                        });
+    }
+
+    private AgentTurnCompleteEvent captureTurnCompleteEvent() {
+        ArgumentCaptor<AgentTurnCompleteEvent> captor =
+                ArgumentCaptor.forClass(AgentTurnCompleteEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        return captor.getValue();
     }
 
     @Test
@@ -129,15 +154,14 @@ class AiServiceTest {
         AiConfig config = new AiConfig();
         ToolExecutionExceptionProcessor processor = config.toolExecutionExceptionProcessor();
         assertInstanceOf(RoxyToolExecutionExceptionProcessor.class, processor);
-
-        ToolCallingManager manager =
+        assertInstanceOf(
+                ReturnDirectToolCallingManager.class,
                 config.toolCallingManager(
                         processor,
                         settingsService,
                         planService,
                         eventPublisher,
-                        config.objectMapper());
-        assertInstanceOf(ReturnDirectToolCallingManager.class, manager);
+                        config.objectMapper()));
     }
 
     @Test
@@ -146,13 +170,8 @@ class AiServiceTest {
         stubChatResponse(
                 WorkflowPhase.CODE, "FULL CODE SYSTEM PROMPT", "AI Response", "STOP", null);
 
-        String result = aiService.chat("default", null, "Hello", null);
-
-        assertEquals("AI Response", result);
-
-        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(requestSpec).system(systemPromptCaptor.capture());
-        assertEquals("FULL CODE SYSTEM PROMPT", systemPromptCaptor.getValue());
+        assertEquals("AI Response", aiService.chat("default", null, "Hello", null));
+        verify(requestSpec).system("FULL CODE SYSTEM PROMPT");
         verify(promptService).buildSystemPrompt(WorkflowPhase.CODE, null);
         verify(requestSpec).options(any());
         verify(requestSpec).tools(jexlTool, planService);
@@ -175,10 +194,9 @@ class AiServiceTest {
     void testChatRegistersOnlyJexlToolInExplorePhase() {
         stubChatResponse(
                 WorkflowPhase.EXPLORE, "EXPLORE SYSTEM PROMPT", "Explore Response", "STOP", null);
-
-        String result = aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null);
-
-        assertEquals("Explore Response", result);
+        assertEquals(
+                "Explore Response",
+                aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null));
         verify(requestSpec).tools(jexlTool);
     }
 
@@ -191,15 +209,11 @@ class AiServiceTest {
         when(responseSpec.chatResponse())
                 .thenReturn(buildChatResponse("AI Response", "STOP", null));
 
-        String result =
+        assertEquals(
+                "AI Response",
                 aiService.chat(
-                        "custom-conv", WorkflowPhase.REVIEW, "Hello", "Extra instructions", null);
-
-        assertEquals("AI Response", result);
-
-        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(requestSpec).system(systemPromptCaptor.capture());
-        assertEquals("REVIEW SYSTEM PROMPT", systemPromptCaptor.getValue());
+                        "custom-conv", WorkflowPhase.REVIEW, "Hello", "Extra instructions", null));
+        verify(requestSpec).system("REVIEW SYSTEM PROMPT");
         verify(requestSpec).tools(jexlTool, planService);
 
         ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorCaptor =
@@ -212,83 +226,56 @@ class AiServiceTest {
 
     @Test
     void testChatPublishesTurnCompleteEventWithFinalTurnCount() {
-        AtomicReference<Map<String, Object>> capturedToolContext = new AtomicReference<>();
-        when(requestSpec.toolContext(anyMap()))
-                .thenAnswer(
-                        inv -> {
-                            capturedToolContext.set(inv.getArgument(0));
-                            return requestSpec;
-                        });
-        stubChatResponse(WorkflowPhase.EXPLORE, "EXPLORE PROMPT", "Done", "STOP", null);
-        when(responseSpec.chatResponse())
-                .thenAnswer(
-                        inv -> {
-                            AtomicInteger counter =
-                                    (AtomicInteger)
-                                            capturedToolContext
-                                                    .get()
-                                                    .get(TurnToolContext.TURN_COUNTER_KEY);
-                            counter.set(2);
-                            return buildChatResponse(
-                                    "Autonomous execution stopped: Maximum tool turns (2) exceeded.",
-                                    "STOP",
-                                    null);
-                        });
+        String msg = "Autonomous execution stopped: Maximum tool turns (2) exceeded.";
+        stubToolTurnsAndResponse(2, msg, "STOP", null);
 
         String result = aiService.chat("default", null, "Hello", null);
-
-        assertEquals("Autonomous execution stopped: Maximum tool turns (2) exceeded.", result);
-        ArgumentCaptor<AgentTurnCompleteEvent> completeCaptor =
-                ArgumentCaptor.forClass(AgentTurnCompleteEvent.class);
-        verify(eventPublisher).publishEvent(completeCaptor.capture());
-        assertEquals(2, completeCaptor.getValue().totalTurns());
-        assertEquals(result, completeCaptor.getValue().result());
+        assertEquals(msg, result);
+        AgentTurnCompleteEvent ev = captureTurnCompleteEvent();
+        assertEquals(2, ev.totalTurns());
+        assertEquals(result, ev.result());
     }
 
     @Test
     void testChatFormatsDirectReturnTransitionOutput() {
-        String expectedMarkdown =
-                """
-                PLAN SUMMARY
-
-                Transition Request""";
+        String expectedMarkdown = "PLAN SUMMARY\n\nTransition Request";
         stubChatResponse(WorkflowPhase.PLAN, "PLAN PROMPT", expectedMarkdown, "STOP", null);
+        assertEquals(expectedMarkdown, aiService.chat("default", null, "Create plan", null));
+    }
 
-        String result = aiService.chat("default", null, "Create plan", null);
-
-        assertEquals(expectedMarkdown, result);
+    private static Arguments caseArgs(String text, String reason, Usage usage, String... snippets) {
+        return Arguments.of(text, reason, usage, List.of(snippets));
     }
 
     static Stream<Arguments> finishReasonFormattingCases() {
         return Stream.of(
-                Arguments.of(
+                caseArgs(
                         "Complete answer.",
                         "STOP",
                         new DefaultUsage(100, 50, 150),
-                        List.of("Complete answer.")),
-                Arguments.of(
+                        "Complete answer."),
+                caseArgs(
                         "Partial output here...",
                         "MAX_TOKENS",
                         new DefaultUsage(1200, 8192, 9392),
-                        List.of(
-                                "Partial output here...",
-                                "MAX_TOKENS",
-                                "promptTokens=1200, completionTokens=8192, totalTokens=9392",
-                                "continue")),
-                Arguments.of(
+                        "Partial output here...",
+                        "MAX_TOKENS",
+                        "promptTokens=1200, completionTokens=8192, totalTokens=9392",
+                        "continue"),
+                caseArgs(
                         "   ",
                         "MAX_TOKENS",
                         new DefaultUsage(4000, 8192, 12192),
-                        List.of(
-                                "MAX_TOKENS",
-                                "promptTokens=4000, completionTokens=8192, totalTokens=12192",
-                                "continue")),
-                Arguments.of(
+                        "MAX_TOKENS",
+                        "promptTokens=4000, completionTokens=8192, totalTokens=12192",
+                        "continue"),
+                caseArgs(
                         null,
                         "MALFORMED_FUNCTION_CALL",
                         null,
-                        List.of("MALFORMED_FUNCTION_CALL", "blocked or aborted")),
-                Arguments.of("", "SAFETY", null, List.of("SAFETY", "blocked or aborted")));
+                        "MALFORMED_FUNCTION_CALL",
+                        "blocked or aborted"),
+                caseArgs("", "SAFETY", null, "SAFETY", "blocked or aborted"));
     }
 
     @ParameterizedTest
@@ -306,43 +293,17 @@ class AiServiceTest {
 
         assertEquals(directFormatted, result);
         for (String snippet : expectedSnippets) {
-            assertTrue(
-                    result.toLowerCase().contains(snippet.toLowerCase()),
-                    "Expected response to contain '" + snippet + "' but got: " + result);
+            assertTrue(result.toLowerCase().contains(snippet.toLowerCase()));
         }
         verify(requestSpec, times(1)).call();
-        ArgumentCaptor<AgentTurnCompleteEvent> completeCaptor =
-                ArgumentCaptor.forClass(AgentTurnCompleteEvent.class);
-        verify(eventPublisher).publishEvent(completeCaptor.capture());
-        assertEquals(result, completeCaptor.getValue().result());
+        assertEquals(result, captureTurnCompleteEvent().result());
     }
 
     @Test
     void testBlankResponseAfterToolExecutionWithStopReturnsDiagnosticMessage() {
-        AtomicReference<Map<String, Object>> capturedToolContext = new AtomicReference<>();
-        when(requestSpec.toolContext(anyMap()))
-                .thenAnswer(
-                        inv -> {
-                            capturedToolContext.set(inv.getArgument(0));
-                            return requestSpec;
-                        });
-        stubChatResponse(WorkflowPhase.EXPLORE, "EXPLORE PROMPT", "", "STOP", null);
-
-        Usage usage = new DefaultUsage(2500, 300, 2800);
-        when(responseSpec.chatResponse())
-                .thenAnswer(
-                        inv -> {
-                            AtomicInteger counter =
-                                    (AtomicInteger)
-                                            capturedToolContext
-                                                    .get()
-                                                    .get(TurnToolContext.TURN_COUNTER_KEY);
-                            counter.set(3);
-                            return buildChatResponse("", "STOP", usage);
-                        });
+        stubToolTurnsAndResponse(3, "", "STOP", new DefaultUsage(2500, 300, 2800));
 
         String result = aiService.chat("default", null, "Analyze project", null);
-
         assertTrue(result.contains("STOP"));
         assertTrue(result.contains("3"));
         assertTrue(result.contains("promptTokens=2500, completionTokens=300, totalTokens=2800"));
@@ -365,9 +326,7 @@ class AiServiceTest {
             assertThrows(
                     CancellationException.class,
                     () -> aiService.chat("default", null, "Run code", null));
-            assertTrue(
-                    Thread.currentThread().isInterrupted(),
-                    "Interrupt flag should be preserved when chat is cancelled");
+            assertTrue(Thread.currentThread().isInterrupted());
         } finally {
             Thread.interrupted();
         }

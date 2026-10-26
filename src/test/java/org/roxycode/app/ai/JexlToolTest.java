@@ -2,7 +2,11 @@ package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.fasterxml.jackson.core.JsonGenerationException;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
@@ -83,32 +87,45 @@ public class JexlToolTest {
         }
     }
 
+    private static JexlTool createTool(Object... services) {
+        return createTool(null, services);
+    }
+
+    private static JexlTool createTool(
+            AtomicReference<ToolExecutionEvent> capturedEvent, Object... services) {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        for (Object service : services) {
+            registry.register(service);
+        }
+        ApplicationEventPublisher publisher =
+                capturedEvent == null
+                        ? null
+                        : event -> {
+                            if (event instanceof ToolExecutionEvent tee) {
+                                capturedEvent.set(tee);
+                            }
+                        };
+        return new JexlTool(registry, publisher, null);
+    }
+
+    private static JsonNode evalJson(JexlTool tool, String script) throws Exception {
+        return AiConfig.SHARED_OBJECT_MAPPER.readTree(tool.executeJexl(script));
+    }
+
     @Test
     public void testExecuteJexlWithService() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new TestService());
-
-        JexlTool tool = new JexlTool(registry, null, null);
-
-        String varCheck = tool.executeJexl("testService");
-        assertNotNull(varCheck);
-
-        String result = tool.executeJexl("testService.hello('Roxy')");
-        assertTrue(result.contains("Hello, Roxy"));
+        JexlTool tool = createTool(new TestService());
+        assertNotNull(tool.executeJexl("testService"));
+        assertTrue(tool.executeJexl("testService.hello('Roxy')").contains("Hello, Roxy"));
     }
 
     @Test
     public void testExecuteJexlSerializesBuildResultAndEditorResultAsStructuredJson()
             throws Exception {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new TestService());
-        JexlTool tool = new JexlTool(registry, null, null);
+        JexlTool tool = createTool(new TestService());
 
-        String buildJson = tool.executeJexl("testService.sampleBuildResult()");
-        JsonNode buildRoot = AiConfig.SHARED_OBJECT_MAPPER.readTree(buildJson);
-        JsonNode buildNode = buildRoot.get("result");
-        assertNotNull(buildNode);
-        assertTrue(buildNode.isObject(), "BuildResult should serialize as a JSON object");
+        JsonNode buildNode = evalJson(tool, "testService.sampleBuildResult()").get("result");
+        assertTrue(buildNode.isObject());
         assertFalse(buildNode.get("success").asBoolean());
         assertEquals(1, buildNode.get("exitCode").asInt());
         assertEquals("Compilation failed", buildNode.get("output").asText());
@@ -116,11 +133,8 @@ public class JexlToolTest {
         assertEquals("AppTest#testFoo", buildNode.get("failedTests").get(0).asText());
         assertEquals("Full build log", buildNode.get("log").asText());
 
-        String editorJson = tool.executeJexl("testService.sampleEditorResult()");
-        JsonNode editorRoot = AiConfig.SHARED_OBJECT_MAPPER.readTree(editorJson);
-        JsonNode editorNode = editorRoot.get("result");
-        assertNotNull(editorNode);
-        assertTrue(editorNode.isObject(), "EditorResult should serialize as a JSON object");
+        JsonNode editorNode = evalJson(tool, "testService.sampleEditorResult()").get("result");
+        assertTrue(editorNode.isObject());
         assertTrue(editorNode.get("success").asBoolean());
         assertEquals("matched content", editorNode.get("content").asText());
         assertTrue(editorNode.get("errorHint").isNull());
@@ -128,27 +142,18 @@ public class JexlToolTest {
 
     @Test
     public void testBuildResultSupportsBothRecordAndBeanAccessorsInJexl() throws Exception {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new TestService());
-        JexlTool tool = new JexlTool(registry, null, null);
-
+        JexlTool tool = createTool(new TestService());
         String script =
                 """
                 var res = testService.sampleBuildResult();
                 {
-                  "recordSuccess": res.success(),
-                  "beanIsSuccess": res.isSuccess(),
-                  "propSuccess": res.success,
-                  "recordExitCode": res.exitCode(),
-                  "beanExitCode": res.getExitCode(),
-                  "recordErrors": res.errors(),
-                  "beanErrors": res.getErrors(),
-                  "recordFailedTests": res.failedTests(),
-                  "beanFailedTests": res.getFailedTests()
+                  "recordSuccess": res.success(), "beanIsSuccess": res.isSuccess(), "propSuccess": res.success,
+                  "recordExitCode": res.exitCode(), "beanExitCode": res.getExitCode(),
+                  "recordErrors": res.errors(), "beanErrors": res.getErrors(),
+                  "recordFailedTests": res.failedTests(), "beanFailedTests": res.getFailedTests()
                 }
                 """;
-        String json = tool.executeJexl(script);
-        JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(json);
+        JsonNode node = evalJson(tool, script);
         assertFalse(node.get("recordSuccess").asBoolean());
         assertFalse(node.get("beanIsSuccess").asBoolean());
         assertFalse(node.get("propSuccess").asBoolean());
@@ -166,31 +171,16 @@ public class JexlToolTest {
 
     @Test
     public void testExecuteJexlReadsPhaseAndConversationIdFromToolContext() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new CodeOnlyService());
-
         AtomicReference<ToolExecutionEvent> capturedEvent = new AtomicReference<>();
-        ApplicationEventPublisher publisher =
-                event -> {
-                    if (event instanceof ToolExecutionEvent tee) {
-                        capturedEvent.set(tee);
-                    }
-                };
+        JexlTool tool = createTool(capturedEvent, new CodeOnlyService());
+        assertTrue(tool.executeJexl("codeOnlyService.writeData()").contains("error"));
 
-        JexlTool tool = new JexlTool(registry, publisher, null);
-
-        // Default EXPLORE phase cannot access codeOnlyService
-        String exploreRes = tool.executeJexl("codeOnlyService.writeData()");
-        assertTrue(exploreRes.contains("error"));
-
-        // Passing CODE phase and conversationId via ToolContext allows access and publishes event
         ToolContext toolContext =
                 new ToolContext(
                         new TurnToolContext("task:default", WorkflowPhase.CODE, null, null)
                                 .toMap());
-        String codeRes = tool.executeJexl("codeOnlyService.writeData()", toolContext);
-        assertTrue(codeRes.contains("written"));
-        assertNotNull(capturedEvent.get());
+        assertTrue(
+                tool.executeJexl("codeOnlyService.writeData()", toolContext).contains("written"));
         assertEquals("task:default", capturedEvent.get().conversationId());
         assertEquals("codeOnlyService.writeData()", capturedEvent.get().script());
         assertEquals("written", capturedEvent.get().result());
@@ -199,140 +189,77 @@ public class JexlToolTest {
 
     @Test
     public void testAgentServiceMethodWithoutAgentDocIsBlockedWhileObjectMethodsAllowed() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new TestService());
-
-        JexlTool tool = new JexlTool(registry, null, null);
-
-        String toStringResult = tool.executeJexl("testService.toString()");
-        assertTrue(toStringResult.contains("TestService"), "Object.toString() should be allowed");
-
+        JexlTool tool = createTool(new TestService());
+        assertTrue(tool.executeJexl("testService.toString()").contains("TestService"));
         String blockedResult = tool.executeJexl("testService.internalMethodWithoutAgentDoc()");
-        assertTrue(
-                blockedResult.contains("error"),
-                "Unannotated method on @AgentService must be rejected by JexlPermissions");
+        assertTrue(blockedResult.contains("error"));
         assertFalse(blockedResult.contains("secret-internal"));
     }
 
     @Test
-    public void testExecuteJexlSuccess() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry, null, null);
-        String result = tool.executeJexl("1 + 1");
-        assertTrue(
-                result.contains(
-                        """
-                        "result":"2" """
-                                .trim()));
+    public void testExecuteJexlSuccess() throws Exception {
+        assertEquals("2", evalJson(createTool(), "1 + 1").get("result").asText());
     }
 
     @Test
-    public void testExecuteJexlWithVariable() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry, null, null);
-        String result = tool.executeJexl("var x = 10; x * 2");
-        assertTrue(
-                result.contains(
-                        """
-                        "result":"20" """
-                                .trim()));
+    public void testExecuteJexlWithVariable() throws Exception {
+        assertEquals("20", evalJson(createTool(), "var x = 10; x * 2").get("result").asText());
     }
 
     @Test
-    public void testExecuteJexlNull() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry, null, null);
-        String result = tool.executeJexl("null");
-        assertTrue(
-                result.contains(
-                        """
-                        "result":"null" """
-                                .trim()));
+    public void testExecuteJexlNull() throws Exception {
+        assertEquals("null", evalJson(createTool(), "null").get("result").asText());
     }
 
     @Test
     public void testExecuteJexlError() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
         AtomicReference<ToolExecutionEvent> capturedEvent = new AtomicReference<>();
-        JexlTool tool =
-                new JexlTool(
-                        registry,
-                        event -> {
-                            if (event instanceof ToolExecutionEvent tee) {
-                                capturedEvent.set(tee);
-                            }
-                        },
-                        null);
-
-        String result = tool.executeJexl("if (");
-        assertTrue(result.contains("Syntax Error"));
-        assertNotNull(capturedEvent.get(), "Syntax error should publish ToolExecutionEvent");
+        assertTrue(createTool(capturedEvent).executeJexl("if (").contains("Syntax Error"));
         assertEquals("if (", capturedEvent.get().script());
         assertNull(capturedEvent.get().result());
         assertFalse(capturedEvent.get().success());
-        assertNotNull(capturedEvent.get().error());
         assertTrue(capturedEvent.get().error().startsWith("Syntax Error: "));
     }
 
     @Test
     public void testToJsonErrorFallbackProducesValidJsonRecognizedAsErrorResponse()
             throws Exception {
-        com.fasterxml.jackson.databind.ObjectMapper failingMapper =
-                new com.fasterxml.jackson.databind.ObjectMapper() {
+        ObjectMapper failingMapper =
+                new ObjectMapper() {
                     @Override
-                    public String writeValueAsString(Object value)
-                            throws com.fasterxml.jackson.core.JsonProcessingException {
-                        throw new com.fasterxml.jackson.core.JsonGenerationException(
-                                "Simulated failure",
-                                (com.fasterxml.jackson.core.JsonGenerator) null);
+                    public String writeValueAsString(Object value) throws JsonProcessingException {
+                        throw new JsonGenerationException(
+                                "Simulated failure", (JsonGenerator) null);
                     }
                 };
         JexlTool tool = new JexlTool(new JexlServiceRegistry(), null, failingMapper);
         String result = tool.executeJexl("if (");
+        assertTrue(RoxyToolExecutionExceptionProcessor.isErrorResponse(result));
         assertEquals(
-                """
-                {"error":"Internal Error during error serialization"}"""
-                        .strip(),
-                result);
-        assertTrue(
-                RoxyToolExecutionExceptionProcessor.isErrorResponse(result),
-                "Fallback JSON error must be recognized by RoxyToolExecutionExceptionProcessor.isErrorResponse");
-        var parsed = AiConfig.SHARED_OBJECT_MAPPER.readTree(result);
-        assertEquals("Internal Error during error serialization", parsed.get("error").asText());
+                "Internal Error during error serialization",
+                AiConfig.SHARED_OBJECT_MAPPER.readTree(result).get("error").asText());
     }
 
     @Test
     public void testExecuteJexlInterrupted() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        JexlTool tool = new JexlTool(registry, null, null);
+        JexlTool tool = createTool();
         Thread.currentThread().interrupt();
         try {
             assertThrows(CancellationException.class, () -> tool.executeJexl("1 + 1"));
         } finally {
-            Thread.interrupted(); // Clear flag
+            Thread.interrupted();
         }
     }
 
     @Test
     public void testExecuteJexlLoopInterruptedPropagatesCancelAsCancellationException()
             throws Exception {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
         TestService testService = new TestService();
-        registry.register(testService);
         AtomicReference<ToolExecutionEvent> capturedEvent = new AtomicReference<>();
-        JexlTool tool =
-                new JexlTool(
-                        registry,
-                        event -> {
-                            if (event instanceof ToolExecutionEvent tee) {
-                                capturedEvent.set(tee);
-                            }
-                        },
-                        null);
+        JexlTool tool = createTool(capturedEvent, testService);
 
         AtomicReference<Throwable> thrownRef = new AtomicReference<>();
         AtomicBoolean interruptFlagPreserved = new AtomicBoolean(false);
-
         Thread worker =
                 new Thread(
                         () -> {
@@ -346,38 +273,25 @@ public class JexlToolTest {
                         });
         worker.start();
 
-        assertTrue(
-                testService.loopStarted.await(5, TimeUnit.SECONDS),
-                "JEXL loop should have started");
+        assertTrue(testService.loopStarted.await(5, TimeUnit.SECONDS));
         worker.interrupt();
         worker.join(5000);
 
-        assertFalse(worker.isAlive(), "Worker thread should have terminated after interrupt");
-        assertInstanceOf(
-                CancellationException.class,
-                thrownRef.get(),
-                "JexlException.Cancel should be propagated as CancellationException");
-        assertTrue(
-                interruptFlagPreserved.get(),
-                "Thread interrupt flag should be restored when JexlException.Cancel is caught");
-        assertNotNull(capturedEvent.get(), "Event publisher should be notified on cancellation");
-        assertFalse(capturedEvent.get().success(), "Event should indicate failure");
+        assertFalse(worker.isAlive());
+        assertInstanceOf(CancellationException.class, thrownRef.get());
+        assertTrue(interruptFlagPreserved.get());
+        assertFalse(capturedEvent.get().success());
         assertEquals("Execution cancelled", capturedEvent.get().error());
     }
 
     @Test
     public void testExecuteJexlInterruptedDuringScriptExecutionThrowsCancellationException() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new TestService());
-        JexlTool tool = new JexlTool(registry, null, null);
-
+        JexlTool tool = createTool(new TestService());
         try {
             assertThrows(
                     CancellationException.class,
                     () -> tool.executeJexl("testService.interruptSelfAndReturn()"));
-            assertTrue(
-                    Thread.currentThread().isInterrupted(),
-                    "Interrupt flag should remain set after post-execution interrupt check");
+            assertTrue(Thread.currentThread().isInterrupted());
         } finally {
             Thread.interrupted();
         }
@@ -385,22 +299,12 @@ public class JexlToolTest {
 
     @Test
     public void testExecuteJexlServiceExceptionsUnwrappedAndClosedByInterruptCancelled() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(new TestService());
         AtomicReference<ToolExecutionEvent> capturedEvent = new AtomicReference<>();
-        JexlTool tool =
-                new JexlTool(
-                        registry,
-                        event -> {
-                            if (event instanceof ToolExecutionEvent tee) {
-                                capturedEvent.set(tee);
-                            }
-                        },
-                        null);
+        JexlTool tool = createTool(capturedEvent, new TestService());
 
-        String errorJson = tool.executeJexl("testService.throwIllegalArgument()");
-        assertTrue(errorJson.contains("File does not exist: missing.txt"));
-        assertNotNull(capturedEvent.get());
+        assertTrue(
+                tool.executeJexl("testService.throwIllegalArgument()")
+                        .contains("File does not exist: missing.txt"));
         assertFalse(capturedEvent.get().success());
         assertEquals("File does not exist: missing.txt", capturedEvent.get().error());
 
@@ -408,9 +312,7 @@ public class JexlToolTest {
             assertThrows(
                     CancellationException.class,
                     () -> tool.executeJexl("testService.throwClosedByInterrupt()"));
-            assertTrue(
-                    Thread.currentThread().isInterrupted(),
-                    "Interrupt flag should be restored when service throws ClosedByInterruptException");
+            assertTrue(Thread.currentThread().isInterrupted());
         } finally {
             Thread.interrupted();
         }

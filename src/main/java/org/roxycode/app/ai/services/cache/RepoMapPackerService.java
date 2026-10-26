@@ -30,14 +30,22 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
- * Service to generate a token-optimized map of the repository. Uses ripgrep for tree generation and
- * ctags for skeletonization. Implements lazy evaluation to avoid redundant processing.
+ * Service to generate a token-optimized map of the repository. Uses ripgrep for file discovery and
+ * ctags for source-only skeletonization. Implements lazy evaluation to avoid redundant processing.
  */
 @Service
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
     static final int CTAGS_BATCH_SIZE = 100;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
+    private static final char LF = '\n';
+    private static final char SLASH = '/';
+    private static final char BACKSLASH = '\\';
+    static final Set<String> SOURCE_EXTENSIONS =
+            Set.of(
+                    "java", "py", "ts", "tsx", "js", "jsx", "go", "rs", "c", "cpp", "cc", "cxx",
+                    "h", "hpp", "cs", "rb", "php", "kt", "kts", "swift", "scala");
+    static final Set<String> IGNORED_TAG_KINDS = Set.of("package", "namespace", "import");
     private static final Set<String> KNOWN_BINARY_EXTENSIONS =
             Set.of(
                     "png",
@@ -225,14 +233,12 @@ public class RepoMapPackerService {
                 }
             }
         }
+        files.sort(Comparator.naturalOrder());
 
         prefetchMissingSkeletons(root, files);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("# Repo Map Snapshot\n\n");
-        sb.append("## Project Tree\n\n```\n");
-        sb.append(FileTreeFormatter.format(files));
-        sb.append("\n```\n\n");
+        sb.append("# Repo Map Snapshot").append(LF);
 
         for (String relPath : files) {
             ExceptionUtils.checkInterrupted("Repo map generation cancelled");
@@ -240,16 +246,17 @@ public class RepoMapPackerService {
             if (!Files.isRegularFile(filePath)) {
                 continue;
             }
-            try {
-                String skeleton = getSkeleton(filePath);
-                if (skeleton != null && !skeleton.isBlank()) {
-                    sb.append("--- ").append(relPath).append(" ---\n");
-                    sb.append(skeleton);
-                    sb.append("\n\n");
+            sb.append(relPath).append(LF);
+            if (shouldGenerateSkeleton(relPath)) {
+                try {
+                    String skeleton = getSkeleton(filePath);
+                    if (skeleton != null && !skeleton.isBlank()) {
+                        sb.append(skeleton);
+                    }
+                } catch (Exception e) {
+                    ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
+                    log.warn("Error processing file {}: {}", relPath, e.getMessage());
                 }
-            } catch (Exception e) {
-                ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-                log.warn("Error processing file {}: {}", relPath, e.getMessage());
             }
         }
 
@@ -269,10 +276,65 @@ public class RepoMapPackerService {
         return new EditorResult(true, generatedMap, null);
     }
 
+    static boolean isSourceFile(String relPath) {
+        if (relPath == null || relPath.isBlank()) {
+            return false;
+        }
+        String normalized = relPath.replace(BACKSLASH, SLASH);
+        int slashIdx = normalized.lastIndexOf(SLASH);
+        String fileName = slashIdx >= 0 ? normalized.substring(slashIdx + 1) : normalized;
+        int dotIdx = fileName.lastIndexOf('.');
+        if (dotIdx <= 0 || dotIdx == fileName.length() - 1) {
+            return false;
+        }
+        String ext = fileName.substring(dotIdx + 1).toLowerCase(Locale.ROOT);
+        return SOURCE_EXTENSIONS.contains(ext);
+    }
+
+    static boolean isTestFile(String relPath) {
+        if (relPath == null || relPath.isBlank()) {
+            return false;
+        }
+        String normalized = relPath.replace(BACKSLASH, SLASH);
+        if (normalized.startsWith("src/test/")
+                || normalized.contains("/src/test/")
+                || normalized.startsWith("test/")
+                || normalized.contains("/test/")
+                || normalized.startsWith("tests/")
+                || normalized.contains("/tests/")
+                || normalized.startsWith("__tests__/")
+                || normalized.contains("/__tests__/")) {
+            return true;
+        }
+        int slashIdx = normalized.lastIndexOf(SLASH);
+        String fileName = slashIdx >= 0 ? normalized.substring(slashIdx + 1) : normalized;
+        return fileName.endsWith("Test.java")
+                || fileName.endsWith("Tests.java")
+                || fileName.endsWith("IT.java")
+                || (fileName.startsWith("test_") && fileName.endsWith(".py"))
+                || fileName.endsWith("_test.py")
+                || fileName.endsWith("_test.go")
+                || fileName.endsWith(".test.ts")
+                || fileName.endsWith(".spec.ts")
+                || fileName.endsWith(".test.tsx")
+                || fileName.endsWith(".spec.tsx")
+                || fileName.endsWith(".test.js")
+                || fileName.endsWith(".spec.js")
+                || fileName.endsWith(".test.jsx")
+                || fileName.endsWith(".spec.jsx");
+    }
+
+    static boolean shouldGenerateSkeleton(String relPath) {
+        return isSourceFile(relPath) && !isTestFile(relPath);
+    }
+
     private void prefetchMissingSkeletons(Path root, List<String> relativeFiles) {
         List<FileStat> uncached = new ArrayList<>();
         for (String relPath : relativeFiles) {
             ExceptionUtils.checkInterrupted("Repo map generation cancelled");
+            if (!shouldGenerateSkeleton(relPath)) {
+                continue;
+            }
             Path filePath = root.resolve(relPath).toAbsolutePath().normalize();
             if (!Files.isRegularFile(filePath)) {
                 continue;
@@ -331,6 +393,12 @@ public class RepoMapPackerService {
                     }
                     try {
                         JsonNode node = objectMapper.readTree(line);
+                        JsonNode kindNode = node.get("kind");
+                        if (kindNode != null
+                                && IGNORED_TAG_KINDS.contains(
+                                        kindNode.asText().toLowerCase(Locale.ROOT))) {
+                            continue;
+                        }
                         JsonNode nameNode = node.get("name");
                         JsonNode lineNode = node.get("line");
                         if (nameNode != null && lineNode != null) {
@@ -418,10 +486,11 @@ public class RepoMapPackerService {
             int lastLine = -1;
             for (Tag tag : tags) {
                 if (tag.line > 0 && tag.line <= lines.size() && tag.line != lastLine) {
-                    skeleton.append(tag.line)
+                    skeleton.append("  ")
+                            .append(tag.line)
                             .append(": ")
                             .append(lines.get(tag.line - 1).trim())
-                            .append('\n');
+                            .append(LF);
                     lastLine = tag.line;
                 }
             }

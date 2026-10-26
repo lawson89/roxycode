@@ -1,10 +1,7 @@
 package org.roxycode.app.ai.services.cache;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -12,12 +9,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -36,11 +33,25 @@ class RepoMapPackerServiceTest {
 
     @BeforeEach
     void setUp() {
-        projectService = Mockito.mock(ProjectService.class);
+        projectService = mock(ProjectService.class);
         objectMapper = new ObjectMapper();
-        grepService = Mockito.mock(GrepService.class);
-        metaService = Mockito.mock(ProjectCacheMetaService.class);
+        grepService = mock(GrepService.class);
+        metaService = mock(ProjectCacheMetaService.class);
         service = new RepoMapPackerService(projectService, objectMapper, grepService, metaService);
+        lenient().when(projectService.hasActiveProject()).thenReturn(true);
+        lenient().when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+    }
+
+    private String ctagsLine(String name, String path, int line) throws IOException {
+        return objectMapper.writeValueAsString(Map.of("name", name, "path", path, "line", line))
+                + "\n";
+    }
+
+    private String ctagsLineWithKind(String name, String path, int line, String kind)
+            throws IOException {
+        return objectMapper.writeValueAsString(
+                        Map.of("name", name, "path", path, "line", line, "kind", kind))
+                + "\n";
     }
 
     @Test
@@ -52,99 +63,177 @@ class RepoMapPackerServiceTest {
     }
 
     @Test
-    void testSmallCodeFilesUseSkeletonsAndNoSkeletonFilesAreOmittedFromSections()
+    void testUnifiedFlatSortedOutputSourceOnlySkeletonsAndBoilerplateFiltering()
             throws IOException {
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-
         String nl = System.lineSeparator();
-        Path smallJava = tempDir.resolve("SmallService.java");
+        Path srcDir = tempDir.resolve("src/main/java/demo");
+        Path testDir = tempDir.resolve("src/test/java/demo");
+        Files.createDirectories(srcDir);
+        Files.createDirectories(testDir);
+
+        Path smallJava =
+                Files.writeString(
+                        srcDir.resolve("SmallService.java"),
+                        String.join(
+                                nl,
+                                "package demo;",
+                                "import java.util.List;",
+                                "public class SmallService {",
+                                "    private int secretBodyLine = 42;",
+                                "    public void execute() {}",
+                                "}",
+                                ""));
         Files.writeString(
-                smallJava,
-                "package demo;"
-                        + nl
-                        + "public class SmallService {"
-                        + nl
-                        + "    private int secretBodyLine = 42;"
-                        + nl
-                        + "    public void execute() {}"
-                        + nl
-                        + "}"
-                        + nl);
+                testDir.resolve("SmallServiceTest.java"),
+                "package demo;\nclass SmallServiceTest { void testIt() {} }\n");
+        Files.writeString(
+                tempDir.resolve("README.md"), "# Project Title" + nl + "Some markdown prose");
+        Files.writeString(tempDir.resolve("pom.xml"), "<project><groupId>demo</groupId></project>");
+        Files.writeString(srcDir.resolve("Empty.java"), "");
 
-        Path readme = tempDir.resolve("README.md");
-        Files.writeString(readme, "# Project Title" + nl + "Some markdown prose");
-
-        Path emptyFile = tempDir.resolve("Empty.java");
-        Files.writeString(emptyFile, "");
-
+        // Return unsorted list to verify lexicographical sorting
         when(grepService.listFiles(null))
-                .thenReturn(List.of("SmallService.java", "README.md", "Empty.java"));
+                .thenReturn(
+                        List.of(
+                                "src/test/java/demo/SmallServiceTest.java",
+                                "src/main/java/demo/SmallService.java",
+                                "pom.xml",
+                                "README.md",
+                                "src/main/java/demo/Empty.java"));
 
         List<List<String>> ctagsCommands = new ArrayList<>();
         service.setCtagsRunner(
                 cmd -> {
                     ctagsCommands.add(cmd);
-                    String line1 =
-                            objectMapper.writeValueAsString(
-                                    java.util.Map.of(
-                                            "name",
-                                            "SmallService",
-                                            "path",
-                                            smallJava.toString(),
-                                            "line",
-                                            2));
-                    String line2 =
-                            objectMapper.writeValueAsString(
-                                    java.util.Map.of(
-                                            "name",
-                                            "execute",
-                                            "path",
-                                            smallJava.toString(),
-                                            "line",
-                                            4));
-                    return new ProcessResult(0, line1 + nl + line2 + nl, "", false);
+                    return new ProcessResult(
+                            0,
+                            ctagsLineWithKind("demo", smallJava.toString(), 1, "package")
+                                    + ctagsLineWithKind("List", smallJava.toString(), 2, "import")
+                                    + ctagsLineWithKind("ns", smallJava.toString(), 1, "namespace")
+                                    + ctagsLineWithKind(
+                                            "SmallService", smallJava.toString(), 3, "class")
+                                    + ctagsLineWithKind(
+                                            "execute", smallJava.toString(), 5, "method"),
+                            "",
+                            false);
                 });
 
         EditorResult result = service.generateRepoMap();
         assertTrue(result.success());
         String content = result.content();
 
-        assertTrue(content.contains("# Repo Map Snapshot"));
-        assertTrue(content.contains("## Project Tree"));
-        // All non-binary files appear in the Project Tree
-        assertTrue(content.contains("SmallService.java"));
-        assertTrue(content.contains("README.md"));
-        assertTrue(content.contains("Empty.java"));
+        String expectedMap =
+                String.join(
+                        "\n",
+                        "# Repo Map Snapshot",
+                        "README.md",
+                        "pom.xml",
+                        "src/main/java/demo/Empty.java",
+                        "src/main/java/demo/SmallService.java",
+                        "  3: public class SmallService {",
+                        "  5: public void execute() {}",
+                        "src/test/java/demo/SmallServiceTest.java",
+                        "");
+        assertEquals(expectedMap, content);
 
-        // Small (< 2KB) Java file uses ctags skeleton rather than raw content dump
-        assertTrue(content.contains("--- SmallService.java ---"));
-        assertTrue(content.contains("2: public class SmallService {"));
-        assertTrue(content.contains("4: public void execute() {}"));
-        assertFalse(
-                content.contains("secretBodyLine"),
-                "Small file should use ctags skeleton and not dump raw non-skeleton lines");
+        for (String forbidden :
+                List.of(
+                        "## Project Tree",
+                        "--- ",
+                        "1: package demo;",
+                        "2: import java.util.List;",
+                        "secretBodyLine",
+                        "Some markdown prose",
+                        "testIt")) {
+            assertFalse(content.contains(forbidden), "Should not contain: " + forbidden);
+        }
 
-        // Files without skeletons (README.md, Empty.java) must not emit per-file blocks or omitted
-        // notices
-        assertFalse(
-                content.contains("--- README.md ---"),
-                "Files without skeletons must not emit a per-file section");
-        assertFalse(content.contains("Some markdown prose"));
-        assertFalse(content.contains("--- Empty.java ---"));
-        assertFalse(content.contains("Full content omitted"));
-
-        // Empty 0-byte file should not be passed to ctags
+        // Only SmallService.java should be passed to ctags (not README.md, pom.xml, Empty.java, or
+        // SmallServiceTest.java)
         assertEquals(1, ctagsCommands.size());
-        assertFalse(
-                ctagsCommands.get(0).stream().anyMatch(arg -> arg.endsWith("Empty.java")),
-                "0-byte files should be skipped during ctags prefetch");
+        assertEquals(6, ctagsCommands.get(0).size());
+        assertTrue(ctagsCommands.get(0).get(5).endsWith("SmallService.java"));
+    }
+
+    @Test
+    void testSourceAndTestClassificationHelpers() {
+        for (String src :
+                List.of(
+                        "src/main/java/App.java",
+                        "app/main.py",
+                        "web/index.ts",
+                        "web/Component.tsx",
+                        "web/script.js",
+                        "web/View.jsx",
+                        "cmd/server.go",
+                        "src/lib.rs",
+                        "native/core.c",
+                        "native/core.cpp",
+                        "native/core.h",
+                        "native/core.hpp",
+                        "Program.cs",
+                        "app.rb",
+                        "index.php",
+                        "Main.kt",
+                        "build.gradle.kts",
+                        "App.swift",
+                        "Main.scala")) {
+            assertTrue(RepoMapPackerService.isSourceFile(src), "Expected source: " + src);
+            assertTrue(
+                    RepoMapPackerService.shouldGenerateSkeleton(src), "Expected skeleton: " + src);
+        }
+
+        for (String nonSrc :
+                List.of(
+                        "README.md",
+                        "pom.xml",
+                        "settings.toml",
+                        "application.properties",
+                        "styles.css",
+                        "package.json",
+                        "config.yml",
+                        "config.yaml",
+                        "mvnw",
+                        "LICENSE",
+                        "")) {
+            assertFalse(
+                    RepoMapPackerService.isSourceFile(nonSrc), "Expected non-source: " + nonSrc);
+            assertFalse(RepoMapPackerService.shouldGenerateSkeleton(nonSrc));
+        }
+        assertFalse(RepoMapPackerService.isSourceFile(null));
+
+        for (String testPath :
+                List.of(
+                        "src/test/java/org/roxycode/Helper.java",
+                        "module/src/test/java/Helper.java",
+                        "test/unit/helper.py",
+                        "pkg/test/helper.go",
+                        "tests/integration/run.py",
+                        "app/tests/run.py",
+                        "__tests__/App.tsx",
+                        "src/__tests__/App.tsx",
+                        "src/main/java/MyTest.java",
+                        "src/main/java/MyTests.java",
+                        "src/main/java/MyIT.java",
+                        "src/test_runner.py",
+                        "src/runner_test.py",
+                        "pkg/server_test.go",
+                        "src/app.test.ts",
+                        "src/app.spec.ts",
+                        "src/app.test.js",
+                        "src/app.spec.js")) {
+            assertTrue(
+                    RepoMapPackerService.isTestFile(testPath), "Expected test file: " + testPath);
+            assertFalse(
+                    RepoMapPackerService.shouldGenerateSkeleton(testPath),
+                    "Expected no skeleton for test: " + testPath);
+        }
+        assertFalse(RepoMapPackerService.isTestFile("src/main/java/ContestService.java"));
+        assertFalse(RepoMapPackerService.isTestFile(null));
     }
 
     @Test
     void testLoadsPersistedRepoCacheOnStartupAndInvalidatesOnFileChanged() throws IOException {
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         when(metaService.loadRepoCache()).thenReturn(Optional.of("# Persisted Repo Map"));
 
         EditorResult firstResult = service.generateRepoMap();
@@ -152,37 +241,20 @@ class RepoMapPackerServiceTest {
         assertEquals("# Persisted Repo Map", firstResult.content());
         verify(grepService, never()).listFiles(null);
 
-        // File change invalidates persisted cache eligibility and triggers fresh generation
-        Path testFile = tempDir.resolve("Fresh.java");
-        Files.writeString(testFile, "public class Fresh {}\n");
+        Path testFile = Files.writeString(tempDir.resolve("Fresh.java"), "public class Fresh {}\n");
         when(grepService.listFiles(null)).thenReturn(List.of("Fresh.java"));
         service.setCtagsRunner(
-                cmd ->
-                        new ProcessResult(
-                                0,
-                                objectMapper.writeValueAsString(
-                                                java.util.Map.of(
-                                                        "name",
-                                                        "Fresh",
-                                                        "path",
-                                                        testFile.toString(),
-                                                        "line",
-                                                        1))
-                                        + "\n",
-                                "",
-                                false));
+                cmd -> new ProcessResult(0, ctagsLine("Fresh", testFile.toString(), 1), "", false));
 
         service.handleFileChanged(new FileChangedEvent("Fresh.java"));
         EditorResult secondResult = service.generateRepoMap();
         assertTrue(secondResult.success());
-        assertTrue(secondResult.content().contains("1: public class Fresh {}"));
+        assertTrue(secondResult.content().contains("Fresh.java\n  1: public class Fresh {}"));
         verify(grepService, times(1)).listFiles(null);
     }
 
     @Test
     void testBatchedCtagsExecutionAndPerFileSkeletonCache() throws IOException {
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         when(metaService.loadRepoCache()).thenReturn(Optional.empty());
 
         Path largeA = tempDir.resolve("LargeA.java");
@@ -200,51 +272,32 @@ class RepoMapPackerServiceTest {
                     ctagsCommands.add(cmd);
                     StringBuilder jsonOut = new StringBuilder();
                     for (int i = 5; i < cmd.size(); i++) {
-                        jsonOut.append(
-                                        objectMapper.writeValueAsString(
-                                                java.util.Map.of(
-                                                        "name",
-                                                        "Cls",
-                                                        "path",
-                                                        cmd.get(i),
-                                                        "line",
-                                                        1)))
-                                .append(nl);
+                        jsonOut.append(ctagsLine("Cls", cmd.get(i), 1));
                     }
                     return new ProcessResult(0, jsonOut.toString(), "", false);
                 });
 
         EditorResult first = service.generateRepoMap();
         assertTrue(first.success());
-        assertTrue(first.content().contains("1: public class LargeA {"));
-        assertTrue(first.content().contains("1: public class LargeB {"));
-        assertEquals(
-                1,
-                ctagsCommands.size(),
-                "Multiple uncached files should be processed in a single batched ctags call");
+        assertTrue(first.content().contains("  1: public class LargeA {"));
+        assertTrue(first.content().contains("  1: public class LargeB {"));
+        assertEquals(1, ctagsCommands.size());
         assertEquals(7, ctagsCommands.get(0).size());
 
-        // Modify only LargeA.java and fire FileChangedEvent
         Files.writeString(largeA, "public class LargeAUpdated {" + nl + padding + "}" + nl);
         service.handleFileChanged(new FileChangedEvent("LargeA.java"));
 
         EditorResult second = service.generateRepoMap();
         assertTrue(second.success());
-        assertTrue(second.content().contains("1: public class LargeAUpdated {"));
-        assertTrue(second.content().contains("1: public class LargeB {"));
-        assertEquals(
-                2,
-                ctagsCommands.size(),
-                "Second generation should only invoke ctags for the modified file while reusing cached skeleton for LargeB.java");
+        assertTrue(second.content().contains("  1: public class LargeAUpdated {"));
+        assertTrue(second.content().contains("  1: public class LargeB {"));
+        assertEquals(2, ctagsCommands.size());
         assertEquals(6, ctagsCommands.get(1).size());
         assertTrue(ctagsCommands.get(1).get(5).endsWith("LargeA.java"));
     }
 
     @Test
     void testExcludeBinaryFilesAndKnownBinaryExtensionsFastPath() throws IOException {
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-
         assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("logo.PNG")));
         assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("lib/app.jar")));
         assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("archive.tar.gz")));
@@ -252,61 +305,33 @@ class RepoMapPackerServiceTest {
         assertFalse(RepoMapPackerService.hasKnownBinaryExtension(Path.of("Makefile")));
         assertFalse(RepoMapPackerService.hasKnownBinaryExtension(null));
 
-        // Create a text file
-        Path textFile = tempDir.resolve("test.txt");
-        Files.writeString(textFile, "Hello Text");
-
-        // Create a binary file with an unknown extension (contains NUL byte, exercises fallback)
-        Path unknownBinaryFile = tempDir.resolve("custom.dat");
-        Files.write(unknownBinaryFile, new byte[] {0, 1, 2, 3});
-
-        // Known binary extension file (does not even need to be read from disk)
+        Files.writeString(tempDir.resolve("test.txt"), "Hello Text");
+        Files.write(tempDir.resolve("custom.dat"), new byte[] {0, 1, 2, 3});
         when(grepService.listFiles(null))
                 .thenReturn(List.of("test.txt", "custom.dat", "assets/icon.png", "dist/app.jar"));
 
         EditorResult result = service.generateRepoMap();
         assertTrue(result.success());
         assertTrue(result.content().contains("test.txt"));
-        assertFalse(result.content().contains("custom.dat"), "NUL-byte file should be excluded");
-        assertFalse(
-                result.content().contains("icon.png"),
-                "Known binary extension .png should be excluded");
-        assertFalse(
-                result.content().contains("app.jar"),
-                "Known binary extension .jar should be excluded");
+        assertFalse(result.content().contains("custom.dat"));
+        assertFalse(result.content().contains("icon.png"));
+        assertFalse(result.content().contains("app.jar"));
     }
 
     @Test
     void testConcurrentInvalidationDuringGenerationDoesNotCacheStaleMap() throws IOException {
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-
-        Path testFile = tempDir.resolve("Versioned.java");
-        Files.writeString(testFile, "public class Version1 {}\n");
-
+        Path testFile =
+                Files.writeString(tempDir.resolve("Versioned.java"), "public class Version1 {}\n");
         service.setCtagsRunner(
                 cmd ->
                         new ProcessResult(
-                                0,
-                                objectMapper.writeValueAsString(
-                                                java.util.Map.of(
-                                                        "name",
-                                                        "Versioned",
-                                                        "path",
-                                                        testFile.toString(),
-                                                        "line",
-                                                        1))
-                                        + "\n",
-                                "",
-                                false));
+                                0, ctagsLine("Versioned", testFile.toString(), 1), "", false));
 
         AtomicBoolean invalidateDuringList = new AtomicBoolean(true);
         when(grepService.listFiles(null))
                 .thenAnswer(
                         invocation -> {
                             if (invalidateDuringList.compareAndSet(true, false)) {
-                                // Simulate a concurrent FileChangedEvent while generateRepoMap() is
-                                // mid-execution
                                 service.handleFileChanged(new FileChangedEvent("Versioned.java"));
                             }
                             return List.of("Versioned.java");
@@ -314,20 +339,17 @@ class RepoMapPackerServiceTest {
 
         EditorResult firstResult = service.generateRepoMap();
         assertTrue(firstResult.success());
-        assertTrue(firstResult.content().contains("1: public class Version1 {}"));
-        // Stale generation must not be persisted to metaService
-        verify(metaService, never()).saveRepoCache(Mockito.anyString());
+        assertTrue(firstResult.content().contains("  1: public class Version1 {}"));
+        verify(metaService, never()).saveRepoCache(anyString());
 
-        // Update file content; next call must regenerate instead of returning stale cache
         Files.writeString(testFile, "public class Version2 {}\n");
         service.handleFileChanged(new FileChangedEvent("Versioned.java"));
         EditorResult secondResult = service.generateRepoMap();
         assertTrue(secondResult.success());
-        assertTrue(secondResult.content().contains("1: public class Version2 {}"));
+        assertTrue(secondResult.content().contains("  1: public class Version2 {}"));
         verify(grepService, times(2)).listFiles(null);
         verify(metaService, times(1)).saveRepoCache(secondResult.content());
 
-        // Third call without invalidation should use the cached map
         EditorResult thirdResult = service.generateRepoMap();
         assertTrue(thirdResult.success());
         assertEquals(secondResult.content(), thirdResult.content());

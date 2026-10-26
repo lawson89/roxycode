@@ -46,26 +46,41 @@ class MentorModeIntegrationTest {
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ExploreChatPanel exploreChatPanel =
-                new ExploreChatPanel(
-                        aiService, planService, eventPublisher, chatMemory, settingsService, null);
-        FeatureChatPanel featureChatPanel =
-                new FeatureChatPanel(
-                        aiService, planService, eventPublisher, chatMemory, settingsService, null);
-
-        qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel);
-        PlanPanel planPanel = new PlanPanel(planService, gitService);
-        taskWorkspacePanel = new TaskWorkspacePanel(featureChatPanel, planService, planPanel);
+        qaWorkspacePanel =
+                new QaWorkspacePanel(
+                        new ExploreChatPanel(
+                                aiService,
+                                planService,
+                                eventPublisher,
+                                chatMemory,
+                                settingsService,
+                                null));
+        taskWorkspacePanel =
+                new TaskWorkspacePanel(
+                        new FeatureChatPanel(
+                                aiService,
+                                planService,
+                                eventPublisher,
+                                chatMemory,
+                                settingsService,
+                                null),
+                        planService,
+                        new PlanPanel(planService, gitService));
 
         sidebar = new SidebarPanel(card -> {});
         qaWorkspacePanel.bindSidebar(sidebar);
         taskWorkspacePanel.bindSidebar(sidebar);
     }
 
+    private static ImplementationPlan planWithTitle(String title) {
+        return new ImplementationPlan(
+                title, "Goal", List.of(), List.of(), false, null, null, null, List.of());
+    }
+
     @Test
     void testWorkspaceBarsLocatedInRespectiveViews() {
         JTabbedPane qaTabs = qaWorkspacePanel.getQaTabs();
-        assertEquals(1, qaTabs.getTabCount(), "QA workspace should only have the Chat tab");
+        assertEquals(1, qaTabs.getTabCount());
         assertEquals("Chat", qaTabs.getTitleAt(0));
         assertEquals(
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
@@ -74,23 +89,17 @@ class MentorModeIntegrationTest {
                 (JPanel)
                         qaTabs.getClientProperty(
                                 FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT);
-        assertNotNull(qaHeaderBar);
         assertSame(qaWorkspacePanel.getQaHeaderBar(), qaHeaderBar);
         JLabel mentorModeLabel = (JLabel) qaHeaderBar.getComponent(0);
         assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
-        assertFalse(
-                mentorModeLabel.isOpaque(),
-                "mentorModeLabel should not be opaque so pill badge renders cleanly");
+        assertFalse(mentorModeLabel.isOpaque());
         String mentorStyle = (String) mentorModeLabel.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(mentorStyle);
-        assertTrue(mentorStyle.contains("arc: 12"));
-        assertTrue(mentorStyle.contains("border: 3,10,3,10"));
+        assertTrue(mentorStyle.contains("arc: 12") && mentorStyle.contains("border: 3,10,3,10"));
 
         JPanel progressTracker = taskWorkspacePanel.getProgressTracker();
         JLabel planLabel = taskWorkspacePanel.getPlanLabel();
         JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
-        assertEquals(
-                2, taskTabs.getTabCount(), "Task workspace should only have Chat and Plan tabs");
+        assertEquals(2, taskTabs.getTabCount());
         assertEquals("Chat", taskTabs.getTitleAt(0));
         assertEquals("Plan", taskTabs.getTitleAt(1));
         assertEquals(
@@ -101,65 +110,27 @@ class MentorModeIntegrationTest {
                 taskHeaderBar,
                 taskTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT));
         assertSame(taskWorkspacePanel.getTopBar(), taskHeaderBar);
-        assertSame(
-                taskHeaderBar,
-                planLabel.getParent(),
-                "planLabel and progressTracker should share taskHeaderBar");
-        assertEquals(
-                0,
-                taskHeaderBar.getComponentZOrder(progressTracker),
-                "progressTracker should precede planLabel");
-        assertEquals(
-                1,
-                taskHeaderBar.getComponentZOrder(planLabel),
-                "planLabel should sit to the right of progressTracker");
+        assertSame(taskHeaderBar, planLabel.getParent());
+        assertEquals(0, taskHeaderBar.getComponentZOrder(progressTracker));
+        assertEquals(1, taskHeaderBar.getComponentZOrder(planLabel));
 
-        assertEquals(
-                5,
-                progressTracker.getComponentCount(),
-                "Progress tracker should have 3 indicators and 2 wizard connector lines");
+        assertEquals(5, progressTracker.getComponentCount());
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(0));
         assertFalse(progressTracker.getComponent(1) instanceof WorkflowPhaseIndicator);
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(2));
         assertFalse(progressTracker.getComponent(3) instanceof WorkflowPhaseIndicator);
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(4));
 
-        ImplementationPlan mockPlan =
-                new ImplementationPlan(
-                        "My Feature Plan",
-                        "Goal",
-                        List.of(),
-                        List.of(),
-                        false,
-                        null,
-                        null,
-                        null,
-                        List.of());
-        when(planService.getCurrentPlan()).thenReturn(mockPlan);
-
+        when(planService.getCurrentPlan()).thenReturn(planWithTitle("My Feature Plan"));
         taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
-
         assertTrue(planLabel.isVisible());
         assertEquals("MY FEATURE PLAN", planLabel.getText());
         assertEquals("My Feature Plan", planLabel.getToolTipText());
 
         String longTitle =
                 "Consolidate EDT dispatch with Edt.run, clean up ProcessRunner buffers, and standardize PromptService I/O exceptions";
-        ImplementationPlan longPlan =
-                new ImplementationPlan(
-                        "  " + longTitle + "  ",
-                        "Goal",
-                        List.of(),
-                        List.of(),
-                        false,
-                        null,
-                        null,
-                        null,
-                        List.of());
-        when(planService.getCurrentPlan()).thenReturn(longPlan);
-
+        when(planService.getCurrentPlan()).thenReturn(planWithTitle("  " + longTitle + "  "));
         taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
-
         assertTrue(planLabel.isVisible());
         assertEquals(
                 longTitle.toUpperCase(Locale.ROOT).substring(0, 37) + "...", planLabel.getText());
@@ -168,7 +139,6 @@ class MentorModeIntegrationTest {
 
         when(planService.getCurrentPlan()).thenReturn(null);
         taskWorkspacePanel.updateActivePhase(WorkflowPhase.PLAN);
-
         assertFalse(planLabel.isVisible());
         assertEquals("", planLabel.getText());
         assertNull(planLabel.getToolTipText());
@@ -182,31 +152,20 @@ class MentorModeIntegrationTest {
 
         qaChatPanel.getInputArea().setText("QA draft message");
         qaChatPanel.getInputArea().setCaretPosition(0);
-
         taskChatPanel.getInputArea().setText("Task draft message");
         taskChatPanel.getInputArea().setCaretPosition(0);
-
         taskTabs.setSelectedIndex(1);
 
         taskWorkspacePanel.onViewShown();
         SwingUtilities.invokeAndWait(() -> {});
 
+        assertEquals(taskChatPanel, taskTabs.getSelectedComponent());
         assertEquals(
-                taskChatPanel,
-                taskTabs.getSelectedComponent(),
-                "Chat tab should be selected in TASK_VIEW");
-        assertEquals(
-                "Task draft message".length(),
-                taskChatPanel.getInputArea().getCaretPosition(),
-                "Task input caret should be at the end of the text");
+                "Task draft message".length(), taskChatPanel.getInputArea().getCaretPosition());
 
         qaWorkspacePanel.focusChatInput();
         SwingUtilities.invokeAndWait(() -> {});
-
-        assertEquals(
-                "QA draft message".length(),
-                qaChatPanel.getInputArea().getCaretPosition(),
-                "QA input caret should be at the end of the text");
+        assertEquals("QA draft message".length(), qaChatPanel.getInputArea().getCaretPosition());
     }
 
     @Test
@@ -217,52 +176,32 @@ class MentorModeIntegrationTest {
                 new WorkflowTransitionEvent(
                         WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code", false));
         SwingUtilities.invokeAndWait(() -> {});
-        assertTrue(
-                sidebar.isTaskWaitingApproval(),
-                "Sidebar should show waiting approval when transition is requested");
+        assertTrue(sidebar.isTaskWaitingApproval());
 
         when(planService.getPendingPhase()).thenReturn(null);
         taskWorkspacePanel.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
         SwingUtilities.invokeAndWait(() -> {});
-        assertFalse(
-                sidebar.isTaskWaitingApproval(),
-                "Sidebar waiting approval should clear when pending phase is null on phase change");
+        assertFalse(sidebar.isTaskWaitingApproval());
 
         assertFalse(sidebar.isQaBusy());
         assertFalse(sidebar.isTaskBusy());
 
         qaWorkspacePanel.getQaChatPanel().setLoading(true);
-        assertTrue(
-                sidebar.isQaBusy(),
-                "Sidebar Codebase Q&A button should show busy indicator when Q&A chat is loading");
+        assertTrue(sidebar.isQaBusy());
         assertFalse(sidebar.isTaskBusy());
 
         qaWorkspacePanel.getQaChatPanel().setLoading(false);
-        assertFalse(
-                sidebar.isQaBusy(),
-                "Sidebar Codebase Q&A button should clear busy indicator when Q&A chat finishes loading");
+        assertFalse(sidebar.isQaBusy());
 
         taskWorkspacePanel.getTaskChatPanel().setLoading(true);
-        assertTrue(
-                sidebar.isTaskBusy(),
-                "Sidebar Feature Request button should show busy indicator when task chat is loading");
+        assertTrue(sidebar.isTaskBusy());
         taskWorkspacePanel.getTaskChatPanel().setLoading(false);
         assertFalse(sidebar.isTaskBusy());
     }
 
     @Test
     void testOnPhaseChangedAndOnPlanUpdatedOffEdtDispatchToEdt() throws Exception {
-        ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Off EDT Plan",
-                        "Goal",
-                        List.of(),
-                        List.of(),
-                        false,
-                        null,
-                        null,
-                        null,
-                        List.of());
+        ImplementationPlan plan = planWithTitle("Off EDT Plan");
         when(planService.getCurrentPlan()).thenReturn(plan);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
@@ -276,7 +215,6 @@ class MentorModeIntegrationTest {
                         });
         bgThread.start();
         bgThread.join();
-
         SwingUtilities.invokeAndWait(() -> {});
 
         assertTrue(taskWorkspacePanel.getPlanLabel().isVisible());

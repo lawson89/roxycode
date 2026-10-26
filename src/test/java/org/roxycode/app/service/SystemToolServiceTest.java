@@ -21,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
+import org.roxycode.app.service.SystemToolService.DockerProbe;
 import org.roxycode.app.service.SystemToolService.DockerVersionInfo;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.dockerclient.DockerClientProviderStrategy;
@@ -28,6 +29,25 @@ import org.testcontainers.dockerclient.DockerClientProviderStrategy;
 class SystemToolServiceTest {
 
     @TempDir Path tempDir;
+
+    private static SystemTool assertDockerTool(
+            DockerProbe probe,
+            boolean cliPresent,
+            String expectedStatus,
+            boolean expectedAvailable) {
+        SystemToolService service = new SystemToolService(probe, () -> cliPresent);
+        SystemTool dockerTool = service.detectDockerTool();
+        assertEquals("Docker", dockerTool.name());
+        assertEquals(expectedStatus, dockerTool.status());
+        assertEquals(expectedAvailable, service.checkDockerAvailable());
+        return dockerTool;
+    }
+
+    private static Field accessibleField(String name) throws Exception {
+        Field f = DockerClientFactory.class.getDeclaredField(name);
+        f.setAccessible(true);
+        return f;
+    }
 
     @Test
     void testDetectToolsIncludesDockerAndJava() throws Exception {
@@ -38,15 +58,11 @@ class SystemToolServiceTest {
                         null,
                         () -> new DockerVersionInfo("27.0.3", "1.46"),
                         () -> true);
-        CompletableFuture<List<SystemTool>> future = service.detectTools();
-        List<SystemTool> tools = future.get();
+        List<SystemTool> tools = service.detectTools().get();
 
-        assertNotNull(tools);
         assertFalse(tools.isEmpty());
-
         assertTrue(tools.stream().anyMatch(t -> t.name().equals("Java")));
         assertTrue(tools.stream().anyMatch(t -> t.name().equals("Docker")));
-
         for (SystemTool tool : tools) {
             assertNotNull(tool.name());
             assertNotNull(tool.status());
@@ -55,73 +71,59 @@ class SystemToolServiceTest {
         }
 
         Boolean dockerAvailable = service.isDockerAvailable().get();
-        assertNotNull(dockerAvailable);
         assertEquals(service.checkDockerAvailable(), dockerAvailable);
     }
 
     @Test
     void testDetectDockerToolDetectedWithVersionAndApiVersion() {
-        SystemToolService service =
-                new SystemToolService(() -> new DockerVersionInfo("28.0.1", "1.48"), () -> true);
-
-        SystemTool dockerTool = service.detectDockerTool();
-        assertEquals("Docker", dockerTool.name());
-        assertEquals("Detected", dockerTool.status());
+        SystemTool dockerTool =
+                assertDockerTool(
+                        () -> new DockerVersionInfo("28.0.1", "1.48"), true, "Detected", true);
         assertEquals("Docker 28.0.1 (API 1.48)", dockerTool.version());
-        assertTrue(service.checkDockerAvailable());
     }
 
     @Test
     void testDetectDockerToolErrorOnApiVersionMismatchOrHandshakeFailure() {
-        SystemToolService service =
-                new SystemToolService(
+        SystemTool dockerTool =
+                assertDockerTool(
                         () -> {
                             throw new IllegalStateException(
                                     "Could not connect to Docker",
                                     new RuntimeException(
                                             "client version 1.32 is too old. Minimum supported API version is 1.44"));
                         },
-                        () -> false);
-
-        SystemTool dockerTool = service.detectDockerTool();
-        assertEquals("Docker", dockerTool.name());
-        assertEquals("Error", dockerTool.status());
+                        false,
+                        "Error",
+                        false);
         assertTrue(dockerTool.version().contains("client version 1.32 is too old"));
-        assertFalse(service.checkDockerAvailable());
     }
 
     @Test
     void testDetectDockerToolMissingWhenDockerNotInstalled() {
-        SystemToolService service =
-                new SystemToolService(
+        SystemTool dockerTool =
+                assertDockerTool(
                         () -> {
                             throw new IllegalStateException(
                                     "Could not find a valid Docker environment. Please see logs and check configuration");
                         },
-                        () -> false);
-
-        SystemTool dockerTool = service.detectDockerTool();
-        assertEquals("Docker", dockerTool.name());
-        assertEquals("Missing", dockerTool.status());
+                        false,
+                        "Missing",
+                        false);
         assertEquals("Not found", dockerTool.version());
-        assertFalse(service.checkDockerAvailable());
     }
 
     @Test
     void testDetectDockerToolErrorWhenCliPresentButTestcontainersCannotConnect() {
-        SystemToolService service =
-                new SystemToolService(
+        SystemTool dockerTool =
+                assertDockerTool(
                         () -> {
                             throw new IllegalStateException(
                                     "Could not find a valid Docker environment. Please see logs and check configuration");
                         },
-                        () -> true);
-
-        SystemTool dockerTool = service.detectDockerTool();
-        assertEquals("Docker", dockerTool.name());
-        assertEquals("Error", dockerTool.status());
+                        true,
+                        "Error",
+                        false);
         assertTrue(dockerTool.version().contains("Could not find a valid Docker environment"));
-        assertFalse(service.checkDockerAvailable());
     }
 
     @Test
@@ -157,21 +159,17 @@ class SystemToolServiceTest {
         assertFalse(service1.hasCachedTools());
         assertTrue(service1.getCachedTools().isEmpty());
 
-        // First detectTools() probes and persists to system-tools.toml
         List<SystemTool> firstResult = service1.detectTools().get(5, TimeUnit.SECONDS);
         assertEquals(1, probeCount.get());
         assertEquals(2, firstResult.size());
         assertTrue(service1.hasCachedTools());
         assertFalse(service1.checkDockerAvailable());
         assertFalse(service1.isDockerAvailable().get(5, TimeUnit.SECONDS));
-        assertEquals(1, probeCount.get(), "Cached calls must not re-probe");
+        assertEquals(1, probeCount.get());
         assertEquals(1, publishedEvents.size());
         assertFalse(publishedEvents.get(0).dockerAvailable());
+        assertTrue(Files.exists(tempDir.resolve(SystemToolService.SYSTEM_TOOLS_FILE)));
 
-        Path tomlFile = tempDir.resolve(SystemToolService.SYSTEM_TOOLS_FILE);
-        assertTrue(Files.exists(tomlFile), "system-tools.toml should be written to Roxy home dir");
-
-        // Second service instance pointing to the same directory loads from disk without probing
         AtomicInteger secondProbeCount = new AtomicInteger(0);
         SystemToolService service2 = new SystemToolService(settingsService, mapper, event -> {});
         service2.setToolProber(
@@ -180,15 +178,14 @@ class SystemToolServiceTest {
                     return List.of();
                 });
 
-        assertTrue(service2.hasCachedTools(), "Should detect cached tools on disk");
+        assertTrue(service2.hasCachedTools());
         List<SystemTool> diskLoaded = service2.getCachedTools();
         assertEquals(2, diskLoaded.size());
         assertEquals("2.45.1", diskLoaded.get(0).version());
-        assertEquals(0, secondProbeCount.get(), "Loading from disk must not invoke prober");
+        assertEquals(0, secondProbeCount.get());
         assertEquals(diskLoaded, service2.detectTools().get(5, TimeUnit.SECONDS));
         assertEquals(0, secondProbeCount.get());
 
-        // Forced refreshTools() re-probes, updates cache and disk, and publishes event
         List<SystemTool> refreshed = service1.refreshTools().get(5, TimeUnit.SECONDS);
         assertEquals(2, probeCount.get());
         assertEquals("2.45.2", refreshed.get(0).version());
@@ -222,38 +219,32 @@ class SystemToolServiceTest {
 
         CompletableFuture<List<SystemTool>> f2 = service.refreshTools();
         CompletableFuture<Boolean> dockerFuture = service.refreshDockerAvailable();
-
-        assertSame(f1, f2, "Concurrent refreshTools() calls should share the in-flight future");
+        assertSame(f1, f2);
 
         releaseProbe.countDown();
         assertEquals(1, f1.get(5, TimeUnit.SECONDS).size());
         assertEquals(1, f2.get(5, TimeUnit.SECONDS).size());
         assertTrue(dockerFuture.get(5, TimeUnit.SECONDS));
-        assertEquals(1, probeCount.get(), "Prober should only execute once for deduplicated calls");
+        assertEquals(1, probeCount.get());
     }
 
     @Test
     void testResetTestcontainersCachesAndProbeWithTestcontainersCleanup() throws Exception {
         DockerClientFactory factory = DockerClientFactory.instance();
-        Field failureField = DockerClientFactory.class.getDeclaredField("cachedClientFailure");
-        failureField.setAccessible(true);
-        Field clientField = DockerClientFactory.class.getDeclaredField("client");
-        clientField.setAccessible(true);
-        Field strategyField = DockerClientFactory.class.getDeclaredField("strategy");
-        strategyField.setAccessible(true);
+        Field failureField = accessibleField("cachedClientFailure");
+        Field clientField = accessibleField("client");
+        Field strategyField = accessibleField("strategy");
 
         Object origFailure = failureField.get(factory);
         Object origClient = clientField.get(factory);
         Object origStrategy = strategyField.get(factory);
 
         try {
-            // 1. Verify resetTestcontainersFailureCache() clears cachedClientFailure
             failureField.set(factory, new RuntimeException("latched failure"));
             assertNotNull(failureField.get(factory));
             SystemToolService.resetTestcontainersFailureCache();
             assertNull(failureField.get(factory));
 
-            // 2. Verify resetTestcontainersClientAndFailureCache() clears all three fields
             DockerClient mockClient = mock(DockerClient.class);
             DockerClientProviderStrategy mockStrategy = mock(DockerClientProviderStrategy.class);
             failureField.set(factory, new RuntimeException("latched failure"));
@@ -265,8 +256,6 @@ class SystemToolServiceTest {
             assertNull(clientField.get(factory));
             assertNull(strategyField.get(factory));
 
-            // 3. Verify probeWithTestcontainers() clears cachedClientFailure before client() and
-            // succeeds when daemon responds
             VersionCmd okVersionCmd = mock(VersionCmd.class);
             Version mockVersion = mock(Version.class);
             when(mockVersion.getVersion()).thenReturn("28.0.4");
@@ -284,16 +273,14 @@ class SystemToolServiceTest {
             assertNull(failureField.get(factory));
             assertSame(mockClient, clientField.get(factory));
 
-            // 4. Verify probeWithTestcontainers() clears client, strategy, and cachedClientFailure
-            // when versionCmd().exec() fails
             VersionCmd failingVersionCmd = mock(VersionCmd.class);
             when(failingVersionCmd.exec()).thenThrow(new RuntimeException("Daemon stopped"));
             when(mockClient.versionCmd()).thenReturn(failingVersionCmd);
 
-            RuntimeException thrown =
-                    assertThrows(
-                            RuntimeException.class, SystemToolService::probeWithTestcontainers);
-            assertEquals("Daemon stopped", thrown.getMessage());
+            assertEquals(
+                    "Daemon stopped",
+                    assertThrows(RuntimeException.class, SystemToolService::probeWithTestcontainers)
+                            .getMessage());
             assertNull(failureField.get(factory));
             assertNull(clientField.get(factory));
             assertNull(strategyField.get(factory));

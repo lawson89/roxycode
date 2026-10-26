@@ -7,19 +7,20 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ImplementationPlanTest {
+
+    private static ImplementationPlan createPlan(
+            List<String> reqs,
+            List<ImplementationPlan.TechStep> steps,
+            List<ImplementationPlan.LogEntry> logs) {
+        return new ImplementationPlan("Title", "Goal", reqs, steps, false, null, null, null, logs);
+    }
+
     @Test
     void testImplementationPlan() {
-        ImplementationPlan.TechStep step = new ImplementationPlan.TechStep("Step 1", false);
         ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Title",
-                        "Goal",
+                createPlan(
                         List.of("Req 1"),
-                        List.of(step),
-                        false,
-                        null,
-                        null,
-                        null,
+                        List.of(new ImplementationPlan.TechStep("Step 1", false)),
                         null);
         assertEquals("Title", plan.title());
         assertEquals("Goal", plan.goal());
@@ -32,50 +33,37 @@ class ImplementationPlanTest {
 
     @Test
     void testImmutabilityAndSafety() {
-        ImplementationPlan.LogEntry handoffEntry =
-                new ImplementationPlan.LogEntry("now", "user", "Handoff 1");
-
         ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Title",
-                        "Goal",
+                createPlan(
                         null,
                         null,
-                        false,
-                        null,
-                        null,
-                        null,
-                        List.of(handoffEntry));
+                        List.of(new ImplementationPlan.LogEntry("now", "user", "Handoff 1")));
         assertNotNull(plan.requirements());
         assertNotNull(plan.technicalSteps());
         assertEquals(1, plan.handoffLog().size());
-
-        // Ensure immutability
-        ImplementationPlan.LogEntry failEntry =
-                new ImplementationPlan.LogEntry("now", "user", "fail");
-        assertThrows(UnsupportedOperationException.class, () -> plan.handoffLog().add(failEntry));
+        assertThrows(
+                UnsupportedOperationException.class,
+                () ->
+                        plan.handoffLog()
+                                .add(new ImplementationPlan.LogEntry("now", "user", "fail")));
     }
 
     @Test
     void testWithCopyHelperMethodsPreserveFieldsAndImmutability() {
         ImplementationPlan base =
-                new ImplementationPlan(
-                        "Title",
-                        "Goal",
+                createPlan(
                         List.of("Req 1"),
                         List.of(new ImplementationPlan.TechStep("Step 1", false)),
-                        false,
-                        null,
-                        null,
-                        null,
                         List.of(new ImplementationPlan.LogEntry("t0", "u0", "init")));
 
-        List<ImplementationPlan.TechStep> mutableSteps = new ArrayList<>();
-        mutableSteps.add(new ImplementationPlan.TechStep("Step 1", true));
-        mutableSteps.add(new ImplementationPlan.TechStep("Step 2", false));
+        List<ImplementationPlan.TechStep> mutableSteps =
+                new ArrayList<>(
+                        List.of(
+                                new ImplementationPlan.TechStep("Step 1", true),
+                                new ImplementationPlan.TechStep("Step 2", false)));
 
         ImplementationPlan withSteps = base.withTechnicalSteps(mutableSteps);
-        mutableSteps.clear(); // verify defensive copy
+        mutableSteps.clear();
         assertEquals("Title", withSteps.title());
         assertEquals("Goal", withSteps.goal());
         assertEquals(List.of("Req 1"), withSteps.requirements());
@@ -108,8 +96,8 @@ class ImplementationPlanTest {
                                 .handoffLog()
                                 .add(new ImplementationPlan.LogEntry("t2", "u2", "m2")));
 
-        List<ImplementationPlan.LogEntry> customLog = new ArrayList<>();
-        customLog.add(new ImplementationPlan.LogEntry("t9", "sys", "Replaced"));
+        List<ImplementationPlan.LogEntry> customLog =
+                new ArrayList<>(List.of(new ImplementationPlan.LogEntry("t9", "sys", "Replaced")));
         ImplementationPlan replacedLog = withLogEntry.withHandoffLog(customLog);
         customLog.clear();
         assertEquals(1, replacedLog.handoffLog().size());
@@ -147,29 +135,19 @@ class ImplementationPlanTest {
                                 new ImplementationPlan.LogEntry(
                                         "2026-04-06T12:05:30.123",
                                         "Architect",
-                                        """
-                                        Created plan | verified
-                                        details""")));
+                                        "Created plan | verified\ndetails")));
 
         String withoutLog = plan.toMarkdown(false);
         assertTrue(withoutLog.contains("# Implementation Plan: Feature Plan"));
         assertTrue(withoutLog.contains("**Goal:** Deliver feature"));
-        assertTrue(
-                withoutLog.contains(
-                        """
-                        ## Requirements
-                        - Req A"""));
-        assertTrue(
-                withoutLog.contains(
-                        """
-                        ## Technical Steps
-                        - [x] 0. Step 0
-                        - [ ] 1. Step 1"""));
+        assertTrue(withoutLog.contains("## Requirements\n- Req A"));
+        assertTrue(withoutLog.contains("## Technical Steps\n- [x] 0. Step 0\n- [ ] 1. Step 1"));
         assertFalse(withoutLog.contains("## Handoff Log"));
+
         String withLog = plan.toMarkdown(true);
         assertTrue(withLog.contains("## Handoff Log"));
         assertTrue(
-                withLog.contains(
-                        "| 2026-04-06 12:05:30 | Architect | Created plan \\| verified details |"));
+                withLog.contains("| 2026-04-06 12:05:30 | Architect | Created plan ")
+                        && withLog.contains("| verified details |"));
     }
 }

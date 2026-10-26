@@ -2,9 +2,14 @@ package org.roxycode.app.ui;
 
 import static org.mockito.Mockito.mock;
 
+import java.util.List;
 import java.util.concurrent.Executor;
+import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.WorkflowTransitionEvent;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -43,5 +48,31 @@ abstract class ChatTestFixture {
     protected ExploreChatPanel createExploreChatPanel(Executor executor) {
         return new ExploreChatPanel(
                 aiService, planService, publisher, chatMemory, settingsService, executor);
+    }
+
+    protected static void flushEdt() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {});
+    }
+
+    protected static void sendOnEdt(ChatPanel panel, String text) throws Exception {
+        SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage(text));
+    }
+
+    protected static WorkflowTransitionEvent transitionEvent(
+            WorkflowPhase from, WorkflowPhase to, String reason, boolean autonomous) {
+        return new WorkflowTransitionEvent(from, to, reason, autonomous);
+    }
+
+    protected static ImplementationPlan samplePlan(ImplementationPlan.TechStep... steps) {
+        return new ImplementationPlan(
+                "Feature X",
+                "Build Feature X",
+                List.of("Req 1"),
+                List.of(steps),
+                true,
+                null,
+                null,
+                null,
+                List.of());
     }
 }

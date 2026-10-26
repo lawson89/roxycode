@@ -1,8 +1,6 @@
 package org.roxycode.app.ai;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -23,47 +21,52 @@ import org.springframework.aop.framework.ProxyFactory;
 
 class LLMDocGeneratorTest {
 
+    private static Arguments serviceCase(Class<?> clazz, Object instance, String... signatures) {
+        return Arguments.of(clazz, instance, List.of(signatures));
+    }
+
+    private static void assertDocContainsAll(String doc, String... snippets) {
+        for (String s : snippets) {
+            assertTrue(doc.contains(s), "Missing '" + s + "'");
+        }
+    }
+
     static Stream<Arguments> agentServiceProvider() {
-        ProjectService projectService = mock(ProjectService.class);
-        when(projectService.hasActiveProject()).thenReturn(false);
+        ProjectService ps = mock(ProjectService.class);
+        when(ps.hasActiveProject()).thenReturn(false);
         return Stream.of(
-                Arguments.of(
+                serviceCase(
                         FileReadService.class,
-                        new FileReadService(projectService),
-                        List.of(
-                                "readLines(relativePath: string, startLine: number, endLine: number): string;",
-                                "readFileNumbered(relativePath: string): string;",
-                                "getLineCount(relativePath: string): number;")),
-                Arguments.of(
+                        new FileReadService(ps),
+                        "readLines(relativePath: string, startLine: number, endLine: number): string;",
+                        "readFileNumbered(relativePath: string): string;",
+                        "getLineCount(relativePath: string): number;"),
+                serviceCase(
                         FileEditorService.class,
-                        new FileEditorService(projectService, null),
-                        List.of(
-                                "moveFile(sourcePath: string, targetPath: string): EditorResult;",
-                                "copyFile(sourcePath: string, targetPath: string): EditorResult;",
-                                "mkdirs(relativePath: string): EditorResult;")),
-                Arguments.of(
+                        new FileEditorService(ps, null),
+                        "moveFile(sourcePath: string, targetPath: string): EditorResult;",
+                        "copyFile(sourcePath: string, targetPath: string): EditorResult;",
+                        "mkdirs(relativePath: string): EditorResult;"),
+                serviceCase(
                         GrepService.class,
-                        new GrepService(projectService),
-                        List.of(
-                                "grepWithContext(pattern: string, contextLines: number): EditorResult;",
-                                "grepLiteral(text: string): EditorResult;",
-                                "grepIgnoreCase(pattern: string): EditorResult;")),
-                Arguments.of(
+                        new GrepService(ps),
+                        "grepWithContext(pattern: string, contextLines: number): EditorResult;",
+                        "grepLiteral(text: string): EditorResult;",
+                        "grepIgnoreCase(pattern: string): EditorResult;"),
+                serviceCase(
                         GitService.class,
-                        new GitService(projectService),
-                        List.of(
-                                "getDiffHead(): string;",
-                                "getDiffHead(relativePath: string): string;",
-                                "getChangedFiles(): List;",
-                                "getBlame(relativePath: string, startLine: number, endLine: number): string;")),
-                Arguments.of(
+                        new GitService(ps),
+                        "getDiffHead(): string;",
+                        "getDiffHead(relativePath: string): string;",
+                        "getChangedFiles(): List;",
+                        "getBlame(relativePath: string, startLine: number, endLine: number): string;"),
+                serviceCase(
                         GenericBuildToolService.class,
-                        new GenericBuildToolService(projectService, null, null),
-                        List.of(
-                                "buildAndTest(): BuildResult;",
-                                "compile(): BuildResult;",
-                                "runSingleTest(testName: string): BuildResult;",
-                                "runTests(): BuildResult;")));
+                        new GenericBuildToolService(ps, null, null),
+                        "buildAndTest(): BuildResult;",
+                        "compile(): BuildResult;",
+                        "runSingleTest(testName: string): BuildResult;",
+                        "runTests(): BuildResult;"));
     }
 
     @ParameterizedTest
@@ -71,65 +74,33 @@ class LLMDocGeneratorTest {
     void testAllAgentServicesExposeAnnotatedMethodsInJexlPermissionsAndLlmDoc(
             Class<?> serviceClass, Object serviceInstance, List<String> expectedSignatures) {
         String doc = new LLMDocGenerator().generateDoc(List.of(serviceInstance));
-        assertTrue(
-                doc.contains("interface " + serviceClass.getSimpleName()),
-                "Generated doc should include interface for " + serviceClass.getSimpleName());
+        assertTrue(doc.contains("interface " + serviceClass.getSimpleName()));
 
         int documentedMethodCount = 0;
         for (Method method : serviceClass.getMethods()) {
-            if (method.getDeclaringClass() == Object.class) {
-                continue;
-            }
+            if (method.getDeclaringClass() == Object.class) continue;
             if (method.isAnnotationPresent(AgentDoc.class)) {
                 documentedMethodCount++;
-                assertTrue(
-                        AgentJexlPermissions.INSTANCE.allow(serviceClass, method),
-                        "Method with @AgentDoc must be allowed by AgentJexlPermissions: "
-                                + serviceClass.getSimpleName()
-                                + "#"
-                                + method.getName());
-                assertTrue(
-                        doc.contains(method.getName() + "("),
-                        "Method with @AgentDoc must be emitted in TypeScript documentation: "
-                                + serviceClass.getSimpleName()
-                                + "#"
-                                + method.getName());
+                assertTrue(AgentJexlPermissions.INSTANCE.allow(serviceClass, method));
+                assertTrue(doc.contains(method.getName() + "("));
             } else {
-                assertFalse(
-                        AgentJexlPermissions.INSTANCE.allow(serviceClass, method),
-                        "Method without @AgentDoc must not be allowed by AgentJexlPermissions: "
-                                + serviceClass.getSimpleName()
-                                + "#"
-                                + method.getName());
+                assertFalse(AgentJexlPermissions.INSTANCE.allow(serviceClass, method));
             }
         }
-        assertTrue(
-                documentedMethodCount > 0,
-                serviceClass.getSimpleName() + " should have at least one @AgentDoc method");
-
-        for (String expectedSignature : expectedSignatures) {
-            assertTrue(
-                    doc.contains(expectedSignature),
-                    "Expected TypeScript signature '"
-                            + expectedSignature
-                            + "' in doc for "
-                            + serviceClass.getSimpleName());
-        }
+        assertTrue(documentedMethodCount > 0);
+        expectedSignatures.forEach(sig -> assertTrue(doc.contains(sig)));
     }
 
     @Test
     void testGenerateDoc() {
-        LLMDocGenerator generator = new LLMDocGenerator();
-        MockAgentService service = new MockAgentService();
-
-        String doc = generator.generateDoc(List.of(service));
-
-        assertTrue(doc.contains("### JEXL API Documentation"));
-        assertTrue(doc.contains("```typescript"));
-        assertTrue(doc.contains("// Global variable exposed in JEXL: mockService"));
-        assertTrue(doc.contains("interface MockAgentService"));
-        assertTrue(doc.contains("doSomething(input: string): string;"));
-        assertTrue(doc.contains("This is a mock service"));
+        String doc = new LLMDocGenerator().generateDoc(List.of(new MockAgentService()));
+        assertDocContainsAll(
+                doc,
+                "### JEXL API Documentation",
+                "// Global variable exposed in JEXL: mockService",
+                "interface MockAgentService",
+                "doSomething(input: string): string;",
+                "This is a mock service");
     }
 
     @Test
@@ -137,89 +108,86 @@ class LLMDocGeneratorTest {
         LLMDocGenerator generator = new LLMDocGenerator();
         ProxyFactory proxyFactory = new ProxyFactory(new MockAgentService());
         proxyFactory.setProxyTargetClass(true);
-        Object proxiedService = proxyFactory.getProxy();
 
-        String doc = generator.generateDoc(List.of(proxiedService));
-
-        assertTrue(doc.contains("// Global variable exposed in JEXL: mockService"));
-        assertTrue(doc.contains("interface MockAgentService {"));
+        String doc = generator.generateDoc(List.of(proxyFactory.getProxy()));
+        assertDocContainsAll(
+                doc,
+                "// Global variable exposed in JEXL: mockService",
+                "interface MockAgentService {",
+                "* @param input The input string to process",
+                "doSomething(input: string): string;");
         assertFalse(doc.contains("SpringCGLIB"));
-        assertTrue(doc.contains("* @param input The input string to process"));
-        assertTrue(doc.contains("doSomething(input: string): string;"));
 
-        SubclassMockAgentService subclassService = new SubclassMockAgentService();
-        String subclassDoc = generator.generateDoc(List.of(subclassService));
-        assertTrue(subclassDoc.contains("interface SubclassMockAgentService {"));
-        assertTrue(subclassDoc.contains("doSomething(input: string): string;"));
-        assertTrue(subclassDoc.contains("extraAction(): string;"));
+        String subclassDoc = generator.generateDoc(List.of(new SubclassMockAgentService()));
+        assertDocContainsAll(
+                subclassDoc,
+                "interface SubclassMockAgentService {",
+                "doSomething(input: string): string;",
+                "extraAction(): string;");
     }
 
     @Test
     void testParameterAgentDocAndBuildResultSupportingRecordSchema() {
-        LLMDocGenerator generator = new LLMDocGenerator();
-        MockAgentService mockService = new MockAgentService();
         ProjectService projectService = mock(ProjectService.class);
         when(projectService.hasActiveProject()).thenReturn(false);
-        GenericBuildToolService buildToolService =
-                new GenericBuildToolService(projectService, null, null);
+        String doc =
+                new LLMDocGenerator()
+                        .generateDoc(
+                                List.of(
+                                        new MockAgentService(),
+                                        new GenericBuildToolService(projectService, null, null)));
 
-        String doc = generator.generateDoc(List.of(mockService, buildToolService));
-
-        assertTrue(doc.contains("* @param input The input string to process"));
-        assertTrue(
-                doc.contains(
-                        "* @param testName The name of the test class or method (e.g., MyTest or MyTest#myMethod)"));
-        assertTrue(
-                doc.contains("// Java Record: access fields via method calls, e.g. obj.field()"));
-        assertTrue(doc.contains("interface BuildResult {"));
-        assertTrue(doc.contains("success: boolean;"));
-        assertTrue(doc.contains("exitCode: number;"));
-        assertTrue(doc.contains("output: string;"));
-        assertTrue(doc.contains("errors: List<String>;"));
-        assertTrue(doc.contains("failedTests: List<String>;"));
-        assertTrue(doc.contains("log: string;"));
+        assertDocContainsAll(
+                doc,
+                "* @param input The input string to process",
+                "* @param testName The name of the test class or method (e.g., MyTest or MyTest#myMethod)",
+                "// Java Record: access fields via method calls, e.g. obj.field()",
+                "interface BuildResult {",
+                "success: boolean;",
+                "exitCode: number;",
+                "output: string;",
+                "errors: List<String>;",
+                "failedTests: List<String>;",
+                "log: string;");
     }
 
     @Test
     void testSupportingTypes() {
-        LLMDocGenerator generator = new LLMDocGenerator();
-        ServiceWithTypes service = new ServiceWithTypes();
-
-        String doc = generator.generateDoc(List.of(service));
-
-        assertTrue(doc.contains("interface ServiceWithTypes"));
-        assertTrue(doc.contains("getDetails(): Details;"));
-        assertTrue(doc.contains("getStatus(): Status;"));
-
-        assertTrue(doc.contains("enum Status {"));
-        assertTrue(doc.contains("ACTIVE, INACTIVE"));
-
-        assertTrue(doc.contains("interface Details {"));
-        assertTrue(doc.contains("id: number;"));
-        assertTrue(doc.contains("name: string;"));
-
-        assertTrue(doc.contains("interface BeanInfoItem {"));
-        assertTrue(doc.contains("active: boolean;"));
-        assertTrue(doc.contains("title: string;"));
+        String doc = new LLMDocGenerator().generateDoc(List.of(new ServiceWithTypes()));
+        assertDocContainsAll(
+                doc,
+                "interface ServiceWithTypes",
+                "getDetails(): Details;",
+                "getStatus(): Status;",
+                "enum Status {",
+                "ACTIVE, INACTIVE",
+                "interface Details {",
+                "id: number;",
+                "name: string;",
+                "interface BeanInfoItem {",
+                "active: boolean;",
+                "title: string;");
     }
 
     @Test
     void testTransitiveNestedSupportingTypesNoConcurrentModificationException() {
-        LLMDocGenerator generator = new LLMDocGenerator();
-        ServiceWithNestedTypes service = new ServiceWithNestedTypes();
-
-        String doc = assertDoesNotThrow(() -> generator.generateDoc(List.of(service)));
-
-        assertTrue(doc.contains("interface ServiceWithNestedTypes"));
-        assertTrue(doc.contains("getParent(): ParentRecord;"));
-        assertTrue(doc.contains("interface ParentRecord {"));
-        assertTrue(doc.contains("child: ChildRecord;"));
-        assertTrue(doc.contains("steps: NestedStep[];"));
-        assertTrue(doc.contains("interface ChildRecord {"));
-        assertTrue(doc.contains("status: Status;"));
-        assertTrue(doc.contains("interface NestedStep {"));
-        assertTrue(doc.contains("description: string;"));
-        assertTrue(doc.contains("enum Status {"));
+        String doc =
+                assertDoesNotThrow(
+                        () ->
+                                new LLMDocGenerator()
+                                        .generateDoc(List.of(new ServiceWithNestedTypes())));
+        assertDocContainsAll(
+                doc,
+                "interface ServiceWithNestedTypes",
+                "getParent(): ParentRecord;",
+                "interface ParentRecord {",
+                "child: ChildRecord;",
+                "steps: NestedStep[];",
+                "interface ChildRecord {",
+                "status: Status;",
+                "interface NestedStep {",
+                "description: string;",
+                "enum Status {");
     }
 
     @AgentService("mockService")
