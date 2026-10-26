@@ -126,7 +126,8 @@ public final class BuildConfigPanel extends JPanel {
         buttonPanel.add(saveButton);
 
         statusLabel = new JLabel("");
-        statusLabel.setForeground(resolveColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
+        statusLabel.setForeground(
+                SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
         buttonPanel.add(statusLabel);
 
         add(buttonPanel, "growx, gaptop 15");
@@ -231,7 +232,8 @@ public final class BuildConfigPanel extends JPanel {
             updateBannerState();
         }
         if (statusLabel != null) {
-            statusLabel.setForeground(resolveColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
+            statusLabel.setForeground(
+                    SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
         }
     }
 
@@ -244,19 +246,20 @@ public final class BuildConfigPanel extends JPanel {
 
         if (!dockerAvailable) {
             Color warningColor =
-                    resolveColor(
+                    SwingHtmlUtils.getUiColor(
                             new Color(0xd9, 0x77, 0x06),
                             "Component.warning.borderColor",
                             "Actions.Yellow");
-            String hex = toHex(warningColor);
+            String hex = SwingHtmlUtils.toHex(warningColor);
             applyBannerStyle(
                     Codicons.WARNING,
                     warningColor,
                     "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: fade(" + hex + ", 15%)",
                     DOCKER_MISSING_WARNING_TEXT);
         } else if (containerEnabled) {
-            Color verifiedColor = resolveColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
-            String hex = toHex(verifiedColor);
+            Color verifiedColor =
+                    SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
+            String hex = SwingHtmlUtils.toHex(verifiedColor);
             applyBannerStyle(
                     Codicons.SHIELD,
                     verifiedColor,
@@ -264,17 +267,19 @@ public final class BuildConfigPanel extends JPanel {
                     CONTAINER_ACTIVE_TEXT);
         } else {
             Color infoColor =
-                    resolveColor(
+                    SwingHtmlUtils.getUiColor(
                             new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
-            Color borderColor = resolveColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
-            Color panelBg = resolveColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background");
+            Color borderColor =
+                    SwingHtmlUtils.getUiColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
+            Color panelBg =
+                    SwingHtmlUtils.getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background");
             applyBannerStyle(
                     Codicons.INFO,
                     infoColor,
                     "arc: 12; border: 1,1,1,1,"
-                            + toHex(borderColor)
+                            + SwingHtmlUtils.toHex(borderColor)
                             + ",1,12; background: darken("
-                            + toHex(panelBg)
+                            + SwingHtmlUtils.toHex(panelBg)
                             + ", 3%)",
                     HOST_EXECUTION_ACTIVE_TEXT);
         }
@@ -286,14 +291,6 @@ public final class BuildConfigPanel extends JPanel {
         bannerIconLabel.setIcon(FontIcon.of(icon, 18, iconColor));
         bannerMessageLabel.setText(message);
         bannerPanel.putClientProperty(FlatClientProperties.STYLE, style);
-    }
-
-    private static Color resolveColor(Color fallback, String... uiKeys) {
-        return SwingHtmlUtils.getUiColor(fallback, uiKeys);
-    }
-
-    private static String toHex(Color color) {
-        return SwingHtmlUtils.toHex(color);
     }
 
     @SuppressWarnings("PMD.UnusedAssignment")

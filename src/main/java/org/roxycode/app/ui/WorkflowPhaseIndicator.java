@@ -47,10 +47,12 @@ public final class WorkflowPhaseIndicator extends JPanel {
     }
 
     private void updateStyle() {
-        Color accentColor = getSafeColor("Component.accentColor", Color.BLUE);
-        Color accentForeground = getSafeColor("Component.accentForeground", Color.WHITE);
-        Color foreground = getSafeColor("Label.foreground", Color.BLACK);
-        Color disabledForeground = getSafeColor("Label.disabledForeground", Color.GRAY);
+        Color accentColor = SwingHtmlUtils.getUiColor(Color.BLUE, "Component.accentColor");
+        Color accentForeground =
+                SwingHtmlUtils.getUiColor(Color.WHITE, "Component.accentForeground");
+        Color foreground = SwingHtmlUtils.getUiColor(Color.BLACK, "Label.foreground");
+        Color disabledForeground =
+                SwingHtmlUtils.getUiColor(Color.GRAY, "Label.disabledForeground");
 
         if (isActive) {
             setOpaque(true);
@@ -67,10 +69,6 @@ public final class WorkflowPhaseIndicator extends JPanel {
                 textLabel.setForeground(disabledForeground);
             }
         }
-    }
-
-    private Color getSafeColor(String key, Color fallback) {
-        return SwingHtmlUtils.getUiColor(fallback, key);
     }
 
     @Override

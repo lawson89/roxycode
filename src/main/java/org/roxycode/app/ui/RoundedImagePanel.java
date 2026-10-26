@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.net.URL;
 import javax.imageio.ImageIO;
 import javax.swing.JPanel;
-import javax.swing.UIManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,13 +82,13 @@ final class RoundedImagePanel extends JPanel {
                 BufferedImage buffer = getOrCreateRoundedBuffer(width, height);
                 g2.drawImage(buffer, 0, 0, null);
             } else {
-                Color accentColor = UIManager.getColor("Component.accentColor");
-                g2.setColor(accentColor != null ? accentColor : new Color(100, 100, 255));
+                g2.setColor(
+                        SwingHtmlUtils.getUiColor(
+                                new Color(100, 100, 255), "Component.accentColor"));
                 g2.fillRoundRect(INSET, INSET, width - (2 * INSET), height - (2 * INSET), arc, arc);
             }
 
-            Color borderColor = UIManager.getColor("Component.borderColor");
-            g2.setColor(borderColor != null ? borderColor : new Color(80, 80, 80));
+            g2.setColor(SwingHtmlUtils.getUiColor(new Color(80, 80, 80), "Component.borderColor"));
             g2.setStroke(new BasicStroke(1.5f));
             g2.drawRoundRect(
                     INSET, INSET, width - (2 * INSET) - 1, height - (2 * INSET) - 1, arc, arc);

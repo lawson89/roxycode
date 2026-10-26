@@ -392,7 +392,8 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         Image thumbnail = bimage.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
         JLabel thumbLabel = new JLabel(new ImageIcon(thumbnail));
         thumbLabel.setBorder(
-                BorderFactory.createLineBorder(UIManager.getColor("Component.borderColor")));
+                BorderFactory.createLineBorder(
+                        SwingHtmlUtils.getUiColor(Color.GRAY, "Component.borderColor")));
 
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setOpaque(false);
