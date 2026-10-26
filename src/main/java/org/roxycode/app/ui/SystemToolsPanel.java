@@ -47,7 +47,6 @@ public final class SystemToolsPanel extends JPanel {
         add(header, "growx, wrap");
 
         progressBar = new JProgressBar();
-        progressBar.setIndeterminate(true);
         progressBar.setVisible(false);
         add(progressBar, "growx, wrap, hidemode 3");
 
@@ -112,11 +111,13 @@ public final class SystemToolsPanel extends JPanel {
         Edt.run(
                 () -> {
                     refreshBtn.setEnabled(false);
+                    progressBar.setIndeterminate(true);
                     progressBar.setVisible(true);
                 });
         if (future == null) {
             Edt.run(
                     () -> {
+                        progressBar.setIndeterminate(false);
                         progressBar.setVisible(false);
                         refreshBtn.setEnabled(true);
                     });
@@ -129,6 +130,7 @@ public final class SystemToolsPanel extends JPanel {
                                     if (ex == null && tools != null) {
                                         populateTable(tools);
                                     }
+                                    progressBar.setIndeterminate(false);
                                     progressBar.setVisible(false);
                                     refreshBtn.setEnabled(true);
                                 }));

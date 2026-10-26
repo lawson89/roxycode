@@ -42,4 +42,18 @@ class EdtTest {
         assertTrue(latch.await(5, TimeUnit.SECONDS), "Action should be executed on EDT");
         assertTrue(ranOnEdt.get(), "Action must run on the Event Dispatch Thread");
     }
+
+    @Test
+    void testRunAndWaitOnAndOffEdt() throws Exception {
+        assertDoesNotThrow(() -> Edt.runAndWait(null));
+
+        assertFalse(SwingUtilities.isEventDispatchThread());
+        AtomicBoolean ranOnEdt = new AtomicBoolean(false);
+        Edt.runAndWait(() -> ranOnEdt.set(SwingUtilities.isEventDispatchThread()));
+        assertTrue(ranOnEdt.get(), "Edt.runAndWait should execute synchronously on the EDT");
+
+        AtomicBoolean ranImmediatelyOnEdt = new AtomicBoolean(false);
+        SwingUtilities.invokeAndWait(() -> Edt.runAndWait(() -> ranImmediatelyOnEdt.set(true)));
+        assertTrue(ranImmediatelyOnEdt.get(), "Edt.runAndWait on EDT should execute immediately");
+    }
 }

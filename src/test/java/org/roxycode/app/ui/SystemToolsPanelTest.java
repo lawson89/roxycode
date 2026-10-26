@@ -31,6 +31,9 @@ public class SystemToolsPanelTest {
         assertFalse(
                 panel.getProgressBar().isVisible(),
                 "Progress bar should be hidden when loaded from cache");
+        assertFalse(
+                panel.getProgressBar().isIndeterminate(),
+                "Progress bar should not be indeterminate while hidden");
         assertTrue(panel.getRefreshButton().isEnabled());
         assertEquals(1, panel.tableModel.getRowCount());
         assertEquals("Ripgrep", panel.tableModel.getValueAt(0, 0));
@@ -73,6 +76,9 @@ public class SystemToolsPanelTest {
         assertFalse(
                 panel.getProgressBar().isVisible(),
                 "Progress bar must be hidden after refresh completes");
+        assertFalse(
+                panel.getProgressBar().isIndeterminate(),
+                "Progress bar must stop indeterminate mode after refresh completes");
         assertTrue(
                 panel.getRefreshButton().isEnabled(),
                 "Refresh button must be re-enabled after refresh completes");

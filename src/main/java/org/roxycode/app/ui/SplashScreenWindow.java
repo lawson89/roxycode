@@ -73,6 +73,12 @@ public final class SplashScreenWindow extends JWindow {
         setLocationRelativeTo(null);
     }
 
+    @Override
+    public void dispose() {
+        progressBar.setIndeterminate(false);
+        super.dispose();
+    }
+
     public void setStatus(String status) {
         Edt.run(() -> statusLabel.setText(status));
     }

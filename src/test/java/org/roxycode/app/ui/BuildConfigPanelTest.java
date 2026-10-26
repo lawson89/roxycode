@@ -201,15 +201,24 @@ class BuildConfigPanelTest {
             assertNotNull(panel.getBannerPanel().getBorder());
 
             // Switch to FlatDarkLaf and verify updateUI() and all states succeed
-            com.formdev.flatlaf.FlatDarkLaf.setup();
-            SwingUtilities.updateComponentTreeUI(panel);
+            SwingUtilities.invokeAndWait(
+                    () -> {
+                        com.formdev.flatlaf.FlatDarkLaf.setup();
+                        SwingUtilities.updateComponentTreeUI(panel);
+                    });
             assertNotNull(panel.getBannerPanel().getBorder());
 
             panel.setDockerAvailable(false);
             assertNotNull(panel.getBannerPanel().getBorder());
         } finally {
             if (previousLaf != null) {
-                javax.swing.UIManager.setLookAndFeel(previousLaf);
+                SwingUtilities.invokeAndWait(
+                        () -> {
+                            try {
+                                javax.swing.UIManager.setLookAndFeel(previousLaf);
+                            } catch (Exception ignored) {
+                            }
+                        });
             }
         }
     }

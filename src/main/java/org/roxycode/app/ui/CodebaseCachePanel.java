@@ -251,6 +251,7 @@ public final class CodebaseCachePanel extends JPanel {
                             statusLabel.setText("Failed: " + e.getMessage());
                         } finally {
                             packButton.setEnabled(true);
+                            progressBar.setIndeterminate(false);
                             progressBar.setVisible(false);
                         }
                     }

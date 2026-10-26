@@ -266,22 +266,25 @@ public final class SettingsPanel extends JPanel {
     }
 
     public static void applyTheme(String themeName) {
-        try {
-            UIManager.put("TabbedPane.tabType", "card");
-            UIManager.put("TabbedPane.showTabSeparators", true);
+        Edt.runAndWait(
+                () -> {
+                    try {
+                        UIManager.put("TabbedPane.tabType", "card");
+                        UIManager.put("TabbedPane.showTabSeparators", true);
 
-            switch (themeName) {
-                case "FlatLaf Light" -> UIManager.setLookAndFeel(new FlatLightLaf());
-                case "FlatLaf Dark" -> UIManager.setLookAndFeel(new FlatDarkLaf());
-                case "IntelliJ" -> UIManager.setLookAndFeel(new FlatIntelliJLaf());
-                case "Darcula" -> UIManager.setLookAndFeel(new FlatDarculaLaf());
-                case "macOS Light" -> UIManager.setLookAndFeel(new FlatMacLightLaf());
-                case "macOS Dark" -> UIManager.setLookAndFeel(new FlatMacDarkLaf());
-                default -> UIManager.setLookAndFeel(new FlatLightLaf());
-            }
-            FlatLaf.updateUI();
-        } catch (Exception ex) {
-            log.error("Failed to apply theme {}: {}", themeName, ex.getMessage());
-        }
+                        switch (themeName) {
+                            case "FlatLaf Light" -> UIManager.setLookAndFeel(new FlatLightLaf());
+                            case "FlatLaf Dark" -> UIManager.setLookAndFeel(new FlatDarkLaf());
+                            case "IntelliJ" -> UIManager.setLookAndFeel(new FlatIntelliJLaf());
+                            case "Darcula" -> UIManager.setLookAndFeel(new FlatDarculaLaf());
+                            case "macOS Light" -> UIManager.setLookAndFeel(new FlatMacLightLaf());
+                            case "macOS Dark" -> UIManager.setLookAndFeel(new FlatMacDarkLaf());
+                            default -> UIManager.setLookAndFeel(new FlatLightLaf());
+                        }
+                        FlatLaf.updateUI();
+                    } catch (Exception ex) {
+                        log.error("Failed to apply theme {}: {}", themeName, ex.getMessage());
+                    }
+                });
     }
 }

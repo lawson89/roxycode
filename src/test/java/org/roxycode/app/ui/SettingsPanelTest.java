@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import java.awt.*;
 import java.awt.event.ActionListener;
 import javax.swing.*;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -97,6 +98,68 @@ class SettingsPanelTest {
             SwingUtilities.invokeAndWait(() -> {});
             assertEquals("FlatLaf Light", themeCombo.getSelectedItem());
         } finally {
+            SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
+        }
+    }
+
+    @Test
+    void testApplyThemeOffEdtWithIndeterminateProgressBarDoesNotLogSevereError() throws Exception {
+        Assumptions.assumeFalse(
+                GraphicsEnvironment.isHeadless(), "Skipping JDialog test in headless environment");
+        java.util.logging.Logger flatLafLogger =
+                java.util.logging.Logger.getLogger("com.formdev.flatlaf");
+        java.util.List<java.util.logging.LogRecord> severeRecords =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.logging.Handler handler =
+                new java.util.logging.Handler() {
+                    @Override
+                    public void publish(java.util.logging.LogRecord record) {
+                        if (record != null
+                                && record.getLevel().intValue()
+                                        >= java.util.logging.Level.SEVERE.intValue()) {
+                            severeRecords.add(record);
+                        }
+                    }
+
+                    @Override
+                    public void flush() {}
+
+                    @Override
+                    public void close() {}
+                };
+
+        flatLafLogger.addHandler(handler);
+        final JDialog[] dialogHolder = new JDialog[1];
+        try {
+            SwingUtilities.invokeAndWait(
+                    () -> {
+                        JDialog dialog = new JDialog();
+                        JProgressBar progressBar = new JProgressBar();
+                        progressBar.setIndeterminate(true);
+                        dialog.add(progressBar);
+                        dialogHolder[0] = dialog;
+                    });
+
+            assertFalse(SwingUtilities.isEventDispatchThread());
+            SettingsPanel.applyTheme("FlatLaf Dark");
+            SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
+
+            assertTrue(
+                    severeRecords.isEmpty(),
+                    "Applying theme off EDT must execute on EDT without FlatProgressBarUI SEVERE logs");
+        } finally {
+            flatLafLogger.removeHandler(handler);
+            if (dialogHolder[0] != null) {
+                SwingUtilities.invokeAndWait(
+                        () -> {
+                            for (Component c : dialogHolder[0].getContentPane().getComponents()) {
+                                if (c instanceof JProgressBar pb) {
+                                    pb.setIndeterminate(false);
+                                }
+                            }
+                            dialogHolder[0].dispose();
+                        });
+            }
             SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
         }
     }

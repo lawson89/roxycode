@@ -155,13 +155,17 @@ class MainFrameTest {
         javax.swing.SwingUtilities.invokeAndWait(() -> {});
         blockTurn.countDown();
 
-        assertEquals("RoxyCode - [NewProject]", mainFrame.getTitle());
-        assertFalse(exploreChatPanel.getController().isTurnActive());
-        assertFalse(featureChatPanel.getController().isTurnActive());
-        assertFalse(exploreChatPanel.getModel().hasPendingImages());
-        assertFalse(featureChatPanel.getModel().hasPendingImages());
-        verify(planService).resetWorkflow();
-        verify(chatMemory).clear(ChatModel.QA_CONVERSATION_ID);
-        verify(chatMemory).clear(ChatModel.TASK_CONVERSATION_ID);
+        try {
+            assertEquals("RoxyCode - [NewProject]", mainFrame.getTitle());
+            assertFalse(exploreChatPanel.getController().isTurnActive());
+            assertFalse(featureChatPanel.getController().isTurnActive());
+            assertFalse(exploreChatPanel.getModel().hasPendingImages());
+            assertFalse(featureChatPanel.getModel().hasPendingImages());
+            verify(planService).resetWorkflow();
+            verify(chatMemory).clear(ChatModel.QA_CONVERSATION_ID);
+            verify(chatMemory).clear(ChatModel.TASK_CONVERSATION_ID);
+        } finally {
+            javax.swing.SwingUtilities.invokeAndWait(mainFrame::dispose);
+        }
     }
 }

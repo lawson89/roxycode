@@ -7,6 +7,7 @@ import java.awt.Container;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.JexlServiceRegistry;
@@ -111,6 +112,13 @@ class MentorModeIntegrationTest {
                         settingsPanel,
                         buildConfigPanel,
                         contextManagerPanel);
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        if (mainFrame != null) {
+            SwingUtilities.invokeAndWait(mainFrame::dispose);
+        }
     }
 
     @Test

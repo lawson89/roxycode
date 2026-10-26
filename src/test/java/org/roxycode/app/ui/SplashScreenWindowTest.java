@@ -82,7 +82,14 @@ class SplashScreenWindowTest {
                                 "Subtitle label 'AI Coding Harness' should be present");
                     });
         } finally {
-            SwingUtilities.invokeAndWait(splash::dispose);
+            SwingUtilities.invokeAndWait(
+                    () -> {
+                        splash.dispose();
+                        assertFalse(
+                                splash.getProgressBar().isIndeterminate(),
+                                "Disposing splash screen should disable indeterminate progress bar");
+                        SettingsPanel.applyTheme("FlatLaf Light");
+                    });
         }
     }
 }
