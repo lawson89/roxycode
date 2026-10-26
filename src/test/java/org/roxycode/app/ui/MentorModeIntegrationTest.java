@@ -89,6 +89,8 @@ class MentorModeIntegrationTest {
         SettingsPanel settingsPanel = new SettingsPanel(settingsService);
         BuildConfigPanel buildConfigPanel =
                 new BuildConfigPanel(buildToolService, settingsService, toolService);
+        GlobalContextPanel globalContextPanel =
+                new GlobalContextPanel(promptService, settingsService);
         ContextManagerPanel contextManagerPanel =
                 new ContextManagerPanel(promptService, settingsService);
 
@@ -106,6 +108,7 @@ class MentorModeIntegrationTest {
                         systemToolsPanel,
                         settingsPanel,
                         buildConfigPanel,
+                        globalContextPanel,
                         contextManagerPanel);
     }
 

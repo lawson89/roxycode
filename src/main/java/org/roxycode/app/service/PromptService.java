@@ -4,16 +4,26 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.apache.commons.text.StringSubstitutor;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -31,7 +41,7 @@ public class PromptService {
     private static final String REVIEW_PROMPT_PATH = "prompts/review_phase.md";
     private static final String PLAN_PROMPT_PATH = "prompts/plan_phase.md";
     private static final String CODE_PROMPT_PATH = "prompts/code_phase.md";
-    private static final String CONTEXT_DIR = "context";
+    static final String PROJECT_CONTEXT_CONFIG_FILE = "context.toml";
 
     private static final String NEWLINE_DOUBLE = "\n\n";
     private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
@@ -40,6 +50,21 @@ public class PromptService {
     private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
     private static final String HEADER_CURRENT_PLAN_PROGRESS = "## CURRENT PLAN PROGRESS\n";
     private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
+
+    /** Represents a discovered top-level text file within a configured context folder. */
+    public record ContextFileItem(String folderPath, String fileName, Path filePath) {
+        @Override
+        public String toString() {
+            return fileName;
+        }
+    }
+
+    /** TOML configuration model for per-project context folders. */
+    public record ProjectContextConfig(List<String> folders) {
+        public ProjectContextConfig {
+            folders = folders == null ? List.of() : List.copyOf(folders);
+        }
+    }
 
     private final ProjectService projectService;
     private final SettingsService settingsService;
@@ -69,6 +94,7 @@ public class PromptService {
     public String getStableContext() {
         StringBuilder sb = new StringBuilder(readClasspathResource(CLASSPATH_PROMPT));
         sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
+        sb.append(loadGlobalContext());
         sb.append(loadProjectContext());
         return sb.toString();
     }
@@ -152,97 +178,258 @@ public class PromptService {
         return readClasspathResource(JEXL_DOC_PATH);
     }
 
-    public String loadProjectContext() {
-        java.util.List<String> files = listContextFiles();
+    public List<String> getGlobalContextFolders() {
+        if (settingsService == null) {
+            return List.of();
+        }
+        AppSettings settings = settingsService.getSettings();
+        if (settings == null) {
+            return List.of();
+        }
+        return normalizeFolderList(settings.getGlobalContextFolders());
+    }
+
+    public void setGlobalContextFolders(List<String> folders) {
+        if (settingsService == null) {
+            return;
+        }
+        AppSettings settings = settingsService.getSettings();
+        if (settings != null) {
+            settings.setGlobalContextFolders(normalizeFolderList(folders));
+            settingsService.saveSettings();
+        }
+    }
+
+    public List<String> getProjectContextFolders() {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return List.of();
+        }
+        Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
+        if (configFile == null || !Files.exists(configFile)) {
+            return List.of();
+        }
+        try {
+            ProjectContextConfig config =
+                    AiConfig.SHARED_TOML_MAPPER.readValue(
+                            configFile.toFile(), ProjectContextConfig.class);
+            return config != null ? normalizeFolderList(config.folders()) : List.of();
+        } catch (IOException e) {
+            log.warn("Failed to read project context config {}: {}", configFile, e.getMessage());
+            return List.of();
+        }
+    }
+
+    public void setProjectContextFolders(List<String> folders) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            throw new IllegalStateException("No active project");
+        }
+        List<String> normalized = normalizeFolderList(folders);
+        Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
+        try {
+            PathUtils.createParentDirectories(configFile);
+            AiConfig.SHARED_TOML_MAPPER.writeValue(
+                    configFile.toFile(), new ProjectContextConfig(normalized));
+        } catch (IOException e) {
+            log.error("Failed to save project context config {}: {}", configFile, e.getMessage());
+            throw new UncheckedIOException("Failed to save project context config", e);
+        }
+    }
+
+    public List<ContextFileItem> listGlobalContextFiles() {
+        return listContextFilesInFolders(getGlobalContextFolders(), false);
+    }
+
+    public List<ContextFileItem> listProjectContextFiles() {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return List.of();
+        }
+        return listContextFilesInFolders(getProjectContextFolders(), true);
+    }
+
+    public List<ContextFileItem> listContextFilesInFolders(List<String> folders) {
+        return listContextFilesInFolders(folders, true);
+    }
+
+    List<ContextFileItem> listContextFilesInFolders(
+            List<String> folders, boolean resolveRelativeToProject) {
+        if (folders == null || folders.isEmpty()) {
+            return List.of();
+        }
+        Map<Path, ContextFileItem> discovered = new LinkedHashMap<>();
+        for (String rawFolder : folders) {
+            if (rawFolder == null || rawFolder.isBlank()) {
+                continue;
+            }
+            String folderStr = rawFolder.trim();
+            Path dir = resolveFolderPath(folderStr, resolveRelativeToProject);
+            if (dir == null || !Files.isDirectory(dir)) {
+                continue;
+            }
+            try (Stream<Path> stream = Files.list(dir)) {
+                List<Path> entries =
+                        stream.filter(Files::isRegularFile)
+                                .filter(Files::isReadable)
+                                .filter(p -> !p.getFileName().toString().startsWith("."))
+                                .filter(PromptService::isNonBinaryFile)
+                                .sorted(
+                                        Comparator.comparing(
+                                                p -> p.getFileName().toString(),
+                                                String.CASE_INSENSITIVE_ORDER))
+                                .toList();
+                for (Path entry : entries) {
+                    Path normalizedPath = entry.toAbsolutePath().normalize();
+                    discovered.putIfAbsent(
+                            normalizedPath,
+                            new ContextFileItem(
+                                    folderStr, entry.getFileName().toString(), normalizedPath));
+                }
+            } catch (IOException e) {
+                log.warn("Failed to list context files in folder {}: {}", dir, e.getMessage());
+            }
+        }
+        List<ContextFileItem> result = new ArrayList<>(discovered.values());
+        result.sort(
+                Comparator.comparing(ContextFileItem::fileName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(item -> item.filePath().toString()));
+        return List.copyOf(result);
+    }
+
+    public String readContextFile(Path filePath) {
+        if (filePath == null) {
+            throw new IllegalArgumentException("Context file path must not be null");
+        }
+        Path normalized = filePath.toAbsolutePath().normalize();
+        if (!Files.exists(normalized) || !Files.isRegularFile(normalized)) {
+            throw new IllegalArgumentException("Context file does not exist: " + filePath);
+        }
+        if (normalized.getFileName().toString().startsWith(".")) {
+            throw new IllegalArgumentException(
+                    "Hidden files are not allowed as context: " + filePath);
+        }
+        if (!isInsideConfiguredContextFolder(normalized)) {
+            throw new IllegalArgumentException(
+                    "File is not in a configured context folder: " + filePath);
+        }
+        try {
+            if (FileReadService.isBinaryFile(normalized)) {
+                throw new IllegalArgumentException(
+                        "Binary files are not allowed as context: " + filePath);
+            }
+            return Files.readString(normalized, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("Failed to read context file {}: {}", filePath, e.getMessage());
+            throw new UncheckedIOException("Failed to read context file", e);
+        }
+    }
+
+    public String loadGlobalContext() {
+        List<ContextFileItem> files = listGlobalContextFiles();
         if (files.isEmpty()) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        for (String filename : files) {
+        for (ContextFileItem item : files) {
             try {
-                String content = readContextFile(filename);
-                sb.append("\n\n## Project Context: ").append(filename).append("\n").append(content);
+                String content = Files.readString(item.filePath(), StandardCharsets.UTF_8);
+                sb.append("\n\n## Global Context: ")
+                        .append(item.fileName())
+                        .append("\n")
+                        .append(content);
             } catch (Exception e) {
-                log.error("Failed to read project context file {}: {}", filename, e.getMessage());
+                log.error(
+                        "Failed to read global context file {}: {}",
+                        item.filePath(),
+                        e.getMessage());
             }
         }
         return sb.toString();
     }
 
-    public java.util.List<String> listContextFiles() {
-        if (!projectService.hasActiveProject()) {
-            return java.util.Collections.emptyList();
-        }
-        Path contextDir = projectService.resolveProjectDataPath(CONTEXT_DIR);
-        if (!Files.exists(contextDir) || !Files.isDirectory(contextDir)) {
-            return java.util.Collections.emptyList();
-        }
-        try (Stream<Path> stream = Files.list(contextDir)) {
-            return stream.filter(Files::isRegularFile)
-                    .filter(p -> p.getFileName().toString().endsWith(".md"))
-                    .map(p -> p.getFileName().toString())
-                    .sorted(String.CASE_INSENSITIVE_ORDER)
-                    .toList();
-        } catch (IOException e) {
-            log.error("Failed to list context files: {}", e.getMessage());
-            return java.util.Collections.emptyList();
-        }
-    }
-
-    static void validateContextFilename(String filename) {
-        if (filename == null
-                || filename.isBlank()
-                || filename.contains("/")
-                || filename.indexOf('\\') >= 0
-                || filename.contains("..")) {
-            throw new IllegalArgumentException("Invalid context filename: " + filename);
-        }
-    }
-
-    public String readContextFile(String filename) {
-        validateContextFilename(filename);
-        if (!projectService.hasActiveProject()) {
+    public String loadProjectContext() {
+        List<ContextFileItem> files = listProjectContextFiles();
+        if (files.isEmpty()) {
             return "";
         }
-        Path file = projectService.resolveProjectDataPath(CONTEXT_DIR + "/" + filename);
-        if (Files.exists(file)) {
+        StringBuilder sb = new StringBuilder();
+        for (ContextFileItem item : files) {
             try {
-                return Files.readString(file, StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                log.error("Failed to read context file {}: {}", filename, e.getMessage());
-                throw new UncheckedIOException("Failed to read context file", e);
+                String content = Files.readString(item.filePath(), StandardCharsets.UTF_8);
+                sb.append("\n\n## Project Context: ")
+                        .append(item.fileName())
+                        .append("\n")
+                        .append(content);
+            } catch (Exception e) {
+                log.error(
+                        "Failed to read project context file {}: {}",
+                        item.filePath(),
+                        e.getMessage());
             }
         }
-        return "";
+        return sb.toString();
     }
 
-    public void saveContextFile(String filename, String content) {
-        validateContextFilename(filename);
-        if (!projectService.hasActiveProject()) {
-            throw new IllegalStateException("No active project");
+    private boolean isInsideConfiguredContextFolder(Path normalizedFile) {
+        Path parent = normalizedFile.getParent();
+        if (parent == null) {
+            return false;
         }
-        Path file = projectService.resolveProjectDataPath(CONTEXT_DIR + "/" + filename);
+        for (String folder : getGlobalContextFolders()) {
+            Path resolved = resolveFolderPath(folder, false);
+            if (parent.equals(resolved)) {
+                return true;
+            }
+        }
+        if (projectService != null && projectService.hasActiveProject()) {
+            for (String folder : getProjectContextFolders()) {
+                Path resolved = resolveFolderPath(folder, true);
+                if (parent.equals(resolved)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private Path resolveFolderPath(String folderStr, boolean resolveRelativeToProject) {
         try {
-            PathUtils.createParentDirectories(file);
-            Files.writeString(file, content, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("Failed to save context file {}: {}", filename, e.getMessage());
-            throw new UncheckedIOException("Failed to save context file", e);
+            Path path = Path.of(folderStr);
+            if (!path.isAbsolute()
+                    && resolveRelativeToProject
+                    && projectService != null
+                    && projectService.hasActiveProject()
+                    && projectService.getCurrentProjectRoot() != null) {
+                return projectService
+                        .getCurrentProjectRoot()
+                        .resolve(path)
+                        .toAbsolutePath()
+                        .normalize();
+            }
+            return path.toAbsolutePath().normalize();
+        } catch (InvalidPathException e) {
+            log.warn("Invalid context folder path '{}': {}", folderStr, e.getMessage());
+            return null;
         }
     }
 
-    public void deleteContextFile(String filename) {
-        validateContextFilename(filename);
-        if (!projectService.hasActiveProject()) {
-            return;
-        }
-        Path file = projectService.resolveProjectDataPath(CONTEXT_DIR + "/" + filename);
+    private static boolean isNonBinaryFile(Path path) {
         try {
-            Files.deleteIfExists(file);
+            return !FileReadService.isBinaryFile(path);
         } catch (IOException e) {
-            log.error("Failed to delete context file {}: {}", filename, e.getMessage());
-            throw new UncheckedIOException("Failed to delete context file", e);
+            return false;
         }
+    }
+
+    private static List<String> normalizeFolderList(List<String> folders) {
+        if (folders == null || folders.isEmpty()) {
+            return List.of();
+        }
+        Set<String> unique = new LinkedHashSet<>();
+        for (String folder : folders) {
+            if (folder != null && !folder.isBlank()) {
+                unique.add(folder.trim());
+            }
+        }
+        return List.copyOf(unique);
     }
 
     private String readClasspathResource(String path) {

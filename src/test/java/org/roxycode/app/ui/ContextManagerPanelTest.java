@@ -8,38 +8,62 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.SwingUtilities;
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.PromptService;
+import org.roxycode.app.service.PromptService.ContextFileItem;
 import org.roxycode.app.service.SettingsService;
 
 class ContextManagerPanelTest {
 
     @Test
-    void testOnProjectChangedClearsEditorAndRefreshesFileList() throws Exception {
+    void testProjectAndGlobalContextPanelsFolderManagementAndReadOnlyPreview() throws Exception {
         PromptService promptService = mock(PromptService.class);
-        when(promptService.listContextFiles()).thenReturn(List.of("old.md"));
-        when(promptService.readContextFile("old.md")).thenReturn("# Old Content");
+        Path oldPath = Path.of("/tmp/docs/old.md");
+        ContextFileItem oldItem = new ContextFileItem("/tmp/docs", "old.md", oldPath);
+
+        when(promptService.getProjectContextFolders()).thenReturn(List.of("/tmp/docs"));
+        when(promptService.listProjectContextFiles()).thenReturn(List.of(oldItem));
+        when(promptService.readContextFile(oldPath)).thenReturn("# Old Content");
 
         ContextManagerPanel panel = new ContextManagerPanel(promptService, null);
+        assertFalse(panel.getTextArea().isEditable(), "Preview text area must be read-only");
+
         for (int i = 0; i < 50; i++) {
             SwingUtilities.invokeAndWait(() -> {});
-            if (panel.getListModel().getSize() == 1) {
+            if (panel.getListModel().getSize() == 1 && panel.getFolderListModel().getSize() == 1) {
                 break;
             }
             Thread.sleep(20);
         }
+        assertEquals(1, panel.getFolderListModel().getSize());
+        assertEquals("/tmp/docs", panel.getFolderListModel().getElementAt(0));
         assertEquals(1, panel.getListModel().getSize());
 
-        panel.loadSelectedFileAsync("old.md").get();
-        SwingUtilities.invokeAndWait(() -> {});
-        panel.getTextArea().setText("# Old Content");
+        panel.loadSelectedFileAsync(oldItem).get();
+        for (int i = 0; i < 50 && panel.getTextArea().getText().isEmpty(); i++) {
+            SwingUtilities.invokeAndWait(() -> {});
+            Thread.sleep(10);
+        }
+        assertEquals("# Old Content", panel.getTextArea().getText());
+        assertEquals(
+                SyntaxConstants.SYNTAX_STYLE_MARKDOWN, panel.getTextArea().getSyntaxEditingStyle());
 
-        when(promptService.listContextFiles()).thenReturn(List.of("new1.md", "new2.md"));
+        // Add folder and refresh on project changed
+        ContextFileItem new1 =
+                new ContextFileItem("/tmp/new", "new1.java", Path.of("/tmp/new/new1.java"));
+        ContextFileItem new2 =
+                new ContextFileItem("/tmp/new", "new2.json", Path.of("/tmp/new/new2.json"));
+        when(promptService.getProjectContextFolders()).thenReturn(List.of("/tmp/docs", "/tmp/new"));
+        when(promptService.listProjectContextFiles()).thenReturn(List.of(new1, new2));
+
+        panel.addFolderAsync("/tmp/new").get();
+        verify(promptService).setProjectContextFolders(List.of("/tmp/docs", "/tmp/new"));
+
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
-
         for (int i = 0; i < 50; i++) {
             SwingUtilities.invokeAndWait(() -> {});
             if (panel.getListModel().getSize() == 2) {
@@ -50,58 +74,89 @@ class ContextManagerPanelTest {
 
         assertEquals("", panel.getTextArea().getText());
         assertEquals(2, panel.getListModel().getSize());
-        assertEquals("new1.md", panel.getListModel().getElementAt(0));
-        assertEquals("new2.md", panel.getListModel().getElementAt(1));
+        assertEquals("new1.java", panel.getListModel().getElementAt(0).fileName());
+        assertEquals("new2.json", panel.getListModel().getElementAt(1).fileName());
+
+        // GlobalContextPanel delegates to global context folder methods
+        Path globalFile = Path.of("/global/rules.yaml");
+        ContextFileItem globalItem = new ContextFileItem("/global", "rules.yaml", globalFile);
+        when(promptService.getGlobalContextFolders()).thenReturn(List.of("/global"));
+        when(promptService.listGlobalContextFiles()).thenReturn(List.of(globalItem));
+        when(promptService.readContextFile(globalFile)).thenReturn("key: value");
+
+        GlobalContextPanel globalPanel = new GlobalContextPanel(promptService, null);
+        assertFalse(globalPanel.getTextArea().isEditable());
+        for (int i = 0; i < 50; i++) {
+            SwingUtilities.invokeAndWait(() -> {});
+            if (globalPanel.getListModel().getSize() == 1) {
+                break;
+            }
+            Thread.sleep(20);
+        }
+        globalPanel.loadSelectedFileAsync(globalItem).get();
+        for (int i = 0; i < 50 && globalPanel.getTextArea().getText().isEmpty(); i++) {
+            SwingUtilities.invokeAndWait(() -> {});
+            Thread.sleep(10);
+        }
+        assertEquals("key: value", globalPanel.getTextArea().getText());
+        assertEquals(
+                SyntaxConstants.SYNTAX_STYLE_YAML,
+                globalPanel.getTextArea().getSyntaxEditingStyle());
+
+        globalPanel.removeFolderAsync("/global").get();
+        verify(promptService).setGlobalContextFolders(List.of());
     }
 
     @Test
-    void testNormalizeRuleFilenameTrimsInput() {
-        assertNull(ContextManagerPanel.normalizeRuleFilename(null));
-        assertEquals("", ContextManagerPanel.normalizeRuleFilename("   "));
-        assertEquals("foo.md", ContextManagerPanel.normalizeRuleFilename(" foo "));
-        assertEquals("rules.md", ContextManagerPanel.normalizeRuleFilename(" rules.md "));
+    void testResolveSyntaxStyle() {
+        assertEquals(
+                SyntaxConstants.SYNTAX_STYLE_MARKDOWN,
+                BaseContextFolderPanel.resolveSyntaxStyle("README.md"));
+        assertEquals(
+                SyntaxConstants.SYNTAX_STYLE_JAVA,
+                BaseContextFolderPanel.resolveSyntaxStyle("App.java"));
+        assertEquals(
+                SyntaxConstants.SYNTAX_STYLE_JSON,
+                BaseContextFolderPanel.resolveSyntaxStyle("config.json"));
+        assertEquals(
+                SyntaxConstants.SYNTAX_STYLE_XML,
+                BaseContextFolderPanel.resolveSyntaxStyle("pom.xml"));
+        assertEquals(
+                SyntaxConstants.SYNTAX_STYLE_NONE,
+                BaseContextFolderPanel.resolveSyntaxStyle("notes.txt"));
     }
 
     @Test
-    void testSaveAndCreateErrorSurfacesErrorMessage() throws Exception {
+    void testAddFolderAndReadErrorSurfacesErrorMessage() throws Exception {
         PromptService promptService = mock(PromptService.class);
-        when(promptService.listContextFiles()).thenReturn(List.of());
-        doThrow(new IllegalArgumentException("Invalid context filename: ../evil.md"))
+        when(promptService.getProjectContextFolders()).thenReturn(List.of());
+        when(promptService.listProjectContextFiles()).thenReturn(List.of());
+        doThrow(new IllegalStateException("No active project"))
                 .when(promptService)
-                .saveContextFile(eq("../evil.md"), anyString());
+                .setProjectContextFolders(anyList());
 
         ContextManagerPanel panel = new ContextManagerPanel(promptService, null);
         List<String> errors = new ArrayList<>();
         panel.setErrorDialogPresenter(errors::add);
 
         try {
-            panel.createNewFileAsync("../evil.md").get();
+            panel.addFolderAsync("/tmp/folder").get();
         } catch (Exception ignored) {
         }
         for (int i = 0; i < 50 && errors.isEmpty(); i++) {
             SwingUtilities.invokeAndWait(() -> {});
             Thread.sleep(10);
         }
-        assertFalse(errors.isEmpty(), "Error presenter should be invoked when create fails");
-        assertTrue(errors.get(0).contains("Invalid context filename"));
-
-        errors.clear();
-        try {
-            panel.saveFileAsync("../evil.md", "content").get();
-        } catch (Exception ignored) {
-        }
-        for (int i = 0; i < 50 && errors.isEmpty(); i++) {
-            SwingUtilities.invokeAndWait(() -> {});
-            Thread.sleep(10);
-        }
-        assertFalse(errors.isEmpty(), "Error presenter should be invoked when save fails");
-        assertTrue(panel.getLastErrorMessage().contains("Invalid context filename"));
+        assertFalse(errors.isEmpty(), "Error presenter should be invoked when addFolder fails");
+        assertTrue(errors.get(0).contains("No active project"));
+        assertTrue(panel.getLastErrorMessage().contains("No active project"));
     }
 
     @Test
     void testOnSettingsChangedUpdatesRSyntaxTextAreaTheme() throws Exception {
         PromptService promptService = mock(PromptService.class);
-        when(promptService.listContextFiles()).thenReturn(List.of());
+        when(promptService.getProjectContextFolders()).thenReturn(List.of());
+        when(promptService.listProjectContextFiles()).thenReturn(List.of());
         SettingsService settingsService = mock(SettingsService.class);
         AppSettings settings = new AppSettings();
         settings.setTheme("FlatLaf Light");

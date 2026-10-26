@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -22,6 +21,7 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.service.PromptService.ContextFileItem;
 
 @ExtendWith(MockitoExtension.class)
 class PromptServiceTest {
@@ -140,70 +140,98 @@ class PromptServiceTest {
     }
 
     @Test
-    void testLoadProjectContextAndCrudOperations() throws IOException {
+    void testGlobalAndProjectContextFoldersAndTopLevelTextDiscovery() throws IOException {
         Path projectDataDir = tempDir.resolve("project-data");
+        Path projectRoot = tempDir.resolve("project-root");
+        Files.createDirectories(projectRoot);
         when(projectService.hasActiveProject()).thenReturn(true);
+        lenient().when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
         when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
 
-        // Case 1: no context directory yet
+        AppSettings settings = new AppSettings();
+        when(settingsService.getSettings()).thenReturn(settings);
+
+        // Initially no folders configured
+        assertEquals("", promptService.loadGlobalContext());
         assertEquals("", promptService.loadProjectContext());
-        assertTrue(promptService.listContextFiles().isEmpty());
+        assertTrue(promptService.listGlobalContextFiles().isEmpty());
+        assertTrue(promptService.listProjectContextFiles().isEmpty());
 
-        // Case 2: save context files and non-markdown file in projectDataDir/context
-        promptService.saveContextFile("b_architecture.md", "Architecture guidelines");
-        promptService.saveContextFile("a_rules.md", "Project rules");
-        Path contextDir = projectDataDir.resolve("context");
-        Files.writeString(contextDir.resolve("ignore.txt"), "Ignore me");
+        // Set up global context folder with top-level text files, hidden file, binary file, and
+        // subdir
+        Path globalDir = tempDir.resolve("global-context");
+        Files.createDirectories(globalDir);
+        Files.writeString(globalDir.resolve("b_global.txt"), "Global B text");
+        Files.writeString(globalDir.resolve("a_global.md"), "Global A markdown");
+        Files.writeString(globalDir.resolve(".hidden.md"), "Hidden file");
+        Files.write(globalDir.resolve("binary.bin"), new byte[] {0x01, 0x00, 0x02});
+        Path nestedGlobalDir = globalDir.resolve("nested");
+        Files.createDirectories(nestedGlobalDir);
+        Files.writeString(nestedGlobalDir.resolve("sub.md"), "Nested should be ignored");
 
-        assertEquals(List.of("a_rules.md", "b_architecture.md"), promptService.listContextFiles());
-        assertEquals("Project rules", promptService.readContextFile("a_rules.md"));
+        promptService.setGlobalContextFolders(
+                List.of("  " + globalDir.toString() + "  ", globalDir.toString()));
+        verify(settingsService).saveSettings();
+        assertEquals(List.of(globalDir.toString()), promptService.getGlobalContextFolders());
 
-        String context = promptService.loadProjectContext();
-        assertTrue(context.contains("## Project Context: a_rules.md"));
-        assertTrue(context.contains("Project rules"));
-        assertTrue(context.contains("## Project Context: b_architecture.md"));
-        assertTrue(context.contains("Architecture guidelines"));
-        assertFalse(context.contains("ignore.txt"));
+        List<ContextFileItem> globalFiles = promptService.listGlobalContextFiles();
+        assertEquals(2, globalFiles.size());
+        assertEquals("a_global.md", globalFiles.get(0).fileName());
+        assertEquals("b_global.txt", globalFiles.get(1).fileName());
+        assertEquals(
+                "Global A markdown", promptService.readContextFile(globalFiles.get(0).filePath()));
 
-        // Alphabetical ordering check: a_rules before b_architecture
-        int idxA = context.indexOf("a_rules.md");
-        int idxB = context.indexOf("b_architecture.md");
-        assertTrue(idxA < idxB, "Context files should be sorted alphabetically");
+        // Set up project context folder (relative to projectRoot and absolute)
+        Path projDocsDir = projectRoot.resolve("docs");
+        Files.createDirectories(projDocsDir);
+        Files.writeString(projDocsDir.resolve("z_spec.json"), "{spec: true}");
+        Files.writeString(projDocsDir.resolve("a_architecture.md"), "Architecture guidelines");
+        Files.write(projDocsDir.resolve("image.png"), new byte[] {(byte) 0x89, 0x50, 0x00, 0x47});
+        Files.createDirectories(projDocsDir.resolve("subdir"));
+        Files.writeString(projDocsDir.resolve("subdir/ignored.md"), "Subdir ignored");
 
-        // Delete a context file
-        promptService.deleteContextFile("a_rules.md");
-        assertEquals(List.of("b_architecture.md"), promptService.listContextFiles());
-        assertEquals("", promptService.readContextFile("a_rules.md"));
+        promptService.setProjectContextFolders(List.of("docs", "docs"));
+        assertEquals(List.of("docs"), promptService.getProjectContextFolders());
 
-        // Invalid filenames (path traversal or subdirectories) should be rejected
+        List<ContextFileItem> projectFiles = promptService.listProjectContextFiles();
+        assertEquals(2, projectFiles.size());
+        assertEquals("a_architecture.md", projectFiles.get(0).fileName());
+        assertEquals("z_spec.json", projectFiles.get(1).fileName());
+        assertEquals(
+                "Architecture guidelines",
+                promptService.readContextFile(projectFiles.get(0).filePath()));
+
+        String globalContext = promptService.loadGlobalContext();
+        assertTrue(globalContext.contains("## Global Context: a_global.md\nGlobal A markdown"));
+        assertTrue(globalContext.contains("## Global Context: b_global.txt\nGlobal B text"));
+        assertFalse(globalContext.contains("Hidden file"));
+        assertFalse(globalContext.contains("Nested should be ignored"));
+
+        String projectContext = promptService.loadProjectContext();
+        assertTrue(
+                projectContext.contains(
+                        "## Project Context: a_architecture.md\nArchitecture guidelines"));
+        assertTrue(projectContext.contains("## Project Context: z_spec.json\n{spec: true}"));
+        assertFalse(projectContext.contains("Subdir ignored"));
+
+        // Alphabetical ordering check
+        assertTrue(
+                projectContext.indexOf("a_architecture.md") < projectContext.indexOf("z_spec.json"),
+                "Project context files should be sorted alphabetically");
+
+        // Validation on readContextFile(Path)
+        Path outsideFile = tempDir.resolve("outside.md");
+        Files.writeString(outsideFile, "Outside");
+        assertThrows(
+                IllegalArgumentException.class, () -> promptService.readContextFile(outsideFile));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> promptService.saveContextFile("../evil.md", "bad"));
+                () -> promptService.readContextFile(globalDir.resolve(".hidden.md")));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> promptService.saveContextFile("sub/rule.md", "bad"));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> promptService.saveContextFile("sub" + (char) 92 + "rule.md", "bad"));
-        assertThrows(
-                IllegalArgumentException.class, () -> promptService.readContextFile("../evil.md"));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> promptService.deleteContextFile("../evil.md"));
-
-        // IOException on readContextFile, saveContextFile, and deleteContextFile throws
-        // UncheckedIOException
-        Path dirAsFile = contextDir.resolve("dir_conflict.md");
-        Files.createDirectories(dirAsFile.resolve("nested"));
-        assertThrows(
-                UncheckedIOException.class, () -> promptService.readContextFile("dir_conflict.md"));
-        assertThrows(
-                UncheckedIOException.class,
-                () -> promptService.saveContextFile("dir_conflict.md", "content"));
-        assertThrows(
-                UncheckedIOException.class,
-                () -> promptService.deleteContextFile("dir_conflict.md"));
+                () -> promptService.readContextFile(globalDir.resolve("binary.bin")));
+        assertThrows(IllegalArgumentException.class, () -> promptService.readContextFile(null));
     }
 
     @Test
@@ -222,12 +250,21 @@ class PromptServiceTest {
     @Test
     void testGetStableSessionAndSystemPrompt() throws IOException {
         Path projectDataDir = tempDir.resolve("project-data");
+        Path globalDir = tempDir.resolve("global-rules");
+        Path projectRulesDir = tempDir.resolve("project-rules");
+        Files.createDirectories(globalDir);
+        Files.createDirectories(projectRulesDir);
+        Files.writeString(globalDir.resolve("global.md"), "GLOBAL RULES");
+        Files.writeString(projectRulesDir.resolve("rules.md"), "CUSTOM RULES");
+
+        AppSettings settings = new AppSettings();
+        settings.setGlobalContextFolders(List.of(globalDir.toString()));
+        when(settingsService.getSettings()).thenReturn(settings);
+
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
-        Path contextDir = projectDataDir.resolve("context");
-        Files.createDirectories(contextDir);
-        Files.writeString(contextDir.resolve("rules.md"), "CUSTOM RULES");
+        promptService.setProjectContextFolders(List.of(projectRulesDir.toString()));
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
@@ -239,7 +276,8 @@ class PromptServiceTest {
         String stable = promptService.getStableContext();
         assertTrue(stable.contains("RoxyCode Workflow Protocol"));
         assertTrue(stable.contains("## JEXL CONTEXT"));
-        assertTrue(stable.contains("CUSTOM RULES"));
+        assertTrue(stable.contains("## Global Context: global.md\nGLOBAL RULES"));
+        assertTrue(stable.contains("## Project Context: rules.md\nCUSTOM RULES"));
 
         String session = promptService.getSessionContext();
         assertTrue(session.contains("DOMINANT LANGUAGE: Java"));

@@ -77,6 +77,8 @@ class MainFrameTest {
         SettingsPanel settingsPanel = new SettingsPanel(settingsService);
         BuildConfigPanel buildConfigPanel =
                 new BuildConfigPanel(buildToolService, settingsService, toolService);
+        GlobalContextPanel globalContextPanel =
+                new GlobalContextPanel(promptService, settingsService);
         ContextManagerPanel contextManagerPanel =
                 new ContextManagerPanel(promptService, settingsService);
 
@@ -94,6 +96,7 @@ class MainFrameTest {
                         systemToolsPanel,
                         settingsPanel,
                         buildConfigPanel,
+                        globalContextPanel,
                         contextManagerPanel);
 
         assertEquals(1, MainFrame.class.getDeclaredConstructors().length);

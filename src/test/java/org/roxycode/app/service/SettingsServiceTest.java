@@ -34,6 +34,7 @@ class SettingsServiceTest {
         AppSettings settings = service.getSettings();
         settings.setTheme("Darcula");
         settings.setGeminiApiKey("test-api-key");
+        settings.setGlobalContextFolders(List.of("/tmp/global-a", "/tmp/global-b"));
         service.saveSettings();
 
         // New service instance to verify persistence
@@ -41,6 +42,9 @@ class SettingsServiceTest {
         service2.setSettingsPathOverride(settingsFile);
         assertEquals("Darcula", service2.getSettings().getTheme());
         assertEquals("test-api-key", service2.getSettings().getGeminiApiKey());
+        assertEquals(
+                List.of("/tmp/global-a", "/tmp/global-b"),
+                service2.getSettings().getGlobalContextFolders());
         assertTrue(Files.exists(settingsFile));
 
         // Verify static loadFromDisk helper

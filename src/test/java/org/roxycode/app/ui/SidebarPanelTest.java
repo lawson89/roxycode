@@ -25,8 +25,8 @@ class SidebarPanelTest {
 
         Component[] components = sidebar.getComponents();
 
-        // Expected: 1 BrandingPanel, 3 Headers, 8 NavButtons = 12
-        assertEquals(12, components.length, "Sidebar should have exactly 12 components");
+        // Expected: 1 BrandingPanel, 3 Headers, 9 NavButtons = 13
+        assertEquals(13, components.length, "Sidebar should have exactly 13 components");
 
         int headerCount = 0;
         int buttonCount = 0;
@@ -40,7 +40,7 @@ class SidebarPanelTest {
 
         assertNotNull(brandingPanel, "Should have a branding header panel");
         assertEquals(3, headerCount, "Should have 3 headers (WORKSPACES, CONTEXT, CONFIG)");
-        assertEquals(8, buttonCount, "Should have 8 navigation buttons");
+        assertEquals(9, buttonCount, "Should have 9 navigation buttons");
 
         boolean foundLogoPanel = false;
         boolean foundTitleLabel = false;

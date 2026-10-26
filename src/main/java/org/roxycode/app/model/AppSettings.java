@@ -1,5 +1,8 @@
 package org.roxycode.app.model;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** Model representing application settings. */
 public class AppSettings {
     public static final String DEFAULT_THEME = "FlatLaf Light";
@@ -11,6 +14,7 @@ public class AppSettings {
     private String geminiModel = DEFAULT_GEMINI_MODEL;
     private int maxAgentToolTurns = 5;
     private int maxChatMemoryMessages = 50;
+    private List<String> globalContextFolders = new ArrayList<>();
 
     public AppSettings() {}
 
@@ -80,5 +84,26 @@ public class AppSettings {
      */
     public void setMaxChatMemoryMessages(int maxChatMemoryMessages) {
         this.maxChatMemoryMessages = maxChatMemoryMessages;
+    }
+
+    /**
+     * Gets the configured global context folder paths.
+     *
+     * @return immutable list of global context folder paths
+     */
+    public List<String> getGlobalContextFolders() {
+        return globalContextFolders == null ? List.of() : List.copyOf(globalContextFolders);
+    }
+
+    /**
+     * Sets the configured global context folder paths.
+     *
+     * @param globalContextFolders the list of folder paths to set
+     */
+    public void setGlobalContextFolders(List<String> globalContextFolders) {
+        this.globalContextFolders =
+                globalContextFolders == null
+                        ? new ArrayList<>()
+                        : new ArrayList<>(globalContextFolders);
     }
 }
