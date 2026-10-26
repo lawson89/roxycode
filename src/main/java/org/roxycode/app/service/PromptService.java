@@ -319,44 +319,34 @@ public class PromptService {
     }
 
     public String loadGlobalContext() {
-        List<ContextFileItem> files = listGlobalContextFiles();
-        if (files.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (ContextFileItem item : files) {
-            try {
-                String content = Files.readString(item.filePath(), StandardCharsets.UTF_8);
-                sb.append("\n\n## Global Context: ")
-                        .append(item.fileName())
-                        .append("\n")
-                        .append(content);
-            } catch (Exception e) {
-                log.error(
-                        "Failed to read global context file {}: {}",
-                        item.filePath(),
-                        e.getMessage());
-            }
-        }
-        return sb.toString();
+        return formatContextSection(listGlobalContextFiles(), "Global Context", "global");
     }
 
     public String loadProjectContext() {
-        List<ContextFileItem> files = listProjectContextFiles();
+        return formatContextSection(listProjectContextFiles(), "Project Context", "project");
+    }
+
+    private String formatContextSection(
+            List<ContextFileItem> files, String headerTitle, String logScope) {
         if (files.isEmpty()) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
         for (ContextFileItem item : files) {
             try {
-                String content = Files.readString(item.filePath(), StandardCharsets.UTF_8);
-                sb.append("\n\n## Project Context: ")
-                        .append(item.fileName())
-                        .append("\n")
-                        .append(content);
+                String content = readContextFile(item.filePath());
+                if (content != null && !content.isBlank()) {
+                    sb.append("\n\n## ")
+                            .append(headerTitle)
+                            .append(": ")
+                            .append(item.fileName())
+                            .append("\n")
+                            .append(content);
+                }
             } catch (Exception e) {
-                log.error(
-                        "Failed to read project context file {}: {}",
+                log.warn(
+                        "Failed to read {} context file {}: {}",
+                        logScope,
                         item.filePath(),
                         e.getMessage());
             }

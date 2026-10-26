@@ -83,7 +83,7 @@ public class AiService {
                         conversationId,
                         phase != null ? phase : planService.getCurrentPhase(),
                         new AtomicInteger(0),
-                        new java.util.concurrent.atomic.AtomicReference<>(new StringBuilder()));
+                        new StringBuilder());
         String convId = turnContext.conversationId();
         AtomicInteger turnCounter = turnContext.turnCounter();
 
@@ -114,7 +114,7 @@ public class AiService {
         String rawFinishReason = null;
         Usage usage = null;
         int toolTurns = turnContext.turnCounter().get();
-        String accumulatedText = turnContext.textAccumulator().get().toString().trim();
+        String accumulatedText = turnContext.textAccumulator().toString().trim();
 
         if (chatResponse != null) {
             Generation result = chatResponse.getResult();
@@ -139,11 +139,8 @@ public class AiService {
 
         if (isTokenLimitFinishReason(finishReason)) {
             if (hasVisibleContent) {
-                StringBuilder sb = new StringBuilder();
-                if (!accumulatedText.isEmpty() && !content.startsWith(accumulatedText)) {
-                    sb.append(accumulatedText).append("\n\n");
-                }
-                sb.append(content);
+                StringBuilder sb =
+                        new StringBuilder(prependAccumulatedText(accumulatedText, content));
                 sb.append("\n\n---\n> ")
                         .append(TRUNCATED_MARKER)
                         .append(" ")
@@ -167,11 +164,7 @@ public class AiService {
                     .append(")**\n\n")
                     .append(
                             "Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
-            sb.append("\n- **Finish reason:** ").append(finishReason);
-            sb.append("\n- **Tool turns executed:** ").append(toolTurns);
-            if (!usageSummary.isEmpty()) {
-                sb.append("\n- **Token usage:** ").append(usageSummary);
-            }
+            appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
             sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.");
             return sb.toString();
         }
@@ -194,11 +187,7 @@ public class AiService {
                         .append(finishReason)
                         .append(").");
             }
-            sb.append("\n- **Finish reason:** ").append(finishReason);
-            sb.append("\n- **Tool turns executed:** ").append(toolTurns);
-            if (!usageSummary.isEmpty()) {
-                sb.append("\n- **Token usage:** ").append(usageSummary);
-            }
+            appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
             if (normalStop) {
                 sb.append(
                         "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response.");
@@ -209,11 +198,23 @@ public class AiService {
             return sb.toString();
         }
 
+        return prependAccumulatedText(accumulatedText, content);
+    }
+
+    private static String prependAccumulatedText(String accumulatedText, String content) {
         if (!accumulatedText.isEmpty() && !content.startsWith(accumulatedText)) {
             return (accumulatedText + "\n\n" + content).trim();
         }
-
         return content;
+    }
+
+    private static void appendDiagnosticMetadata(
+            StringBuilder sb, String finishReason, int toolTurns, String usageSummary) {
+        sb.append("\n- **Finish reason:** ").append(finishReason);
+        sb.append("\n- **Tool turns executed:** ").append(toolTurns);
+        if (!usageSummary.isEmpty()) {
+            sb.append("\n- **Token usage:** ").append(usageSummary);
+        }
     }
 
     public static boolean isAutoNudgeableResponse(String response, boolean hadToolTurns) {

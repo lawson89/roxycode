@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ToolContext;
@@ -25,8 +24,7 @@ class TurnToolContextTest {
         assertNotNull(defaultCtx.textAccumulator());
 
         AtomicInteger counter = new AtomicInteger(3);
-        AtomicReference<StringBuilder> accumulator =
-                new AtomicReference<>(new StringBuilder("existing"));
+        StringBuilder accumulator = new StringBuilder("existing");
         TurnToolContext ctx =
                 new TurnToolContext("task:default", WorkflowPhase.CODE, counter, accumulator);
         Map<String, Object> map = ctx.toMap();
@@ -35,7 +33,8 @@ class TurnToolContextTest {
         assertEquals("task:default", restored.conversationId());
         assertEquals(WorkflowPhase.CODE, restored.phase());
         assertSame(counter, restored.turnCounter());
-        assertEquals("existing", restored.textAccumulator().get().toString());
+        assertSame(accumulator, restored.textAccumulator());
+        assertEquals("existing", restored.textAccumulator().toString());
     }
 
     @Test

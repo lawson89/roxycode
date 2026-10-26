@@ -260,8 +260,7 @@ class ReturnDirectToolCallingManagerTest {
     void testExecuteToolCallsAccumulatesAssistantText() {
         settings.setMaxAgentToolTurns(5);
         AtomicInteger turnCounter = new AtomicInteger(0);
-        java.util.concurrent.atomic.AtomicReference<StringBuilder> accumulator =
-                new java.util.concurrent.atomic.AtomicReference<>(new StringBuilder());
+        StringBuilder accumulator = new StringBuilder();
         TurnToolContext turnContext =
                 new TurnToolContext("conv-accum", WorkflowPhase.EXPLORE, turnCounter, accumulator);
 
@@ -287,6 +286,6 @@ class ReturnDirectToolCallingManagerTest {
 
         manager.executeToolCalls(prompt, chatResponse);
 
-        assertEquals("Initial thoughts.\n\n", accumulator.get().toString());
+        assertEquals("Initial thoughts.\n\n", accumulator.toString());
     }
 }

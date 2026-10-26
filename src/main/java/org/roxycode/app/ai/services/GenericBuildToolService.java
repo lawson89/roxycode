@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.SystemUtils;
@@ -125,14 +126,14 @@ public class GenericBuildToolService {
             value = "Cleans the project using the configured clean command",
             examples = "buildToolService.clean()")
     public BuildResult clean() {
-        return runCommand("build", "clean");
+        return runCommand("build.clean", config -> config.build().clean());
     }
 
     @AgentDoc(
             value = "Compiles the project using the configured compile command",
             examples = "buildToolService.compile()")
     public BuildResult compile() {
-        return runCommand("build", "compile");
+        return runCommand("build.compile", config -> config.build().compile());
     }
 
     @AgentDoc(
@@ -156,7 +157,7 @@ public class GenericBuildToolService {
             value = "Runs all tests using the configured test command",
             examples = "buildToolService.runTests()")
     public BuildResult runTests() {
-        return runCommand("test", "run_all");
+        return runCommand("test.run_all", config -> config.test().runAll());
     }
 
     @AgentDoc(
@@ -166,11 +167,15 @@ public class GenericBuildToolService {
     public BuildResult runSingleTest(
             @AgentDoc("The name of the test class or method (e.g., MyTest or MyTest#myMethod)")
                     String testName) {
-        return runCommand("test", "run_single", Map.of("testName", testName));
+        return runCommand(
+                "test.run_single",
+                config -> config.test().runSingle(),
+                Map.of("testName", testName));
     }
 
-    private BuildResult runCommand(String section, String commandKey) {
-        return runCommand(section, commandKey, Map.of());
+    private BuildResult runCommand(
+            String commandLabel, Function<BuildConfig, String> commandExtractor) {
+        return runCommand(commandLabel, commandExtractor, Map.of());
     }
 
     @AgentDoc(
@@ -200,7 +205,9 @@ public class GenericBuildToolService {
     }
 
     private BuildResult runCommand(
-            String section, String commandKey, Map<String, String> placeholders) {
+            String commandLabel,
+            Function<BuildConfig, String> commandExtractor,
+            Map<String, String> placeholders) {
         if (!projectService.hasActiveProject()) {
             return new BuildResult(
                     false, -1, "", List.of("No active project"), List.of(), "No active project");
@@ -210,13 +217,13 @@ public class GenericBuildToolService {
 
         try {
             BuildConfig config = loadConfig();
-            String command = getCommand(config, section, commandKey);
+            String command = commandExtractor.apply(config);
             if (command == null || command.isBlank()) {
                 return new BuildResult(
                         false,
                         -1,
                         "",
-                        List.of("Command not configured: " + commandKey),
+                        List.of("Command not configured: " + commandLabel),
                         List.of(),
                         "Command not configured");
             }
@@ -225,8 +232,8 @@ public class GenericBuildToolService {
                 command = new StringSubstitutor(placeholders, "{", "}").replace(command);
             }
 
-            String errorRegex = getParseRegex(config, "error_regex");
-            String testFailureRegex = getParseRegex(config, "test_failure_regex");
+            String errorRegex = config.parse().errorRegex();
+            String testFailureRegex = config.parse().testFailureRegex();
 
             Map<String, String> env = config.env();
             ContainerConfig containerConfig = config.container();
@@ -240,7 +247,7 @@ public class GenericBuildToolService {
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Failed to run build command: {}", commandKey, e);
+            log.error("Failed to run build command: {}", commandLabel, e);
             return new BuildResult(
                     false, -1, "", List.of(e.getMessage()), List.of(), e.getMessage());
         }
@@ -316,32 +323,6 @@ public class GenericBuildToolService {
             }
         }
         return tomlMapper.readValue(loadDefaultTemplateContent(), BuildConfig.class);
-    }
-
-    private String getCommand(BuildConfig config, String section, String key) {
-        return switch (section) {
-            case "build" ->
-                    switch (key) {
-                        case "compile" -> config.build().compile();
-                        case "clean" -> config.build().clean();
-                        default -> null;
-                    };
-            case "test" ->
-                    switch (key) {
-                        case "run_all" -> config.test().runAll();
-                        case "run_single" -> config.test().runSingle();
-                        default -> null;
-                    };
-            default -> null;
-        };
-    }
-
-    private String getParseRegex(BuildConfig config, String key) {
-        return switch (key) {
-            case "error_regex" -> config.parse().errorRegex();
-            case "test_failure_regex" -> config.parse().testFailureRegex();
-            default -> null;
-        };
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")

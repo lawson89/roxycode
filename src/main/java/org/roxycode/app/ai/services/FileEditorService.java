@@ -69,11 +69,8 @@ public class FileEditorService {
         PathUtils.createParentDirectories(path);
         Files.writeString(path, content);
 
-        long size = Files.size(path);
-        log.info("Wrote file: {} ({} bytes) at {}", relativePath, size, path.toAbsolutePath());
-
-        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
-        return new EditorResult(true, "File written successfully: " + relativePath, null);
+        return completeFileMutation(
+                path, relativePath, "File written successfully: " + relativePath);
     }
 
     /**
@@ -121,17 +118,7 @@ public class FileEditorService {
             return applyReplacement(path, relativePath, content, start, end, normalizedReplacement);
         }
         if (exactMatchOffsets.size() > SINGLE_MATCH_COUNT) {
-            List<Integer> matchLines = offsetsToLineNumbers(content, exactMatchOffsets);
-            return new EditorResult(
-                    false,
-                    "",
-                    "TargetBlock is not unique in file: "
-                            + relativePath
-                            + " (found "
-                            + matchLines.size()
-                            + " matches at lines: "
-                            + matchLines
-                            + ")");
+            return nonUniqueMatchResult(relativePath, content, exactMatchOffsets);
         }
 
         // Pass 2: Whitespace-agnostic regex fallback with leading indentation preservation
@@ -163,17 +150,7 @@ public class FileEditorService {
             for (int[] match : regexMatches) {
                 offsets.add(match[0]);
             }
-            List<Integer> matchLines = offsetsToLineNumbers(content, offsets);
-            return new EditorResult(
-                    false,
-                    "",
-                    "TargetBlock is not unique in file: "
-                            + relativePath
-                            + " (found "
-                            + matchLines.size()
-                            + " matches at lines: "
-                            + matchLines
-                            + ")");
+            return nonUniqueMatchResult(relativePath, content, offsets);
         }
 
         int start = regexMatches.get(0)[0];
@@ -247,17 +224,8 @@ public class FileEditorService {
 
         writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
 
-        long size = Files.size(path);
-        log.info(
-                "Replaced lines {}-{} in file: {} ({} bytes) at {}",
-                startLine,
-                endLine,
-                relativePath,
-                size,
-                path.toAbsolutePath());
-
-        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
-        return new EditorResult(true, "Lines replaced successfully in: " + relativePath, null);
+        return completeFileMutation(
+                path, relativePath, "Lines replaced successfully in: " + relativePath);
     }
 
     /**
@@ -311,16 +279,8 @@ public class FileEditorService {
 
         writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
 
-        long size = Files.size(path);
-        log.info(
-                "Inserted content at line {} in file: {} ({} bytes) at {}",
-                lineNumber,
-                relativePath,
-                size,
-                path.toAbsolutePath());
-
-        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
-        return new EditorResult(true, "Content inserted successfully in: " + relativePath, null);
+        return completeFileMutation(
+                path, relativePath, "Content inserted successfully in: " + relativePath);
     }
 
     /**
@@ -464,15 +424,31 @@ public class FileEditorService {
         String newContent = content.substring(0, start) + replacementBlock + content.substring(end);
         Files.writeString(path, newContent);
 
-        long size = Files.size(path);
-        log.info(
-                "Replaced block in file: {} ({} bytes) at {}",
-                relativePath,
-                size,
-                path.toAbsolutePath());
+        return completeFileMutation(
+                path, relativePath, "Block replaced successfully in: " + relativePath);
+    }
 
+    private EditorResult completeFileMutation(Path path, String relativePath, String message)
+            throws IOException {
+        long size = Files.size(path);
+        log.info("{} ({} bytes) at {}", message, size, path.toAbsolutePath());
         eventPublisher.publishEvent(new FileChangedEvent(relativePath));
-        return new EditorResult(true, "Block replaced successfully in: " + relativePath, null);
+        return new EditorResult(true, message, null);
+    }
+
+    private static EditorResult nonUniqueMatchResult(
+            String relativePath, String content, List<Integer> matchOffsets) {
+        List<Integer> matchLines = offsetsToLineNumbers(content, matchOffsets);
+        return new EditorResult(
+                false,
+                "",
+                "TargetBlock is not unique in file: "
+                        + relativePath
+                        + " (found "
+                        + matchLines.size()
+                        + " matches at lines: "
+                        + matchLines
+                        + ")");
     }
 
     private static List<Integer> findExactMatches(String content, String target) {

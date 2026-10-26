@@ -2,7 +2,6 @@ package org.roxycode.app.ai;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -17,7 +16,7 @@ public record TurnToolContext(
         String conversationId,
         WorkflowPhase phase,
         AtomicInteger turnCounter,
-        AtomicReference<StringBuilder> textAccumulator) {
+        StringBuilder textAccumulator) {
 
     public static final String CONVERSATION_ID_KEY = "conversationId";
     public static final String PHASE_KEY = "phase";
@@ -29,10 +28,7 @@ public record TurnToolContext(
         conversationId = StringUtils.defaultIfBlank(conversationId, DEFAULT_CONVERSATION_ID);
         phase = phase != null ? phase : WorkflowPhase.EXPLORE;
         turnCounter = turnCounter != null ? turnCounter : new AtomicInteger(0);
-        textAccumulator =
-                textAccumulator != null
-                        ? textAccumulator
-                        : new AtomicReference<>(new StringBuilder());
+        textAccumulator = textAccumulator != null ? textAccumulator : new StringBuilder();
     }
 
     public Map<String, Object> toMap() {
@@ -60,7 +56,6 @@ public record TurnToolContext(
         return fromMap(map, fallbackPhase);
     }
 
-    @SuppressWarnings("unchecked")
     public static TurnToolContext fromMap(
             Map<String, Object> contextMap, WorkflowPhase fallbackPhase) {
         WorkflowPhase defaultPhase = fallbackPhase != null ? fallbackPhase : WorkflowPhase.EXPLORE;
@@ -69,7 +64,7 @@ public record TurnToolContext(
                     DEFAULT_CONVERSATION_ID,
                     defaultPhase,
                     new AtomicInteger(0),
-                    new AtomicReference<>(new StringBuilder()));
+                    new StringBuilder());
         }
 
         String convId =
@@ -94,11 +89,10 @@ public record TurnToolContext(
                         ? ai
                         : new AtomicInteger(0);
 
-        AtomicReference<StringBuilder> accumulator =
-                contextMap.get(TEXT_ACCUMULATOR_KEY) instanceof AtomicReference<?> ar
-                                && ar.get() instanceof StringBuilder
-                        ? (AtomicReference<StringBuilder>) ar
-                        : new AtomicReference<>(new StringBuilder());
+        StringBuilder accumulator =
+                contextMap.get(TEXT_ACCUMULATOR_KEY) instanceof StringBuilder sb
+                        ? sb
+                        : new StringBuilder();
 
         return new TurnToolContext(convId, resolvedPhase, counter, accumulator);
     }

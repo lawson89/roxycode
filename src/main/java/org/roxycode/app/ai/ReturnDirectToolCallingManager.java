@@ -76,7 +76,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
                 && chatResponse.getResult().getOutput() != null) {
             AssistantMessage assistantMsg = chatResponse.getResult().getOutput();
             if (org.apache.commons.lang3.StringUtils.isNotBlank(assistantMsg.getText())) {
-                turnContext.textAccumulator().get().append(assistantMsg.getText()).append("\n\n");
+                turnContext.textAccumulator().append(assistantMsg.getText()).append("\n\n");
             }
         }
 

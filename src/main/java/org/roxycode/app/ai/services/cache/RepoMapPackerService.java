@@ -218,10 +218,7 @@ public class RepoMapPackerService {
                     continue;
                 }
                 long lastModified = Files.getLastModifiedTime(filePath).toMillis();
-                CachedSkeleton existing = skeletonCache.get(filePath);
-                if (existing == null
-                        || existing.lastModifiedMillis() != lastModified
-                        || existing.size() != size) {
+                if (getValidCachedSkeleton(filePath, lastModified, size) == null) {
                     uncached.add(new FileStat(filePath, lastModified, size));
                 }
             } catch (Exception e) {
@@ -314,15 +311,13 @@ public class RepoMapPackerService {
             Path normalized = filePath.toAbsolutePath().normalize();
             long size = Files.size(normalized);
             long lastModified = Files.getLastModifiedTime(normalized).toMillis();
-            CachedSkeleton cached = skeletonCache.get(normalized);
-            if (cached != null
-                    && cached.lastModifiedMillis() == lastModified
-                    && cached.size() == size) {
+            CachedSkeleton cached = getValidCachedSkeleton(normalized, lastModified, size);
+            if (cached != null) {
                 return cached.skeleton().isEmpty() ? null : cached.skeleton();
             }
 
             populateSkeletonBatch(List.of(new FileStat(normalized, lastModified, size)));
-            cached = skeletonCache.get(normalized);
+            cached = getValidCachedSkeleton(normalized, lastModified, size);
             if (cached != null) {
                 return cached.skeleton().isEmpty() ? null : cached.skeleton();
             }
@@ -332,6 +327,16 @@ public class RepoMapPackerService {
             log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
             return null;
         }
+    }
+
+    private CachedSkeleton getValidCachedSkeleton(Path path, long lastModifiedMillis, long size) {
+        CachedSkeleton cached = skeletonCache.get(path);
+        if (cached != null
+                && cached.lastModifiedMillis() == lastModifiedMillis
+                && cached.size() == size) {
+            return cached;
+        }
+        return null;
     }
 
     private static String formatSkeletonLines(Path filePath, List<Tag> tags) {
