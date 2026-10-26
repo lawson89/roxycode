@@ -5,6 +5,7 @@ import java.awt.Container;
 import java.util.function.Predicate;
 import javax.swing.JButton;
 import javax.swing.text.Element;
+import javax.swing.text.html.HTML;
 
 /** Shared component and HTML document tree traversal utilities for UI tests. */
 final class SwingTestUtils {
@@ -55,5 +56,30 @@ final class SwingTestUtils {
             }
         }
         return null;
+    }
+
+    static Element findTdByClass(Element root, String className) {
+        return findElement(
+                root,
+                "td",
+                elem ->
+                        className.equals(
+                                String.valueOf(
+                                        elem.getAttributes().getAttribute(HTML.Attribute.CLASS))));
+    }
+
+    static Element findTdWithText(Element root, String snippet) {
+        return findElement(
+                root,
+                "td",
+                elem -> {
+                    try {
+                        int start = elem.getStartOffset();
+                        int end = elem.getEndOffset();
+                        return elem.getDocument().getText(start, end - start).contains(snippet);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                });
     }
 }

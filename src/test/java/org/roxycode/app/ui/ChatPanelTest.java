@@ -18,7 +18,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.Action;
@@ -31,10 +30,8 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.MatteBorder;
 import net.miginfocom.swing.MigLayout;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -42,43 +39,9 @@ import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
-import org.roxycode.app.service.AiService;
-import org.roxycode.app.service.SettingsService;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
-public class ChatPanelTest {
-
-    private AiService aiService;
-    private PlanService planService;
-    private ApplicationEventPublisher publisher;
-    private ChatMemory chatMemory;
-    private SettingsService settingsService;
-
-    @BeforeEach
-    void setUp() {
-        aiService = mock(AiService.class);
-        planService = mock(PlanService.class);
-        publisher = mock(ApplicationEventPublisher.class);
-        chatMemory = mock(ChatMemory.class);
-        settingsService = mock(SettingsService.class);
-    }
-
-    private ChatPanel createChatPanel() {
-        return new ChatPanel(
-                aiService, planService, publisher, chatMemory, "test", null, true, null, null);
-    }
-
-    private FeatureChatPanel createFeatureChatPanel(Executor executor) {
-        return new FeatureChatPanel(
-                aiService, planService, publisher, chatMemory, settingsService, executor);
-    }
-
-    private ExploreChatPanel createExploreChatPanel(Executor executor) {
-        return new ExploreChatPanel(
-                aiService, planService, publisher, chatMemory, settingsService, executor);
-    }
+public class ChatPanelTest extends ChatTestFixture {
 
     @Test
     public void testChatPanelInitialization() {

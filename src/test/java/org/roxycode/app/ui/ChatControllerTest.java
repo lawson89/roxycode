@@ -5,52 +5,18 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.awt.image.BufferedImage;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserMessageEvent;
-import org.roxycode.app.service.AiService;
-import org.roxycode.app.service.SettingsService;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.context.ApplicationEventPublisher;
 
-class ChatControllerTest {
-
-    private AiService aiService;
-    private PlanService planService;
-    private ApplicationEventPublisher publisher;
-    private ChatMemory chatMemory;
-    private SettingsService settingsService;
-    private Executor directExecutor;
-
-    @BeforeEach
-    void setUp() {
-        aiService = mock(AiService.class);
-        planService = mock(PlanService.class);
-        publisher = mock(ApplicationEventPublisher.class);
-        chatMemory = mock(ChatMemory.class);
-        settingsService = mock(SettingsService.class);
-        directExecutor = Runnable::run;
-    }
-
-    private FeatureChatPanel createFeatureChatPanel(Executor executor) {
-        return new FeatureChatPanel(
-                aiService, planService, publisher, chatMemory, settingsService, executor);
-    }
-
-    private ExploreChatPanel createExploreChatPanel(Executor executor) {
-        return new ExploreChatPanel(
-                aiService, planService, publisher, chatMemory, settingsService, executor);
-    }
+class ChatControllerTest extends ChatTestFixture {
 
     @Test
     void testRejectPhaseNotifiesWorkflowAndTriggersTurn() throws Exception {

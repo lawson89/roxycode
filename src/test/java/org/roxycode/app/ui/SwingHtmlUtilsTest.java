@@ -160,6 +160,9 @@ class SwingHtmlUtilsTest {
                 extractedText.contains(longInlineToken),
                 "Underlying document text for inline content should remain intact");
 
+        assertNotNull(
+                SwingTestUtils.findElement(doc.getDefaultRootElement(), "br", e -> true),
+                "Should find <br> element in document");
         boolean foundBr = verifyWrappingViews(doc.getDefaultRootElement(), factory);
         assertTrue(foundBr, "Should find <br> element in document");
     }

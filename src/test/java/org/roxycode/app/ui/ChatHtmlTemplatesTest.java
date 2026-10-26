@@ -6,7 +6,6 @@ import javax.swing.JEditorPane;
 import javax.swing.text.Element;
 import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
-import javax.swing.text.html.HTML;
 import org.junit.jupiter.api.Test;
 
 class ChatHtmlTemplatesTest {
@@ -177,16 +176,8 @@ class ChatHtmlTemplatesTest {
 
         ViewFactory factory = pane.getEditorKit().getViewFactory();
         Element accentTd =
-                SwingTestUtils.findElement(
-                        pane.getDocument().getDefaultRootElement(),
-                        "td",
-                        elem ->
-                                "ai-accent"
-                                        .equals(
-                                                String.valueOf(
-                                                        elem.getAttributes()
-                                                                .getAttribute(
-                                                                        HTML.Attribute.CLASS))));
+                SwingTestUtils.findTdByClass(
+                        pane.getDocument().getDefaultRootElement(), "ai-accent");
         assertNotNull(accentTd, "Should find ai-accent td element");
         View tdView = factory.create(accentTd);
         assertTrue(

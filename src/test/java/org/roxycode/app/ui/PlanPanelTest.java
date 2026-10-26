@@ -131,19 +131,21 @@ class PlanPanelTest {
         ViewFactory factory = kit.getViewFactory();
         HTMLDocument doc = (HTMLDocument) editorPane.getDocument();
 
-        Element td0 = findTdWithText(doc.getDefaultRootElement(), "0.");
+        Element td0 = SwingTestUtils.findTdWithText(doc.getDefaultRootElement(), "0.");
         assertNotNull(td0, "Should find index <td> element");
         assertTrue(
                 hasPositiveInlineMinSpan(td0, factory),
                 "Nowrap index cell inline content should preserve positive minimum X span so it does not wrap");
 
-        Element tdCheckbox = findTdWithText(doc.getDefaultRootElement(), "[");
+        Element tdCheckbox = SwingTestUtils.findTdWithText(doc.getDefaultRootElement(), "[");
         assertNotNull(tdCheckbox, "Should find checkbox <td> element");
         assertTrue(
                 hasPositiveInlineMinSpan(tdCheckbox, factory),
                 "Nowrap checkbox cell inline content should preserve positive minimum X span so it does not wrap");
 
-        Element tdDesc = findTdWithText(doc.getDefaultRootElement(), "Update src/main/resources");
+        Element tdDesc =
+                SwingTestUtils.findTdWithText(
+                        doc.getDefaultRootElement(), "Update src/main/resources");
         assertNotNull(tdDesc, "Should find description <td> element");
         assertFalse(
                 hasPositiveInlineMinSpan(tdDesc, factory),
@@ -282,20 +284,5 @@ class PlanPanelTest {
             }
         }
         return false;
-    }
-
-    private Element findTdWithText(Element root, String snippet) {
-        return SwingTestUtils.findElement(
-                root,
-                "td",
-                elem -> {
-                    try {
-                        int start = elem.getStartOffset();
-                        int end = elem.getEndOffset();
-                        return elem.getDocument().getText(start, end - start).contains(snippet);
-                    } catch (Exception e) {
-                        return false;
-                    }
-                });
     }
 }
