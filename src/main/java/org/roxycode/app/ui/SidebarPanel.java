@@ -31,7 +31,7 @@ public final class SidebarPanel extends JPanel {
                 new MigLayout(
                         "wrap, fillx, insets 15 12 15 12",
                         "[fill, grow]",
-                        "[]20[]5[]2[]15[]5[]2[]2[]2[]15[]5[]2[]2[]push"));
+                        "[]20[]5[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
 
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
@@ -47,8 +47,7 @@ public final class SidebarPanel extends JPanel {
         add(taskBtn);
 
         add(createSectionHeader("CONTEXT"), "gaptop 15");
-        add(createNavButton("Global Context", "GLOBAL_CONTEXT", Codicons.GLOBE));
-        add(createNavButton("Project Context", "CONTEXT_MGR", Codicons.FILE));
+        add(createNavButton("Context", "CONTEXT_MGR", Codicons.FILE));
         add(createNavButton("Implicit Cache", "CACHE", Codicons.DATABASE));
         add(createNavButton("API", "API", Codicons.CODE));
 

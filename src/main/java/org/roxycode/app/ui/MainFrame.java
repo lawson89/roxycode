@@ -25,7 +25,6 @@ public final class MainFrame extends JFrame {
 
     static final String QA_VIEW = "QA_VIEW";
     static final String TASK_VIEW = "TASK_VIEW";
-    static final String GLOBAL_CONTEXT_VIEW = "GLOBAL_CONTEXT";
     private static final String CACHE_VIEW = "CACHE";
     private static final String API_VIEW = "API";
     private static final String TOOLS_VIEW = "TOOLS";
@@ -56,7 +55,6 @@ public final class MainFrame extends JFrame {
             SystemToolsPanel systemToolsPanel,
             SettingsPanel settingsPanel,
             BuildConfigPanel buildConfigPanel,
-            GlobalContextPanel globalContextPanel,
             ContextManagerPanel contextManagerPanel) {
         this.settingsService = settingsService;
         this.projectService = projectService;
@@ -74,7 +72,6 @@ public final class MainFrame extends JFrame {
                 systemToolsPanel,
                 settingsPanel,
                 buildConfigPanel,
-                globalContextPanel,
                 contextManagerPanel);
     }
 
@@ -137,7 +134,6 @@ public final class MainFrame extends JFrame {
             SystemToolsPanel systemToolsPanel,
             SettingsPanel settingsPanel,
             BuildConfigPanel buildConfigPanel,
-            GlobalContextPanel globalContextPanel,
             ContextManagerPanel contextManagerPanel) {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
@@ -158,7 +154,6 @@ public final class MainFrame extends JFrame {
         contentArea.add(systemToolsPanel, TOOLS_VIEW);
         contentArea.add(settingsPanel, SETTINGS_VIEW);
         contentArea.add(buildConfigPanel, BUILD_CONFIG_VIEW);
-        contentArea.add(globalContextPanel, GLOBAL_CONTEXT_VIEW);
         contentArea.add(contextManagerPanel, CONTEXT_MGR_VIEW);
 
         workspace.add(header, "h 36!, wrap");

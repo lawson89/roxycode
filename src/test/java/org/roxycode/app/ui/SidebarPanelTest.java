@@ -25,8 +25,8 @@ class SidebarPanelTest {
 
         Component[] components = sidebar.getComponents();
 
-        // Expected: 1 BrandingPanel, 3 Headers, 9 NavButtons = 13
-        assertEquals(13, components.length, "Sidebar should have exactly 13 components");
+        // Expected: 1 BrandingPanel, 3 Headers, 8 NavButtons = 12
+        assertEquals(12, components.length, "Sidebar should have exactly 12 components");
 
         int headerCount = 0;
         int buttonCount = 0;
@@ -40,7 +40,17 @@ class SidebarPanelTest {
 
         assertNotNull(brandingPanel, "Should have a branding header panel");
         assertEquals(3, headerCount, "Should have 3 headers (WORKSPACES, CONTEXT, CONFIG)");
-        assertEquals(9, buttonCount, "Should have 9 navigation buttons");
+        assertEquals(8, buttonCount, "Should have 8 navigation buttons");
+
+        assertNull(
+                SwingTestUtils.findButton(sidebar, "Global Context"),
+                "Should not have a separate Global Context button");
+        assertNull(
+                SwingTestUtils.findButton(sidebar, "Project Context"),
+                "Should not have a separate Project Context button");
+        assertNotNull(
+                SwingTestUtils.findButton(sidebar, "Context"),
+                "Should have a single Context button");
 
         boolean foundLogoPanel = false;
         boolean foundTitleLabel = false;
@@ -100,9 +110,11 @@ class SidebarPanelTest {
 
         JButton qaBtn = SwingTestUtils.findButton(sidebar, "Codebase Q&A");
         JButton taskBtn = SwingTestUtils.findButton(sidebar, "Feature Request");
+        JButton contextBtn = SwingTestUtils.findButton(sidebar, "Context");
 
         assertNotNull(qaBtn, "QA Button should be found");
         assertNotNull(taskBtn, "Task Button should be found");
+        assertNotNull(contextBtn, "Context Button should be found");
         assertInstanceOf(FontIcon.class, taskBtn.getIcon());
         assertEquals(Codicons.GIT_PULL_REQUEST, ((FontIcon) taskBtn.getIcon()).getIkon());
 
@@ -115,6 +127,9 @@ class SidebarPanelTest {
 
         taskBtn.doClick();
         verify(navAction).accept("TASK_VIEW");
+
+        contextBtn.doClick();
+        verify(navAction).accept("CONTEXT_MGR");
     }
 
     @Test

@@ -1,12 +1,14 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Font;
 import java.awt.GraphicsEnvironment;
 import java.awt.GridLayout;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
@@ -22,14 +24,12 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingWorker;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.fife.ui.rtextarea.RTextScrollPane;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.service.PromptService;
 import org.roxycode.app.service.PromptService.ContextFileItem;
-import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
@@ -39,218 +39,57 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Panel for managing per-project context folders and previewing discovered top-level text files.
+ * Unified side-by-side panel for managing Global Context folders (left column) and Project Context
+ * folders (right column) along with their discovered top-level text files.
  */
 @Component
 @Lazy
-public final class ContextManagerPanel extends BaseContextFolderPanel {
+public final class ContextManagerPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
-    public ContextManagerPanel(PromptService promptService, SettingsService settingsService) {
-        super(promptService, settingsService, "Project Context Folders", false);
+    static final String GLOBAL_SUBTITLE = "Shared across all projects";
+    static final String PROJECT_SUBTITLE = "Scoped to active project";
+
+    private final ContextScopeColumn globalColumn;
+    private final ContextScopeColumn projectColumn;
+    private String lastErrorMessage;
+    private transient Consumer<String> errorDialogPresenter;
+
+    public ContextManagerPanel(PromptService promptService) {
+        this.errorDialogPresenter =
+                msg -> {
+                    if (!GraphicsEnvironment.isHeadless()) {
+                        JOptionPane.showMessageDialog(
+                                ContextManagerPanel.this, msg, "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                };
+        setLayout(new GridLayout(1, 2, 12, 0));
+        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        this.globalColumn =
+                new ContextScopeColumn(promptService, "Global Context", true, this::showError);
+        this.projectColumn =
+                new ContextScopeColumn(promptService, "Project Context", false, this::showError);
+
+        add(globalColumn);
+        add(projectColumn);
     }
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        handleSettingsChanged(event);
+        Edt.run(globalColumn::refreshFoldersAndFiles);
     }
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(
                 () -> {
-                    clearSelectionAndPreview();
-                    refreshFoldersAndFiles();
-                });
-    }
-}
-
-/**
- * Shared base panel for Global Context and Project Context folder management and read-only preview.
- */
-abstract class BaseContextFolderPanel extends JPanel {
-    private static final long serialVersionUID = 1L;
-    private static final Logger log = LoggerFactory.getLogger(BaseContextFolderPanel.class);
-
-    protected final transient PromptService promptService;
-    protected final transient SettingsService settingsService;
-    private final boolean globalScope;
-
-    private final DefaultListModel<String> folderListModel;
-    private final JList<String> folderList;
-    private final JButton btnAddFolder;
-    private final JButton btnRemoveFolder;
-
-    private final DefaultListModel<ContextFileItem> fileListModel;
-    private final JList<ContextFileItem> fileList;
-    private final RSyntaxTextArea textArea;
-
-    private ContextFileItem currentFile;
-    private String lastErrorMessage;
-    private transient Consumer<String> errorDialogPresenter;
-
-    record FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {}
-
-    protected BaseContextFolderPanel(
-            PromptService promptService,
-            SettingsService settingsService,
-            String foldersHeaderTitle,
-            boolean globalScope) {
-        this.promptService = promptService;
-        this.settingsService = settingsService;
-        this.globalScope = globalScope;
-        this.errorDialogPresenter =
-                msg -> {
-                    if (!GraphicsEnvironment.isHeadless()) {
-                        JOptionPane.showMessageDialog(
-                                BaseContextFolderPanel.this,
-                                msg,
-                                "Error",
-                                JOptionPane.ERROR_MESSAGE);
-                    }
-                };
-        setLayout(new BorderLayout());
-
-        folderListModel = new DefaultListModel<>();
-        folderList = new JList<>(folderListModel);
-        folderList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        JScrollPane folderScroll = new JScrollPane(folderList);
-
-        btnAddFolder = new JButton("Add Folder...");
-        btnRemoveFolder = new JButton("Remove Folder");
-        btnRemoveFolder.setEnabled(false);
-
-        JPanel folderButtons = new JPanel(new GridLayout(1, 2, 5, 5));
-        folderButtons.add(btnAddFolder);
-        folderButtons.add(btnRemoveFolder);
-
-        JPanel foldersPanel = new JPanel(new BorderLayout(0, 5));
-        foldersPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        foldersPanel.add(new JLabel(foldersHeaderTitle), BorderLayout.NORTH);
-        foldersPanel.add(folderScroll, BorderLayout.CENTER);
-        foldersPanel.add(folderButtons, BorderLayout.SOUTH);
-
-        fileListModel = new DefaultListModel<>();
-        fileList = new JList<>(fileListModel);
-        fileList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        fileList.setCellRenderer(
-                new DefaultListCellRenderer() {
-                    private static final long serialVersionUID = 1L;
-
-                    @Override
-                    public java.awt.Component getListCellRendererComponent(
-                            JList<?> list,
-                            Object value,
-                            int index,
-                            boolean isSelected,
-                            boolean cellHasFocus) {
-                        super.getListCellRendererComponent(
-                                list, value, index, isSelected, cellHasFocus);
-                        if (value instanceof ContextFileItem item) {
-                            setText(item.fileName());
-                            if (item.filePath() != null) {
-                                setToolTipText(item.filePath().toString());
-                            }
-                        }
-                        return this;
-                    }
-                });
-        JScrollPane fileScroll = new JScrollPane(fileList);
-
-        JPanel filesPanel = new JPanel(new BorderLayout(0, 5));
-        filesPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        filesPanel.add(new JLabel("Discovered Text Files (Top-Level)"), BorderLayout.NORTH);
-        filesPanel.add(fileScroll, BorderLayout.CENTER);
-
-        JSplitPane leftSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, foldersPanel, filesPanel);
-        leftSplit.setDividerLocation(180);
-        leftSplit.setResizeWeight(0.4);
-
-        textArea = new RSyntaxTextArea();
-        textArea.setEditable(false);
-        textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_MARKDOWN);
-        textArea.setCodeFoldingEnabled(true);
-        textArea.setAntiAliasingEnabled(true);
-        updateTextAreaTheme();
-        RTextScrollPane textScroll = new RTextScrollPane(textArea);
-
-        JPanel rightPanel = new JPanel(new BorderLayout(0, 5));
-        rightPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        rightPanel.add(new JLabel("File Preview (Read-Only)"), BorderLayout.NORTH);
-        rightPanel.add(textScroll, BorderLayout.CENTER);
-
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftSplit, rightPanel);
-        mainSplit.setDividerLocation(280);
-        add(mainSplit, BorderLayout.CENTER);
-
-        setupListeners();
-        refreshFoldersAndFiles();
-    }
-
-    protected void handleSettingsChanged(SettingsChangedEvent event) {
-        Edt.run(
-                () -> {
-                    updateTextAreaTheme(
-                            event != null && event.settings() != null
-                                    ? event.settings().getTheme()
-                                    : null);
-                    if (globalScope) {
-                        refreshFoldersAndFiles();
-                    }
+                    projectColumn.clearSelection();
+                    projectColumn.refreshFoldersAndFiles();
                 });
     }
 
-    protected void clearSelectionAndPreview() {
-        currentFile = null; // NOPMD
-        folderList.clearSelection();
-        fileList.clearSelection();
-        textArea.setText("");
-        btnRemoveFolder.setEnabled(false);
-    }
-
-    @Override
-    public void updateUI() {
-        super.updateUI();
-        if (textArea != null) {
-            updateTextAreaTheme();
-        }
-    }
-
-    void updateTextAreaTheme() {
-        SettingsPanel.applyRSyntaxTheme(textArea, settingsService);
-    }
-
-    void updateTextAreaTheme(String themeName) {
-        SettingsPanel.applyRSyntaxTheme(textArea, themeName);
-    }
-
-    static String resolveSyntaxStyle(String fileName) {
-        if (fileName == null || fileName.isBlank()) {
-            return SyntaxConstants.SYNTAX_STYLE_NONE;
-        }
-        String lower = fileName.toLowerCase(Locale.ROOT);
-        int dot = lower.lastIndexOf('.');
-        String ext = dot >= 0 ? lower.substring(dot + 1) : "";
-        return switch (ext) {
-            case "md", "markdown" -> SyntaxConstants.SYNTAX_STYLE_MARKDOWN;
-            case "java" -> SyntaxConstants.SYNTAX_STYLE_JAVA;
-            case "json" -> SyntaxConstants.SYNTAX_STYLE_JSON;
-            case "xml", "pom" -> SyntaxConstants.SYNTAX_STYLE_XML;
-            case "yml", "yaml" -> SyntaxConstants.SYNTAX_STYLE_YAML;
-            case "py" -> SyntaxConstants.SYNTAX_STYLE_PYTHON;
-            case "js", "mjs", "cjs" -> SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT;
-            case "ts", "tsx" -> SyntaxConstants.SYNTAX_STYLE_TYPESCRIPT;
-            case "html", "htm" -> SyntaxConstants.SYNTAX_STYLE_HTML;
-            case "css" -> SyntaxConstants.SYNTAX_STYLE_CSS;
-            case "sh", "bash", "zsh" -> SyntaxConstants.SYNTAX_STYLE_UNIX_SHELL;
-            case "sql" -> SyntaxConstants.SYNTAX_STYLE_SQL;
-            case "properties", "toml", "ini", "cfg", "conf" ->
-                    SyntaxConstants.SYNTAX_STYLE_PROPERTIES_FILE;
-            default -> SyntaxConstants.SYNTAX_STYLE_NONE;
-        };
-    }
-
-    protected void showError(String message) {
+    void showError(String message) {
         this.lastErrorMessage = message;
         if (errorDialogPresenter != null) {
             errorDialogPresenter.accept(message);
@@ -265,224 +104,464 @@ abstract class BaseContextFolderPanel extends JPanel {
         return lastErrorMessage;
     }
 
-    private void setupListeners() {
-        folderList.addListSelectionListener(
-                e -> {
-                    if (!e.getValueIsAdjusting()) {
-                        btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
-                    }
-                });
-
-        fileList.addListSelectionListener(
-                e -> {
-                    if (!e.getValueIsAdjusting()) {
-                        ContextFileItem selected = fileList.getSelectedValue();
-                        if (selected != null) {
-                            currentFile = selected;
-                            loadSelectedFileAsync(selected);
-                        } else {
-                            currentFile = null; // NOPMD
-                            textArea.setText("");
-                        }
-                    }
-                });
-
-        btnAddFolder.addActionListener(e -> chooseAndAddFolder());
-
-        btnRemoveFolder.addActionListener(
-                e -> {
-                    String selectedFolder = folderList.getSelectedValue();
-                    if (selectedFolder != null) {
-                        removeFolderAsync(selectedFolder);
-                    }
-                });
+    ContextScopeColumn getGlobalColumn() {
+        return globalColumn;
     }
 
-    private void chooseAndAddFolder() {
-        if (GraphicsEnvironment.isHeadless()) {
-            return;
+    ContextScopeColumn getProjectColumn() {
+        return projectColumn;
+    }
+
+    SwingWorker<Void, Void> addGlobalFolderAsync(String folderPath) {
+        return globalColumn.addFolderAsync(folderPath);
+    }
+
+    SwingWorker<Void, Void> removeGlobalFolderAsync(String folderPath) {
+        return globalColumn.removeFolderAsync(folderPath);
+    }
+
+    SwingWorker<Void, Void> addProjectFolderAsync(String folderPath) {
+        return projectColumn.addFolderAsync(folderPath);
+    }
+
+    SwingWorker<Void, Void> removeProjectFolderAsync(String folderPath) {
+        return projectColumn.removeFolderAsync(folderPath);
+    }
+
+    DefaultListModel<String> getGlobalFolderListModel() {
+        return globalColumn.getFolderListModel();
+    }
+
+    DefaultListModel<ContextFileItem> getGlobalFileListModel() {
+        return globalColumn.getFileListModel();
+    }
+
+    DefaultListModel<String> getProjectFolderListModel() {
+        return projectColumn.getFolderListModel();
+    }
+
+    DefaultListModel<ContextFileItem> getProjectFileListModel() {
+        return projectColumn.getFileListModel();
+    }
+
+    /** Single column section for either Global Context or Project Context. */
+    static final class ContextScopeColumn extends JPanel {
+        private static final long serialVersionUID = 1L;
+        private static final Logger log = LoggerFactory.getLogger(ContextScopeColumn.class);
+
+        private final transient PromptService promptService;
+        private final boolean globalScope;
+        private final transient Consumer<String> errorReporter;
+
+        private final JPanel headerBanner;
+        private final JLabel headerLabel;
+        private final JLabel subtitleLabel;
+        private final JLabel foldersSectionLabel;
+        private final JLabel filesSectionLabel;
+
+        private final DefaultListModel<String> folderListModel;
+        private final JList<String> folderList;
+        private final JButton btnAddFolder;
+        private final JButton btnRemoveFolder;
+
+        private final DefaultListModel<ContextFileItem> fileListModel;
+        private final JList<ContextFileItem> fileList;
+
+        record FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {}
+
+        ContextScopeColumn(
+                PromptService promptService,
+                String sectionTitle,
+                boolean globalScope,
+                Consumer<String> errorReporter) {
+            this.promptService = promptService;
+            this.globalScope = globalScope;
+            this.errorReporter = errorReporter;
+
+            setLayout(new BorderLayout(0, 8));
+
+            headerLabel = new JLabel(sectionTitle);
+            headerLabel.setFont(headerLabel.getFont().deriveFont(Font.BOLD, 14f));
+            headerLabel.setIconTextGap(8);
+
+            subtitleLabel = new JLabel(globalScope ? GLOBAL_SUBTITLE : PROJECT_SUBTITLE);
+            subtitleLabel.setFont(subtitleLabel.getFont().deriveFont(Font.PLAIN, 11f));
+
+            headerBanner = new JPanel(new BorderLayout(8, 0));
+            headerBanner.add(headerLabel, BorderLayout.WEST);
+            headerBanner.add(subtitleLabel, BorderLayout.EAST);
+            add(headerBanner, BorderLayout.NORTH);
+
+            folderListModel = new DefaultListModel<>();
+            folderList = new JList<>(folderListModel);
+            folderList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            folderList.setCellRenderer(
+                    new DefaultListCellRenderer() {
+                        private static final long serialVersionUID = 1L;
+
+                        @Override
+                        public java.awt.Component getListCellRendererComponent(
+                                JList<?> list,
+                                Object value,
+                                int index,
+                                boolean isSelected,
+                                boolean cellHasFocus) {
+                            super.getListCellRendererComponent(
+                                    list, value, index, isSelected, cellHasFocus);
+                            Color iconColor = isSelected ? getForeground() : resolveAccentColor();
+                            setIcon(FontIcon.of(Codicons.FOLDER, 14, iconColor));
+                            setIconTextGap(6);
+                            if (value != null) {
+                                setToolTipText(value.toString());
+                            }
+                            return this;
+                        }
+                    });
+            JScrollPane folderScroll = new JScrollPane(folderList);
+
+            btnAddFolder = new JButton("Add Folder...");
+            btnAddFolder.setIconTextGap(6);
+            btnRemoveFolder = new JButton("Remove Folder");
+            btnRemoveFolder.setIconTextGap(6);
+            btnRemoveFolder.setEnabled(false);
+
+            JPanel folderButtons = new JPanel(new GridLayout(1, 2, 5, 5));
+            folderButtons.add(btnAddFolder);
+            folderButtons.add(btnRemoveFolder);
+
+            foldersSectionLabel = new JLabel(sectionTitle + " Folders");
+            foldersSectionLabel.setIconTextGap(6);
+
+            JPanel foldersPanel = new JPanel(new BorderLayout(0, 5));
+            foldersPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            foldersPanel.add(foldersSectionLabel, BorderLayout.NORTH);
+            foldersPanel.add(folderScroll, BorderLayout.CENTER);
+            foldersPanel.add(folderButtons, BorderLayout.SOUTH);
+
+            fileListModel = new DefaultListModel<>();
+            fileList = new JList<>(fileListModel);
+            fileList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            fileList.setCellRenderer(
+                    new DefaultListCellRenderer() {
+                        private static final long serialVersionUID = 1L;
+
+                        @Override
+                        public java.awt.Component getListCellRendererComponent(
+                                JList<?> list,
+                                Object value,
+                                int index,
+                                boolean isSelected,
+                                boolean cellHasFocus) {
+                            super.getListCellRendererComponent(
+                                    list, value, index, isSelected, cellHasFocus);
+                            Color iconColor = isSelected ? getForeground() : resolveAccentColor();
+                            setIcon(FontIcon.of(Codicons.FILE, 14, iconColor));
+                            setIconTextGap(6);
+                            if (value instanceof ContextFileItem item) {
+                                setText(item.fileName());
+                                if (item.filePath() != null) {
+                                    setToolTipText(item.filePath().toString());
+                                }
+                            }
+                            return this;
+                        }
+                    });
+            JScrollPane fileScroll = new JScrollPane(fileList);
+
+            filesSectionLabel = new JLabel("Discovered Text Files (Top-Level)");
+            filesSectionLabel.setIconTextGap(6);
+
+            JPanel filesPanel = new JPanel(new BorderLayout(0, 5));
+            filesPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            filesPanel.add(filesSectionLabel, BorderLayout.NORTH);
+            filesPanel.add(fileScroll, BorderLayout.CENTER);
+
+            JSplitPane splitPane =
+                    new JSplitPane(JSplitPane.VERTICAL_SPLIT, foldersPanel, filesPanel);
+            splitPane.setDividerLocation(220);
+            splitPane.setResizeWeight(0.45);
+            add(splitPane, BorderLayout.CENTER);
+
+            applyScopeStyling();
+            setupListeners();
+            refreshFoldersAndFiles();
         }
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setDialogTitle(
-                globalScope ? "Select Global Context Folder" : "Select Project Context Folder");
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File selectedDir = chooser.getSelectedFile();
-            if (selectedDir != null) {
-                addFolderAsync(selectedDir.getAbsolutePath());
+
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            if (headerBanner != null) {
+                applyScopeStyling();
             }
         }
-    }
 
-    private <T> SwingWorker<T, Void> executeOperationAsync(
-            Callable<T> backgroundTask,
-            Consumer<T> onSuccess,
-            String logVerb,
-            String errorVerb,
-            String target) {
-        SwingWorker<T, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected T doInBackground() throws Exception {
-                        return backgroundTask.call();
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            T result = get();
-                            if (onSuccess != null) {
-                                onSuccess.accept(result);
-                            }
-                        } catch (Exception ex) {
-                            log.warn("Failed to {} {}: {}", logVerb, target, ex.getMessage());
-                            Throwable root = ExceptionUtils.getRootCause(ex);
-                            showError(
-                                    "Error "
-                                            + errorVerb
-                                            + " "
-                                            + target
-                                            + ": "
-                                            + (root != null ? root.getMessage() : ex.getMessage()));
-                        }
-                    }
-                };
-        worker.execute();
-        return worker;
-    }
-
-    SwingWorker<Void, Void> addFolderAsync(String folderPath) {
-        return executeOperationAsync(
-                () -> {
-                    if (folderPath == null || folderPath.isBlank()) {
-                        throw new IllegalArgumentException("Folder path must not be blank");
-                    }
-                    List<String> updated = new ArrayList<>(loadConfiguredFolders());
-                    String trimmed = folderPath.trim();
-                    if (!updated.contains(trimmed)) {
-                        updated.add(trimmed);
-                    }
-                    saveConfiguredFolders(updated);
-                    return null;
-                },
-                v -> refreshFoldersAndFiles(),
-                "add context folder",
-                "adding context folder",
-                folderPath);
-    }
-
-    SwingWorker<Void, Void> removeFolderAsync(String folderPath) {
-        return executeOperationAsync(
-                () -> {
-                    List<String> updated = new ArrayList<>(loadConfiguredFolders());
-                    updated.remove(folderPath);
-                    saveConfiguredFolders(updated);
-                    return null;
-                },
-                v -> {
-                    clearSelectionAndPreview();
-                    refreshFoldersAndFiles();
-                },
-                "remove context folder",
-                "removing context folder",
-                folderPath);
-    }
-
-    SwingWorker<String, Void> loadSelectedFileAsync(ContextFileItem selected) {
-        currentFile = selected;
-        return executeOperationAsync(
-                () -> promptService.readContextFile(selected.filePath()),
-                content -> {
-                    if (selected.equals(currentFile)) {
-                        textArea.setSyntaxEditingStyle(resolveSyntaxStyle(selected.fileName()));
-                        textArea.setText(content != null ? content : "");
-                        textArea.setCaretPosition(0);
-                    }
-                },
-                "read context file",
-                "reading context file",
-                selected.fileName());
-    }
-
-    SwingWorker<FolderAndFilesData, Void> refreshFoldersAndFiles() {
-        SwingWorker<FolderAndFilesData, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected FolderAndFilesData doInBackground() {
-                        List<String> folders = loadConfiguredFolders();
-                        List<ContextFileItem> files = loadDiscoveredFiles();
-                        return new FolderAndFilesData(
-                                folders != null ? folders : List.of(),
-                                files != null ? files : List.of());
-                    }
-
-                    @Override
-                    protected void done() {
-                        try {
-                            FolderAndFilesData data = get();
-                            folderListModel.clear();
-                            for (String folder : data.folders()) {
-                                folderListModel.addElement(folder);
-                            }
-                            fileListModel.clear();
-                            for (ContextFileItem item : data.files()) {
-                                fileListModel.addElement(item);
-                            }
-                            btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
-                        } catch (Exception ex) {
-                            log.error("Failed to refresh context folders and files", ex);
-                        }
-                    }
-                };
-        worker.execute();
-        return worker;
-    }
-
-    private List<String> loadConfiguredFolders() {
-        return globalScope
-                ? promptService.getGlobalContextFolders()
-                : promptService.getProjectContextFolders();
-    }
-
-    private void saveConfiguredFolders(List<String> folders) {
-        if (globalScope) {
-            promptService.setGlobalContextFolders(folders);
-        } else {
-            promptService.setProjectContextFolders(folders);
+        Color resolveAccentColor() {
+            if (globalScope) {
+                return SwingHtmlUtils.getUiColor(
+                        new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
+            }
+            return SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
         }
-    }
 
-    private List<ContextFileItem> loadDiscoveredFiles() {
-        return globalScope
-                ? promptService.listGlobalContextFiles()
-                : promptService.listProjectContextFiles();
-    }
+        void applyScopeStyling() {
+            Color accent = resolveAccentColor();
+            Color borderColor =
+                    SwingHtmlUtils.getUiColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
+            Color mutedFg =
+                    SwingHtmlUtils.getUiColor(
+                            new Color(0x77, 0x77, 0x77),
+                            "Label.disabledForeground",
+                            "Component.infoForeground");
+            Color buttonFg =
+                    SwingHtmlUtils.getUiColor(
+                            new Color(0x33, 0x33, 0x33), "Button.foreground", "Label.foreground");
 
-    DefaultListModel<String> getFolderListModel() {
-        return folderListModel;
-    }
+            // Column frame: 3px top accent bar + 1px subtle border around the column
+            setBorder(
+                    BorderFactory.createCompoundBorder(
+                            BorderFactory.createCompoundBorder(
+                                    BorderFactory.createMatteBorder(3, 0, 0, 0, accent),
+                                    BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor)),
+                            BorderFactory.createEmptyBorder(8, 8, 8, 8)));
 
-    JList<String> getFolderList() {
-        return folderList;
-    }
+            // Header banner: left accent bar + tinted background
+            String hex = SwingHtmlUtils.toHex(accent);
+            headerBanner.setBorder(
+                    BorderFactory.createCompoundBorder(
+                            BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
+                            BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+            headerBanner.putClientProperty(
+                    FlatClientProperties.STYLE, "background: fade(" + hex + ", 12%)");
 
-    DefaultListModel<ContextFileItem> getListModel() {
-        return fileListModel;
-    }
+            Codicons headerIcon = globalScope ? Codicons.GLOBE : Codicons.FOLDER_OPENED;
+            headerLabel.setIcon(FontIcon.of(headerIcon, 18, accent));
+            subtitleLabel.setForeground(mutedFg);
 
-    JList<ContextFileItem> getFileList() {
-        return fileList;
-    }
+            foldersSectionLabel.setIcon(FontIcon.of(Codicons.FOLDER, 14, accent));
+            filesSectionLabel.setIcon(FontIcon.of(Codicons.FILE, 14, accent));
 
-    JButton getAddFolderButton() {
-        return btnAddFolder;
-    }
+            btnAddFolder.setIcon(FontIcon.of(Codicons.ADD, 14, accent));
+            btnRemoveFolder.setIcon(FontIcon.of(Codicons.TRASH, 14, buttonFg));
 
-    JButton getRemoveFolderButton() {
-        return btnRemoveFolder;
-    }
+            folderList.repaint();
+            fileList.repaint();
+        }
 
-    RSyntaxTextArea getTextArea() {
-        return textArea;
+        void clearSelection() {
+            folderList.clearSelection();
+            fileList.clearSelection();
+            btnRemoveFolder.setEnabled(false);
+        }
+
+        private void setupListeners() {
+            folderList.addListSelectionListener(
+                    e -> {
+                        if (!e.getValueIsAdjusting()) {
+                            btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
+                        }
+                    });
+
+            btnAddFolder.addActionListener(e -> chooseAndAddFolder());
+
+            btnRemoveFolder.addActionListener(
+                    e -> {
+                        String selectedFolder = folderList.getSelectedValue();
+                        if (selectedFolder != null) {
+                            removeFolderAsync(selectedFolder);
+                        }
+                    });
+        }
+
+        private void chooseAndAddFolder() {
+            if (GraphicsEnvironment.isHeadless()) {
+                return;
+            }
+            JFileChooser chooser = new JFileChooser();
+            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            chooser.setDialogTitle(
+                    globalScope ? "Select Global Context Folder" : "Select Project Context Folder");
+            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File selectedDir = chooser.getSelectedFile();
+                if (selectedDir != null) {
+                    addFolderAsync(selectedDir.getAbsolutePath());
+                }
+            }
+        }
+
+        private <T> SwingWorker<T, Void> executeOperationAsync(
+                Callable<T> backgroundTask,
+                Consumer<T> onSuccess,
+                String logVerb,
+                String errorVerb,
+                String target) {
+            SwingWorker<T, Void> worker =
+                    new SwingWorker<>() {
+                        @Override
+                        protected T doInBackground() throws Exception {
+                            return backgroundTask.call();
+                        }
+
+                        @Override
+                        protected void done() {
+                            try {
+                                T result = get();
+                                if (onSuccess != null) {
+                                    onSuccess.accept(result);
+                                }
+                            } catch (Exception ex) {
+                                log.warn("Failed to {} {}: {}", logVerb, target, ex.getMessage());
+                                Throwable root = ExceptionUtils.getRootCause(ex);
+                                if (errorReporter != null) {
+                                    errorReporter.accept(
+                                            "Error "
+                                                    + errorVerb
+                                                    + " "
+                                                    + target
+                                                    + ": "
+                                                    + (root != null
+                                                            ? root.getMessage()
+                                                            : ex.getMessage()));
+                                }
+                            }
+                        }
+                    };
+            worker.execute();
+            return worker;
+        }
+
+        SwingWorker<Void, Void> addFolderAsync(String folderPath) {
+            return executeOperationAsync(
+                    () -> {
+                        if (folderPath == null || folderPath.isBlank()) {
+                            throw new IllegalArgumentException("Folder path must not be blank");
+                        }
+                        List<String> updated = new ArrayList<>(loadConfiguredFolders());
+                        String trimmed = folderPath.trim();
+                        if (!updated.contains(trimmed)) {
+                            updated.add(trimmed);
+                        }
+                        saveConfiguredFolders(updated);
+                        return null;
+                    },
+                    v -> refreshFoldersAndFiles(),
+                    "add context folder",
+                    "adding context folder",
+                    folderPath);
+        }
+
+        SwingWorker<Void, Void> removeFolderAsync(String folderPath) {
+            return executeOperationAsync(
+                    () -> {
+                        List<String> updated = new ArrayList<>(loadConfiguredFolders());
+                        updated.remove(folderPath);
+                        saveConfiguredFolders(updated);
+                        return null;
+                    },
+                    v -> {
+                        clearSelection();
+                        refreshFoldersAndFiles();
+                    },
+                    "remove context folder",
+                    "removing context folder",
+                    folderPath);
+        }
+
+        SwingWorker<FolderAndFilesData, Void> refreshFoldersAndFiles() {
+            SwingWorker<FolderAndFilesData, Void> worker =
+                    new SwingWorker<>() {
+                        @Override
+                        protected FolderAndFilesData doInBackground() {
+                            List<String> folders = loadConfiguredFolders();
+                            List<ContextFileItem> files = loadDiscoveredFiles();
+                            return new FolderAndFilesData(
+                                    folders != null ? folders : List.of(),
+                                    files != null ? files : List.of());
+                        }
+
+                        @Override
+                        protected void done() {
+                            try {
+                                FolderAndFilesData data = get();
+                                folderListModel.clear();
+                                for (String folder : data.folders()) {
+                                    folderListModel.addElement(folder);
+                                }
+                                fileListModel.clear();
+                                for (ContextFileItem item : data.files()) {
+                                    fileListModel.addElement(item);
+                                }
+                                btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
+                            } catch (Exception ex) {
+                                log.error("Failed to refresh context folders and files", ex);
+                            }
+                        }
+                    };
+            worker.execute();
+            return worker;
+        }
+
+        private List<String> loadConfiguredFolders() {
+            return globalScope
+                    ? promptService.getGlobalContextFolders()
+                    : promptService.getProjectContextFolders();
+        }
+
+        private void saveConfiguredFolders(List<String> folders) {
+            if (globalScope) {
+                promptService.setGlobalContextFolders(folders);
+            } else {
+                promptService.setProjectContextFolders(folders);
+            }
+        }
+
+        private List<ContextFileItem> loadDiscoveredFiles() {
+            return globalScope
+                    ? promptService.listGlobalContextFiles()
+                    : promptService.listProjectContextFiles();
+        }
+
+        JPanel getHeaderBanner() {
+            return headerBanner;
+        }
+
+        JLabel getHeaderLabel() {
+            return headerLabel;
+        }
+
+        JLabel getSubtitleLabel() {
+            return subtitleLabel;
+        }
+
+        JLabel getFoldersSectionLabel() {
+            return foldersSectionLabel;
+        }
+
+        JLabel getFilesSectionLabel() {
+            return filesSectionLabel;
+        }
+
+        DefaultListModel<String> getFolderListModel() {
+            return folderListModel;
+        }
+
+        JList<String> getFolderList() {
+            return folderList;
+        }
+
+        DefaultListModel<ContextFileItem> getFileListModel() {
+            return fileListModel;
+        }
+
+        JList<ContextFileItem> getFileList() {
+            return fileList;
+        }
+
+        JButton getAddFolderButton() {
+            return btnAddFolder;
+        }
+
+        JButton getRemoveFolderButton() {
+            return btnRemoveFolder;
+        }
     }
 }
