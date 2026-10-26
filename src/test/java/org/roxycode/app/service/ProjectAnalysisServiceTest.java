@@ -1,8 +1,11 @@
 package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -12,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.events.ProjectChangedEvent;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectAnalysisServiceTest {
@@ -65,5 +69,21 @@ class ProjectAnalysisServiceTest {
         when(grepService.listFiles(null)).thenReturn(files);
 
         assertEquals("Shell", projectAnalysisService.getDominantLanguage());
+    }
+
+    @Test
+    void testDominantLanguageCachedAndInvalidatedOnProjectChangedEvent() {
+        when(grepService.listFiles(null))
+                .thenReturn(List.of("src/Main.java"))
+                .thenReturn(List.of("app.py"));
+
+        assertEquals("Java", projectAnalysisService.getDominantLanguage());
+        assertEquals("Java", projectAnalysisService.getDominantLanguage());
+        verify(grepService, times(1)).listFiles(null);
+
+        projectAnalysisService.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-proj")));
+
+        assertEquals("Python", projectAnalysisService.getDominantLanguage());
+        verify(grepService, times(2)).listFiles(null);
     }
 }

@@ -5,6 +5,7 @@ import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.*;
 import java.util.*;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.core.annotation.AnnotationUtils;
 
 /**
@@ -37,7 +38,8 @@ public class LLMDocGenerator {
         Set<Class<?>> extraTypes = new LinkedHashSet<>();
 
         for (Object service : services) {
-            Class<?> clazz = service.getClass();
+            if (service == null) continue;
+            Class<?> clazz = AopUtils.getTargetClass(service);
             AgentService agentService = AnnotationUtils.findAnnotation(clazz, AgentService.class);
             if (agentService == null) continue;
 
@@ -122,6 +124,52 @@ public class LLMDocGenerator {
         sb.append("}\n");
     }
 
+    private String getGenericTypeName(Type genericType, Set<Class<?>> extraTypes) {
+        if (genericType instanceof ParameterizedType pt) {
+            Type raw = pt.getRawType();
+            String rawName =
+                    raw instanceof Class<?> rawClass
+                            ? getTypeName(rawClass, extraTypes)
+                            : raw.getTypeName();
+            Type[] typeArgs = pt.getActualTypeArguments();
+            if (typeArgs.length == 0) {
+                return rawName;
+            }
+            StringBuilder sb = new StringBuilder(rawName).append("<");
+            for (int i = 0; i < typeArgs.length; i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(getGenericTypeArgumentName(typeArgs[i], extraTypes));
+            }
+            return sb.append(">").toString();
+        }
+        if (genericType instanceof GenericArrayType arrayType) {
+            return getGenericTypeName(arrayType.getGenericComponentType(), extraTypes) + "[]";
+        }
+        if (genericType instanceof Class<?> clazz) {
+            return getTypeName(clazz, extraTypes);
+        }
+        return genericType.getTypeName();
+    }
+
+    private String getGenericTypeArgumentName(Type argType, Set<Class<?>> extraTypes) {
+        if (argType instanceof Class<?> clazz) {
+            if (clazz.getName().startsWith("org.roxycode.app")) {
+                extraTypes.add(clazz);
+            }
+            return clazz.getSimpleName();
+        }
+        if (argType instanceof WildcardType wt) {
+            Type[] upper = wt.getUpperBounds();
+            if (upper.length > 0 && upper[0] != Object.class) {
+                return getGenericTypeArgumentName(upper[0], extraTypes);
+            }
+            return "any";
+        }
+        return getGenericTypeName(argType, extraTypes);
+    }
+
     private String getTypeName(Class<?> type, Set<Class<?>> extraTypes) {
         if (type.isArray()) {
             return getTypeName(type.getComponentType(), extraTypes) + "[]";
@@ -168,7 +216,7 @@ public class LLMDocGenerator {
                 sb.append("    ")
                         .append(comp.getName())
                         .append(": ")
-                        .append(getTypeName(comp.getType(), extraTypes))
+                        .append(getGenericTypeName(comp.getGenericType(), extraTypes))
                         .append(";\n");
             }
             sb.append("}\n");
@@ -180,7 +228,8 @@ public class LLMDocGenerator {
             Arrays.sort(fields, Comparator.comparing(Field::getName));
             for (Field f : fields) {
                 if (Modifier.isPublic(f.getModifiers()) && !Modifier.isStatic(f.getModifiers())) {
-                    properties.putIfAbsent(f.getName(), getTypeName(f.getType(), extraTypes));
+                    properties.putIfAbsent(
+                            f.getName(), getGenericTypeName(f.getGenericType(), extraTypes));
                 }
             }
 
@@ -190,7 +239,8 @@ public class LLMDocGenerator {
                     Method readMethod = pd.getReadMethod();
                     if (readMethod != null && pd.getPropertyType() != null) {
                         properties.putIfAbsent(
-                                pd.getName(), getTypeName(pd.getPropertyType(), extraTypes));
+                                pd.getName(),
+                                getGenericTypeName(readMethod.getGenericReturnType(), extraTypes));
                     }
                 }
             } catch (IntrospectionException ignored) {

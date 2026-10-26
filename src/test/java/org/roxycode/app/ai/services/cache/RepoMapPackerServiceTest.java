@@ -10,7 +10,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import org.mockito.Mockito;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 
 class RepoMapPackerServiceTest {
@@ -61,6 +64,90 @@ class RepoMapPackerServiceTest {
         assertTrue(result.success());
         assertTrue(result.content().contains("# Repo Map Snapshot"));
         assertTrue(result.content().contains("## Project Tree"));
+    }
+
+    @Test
+    void testLoadsPersistedRepoCacheOnStartupAndInvalidatesOnFileChanged() throws IOException {
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        when(metaService.loadRepoCache()).thenReturn(Optional.of("# Persisted Repo Map"));
+
+        EditorResult firstResult = service.generateRepoMap();
+        assertTrue(firstResult.success());
+        assertEquals("# Persisted Repo Map", firstResult.content());
+        verify(grepService, never()).listFiles(null);
+
+        // File change invalidates persisted cache eligibility and triggers fresh generation
+        Path testFile = tempDir.resolve("fresh.txt");
+        Files.writeString(testFile, "Fresh Content");
+        when(grepService.listFiles(null)).thenReturn(List.of("fresh.txt"));
+
+        service.handleFileChanged(new FileChangedEvent("fresh.txt"));
+        EditorResult secondResult = service.generateRepoMap();
+        assertTrue(secondResult.success());
+        assertTrue(secondResult.content().contains("Fresh Content"));
+        verify(grepService, times(1)).listFiles(null);
+    }
+
+    @Test
+    void testBatchedCtagsExecutionAndPerFileSkeletonCache() throws IOException {
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        when(metaService.loadRepoCache()).thenReturn(Optional.empty());
+
+        Path largeA = tempDir.resolve("LargeA.java");
+        Path largeB = tempDir.resolve("LargeB.java");
+        String nl = System.lineSeparator();
+        String padding = "// " + "x".repeat(2200) + nl;
+        Files.writeString(largeA, "public class LargeA {" + nl + padding + "}" + nl);
+        Files.writeString(largeB, "public class LargeB {" + nl + padding + "}" + nl);
+
+        when(grepService.listFiles(null)).thenReturn(List.of("LargeA.java", "LargeB.java"));
+
+        List<List<String>> ctagsCommands = new ArrayList<>();
+        service.setCtagsRunner(
+                cmd -> {
+                    ctagsCommands.add(cmd);
+                    StringBuilder jsonOut = new StringBuilder();
+                    for (int i = 5; i < cmd.size(); i++) {
+                        jsonOut.append(
+                                        objectMapper.writeValueAsString(
+                                                java.util.Map.of(
+                                                        "name",
+                                                        "Cls",
+                                                        "path",
+                                                        cmd.get(i),
+                                                        "line",
+                                                        1)))
+                                .append(nl);
+                    }
+                    return new ProcessResult(0, jsonOut.toString(), "", false);
+                });
+
+        EditorResult first = service.generateRepoMap();
+        assertTrue(first.success());
+        assertTrue(first.content().contains("1: public class LargeA {"));
+        assertTrue(first.content().contains("1: public class LargeB {"));
+        assertEquals(
+                1,
+                ctagsCommands.size(),
+                "Multiple uncached large files should be processed in a single batched ctags call");
+        assertEquals(7, ctagsCommands.get(0).size());
+
+        // Modify only LargeA.java and fire FileChangedEvent
+        Files.writeString(largeA, "public class LargeAUpdated {" + nl + padding + "}" + nl);
+        service.handleFileChanged(new FileChangedEvent("LargeA.java"));
+
+        EditorResult second = service.generateRepoMap();
+        assertTrue(second.success());
+        assertTrue(second.content().contains("1: public class LargeAUpdated {"));
+        assertTrue(second.content().contains("1: public class LargeB {"));
+        assertEquals(
+                2,
+                ctagsCommands.size(),
+                "Second generation should only invoke ctags for the modified file while reusing cached skeleton for LargeB.java");
+        assertEquals(6, ctagsCommands.get(1).size());
+        assertTrue(ctagsCommands.get(1).get(5).endsWith("LargeA.java"));
     }
 
     @Test

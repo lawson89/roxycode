@@ -1,6 +1,7 @@
 package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -9,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.service.ProjectService;
+import org.springframework.aop.framework.ProxyFactory;
 
 class LLMDocGeneratorTest {
 
@@ -25,6 +27,22 @@ class LLMDocGeneratorTest {
         assertTrue(doc.contains("interface MockAgentService"));
         assertTrue(doc.contains("doSomething(input: string): string;"));
         assertTrue(doc.contains("This is a mock service"));
+    }
+
+    @Test
+    void testGenerateDocUnwrapsSpringCglibProxy() {
+        LLMDocGenerator generator = new LLMDocGenerator();
+        ProxyFactory proxyFactory = new ProxyFactory(new MockAgentService());
+        proxyFactory.setProxyTargetClass(true);
+        Object proxiedService = proxyFactory.getProxy();
+
+        String doc = generator.generateDoc(List.of(proxiedService));
+
+        assertTrue(doc.contains("// Global variable exposed in JEXL: mockService"));
+        assertTrue(doc.contains("interface MockAgentService {"));
+        assertFalse(doc.contains("SpringCGLIB"));
+        assertTrue(doc.contains("* @param input The input string to process"));
+        assertTrue(doc.contains("doSomething(input: string): string;"));
     }
 
     @Test
@@ -48,8 +66,8 @@ class LLMDocGeneratorTest {
         assertTrue(doc.contains("success: boolean;"));
         assertTrue(doc.contains("exitCode: number;"));
         assertTrue(doc.contains("output: string;"));
-        assertTrue(doc.contains("errors: List;"));
-        assertTrue(doc.contains("failedTests: List;"));
+        assertTrue(doc.contains("errors: List<String>;"));
+        assertTrue(doc.contains("failedTests: List<String>;"));
         assertTrue(doc.contains("log: string;"));
     }
 

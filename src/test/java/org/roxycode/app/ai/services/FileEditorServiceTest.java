@@ -410,11 +410,14 @@ class FileEditorServiceTest {
         assertTrue(copyDir.errorHint().contains("nested"));
 
         // moveFile success, parent creation, and missing source
+        clearInvocations(eventPublisher);
         EditorResult moveSuccess =
                 fileEditorService.moveFile("existing.txt", "moved/sub/renamed.txt");
         assertTrue(moveSuccess.success());
         assertFalse(Files.exists(existingFile));
         assertEquals("hello", Files.readString(tempDir.resolve("moved/sub/renamed.txt")));
+        verify(eventPublisher).publishEvent(new FileChangedEvent("existing.txt"));
+        verify(eventPublisher).publishEvent(new FileChangedEvent("moved/sub/renamed.txt"));
 
         EditorResult moveMissing = fileEditorService.moveFile("existing.txt", "moved/again.txt");
         assertFalse(moveMissing.success());

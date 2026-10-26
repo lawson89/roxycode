@@ -199,6 +199,24 @@ public class GenericBuildToolService {
         return projectService.resolveProjectDataPath(CONFIG_FILE);
     }
 
+    private static final String DEFAULT_FALLBACK_TOML =
+            """
+            [build]
+            compile = 'echo No build command'""";
+
+    private String loadDefaultTemplateContent() {
+        String templateName = detectTemplate();
+        try (InputStream is =
+                getClass().getResourceAsStream("/templates/build/" + templateName + ".toml")) {
+            if (is != null) {
+                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+        } catch (IOException e) {
+            log.warn("Failed to read build template: {}", templateName, e);
+        }
+        return DEFAULT_FALLBACK_TOML;
+    }
+
     private void ensureConfig() {
         Path configPath = getConfigPath();
         if (Files.exists(configPath)) {
@@ -206,21 +224,10 @@ public class GenericBuildToolService {
         }
 
         try {
-            Files.createDirectories(configPath.getParent());
-            String templateName = detectTemplate();
-            try (InputStream is =
-                    getClass().getResourceAsStream("/templates/build/" + templateName + ".toml")) {
-                if (is != null) {
-                    Files.copy(is, configPath);
-                } else {
-                    Files.writeString(
-                            configPath,
-                            """
-                            [build]
-                            compile = 'echo No build command'""",
-                            StandardCharsets.UTF_8);
-                }
+            if (configPath.getParent() != null) {
+                Files.createDirectories(configPath.getParent());
             }
+            Files.writeString(configPath, loadDefaultTemplateContent(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.error("Failed to initialize build config", e);
         }
@@ -253,7 +260,14 @@ public class GenericBuildToolService {
 
     private Map<String, Object> loadConfig() throws IOException {
         Path configPath = getConfigPath();
-        return tomlMapper.readValue(configPath.toFile(), Map.class);
+        if (Files.exists(configPath)) {
+            try {
+                return tomlMapper.readValue(configPath.toFile(), Map.class);
+            } catch (java.nio.file.NoSuchFileException | java.io.FileNotFoundException e) {
+                log.warn("Build config file not found at {}, falling back to template", configPath);
+            }
+        }
+        return tomlMapper.readValue(loadDefaultTemplateContent(), Map.class);
     }
 
     private String getCommand(Map<String, Object> config, String section, String key) {
@@ -402,7 +416,14 @@ public class GenericBuildToolService {
         if (!Files.exists(configPath)) {
             ensureConfig();
         }
-        return Files.readString(configPath, StandardCharsets.UTF_8);
+        if (Files.exists(configPath)) {
+            try {
+                return Files.readString(configPath, StandardCharsets.UTF_8);
+            } catch (java.nio.file.NoSuchFileException e) {
+                log.warn("Build config file not found at {}, falling back to template", configPath);
+            }
+        }
+        return loadDefaultTemplateContent();
     }
 
     public void saveConfigContent(String content) throws IOException {

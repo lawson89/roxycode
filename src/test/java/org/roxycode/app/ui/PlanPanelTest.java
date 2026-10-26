@@ -65,6 +65,16 @@ class PlanPanelTest {
         assertFalse(
                 htmlWithLogs.contains("bgcolor='#2d2d2d'"),
                 "Handoff log table header should not hardcode dark mode bgcolor='#2d2d2d'");
+        assertFalse(
+                htmlWithLogs.contains("#888888")
+                        || htmlWithLogs.contains("#569cd6")
+                        || htmlWithLogs.contains("#28a745"),
+                "Plan HTML should not hardcode dark-theme hex colors");
+        assertTrue(
+                htmlWithLogs.contains("class='plan-step-done'")
+                        && htmlWithLogs.contains("class='plan-step-completed'")
+                        && htmlWithLogs.contains("class='plan-log-user'"),
+                "Plan HTML should use theme-aware CSS classes");
         assertTrue(
                 htmlWithLogs.contains("class='system-entry'")
                         || htmlWithLogs.contains("class='md-th'"),

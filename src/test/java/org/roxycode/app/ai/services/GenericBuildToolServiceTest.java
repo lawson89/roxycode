@@ -334,4 +334,17 @@ class GenericBuildToolServiceTest {
         buildToolService.handleProjectChanged(new ProjectChangedEvent(projectRoot));
         assertTrue(sessionClosed.get(), "Switching project should stop active warm container");
     }
+
+    @Test
+    void testGetConfigContentAndCompileFallbackWhenEnsureConfigCannotWriteToDisk()
+            throws IOException {
+        Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
+        // Make projectDataDir a regular file so ensureConfig() cannot create build.toml inside it
+        Files.createDirectories(projectDataDir.getParent());
+        Files.writeString(projectDataDir, "not a directory");
+
+        String content = assertDoesNotThrow(() -> buildToolService.getConfigContent());
+        assertTrue(content.contains("./mvnw compile"));
+        assertTrue(content.contains("[container]"));
+    }
 }

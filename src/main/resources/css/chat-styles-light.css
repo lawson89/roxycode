@@ -44,3 +44,10 @@ code { font-family: monospace; background-color: #f3f4f6; color: #000000; }
 .md-table { margin-top: 6px; margin-bottom: 6px; border-color: #d1d5db; border-style: solid; border-width: 1px 0px 0px 1px; }
 .md-th { background-color: #eef2f6; color: #111827; font-weight: bold; padding: 6px 10px; border-color: #d1d5db; border-style: solid; border-width: 0px 1px 1px 0px; text-align: left; }
 .md-td { background-color: #ffffff; color: #333333; padding: 5px 10px; border-color: #d1d5db; border-style: solid; border-width: 0px 1px 1px 0px; }
+
+.plan-muted { color: #666666; }
+.plan-step-index { font-family: monospace; color: #666666; }
+.plan-step-check { font-family: monospace; }
+.plan-step-done { color: #2e7d32; }
+.plan-step-completed { text-decoration: line-through; color: #666666; }
+.plan-log-user { color: #005fb8; }

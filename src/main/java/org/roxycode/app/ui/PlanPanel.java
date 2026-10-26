@@ -152,25 +152,22 @@ public final class PlanPanel extends JPanel {
         for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
             String checkbox =
                     step.completed()
-                            ? "<font color='#28a745'><b>[x]</b></font>"
-                            : "<font color='#888888'>[&nbsp;]</font>";
-            String textStyle =
-                    step.completed()
-                            ? "style='text-decoration: line-through; color: #888888;'"
-                            : "";
+                            ? "<span class='plan-step-done'><b>[x]</b></span>"
+                            : "<span class='plan-muted'>[&nbsp;]</span>";
+            String textClass = step.completed() ? "class='plan-step-completed'" : "";
 
             stepRows.append(
                     """
                     <tr>
-                        <td valign='top' nowrap='nowrap' style='font-family: monospace; color: #888888;'>%d.</td>
-                        <td valign='top' nowrap='nowrap' style='font-family: monospace;'>%s</td>
+                        <td valign='top' nowrap='nowrap' class='plan-step-index'>%d.</td>
+                        <td valign='top' nowrap='nowrap' class='plan-step-check'>%s</td>
                         <td width='100%%' %s>%s</td>
                     </tr>
                     """
                             .formatted(
                                     index,
                                     checkbox,
-                                    textStyle,
+                                    textClass,
                                     SwingHtmlUtils.escapeHtml(step.description())));
             index++;
         }
@@ -206,8 +203,8 @@ public final class PlanPanel extends JPanel {
             rows.append(
                     """
                     <tr>
-                        <td valign='top'><font size='2' color='#888888'>%s</font></td>
-                        <td valign='top'><font size='2' color='#569cd6'>%s</font></td>
+                        <td valign='top'><span class='plan-muted'><font size='2'>%s</font></span></td>
+                        <td valign='top'><span class='plan-log-user'><font size='2'>%s</font></span></td>
                         <td valign='top'><font size='3'>%s</font></td>
                     </tr>
                     """
@@ -221,9 +218,9 @@ public final class PlanPanel extends JPanel {
                 <h3>%s:</h3>
                 <table width='100%%' border='0' cellpadding='2' cellspacing='0'>
                     <tr class='system-entry'>
-                        <td class='md-th' width='25%%' align='left'><b><font size='2' color='#888888'>Timestamp</font></b></td>
-                        <td class='md-th' width='15%%' align='left'><b><font size='2' color='#888888'>User</font></b></td>
-                        <td class='md-th' width='60%%' align='left'><b><font size='2' color='#888888'>Message</font></b></td>
+                        <td class='md-th' width='25%%' align='left'><b><span class='plan-muted'><font size='2'>Timestamp</font></span></b></td>
+                        <td class='md-th' width='15%%' align='left'><b><span class='plan-muted'><font size='2'>User</font></span></b></td>
+                        <td class='md-th' width='60%%' align='left'><b><span class='plan-muted'><font size='2'>Message</font></span></b></td>
                     </tr>
                 %s
                 </table>

@@ -2,11 +2,16 @@ package org.roxycode.app.ai.services.cache;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.FileReadService;
@@ -29,7 +34,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
-    private static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB
+    static final long RAW_CONTENT_THRESHOLD = 2048; // 2KB
+    static final int CTAGS_BATCH_SIZE = 100;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
 
     private final ProjectService projectService;
@@ -39,8 +45,17 @@ public class RepoMapPackerService {
     private final List<String> excludePatterns;
     private final AtomicLong generation = new AtomicLong(1);
 
+    @FunctionalInterface
+    interface CtagsRunner {
+        ProcessResult run(List<String> command) throws IOException;
+    }
+
+    private final Map<Path, CachedSkeleton> skeletonCache = new ConcurrentHashMap<>();
+    private CtagsRunner ctagsRunner = command -> ProcessRunner.run(command, null, false);
+
     private String cachedMap = null;
     private long cachedGeneration = 0;
+    private boolean diskCacheEligible = true;
 
     public RepoMapPackerService(
             ProjectService projectService,
@@ -55,23 +70,44 @@ public class RepoMapPackerService {
         this.excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
     }
 
+    void setCtagsRunner(CtagsRunner ctagsRunner) {
+        this.ctagsRunner = ctagsRunner;
+    }
+
     @EventListener
     public void handleProjectChanged(ProjectChangedEvent event) {
-        invalidate();
+        invalidateForProjectChange();
         log.debug("Repo map invalidated due to project change.");
     }
 
     @EventListener
     public void handleFileChanged(FileChangedEvent event) {
-        invalidate();
-        log.debug("Repo map invalidated due to file change: {}", event.path());
+        invalidateForFileChange(event != null ? event.path() : null);
+        log.debug("Repo map invalidated due to file change: {}", event != null ? event.path() : "");
     }
 
     @SuppressWarnings("PMD.NullAssignment")
-    private synchronized void invalidate() {
+    private synchronized void invalidateForProjectChange() {
         generation.incrementAndGet();
         cachedMap = null;
         cachedGeneration = 0;
+        diskCacheEligible = true;
+        skeletonCache.clear();
+    }
+
+    @SuppressWarnings("PMD.NullAssignment")
+    private synchronized void invalidateForFileChange(String changedRelativePath) {
+        generation.incrementAndGet();
+        cachedMap = null;
+        cachedGeneration = 0;
+        diskCacheEligible = false;
+        if (changedRelativePath != null && !changedRelativePath.isBlank()) {
+            Path root = projectService.getCurrentProjectRoot();
+            if (root != null) {
+                Path resolved = root.resolve(changedRelativePath).toAbsolutePath().normalize();
+                skeletonCache.remove(resolved);
+            }
+        }
     }
 
     public EditorResult generateRepoMap() {
@@ -82,19 +118,43 @@ public class RepoMapPackerService {
         }
 
         long startGeneration = generation.get();
+        boolean checkDiskCache = false;
         synchronized (this) {
             if (cachedMap != null && cachedGeneration == startGeneration) {
                 return new EditorResult(true, cachedMap, null);
+            }
+            if (diskCacheEligible) {
+                checkDiskCache = true;
+                diskCacheEligible = false;
+            }
+        }
+
+        if (checkDiskCache) {
+            Optional<String> persisted = metaService.loadRepoCache();
+            if (persisted != null && persisted.isPresent() && !persisted.get().isBlank()) {
+                String loaded = persisted.get();
+                synchronized (this) {
+                    if (generation.get() == startGeneration
+                            && root.equals(projectService.getCurrentProjectRoot())) {
+                        this.cachedMap = loaded;
+                        this.cachedGeneration = startGeneration;
+                    }
+                }
+                return new EditorResult(true, loaded, null);
             }
         }
 
         List<String> rawFiles = grepService.listFiles(null);
         List<String> files = new ArrayList<>();
-        for (String f : rawFiles) {
-            if (!isExcluded(f) && !isBinaryFile(root.resolve(f))) {
-                files.add(f);
+        if (rawFiles != null) {
+            for (String f : rawFiles) {
+                if (!isExcluded(f) && !isBinaryFile(root.resolve(f))) {
+                    files.add(f);
+                }
             }
         }
+
+        prefetchMissingSkeletons(root, files);
 
         StringBuilder sb = new StringBuilder();
         sb.append("# Repo Map Snapshot\n\n");
@@ -144,26 +204,66 @@ public class RepoMapPackerService {
         return new EditorResult(true, generatedMap, null);
     }
 
-    private String getSkeleton(Path filePath) {
+    private void prefetchMissingSkeletons(Path root, List<String> relativeFiles) {
+        List<FileStat> uncached = new ArrayList<>();
+        for (String relPath : relativeFiles) {
+            ExceptionUtils.checkInterrupted("Repo map generation cancelled");
+            Path filePath = root.resolve(relPath).toAbsolutePath().normalize();
+            if (!Files.isRegularFile(filePath)) {
+                continue;
+            }
+            try {
+                long size = Files.size(filePath);
+                if (size < RAW_CONTENT_THRESHOLD) {
+                    continue;
+                }
+                long lastModified = Files.getLastModifiedTime(filePath).toMillis();
+                CachedSkeleton existing = skeletonCache.get(filePath);
+                if (existing == null
+                        || existing.lastModifiedMillis() != lastModified
+                        || existing.size() != size) {
+                    uncached.add(new FileStat(filePath, lastModified, size));
+                }
+            } catch (Exception e) {
+                ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
+                log.debug(
+                        "Failed to stat file for skeleton prefetch {}: {}",
+                        filePath,
+                        e.getMessage());
+            }
+        }
+
+        for (int i = 0; i < uncached.size(); i += CTAGS_BATCH_SIZE) {
+            int end = Math.min(i + CTAGS_BATCH_SIZE, uncached.size());
+            populateSkeletonBatch(uncached.subList(i, end));
+        }
+    }
+
+    private void populateSkeletonBatch(List<FileStat> batch) {
+        if (batch.isEmpty()) {
+            return;
+        }
         try {
-            List<String> command =
-                    List.of(
-                            "ctags",
-                            "-f",
-                            "-",
-                            "--output-format=json",
-                            "--fields=+n",
-                            filePath.toAbsolutePath().toString());
-            ProcessResult result = ProcessRunner.run(command, null, false);
-            if (result.timedOut()) {
-                log.warn("Ctags timed out for {}", filePath);
-                return null;
+            List<String> command = new ArrayList<>(5 + batch.size());
+            command.add("ctags");
+            command.add("-f");
+            command.add("-");
+            command.add("--output-format=json");
+            command.add("--fields=+n");
+            for (FileStat stat : batch) {
+                command.add(stat.path().toString());
             }
 
-            List<Tag> tags = new ArrayList<>();
+            ProcessResult result = ctagsRunner.run(command);
+            if (result.timedOut()) {
+                log.warn("Ctags timed out for batch of {} files", batch.size());
+                return;
+            }
+
+            Map<Path, List<Tag>> tagsByPath = new HashMap<>();
             String output = result.output();
             if (output != null && !output.isEmpty()) {
-                for (String line : output.split("\\R")) {
+                for (String line : output.lines().toList()) {
                     if (line.isBlank()) {
                         continue;
                     }
@@ -172,7 +272,19 @@ public class RepoMapPackerService {
                         JsonNode nameNode = node.get("name");
                         JsonNode lineNode = node.get("line");
                         if (nameNode != null && lineNode != null) {
-                            tags.add(new Tag(lineNode.asInt()));
+                            JsonNode pathNode = node.get("path");
+                            Path targetPath = null;
+                            if (pathNode != null && !pathNode.asText().isBlank()) {
+                                targetPath =
+                                        Path.of(pathNode.asText()).toAbsolutePath().normalize();
+                            } else if (batch.size() == 1) {
+                                targetPath = batch.get(0).path();
+                            }
+                            if (targetPath != null) {
+                                tagsByPath
+                                        .computeIfAbsent(targetPath, k -> new ArrayList<>())
+                                        .add(new Tag(lineNode.asInt()));
+                            }
                         }
                     } catch (Exception e) {
                         ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
@@ -180,7 +292,53 @@ public class RepoMapPackerService {
                     }
                 }
             }
-            if (tags.isEmpty()) return null;
+
+            for (FileStat stat : batch) {
+                List<Tag> tags = tagsByPath.get(stat.path());
+                String skeleton = formatSkeletonLines(stat.path(), tags);
+                skeletonCache.put(
+                        stat.path(),
+                        new CachedSkeleton(
+                                stat.lastModifiedMillis(),
+                                stat.size(),
+                                skeleton != null ? skeleton : ""));
+            }
+        } catch (Exception e) {
+            ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
+            log.warn("Ctags batch failed: {}", e.getMessage());
+        }
+    }
+
+    private String getSkeleton(Path filePath) {
+        try {
+            Path normalized = filePath.toAbsolutePath().normalize();
+            long size = Files.size(normalized);
+            long lastModified = Files.getLastModifiedTime(normalized).toMillis();
+            CachedSkeleton cached = skeletonCache.get(normalized);
+            if (cached != null
+                    && cached.lastModifiedMillis() == lastModified
+                    && cached.size() == size) {
+                return cached.skeleton().isEmpty() ? null : cached.skeleton();
+            }
+
+            populateSkeletonBatch(List.of(new FileStat(normalized, lastModified, size)));
+            cached = skeletonCache.get(normalized);
+            if (cached != null) {
+                return cached.skeleton().isEmpty() ? null : cached.skeleton();
+            }
+            return null;
+        } catch (Exception e) {
+            ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
+            log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
+            return null;
+        }
+    }
+
+    private static String formatSkeletonLines(Path filePath, List<Tag> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return null;
+        }
+        try {
             tags.sort(Comparator.comparingInt(t -> t.line));
             List<String> lines = Files.readAllLines(filePath);
             StringBuilder skeleton = new StringBuilder();
@@ -197,7 +355,7 @@ public class RepoMapPackerService {
             return skeleton.toString();
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-            log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
+            log.warn("Failed to format skeleton for {}: {}", filePath, e.getMessage());
             return null;
         }
     }
@@ -222,4 +380,8 @@ public class RepoMapPackerService {
     }
 
     private record Tag(int line) {}
+
+    private record FileStat(Path path, long lastModifiedMillis, long size) {}
+
+    private record CachedSkeleton(long lastModifiedMillis, long size, String skeleton) {}
 }

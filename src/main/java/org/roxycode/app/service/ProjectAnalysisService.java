@@ -6,18 +6,42 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.events.ProjectChangedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ProjectAnalysisService {
 
     private final GrepService grepService;
+    private volatile String cachedDominantLanguage;
 
     public ProjectAnalysisService(GrepService grepService) {
         this.grepService = grepService;
     }
 
+    @EventListener
+    @SuppressWarnings("PMD.NullAssignment")
+    public synchronized void onProjectChanged(ProjectChangedEvent event) {
+        this.cachedDominantLanguage = null;
+    }
+
     public String getDominantLanguage() {
+        String cached = this.cachedDominantLanguage;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (this) {
+            if (this.cachedDominantLanguage != null) {
+                return this.cachedDominantLanguage;
+            }
+            String computed = computeDominantLanguage();
+            this.cachedDominantLanguage = computed;
+            return computed;
+        }
+    }
+
+    private String computeDominantLanguage() {
         List<String> files = grepService.listFiles(null);
         if (files == null || files.isEmpty()) {
             return "Unknown";
