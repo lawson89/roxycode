@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +23,8 @@ import org.slf4j.LoggerFactory;
 public final class ProcessRunner {
     private static final Logger log = LoggerFactory.getLogger(ProcessRunner.class);
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+    private static final ExecutorService STREAM_READER_EXECUTOR =
+            Executors.newVirtualThreadPerTaskExecutor();
 
     private ProcessRunner() {}
 
@@ -70,12 +74,14 @@ public final class ProcessRunner {
 
         CompletableFuture<Void> stdoutFuture =
                 CompletableFuture.runAsync(
-                        () -> readStream(process.getInputStream(), stdoutBuffer));
+                        () -> readStream(process.getInputStream(), stdoutBuffer),
+                        STREAM_READER_EXECUTOR);
         CompletableFuture<Void> stderrFuture =
                 redirectErrorStream
                         ? CompletableFuture.completedFuture(null)
                         : CompletableFuture.runAsync(
-                                () -> readStream(process.getErrorStream(), stderrBuffer));
+                                () -> readStream(process.getErrorStream(), stderrBuffer),
+                                STREAM_READER_EXECUTOR);
 
         boolean cleanupNeeded = true;
         try {
@@ -106,6 +112,10 @@ public final class ProcessRunner {
                 destroyProcessTree(process);
             }
         }
+    }
+
+    static ExecutorService getStreamReaderExecutor() {
+        return STREAM_READER_EXECUTOR;
     }
 
     private static void readStream(InputStream inputStream, StringBuilder buffer) {

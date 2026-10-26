@@ -194,6 +194,14 @@ class BuildContainerServiceTest {
     void testIsAndUpdateContainerEnabledInToml() {
         assertFalse(BuildContainerService.isContainerEnabledInToml(null));
         assertFalse(BuildContainerService.isContainerEnabledInToml(""));
+        assertFalse(BuildContainerService.isContainerEnabledInToml("   "));
+        assertFalse(
+                BuildContainerService.isContainerEnabledInToml(
+                        """
+                        [container
+                        enabled = true
+                        """));
+        assertFalse(BuildContainerService.isContainerEnabledInToml("invalid = = toml"));
 
         String tomlWithDisabled =
                 """

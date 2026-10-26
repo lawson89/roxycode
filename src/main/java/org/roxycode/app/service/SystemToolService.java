@@ -20,6 +20,7 @@ import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.util.ExceptionUtils;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -308,9 +309,7 @@ public class SystemToolService {
             return;
         }
         try {
-            if (path.getParent() != null) {
-                Files.createDirectories(path.getParent());
-            }
+            PathUtils.createParentDirectories(path);
             mapper.writeValue(path.toFile(), new SystemToolsCache(tools));
         } catch (IOException e) {
             log.warn("Failed to save system tools cache to {}: {}", path, e.getMessage());

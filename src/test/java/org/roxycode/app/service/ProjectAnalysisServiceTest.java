@@ -65,7 +65,14 @@ class ProjectAnalysisServiceTest {
 
     @Test
     void testGetDominantLanguageHiddenFiles() {
-        List<String> files = Arrays.asList(".gitignore", "script.sh");
+        List<String> files =
+                Arrays.asList(
+                        ".gitignore",
+                        "dir/.env",
+                        "dir/trailingdot.",
+                        "Makefile",
+                        "   ",
+                        "script.sh");
         when(grepService.listFiles(null)).thenReturn(files);
 
         assertEquals("Shell", projectAnalysisService.getDominantLanguage());

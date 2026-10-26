@@ -24,6 +24,7 @@ import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -224,9 +225,7 @@ public class GenericBuildToolService {
         }
 
         try {
-            if (configPath.getParent() != null) {
-                Files.createDirectories(configPath.getParent());
-            }
+            PathUtils.createParentDirectories(configPath);
             Files.writeString(configPath, loadDefaultTemplateContent(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.error("Failed to initialize build config", e);
@@ -432,7 +431,7 @@ public class GenericBuildToolService {
         }
         stopActiveContainer();
         Path configPath = getConfigPath();
-        Files.createDirectories(configPath.getParent());
+        PathUtils.createParentDirectories(configPath);
         Files.writeString(configPath, content, StandardCharsets.UTF_8);
     }
 }

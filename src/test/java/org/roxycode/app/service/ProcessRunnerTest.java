@@ -92,4 +92,14 @@ class ProcessRunnerTest {
         assertInstanceOf(CancellationException.class, thrown.get());
         assertTrue(interruptRestored.get(), "Thread interrupt flag must be restored");
     }
+
+    @Test
+    void testStreamReaderExecutorUsesVirtualThreads() throws Exception {
+        boolean isVirtual =
+                java.util.concurrent.CompletableFuture.supplyAsync(
+                                () -> Thread.currentThread().isVirtual(),
+                                ProcessRunner.getStreamReaderExecutor())
+                        .get();
+        assertTrue(isVirtual, "ProcessRunner stream reader executor must run on virtual threads");
+    }
 }

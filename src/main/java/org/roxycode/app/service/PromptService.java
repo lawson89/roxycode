@@ -15,6 +15,7 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -222,9 +223,7 @@ public class PromptService {
         }
         Path file = projectService.resolveProjectDataPath(CONTEXT_DIR + "/" + filename);
         try {
-            if (file.getParent() != null) {
-                Files.createDirectories(file.getParent());
-            }
+            PathUtils.createParentDirectories(file);
             Files.writeString(file, content, StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.error("Failed to save context file {}: {}", filename, e.getMessage());

@@ -12,6 +12,7 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.GeminiModels;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -119,9 +120,7 @@ public class SettingsService {
     public synchronized void saveSettings() {
         try {
             Path path = getSettingsPath();
-            if (path.getParent() != null) {
-                Files.createDirectories(path.getParent());
-            }
+            PathUtils.createParentDirectories(path);
             AppSettings currentSettings = getSettings();
             mapper.writeValue(path.toFile(), currentSettings);
             eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));

@@ -2,6 +2,7 @@ package org.roxycode.app.ai;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.core.annotation.AnnotationUtils;
 
 /** Registry for JEXL-exposed services. */
@@ -11,7 +12,11 @@ public class JexlServiceRegistry {
     private final Map<String, String> docCache = new ConcurrentHashMap<>();
 
     public synchronized void register(Object service) {
-        AgentService ann = AnnotationUtils.findAnnotation(service.getClass(), AgentService.class);
+        if (service == null) {
+            return;
+        }
+        Class<?> targetClass = AopUtils.getTargetClass(service);
+        AgentService ann = AnnotationUtils.findAnnotation(targetClass, AgentService.class);
         if (ann != null) {
             services.put(ann.value(), service);
             docCache.clear();
@@ -22,8 +27,8 @@ public class JexlServiceRegistry {
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : services.entrySet()) {
             Object service = entry.getValue();
-            AgentService ann =
-                    AnnotationUtils.findAnnotation(service.getClass(), AgentService.class);
+            Class<?> targetClass = AopUtils.getTargetClass(service);
+            AgentService ann = AnnotationUtils.findAnnotation(targetClass, AgentService.class);
 
             if (ann != null) {
                 String[] phases = ann.phases();

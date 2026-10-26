@@ -75,4 +75,38 @@ class JexlServiceRegistryTest {
         assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(buildTool));
         assertTrue(registry.getServices(WorkflowPhase.REVIEW).containsValue(buildTool));
     }
+
+    public interface ServiceContract {
+        String runAction();
+    }
+
+    @AgentService(
+            value = "contractService",
+            phases = {"CODE"})
+    public static class ContractServiceImpl implements ServiceContract {
+        @Override
+        @AgentDoc("Runs an action")
+        public String runAction() {
+            return "ok";
+        }
+    }
+
+    @Test
+    void testRegisterAndGetServicesUnwrapsJdkAndCglibProxiesAndSubclasses() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        org.springframework.aop.framework.ProxyFactory jdkFactory =
+                new org.springframework.aop.framework.ProxyFactory(new ContractServiceImpl());
+        jdkFactory.setInterfaces(ServiceContract.class);
+        Object jdkProxy = jdkFactory.getProxy();
+
+        registry.register(jdkProxy);
+        registry.register(null);
+
+        assertSame(jdkProxy, registry.getServices(WorkflowPhase.CODE).get("contractService"));
+        assertFalse(registry.getServices(WorkflowPhase.PLAN).containsKey("contractService"));
+
+        String doc = registry.getDocumentation(WorkflowPhase.CODE);
+        assertTrue(doc.contains("// Global variable exposed in JEXL: contractService"));
+        assertTrue(doc.contains("runAction(): string;"));
+    }
 }

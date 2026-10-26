@@ -84,10 +84,15 @@ public class LLMDocGenerator {
     private void generateClassStub(Class<?> clazz, StringBuilder sb, Set<Class<?>> extraTypes) {
         sb.append("interface ").append(clazz.getSimpleName()).append(" {\n");
 
-        Method[] methods = clazz.getDeclaredMethods();
-        Arrays.sort(methods, Comparator.comparing(Method::getName));
+        Method[] methods = clazz.getMethods();
+        Arrays.sort(
+                methods,
+                Comparator.comparing(Method::getName)
+                        .thenComparingInt(Method::getParameterCount)
+                        .thenComparing(m -> Arrays.toString(m.getParameterTypes())));
 
         for (Method m : methods) {
+            if (m.getDeclaringClass() == Object.class || m.isBridge() || m.isSynthetic()) continue;
             if (!Modifier.isPublic(m.getModifiers())) continue;
 
             AgentDoc doc = AnnotationUtils.findAnnotation(m, AgentDoc.class);

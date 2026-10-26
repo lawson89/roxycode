@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
 import org.slf4j.Logger;
@@ -112,8 +113,11 @@ public class BuildContainerService {
         return systemToolService.checkDockerAvailable();
     }
 
-    @SuppressWarnings("unchecked")
     public ContainerConfig parseContainerConfig(Map<String, Object> config) {
+        return parseContainerConfigFromMap(config);
+    }
+
+    static ContainerConfig parseContainerConfigFromMap(Map<String, Object> config) {
         if (config == null) {
             return new ContainerConfig(false, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
         }
@@ -166,31 +170,18 @@ public class BuildContainerService {
         return activeSession;
     }
 
+    @SuppressWarnings("unchecked")
     public static boolean isContainerEnabledInToml(String toml) {
-        if (toml == null || toml.isBlank()) {
+        if (StringUtils.isBlank(toml)) {
             return false;
         }
-        List<String> lines = toml.lines().toList();
-        boolean inContainerSection = false;
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                inContainerSection = "[container]".equals(trimmed);
-                continue;
-            }
-            if (inContainerSection && isEnabledAssignment(trimmed)) {
-                int eqIdx = trimmed.indexOf('=');
-                if (eqIdx >= 0) {
-                    String val = trimmed.substring(eqIdx + 1).trim();
-                    int commentIdx = val.indexOf('#');
-                    if (commentIdx >= 0) {
-                        val = val.substring(0, commentIdx).trim();
-                    }
-                    return Boolean.parseBoolean(val);
-                }
-            }
+        try {
+            Map<String, Object> parsed = AiConfig.SHARED_TOML_MAPPER.readValue(toml, Map.class);
+            return parseContainerConfigFromMap(parsed).enabled();
+        } catch (Exception e) {
+            log.debug("Failed to parse TOML when checking container.enabled flag", e);
+            return false;
         }
-        return false;
     }
 
     public static String updateContainerEnabledInToml(String toml, boolean enabled) {

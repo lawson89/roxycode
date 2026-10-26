@@ -1,10 +1,12 @@
 package org.roxycode.app.service;
 
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.springframework.context.event.EventListener;
@@ -50,14 +52,8 @@ public class ProjectAnalysisService {
         Map<String, Integer> extensionCounts = new HashMap<>();
 
         for (String filePath : files) {
-            int lastDot = filePath.lastIndexOf('.');
-            int lastSlash = filePath.lastIndexOf('/');
-
-            // Ensure the dot is actually an extension and not a hidden file without an
-            // extension (like
-            // .gitignore)
-            if (lastDot > lastSlash + 1 && lastDot < filePath.length() - 1) {
-                String ext = filePath.substring(lastDot).toLowerCase(Locale.ROOT);
+            String ext = extractExtension(filePath);
+            if (ext != null) {
                 extensionCounts.merge(ext, 1, Integer::sum);
             }
         }
@@ -86,5 +82,22 @@ public class ProjectAnalysisService {
             case ".swift" -> "Swift";
             default -> "Unknown (" + dominantExt + ")";
         };
+    }
+
+    static String extractExtension(String filePath) {
+        if (StringUtils.isBlank(filePath)) {
+            return null;
+        }
+        Path fileNamePath = Path.of(filePath).getFileName();
+        if (fileNamePath == null) {
+            return null;
+        }
+        String fileName = fileNamePath.toString();
+        String baseName = StringUtils.substringBeforeLast(fileName, ".");
+        String ext = StringUtils.substringAfterLast(fileName, ".");
+        if (StringUtils.isEmpty(baseName) || StringUtils.isEmpty(ext)) {
+            return null;
+        }
+        return "." + ext.toLowerCase(Locale.ROOT);
     }
 }

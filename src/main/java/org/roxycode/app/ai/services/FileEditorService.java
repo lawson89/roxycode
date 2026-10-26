@@ -15,6 +15,7 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -65,9 +66,7 @@ public class FileEditorService {
         if (Files.exists(path) && Files.isDirectory(path)) {
             return new EditorResult(false, "", "Path is a directory: " + relativePath);
         }
-        if (path.getParent() != null) {
-            Files.createDirectories(path.getParent());
-        }
+        PathUtils.createParentDirectories(path);
         Files.writeString(path, content);
 
         long size = Files.size(path);
@@ -371,9 +370,7 @@ public class FileEditorService {
         if (!Files.exists(source)) {
             return new EditorResult(false, "", "File does not exist: " + sourcePath);
         }
-        if (target.getParent() != null) {
-            Files.createDirectories(target.getParent());
-        }
+        PathUtils.createParentDirectories(target);
         Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Moved file from {} to {}", sourcePath, targetPath);
 
@@ -406,9 +403,7 @@ public class FileEditorService {
         if (validationError != null) {
             return validationError;
         }
-        if (target.getParent() != null) {
-            Files.createDirectories(target.getParent());
-        }
+        PathUtils.createParentDirectories(target);
         Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Copied file from {} to {}", sourcePath, targetPath);
 

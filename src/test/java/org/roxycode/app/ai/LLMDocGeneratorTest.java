@@ -43,6 +43,12 @@ class LLMDocGeneratorTest {
         assertFalse(doc.contains("SpringCGLIB"));
         assertTrue(doc.contains("* @param input The input string to process"));
         assertTrue(doc.contains("doSomething(input: string): string;"));
+
+        SubclassMockAgentService subclassService = new SubclassMockAgentService();
+        String subclassDoc = generator.generateDoc(List.of(subclassService));
+        assertTrue(subclassDoc.contains("interface SubclassMockAgentService {"));
+        assertTrue(subclassDoc.contains("doSomething(input: string): string;"));
+        assertTrue(subclassDoc.contains("extraAction(): string;"));
     }
 
     @Test
@@ -119,6 +125,18 @@ class LLMDocGeneratorTest {
         @AgentDoc("Does something")
         public String doSomething(@AgentDoc("The input string to process") String input) {
             return input;
+        }
+    }
+
+    public static class SubclassMockAgentService extends MockAgentService {
+        @Override
+        public String doSomething(String input) {
+            return super.doSomething(input);
+        }
+
+        @AgentDoc("Extra subclass action")
+        public String extraAction() {
+            return "extra";
         }
     }
 
