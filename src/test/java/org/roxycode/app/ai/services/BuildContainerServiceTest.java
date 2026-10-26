@@ -223,6 +223,12 @@ class BuildContainerServiceTest {
         String appended =
                 BuildContainerService.updateContainerEnabledInToml(tomlWithoutSection, true);
         assertTrue(appended.contains("[container]"));
+        assertTrue(
+                appended.contains(
+                        "image = '" + BuildContainerService.DEFAULT_CONTAINER_IMAGE + "'"));
+        assertTrue(
+                appended.contains(
+                        "workdir = '" + BuildContainerService.DEFAULT_CONTAINER_WORKDIR + "'"));
         assertTrue(BuildContainerService.isContainerEnabledInToml(appended));
     }
 }

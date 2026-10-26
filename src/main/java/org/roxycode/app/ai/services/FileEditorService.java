@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.similarity.JaroWinklerSimilarity;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
@@ -501,14 +502,8 @@ public class FileEditorService {
     }
 
     private static int lineNumberAtOffset(String content, int offset) {
-        int line = 1;
-        int limit = Math.min(offset, content.length());
-        for (int i = 0; i < limit; i++) {
-            if (content.charAt(i) == LF) {
-                line++;
-            }
-        }
-        return line;
+        int limit = Math.max(0, Math.min(offset, content.length()));
+        return 1 + StringUtils.countMatches(content.subSequence(0, limit), LF);
     }
 
     private String buildTargetNotFoundHint(
@@ -574,24 +569,11 @@ public class FileEditorService {
     }
 
     private static String stripLeadingNewlines(String text) {
-        int i = 0;
-        while (i < text.length() && (text.charAt(i) == '\n' || text.charAt(i) == '\r')) {
-            i++;
-        }
-        return text.substring(i);
+        return StringUtils.stripStart(text, "\r\n");
     }
 
     private static boolean isHorizontalWhitespaceOnly(String text) {
-        if (text.isEmpty()) {
-            return false;
-        }
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c != ' ' && c != '\t') {
-                return false;
-            }
-        }
-        return true;
+        return !text.isEmpty() && StringUtils.containsOnly(text, " \t");
     }
 
     private static boolean startsWithHorizontalWhitespace(String text) {

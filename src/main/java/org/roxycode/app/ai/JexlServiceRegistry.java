@@ -6,11 +6,11 @@ import org.springframework.core.annotation.AnnotationUtils;
 
 /** Registry for JEXL-exposed services. */
 public class JexlServiceRegistry {
-    private final Map<String, Object> services = new LinkedHashMap<>();
+    private final Map<String, Object> services = Collections.synchronizedMap(new LinkedHashMap<>());
     private final LLMDocGenerator docGenerator = new LLMDocGenerator();
     private final Map<String, String> docCache = new ConcurrentHashMap<>();
 
-    public void register(Object service) {
+    public synchronized void register(Object service) {
         AgentService ann = AnnotationUtils.findAnnotation(service.getClass(), AgentService.class);
         if (ann != null) {
             services.put(ann.value(), service);
@@ -18,7 +18,7 @@ public class JexlServiceRegistry {
         }
     }
 
-    public Map<String, Object> getServices(WorkflowPhase phase) {
+    public synchronized Map<String, Object> getServices(WorkflowPhase phase) {
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : services.entrySet()) {
             Object service = entry.getValue();

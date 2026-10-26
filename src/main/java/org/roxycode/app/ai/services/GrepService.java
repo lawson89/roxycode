@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProcessRunner;
@@ -315,12 +316,10 @@ public class GrepService {
                 for (String line : output.lines().toList()) {
                     if (!line.isBlank()) {
                         String normalized = line.replace((char) 92, '/');
-                        if (!rootPrefix.isEmpty() && normalized.startsWith(rootPrefix)) {
-                            normalized = normalized.substring(rootPrefix.length());
+                        if (!rootPrefix.isEmpty()) {
+                            normalized = StringUtils.removeStart(normalized, rootPrefix);
                         }
-                        if (normalized.startsWith("./")) {
-                            normalized = normalized.substring(2);
-                        }
+                        normalized = StringUtils.removeStart(normalized, "./");
                         files.add(normalized);
                     }
                 }
@@ -357,9 +356,9 @@ public class GrepService {
             }
             String line = lines.get(i);
             if (line.startsWith(rawPrefixWithSep)) {
-                line = line.substring(rawPrefixWithSep.length());
-            } else if (!slashPrefix.isEmpty() && line.startsWith(slashPrefix)) {
-                line = line.substring(slashPrefix.length());
+                line = StringUtils.removeStart(line, rawPrefixWithSep);
+            } else if (!slashPrefix.isEmpty()) {
+                line = StringUtils.removeStart(line, slashPrefix);
             }
             sb.append(line);
         }

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import javax.swing.*;
+import org.apache.commons.lang3.StringUtils;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
@@ -142,7 +143,7 @@ public final class ContextManagerPanel extends JPanel {
         if (trimmed.isEmpty()) {
             return "";
         }
-        return trimmed.endsWith(".md") ? trimmed : trimmed + ".md";
+        return StringUtils.appendIfMissing(trimmed, ".md");
     }
 
     private void showError(String message) {

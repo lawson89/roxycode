@@ -204,6 +204,41 @@ class GitServiceTest {
     }
 
     @Test
+    void testGetChangedFilesPreservesFirstLineLeadingSpaceAndUnquotesEscapedPaths() {
+        ProjectService projectService = createActiveProjectService();
+        GitService gitService = new GitService(projectService);
+
+        char dq = (char) 34;
+        char bs = (char) 92;
+        String quotedEscaped =
+                "?? " + dq + "dir with spaces/quote" + bs + dq + "file" + bs + bs + "name.txt" + dq;
+        String statusOut =
+                String.join(
+                        String.valueOf((char) 10),
+                        " M FirstUnstaged.java",
+                        quotedEscaped,
+                        "R  " + dq + "old name.txt" + dq + " -> " + dq + "new name.txt" + dq);
+
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(
+                            () ->
+                                    ProcessRunner.run(
+                                            eq(List.of("git", "status", "--porcelain", "-uall")),
+                                            eq(tempDir),
+                                            anyMap()))
+                    .thenReturn(new ProcessResult(0, statusOut + (char) 10, "", false));
+
+            List<String> changedFiles = gitService.getChangedFiles();
+            assertEquals(
+                    List.of(
+                            "FirstUnstaged.java",
+                            "dir with spaces/quote" + dq + "file/name.txt",
+                            "new name.txt"),
+                    changedFiles);
+        }
+    }
+
+    @Test
     void testGetDiffHeadFallbackWhenUnbornHead() {
         ProjectService projectService = createActiveProjectService();
         GitService gitService = new GitService(projectService);

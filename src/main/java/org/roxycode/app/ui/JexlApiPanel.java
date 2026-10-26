@@ -11,8 +11,15 @@ import org.springframework.stereotype.Component;
 @Lazy
 public final class JexlApiPanel extends JPanel {
     private static final long serialVersionUID = 1L;
+    static final int COPY_FEEDBACK_DELAY_MS = 1500;
+    static final String COPY_BUTTON_TEXT = "Copy";
+    static final String COPIED_BUTTON_TEXT = "Copied!";
+
     private final transient JexlServiceRegistry registry;
     private final JTextPane textPane;
+    private final JButton copyBtn;
+    private Timer copyFeedbackTimer;
+    private String lastCopiedDocumentation;
 
     public JexlApiPanel(JexlServiceRegistry registry) {
         this.registry = registry;
@@ -31,24 +38,41 @@ public final class JexlApiPanel extends JPanel {
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         toolbar.setOpaque(false);
         JButton refreshBtn = new JButton("Refresh");
-        refreshBtn.addActionListener(
-                e -> {
-                    refresh();
-                });
+        refreshBtn.addActionListener(e -> refresh());
 
-        JButton copyBtn = new JButton("Copy");
-        copyBtn.addActionListener(
-                e -> {
-                    textPane.selectAll();
-                    textPane.copy();
-                    JOptionPane.showMessageDialog(this, "API Documentation copied to clipboard.");
-                });
+        copyBtn = new JButton(COPY_BUTTON_TEXT);
+        copyBtn.addActionListener(e -> copyDocumentation());
 
         toolbar.add(copyBtn);
         toolbar.add(refreshBtn);
         add(toolbar, BorderLayout.NORTH);
+    }
 
-        refresh();
+    private void copyDocumentation() {
+        String doc = registry.getDocumentation(null);
+        this.lastCopiedDocumentation = doc;
+        SwingHtmlUtils.copyToClipboard(doc);
+
+        copyBtn.setText(COPIED_BUTTON_TEXT);
+        if (copyFeedbackTimer != null && copyFeedbackTimer.isRunning()) {
+            copyFeedbackTimer.stop();
+        }
+        copyFeedbackTimer =
+                new Timer(COPY_FEEDBACK_DELAY_MS, e -> copyBtn.setText(COPY_BUTTON_TEXT));
+        copyFeedbackTimer.setRepeats(false);
+        copyFeedbackTimer.start();
+    }
+
+    JButton getCopyButton() {
+        return copyBtn;
+    }
+
+    JTextPane getTextPane() {
+        return textPane;
+    }
+
+    String getLastCopiedDocumentation() {
+        return lastCopiedDocumentation;
     }
 
     @Override

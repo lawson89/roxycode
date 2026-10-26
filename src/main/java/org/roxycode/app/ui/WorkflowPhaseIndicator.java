@@ -70,8 +70,7 @@ public final class WorkflowPhaseIndicator extends JPanel {
     }
 
     private Color getSafeColor(String key, Color fallback) {
-        Color color = UIManager.getColor(key);
-        return color != null ? color : fallback;
+        return SwingHtmlUtils.getUiColor(fallback, key);
     }
 
     @Override

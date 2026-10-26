@@ -246,10 +246,6 @@ public class PromptService {
         }
     }
 
-    public String generateExploreSystemPrompt() {
-        return loadPhasePrompt(WorkflowPhase.EXPLORE);
-    }
-
     private String readClasspathResource(String path) {
         try {
             Resource resource = new ClassPathResource(path);

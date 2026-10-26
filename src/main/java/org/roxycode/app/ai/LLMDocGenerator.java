@@ -1,5 +1,8 @@
 package org.roxycode.app.ai;
 
+import java.beans.IntrospectionException;
+import java.beans.Introspector;
+import java.beans.PropertyDescriptor;
 import java.lang.reflect.*;
 import java.util.*;
 import org.springframework.core.annotation.AnnotationUtils;
@@ -181,32 +184,17 @@ public class LLMDocGenerator {
                 }
             }
 
-            Method[] methods = type.getDeclaredMethods();
-            Arrays.sort(methods, Comparator.comparing(Method::getName));
-            for (Method m : methods) {
-                if (Modifier.isPublic(m.getModifiers()) && !Modifier.isStatic(m.getModifiers())) {
-                    String name = m.getName();
-                    if (m.getParameterCount() == 0 && m.getReturnType() != void.class) {
-                        String propName = null;
-                        if (name.startsWith("get") && name.length() > 3) {
-                            propName = decapitalize(name, 3);
-                        } else if (name.startsWith("is")
-                                && name.length() > 2
-                                && (m.getReturnType() == boolean.class
-                                        || m.getReturnType() == Boolean.class)) {
-                            propName = decapitalize(name, 2);
-                        } else if (name.startsWith("has")
-                                && name.length() > 3
-                                && (m.getReturnType() == boolean.class
-                                        || m.getReturnType() == Boolean.class)) {
-                            propName = decapitalize(name, 3);
-                        }
-                        if (propName != null) {
-                            properties.putIfAbsent(
-                                    propName, getTypeName(m.getReturnType(), extraTypes));
-                        }
+            try {
+                for (PropertyDescriptor pd :
+                        Introspector.getBeanInfo(type, Object.class).getPropertyDescriptors()) {
+                    Method readMethod = pd.getReadMethod();
+                    if (readMethod != null && pd.getPropertyType() != null) {
+                        properties.putIfAbsent(
+                                pd.getName(), getTypeName(pd.getPropertyType(), extraTypes));
                     }
                 }
+            } catch (IntrospectionException ignored) {
+                // ignore introspection failure
             }
 
             for (Map.Entry<String, String> entry : properties.entrySet()) {
@@ -218,9 +206,5 @@ public class LLMDocGenerator {
             }
             sb.append("}\n");
         }
-    }
-
-    private String decapitalize(String name, int offset) {
-        return Character.toLowerCase(name.charAt(offset)) + name.substring(offset + 1);
     }
 }

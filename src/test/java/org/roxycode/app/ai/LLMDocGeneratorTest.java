@@ -70,6 +70,10 @@ class LLMDocGeneratorTest {
         assertTrue(doc.contains("interface Details {"));
         assertTrue(doc.contains("id: number;"));
         assertTrue(doc.contains("name: string;"));
+
+        assertTrue(doc.contains("interface BeanInfoItem {"));
+        assertTrue(doc.contains("active: boolean;"));
+        assertTrue(doc.contains("title: string;"));
     }
 
     @Test
@@ -110,6 +114,21 @@ class LLMDocGeneratorTest {
         @AgentDoc("Get status")
         public Status getStatus() {
             return null;
+        }
+
+        @AgentDoc("Get bean info item")
+        public BeanInfoItem getBeanInfoItem() {
+            return null;
+        }
+    }
+
+    public static class BeanInfoItem {
+        public String getTitle() {
+            return "sample";
+        }
+
+        public boolean isActive() {
+            return true;
         }
     }
 

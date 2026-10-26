@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProcessRunner;
@@ -47,7 +48,7 @@ public class GitService {
 
     @AgentDoc(value = "Returns the git status (porcelain).", examples = "gitService.getStatus()")
     public String getStatus() {
-        return executeGitCommand("status", "--porcelain");
+        return executeGitCommand(false, "status", "--porcelain");
     }
 
     @AgentDoc(
@@ -121,7 +122,7 @@ public class GitService {
         if (!projectService.hasActiveProject()) {
             return List.of();
         }
-        String statusOutput = executeGitCommand("status", "--porcelain", "-uall");
+        String statusOutput = executeGitCommand(false, "status", "--porcelain", "-uall");
         if (statusOutput.isEmpty() || isGitError(statusOutput)) {
             return List.of();
         }
@@ -135,11 +136,7 @@ public class GitService {
             if (arrowIdx >= 0) {
                 rawPath = rawPath.substring(arrowIdx + 4).trim();
             }
-            if (rawPath.length() >= 2
-                    && rawPath.charAt(0) == DQUOTE
-                    && rawPath.charAt(rawPath.length() - 1) == DQUOTE) {
-                rawPath = rawPath.substring(1, rawPath.length() - 1);
-            }
+            rawPath = unquotePorcelainPath(rawPath);
             if (!rawPath.isEmpty()) {
                 files.add(rawPath.replace(BACKSLASH, '/'));
             }
@@ -314,7 +311,23 @@ public class GitService {
         return a + NL + b;
     }
 
+    static String unquotePorcelainPath(String path) {
+        if (path == null) {
+            return "";
+        }
+        if (path.length() >= 2
+                && path.charAt(0) == DQUOTE
+                && path.charAt(path.length() - 1) == DQUOTE) {
+            return StringEscapeUtils.unescapeJava(path.substring(1, path.length() - 1));
+        }
+        return path;
+    }
+
     private String executeGitCommand(String... args) {
+        return executeGitCommand(true, args);
+    }
+
+    private String executeGitCommand(boolean trimLeadingWhitespace, String... args) {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
@@ -349,7 +362,7 @@ public class GitService {
                 return "Error (" + exitCode + "): " + out.trim();
             }
 
-            return out.trim();
+            return trimLeadingWhitespace ? out.trim() : out.stripTrailing();
         } catch (IOException e) {
             log.warn(
                     "Failed to execute git command {}: {}", String.join(" ", args), e.getMessage());

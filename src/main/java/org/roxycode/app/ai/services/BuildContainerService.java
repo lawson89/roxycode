@@ -230,10 +230,10 @@ public class BuildContainerService {
                     """
                     [container]
                     enabled = %s
-                    image = 'eclipse-temurin:25-jdk'
-                    workdir = '/workspace'
+                    image = '%s'
+                    workdir = '%s'
                     """
-                            .formatted(enabled);
+                            .formatted(enabled, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
             if (safeToml.isEmpty()) {
                 return section;
             }

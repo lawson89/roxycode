@@ -4,7 +4,6 @@ import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.Version;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -15,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
@@ -125,10 +125,8 @@ public class SystemToolService {
     private static void clearDockerClientFactoryField(
             DockerClientFactory factory, String fieldName) {
         try {
-            Field field = DockerClientFactory.class.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(factory, null);
-        } catch (ReflectiveOperationException | SecurityException e) {
+            FieldUtils.writeDeclaredField(factory, fieldName, null, true);
+        } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
             log.debug("Could not reset DockerClientFactory.{}: {}", fieldName, e.getMessage());
         }
     }
@@ -377,7 +375,7 @@ public class SystemToolService {
         if (StringUtils.isBlank(rawMessage)) {
             return "Testcontainers connection failed";
         }
-        String normalized = rawMessage.replaceAll("\s+", " ").trim();
+        String normalized = StringUtils.normalizeSpace(rawMessage);
         return StringUtils.abbreviate(normalized, MAX_DOCKER_ERROR_LENGTH);
     }
 

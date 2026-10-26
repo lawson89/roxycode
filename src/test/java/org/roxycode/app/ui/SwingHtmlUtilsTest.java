@@ -196,4 +196,29 @@ class SwingHtmlUtilsTest {
         assertDoesNotThrow(() -> SwingHtmlUtils.copyToClipboard("Copied text"));
         assertDoesNotThrow(() -> SwingHtmlUtils.copyToClipboard(null));
     }
+
+    @Test
+    void testGetUiColorAndToHexAndJexlApiPanelCopyFeedback() {
+        java.awt.Color fallback = new java.awt.Color(0x12, 0x34, 0x56);
+        assertEquals("#123456", SwingHtmlUtils.toHex(fallback));
+        assertEquals(fallback, SwingHtmlUtils.getUiColor(fallback, "NonExistent.uiKey.12345"));
+
+        org.roxycode.app.ai.JexlServiceRegistry registry =
+                new org.roxycode.app.ai.JexlServiceRegistry();
+        JexlApiPanel apiPanel = new JexlApiPanel(registry);
+
+        assertEquals(JexlApiPanel.COPY_BUTTON_TEXT, apiPanel.getCopyButton().getText());
+        assertEquals(0, apiPanel.getTextPane().getSelectionStart());
+        assertEquals(0, apiPanel.getTextPane().getSelectionEnd());
+
+        apiPanel.getCopyButton().doClick();
+
+        assertEquals(JexlApiPanel.COPIED_BUTTON_TEXT, apiPanel.getCopyButton().getText());
+        assertEquals(registry.getDocumentation(null), apiPanel.getLastCopiedDocumentation());
+        assertEquals(
+                0,
+                apiPanel.getTextPane().getSelectionEnd()
+                        - apiPanel.getTextPane().getSelectionStart(),
+                "Copy button should not select all text in the JTextPane");
+    }
 }

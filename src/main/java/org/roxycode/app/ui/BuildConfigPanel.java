@@ -299,17 +299,11 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     private static Color resolveColor(Color fallback, String... uiKeys) {
-        for (String key : uiKeys) {
-            Color color = UIManager.getColor(key);
-            if (color != null) {
-                return color;
-            }
-        }
-        return fallback;
+        return SwingHtmlUtils.getUiColor(fallback, uiKeys);
     }
 
     private static String toHex(Color color) {
-        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+        return SwingHtmlUtils.toHex(color);
     }
 
     @SuppressWarnings("PMD.UnusedAssignment")

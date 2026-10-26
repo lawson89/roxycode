@@ -207,12 +207,12 @@ class PromptServiceTest {
     }
 
     @Test
-    void testGenerateExploreSystemPrompt() {
+    void testLoadExplorePhasePromptSubstitutesMaxTurns() {
         AppSettings settings = new AppSettings();
         settings.setMaxAgentToolTurns(42);
         when(settingsService.getSettings()).thenReturn(settings);
 
-        String prompt = promptService.generateExploreSystemPrompt();
+        String prompt = promptService.loadPhasePrompt(WorkflowPhase.EXPLORE);
 
         assertNotNull(prompt);
         assertTrue(prompt.contains("42"));

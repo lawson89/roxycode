@@ -232,8 +232,7 @@ public class HistoryPanel extends JPanel {
             return switch (columnIndex) {
                 case 0 -> rowIndex + 1;
                 case 1 -> {
-                    if (msg.getMessageType() == MessageType.ASSISTANT) {
-                        AssistantMessage am = (AssistantMessage) msg;
+                    if (msg instanceof AssistantMessage am) {
                         yield (am.getToolCalls() != null && !am.getToolCalls().isEmpty())
                                 ? "tool-call"
                                 : "assistant";

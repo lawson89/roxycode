@@ -14,6 +14,8 @@ import java.util.concurrent.CancellationException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.SystemUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerConfig;
@@ -126,24 +128,24 @@ public class GenericBuildToolService {
             examples = "buildToolService.buildAndTest()")
     public BuildResult buildAndTest() {
         BuildResult compileResult = compile();
-        if (!compileResult.isSuccess()) {
+        if (!compileResult.success()) {
             return compileResult; // Fast fail if compilation breaks
         }
         BuildResult testResult = runTests();
         // Combine outputs for the LLM
         return new BuildResult(
-                testResult.isSuccess(),
-                testResult.getExitCode(),
+                testResult.success(),
+                testResult.exitCode(),
                 """
                 COMPILE OUTPUT:
                 %s
 
                 TEST OUTPUT:
                 %s"""
-                        .formatted(compileResult.getOutput(), testResult.getOutput()),
-                testResult.getErrors(),
-                testResult.getFailedTests(),
-                testResult.getLog());
+                        .formatted(compileResult.output(), testResult.output()),
+                testResult.errors(),
+                testResult.failedTests(),
+                testResult.log());
     }
 
     private BuildResult runCommand(
@@ -168,8 +170,8 @@ public class GenericBuildToolService {
                         "Command not configured");
             }
 
-            for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-                command = command.replace("{" + entry.getKey() + "}", entry.getValue());
+            if (!placeholders.isEmpty()) {
+                command = new StringSubstitutor(placeholders, "{", "}").replace(command);
             }
 
             String errorRegex = getParseRegex(config, "error_regex");
@@ -357,9 +359,7 @@ public class GenericBuildToolService {
             throw e;
         } catch (Exception e) {
             log.error("Process execution failed", e);
-            StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            errors.add(sw.toString());
+            errors.add(ExceptionUtils.getStackTrace(e));
         }
 
         return buildResultFromExecution(exitCode, fullOutput, errors, errorRegex, testFailureRegex);

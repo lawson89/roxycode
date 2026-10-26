@@ -146,10 +146,8 @@ public final class SwingHtmlUtils {
             sheet.importStyleSheet(cssUrl);
         }
 
-        Color bg = UIManager.getColor("TextPane.background");
-        Color fg = UIManager.getColor("TextPane.foreground");
-        if (bg == null) bg = isDark ? new Color(30, 30, 30) : Color.WHITE;
-        if (fg == null) fg = isDark ? Color.LIGHT_GRAY : Color.BLACK;
+        Color bg = getUiColor(isDark ? new Color(30, 30, 30) : Color.WHITE, "TextPane.background");
+        Color fg = getUiColor(isDark ? Color.LIGHT_GRAY : Color.BLACK, "TextPane.foreground");
 
         textPane.setBackground(bg);
         textPane.setForeground(fg);
@@ -157,14 +155,8 @@ public final class SwingHtmlUtils {
 
         String bodyRule =
                 String.format(
-                        "body { background-color: #%02x%02x%02x; color: #%02x%02x%02x; margin: %dpx; }",
-                        bg.getRed(),
-                        bg.getGreen(),
-                        bg.getBlue(),
-                        fg.getRed(),
-                        fg.getGreen(),
-                        fg.getBlue(),
-                        marginPx);
+                        "body { background-color: %s; color: %s; margin: %dpx; }",
+                        toHex(bg), toHex(fg), marginPx);
         sheet.addRule(bodyRule);
 
         kit.setStyleSheet(sheet);
@@ -289,6 +281,36 @@ public final class SwingHtmlUtils {
      * @param text the raw text
      * @return HTML entity escaped text
      */
+    /**
+     * Resolves the first non-null {@link Color} from {@link UIManager} for the given keys, or
+     * returns the fallback color.
+     *
+     * @param fallback the fallback color if none of the keys resolve
+     * @param uiKeys the UIManager color keys to check in order
+     * @return the resolved color
+     */
+    public static Color getUiColor(Color fallback, String... uiKeys) {
+        if (uiKeys != null) {
+            for (String key : uiKeys) {
+                Color color = UIManager.getColor(key);
+                if (color != null) {
+                    return color;
+                }
+            }
+        }
+        return fallback;
+    }
+
+    /**
+     * Formats a {@link Color} as a 6-digit hex string (e.g. {@code #1a2b3c}).
+     *
+     * @param color the color to format
+     * @return the hex color string
+     */
+    public static String toHex(Color color) {
+        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+    }
+
     public static String escapeHtml(String text) {
         return text == null ? "" : StringEscapeUtils.escapeHtml4(text);
     }

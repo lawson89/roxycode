@@ -25,7 +25,7 @@ public final class MarkdownPane extends JTextPane {
 
     private record Message(
             String role,
-            StringBuilder content,
+            String content,
             String timestamp,
             boolean isTool,
             boolean success,
@@ -79,7 +79,7 @@ public final class MarkdownPane extends JTextPane {
         messages.add(
                 new Message(
                         role,
-                        new StringBuilder(safeContent),
+                        safeContent,
                         LocalDateTime.now().format(TIME_FORMATTER),
                         false,
                         true,
@@ -92,7 +92,7 @@ public final class MarkdownPane extends JTextPane {
         messages.add(
                 new Message(
                         null,
-                        new StringBuilder(safeOutput),
+                        safeOutput,
                         LocalDateTime.now().format(TIME_FORMATTER),
                         true,
                         success,
@@ -114,7 +114,7 @@ public final class MarkdownPane extends JTextPane {
         if (msg.isTool()) {
             return;
         }
-        String rawMarkdown = msg.content().toString();
+        String rawMarkdown = msg.content();
         this.lastCopiedMarkdown = rawMarkdown;
         SwingHtmlUtils.copyToClipboard(rawMarkdown);
 
@@ -155,10 +155,9 @@ public final class MarkdownPane extends JTextPane {
                     if (msg.isTool()) {
                         fullHtml.append(
                                 ChatHtmlTemplates.renderToolLog(
-                                        msg.content().toString(), msg.success(), msg.error()));
+                                        msg.content(), msg.success(), msg.error()));
                     } else {
-                        String highlightedHtml =
-                                SwingHtmlUtils.renderMarkdownToHtml(msg.content().toString());
+                        String highlightedHtml = SwingHtmlUtils.renderMarkdownToHtml(msg.content());
                         fullHtml.append(
                                 ChatHtmlTemplates.renderChatEntry(
                                         msg.role().toLowerCase(Locale.ROOT),
