@@ -251,6 +251,20 @@ class RepoMapPackerServiceTest {
         assertTrue(secondResult.success());
         assertTrue(secondResult.content().contains("Fresh.java\n  1: public class Fresh {}"));
         verify(grepService, times(1)).listFiles(null);
+
+        // Modify file without firing FileChangedEvent; generateRepoMap returns in-memory cache
+        Files.writeString(testFile, "public class FreshUpdated {}\n");
+        EditorResult cachedResult = service.generateRepoMap();
+        assertTrue(cachedResult.content().contains("public class Fresh {}"));
+        verify(grepService, times(1)).listFiles(null);
+
+        // forceRegenerateRepoMap deletes disk cache, clears in-memory caches, and regenerates
+        EditorResult forcedResult = service.forceRegenerateRepoMap();
+        assertTrue(forcedResult.success());
+        assertTrue(
+                forcedResult.content().contains("Fresh.java\n  1: public class FreshUpdated {}"));
+        verify(metaService, times(1)).deleteRepoCache();
+        verify(grepService, times(2)).listFiles(null);
     }
 
     @Test

@@ -94,4 +94,21 @@ public class ProjectCacheMetaServiceTest {
         service.loadMeta();
         verify(projectService, times(1)).resolveProjectDataPath("tmp/repo_cache.txt");
     }
+
+    @Test
+    public void testDeleteRepoCacheRemovesDiskFileAndClearsInMemoryCache() throws IOException {
+        ProjectCacheMetaService service = new ProjectCacheMetaService(projectService);
+
+        service.saveRepoCache("Cached content to be deleted");
+        Path cacheFile = projectDataDir.resolve("tmp/repo_cache.txt");
+        assertTrue(Files.exists(cacheFile));
+        assertTrue(service.loadMeta().isPresent());
+        assertTrue(service.loadRepoCache().isPresent());
+
+        service.deleteRepoCache();
+
+        assertFalse(Files.exists(cacheFile));
+        assertTrue(service.loadRepoCache().isEmpty());
+        assertTrue(service.loadMeta().isEmpty());
+    }
 }

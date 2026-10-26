@@ -54,6 +54,17 @@ public class ProjectCacheMetaService {
         cachedMeta = null;
     }
 
+    public synchronized void deleteRepoCache() {
+        invalidateCache();
+        if (!projectService.hasActiveProject()) return;
+        Path path = projectService.resolveProjectDataPath(REPO_CACHE_FILE);
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            log.error("Failed to delete repo cache: {}", e.getMessage());
+        }
+    }
+
     public synchronized Optional<ProjectCacheMeta> loadMeta() {
         if (!projectService.hasActiveProject()) {
             invalidateCache();

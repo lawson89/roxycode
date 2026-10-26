@@ -167,6 +167,23 @@ public class RepoMapPackerService {
     }
 
     @SuppressWarnings("PMD.NullAssignment")
+    public void invalidateCache() {
+        synchronized (this) {
+            generation.incrementAndGet();
+            cachedMap = null;
+            cachedGeneration = 0;
+            diskCacheEligible = false;
+            skeletonCache.clear();
+        }
+        metaService.deleteRepoCache();
+    }
+
+    public EditorResult forceRegenerateRepoMap() {
+        invalidateCache();
+        return generateRepoMap();
+    }
+
+    @SuppressWarnings("PMD.NullAssignment")
     private synchronized void invalidateForProjectChange() {
         generation.incrementAndGet();
         cachedMap = null;

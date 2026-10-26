@@ -2,6 +2,7 @@ package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
@@ -47,6 +48,29 @@ class CodebaseCachePanelTest {
     @Test
     void testButtonsExist() {
         assertNotNull(SwingTestUtils.findButton(panel, "Update Implicit Cache"));
+    }
+
+    @Test
+    void testUpdateImplicitCacheButtonCallsForceRegenerateRepoMap() throws Exception {
+        awaitCondition(() -> !"Status: Unknown".equals(panel.getStatusLabel().getText()));
+
+        when(packerService.forceRegenerateRepoMap())
+                .thenReturn(
+                        new org.roxycode.app.ai.services.EditorResult(
+                                true, "# Forced Repo Map", null));
+        when(metaService.loadRepoCache()).thenReturn(Optional.of("# Forced Repo Map"));
+
+        JButton packButton = SwingTestUtils.findButton(panel, "Update Implicit Cache");
+        assertNotNull(packButton);
+        SwingUtilities.invokeAndWait(packButton::doClick);
+
+        awaitCondition(
+                () ->
+                        "# Forced Repo Map".equals(panel.getRepoMapArea().getText())
+                                && packButton.isEnabled());
+
+        verify(packerService).forceRegenerateRepoMap();
+        assertEquals("# Forced Repo Map", panel.getRepoMapArea().getText());
     }
 
     @Test

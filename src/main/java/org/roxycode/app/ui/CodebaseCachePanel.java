@@ -292,7 +292,7 @@ public final class CodebaseCachePanel extends JPanel {
                     @Override
                     protected org.roxycode.app.ai.services.EditorResult doInBackground()
                             throws Exception {
-                        return packerService.generateRepoMap();
+                        return packerService.forceRegenerateRepoMap();
                     }
 
                     @Override
