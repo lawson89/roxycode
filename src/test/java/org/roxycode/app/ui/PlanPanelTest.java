@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.nio.file.Path;
 import java.util.List;
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
@@ -13,8 +14,11 @@ import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.InlineView;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 
 class PlanPanelTest {
@@ -53,6 +57,16 @@ class PlanPanelTest {
         assertTrue(
                 html.contains("<td width='100%'"),
                 "Step description cell should take 100% remaining width");
+        assertTrue(html.contains("<h3>Changes:</h3>"), "Plan HTML should include Changes header");
+        assertTrue(
+                html.contains("No files changed"),
+                "Plan HTML should display 'No files changed' when git status is blank");
+
+        String htmlWithChanges =
+                PlanPanel.buildPlanHtml(plan, " M src/App.java\n?? src/NewFile.java\n");
+        assertTrue(htmlWithChanges.contains("<h3>Changes:</h3>"));
+        assertTrue(htmlWithChanges.contains("<pre> M src/App.java\n?? src/NewFile.java</pre>"));
+        assertFalse(htmlWithChanges.contains("No files changed"));
 
         ImplementationPlan planWithLogs =
                 new ImplementationPlan(
@@ -90,6 +104,7 @@ class PlanPanelTest {
     @Test
     void testPlanPanelRendersNonZeroMinimumSpanForNowrapCells() throws Exception {
         PlanService planService = mock(PlanService.class);
+        GitService gitService = mock(GitService.class);
 
         ImplementationPlan plan =
                 new ImplementationPlan(
@@ -108,7 +123,7 @@ class PlanPanelTest {
 
         when(planService.getCurrentPlan()).thenReturn(plan);
 
-        PlanPanel panel = new PlanPanel(planService);
+        PlanPanel panel = new PlanPanel(planService, gitService);
         SwingUtilities.invokeAndWait(() -> {});
 
         JEditorPane editorPane = panel.getDisplayArea();
@@ -136,7 +151,7 @@ class PlanPanelTest {
     }
 
     @Test
-    void testBuildPlanMarkdownFormatsPlanAndHandoffLog() {
+    void testBuildPlanMarkdownFormatsPlanHandoffLogAndChanges() {
         assertEquals("", PlanPanel.buildPlanMarkdown(null));
 
         ImplementationPlan plan =
@@ -180,14 +195,32 @@ class PlanPanelTest {
         assertTrue(
                 md.contains("| 2026-04-06 12:05:30 | Architect | Created plan ")
                         && md.contains("| verified details |"));
+        assertTrue(
+                md.contains(
+                        """
+                        ## Changes
+                        No files changed"""));
+
+        String mdWithChanges =
+                PlanPanel.buildPlanMarkdown(plan, " M src/App.java\n?? src/NewFile.java\n");
+        assertTrue(
+                mdWithChanges.contains(
+                        """
+                        ## Changes
+                        ```text
+                         M src/App.java
+                        ?? src/NewFile.java
+                        ```"""));
     }
 
     @Test
-    void testCopyMarkdownButtonStateAndAction() throws Exception {
+    void testCopyMarkdownButtonAndGitChangesRefreshOnEvents() throws Exception {
         PlanService planService = mock(PlanService.class);
+        GitService gitService = mock(GitService.class);
 
         when(planService.getCurrentPlan()).thenReturn(null);
-        PlanPanel panel = new PlanPanel(planService);
+        when(gitService.getStatus()).thenReturn("");
+        PlanPanel panel = new PlanPanel(planService, gitService);
         SwingUtilities.invokeAndWait(() -> {});
 
         assertFalse(
@@ -213,6 +246,14 @@ class PlanPanelTest {
                 panel.getCopyMarkdownButton().isEnabled(),
                 "Copy button should be enabled when plan is present");
         assertEquals("Copy Plan as Markdown", panel.getCopyMarkdownButton().getText());
+        assertTrue(panel.getDisplayArea().getText().contains("No files changed"));
+
+        when(gitService.getStatus()).thenReturn(" M src/Main.java\n?? src/Extra.java\n");
+        panel.onFileChanged(new FileChangedEvent("src/Main.java"));
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertTrue(panel.getDisplayArea().getText().contains("M src/Main.java"));
+        assertTrue(panel.getDisplayArea().getText().contains("?? src/Extra.java"));
 
         panel.getCopyMarkdownButton().doClick();
 
@@ -220,6 +261,14 @@ class PlanPanelTest {
         assertNotNull(panel.getLastCopiedMarkdown());
         assertTrue(panel.getLastCopiedMarkdown().contains("# Implementation Plan: Test Plan"));
         assertTrue(panel.getLastCopiedMarkdown().contains("- [x] 0. Step 0"));
+        assertTrue(panel.getLastCopiedMarkdown().contains("## Changes"));
+        assertTrue(panel.getLastCopiedMarkdown().contains(" M src/Main.java"));
+
+        when(gitService.getStatus()).thenReturn("");
+        panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/other")));
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertTrue(panel.getDisplayArea().getText().contains("No files changed"));
     }
 
     private boolean hasPositiveInlineMinSpan(Element elem, ViewFactory factory) {

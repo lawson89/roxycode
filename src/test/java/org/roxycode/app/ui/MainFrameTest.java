@@ -66,15 +66,10 @@ class MainFrameTest {
         StatusPanel statusPanel = new StatusPanel(envService);
         QaWorkspacePanel qaWorkspacePanel =
                 new QaWorkspacePanel(exploreChatPanel, exploreHistoryPanel);
-        PlanPanel planPanel = new PlanPanel(planService);
-        GitChangesPanel gitChangesPanel = new GitChangesPanel(gitService);
+        PlanPanel planPanel = new PlanPanel(planService, gitService);
         TaskWorkspacePanel taskWorkspacePanel =
                 new TaskWorkspacePanel(
-                        featureChatPanel,
-                        featureHistoryPanel,
-                        planService,
-                        planPanel,
-                        gitChangesPanel);
+                        featureChatPanel, featureHistoryPanel, planService, planPanel);
         CodebaseCachePanel codebaseCachePanel =
                 new CodebaseCachePanel(packerService, cacheMetaService, promptService);
         JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);

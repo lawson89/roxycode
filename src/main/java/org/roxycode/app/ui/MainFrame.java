@@ -83,14 +83,12 @@ public final class MainFrame extends JFrame {
                     if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {
                         qaWorkspacePanel.getQaChatPanel().getController().resetForProjectChange();
                     }
-                    if (taskWorkspacePanel != null) {
-                        if (taskWorkspacePanel.getTaskChatPanel() != null) {
-                            taskWorkspacePanel
-                                    .getTaskChatPanel()
-                                    .getController()
-                                    .resetForProjectChange();
-                        }
-                        taskWorkspacePanel.refreshGitChanges();
+                    if (taskWorkspacePanel != null
+                            && taskWorkspacePanel.getTaskChatPanel() != null) {
+                        taskWorkspacePanel
+                                .getTaskChatPanel()
+                                .getController()
+                                .resetForProjectChange();
                     }
                     chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
                     chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);

@@ -15,7 +15,6 @@ import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
@@ -34,7 +33,7 @@ public final class TaskWorkspacePanel extends JPanel {
     static final int MAX_PLAN_TITLE_LENGTH = 40;
 
     private final transient PlanService planService;
-    private final GitChangesPanel gitChangesPanel;
+    private final PlanPanel planPanel;
     private final FeatureChatPanel taskChatPanel;
     private final JTabbedPane taskTabs;
     private final JPanel topBar;
@@ -47,11 +46,10 @@ public final class TaskWorkspacePanel extends JPanel {
             FeatureChatPanel taskChatPanel,
             FeatureHistoryPanel taskHistoryPanel,
             PlanService planService,
-            PlanPanel planPanel,
-            GitChangesPanel gitChangesPanel) {
+            PlanPanel planPanel) {
         super(new BorderLayout());
         this.planService = planService;
-        this.gitChangesPanel = gitChangesPanel;
+        this.planPanel = planPanel;
         this.taskChatPanel = taskChatPanel;
 
         topBar =
@@ -82,15 +80,14 @@ public final class TaskWorkspacePanel extends JPanel {
         taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, topBar);
         taskTabs.addTab("Chat", taskChatPanel);
         taskTabs.addTab("Plan", planPanel);
-        taskTabs.addTab("Git", gitChangesPanel);
         taskTabs.addTab("History", taskHistoryPanel);
         taskTabs.addChangeListener(
                 e -> {
                     if (taskChatPanel.equals(taskTabs.getSelectedComponent())) {
                         SwingUtilities.invokeLater(taskChatPanel::focusInput);
-                    } else if (gitChangesPanel != null
-                            && gitChangesPanel.equals(taskTabs.getSelectedComponent())) {
-                        gitChangesPanel.refresh();
+                    } else if (planPanel != null
+                            && planPanel.equals(taskTabs.getSelectedComponent())) {
+                        planPanel.refresh();
                     }
                 });
 
@@ -119,11 +116,6 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     @EventListener
-    public void onFileChanged(FileChangedEvent event) {
-        Edt.run(this::refreshGitChanges);
-    }
-
-    @EventListener
     public void onWorkflowTransition(WorkflowTransitionEvent event) {
         if (sidebar != null && !event.autonomous()) {
             Edt.run(() -> sidebar.setTaskWaitingApproval(event.to() != null));
@@ -131,16 +123,12 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     public void onViewShown() {
-        refreshGitChanges();
+        if (planPanel != null) {
+            planPanel.refresh();
+        }
         if (taskChatPanel != null) {
             taskTabs.setSelectedComponent(taskChatPanel);
             SwingUtilities.invokeLater(taskChatPanel::focusInput);
-        }
-    }
-
-    public void refreshGitChanges() {
-        if (gitChangesPanel != null) {
-            gitChangesPanel.refresh();
         }
     }
 
@@ -217,7 +205,7 @@ public final class TaskWorkspacePanel extends JPanel {
         return planLabel;
     }
 
-    GitChangesPanel getGitChangesPanel() {
-        return gitChangesPanel;
+    PlanPanel getPlanPanel() {
+        return planPanel;
     }
 }
