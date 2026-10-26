@@ -24,8 +24,7 @@ public final class QaWorkspacePanel extends JPanel {
     private final ExploreChatPanel qaChatPanel;
     private final JPanel qaHeaderBar;
 
-    public QaWorkspacePanel(
-            ExploreChatPanel exploreChatPanel, ExploreHistoryPanel exploreHistoryPanel) {
+    public QaWorkspacePanel(ExploreChatPanel exploreChatPanel) {
         super(new BorderLayout());
 
         qaHeaderBar =
@@ -48,7 +47,6 @@ public final class QaWorkspacePanel extends JPanel {
         qaTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, qaHeaderBar);
         this.qaChatPanel = exploreChatPanel;
         qaTabs.addTab("Chat", qaChatPanel);
-        qaTabs.addTab("History", exploreHistoryPanel);
         qaTabs.addChangeListener(
                 e -> {
                     if (qaChatPanel.equals(qaTabs.getSelectedComponent())) {

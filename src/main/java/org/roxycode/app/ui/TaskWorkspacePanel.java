@@ -42,10 +42,7 @@ public final class TaskWorkspacePanel extends JPanel {
     private SidebarPanel sidebar;
 
     public TaskWorkspacePanel(
-            FeatureChatPanel taskChatPanel,
-            FeatureHistoryPanel taskHistoryPanel,
-            PlanService planService,
-            PlanPanel planPanel) {
+            FeatureChatPanel taskChatPanel, PlanService planService, PlanPanel planPanel) {
         super(new BorderLayout());
         this.planService = planService;
         this.planPanel = planPanel;
@@ -79,7 +76,6 @@ public final class TaskWorkspacePanel extends JPanel {
         taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, topBar);
         taskTabs.addTab("Chat", taskChatPanel);
         taskTabs.addTab("Plan", planPanel);
-        taskTabs.addTab("History", taskHistoryPanel);
         taskTabs.addChangeListener(
                 e -> {
                     if (taskChatPanel.equals(taskTabs.getSelectedComponent())) {

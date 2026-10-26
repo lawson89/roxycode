@@ -49,17 +49,13 @@ class MentorModeIntegrationTest {
         ExploreChatPanel exploreChatPanel =
                 new ExploreChatPanel(
                         aiService, planService, eventPublisher, chatMemory, settingsService, null);
-        ExploreHistoryPanel exploreHistoryPanel = new ExploreHistoryPanel(chatMemory);
         FeatureChatPanel featureChatPanel =
                 new FeatureChatPanel(
                         aiService, planService, eventPublisher, chatMemory, settingsService, null);
-        FeatureHistoryPanel featureHistoryPanel = new FeatureHistoryPanel(chatMemory);
 
-        qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel, exploreHistoryPanel);
+        qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel);
         PlanPanel planPanel = new PlanPanel(planService, gitService);
-        taskWorkspacePanel =
-                new TaskWorkspacePanel(
-                        featureChatPanel, featureHistoryPanel, planService, planPanel);
+        taskWorkspacePanel = new TaskWorkspacePanel(featureChatPanel, planService, planPanel);
 
         sidebar = new SidebarPanel(card -> {});
         qaWorkspacePanel.bindSidebar(sidebar);
@@ -69,6 +65,8 @@ class MentorModeIntegrationTest {
     @Test
     void testWorkspaceBarsLocatedInRespectiveViews() {
         JTabbedPane qaTabs = qaWorkspacePanel.getQaTabs();
+        assertEquals(1, qaTabs.getTabCount(), "QA workspace should only have the Chat tab");
+        assertEquals("Chat", qaTabs.getTitleAt(0));
         assertEquals(
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
                 qaTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE));
@@ -91,6 +89,10 @@ class MentorModeIntegrationTest {
         JPanel progressTracker = taskWorkspacePanel.getProgressTracker();
         JLabel planLabel = taskWorkspacePanel.getPlanLabel();
         JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
+        assertEquals(
+                2, taskTabs.getTabCount(), "Task workspace should only have Chat and Plan tabs");
+        assertEquals("Chat", taskTabs.getTitleAt(0));
+        assertEquals("Plan", taskTabs.getTitleAt(1));
         assertEquals(
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
                 taskTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE));

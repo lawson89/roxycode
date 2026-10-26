@@ -56,20 +56,16 @@ class MainFrameTest {
         ExploreChatPanel exploreChatPanel =
                 new ExploreChatPanel(
                         aiService, planService, eventPublisher, chatMemory, settingsService, null);
-        ExploreHistoryPanel exploreHistoryPanel = new ExploreHistoryPanel(chatMemory);
         FeatureChatPanel featureChatPanel =
                 new FeatureChatPanel(
                         aiService, planService, eventPublisher, chatMemory, settingsService, null);
-        FeatureHistoryPanel featureHistoryPanel = new FeatureHistoryPanel(chatMemory);
 
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
         StatusPanel statusPanel = new StatusPanel(envService);
-        QaWorkspacePanel qaWorkspacePanel =
-                new QaWorkspacePanel(exploreChatPanel, exploreHistoryPanel);
+        QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel);
         PlanPanel planPanel = new PlanPanel(planService, gitService);
         TaskWorkspacePanel taskWorkspacePanel =
-                new TaskWorkspacePanel(
-                        featureChatPanel, featureHistoryPanel, planService, planPanel);
+                new TaskWorkspacePanel(featureChatPanel, planService, planPanel);
         CodebaseCachePanel codebaseCachePanel =
                 new CodebaseCachePanel(packerService, cacheMetaService, promptService);
         JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);

@@ -6,7 +6,7 @@ import org.apache.commons.text.StringEscapeUtils;
 
 /**
  * Utility class to convert JEXL and programming script text to syntax-highlighted HTML. Optimized
- * for display in MarkdownPane and MarkdownViewer using CSS classes.
+ * for display in MarkdownPane using CSS classes.
  */
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class JexlToHtmlConverter {
