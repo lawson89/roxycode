@@ -99,9 +99,8 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                         + "border: 1,0,0,0,$Component.borderColor");
         inlineActionPanel.setVisible(false);
 
-        Color accentColor = UIManager.getColor("Component.accentColor");
-        if (accentColor == null) accentColor = UIManager.getColor("Label.foreground");
-        if (accentColor == null) accentColor = Color.GRAY;
+        Color accentColor =
+                SwingHtmlUtils.getUiColor(Color.GRAY, "Component.accentColor", "Label.foreground");
 
         transitionLabel =
                 new JLabel(
@@ -270,9 +269,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     private void updateOutputScrollPaneBorder() {
-        outputScrollPane.setBorder(
-                BorderFactory.createMatteBorder(
-                        0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
+        outputScrollPane.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
     }
 
     @EventListener

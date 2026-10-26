@@ -93,21 +93,15 @@ public final class PlanPanel extends JPanel {
         this.lastCopiedMarkdown = markdown;
         SwingHtmlUtils.copyToClipboard(markdown);
 
-        copyMarkdownButton.setText("Copied!");
-        copyMarkdownButton.setIcon(FontIcon.of(Codicons.CHECK, 14));
-
-        if (copyFeedbackTimer != null && copyFeedbackTimer.isRunning()) {
-            copyFeedbackTimer.stop();
-        }
         copyFeedbackTimer =
-                new Timer(
-                        COPY_FEEDBACK_DELAY_MS,
-                        e -> {
-                            copyMarkdownButton.setText(COPY_BUTTON_TEXT);
-                            copyMarkdownButton.setIcon(FontIcon.of(Codicons.CLIPPY, 14));
-                        });
-        copyFeedbackTimer.setRepeats(false);
-        copyFeedbackTimer.start();
+                SwingHtmlUtils.showCopyButtonFeedback(
+                        copyMarkdownButton,
+                        copyFeedbackTimer,
+                        "Copied!",
+                        FontIcon.of(Codicons.CHECK, 14),
+                        COPY_BUTTON_TEXT,
+                        FontIcon.of(Codicons.CLIPPY, 14),
+                        COPY_FEEDBACK_DELAY_MS);
     }
 
     JEditorPane getDisplayArea() {

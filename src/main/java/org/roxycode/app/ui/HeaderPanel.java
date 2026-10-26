@@ -103,9 +103,7 @@ public final class HeaderPanel extends JPanel {
     }
 
     private void updateBorder() {
-        setBorder(
-                BorderFactory.createMatteBorder(
-                        0, 0, 1, 0, UIManager.getColor("Component.borderColor")));
+        setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
     }
 
     @EventListener

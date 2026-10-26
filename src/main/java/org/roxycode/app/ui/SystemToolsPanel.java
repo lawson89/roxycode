@@ -114,20 +114,13 @@ public final class SystemToolsPanel extends JPanel {
                     progressBar.setIndeterminate(true);
                     progressBar.setVisible(true);
                 });
-        if (future == null) {
-            Edt.run(
-                    () -> {
-                        progressBar.setIndeterminate(false);
-                        progressBar.setVisible(false);
-                        refreshBtn.setEnabled(true);
-                    });
-            return CompletableFuture.completedFuture(List.of());
-        }
-        return future.whenComplete(
+        CompletableFuture<List<SystemTool>> effectiveFuture =
+                future != null ? future : CompletableFuture.completedFuture(List.of());
+        return effectiveFuture.whenComplete(
                 (tools, ex) ->
                         Edt.run(
                                 () -> {
-                                    if (ex == null && tools != null) {
+                                    if (future != null && ex == null && tools != null) {
                                         populateTable(tools);
                                     }
                                     progressBar.setIndeterminate(false);
@@ -181,17 +174,12 @@ public final class SystemToolsPanel extends JPanel {
 
             String status = String.valueOf(value);
             if (SystemToolService.STATUS_DETECTED.equals(status)) {
-                Color successColor = UIManager.getColor("Actions.Green");
-                if (successColor == null) {
-                    successColor = new Color(40, 167, 69);
-                }
+                Color successColor =
+                        SwingHtmlUtils.getUiColor(new Color(40, 167, 69), "Actions.Green");
                 setForeground(successColor);
                 setIcon(FontIcon.of(Codicons.CHECK, 16, successColor));
             } else {
-                Color errorColor = UIManager.getColor("Actions.Red");
-                if (errorColor == null) {
-                    errorColor = new Color(220, 53, 69);
-                }
+                Color errorColor = SwingHtmlUtils.getUiColor(new Color(220, 53, 69), "Actions.Red");
                 setForeground(errorColor);
                 setIcon(FontIcon.of(Codicons.ERROR, 16, errorColor));
             }

@@ -5,10 +5,8 @@ import java.awt.Font;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -69,9 +67,7 @@ public final class SidebarPanel extends JPanel {
     }
 
     private void updateBorder() {
-        setBorder(
-                BorderFactory.createMatteBorder(
-                        0, 0, 0, 1, UIManager.getColor("Component.borderColor")));
+        setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 0, 1));
     }
 
     private JPanel createBrandingHeader() {

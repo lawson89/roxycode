@@ -75,9 +75,7 @@ public final class StatusPanel extends JPanel {
     }
 
     private void updateBorder() {
-        setBorder(
-                BorderFactory.createMatteBorder(
-                        1, 0, 0, 0, UIManager.getColor("Component.borderColor")));
+        setBorder(SwingHtmlUtils.createThemeMatteBorder(1, 0, 0, 0));
     }
 
     void updateStats() {

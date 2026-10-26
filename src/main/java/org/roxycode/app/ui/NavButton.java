@@ -163,14 +163,8 @@ public final class NavButton extends JButton {
     }
 
     private Color resolveBusyStatusColor() {
-        Color color = UIManager.getColor("Label.disabledForeground");
-        if (color == null) {
-            color = UIManager.getColor("Component.accentColor");
-        }
-        if (color == null) {
-            color = getForeground();
-        }
-        return color;
+        return SwingHtmlUtils.getUiColor(
+                getForeground(), "Label.disabledForeground", "Component.accentColor");
     }
 
     @Override

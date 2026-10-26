@@ -10,7 +10,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -175,12 +174,10 @@ public final class TaskWorkspacePanel extends JPanel {
     private JPanel createConnectorLine(boolean reached) {
         JPanel line = new JPanel();
         line.setOpaque(true);
-        Color accentColor = UIManager.getColor("Component.accentColor");
-        Color borderColor = UIManager.getColor("Component.borderColor");
         if (reached) {
-            line.setBackground(accentColor != null ? accentColor : Color.BLUE);
+            line.setBackground(SwingHtmlUtils.getUiColor(Color.BLUE, "Component.accentColor"));
         } else {
-            line.setBackground(borderColor != null ? borderColor : Color.GRAY);
+            line.setBackground(SwingHtmlUtils.getUiColor(Color.GRAY, "Component.borderColor"));
         }
         return line;
     }

@@ -62,7 +62,7 @@ class ChatControllerTest {
     }
 
     @Test
-    void testPerformResetSessionResetsWorkflowAndClearsMemory() {
+    void testPerformResetSessionResetsWorkflowAndClearsMemory() throws Exception {
         AiService aiService = mock(AiService.class);
         PlanService planService = mock(PlanService.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -73,6 +73,7 @@ class ChatControllerTest {
 
         panel.getModel().setCurrentTurn(3);
         panel.getController().performResetSession();
+        SwingUtilities.invokeAndWait(() -> {});
 
         verify(planService).resetWorkflow();
         verify(chatMemory).clear("task:default");

@@ -10,7 +10,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JWindow;
-import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.util.Edt;
 
@@ -39,10 +38,8 @@ public final class SplashScreenWindow extends JWindow {
                                 "[grow, center]",
                                 "[]12[]4[]16[]8[]"));
 
-        Color borderColor = UIManager.getColor("Component.borderColor");
-        if (borderColor == null) {
-            borderColor = new Color(80, 80, 80);
-        }
+        Color borderColor =
+                SwingHtmlUtils.getUiColor(new Color(80, 80, 80), "Component.borderColor");
         rootPanel.setBorder(BorderFactory.createLineBorder(borderColor, 1));
 
         JPanel logoPanel = new RoundedImagePanel(logoImage, 80, 22);

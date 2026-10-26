@@ -169,11 +169,8 @@ public final class BuildConfigPanel extends JPanel {
             setDockerAvailable(false);
             return;
         }
-        if (systemToolService.hasCachedTools()) {
-            setDockerAvailable(systemToolService.checkDockerAvailable());
-            return;
-        }
-        CompletableFuture<Boolean> future = systemToolService.isDockerAvailable();
+        CompletableFuture<Boolean> future =
+                systemToolService.hasCachedTools() ? null : systemToolService.isDockerAvailable();
         if (future == null) {
             setDockerAvailable(systemToolService.checkDockerAvailable());
             return;
@@ -197,14 +194,7 @@ public final class BuildConfigPanel extends JPanel {
             future = systemToolService.isDockerAvailable();
         }
         if (future == null) {
-            boolean available = systemToolService.checkDockerAvailable();
-            Edt.run(
-                    () -> {
-                        setDockerAvailable(available);
-                        recheckDockerButton.setText(RECHECK_DOCKER_TEXT);
-                        recheckDockerButton.setEnabled(true);
-                    });
-            return CompletableFuture.completedFuture(available);
+            future = CompletableFuture.completedFuture(systemToolService.checkDockerAvailable());
         }
         return future.whenComplete(
                         (available, ex) ->

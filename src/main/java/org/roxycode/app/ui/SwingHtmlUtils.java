@@ -263,6 +263,60 @@ public final class SwingHtmlUtils {
     }
 
     /**
+     * Updates a button with temporary copy feedback text and icon, stopping any existing timer, and
+     * starts a non-repeating Swing {@link Timer} to restore the original text and icon.
+     *
+     * @param button the button to update
+     * @param existingTimer any previously started feedback timer (stopped if running)
+     * @param copiedText the temporary text to display while copied
+     * @param copiedIcon the temporary icon to display while copied
+     * @param originalText the original text to restore after the delay
+     * @param originalIcon the original icon to restore after the delay
+     * @param delayMs the duration in milliseconds before restoring the original state
+     * @return the newly started non-repeating {@link Timer}
+     */
+    public static Timer showCopyButtonFeedback(
+            JButton button,
+            Timer existingTimer,
+            String copiedText,
+            Icon copiedIcon,
+            String originalText,
+            Icon originalIcon,
+            int delayMs) {
+        if (existingTimer != null && existingTimer.isRunning()) {
+            existingTimer.stop();
+        }
+        button.setText(copiedText);
+        button.setIcon(copiedIcon);
+        Timer timer =
+                new Timer(
+                        delayMs,
+                        e -> {
+                            button.setText(originalText);
+                            button.setIcon(originalIcon);
+                        });
+        timer.setRepeats(false);
+        timer.start();
+        return timer;
+    }
+
+    /**
+     * Creates a theme-aware {@link javax.swing.border.MatteBorder} using {@code
+     * Component.borderColor} from {@link UIManager} (with a gray fallback).
+     *
+     * @param top the top inset in pixels
+     * @param left the left inset in pixels
+     * @param bottom the bottom inset in pixels
+     * @param right the right inset in pixels
+     * @return the matte border
+     */
+    public static javax.swing.border.Border createThemeMatteBorder(
+            int top, int left, int bottom, int right) {
+        return BorderFactory.createMatteBorder(
+                top, left, bottom, right, getUiColor(Color.GRAY, "Component.borderColor"));
+    }
+
+    /**
      * Resolves the first non-null {@link Color} from {@link UIManager} for the given keys, or
      * returns the fallback color.
      *

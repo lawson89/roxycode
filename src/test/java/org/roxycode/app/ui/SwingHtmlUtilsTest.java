@@ -231,5 +231,29 @@ class SwingHtmlUtilsTest {
                 apiPanel.getTextPane().getSelectionEnd()
                         - apiPanel.getTextPane().getSelectionStart(),
                 "Copy button should not select all text in the JTextPane");
+
+        JButton btn = new JButton("Original");
+        Timer firstTimer =
+                SwingHtmlUtils.showCopyButtonFeedback(
+                        btn, null, "Copied!", null, "Original", null, 5000);
+        assertEquals("Copied!", btn.getText());
+        assertTrue(firstTimer.isRunning());
+        assertFalse(firstTimer.isRepeats());
+
+        Timer secondTimer =
+                SwingHtmlUtils.showCopyButtonFeedback(
+                        btn, firstTimer, "Copied Again!", null, "Original", null, 5000);
+        assertFalse(firstTimer.isRunning());
+        assertTrue(secondTimer.isRunning());
+        assertEquals("Copied Again!", btn.getText());
+        for (var listener : secondTimer.getActionListeners()) {
+            listener.actionPerformed(null);
+        }
+        secondTimer.stop();
+        assertEquals("Original", btn.getText());
+
+        javax.swing.border.Border border = SwingHtmlUtils.createThemeMatteBorder(1, 0, 1, 0);
+        assertNotNull(border);
+        assertEquals(new java.awt.Insets(1, 0, 1, 0), border.getBorderInsets(btn));
     }
 }

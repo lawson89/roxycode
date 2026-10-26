@@ -256,28 +256,23 @@ public final class ChatController implements AutoCloseable {
     }
 
     void performResetSession() {
-        if (cancelActiveTurnState(true)) {
-            view.setLoading(false);
-        }
-        if (model.isTaskMode()) {
-            planService.resetWorkflow();
-        }
-        model.clearPendingImages();
-        view.clearAttachments();
-        model.setCurrentTurn(0);
-        view.updateTurnLabel();
-        chatMemory.clear(model.getConversationId());
-        view.clearOutput();
-        view.appendMessage(ROLE_SYSTEM, "Session reset.");
+        resetSessionState(true);
     }
 
     public void resetForProjectChange() {
-        cancelActiveTurnState(true);
+        resetSessionState(false);
+    }
+
+    private void resetSessionState(boolean clearMemoryAndAppendNotice) {
+        cancelActiveTurnState(false);
         if (model.isTaskMode() && planService != null) {
             planService.resetWorkflow();
         }
         model.clearPendingImages();
         model.setCurrentTurn(0);
+        if (clearMemoryAndAppendNotice) {
+            chatMemory.clear(model.getConversationId());
+        }
         Edt.run(
                 () -> {
                     view.clearAttachments();
@@ -285,6 +280,9 @@ public final class ChatController implements AutoCloseable {
                     view.setLoading(false);
                     view.updateTurnLabel();
                     view.clearOutput();
+                    if (clearMemoryAndAppendNotice) {
+                        view.appendMessage(ROLE_SYSTEM, "Session reset.");
+                    }
                 });
     }
 
