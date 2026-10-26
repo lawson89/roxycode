@@ -37,20 +37,6 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
     private final ObjectMapper objectMapper;
 
     public ReturnDirectToolCallingManager(
-            SettingsService settingsService,
-            PlanService planService,
-            ApplicationEventPublisher eventPublisher) {
-        this(
-                ToolCallingManager.builder()
-                        .toolExecutionExceptionProcessor(new RoxyToolExecutionExceptionProcessor())
-                        .build(),
-                settingsService,
-                planService,
-                eventPublisher,
-                AiConfig.SHARED_OBJECT_MAPPER);
-    }
-
-    public ReturnDirectToolCallingManager(
             ToolCallingManager delegate,
             SettingsService settingsService,
             PlanService planService,

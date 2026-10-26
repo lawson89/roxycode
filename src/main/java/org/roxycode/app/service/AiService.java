@@ -216,10 +216,6 @@ public class AiService {
         return content;
     }
 
-    public static boolean isAutoNudgeableResponse(String response) {
-        return isAutoNudgeableResponse(response, true);
-    }
-
     public static boolean isAutoNudgeableResponse(String response, boolean hadToolTurns) {
         if (StringUtils.isBlank(response)) {
             return false;

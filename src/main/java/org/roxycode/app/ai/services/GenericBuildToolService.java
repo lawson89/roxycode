@@ -228,8 +228,8 @@ public class GenericBuildToolService {
             String errorRegex = getParseRegex(config, "error_regex");
             String testFailureRegex = getParseRegex(config, "test_failure_regex");
 
-            Map<String, String> env = getEnv(config);
-            ContainerConfig containerConfig = getContainerConfig(config);
+            Map<String, String> env = config.env();
+            ContainerConfig containerConfig = config.container();
             if (containerConfig.enabled()) {
                 return executeInContainer(
                         command, containerConfig, env, errorRegex, testFailureRegex);
@@ -342,14 +342,6 @@ public class GenericBuildToolService {
             case "test_failure_regex" -> config.parse().testFailureRegex();
             default -> null;
         };
-    }
-
-    private Map<String, String> getEnv(BuildConfig config) {
-        return config.env();
-    }
-
-    ContainerConfig getContainerConfig(BuildConfig config) {
-        return buildContainerService.parseContainerConfig(config);
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")

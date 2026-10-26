@@ -129,12 +129,6 @@ public class BuildContainerService {
         return config != null ? config : ContainerConfig.DEFAULT;
     }
 
-    public ContainerConfig parseContainerConfig(GenericBuildToolService.BuildConfig config) {
-        return config != null && config.container() != null
-                ? config.container()
-                : ContainerConfig.DEFAULT;
-    }
-
     public ContainerExecResult executeCommand(
             Path projectRoot,
             ContainerConfig containerConfig,

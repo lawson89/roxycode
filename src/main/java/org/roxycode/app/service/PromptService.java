@@ -246,10 +246,6 @@ public class PromptService {
         return listContextFilesInFolders(getProjectContextFolders(), true);
     }
 
-    public List<ContextFileItem> listContextFilesInFolders(List<String> folders) {
-        return listContextFilesInFolders(folders, true);
-    }
-
     List<ContextFileItem> listContextFilesInFolders(
             List<String> folders, boolean resolveRelativeToProject) {
         if (folders == null || folders.isEmpty()) {

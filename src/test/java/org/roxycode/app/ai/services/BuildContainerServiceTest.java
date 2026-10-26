@@ -89,8 +89,7 @@ class BuildContainerServiceTest {
 
     @Test
     void testParseContainerConfigDefaultsAndCustomValues() {
-        ContainerConfig defaultConfig =
-                buildContainerService.parseContainerConfig((ContainerConfig) null);
+        ContainerConfig defaultConfig = buildContainerService.parseContainerConfig(null);
         assertFalse(defaultConfig.enabled());
         assertEquals("ubuntu:24.04", defaultConfig.image());
         assertEquals("/workspace", defaultConfig.workdir());

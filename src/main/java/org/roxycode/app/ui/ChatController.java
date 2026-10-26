@@ -519,13 +519,10 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onPhaseChanged(PhaseChangedEvent event) {
-        if (event != null) {
-            onPhaseChanged(event.phase());
+        if (event == null) {
+            return;
         }
-    }
-
-    void onPhaseChanged(WorkflowPhase phase) {
-        log.debug("Phase changed to: {}", phase);
+        log.debug("Phase changed to: {}", event.phase());
         Edt.run(
                 () -> {
                     if (model.isTaskMode()) {

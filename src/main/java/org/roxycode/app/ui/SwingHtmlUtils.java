@@ -92,19 +92,6 @@ public final class SwingHtmlUtils {
         }
     }
 
-    /** Returns the shared Flexmark {@link Parser} configured with GFM tables and strikethrough. */
-    public static Parser markdownParser() {
-        return MARKDOWN_PARSER;
-    }
-
-    /**
-     * Returns the shared Flexmark {@link HtmlRenderer} configured with GFM tables and
-     * strikethrough.
-     */
-    public static HtmlRenderer markdownRenderer() {
-        return MARKDOWN_RENDERER;
-    }
-
     /**
      * Renders Markdown into Swing-compatible HTML with GFM table styling and code block syntax
      * highlighting applied.
