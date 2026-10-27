@@ -233,4 +233,18 @@ class SettingsPanelTest {
                     env.getProperty("spring.ai.google.genai.chat.options.model"));
         }
     }
+
+    @Test
+    void testGetRSyntaxThemeCachesLightAndDarkInstances() throws Exception {
+        var light1 = SettingsPanel.getRSyntaxTheme(false);
+        var light2 = SettingsPanel.getRSyntaxTheme(false);
+        var dark1 = SettingsPanel.getRSyntaxTheme(true);
+        var dark2 = SettingsPanel.getRSyntaxTheme(true);
+
+        assertNotNull(light1);
+        assertNotNull(dark1);
+        assertSame(light1, light2);
+        assertSame(dark1, dark2);
+        assertNotSame(light1, dark1);
+    }
 }

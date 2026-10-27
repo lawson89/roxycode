@@ -285,6 +285,48 @@ class GenericBuildToolServiceTest {
 
         buildToolService.handleProjectChanged(new ProjectChangedEvent(projectRoot));
         assertTrue(sessionClosed.get());
+
+        // Verify handleProjectChanged on EDT offloads stopActiveContainer off the EDT
+        buildToolService.compile();
+        assertFalse(sessionClosed.get());
+        AtomicBoolean stoppedOnEdt = new AtomicBoolean(true);
+        buildContainerService.setContainerSessionFactory(
+                key ->
+                        new ContainerSession() {
+                            @Override
+                            public ContainerExecResult execInContainer(String... command) {
+                                return new ContainerExecResult(0, "OK", "");
+                            }
+
+                            @Override
+                            public boolean isRunning() {
+                                return !sessionClosed.get();
+                            }
+
+                            @Override
+                            public void close() {
+                                stoppedOnEdt.set(
+                                        javax.swing.SwingUtilities.isEventDispatchThread());
+                                sessionClosed.set(true);
+                            }
+                        });
+        buildToolService.stopActiveContainer();
+        sessionClosed.set(false);
+        buildToolService.compile();
+
+        try {
+            javax.swing.SwingUtilities.invokeAndWait(
+                    () ->
+                            buildToolService.handleProjectChanged(
+                                    new ProjectChangedEvent(projectRoot)));
+            for (int i = 0; i < 50 && !sessionClosed.get(); i++) {
+                Thread.sleep(20);
+            }
+        } catch (Exception e) {
+            fail(e);
+        }
+        assertTrue(sessionClosed.get());
+        assertFalse(stoppedOnEdt.get(), "Container stop must be offloaded off EDT");
     }
 
     @Test

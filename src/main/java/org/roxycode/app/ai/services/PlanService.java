@@ -567,8 +567,6 @@ public class PlanService {
             String message = String.format("%s -> %s: %s", oldPhase, nextPhase, reason);
             addHandoffLogEntry(timestamp, "System", message);
 
-            handleCompletionMetadata(oldPhase, nextPhase, "System", timestamp);
-
             this.currentPhase = nextPhase;
             this.visitedPhases.add(nextPhase);
             publishPhaseChanged();
@@ -617,17 +615,6 @@ public class PlanService {
                         "Error: Cannot transition from REVIEW to PLAN. All technical and verification steps (including code review) must be marked completed before requesting completion. Incomplete steps: ["
                                 + String.join(", ", incompleteAll)
                                 + "]. Mark them completed via markStepCompleted or markStepsCompleted, or call requestFixes to return to CODE.");
-            }
-        }
-    }
-
-    private void handleCompletionMetadata(
-            WorkflowPhase from, WorkflowPhase to, String user, String timestamp) {
-        if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.PLAN) {
-            if (currentPlan != null) {
-                completePlan(user, timestamp);
-                archiveCurrentPlan(currentPlan, timestamp);
-                clearPlan();
             }
         }
     }
@@ -708,8 +695,13 @@ public class PlanService {
         return pendingReason;
     }
 
-    public synchronized void approveTransition() {
-        if (pendingPhase != null) {
+    public void approveTransition() {
+        ImplementationPlan planToArchive = null;
+        String archiveTimestamp = null;
+        synchronized (this) {
+            if (pendingPhase == null) {
+                return;
+            }
             String timestamp = OffsetDateTime.now().toString();
             String user = environmentService != null ? environmentService.getCurrentUser() : "User";
             String message =
@@ -724,13 +716,30 @@ public class PlanService {
             }
 
             // Phase Completion Metadata
-            handleCompletionMetadata(currentPhase, pendingPhase, user, timestamp);
+            if (currentPhase == WorkflowPhase.REVIEW
+                    && pendingPhase == WorkflowPhase.PLAN
+                    && currentPlan != null) {
+                completePlan(user, timestamp);
+                planToArchive = currentPlan;
+                archiveTimestamp = timestamp;
+                clearPlan();
+            }
 
             this.currentPhase = pendingPhase;
             this.visitedPhases.add(pendingPhase);
             this.pendingPhase = null;
             this.pendingReason = null;
             publishPhaseChanged();
+        }
+        if (planToArchive != null) {
+            ImplementationPlan capturedPlan = planToArchive;
+            String capturedTimestamp = archiveTimestamp;
+            if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+                java.util.concurrent.CompletableFuture.runAsync(
+                        () -> archiveCurrentPlan(capturedPlan, capturedTimestamp));
+            } else {
+                archiveCurrentPlan(capturedPlan, capturedTimestamp);
+            }
         }
     }
 

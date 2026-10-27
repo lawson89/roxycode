@@ -88,11 +88,16 @@ public final class SystemToolsPanel extends JPanel {
         if (toolService == null) {
             return;
         }
-        if (toolService.hasCachedTools()) {
-            populateTable(toolService.getCachedTools());
+        CompletableFuture<List<SystemTool>> future = toolService.detectTools();
+        if (future == null) {
             return;
         }
-        runAsyncToolLoad(toolService.detectTools());
+        if (future.isDone() && !future.isCompletedExceptionally()) {
+            List<SystemTool> immediate = future.join();
+            Edt.run(() -> populateTable(immediate));
+            return;
+        }
+        runAsyncToolLoad(future);
     }
 
     public CompletableFuture<List<SystemTool>> refreshTools() {

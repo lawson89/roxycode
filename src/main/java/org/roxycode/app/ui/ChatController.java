@@ -231,20 +231,31 @@ public final class ChatController implements AutoCloseable {
         if (requested != null) {
             cancelActiveTurnState(false);
             consecutiveAutoNudges = 0;
-            planService.approveTransition();
-            view.appendMessage(
-                    ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** approved.");
-            if (current == WorkflowPhase.REVIEW && requested == WorkflowPhase.PLAN) {
-                chatMemory.clear(model.getConversationId());
-                view.appendMessage(
-                        ROLE_SYSTEM,
-                        "Task complete. What is the next feature you would like to work on?");
-            } else {
-                triggerTurn(
-                        "I approve the transition to "
-                                + requested.getDisplayName()
-                                + ". Please proceed with the next phase.");
-            }
+            Edt.run(view::hideTransitionBanner);
+            turnExecutor.execute(
+                    () -> {
+                        planService.approveTransition();
+                        Edt.run(
+                                () -> {
+                                    view.appendMessage(
+                                            ROLE_SYSTEM,
+                                            "Transition to **"
+                                                    + requested.getDisplayName()
+                                                    + "** approved.");
+                                    if (current == WorkflowPhase.REVIEW
+                                            && requested == WorkflowPhase.PLAN) {
+                                        chatMemory.clear(model.getConversationId());
+                                        view.appendMessage(
+                                                ROLE_SYSTEM,
+                                                "Task complete. What is the next feature you would like to work on?");
+                                    } else {
+                                        triggerTurn(
+                                                "I approve the transition to "
+                                                        + requested.getDisplayName()
+                                                        + ". Please proceed with the next phase.");
+                                    }
+                                });
+                    });
         }
     }
 
@@ -385,13 +396,15 @@ public final class ChatController implements AutoCloseable {
         model.setCurrentTurn(0);
         view.updateTurnLabel();
 
-        List<byte[]> imageBytes = model.drainPendingImagesAsPngBytes();
+        List<java.awt.image.BufferedImage> pendingImages = model.drainPendingImages();
         view.clearAttachments();
 
         FutureTask<Void> task =
                 new FutureTask<>(
                         () -> {
                             try {
+                                List<byte[]> imageBytes =
+                                        ChatModel.encodeImagesToPngBytes(pendingImages);
                                 WorkflowPhase activePhase =
                                         model.resolveActivePhase(planService.getCurrentPhase());
                                 String response =

@@ -210,4 +210,30 @@ class HeaderPanelTest {
         Container leftPanel = openButton.getParent();
         assertEquals(3, leftPanel.getComponentCount());
     }
+
+    @Test
+    void testSwitchProjectAsyncRunsOffEdt() throws Exception {
+        SettingsService ss = createSettingsService();
+        ProjectService ps = spy(createProjectService(ss));
+        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        java.util.concurrent.atomic.AtomicBoolean calledOnEdt =
+                new java.util.concurrent.atomic.AtomicBoolean(true);
+        doAnswer(
+                        inv -> {
+                            calledOnEdt.set(SwingUtilities.isEventDispatchThread());
+                            return inv.callRealMethod();
+                        })
+                .when(ps)
+                .setCurrentProjectRoot(any());
+
+        Path chosen = tempDir.resolve("chosen-project");
+        final java.util.concurrent.CompletableFuture<Void>[] futureRef =
+                new java.util.concurrent.CompletableFuture[1];
+        SwingUtilities.invokeAndWait(() -> futureRef[0] = header.switchProjectAsync(chosen));
+        futureRef[0].get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        assertFalse(
+                calledOnEdt.get(), "switchProjectAsync must invoke setCurrentProjectRoot off EDT");
+        assertEquals(chosen, ps.getCurrentProjectRoot());
+    }
 }

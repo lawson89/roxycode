@@ -249,16 +249,41 @@ public final class SettingsPanel extends JPanel {
         applyRSyntaxTheme(textArea, themeName);
     }
 
+    private static volatile Theme cachedDarkRSyntaxTheme;
+    private static volatile Theme cachedLightRSyntaxTheme;
+
+    static Theme getRSyntaxTheme(boolean dark) throws IOException {
+        Theme cached = dark ? cachedDarkRSyntaxTheme : cachedLightRSyntaxTheme;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (SettingsPanel.class) {
+            cached = dark ? cachedDarkRSyntaxTheme : cachedLightRSyntaxTheme;
+            if (cached != null) {
+                return cached;
+            }
+            String themePath =
+                    dark
+                            ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
+                            : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
+            try (InputStream in = SettingsPanel.class.getResourceAsStream(themePath)) {
+                Theme loaded = Theme.load(in);
+                if (dark) {
+                    cachedDarkRSyntaxTheme = loaded;
+                } else {
+                    cachedLightRSyntaxTheme = loaded;
+                }
+                return loaded;
+            }
+        }
+    }
+
     public static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
         if (textArea == null) {
             return;
         }
-        String themePath =
-                isDarkTheme(themeName)
-                        ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
-                        : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
-        try (InputStream in = SettingsPanel.class.getResourceAsStream(themePath)) {
-            Theme theme = Theme.load(in);
+        try {
+            Theme theme = getRSyntaxTheme(isDarkTheme(themeName));
             theme.apply(textArea);
         } catch (IOException ioe) {
             log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());

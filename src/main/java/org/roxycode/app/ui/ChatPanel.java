@@ -28,6 +28,7 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -371,6 +372,8 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         controller.sendMessage(inputArea.getText());
     }
 
+    static final int THUMBNAIL_SIZE = 64;
+
     private void chooseImageAttachment() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(
@@ -385,22 +388,50 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
             if (file != null) {
-                try {
-                    BufferedImage img = ImageIO.read(file);
-                    if (img != null) {
-                        addPendingImage(img);
-                    }
-                } catch (Exception ex) {
-                    log.error("Failed to load attached image", ex);
-                }
+                loadImageAttachmentAsync(file);
             }
         }
     }
 
-    private void addPendingImage(Image img) {
+    java.util.concurrent.CompletableFuture<BufferedImage> loadImageAttachmentAsync(File file) {
+        if (file == null) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+        return java.util.concurrent.CompletableFuture.supplyAsync(
+                        () -> {
+                            try {
+                                return ImageIO.read(file);
+                            } catch (Exception ex) {
+                                log.error("Failed to load attached image", ex);
+                                return null;
+                            }
+                        })
+                .thenApply(
+                        img -> {
+                            if (img != null) {
+                                Edt.run(() -> addPendingImage(img));
+                            }
+                            return img;
+                        });
+    }
+
+    static BufferedImage createThumbnail(BufferedImage source, int size) {
+        BufferedImage thumb = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = thumb.createGraphics();
+        try {
+            g2.setRenderingHint(
+                    RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g2.drawImage(source, 0, 0, size, size, null);
+        } finally {
+            g2.dispose();
+        }
+        return thumb;
+    }
+
+    void addPendingImage(Image img) {
         BufferedImage bimage = model.addPendingImage(img);
 
-        Image thumbnail = bimage.getScaledInstance(64, 64, Image.SCALE_SMOOTH);
+        BufferedImage thumbnail = createThumbnail(bimage, THUMBNAIL_SIZE);
         JLabel thumbLabel = new JLabel(new ImageIcon(thumbnail));
         thumbLabel.setBorder(
                 BorderFactory.createLineBorder(

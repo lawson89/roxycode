@@ -112,6 +112,14 @@ public class GenericBuildToolService {
 
     @EventListener
     public void handleProjectChanged(ProjectChangedEvent event) {
+        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+            java.util.concurrent.CompletableFuture.runAsync(this::performProjectChanged);
+        } else {
+            performProjectChanged();
+        }
+    }
+
+    private void performProjectChanged() {
         stopActiveContainer();
         if (this.projectService.hasActiveProject()) {
             ensureConfig();

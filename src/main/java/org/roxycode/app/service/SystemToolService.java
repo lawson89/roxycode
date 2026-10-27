@@ -152,12 +152,22 @@ public class SystemToolService {
         if (cachedTools != null && !cachedTools.isEmpty()) {
             return true;
         }
+        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+            return false;
+        }
+        return !loadDiskCacheIntoMemory().isEmpty();
+    }
+
+    private synchronized List<SystemTool> loadDiskCacheIntoMemory() {
+        if (cachedTools != null && !cachedTools.isEmpty()) {
+            return List.copyOf(cachedTools);
+        }
         List<SystemTool> loaded = loadFromDisk();
         if (loaded != null && !loaded.isEmpty()) {
             cachedTools = List.copyOf(loaded);
-            return true;
+            return cachedTools;
         }
-        return false;
+        return List.of();
     }
 
     /**
@@ -177,9 +187,23 @@ public class SystemToolService {
      */
     public CompletableFuture<List<SystemTool>> detectTools() {
         synchronized (this) {
-            if (hasCachedTools()) {
+            if (cachedTools != null && !cachedTools.isEmpty()) {
                 return CompletableFuture.completedFuture(List.copyOf(cachedTools));
             }
+        }
+        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+            return CompletableFuture.supplyAsync(this::loadDiskCacheIntoMemory)
+                    .thenCompose(
+                            diskTools -> {
+                                if (!diskTools.isEmpty()) {
+                                    return CompletableFuture.completedFuture(diskTools);
+                                }
+                                return refreshTools();
+                            });
+        }
+        List<SystemTool> diskTools = loadDiskCacheIntoMemory();
+        if (!diskTools.isEmpty()) {
+            return CompletableFuture.completedFuture(diskTools);
         }
         return refreshTools();
     }
@@ -218,7 +242,7 @@ public class SystemToolService {
      */
     public CompletableFuture<Boolean> isDockerAvailable() {
         synchronized (this) {
-            if (hasCachedTools()) {
+            if (cachedTools != null && !cachedTools.isEmpty()) {
                 return CompletableFuture.completedFuture(isDockerDetected(cachedTools));
             }
         }

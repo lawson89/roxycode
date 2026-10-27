@@ -37,6 +37,9 @@ public class SettingsService {
 
     private AppSettings settings;
     private Path settingsPathOverride;
+    private volatile List<GeminiModelConfig> cachedAvailableModels;
+    private volatile java.util.concurrent.CompletableFuture<Void> lastSaveFuture =
+            java.util.concurrent.CompletableFuture.completedFuture(null);
 
     /** Returns the default RoxyCode home directory (~/.roxycode). */
     public static Path getDefaultRoxyHomeDir() {
@@ -90,16 +93,28 @@ public class SettingsService {
      * @return list of available model configurations
      */
     public List<GeminiModelConfig> getAvailableModels() {
-        ClassPathResource resource = new ClassPathResource("models.toml");
-        try {
-            String content = resource.getContentAsString(StandardCharsets.UTF_8);
-            GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
-            return geminiModels != null && geminiModels.models() != null
-                    ? geminiModels.models()
-                    : List.of();
-        } catch (IOException e) {
-            log.error("Failed to load Gemini models: {}", e.getMessage(), e);
-            return List.of();
+        List<GeminiModelConfig> cached = this.cachedAvailableModels;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (this) {
+            if (this.cachedAvailableModels != null) {
+                return this.cachedAvailableModels;
+            }
+            ClassPathResource resource = new ClassPathResource("models.toml");
+            try {
+                String content = resource.getContentAsString(StandardCharsets.UTF_8);
+                GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
+                List<GeminiModelConfig> loaded =
+                        geminiModels != null && geminiModels.models() != null
+                                ? List.copyOf(geminiModels.models())
+                                : List.of();
+                this.cachedAvailableModels = loaded;
+                return loaded;
+            } catch (IOException e) {
+                log.error("Failed to load Gemini models: {}", e.getMessage(), e);
+                return List.of();
+            }
         }
     }
 
@@ -116,16 +131,35 @@ public class SettingsService {
     }
 
     /** Saves the current settings to the TOML file. */
-    public synchronized void saveSettings() {
+    public void saveSettings() {
+        AppSettings currentSettings;
+        Path path;
+        synchronized (this) {
+            currentSettings = getSettings();
+            path = getSettingsPath();
+        }
+        eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
+        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+            lastSaveFuture =
+                    java.util.concurrent.CompletableFuture.runAsync(
+                            () -> writeSettingsToDisk(path, currentSettings));
+        } else {
+            writeSettingsToDisk(path, currentSettings);
+            lastSaveFuture = java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+    }
+
+    private synchronized void writeSettingsToDisk(Path path, AppSettings currentSettings) {
         try {
-            Path path = getSettingsPath();
             PathUtils.createParentDirectories(path);
-            AppSettings currentSettings = getSettings();
             mapper.writeValue(path.toFile(), currentSettings);
-            eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
         } catch (IOException e) {
             log.error("Failed to save settings: {}", e.getMessage(), e);
         }
+    }
+
+    java.util.concurrent.CompletableFuture<Void> getLastSaveFuture() {
+        return lastSaveFuture;
     }
 
     /**

@@ -21,6 +21,7 @@ import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.Edt;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
@@ -56,6 +57,11 @@ public final class BuildConfigPanel extends JPanel {
 
     private boolean dockerAvailable = false;
     private boolean updatingTextProgrammatically = false;
+    private transient volatile CompletableFuture<String> loadConfigFuture =
+            CompletableFuture.completedFuture("");
+    private transient volatile CompletableFuture<Void> saveConfigFuture =
+            CompletableFuture.completedFuture(null);
+    private transient java.util.function.Consumer<String> errorDialogPresenter;
 
     public BuildConfigPanel(
             GenericBuildToolService buildToolService,
@@ -170,10 +176,9 @@ public final class BuildConfigPanel extends JPanel {
             setDockerAvailable(false);
             return;
         }
-        CompletableFuture<Boolean> future =
-                systemToolService.hasCachedTools() ? null : systemToolService.isDockerAvailable();
+        CompletableFuture<Boolean> future = systemToolService.isDockerAvailable();
         if (future == null) {
-            setDockerAvailable(systemToolService.checkDockerAvailable());
+            setDockerAvailable(false);
             return;
         }
         future.thenAccept(
@@ -195,7 +200,7 @@ public final class BuildConfigPanel extends JPanel {
             future = systemToolService.isDockerAvailable();
         }
         if (future == null) {
-            future = CompletableFuture.completedFuture(systemToolService.checkDockerAvailable());
+            future = CompletableFuture.completedFuture(false);
         }
         return future.whenComplete(
                         (available, ex) ->
@@ -310,34 +315,104 @@ public final class BuildConfigPanel extends JPanel {
         updateBannerState();
     }
 
-    @SuppressWarnings("PMD.UnusedAssignment")
-    private void loadConfig() {
-        updatingTextProgrammatically = true;
-        try {
-            textArea.setText(buildToolService.getConfigContent());
-            textArea.setCaretPosition(0);
-        } catch (IOException e) {
-            log.error("Failed to load build config", e);
-            textArea.setText("# Error loading config: " + e.getMessage());
-        } finally {
-            updatingTextProgrammatically = false;
+    @SuppressWarnings({"PMD.UnusedAssignment", "PMD.CompareObjectsWithEquals"})
+    CompletableFuture<String> loadConfig() {
+        if (buildToolService == null) {
+            return CompletableFuture.completedFuture("");
+        }
+        CompletableFuture<String> future =
+                CompletableFuture.supplyAsync(
+                        () -> {
+                            try {
+                                String content = buildToolService.getConfigContent();
+                                return content != null ? content : "";
+                            } catch (IOException e) {
+                                log.error("Failed to load build config", e);
+                                return "# Error loading config: " + e.getMessage();
+                            }
+                        });
+        CompletableFuture<String> completed =
+                future.whenComplete(
+                        (content, ex) -> {
+                            if (ex == null) {
+                                Edt.run(
+                                        () -> {
+                                            updatingTextProgrammatically = true;
+                                            try {
+                                                textArea.setText(content);
+                                                textArea.setCaretPosition(0);
+                                            } finally {
+                                                updatingTextProgrammatically = false;
+                                            }
+                                            updateBannerState();
+                                        });
+                            }
+                        });
+        this.loadConfigFuture = completed;
+        return completed;
+    }
+
+    CompletableFuture<Void> saveConfig() {
+        if (buildToolService == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        String contentToSave = textArea.getText();
+        Edt.run(() -> saveButton.setEnabled(false));
+        CompletableFuture<Void> future =
+                CompletableFuture.runAsync(
+                                () -> {
+                                    try {
+                                        buildToolService.saveConfigContent(contentToSave);
+                                    } catch (IOException e) {
+                                        throw new java.io.UncheckedIOException(e);
+                                    }
+                                })
+                        .whenComplete(
+                                (unused, ex) ->
+                                        Edt.run(
+                                                () -> {
+                                                    saveButton.setEnabled(true);
+                                                    if (ex == null) {
+                                                        updateBannerState();
+                                                        statusLabel.setText(
+                                                                "Configuration saved successfully!");
+                                                        statusTimer.restart();
+                                                    } else {
+                                                        Throwable cause =
+                                                                ExceptionUtils.getRootCause(ex);
+                                                        log.error(
+                                                                "Failed to save build config: {}",
+                                                                cause.getMessage());
+                                                        showSaveErrorDialog(cause.getMessage());
+                                                    }
+                                                }));
+        this.saveConfigFuture = future;
+        return future;
+    }
+
+    private void showSaveErrorDialog(String message) {
+        String fullMsg = "Error saving config: " + message;
+        if (errorDialogPresenter != null) {
+            errorDialogPresenter.accept(fullMsg);
+        } else if (!GraphicsEnvironment.isHeadless()) {
+            JOptionPane.showMessageDialog(this, fullMsg, "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private void saveConfig() {
-        try {
-            buildToolService.saveConfigContent(textArea.getText());
-            updateBannerState();
-            statusLabel.setText("Configuration saved successfully!");
-            statusTimer.restart();
-        } catch (Exception e) {
-            log.error("Failed to save build config: {}", e.getMessage());
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Error saving config: " + e.getMessage(),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
+    void setErrorDialogPresenter(java.util.function.Consumer<String> errorDialogPresenter) {
+        this.errorDialogPresenter = errorDialogPresenter;
+    }
+
+    CompletableFuture<String> getLoadConfigFuture() {
+        return loadConfigFuture;
+    }
+
+    CompletableFuture<Void> getSaveConfigFuture() {
+        return saveConfigFuture;
+    }
+
+    JLabel getStatusLabel() {
+        return statusLabel;
     }
 
     private void updateTextAreaTheme() {

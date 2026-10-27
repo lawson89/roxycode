@@ -12,6 +12,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.MatteBorder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -132,18 +134,23 @@ class MentorModeIntegrationTest {
         assertEquals(1, taskHeaderBar.getComponentZOrder(planLabel));
 
         assertTrue(progressTracker.isOpaque());
+        CompoundBorder trackerBorder =
+                assertInstanceOf(CompoundBorder.class, progressTracker.getBorder());
+        MatteBorder leftBlazeBorder =
+                assertInstanceOf(MatteBorder.class, trackerBorder.getOutsideBorder());
+        assertEquals(4, leftBlazeBorder.getBorderInsets().left);
         String trackerStyle =
                 (String) progressTracker.getClientProperty(FlatClientProperties.STYLE);
         assertNotNull(trackerStyle);
-        assertTrue(
-                trackerStyle.contains("arc: 14")
-                        && trackerStyle.contains("darken($Panel.background, 4%)"));
+        assertFalse(trackerStyle.contains("arc:"));
+        assertTrue(trackerStyle.contains("background: fade(") && trackerStyle.contains("12%)"));
 
         assertEquals(6, progressTracker.getComponentCount());
         assertSame(phaseHeaderLabel, progressTracker.getComponent(0));
-        assertEquals("PHASE", phaseHeaderLabel.getText());
+        assertEquals("CURRENT PHASE", phaseHeaderLabel.getText());
         assertEquals(
                 "font: bold -2", phaseHeaderLabel.getClientProperty(FlatClientProperties.STYLE));
+        assertEquals(QaWorkspacePanel.resolveAccentColor(), phaseHeaderLabel.getForeground());
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(1));
         JLabel connector1 = assertInstanceOf(JLabel.class, progressTracker.getComponent(2));
         FontIcon chevron1 = assertInstanceOf(FontIcon.class, connector1.getIcon());

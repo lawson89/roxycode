@@ -21,8 +21,7 @@ public class SystemToolsPanelTest {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         List<SystemTool> cached =
                 List.of(new SystemTool("Ripgrep", "14.1.0", "Detected", "Fast search"));
-        when(service.hasCachedTools()).thenReturn(true);
-        when(service.getCachedTools()).thenReturn(cached);
+        when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(cached));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
         SwingUtilities.invokeAndWait(() -> {});
@@ -37,15 +36,16 @@ public class SystemToolsPanelTest {
         assertTrue(panel.getRefreshButton().isEnabled());
         assertEquals(1, panel.tableModel.getRowCount());
         assertEquals("Ripgrep", panel.tableModel.getValueAt(0, 0));
-        verify(service, never()).detectTools();
+        verify(service, times(1)).detectTools();
+        verify(service, never()).hasCachedTools();
+        verify(service, never()).getCachedTools();
         verify(service, never()).refreshTools();
     }
 
     @Test
     public void testRefreshToolsShowsProgressBarDisablesButtonAndPopulatesTable() throws Exception {
         SystemToolService service = Mockito.mock(SystemToolService.class);
-        when(service.hasCachedTools()).thenReturn(true);
-        when(service.getCachedTools()).thenReturn(List.of());
+        when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of()));
 
         CompletableFuture<List<SystemTool>> pendingRefresh = new CompletableFuture<>();
         when(service.refreshTools()).thenReturn(pendingRefresh);
@@ -92,8 +92,7 @@ public class SystemToolsPanelTest {
     @Test
     public void testOnSystemToolsUpdatedEventSynchronizesTable() throws Exception {
         SystemToolService service = Mockito.mock(SystemToolService.class);
-        when(service.hasCachedTools()).thenReturn(true);
-        when(service.getCachedTools()).thenReturn(List.of());
+        when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of()));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
         SwingUtilities.invokeAndWait(() -> {});

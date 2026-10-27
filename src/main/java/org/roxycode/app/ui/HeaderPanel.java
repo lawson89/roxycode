@@ -305,7 +305,14 @@ public final class HeaderPanel extends JPanel {
         int returnVal = chooser.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
-            projectService.setCurrentProjectRoot(file.toPath());
+            if (file != null) {
+                switchProjectAsync(file.toPath());
+            }
         }
+    }
+
+    java.util.concurrent.CompletableFuture<Void> switchProjectAsync(Path projectPath) {
+        return java.util.concurrent.CompletableFuture.runAsync(
+                () -> projectService.setCurrentProjectRoot(projectPath));
     }
 }

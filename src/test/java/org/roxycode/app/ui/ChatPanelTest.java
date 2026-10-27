@@ -401,4 +401,29 @@ public class ChatPanelTest extends ChatTestFixture {
         flushEdt();
         assertEquals("Turns: 2 / 5 | Plan: 2/3 steps", chatPanel.getTurnLabel().getText());
     }
+
+    @Test
+    public void testLoadImageAttachmentAsyncAndBilinearThumbnailCreation(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path tempDir) throws Exception {
+        ChatPanel chatPanel = createChatPanel();
+        java.awt.image.BufferedImage src =
+                new java.awt.image.BufferedImage(
+                        120, 80, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.image.BufferedImage thumb =
+                ChatPanel.createThumbnail(src, ChatPanel.THUMBNAIL_SIZE);
+        assertEquals(64, thumb.getWidth());
+        assertEquals(64, thumb.getHeight());
+
+        java.io.File imgFile = tempDir.resolve("sample.png").toFile();
+        javax.imageio.ImageIO.write(src, "png", imgFile);
+
+        java.awt.image.BufferedImage loaded =
+                chatPanel.loadImageAttachmentAsync(imgFile).get(5, TimeUnit.SECONDS);
+        flushEdt();
+
+        assertNotNull(loaded);
+        assertEquals(120, loaded.getWidth());
+        assertTrue(chatPanel.getModel().hasPendingImages());
+        assertEquals(1, chatPanel.getModel().getPendingImages().size());
+    }
 }

@@ -132,14 +132,20 @@ public final class ChatModel {
         }
     }
 
-    public List<byte[]> drainPendingImagesAsPngBytes() {
-        List<BufferedImage> snapshot;
+    public List<BufferedImage> drainPendingImages() {
         synchronized (pendingImages) {
-            snapshot = new ArrayList<>(pendingImages);
+            List<BufferedImage> snapshot = List.copyOf(pendingImages);
             pendingImages.clear();
+            return snapshot;
         }
-        List<byte[]> imageBytes = new ArrayList<>(snapshot.size());
-        for (BufferedImage bimg : snapshot) {
+    }
+
+    public static List<byte[]> encodeImagesToPngBytes(List<BufferedImage> images) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
+        List<byte[]> imageBytes = new ArrayList<>(images.size());
+        for (BufferedImage bimg : images) {
             try {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 ImageIO.write(bimg, "png", baos);
@@ -149,6 +155,10 @@ public final class ChatModel {
             }
         }
         return imageBytes;
+    }
+
+    public List<byte[]> drainPendingImagesAsPngBytes() {
+        return encodeImagesToPngBytes(drainPendingImages());
     }
 
     public String formatTurnStatus(AppSettings settings, ImplementationPlan plan) {

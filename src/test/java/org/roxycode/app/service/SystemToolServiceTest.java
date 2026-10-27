@@ -178,8 +178,18 @@ class SystemToolServiceTest {
                     return List.of();
                 });
 
+        // On EDT, hasCachedTools() does not block on disk I/O, while detectTools() loads disk cache
+        // off EDT
+        final boolean[] edtHasCached = new boolean[1];
+        final CompletableFuture<List<SystemTool>>[] edtDetectFuture = new CompletableFuture[1];
+        javax.swing.SwingUtilities.invokeAndWait(
+                () -> {
+                    edtHasCached[0] = service2.hasCachedTools();
+                    edtDetectFuture[0] = service2.detectTools();
+                });
+        assertFalse(edtHasCached[0], "hasCachedTools() on EDT must not read disk synchronously");
+        List<SystemTool> diskLoaded = edtDetectFuture[0].get(5, TimeUnit.SECONDS);
         assertTrue(service2.hasCachedTools());
-        List<SystemTool> diskLoaded = service2.getCachedTools();
         assertEquals(2, diskLoaded.size());
         assertEquals("2.45.1", diskLoaded.get(0).version());
         assertEquals(0, secondProbeCount.get());

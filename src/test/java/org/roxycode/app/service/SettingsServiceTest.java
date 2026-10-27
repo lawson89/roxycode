@@ -106,12 +106,26 @@ class SettingsServiceTest {
     }
 
     @Test
-    void testGetAvailableModelsLoadsFromClasspathToml() {
+    void testGetAvailableModelsLoadsFromClasspathTomlAndCachesResult() throws Exception {
         SettingsService service = new SettingsService(null, null);
         var models = service.getAvailableModels();
         assertNotNull(models);
         assertTrue(!models.isEmpty(), "Available models from /models.toml should not be empty");
         assertTrue(models.stream().anyMatch(m -> "gemini-3.5-flash".equals(m.apiName())));
+        assertSame(
+                models, service.getAvailableModels(), "Repeated calls should return cached list");
+
+        // Verify saveSettings on EDT writes asynchronously off the EDT
+        Path edtSettingsFile = tempDir.resolve("edt_settings.toml");
+        service.setSettingsPathOverride(edtSettingsFile);
+        service.getSettings().setTheme("FlatLaf Dark");
+        javax.swing.SwingUtilities.invokeAndWait(service::saveSettings);
+        service.getLastSaveFuture().get(5, java.util.concurrent.TimeUnit.SECONDS);
+        assertTrue(Files.exists(edtSettingsFile));
+        assertEquals(
+                "FlatLaf Dark",
+                SettingsService.loadFromDisk(edtSettingsFile, AiConfig.SHARED_TOML_MAPPER)
+                        .getTheme());
     }
 
     @Test

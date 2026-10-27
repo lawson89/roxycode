@@ -6,6 +6,7 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
@@ -31,7 +32,7 @@ import org.springframework.stereotype.Component;
 public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
-    static final String PHASE_HEADER_TEXT = "PHASE";
+    static final String PHASE_HEADER_TEXT = "CURRENT PHASE";
     static final int MAX_PLAN_TITLE_LENGTH = 40;
 
     private final transient PlanService planService;
@@ -56,7 +57,7 @@ public final class TaskWorkspacePanel extends JPanel {
                 new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
         topBar.setOpaque(false);
 
-        progressTracker = new JPanel(new MigLayout("insets 2 8 2 4, gapx 2", "[]", LAYOUT_CENTER));
+        progressTracker = new JPanel(new MigLayout("insets 0, gapx 2", "[]", LAYOUT_CENTER));
         phaseHeaderLabel = new JLabel(PHASE_HEADER_TEXT);
         applyPhaseTrackerStyling();
 
@@ -64,7 +65,7 @@ public final class TaskWorkspacePanel extends JPanel {
             if (phase == WorkflowPhase.EXPLORE) {
                 continue;
             }
-            indicators.add(new WorkflowPhaseIndicator(phase, "font: bold -1"));
+            indicators.add(new WorkflowPhaseIndicator(phase));
         }
         topBar.add(progressTracker, "split 2, right, center");
 
@@ -108,14 +109,19 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     void applyPhaseTrackerStyling() {
-        progressTracker.setOpaque(true);
-        progressTracker.putClientProperty(
-                FlatClientProperties.STYLE, "arc: 14; background: darken($Panel.background, 4%)");
-        Color muted =
+        Color accent =
                 SwingHtmlUtils.getUiColor(
-                        Color.GRAY, "Label.disabledForeground", "Component.infoForeground");
-        phaseHeaderLabel.setForeground(muted);
+                        new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
+        String accentHex = SwingHtmlUtils.toHex(accent);
+        progressTracker.setOpaque(true);
+        progressTracker.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
+                        BorderFactory.createEmptyBorder(2, 8, 2, 6)));
+        progressTracker.putClientProperty(
+                FlatClientProperties.STYLE, "background: fade(" + accentHex + ", 12%)");
         phaseHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2");
+        phaseHeaderLabel.setForeground(accent);
     }
 
     void applyPlanBadgeStyling() {

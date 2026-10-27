@@ -5,8 +5,12 @@ import static org.mockito.Mockito.*;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -47,16 +51,22 @@ class BuildConfigPanelTest {
     }
 
     private BuildConfigPanel createPanelOnEdt() throws Exception {
-        BuildConfigPanel panel =
-                new BuildConfigPanel(buildToolService, settingsService, systemToolService);
+        AtomicReference<BuildConfigPanel> ref = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(
+                () ->
+                        ref.set(
+                                new BuildConfigPanel(
+                                        buildToolService, settingsService, systemToolService)));
+        BuildConfigPanel panel = ref.get();
+        panel.getLoadConfigFuture().get(5, TimeUnit.SECONDS);
         SwingUtilities.invokeAndWait(() -> {});
         return panel;
     }
 
     @Test
     void testCachedDockerAvailabilityOnInitializationWithoutReprobe() throws Exception {
-        when(systemToolService.hasCachedTools()).thenReturn(true);
-        when(systemToolService.checkDockerAvailable()).thenReturn(true);
+        when(systemToolService.isDockerAvailable())
+                .thenReturn(CompletableFuture.completedFuture(true));
 
         BuildConfigPanel panel = createPanelOnEdt();
         assertTrue(panel.isDockerAvailableState());
@@ -65,6 +75,59 @@ class BuildConfigPanelTest {
                 panel.getBannerMessageLabel().getText());
         verify(systemToolService, never()).refreshDockerAvailable();
         verify(systemToolService, never()).refreshTools();
+        verify(systemToolService, never()).checkDockerAvailable();
+        verify(systemToolService, never()).hasCachedTools();
+    }
+
+    @Test
+    void testLoadAndSaveConfigRunOffEdtAndDisableSaveButtonDuringSave() throws Exception {
+        AtomicBoolean loadCalledOnEdt = new AtomicBoolean(false);
+        AtomicBoolean saveCalledOnEdt = new AtomicBoolean(false);
+        when(buildToolService.getConfigContent())
+                .thenAnswer(
+                        inv -> {
+                            loadCalledOnEdt.set(SwingUtilities.isEventDispatchThread());
+                            return "[build]\ncompile = './mvnw compile'\n";
+                        });
+        doAnswer(
+                        inv -> {
+                            saveCalledOnEdt.set(SwingUtilities.isEventDispatchThread());
+                            return null;
+                        })
+                .when(buildToolService)
+                .saveConfigContent(anyString());
+        when(systemToolService.isDockerAvailable())
+                .thenReturn(CompletableFuture.completedFuture(false));
+
+        BuildConfigPanel panel = createPanelOnEdt();
+        assertFalse(loadCalledOnEdt.get(), "loadConfig() must not execute on EDT");
+        assertTrue(panel.getTextArea().getText().contains("./mvnw compile"));
+
+        SwingUtilities.invokeAndWait(
+                () -> {
+                    panel.getTextArea().setText("[build]\ncompile = 'mvn test'\n");
+                    panel.getSaveButton().doClick();
+                });
+
+        panel.getSaveConfigFuture().get(5, TimeUnit.SECONDS);
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertFalse(saveCalledOnEdt.get(), "saveConfig() must not execute on EDT");
+        assertTrue(panel.getSaveButton().isEnabled());
+        assertEquals("Configuration saved successfully!", panel.getStatusLabel().getText());
+        verify(buildToolService).saveConfigContent("[build]\ncompile = 'mvn test'\n");
+
+        // Verify save failure reports error via presenter and re-enables button
+        AtomicReference<String> errorMsg = new AtomicReference<>();
+        panel.setErrorDialogPresenter(errorMsg::set);
+        doThrow(new IOException("Disk full")).when(buildToolService).saveConfigContent(anyString());
+
+        SwingUtilities.invokeAndWait(() -> panel.getSaveButton().doClick());
+        assertThrows(Exception.class, () -> panel.getSaveConfigFuture().get(5, TimeUnit.SECONDS));
+        SwingUtilities.invokeAndWait(() -> {});
+
+        assertTrue(panel.getSaveButton().isEnabled());
+        assertEquals("Error saving config: Disk full", errorMsg.get());
     }
 
     @Test
@@ -114,8 +177,8 @@ class BuildConfigPanelTest {
     void testRecheckDockerButtonUpdatesAvailabilityAndAppendsContainerSectionIfMissing()
             throws Exception {
         when(buildToolService.getConfigContent()).thenReturn("[build]\ncompile = 'mvn'");
-        when(systemToolService.hasCachedTools()).thenReturn(true);
-        when(systemToolService.checkDockerAvailable()).thenReturn(false);
+        when(systemToolService.isDockerAvailable())
+                .thenReturn(CompletableFuture.completedFuture(false));
 
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(panel.getContainerToggleCheckBox().isEnabled());
@@ -143,8 +206,8 @@ class BuildConfigPanelTest {
 
     @Test
     void testOnSystemToolsUpdatedEventSynchronizesDockerAvailability() throws Exception {
-        when(systemToolService.hasCachedTools()).thenReturn(true);
-        when(systemToolService.checkDockerAvailable()).thenReturn(false);
+        when(systemToolService.isDockerAvailable())
+                .thenReturn(CompletableFuture.completedFuture(false));
 
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(panel.isDockerAvailableState());

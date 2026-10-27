@@ -313,4 +313,51 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(html.contains("RipGrep Search Architecture"));
         assertTrue(html.contains("20250514-153000-ripgrep-search-architecture.md"));
     }
+
+    @Test
+    void testApprovePhaseAndImageEncodingRunOnTurnExecutorOffEdt() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean approveOnEdt =
+                new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.atomic.AtomicBoolean chatOnEdt =
+                new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.atomic.AtomicReference<java.util.List<byte[]>> capturedImages =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+        doAnswer(
+                        inv -> {
+                            approveOnEdt.set(SwingUtilities.isEventDispatchThread());
+                            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+                            when(planService.getPendingPhase()).thenReturn(null);
+                            return null;
+                        })
+                .when(planService)
+                .approveTransition();
+
+        when(aiService.chat(anyString(), any(), anyString(), any()))
+                .thenAnswer(
+                        inv -> {
+                            chatOnEdt.set(SwingUtilities.isEventDispatchThread());
+                            capturedImages.set(inv.getArgument(3));
+                            return "Proceeding in CODE";
+                        });
+
+        FeatureChatPanel panel = createFeatureChatPanel(null);
+        panel.getModel().addPendingImage(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
+
+        SwingUtilities.invokeAndWait(() -> panel.getController().approvePhase());
+
+        for (int i = 0; i < 50 && capturedImages.get() == null; i++) {
+            Thread.sleep(20);
+            flushEdt();
+        }
+
+        assertFalse(approveOnEdt.get(), "planService.approveTransition() must run off EDT");
+        assertFalse(chatOnEdt.get(), "aiService.chat() and PNG encoding must run off EDT");
+        assertNotNull(capturedImages.get());
+        assertEquals(1, capturedImages.get().size());
+        assertTrue(capturedImages.get().get(0).length > 0);
+        assertFalse(panel.getModel().hasPendingImages());
+    }
 }
