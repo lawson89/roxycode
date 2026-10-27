@@ -426,4 +426,120 @@ public class ChatPanelTest extends ChatTestFixture {
         assertTrue(chatPanel.getModel().hasPendingImages());
         assertEquals(1, chatPanel.getModel().getPendingImages().size());
     }
+
+    @Test
+    public void testFileMentionAutocompleteKeyboardNavigationAndEnterInterception()
+            throws Exception {
+        ChatPanel chatPanel = createChatPanel();
+        org.roxycode.app.ai.services.GrepService grepService =
+                mock(org.roxycode.app.ai.services.GrepService.class);
+        when(grepService.listFiles())
+                .thenReturn(
+                        List.of(
+                                "src/main/java/org/roxycode/app/ui/ChatPanel.java",
+                                "src/main/java/org/roxycode/app/ui/ChatController.java",
+                                "src/main/java/org/roxycode/app/ui/ChatModel.java"));
+
+        FileMentionPopup mentionPopup = chatPanel.getFileMentionPopup();
+        mentionPopup.setBackgroundExecutor(Runnable::run);
+        chatPanel.setGrepService(grepService);
+
+        JTextArea inputArea = chatPanel.getInputArea();
+        SwingUtilities.invokeAndWait(
+                () -> {
+                    inputArea.setText("Review @Chat");
+                    inputArea.setCaretPosition(inputArea.getText().length());
+                });
+        flushEdt();
+
+        assertTrue(mentionPopup.isPopupVisible());
+        assertEquals(3, mentionPopup.getListModel().size());
+        assertEquals(0, mentionPopup.getCandidateList().getSelectedIndex());
+        assertEquals(
+                "src/main/java/org/roxycode/app/ui/ChatModel.java",
+                mentionPopup.getListModel().get(0).relativePath());
+
+        Action downAction = inputArea.getActionMap().get("autocomplete-or-down");
+        Action upAction = inputArea.getActionMap().get("autocomplete-or-up");
+        Action enterAction = inputArea.getActionMap().get("send-message");
+        Action tabAction = inputArea.getActionMap().get("autocomplete-or-tab");
+        Action escapeAction = inputArea.getActionMap().get("dismiss-autocomplete");
+
+        // Navigate DOWN to index 1 (ChatPanel.java)
+        SwingUtilities.invokeAndWait(() -> downAction.actionPerformed(null));
+        assertEquals(1, mentionPopup.getCandidateList().getSelectedIndex());
+        assertEquals(
+                "src/main/java/org/roxycode/app/ui/ChatPanel.java",
+                mentionPopup.getCandidateList().getSelectedValue().relativePath());
+
+        // Navigate UP back to index 0, then UP again to wrap around to index 2
+        SwingUtilities.invokeAndWait(() -> upAction.actionPerformed(null));
+        assertEquals(0, mentionPopup.getCandidateList().getSelectedIndex());
+        SwingUtilities.invokeAndWait(() -> upAction.actionPerformed(null));
+        assertEquals(2, mentionPopup.getCandidateList().getSelectedIndex());
+
+        // Press ENTER while popup is visible: must insert mention + trailing space and NOT send
+        // message
+        SwingUtilities.invokeAndWait(() -> enterAction.actionPerformed(null));
+        flushEdt();
+
+        assertFalse(mentionPopup.isPopupVisible());
+        assertEquals(
+                "Review @src/main/java/org/roxycode/app/ui/ChatController.java ",
+                inputArea.getText());
+        assertEquals(inputArea.getText().length(), inputArea.getCaretPosition());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+
+        // Type another @ mention and accept with TAB
+        SwingUtilities.invokeAndWait(
+                () -> {
+                    inputArea.insert("@ChatM", inputArea.getCaretPosition());
+                });
+        flushEdt();
+        assertTrue(mentionPopup.isPopupVisible());
+
+        SwingUtilities.invokeAndWait(() -> tabAction.actionPerformed(null));
+        flushEdt();
+        assertFalse(mentionPopup.isPopupVisible());
+        assertEquals(
+                "Review @src/main/java/org/roxycode/app/ui/ChatController.java "
+                        + "@src/main/java/org/roxycode/app/ui/ChatModel.java ",
+                inputArea.getText());
+
+        // Type another @ mention and dismiss with ESCAPE
+        SwingUtilities.invokeAndWait(
+                () -> {
+                    inputArea.insert("@ChatP", inputArea.getCaretPosition());
+                });
+        flushEdt();
+        assertTrue(mentionPopup.isPopupVisible());
+
+        SwingUtilities.invokeAndWait(() -> escapeAction.actionPerformed(null));
+        assertFalse(mentionPopup.isPopupVisible());
+        assertTrue(inputArea.getText().endsWith("@ChatP"));
+
+        // Subsequent ENTER when popup is hidden sends the message as normal
+        SwingUtilities.invokeAndWait(() -> enterAction.actionPerformed(null));
+        flushEdt();
+        assertEquals("", inputArea.getText());
+    }
+
+    @Test
+    public void testFileMentionCacheInvalidatedOnProjectAndFileEvents() {
+        ChatPanel chatPanel = createChatPanel();
+        org.roxycode.app.ai.services.GrepService grepService =
+                mock(org.roxycode.app.ai.services.GrepService.class);
+        when(grepService.listFiles()).thenReturn(List.of("src/App.java"));
+
+        chatPanel.getFileMentionPopup().setBackgroundExecutor(Runnable::run);
+        chatPanel.setGrepService(grepService);
+        verify(grepService, times(1)).listFiles();
+
+        chatPanel.onProjectChanged(
+                new org.roxycode.app.events.ProjectChangedEvent(java.nio.file.Path.of(".")));
+        verify(grepService, times(2)).listFiles();
+
+        chatPanel.onFileChanged(new org.roxycode.app.events.FileChangedEvent("src/NewFile.java"));
+        verify(grepService, times(3)).listFiles();
+    }
 }

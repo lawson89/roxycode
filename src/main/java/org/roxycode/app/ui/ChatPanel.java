@@ -21,9 +21,12 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
+import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.service.AiService;
@@ -32,6 +35,7 @@ import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
@@ -64,6 +68,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     private final JLabel turnLabel;
     private final JScrollPane outputScrollPane;
     private final JPanel attachmentPanel;
+    private final transient FileMentionPopup fileMentionPopup;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
 
     public ChatPanel(
@@ -175,6 +180,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                 FlatClientProperties.PLACEHOLDER_TEXT,
                 "Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)");
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
+        fileMentionPopup = new FileMentionPopup(inputArea, inputScrollPane);
 
         JPanel inputAreaContainer = new JPanel(new BorderLayout());
         inputAreaContainer.setOpaque(false);
@@ -278,10 +284,22 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         if (outputScrollPane != null) {
             updateOutputScrollPaneBorder();
         }
+        if (fileMentionPopup != null) {
+            fileMentionPopup.updateTheme();
+        }
     }
 
     private void updateOutputScrollPaneBorder() {
         outputScrollPane.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
+    }
+
+    @Autowired(required = false)
+    public void setGrepService(GrepService grepService) {
+        fileMentionPopup.setGrepService(grepService);
+    }
+
+    public FileMentionPopup getFileMentionPopup() {
+        return fileMentionPopup;
     }
 
     @EventListener
@@ -302,6 +320,16 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
         controller.onSettingsChanged(event);
+    }
+
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
+        fileMentionPopup.invalidateCache();
+    }
+
+    @EventListener
+    public void onFileChanged(FileChangedEvent event) {
+        fileMentionPopup.invalidateCache();
     }
 
     void updateTurnLabel() {
@@ -333,6 +361,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void clearInputText() {
+        fileMentionPopup.hidePopup();
         inputArea.setText("");
     }
 
@@ -369,6 +398,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         if (e != null) {
             log.debug("Send message triggered by: {}", e.getActionCommand());
         }
+        fileMentionPopup.hidePopup();
         controller.sendMessage(inputArea.getText());
     }
 
@@ -599,7 +629,89 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                 new AbstractAction() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
+                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                            fileMentionPopup.acceptSelected();
+                            return;
+                        }
                         sendMessage(e);
+                    }
+                });
+
+        KeyStroke tabKey = KeyStroke.getKeyStroke(KeyEvent.VK_TAB, 0);
+        Object existingTabKey = im.get(tabKey);
+        Action defaultTabAction = existingTabKey != null ? am.get(existingTabKey) : null;
+        im.put(tabKey, "autocomplete-or-tab");
+        am.put(
+                "autocomplete-or-tab",
+                new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                            fileMentionPopup.acceptSelected();
+                            return;
+                        }
+                        if (defaultTabAction != null) {
+                            defaultTabAction.actionPerformed(e);
+                        } else {
+                            inputArea.insert("\t", inputArea.getCaretPosition());
+                        }
+                    }
+                });
+
+        KeyStroke upKey = KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0);
+        Object existingUpKey = im.get(upKey);
+        Action defaultUpAction = existingUpKey != null ? am.get(existingUpKey) : null;
+        im.put(upKey, "autocomplete-or-up");
+        am.put(
+                "autocomplete-or-up",
+                new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                            fileMentionPopup.selectPrevious();
+                            return;
+                        }
+                        if (defaultUpAction != null) {
+                            defaultUpAction.actionPerformed(e);
+                        }
+                    }
+                });
+
+        KeyStroke downKey = KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0);
+        Object existingDownKey = im.get(downKey);
+        Action defaultDownAction = existingDownKey != null ? am.get(existingDownKey) : null;
+        im.put(downKey, "autocomplete-or-down");
+        am.put(
+                "autocomplete-or-down",
+                new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                            fileMentionPopup.selectNext();
+                            return;
+                        }
+                        if (defaultDownAction != null) {
+                            defaultDownAction.actionPerformed(e);
+                        }
+                    }
+                });
+
+        KeyStroke escapeKey = KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0);
+        Object existingEscapeKey = im.get(escapeKey);
+        Action defaultEscapeAction = existingEscapeKey != null ? am.get(existingEscapeKey) : null;
+        im.put(escapeKey, "dismiss-autocomplete");
+        am.put(
+                "dismiss-autocomplete",
+                new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                            fileMentionPopup.hidePopup();
+                            return;
+                        }
+                        if (defaultEscapeAction != null) {
+                            defaultEscapeAction.actionPerformed(e);
+                        }
                     }
                 });
 
@@ -611,6 +723,9 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                 new AbstractAction() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
+                        if (fileMentionPopup != null) {
+                            fileMentionPopup.hidePopup();
+                        }
                         inputArea.insert("\n", inputArea.getCaretPosition());
                     }
                 });
