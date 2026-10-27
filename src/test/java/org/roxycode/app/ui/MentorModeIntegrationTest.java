@@ -111,6 +111,7 @@ class MentorModeIntegrationTest {
         assertNotNull(mentorModeLabel.getIcon());
 
         JPanel progressTracker = taskWorkspacePanel.getProgressTracker();
+        JLabel phaseHeaderLabel = taskWorkspacePanel.getPhaseHeaderLabel();
         JLabel planLabel = taskWorkspacePanel.getPlanLabel();
         JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
         assertEquals(2, taskTabs.getTabCount());
@@ -128,16 +129,30 @@ class MentorModeIntegrationTest {
         assertEquals(0, taskHeaderBar.getComponentZOrder(progressTracker));
         assertEquals(1, taskHeaderBar.getComponentZOrder(planLabel));
 
-        assertEquals(5, progressTracker.getComponentCount());
-        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(0));
-        JLabel connector1 = assertInstanceOf(JLabel.class, progressTracker.getComponent(1));
+        assertTrue(progressTracker.isOpaque());
+        String trackerStyle =
+                (String) progressTracker.getClientProperty(FlatClientProperties.STYLE);
+        assertNotNull(trackerStyle);
+        assertTrue(
+                trackerStyle.contains("arc: 14")
+                        && trackerStyle.contains("darken($Panel.background, 4%)"));
+
+        assertEquals(6, progressTracker.getComponentCount());
+        assertSame(phaseHeaderLabel, progressTracker.getComponent(0));
+        assertEquals("PHASE", phaseHeaderLabel.getText());
+        assertEquals(
+                "font: bold -2", phaseHeaderLabel.getClientProperty(FlatClientProperties.STYLE));
+        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(1));
+        JLabel connector1 = assertInstanceOf(JLabel.class, progressTracker.getComponent(2));
         FontIcon chevron1 = assertInstanceOf(FontIcon.class, connector1.getIcon());
         assertEquals(Codicons.CHEVRON_RIGHT, chevron1.getIkon());
-        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(2));
-        JLabel connector2 = assertInstanceOf(JLabel.class, progressTracker.getComponent(3));
+        assertEquals(12, chevron1.getIconSize());
+        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(3));
+        JLabel connector2 = assertInstanceOf(JLabel.class, progressTracker.getComponent(4));
         FontIcon chevron2 = assertInstanceOf(FontIcon.class, connector2.getIcon());
         assertEquals(Codicons.CHEVRON_RIGHT, chevron2.getIkon());
-        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(4));
+        assertEquals(12, chevron2.getIconSize());
+        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(5));
 
         when(planService.getVisitedPhases())
                 .thenReturn(EnumSet.of(WorkflowPhase.PLAN, WorkflowPhase.CODE));

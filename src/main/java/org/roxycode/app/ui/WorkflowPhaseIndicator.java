@@ -68,31 +68,28 @@ public final class WorkflowPhaseIndicator extends JPanel {
                 SwingHtmlUtils.getUiColor(
                         Color.GRAY, "Label.disabledForeground", "Component.infoForeground");
 
+        setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+
         if (isActive) {
             String accentHex = SwingHtmlUtils.toHex(accentColor);
-            setBorder(
-                    BorderFactory.createCompoundBorder(
-                            BorderFactory.createMatteBorder(0, 4, 0, 0, accentColor),
-                            BorderFactory.createEmptyBorder(3, 8, 3, 10)));
+            setOpaque(true);
             putClientProperty(
                     FlatClientProperties.STYLE,
-                    "arc: 12; background: fade(" + accentHex + ", 15%)");
+                    "arc: 10; background: fade(" + accentHex + ", 18%)");
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
             textLabel.setForeground(accentColor);
             textLabel.setIcon(FontIcon.of(phase.getIcon(), 14, accentColor));
         } else if (isCompleted) {
             String greenHex = SwingHtmlUtils.toHex(greenColor);
-            setBorder(BorderFactory.createEmptyBorder(3, 10, 3, 10));
+            setOpaque(true);
             putClientProperty(
-                    FlatClientProperties.STYLE, "arc: 12; background: fade(" + greenHex + ", 12%)");
+                    FlatClientProperties.STYLE, "arc: 10; background: fade(" + greenHex + ", 12%)");
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
             textLabel.setForeground(greenColor);
             textLabel.setIcon(FontIcon.of(Codicons.CHECK, 14, greenColor));
         } else {
-            setBorder(BorderFactory.createEmptyBorder(3, 10, 3, 10));
-            putClientProperty(
-                    FlatClientProperties.STYLE,
-                    "arc: 12; background: darken($Panel.background, 4%)");
+            setOpaque(false);
+            putClientProperty(FlatClientProperties.STYLE, null);
             textLabel.putClientProperty(FlatClientProperties.STYLE, defaultFontStyle);
             textLabel.setForeground(disabledForeground);
             textLabel.setIcon(FontIcon.of(phase.getIcon(), 14, disabledForeground));

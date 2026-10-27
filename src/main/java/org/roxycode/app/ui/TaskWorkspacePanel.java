@@ -31,6 +31,7 @@ import org.springframework.stereotype.Component;
 public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
+    static final String PHASE_HEADER_TEXT = "PHASE";
     static final int MAX_PLAN_TITLE_LENGTH = 40;
 
     private final transient PlanService planService;
@@ -38,6 +39,7 @@ public final class TaskWorkspacePanel extends JPanel {
     private final FeatureChatPanel taskChatPanel;
     private final JTabbedPane taskTabs;
     private final JPanel topBar;
+    private final JLabel phaseHeaderLabel;
     private final JLabel planLabel;
     private final JPanel progressTracker;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
@@ -54,8 +56,10 @@ public final class TaskWorkspacePanel extends JPanel {
                 new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
         topBar.setOpaque(false);
 
-        progressTracker = new JPanel(new MigLayout("insets 0, gapx 6", "[]", LAYOUT_CENTER));
-        progressTracker.setOpaque(false);
+        progressTracker = new JPanel(new MigLayout("insets 2 8 2 4, gapx 2", "[]", LAYOUT_CENTER));
+        phaseHeaderLabel = new JLabel(PHASE_HEADER_TEXT);
+        applyPhaseTrackerStyling();
+
         for (WorkflowPhase phase : WorkflowPhase.values()) {
             if (phase == WorkflowPhase.EXPLORE) {
                 continue;
@@ -95,11 +99,23 @@ public final class TaskWorkspacePanel extends JPanel {
     public void updateUI() {
         super.updateUI();
         if (planLabel != null) {
+            applyPhaseTrackerStyling();
             applyPlanBadgeStyling();
             if (planService != null) {
                 updateActivePhase(planService.getCurrentPhase());
             }
         }
+    }
+
+    void applyPhaseTrackerStyling() {
+        progressTracker.setOpaque(true);
+        progressTracker.putClientProperty(
+                FlatClientProperties.STYLE, "arc: 14; background: darken($Panel.background, 4%)");
+        Color muted =
+                SwingHtmlUtils.getUiColor(
+                        Color.GRAY, "Label.disabledForeground", "Component.infoForeground");
+        phaseHeaderLabel.setForeground(muted);
+        phaseHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2");
     }
 
     void applyPlanBadgeStyling() {
@@ -176,6 +192,7 @@ public final class TaskWorkspacePanel extends JPanel {
         }
 
         progressTracker.removeAll();
+        progressTracker.add(phaseHeaderLabel, "gapright 4, center");
         var visitedPhases = planService.getVisitedPhases();
         for (int i = 0; i < indicators.size(); i++) {
             WorkflowPhaseIndicator indicator = indicators.get(i);
@@ -202,7 +219,7 @@ public final class TaskWorkspacePanel extends JPanel {
                                 "Actions.Blue")
                         : SwingHtmlUtils.getUiColor(
                                 Color.GRAY, "Label.disabledForeground", "Component.borderColor");
-        return new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 14, color));
+        return new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 12, color));
     }
 
     JTabbedPane getTaskTabs() {
@@ -219,6 +236,10 @@ public final class TaskWorkspacePanel extends JPanel {
 
     JPanel getProgressTracker() {
         return progressTracker;
+    }
+
+    JLabel getPhaseHeaderLabel() {
+        return phaseHeaderLabel;
     }
 
     JLabel getPlanLabel() {

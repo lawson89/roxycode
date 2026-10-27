@@ -38,9 +38,8 @@ class WorkflowPhaseIndicatorTest {
         assertEquals("Plan", label.getText());
         FontIcon icon = assertInstanceOf(FontIcon.class, label.getIcon());
         assertEquals(Codicons.LIST_ORDERED, icon.getIkon());
-        String style = (String) indicator.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(style);
-        assertTrue(style.contains("arc: 12") && style.contains("darken($Panel.background, 4%)"));
+        assertFalse(indicator.isOpaque());
+        assertNull(indicator.getClientProperty(FlatClientProperties.STYLE));
     }
 
     @Test
@@ -48,29 +47,41 @@ class WorkflowPhaseIndicatorTest {
         WorkflowPhaseIndicator indicator = new WorkflowPhaseIndicator(WorkflowPhase.CODE);
         JLabel label = indicator.getTextLabel();
 
-        // Inactive initially
+        // Inactive initially: transparent segment inside the unified bar
         assertFalse(indicator.isActive());
         assertFalse(indicator.isCompleted());
+        assertFalse(indicator.isOpaque());
+        assertNull(indicator.getClientProperty(FlatClientProperties.STYLE));
         FontIcon initialIcon = assertInstanceOf(FontIcon.class, label.getIcon());
         assertEquals(Codicons.CODE, initialIcon.getIkon());
 
-        // Active state: phase icon + 15% faded accent background + left matte border
+        // Active state: phase icon + 18% faded accent pill background
         indicator.setActive(true);
         assertTrue(indicator.isActive());
+        assertTrue(indicator.isOpaque());
         FontIcon activeIcon = assertInstanceOf(FontIcon.class, label.getIcon());
         assertEquals(Codicons.CODE, activeIcon.getIkon());
         String activeStyle = (String) indicator.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(activeStyle.contains("fade(") && activeStyle.contains("15%)"));
+        assertNotNull(activeStyle);
+        assertTrue(
+                activeStyle.contains("arc: 10")
+                        && activeStyle.contains("fade(")
+                        && activeStyle.contains("18%)"));
 
-        // Completed state (when not active): CHECK icon in green + 12% faded green background
+        // Completed state (when not active): CHECK icon in green + 12% faded green pill background
         indicator.setActive(false);
         indicator.setCompleted(true);
         assertFalse(indicator.isActive());
         assertTrue(indicator.isCompleted());
+        assertTrue(indicator.isOpaque());
         FontIcon completedIcon = assertInstanceOf(FontIcon.class, label.getIcon());
         assertEquals(Codicons.CHECK, completedIcon.getIkon());
         String completedStyle = (String) indicator.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(completedStyle.contains("fade(") && completedStyle.contains("12%)"));
+        assertNotNull(completedStyle);
+        assertTrue(
+                completedStyle.contains("arc: 10")
+                        && completedStyle.contains("fade(")
+                        && completedStyle.contains("12%)"));
 
         // Theme refresh
         assertDoesNotThrow(indicator::updateUI);
