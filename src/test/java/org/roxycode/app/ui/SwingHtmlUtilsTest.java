@@ -203,4 +203,70 @@ class SwingHtmlUtilsTest {
         assertNotNull(border);
         assertEquals(new Insets(1, 0, 1, 0), border.getBorderInsets(btn));
     }
+
+    @Test
+    void testGetAccentColorAndGetMutedForegroundColor() {
+        UIDefaults defaults = UIManager.getDefaults();
+        Object origAccent = defaults.get("Component.accentColor");
+        Object origActionsBlue = defaults.get("Actions.Blue");
+        Object origDisabledFg = defaults.get("Label.disabledForeground");
+        Object origInfoFg = defaults.get("Component.infoForeground");
+        try {
+            Color customAccent = new Color(0x11, 0x22, 0x33);
+            Color customBlue = new Color(0x44, 0x55, 0x66);
+            Color customDisabled = new Color(0x77, 0x88, 0x99);
+            Color customInfo = new Color(0xaa, 0xbb, 0xcc);
+
+            defaults.put("Component.accentColor", customAccent);
+            defaults.put("Actions.Blue", customBlue);
+            assertEquals(customAccent, SwingHtmlUtils.getAccentColor());
+
+            defaults.put("Component.accentColor", "not-a-color");
+            assertEquals(customBlue, SwingHtmlUtils.getAccentColor());
+
+            defaults.put("Actions.Blue", "not-a-color");
+            assertEquals(new Color(0x00, 0x7a, 0xcc), SwingHtmlUtils.getAccentColor());
+
+            defaults.put("Label.disabledForeground", customDisabled);
+            defaults.put("Component.infoForeground", customInfo);
+            assertEquals(customDisabled, SwingHtmlUtils.getMutedForegroundColor());
+
+            defaults.put("Label.disabledForeground", "not-a-color");
+            assertEquals(customInfo, SwingHtmlUtils.getMutedForegroundColor());
+
+            defaults.put("Component.infoForeground", "not-a-color");
+            assertEquals(Color.GRAY, SwingHtmlUtils.getMutedForegroundColor());
+        } finally {
+            defaults.put("Component.accentColor", origAccent);
+            defaults.put("Actions.Blue", origActionsBlue);
+            defaults.put("Label.disabledForeground", origDisabledFg);
+            defaults.put("Component.infoForeground", origInfoFg);
+        }
+    }
+
+    @Test
+    void testBlendColorAndGetTintedBackground() {
+        Color fg = new Color(100, 200, 50);
+        Color bg = new Color(200, 100, 150);
+
+        assertEquals(bg, SwingHtmlUtils.blendColor(fg, bg, 0.0));
+        assertEquals(bg, SwingHtmlUtils.blendColor(fg, bg, -0.5));
+        assertEquals(fg, SwingHtmlUtils.blendColor(fg, bg, 1.0));
+        assertEquals(fg, SwingHtmlUtils.blendColor(fg, bg, 1.5));
+
+        Color half = SwingHtmlUtils.blendColor(fg, bg, 0.5);
+        assertEquals(new Color(150, 150, 100), half);
+        assertEquals(255, half.getAlpha());
+
+        UIDefaults defaults = UIManager.getDefaults();
+        Object origPanelBg = defaults.get("Panel.background");
+        try {
+            defaults.put("Panel.background", new Color(250, 250, 250));
+            Color tinted = SwingHtmlUtils.getTintedBackground(new Color(0, 100, 200), 0.10);
+            assertEquals(new Color(225, 235, 245), tinted);
+            assertEquals(255, tinted.getAlpha());
+        } finally {
+            defaults.put("Panel.background", origPanelBg);
+        }
+    }
 }

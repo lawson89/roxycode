@@ -29,7 +29,6 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -81,26 +80,6 @@ public class PromptService {
     private final RepoMapPackerService repoMapPackerService;
     private final MemoryService memoryService;
 
-    public PromptService(
-            ProjectService projectService,
-            SettingsService settingsService,
-            PlanService planService,
-            JexlServiceRegistry jexlServiceRegistry,
-            GitService gitService,
-            ProjectAnalysisService projectAnalysisService,
-            RepoMapPackerService repoMapPackerService) {
-        this(
-                projectService,
-                settingsService,
-                planService,
-                jexlServiceRegistry,
-                gitService,
-                projectAnalysisService,
-                repoMapPackerService,
-                null);
-    }
-
-    @Autowired
     public PromptService(
             ProjectService projectService,
             SettingsService settingsService,

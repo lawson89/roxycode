@@ -12,7 +12,8 @@ class ImplementationPlanTest {
             List<String> reqs,
             List<ImplementationPlan.TechStep> steps,
             List<ImplementationPlan.LogEntry> logs) {
-        return new ImplementationPlan("Title", "Goal", reqs, steps, false, null, null, null, logs);
+        return new ImplementationPlan(
+                "Title", "Goal", reqs, steps, false, null, null, null, null, logs);
     }
 
     @Test
@@ -120,11 +121,6 @@ class ImplementationPlanTest {
         assertEquals("alice", completedWithUser.approvedBy());
         assertEquals(2, completedWithUser.technicalSteps().size());
         assertEquals(1, completedWithUser.handoffLog().size());
-
-        ImplementationPlan completedTimestampOnly =
-                completedWithUser.withCompletedOn("2026-01-03T00:00:00Z");
-        assertEquals("charlie", completedTimestampOnly.completedBy());
-        assertEquals("2026-01-03T00:00:00Z", completedTimestampOnly.completedOn());
     }
 
     @Test

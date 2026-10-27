@@ -69,10 +69,10 @@ class MainFrameTest {
 
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
         StatusPanel statusPanel = new StatusPanel(envService);
-        QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel);
+        QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel, null);
         PlanPanel planPanel = new PlanPanel(planService, gitService);
         TaskWorkspacePanel taskWorkspacePanel =
-                new TaskWorkspacePanel(featureChatPanel, planService, planPanel);
+                new TaskWorkspacePanel(featureChatPanel, planService, planPanel, null);
         CodebaseCachePanel codebaseCachePanel =
                 new CodebaseCachePanel(packerService, cacheMetaService, promptService);
         JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
@@ -123,16 +123,15 @@ class MainFrameTest {
         featureChatPanel.getInputArea().setCaretPosition(0);
         taskWorkspacePanel.getTaskTabs().setSelectedIndex(1);
         mainFrame.showCard("TASK_VIEW");
-        javax.swing.SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         assertEquals(featureChatPanel, taskWorkspacePanel.getTaskTabs().getSelectedComponent());
         assertEquals("Task draft".length(), featureChatPanel.getInputArea().getCaretPosition());
 
         exploreChatPanel.getInputArea().setText("QA draft");
         exploreChatPanel.getInputArea().setCaretPosition(0);
         mainFrame.showCard("QA_VIEW");
-        javax.swing.SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         assertEquals("QA draft".length(), exploreChatPanel.getInputArea().getCaretPosition());
-
         // Simulate active turns and pending images on both panels before switching project
         java.util.concurrent.CountDownLatch turnStarted =
                 new java.util.concurrent.CountDownLatch(2);
@@ -172,7 +171,7 @@ class MainFrameTest {
         when(projectService.getProjectName()).thenReturn("NewProject");
         assertFalse(javax.swing.SwingUtilities.isEventDispatchThread());
         mainFrame.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new")));
-        javax.swing.SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         blockTurn.countDown();
 
         try {
@@ -185,7 +184,7 @@ class MainFrameTest {
             verify(chatMemory).clear(ChatModel.QA_CONVERSATION_ID);
             verify(chatMemory).clear(ChatModel.TASK_CONVERSATION_ID);
         } finally {
-            javax.swing.SwingUtilities.invokeAndWait(mainFrame::dispose);
+            SwingTestUtils.runOnEdt(mainFrame::dispose);
         }
     }
 }

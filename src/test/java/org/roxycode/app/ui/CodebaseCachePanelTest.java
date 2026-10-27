@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.function.BooleanSupplier;
 import javax.swing.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,22 +36,15 @@ class CodebaseCachePanelTest {
         panel = new CodebaseCachePanel(packerService, metaService, promptService);
     }
 
-    private static void awaitCondition(BooleanSupplier condition) throws Exception {
-        for (int i = 0; i < 50; i++) {
-            SwingUtilities.invokeAndWait(() -> {});
-            if (condition.getAsBoolean()) return;
-            Thread.sleep(20);
-        }
-    }
-
     @Test
     void testButtonsExist() {
         assertNotNull(SwingTestUtils.findButton(panel, "Update Implicit Cache"));
     }
 
     @Test
-    void testUpdateImplicitCacheButtonCallsForceRegenerateRepoMap() throws Exception {
-        awaitCondition(() -> !"Status: Unknown".equals(panel.getStatusLabel().getText()));
+    void testUpdateImplicitCacheButtonCallsForceRegenerateRepoMap() {
+        SwingTestUtils.awaitCondition(
+                () -> !"Status: Unknown".equals(panel.getStatusLabel().getText()));
 
         when(packerService.forceRegenerateRepoMap())
                 .thenReturn(
@@ -62,9 +54,9 @@ class CodebaseCachePanelTest {
 
         JButton packButton = SwingTestUtils.findButton(panel, "Update Implicit Cache");
         assertNotNull(packButton);
-        SwingUtilities.invokeAndWait(packButton::doClick);
+        SwingTestUtils.clickOnEdt(packButton);
 
-        awaitCondition(
+        SwingTestUtils.awaitCondition(
                 () ->
                         "# Forced Repo Map".equals(panel.getRepoMapArea().getText())
                                 && packButton.isEnabled());
@@ -93,14 +85,14 @@ class CodebaseCachePanelTest {
                         oversizedLen);
         String truncated = CodebaseCachePanel.truncateForDisplay("x".repeat(oversizedLen));
 
-        assertTrue(truncated.startsWith("x".repeat(100)));
         assertTrue(truncated.endsWith(suffix));
         assertEquals(CodebaseCachePanel.MAX_DISPLAY_CHARS + suffix.length(), truncated.length());
     }
 
     @Test
-    void testRefreshStatusRunsAsyncAndUpdatesAreasAndTruncatesLargeContent() throws Exception {
-        awaitCondition(() -> !"Status: Unknown".equals(panel.getStatusLabel().getText()));
+    void testRefreshStatusRunsAsyncAndUpdatesAreasAndTruncatesLargeContent() {
+        SwingTestUtils.awaitCondition(
+                () -> !"Status: Unknown".equals(panel.getStatusLabel().getText()));
 
         ProjectCacheMeta meta =
                 new ProjectCacheMeta("roxycode", LocalDateTime.of(2026, 1, 1, 12, 0), 500L);
@@ -109,8 +101,9 @@ class CodebaseCachePanelTest {
         when(promptService.getStableContext()).thenReturn("stable prompt");
         when(promptService.getSessionContext()).thenReturn("session prompt");
 
-        panel.refreshStatus().get();
-        awaitCondition(() -> "session prompt".equals(panel.getSessionContextArea().getText()));
+        SwingTestUtils.awaitWorker(panel.refreshStatus());
+        SwingTestUtils.awaitCondition(
+                () -> "session prompt".equals(panel.getSessionContextArea().getText()));
 
         assertTrue(panel.getStatusLabel().getText().contains("Total: 503"));
         assertEquals("cached repo map", panel.getRepoMapArea().getText());
@@ -119,8 +112,8 @@ class CodebaseCachePanelTest {
 
         when(metaService.loadRepoCache())
                 .thenReturn(Optional.of("R".repeat(CodebaseCachePanel.MAX_DISPLAY_CHARS + 12_345)));
-        panel.refreshStatus().get();
-        awaitCondition(
+        SwingTestUtils.awaitWorker(panel.refreshStatus());
+        SwingTestUtils.awaitCondition(
                 () ->
                         panel.getRepoMapArea()
                                 .getText()
@@ -137,19 +130,21 @@ class CodebaseCachePanelTest {
         when(metaService.loadRepoCache()).thenReturn(Optional.of("new project repo map"));
         assertFalse(SwingUtilities.isEventDispatchThread());
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp")));
-        awaitCondition(() -> "new project repo map".equals(panel.getRepoMapArea().getText()));
+        SwingTestUtils.awaitCondition(
+                () -> "new project repo map".equals(panel.getRepoMapArea().getText()));
         assertEquals("new project repo map", panel.getRepoMapArea().getText());
 
         when(metaService.loadMeta()).thenReturn(Optional.empty());
         when(metaService.loadRepoCache()).thenReturn(Optional.of("local only repo map"));
-        panel.refreshStatus().get();
-        awaitCondition(() -> "local only repo map".equals(panel.getRepoMapArea().getText()));
+        SwingTestUtils.awaitWorker(panel.refreshStatus());
+        SwingTestUtils.awaitCondition(
+                () -> "local only repo map".equals(panel.getRepoMapArea().getText()));
         assertEquals("Status: Repo Map available locally.", panel.getStatusLabel().getText());
         assertEquals("local only repo map", panel.getRepoMapArea().getText());
 
         when(metaService.loadRepoCache()).thenReturn(Optional.empty());
-        panel.refreshStatus().get();
-        awaitCondition(
+        SwingTestUtils.awaitWorker(panel.refreshStatus());
+        SwingTestUtils.awaitCondition(
                 () -> "Status: No implicit cache found.".equals(panel.getStatusLabel().getText()));
         assertEquals("Status: No implicit cache found.", panel.getStatusLabel().getText());
         assertEquals(

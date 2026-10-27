@@ -123,10 +123,7 @@ public class ChatPanelTest extends ChatTestFixture {
                 transitionEvent(
                         WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop transition", true));
         flushEdt();
-
-        SwingUtilities.invokeAndWait(() -> chatPanel.getStopButton().doClick());
-        flushEdt();
-
+        SwingTestUtils.clickOnEdt(chatPanel.getStopButton());
         chatPanel.onWorkflowTransition(
                 transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
         chatPanel.onToolExecution(
@@ -418,8 +415,7 @@ public class ChatPanelTest extends ChatTestFixture {
         javax.imageio.ImageIO.write(src, "png", imgFile);
 
         java.awt.image.BufferedImage loaded =
-                chatPanel.loadImageAttachmentAsync(imgFile).get(5, TimeUnit.SECONDS);
-        flushEdt();
+                SwingTestUtils.awaitWorker(chatPanel.loadImageAttachmentAsync(imgFile));
 
         assertNotNull(loaded);
         assertEquals(120, loaded.getWidth());
@@ -445,7 +441,7 @@ public class ChatPanelTest extends ChatTestFixture {
         chatPanel.setGrepService(grepService);
 
         JTextArea inputArea = chatPanel.getInputArea();
-        SwingUtilities.invokeAndWait(
+        SwingTestUtils.runOnEdt(
                 () -> {
                     inputArea.setText("Review @Chat");
                     inputArea.setCaretPosition(inputArea.getText().length());
@@ -466,21 +462,21 @@ public class ChatPanelTest extends ChatTestFixture {
         Action escapeAction = inputArea.getActionMap().get("dismiss-autocomplete");
 
         // Navigate DOWN to index 1 (ChatPanel.java)
-        SwingUtilities.invokeAndWait(() -> downAction.actionPerformed(null));
+        SwingTestUtils.runOnEdt(() -> downAction.actionPerformed(null));
         assertEquals(1, mentionPopup.getCandidateList().getSelectedIndex());
         assertEquals(
                 "src/main/java/org/roxycode/app/ui/ChatPanel.java",
                 mentionPopup.getCandidateList().getSelectedValue().relativePath());
 
         // Navigate UP back to index 0, then UP again to wrap around to index 2
-        SwingUtilities.invokeAndWait(() -> upAction.actionPerformed(null));
+        SwingTestUtils.runOnEdt(() -> upAction.actionPerformed(null));
         assertEquals(0, mentionPopup.getCandidateList().getSelectedIndex());
-        SwingUtilities.invokeAndWait(() -> upAction.actionPerformed(null));
+        SwingTestUtils.runOnEdt(() -> upAction.actionPerformed(null));
         assertEquals(2, mentionPopup.getCandidateList().getSelectedIndex());
 
         // Press ENTER while popup is visible: must insert mention + trailing space and NOT send
         // message
-        SwingUtilities.invokeAndWait(() -> enterAction.actionPerformed(null));
+        SwingTestUtils.runOnEdt(() -> enterAction.actionPerformed(null));
         flushEdt();
 
         assertFalse(mentionPopup.isPopupVisible());
@@ -491,14 +487,14 @@ public class ChatPanelTest extends ChatTestFixture {
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
         // Type another @ mention and accept with TAB
-        SwingUtilities.invokeAndWait(
+        SwingTestUtils.runOnEdt(
                 () -> {
                     inputArea.insert("@ChatM", inputArea.getCaretPosition());
                 });
         flushEdt();
         assertTrue(mentionPopup.isPopupVisible());
 
-        SwingUtilities.invokeAndWait(() -> tabAction.actionPerformed(null));
+        SwingTestUtils.runOnEdt(() -> tabAction.actionPerformed(null));
         flushEdt();
         assertFalse(mentionPopup.isPopupVisible());
         assertEquals(
@@ -507,19 +503,19 @@ public class ChatPanelTest extends ChatTestFixture {
                 inputArea.getText());
 
         // Type another @ mention and dismiss with ESCAPE
-        SwingUtilities.invokeAndWait(
+        SwingTestUtils.runOnEdt(
                 () -> {
                     inputArea.insert("@ChatP", inputArea.getCaretPosition());
                 });
         flushEdt();
         assertTrue(mentionPopup.isPopupVisible());
 
-        SwingUtilities.invokeAndWait(() -> escapeAction.actionPerformed(null));
+        SwingTestUtils.runOnEdt(() -> escapeAction.actionPerformed(null));
         assertFalse(mentionPopup.isPopupVisible());
         assertTrue(inputArea.getText().endsWith("@ChatP"));
 
         // Subsequent ENTER when popup is hidden sends the message as normal
-        SwingUtilities.invokeAndWait(() -> enterAction.actionPerformed(null));
+        SwingTestUtils.runOnEdt(() -> enterAction.actionPerformed(null));
         flushEdt();
         assertEquals("", inputArea.getText());
     }
@@ -530,7 +526,6 @@ public class ChatPanelTest extends ChatTestFixture {
         org.roxycode.app.ai.services.GrepService grepService =
                 mock(org.roxycode.app.ai.services.GrepService.class);
         when(grepService.listFiles()).thenReturn(List.of("src/App.java"));
-
         chatPanel.getFileMentionPopup().setBackgroundExecutor(Runnable::run);
         chatPanel.setGrepService(grepService);
         verify(grepService, times(1)).listFiles();

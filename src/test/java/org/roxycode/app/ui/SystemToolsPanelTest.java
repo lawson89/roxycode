@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -22,14 +21,14 @@ import org.roxycode.app.ui.SystemToolsPanel.ToolCard;
 public class SystemToolsPanelTest {
 
     @Test
-    public void testSystemToolsPanelInstantiationWithCachedTools() throws Exception {
+    public void testSystemToolsPanelInstantiationWithCachedTools() {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         List<SystemTool> cached =
                 List.of(new SystemTool("Ripgrep", "ripgrep 14.1.0", "Detected", "Fast search"));
         when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(cached));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertNotNull(panel);
         assertFalse(
@@ -58,7 +57,7 @@ public class SystemToolsPanelTest {
     }
 
     @Test
-    public void testRefreshToolsShowsProgressBarDisablesButtonAndPopulatesCards() throws Exception {
+    public void testRefreshToolsShowsProgressBarDisablesButtonAndPopulatesCards() {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of()));
 
@@ -66,13 +65,13 @@ public class SystemToolsPanelTest {
         when(service.refreshTools()).thenReturn(pendingRefresh);
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertFalse(panel.getProgressBar().isVisible());
         assertTrue(panel.getRefreshButton().isEnabled());
 
         // Click "Refresh Status" -> button disabled, indeterminate progress bar visible
-        SwingUtilities.invokeAndWait(() -> panel.getRefreshButton().doClick());
+        SwingTestUtils.clickOnEdt(panel.getRefreshButton());
 
         assertFalse(
                 panel.getRefreshButton().isEnabled(),
@@ -93,7 +92,7 @@ public class SystemToolsPanelTest {
                         "MIT",
                         "https://example.com/tool/"));
         pendingRefresh.complete(tools);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertFalse(
                 panel.getProgressBar().isVisible(),
@@ -115,12 +114,12 @@ public class SystemToolsPanelTest {
     }
 
     @Test
-    public void testOnSystemToolsUpdatedEventSynchronizesCardsAndStatuses() throws Exception {
+    public void testOnSystemToolsUpdatedEventSynchronizesCardsAndStatuses() {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of()));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         assertEquals(0, panel.getToolCards().size());
 
         List<SystemTool> updated =
@@ -129,7 +128,7 @@ public class SystemToolsPanelTest {
                         SystemTool.ofKnownTool("Docker", "Client API version mismatch", "Error"),
                         SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing"));
         panel.onSystemToolsUpdated(new SystemToolsUpdatedEvent(updated, false));
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertEquals(3, panel.getToolCards().size());
 
@@ -165,22 +164,21 @@ public class SystemToolsPanelTest {
     }
 
     @Test
-    public void testWebsiteLinkClickInvokesBrowserLauncherAndUpdateUiRefreshesTheme()
-            throws Exception {
+    public void testWebsiteLinkClickInvokesBrowserLauncherAndUpdateUiRefreshesTheme() {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         List<SystemTool> tools =
                 List.of(SystemTool.ofKnownTool("Java", "version 25.0.4", "Detected"));
         when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(tools));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         AtomicReference<URI> launchedUri = new AtomicReference<>();
         panel.setBrowserLauncher(launchedUri::set);
 
         ToolCard javaCard = panel.getToolCards().get(0);
         assertEquals("adoptium.net", javaCard.getWebsiteLinkButton().getText());
-        SwingUtilities.invokeAndWait(() -> javaCard.getWebsiteLinkButton().doClick());
+        SwingTestUtils.clickOnEdt(javaCard.getWebsiteLinkButton());
         assertEquals(URI.create("https://adoptium.net"), launchedUri.get());
 
         // Fallback when browser launcher throws
@@ -188,19 +186,21 @@ public class SystemToolsPanelTest {
                 uri -> {
                     throw new UnsupportedOperationException("Headless test");
                 });
-        assertDoesNotThrow(
-                () ->
-                        SwingUtilities.invokeAndWait(
-                                () -> javaCard.getWebsiteLinkButton().doClick()));
+        assertDoesNotThrow(() -> SwingTestUtils.clickOnEdt(javaCard.getWebsiteLinkButton()));
 
-        // Verify updateUI refreshes cards cleanly
-        SwingUtilities.invokeAndWait(panel::updateUI);
+        // Verify updateUI and dark theme refresh cards cleanly
+        SwingTestUtils.withDarkTheme(
+                panel,
+                () -> {
+                    assertNotNull(javaCard.getNameLabel().getIcon());
+                    assertNotNull(javaCard.getStatusBadge().getIcon());
+                });
         assertNotNull(javaCard.getNameLabel().getIcon());
         assertNotNull(javaCard.getStatusBadge().getIcon());
     }
 
     @Test
-    public void testRoxyCodeInitializeSystemToolsDuringSplashScreen() throws Exception {
+    public void testRoxyCodeInitializeSystemToolsDuringSplashScreen() {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         when(service.hasCachedTools()).thenReturn(false);
         when(service.detectTools())
@@ -210,20 +210,20 @@ public class SystemToolsPanelTest {
 
         SplashScreenWindow splash = Mockito.mock(SplashScreenWindow.class);
         RoxyCode.initializeSystemTools(service, splash);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         verify(splash, times(1)).setStatus("Checking system tools...");
         verify(service, times(1)).detectTools();
 
         // Subsequent run when cached skips detection
         when(service.hasCachedTools()).thenReturn(true);
         RoxyCode.initializeSystemTools(service, splash);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         verify(splash, times(1)).setStatus("Checking system tools...");
         verify(service, times(1)).detectTools();
     }
 
     @Test
-    public void testCardsFitWithinConstrainedViewportWithoutHorizontalOverflow() throws Exception {
+    public void testCardsFitWithinConstrainedViewportWithoutHorizontalOverflow() {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         List<SystemTool> tools =
                 List.of(
@@ -239,7 +239,7 @@ public class SystemToolsPanelTest {
         when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(tools));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
-        SwingUtilities.invokeAndWait(
+        SwingTestUtils.runOnEdt(
                 () -> {
                     panel.setSize(700, 600);
                     layoutRecursively(panel);

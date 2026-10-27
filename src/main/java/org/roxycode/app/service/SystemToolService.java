@@ -43,6 +43,7 @@ public class SystemToolService {
     public static final String STATUS_ERROR = "Error";
     public static final String STATUS_MISSING = "Missing";
     static final String VERSION_NOT_FOUND = "Not found";
+    static final String VERSION_UNKNOWN = "Unknown";
     private static final int MAX_DOCKER_ERROR_LENGTH = 120;
     private static final int MAX_VERSION_LENGTH = 50;
 
@@ -346,7 +347,8 @@ public class SystemToolService {
             DockerVersionInfo info = dockerProbe.probe();
             String serverVersion =
                     StringUtils.defaultIfBlank(
-                            info != null ? StringUtils.trim(info.version()) : null, "Unknown");
+                            info != null ? StringUtils.trim(info.version()) : null,
+                            VERSION_UNKNOWN);
             String apiVersion =
                     StringUtils.defaultIfBlank(
                             info != null ? StringUtils.trim(info.apiVersion()) : null, "");
@@ -445,15 +447,15 @@ public class SystemToolService {
 
     static String parseVersion(String output, String toolName) {
         if (StringUtils.isBlank(output)) {
-            return "Unknown";
+            return VERSION_UNKNOWN;
         }
         String firstLine =
                 output.lines()
                         .map(String::trim)
                         .filter(line -> !line.isEmpty())
                         .findFirst()
-                        .orElse("Unknown");
-        if ("Unknown".equals(firstLine)) {
+                        .orElse(VERSION_UNKNOWN);
+        if (VERSION_UNKNOWN.equals(firstLine)) {
             return firstLine;
         }
         if (JAVA.equals(toolName) && firstLine.contains("version")) {

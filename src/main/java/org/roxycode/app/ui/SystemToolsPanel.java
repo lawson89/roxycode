@@ -46,6 +46,8 @@ public final class SystemToolsPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(SystemToolsPanel.class);
     static final String SUBTITLE_TEXT =
             "External CLI utilities and runtimes used by RoxyCode for search, version control, symbol indexing, and isolated builds.";
+    private static final String MIG_COL_GROW_FILL = "[0:0, grow, fill]";
+    private static final String MIG_GROWX_WMIN_ZERO = "growx, wmin 0";
 
     private final transient SystemToolService toolService;
     private final JLabel titleLabel;
@@ -61,9 +63,7 @@ public final class SystemToolsPanel extends JPanel {
         this.toolService = toolService;
         setLayout(
                 new MigLayout(
-                        "fill, insets 20, hidemode 3",
-                        "[0:0, grow, fill]",
-                        "[]10[]10[grow, fill]"));
+                        "fill, insets 20, hidemode 3", MIG_COL_GROW_FILL, "[]10[]10[grow, fill]"));
         setOpaque(true);
 
         titleLabel = new JLabel("System Tools Status");
@@ -72,10 +72,10 @@ public final class SystemToolsPanel extends JPanel {
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
 
         JPanel titleBlock =
-                new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[0:0, grow, fill]", "[]"));
+                new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", MIG_COL_GROW_FILL, "[]"));
         titleBlock.setOpaque(false);
-        titleBlock.add(titleLabel, "growx, wmin 0");
-        titleBlock.add(subtitleLabel, "growx, wmin 0");
+        titleBlock.add(titleLabel, MIG_GROWX_WMIN_ZERO);
+        titleBlock.add(subtitleLabel, MIG_GROWX_WMIN_ZERO);
 
         refreshBtn = new JButton("Refresh Status");
         refreshBtn.addActionListener(e -> refreshTools());
@@ -83,7 +83,7 @@ public final class SystemToolsPanel extends JPanel {
         JPanel header =
                 new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill][]", "[center]"));
         header.setOpaque(false);
-        header.add(titleBlock, "growx, wmin 0");
+        header.add(titleBlock, MIG_GROWX_WMIN_ZERO);
         header.add(refreshBtn);
         add(header, "growx, wmin 0, wrap");
 
@@ -93,7 +93,7 @@ public final class SystemToolsPanel extends JPanel {
 
         cardsContainer = new ScrollableCardsPanel();
         cardsContainer.setLayout(
-                new MigLayout("fillx, wrap 1, insets 4 2 12 6, gapy 12", "[0:0, grow, fill]", ""));
+                new MigLayout("fillx, wrap 1, insets 4 2 12 6, gapy 12", MIG_COL_GROW_FILL, ""));
         cardsContainer.setOpaque(true);
 
         scrollPane = new JScrollPane(cardsContainer);
@@ -335,7 +335,7 @@ public final class SystemToolsPanel extends JPanel {
             this.tool = tool;
             setLayout(
                     new MigLayout(
-                            "fillx, wrap 1, insets 14 16 14 16, gapy 8", "[0:0, grow, fill]", ""));
+                            "fillx, wrap 1, insets 14 16 14 16, gapy 8", MIG_COL_GROW_FILL, ""));
             setOpaque(true);
 
             // 1. Header Row: Tool Icon + Name (left), Status Pill (right)
@@ -353,7 +353,7 @@ public final class SystemToolsPanel extends JPanel {
             statusBadge.setIconTextGap(6);
             headerRow.add(statusBadge, "right");
 
-            add(headerRow, "growx, wmin 0");
+            add(headerRow, MIG_GROWX_WMIN_ZERO);
 
             // 2. Description Row: Multi-line wrapped purpose text
             descriptionArea = new JTextArea(tool.description());
@@ -363,7 +363,7 @@ public final class SystemToolsPanel extends JPanel {
             descriptionArea.setOpaque(false);
             descriptionArea.setFocusable(false);
             descriptionArea.setBorder(BorderFactory.createEmptyBorder());
-            add(descriptionArea, "growx, wmin 0");
+            add(descriptionArea, MIG_GROWX_WMIN_ZERO);
 
             // 3. Footer Row: Version Pill, License Badge, Website Link
             JPanel footerRow =
@@ -401,7 +401,7 @@ public final class SystemToolsPanel extends JPanel {
             }
             footerRow.add(websiteLinkButton, "right, hidemode 3");
 
-            add(footerRow, "growx, wmin 0");
+            add(footerRow, MIG_GROWX_WMIN_ZERO);
 
             applyCardTheme();
         }

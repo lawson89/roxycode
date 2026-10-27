@@ -14,8 +14,8 @@ public final class WorkflowPhaseIndicator extends JPanel {
     private final WorkflowPhase phase;
     private final String defaultFontStyle;
     private final JLabel textLabel;
-    private boolean isActive;
-    private boolean isCompleted;
+    private boolean active;
+    private boolean completed;
 
     public WorkflowPhaseIndicator(WorkflowPhase phase) {
         this(phase, "font: -1");
@@ -37,11 +37,11 @@ public final class WorkflowPhaseIndicator extends JPanel {
     }
 
     public boolean isActive() {
-        return isActive;
+        return active;
     }
 
     public boolean isCompleted() {
-        return isCompleted;
+        return completed;
     }
 
     JLabel getTextLabel() {
@@ -49,12 +49,12 @@ public final class WorkflowPhaseIndicator extends JPanel {
     }
 
     public void setActive(boolean active) {
-        this.isActive = active;
+        this.active = active;
         updateStyle();
     }
 
     public void setCompleted(boolean completed) {
-        this.isCompleted = completed;
+        this.completed = completed;
         updateStyle();
     }
 
@@ -70,14 +70,14 @@ public final class WorkflowPhaseIndicator extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
         textLabel.setIcon(null);
 
-        if (isActive) {
+        if (active) {
             String accentHex = SwingHtmlUtils.toHex(accentColor);
             setOpaque(true);
             setBackground(accentColor);
             putClientProperty(FlatClientProperties.STYLE, "background: " + accentHex);
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
             textLabel.setForeground(Color.WHITE);
-        } else if (isCompleted) {
+        } else if (completed) {
             setOpaque(false);
             putClientProperty(FlatClientProperties.STYLE, null);
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");

@@ -27,12 +27,8 @@ import org.roxycode.app.model.ImplementationPlan;
 
 class PlanPanelTest {
 
-    private static void awaitRefresh(PlanPanel panel) throws Exception {
-        SwingWorker<String, Void> worker = panel.getActiveRefreshWorker();
-        if (worker != null) {
-            worker.get(5, TimeUnit.SECONDS);
-        }
-        SwingUtilities.invokeAndWait(() -> {});
+    private static void awaitRefresh(PlanPanel panel) {
+        SwingTestUtils.awaitWorker(panel.getActiveRefreshWorker());
     }
 
     private static ImplementationPlan createPlan(
@@ -43,6 +39,7 @@ class PlanPanelTest {
                 List.of("Requirement 1"),
                 steps,
                 false,
+                null,
                 null,
                 null,
                 null,
@@ -228,7 +225,7 @@ class PlanPanelTest {
         assertTrue(panel.getDisplayArea().getText().contains("?? src/Extra.java"));
 
         clearInvocations(gitService);
-        SwingUtilities.invokeAndWait(() -> panel.getCopyMarkdownButton().doClick());
+        SwingTestUtils.clickOnEdt(panel.getCopyMarkdownButton());
 
         verify(gitService, never()).getStatus();
         assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
@@ -239,7 +236,7 @@ class PlanPanelTest {
         assertTrue(copied.contains("## Changes"));
         assertTrue(copied.contains(" M src/Main.java"));
 
-        SwingUtilities.invokeAndWait(panel::updateUI);
+        SwingTestUtils.runOnEdt(panel::updateUI);
         verify(gitService, never()).getStatus();
 
         when(gitService.getStatus())
@@ -292,8 +289,7 @@ class PlanPanelTest {
 
         freshWorker.get(5, TimeUnit.SECONDS);
         releaseSlow.countDown();
-        staleWorker.get(5, TimeUnit.SECONDS);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.awaitWorker(staleWorker);
 
         assertEquals(" M src/FreshFile.java\n", panel.getLastGitStatus());
         assertTrue(panel.getDisplayArea().getText().contains("FreshFile.java"));

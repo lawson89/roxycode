@@ -49,7 +49,8 @@ class PromptServiceTest {
                         jexlServiceRegistry,
                         gitService,
                         projectAnalysisService,
-                        repoMapPackerService);
+                        repoMapPackerService,
+                        null);
     }
 
     private static void assertContainsAll(String text, String... expected) {
@@ -299,6 +300,7 @@ class PromptServiceTest {
                                 new ImplementationPlan.TechStep("Update PlanService", false),
                                 new ImplementationPlan.TechStep("Update PromptService", false)),
                         true,
+                        null,
                         null,
                         null,
                         null,

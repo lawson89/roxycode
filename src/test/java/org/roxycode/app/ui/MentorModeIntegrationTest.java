@@ -11,7 +11,6 @@ import java.util.Locale;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
-import javax.swing.SwingUtilities;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.MatteBorder;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,7 +60,8 @@ class MentorModeIntegrationTest {
                                 settingsService,
                                 null,
                                 null,
-                                null));
+                                null),
+                        null);
         taskWorkspacePanel =
                 new TaskWorkspacePanel(
                         new FeatureChatPanel(
@@ -72,7 +72,8 @@ class MentorModeIntegrationTest {
                                 settingsService,
                                 null),
                         planService,
-                        new PlanPanel(planService, gitService));
+                        new PlanPanel(planService, gitService),
+                        null);
 
         sidebar = new SidebarPanel(card -> {});
         qaWorkspacePanel.bindSidebar(sidebar);
@@ -81,7 +82,7 @@ class MentorModeIntegrationTest {
 
     private static ImplementationPlan planWithTitle(String title) {
         return new ImplementationPlan(
-                title, "Goal", List.of(), List.of(), false, null, null, null, List.of());
+                title, "Goal", List.of(), List.of(), false, null, null, null, null, List.of());
     }
 
     @Test
@@ -102,9 +103,11 @@ class MentorModeIntegrationTest {
 
         JPanel mentorBanner = assertInstanceOf(JPanel.class, qaHeaderBar.getComponent(0));
         assertSame(qaWorkspacePanel.getMentorBanner(), mentorBanner);
+        assertEquals(255, mentorBanner.getBackground().getAlpha());
         String bannerStyle = (String) mentorBanner.getClientProperty(FlatClientProperties.STYLE);
         assertNotNull(bannerStyle);
-        assertTrue(bannerStyle.contains("background: fade(") && bannerStyle.contains("12%)"));
+        assertTrue(bannerStyle.startsWith("background: #"));
+        assertFalse(bannerStyle.contains("fade("));
 
         JLabel mentorModeLabel = qaWorkspacePanel.getMentorModeLabel();
         assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
@@ -138,6 +141,7 @@ class MentorModeIntegrationTest {
         assertEquals(1, taskHeaderBar.getComponentZOrder(planLabel));
 
         assertTrue(progressTracker.isOpaque());
+        assertEquals(255, progressTracker.getBackground().getAlpha());
         CompoundBorder trackerBorder =
                 assertInstanceOf(CompoundBorder.class, progressTracker.getBorder());
         MatteBorder leftBlazeBorder =
@@ -147,14 +151,15 @@ class MentorModeIntegrationTest {
                 (String) progressTracker.getClientProperty(FlatClientProperties.STYLE);
         assertNotNull(trackerStyle);
         assertFalse(trackerStyle.contains("arc:"));
-        assertTrue(trackerStyle.contains("background: fade(") && trackerStyle.contains("12%)"));
+        assertTrue(trackerStyle.startsWith("background: #"));
+        assertFalse(trackerStyle.contains("fade("));
 
         assertEquals(6, progressTracker.getComponentCount());
         assertSame(phaseHeaderLabel, progressTracker.getComponent(0));
         assertEquals("CURRENT PHASE", phaseHeaderLabel.getText());
         assertEquals(
                 "font: bold -2", phaseHeaderLabel.getClientProperty(FlatClientProperties.STYLE));
-        assertEquals(QaWorkspacePanel.resolveAccentColor(), phaseHeaderLabel.getForeground());
+        assertEquals(SwingHtmlUtils.getAccentColor(), phaseHeaderLabel.getForeground());
         assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(1));
         JLabel connector1 = assertInstanceOf(JLabel.class, progressTracker.getComponent(2));
         FontIcon chevron1 = assertInstanceOf(FontIcon.class, connector1.getIcon());
@@ -178,7 +183,8 @@ class MentorModeIntegrationTest {
         assertEquals(Codicons.PROJECT, projectIcon.getIkon());
         String planStyle = (String) planLabel.getClientProperty(FlatClientProperties.STYLE);
         assertNotNull(planStyle);
-        assertTrue(planStyle.contains("fade(") && planStyle.contains("10%)"));
+        assertTrue(planStyle.contains("background: #"));
+        assertFalse(planStyle.contains("fade("));
 
         taskWorkspacePanel.updateUI();
         assertNotNull(planLabel.getIcon());
@@ -213,32 +219,31 @@ class MentorModeIntegrationTest {
         taskTabs.setSelectedIndex(1);
 
         taskWorkspacePanel.onViewShown();
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertEquals(taskChatPanel, taskTabs.getSelectedComponent());
         assertEquals(
                 "Task draft message".length(), taskChatPanel.getInputArea().getCaretPosition());
 
         qaWorkspacePanel.focusChatInput();
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         assertEquals("QA draft message".length(), qaChatPanel.getInputArea().getCaretPosition());
     }
 
     @Test
-    void testSidebarWaitingApprovalSyncedWithPlanService() throws Exception {
+    void testSidebarWaitingApprovalSyncedWithPlanService() {
         assertFalse(sidebar.isTaskWaitingApproval());
 
         taskWorkspacePanel.onWorkflowTransition(
                 new WorkflowTransitionEvent(
                         WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready to code", false));
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         assertTrue(sidebar.isTaskWaitingApproval());
 
         when(planService.getPendingPhase()).thenReturn(null);
         taskWorkspacePanel.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
         assertFalse(sidebar.isTaskWaitingApproval());
-
         assertFalse(sidebar.isQaBusy());
         assertFalse(sidebar.isTaskBusy());
 
@@ -271,7 +276,7 @@ class MentorModeIntegrationTest {
                         });
         bgThread.start();
         bgThread.join();
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertTrue(taskWorkspacePanel.getPlanLabel().isVisible());
         assertEquals("OFF EDT PLAN", taskWorkspacePanel.getPlanLabel().getText());

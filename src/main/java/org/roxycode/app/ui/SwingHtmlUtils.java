@@ -337,6 +337,57 @@ public final class SwingHtmlUtils {
     }
 
     /**
+     * Resolves the theme accent color from {@link UIManager}, falling back to RoxyCode blue.
+     *
+     * @return the resolved accent color
+     */
+    public static Color getAccentColor() {
+        return getUiColor(new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
+    }
+
+    /**
+     * Resolves the theme muted foreground color from {@link UIManager}, falling back to {@link
+     * Color#GRAY}.
+     *
+     * @return the resolved muted foreground color
+     */
+    public static Color getMutedForegroundColor() {
+        return getUiColor(Color.GRAY, "Label.disabledForeground", "Component.infoForeground");
+    }
+
+    /**
+     * Blends a foreground color over a background color at the specified ratio, returning a 100%
+     * opaque ({@code alpha = 255}) {@link Color}.
+     *
+     * @param foreground the foreground tint color
+     * @param background the base background color
+     * @param foregroundRatio the blend weight of {@code foreground} in {@code [0.0, 1.0]}
+     * @return the solid blended color
+     */
+    public static Color blendColor(Color foreground, Color background, double foregroundRatio) {
+        double clamped = Math.clamp(foregroundRatio, 0.0, 1.0);
+        double bgRatio = 1.0 - clamped;
+        int r = (int) Math.round(foreground.getRed() * clamped + background.getRed() * bgRatio);
+        int g = (int) Math.round(foreground.getGreen() * clamped + background.getGreen() * bgRatio);
+        int b = (int) Math.round(foreground.getBlue() * clamped + background.getBlue() * bgRatio);
+        return new Color(Math.clamp(r, 0, 255), Math.clamp(g, 0, 255), Math.clamp(b, 0, 255));
+    }
+
+    /**
+     * Blends the given tint color over the current theme's {@code Panel.background} color at the
+     * specified ratio, returning a solid ({@code alpha = 255}) {@link Color} suitable for opaque
+     * Swing panels without repaint bleed-through artifacts.
+     *
+     * @param tint the tint color to blend
+     * @param tintRatio the blend weight of {@code tint} in {@code [0.0, 1.0]}
+     * @return the solid tinted background color
+     */
+    public static Color getTintedBackground(Color tint, double tintRatio) {
+        Color panelBg = getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background");
+        return blendColor(tint, panelBg, tintRatio);
+    }
+
+    /**
      * Formats a {@link Color} as a 6-digit hex string (e.g. {@code #1a2b3c}).
      *
      * @param color the color to format

@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -101,12 +100,6 @@ public class PlanService {
     private volatile WorkflowPhase pendingPhase;
     private volatile String pendingReason;
 
-    public PlanService(
-            EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
-        this(environmentService, eventPublisher, null, null);
-    }
-
-    @Autowired
     public PlanService(
             EnvironmentService environmentService,
             ApplicationEventPublisher eventPublisher,
@@ -322,11 +315,6 @@ public class PlanService {
         }
         currentPlan = currentPlan.withApproval(user, timestamp);
         publishPlanUpdated();
-    }
-
-    /** Marks the current plan as completed. Internal lifecycle method. */
-    public synchronized void completePlan(String timestamp) {
-        completePlan(currentPlan != null ? currentPlan.completedBy() : null, timestamp);
     }
 
     /** Marks the current plan as completed by the specified user. Internal lifecycle method. */

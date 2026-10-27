@@ -22,6 +22,7 @@ public final class MarkdownPane extends JTextPane {
     private static final long serialVersionUID = 1L;
     private static final String COPY_PREFIX = "copy:";
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
+    private static final int INITIAL_MESSAGE_COUNT = 1;
     private static final String ERROR_RENDERING_HTML = "<div>Error rendering message</div>";
 
     private final List<Message> messages = new ArrayList<>();
@@ -184,7 +185,7 @@ public final class MarkdownPane extends JTextPane {
     }
 
     private void appendRenderedEntry(String entryHtml) {
-        if (messages.size() == 1) {
+        if (messages.size() == INITIAL_MESSAGE_COUNT) {
             setText("<html><body>" + entryHtml + "</body></html>");
             scrollToBottomLater();
             return;

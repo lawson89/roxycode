@@ -26,7 +26,6 @@ import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
 import org.roxycode.app.util.Edt;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -53,12 +52,6 @@ public final class TaskWorkspacePanel extends JPanel {
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
     private SidebarPanel sidebar;
 
-    public TaskWorkspacePanel(
-            FeatureChatPanel taskChatPanel, PlanService planService, PlanPanel planPanel) {
-        this(taskChatPanel, planService, planPanel, null);
-    }
-
-    @Autowired
     public TaskWorkspacePanel(
             FeatureChatPanel taskChatPanel,
             PlanService planService,
@@ -146,33 +139,30 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     void applyPhaseTrackerStyling() {
-        Color accent =
-                SwingHtmlUtils.getUiColor(
-                        new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
-        String accentHex = SwingHtmlUtils.toHex(accent);
+        Color accent = SwingHtmlUtils.getAccentColor();
+        Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.12);
         progressTracker.setOpaque(true);
+        progressTracker.setBackground(tintedBg);
         progressTracker.setBorder(
                 BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
                         BorderFactory.createEmptyBorder(2, 8, 2, 6)));
         progressTracker.putClientProperty(
-                FlatClientProperties.STYLE, "background: fade(" + accentHex + ", 12%)");
+                FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(tintedBg));
         phaseHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2");
         phaseHeaderLabel.setForeground(accent);
     }
 
     void applyPlanBadgeStyling() {
-        Color accent =
-                SwingHtmlUtils.getUiColor(
-                        new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
-        String accentHex = SwingHtmlUtils.toHex(accent);
+        Color accent = SwingHtmlUtils.getAccentColor();
+        Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.10);
         planLabel.setIcon(FontIcon.of(Codicons.PROJECT, 14, accent));
         planLabel.setForeground(accent);
         planLabel.putClientProperty(
                 FlatClientProperties.STYLE,
-                "font: bold -2; background: fade("
-                        + accentHex
-                        + ", 10%); arc: 10; border: 3,8,3,8");
+                "font: bold -2; background: "
+                        + SwingHtmlUtils.toHex(tintedBg)
+                        + "; arc: 10; border: 3,8,3,8");
     }
 
     public void bindSidebar(SidebarPanel sidebar) {
@@ -254,15 +244,16 @@ public final class TaskWorkspacePanel extends JPanel {
         }
         progressTracker.revalidate();
         progressTracker.repaint();
+        if (topBar != null) {
+            topBar.revalidate();
+            topBar.repaint();
+        }
     }
 
     private JLabel createConnectorIcon(boolean reached) {
         Color color =
                 reached
-                        ? SwingHtmlUtils.getUiColor(
-                                new Color(0x00, 0x7a, 0xcc),
-                                "Component.accentColor",
-                                "Actions.Blue")
+                        ? SwingHtmlUtils.getAccentColor()
                         : SwingHtmlUtils.getUiColor(
                                 Color.GRAY, "Label.disabledForeground", "Component.borderColor");
         return new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 12, color));

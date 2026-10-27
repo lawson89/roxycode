@@ -11,7 +11,6 @@ import java.util.List;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.ListCellRenderer;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.roxycode.app.ai.services.GrepService;
@@ -173,7 +172,7 @@ class FileMentionPopupTest {
 
         inputArea.setText("Check @Chat");
         inputArea.setCaretPosition(inputArea.getText().length());
-        javax.swing.SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertTrue(popup.isPopupVisible());
         assertEquals(1, popup.getListModel().size());
@@ -183,12 +182,16 @@ class FileMentionPopupTest {
         assertTrue(loc.x >= 0 && loc.x + 320 <= 400);
         assertTrue(loc.y < 0, "Popup Y coordinate must be positioned above the caret line");
 
-        ListCellRenderer<? super FileCandidate> renderer =
-                popup.getCandidateList().getCellRenderer();
-        Component comp =
-                renderer.getListCellRendererComponent(
-                        popup.getCandidateList(), popup.getListModel().get(0), 0, true, false);
+        Component comp = SwingTestUtils.renderListCell(popup.getCandidateList(), 0, true);
         assertInstanceOf(JPanel.class, comp);
+        SwingTestUtils.withDarkTheme(
+                popup.getPopupMenu(),
+                () -> {
+                    popup.updateTheme();
+                    assertInstanceOf(
+                            JPanel.class,
+                            SwingTestUtils.renderListCell(popup.getCandidateList(), 0, false));
+                });
         assertEquals(Codicons.FILE_CODE, FileMentionPopup.resolveFileIcon("chatpanel.java"));
         assertEquals(Codicons.FILE, FileMentionPopup.resolveFileIcon("license"));
     }

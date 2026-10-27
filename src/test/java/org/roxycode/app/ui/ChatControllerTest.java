@@ -256,9 +256,7 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(panel.getController().isTurnActive());
         assertTrue(panel.getModel().isLoading());
         assertTrue(panel.getStopButton().isEnabled());
-
-        SwingUtilities.invokeAndWait(() -> panel.getController().stopTurn());
-
+        SwingTestUtils.runOnEdt(() -> panel.getController().stopTurn());
         assertEquals(0, panel.getController().getConsecutiveAutoNudges());
         assertNull(panel.getController().getAutoNudgeTimer());
         assertFalse(panel.getController().isTurnActive());
@@ -277,7 +275,7 @@ class ChatControllerTest extends ChatTestFixture {
         ExploreChatPanel panel = createExploreChatPanel(directExecutor);
 
         // 1. Empty Q&A session: resets cleanly without archiving
-        SwingUtilities.invokeAndWait(() -> panel.getController().performResetSession());
+        SwingTestUtils.runOnEdt(() -> panel.getController().performResetSession());
         flushEdt();
 
         verify(chatMemory).clear("qa:default");
@@ -292,7 +290,7 @@ class ChatControllerTest extends ChatTestFixture {
                         eq("RipGrep Search Architecture"), eq("DevUser"), anyString(), anyList()))
                 .thenReturn("20250514-153000-ripgrep-search-architecture.md");
 
-        SwingUtilities.invokeAndWait(
+        SwingTestUtils.runOnEdt(
                 () -> {
                     panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
                     panel.appendMessage("ai", "It searches global, project, and archive dirs.");
@@ -320,7 +318,7 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testApprovePhaseAndImageEncodingRunOnTurnExecutorOffEdt() throws Exception {
+    void testApprovePhaseAndImageEncodingRunOnTurnExecutorOffEdt() {
         java.util.concurrent.atomic.AtomicBoolean approveOnEdt =
                 new java.util.concurrent.atomic.AtomicBoolean(true);
         java.util.concurrent.atomic.AtomicBoolean chatOnEdt =
@@ -351,12 +349,8 @@ class ChatControllerTest extends ChatTestFixture {
         FeatureChatPanel panel = createFeatureChatPanel(null);
         panel.getModel().addPendingImage(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
 
-        SwingUtilities.invokeAndWait(() -> panel.getController().approvePhase());
-
-        for (int i = 0; i < 50 && capturedImages.get() == null; i++) {
-            Thread.sleep(20);
-            flushEdt();
-        }
+        SwingTestUtils.runOnEdt(() -> panel.getController().approvePhase());
+        SwingTestUtils.awaitCondition(() -> capturedImages.get() != null);
 
         assertFalse(approveOnEdt.get(), "planService.approveTransition() must run off EDT");
         assertFalse(chatOnEdt.get(), "aiService.chat() and PNG encoding must run off EDT");

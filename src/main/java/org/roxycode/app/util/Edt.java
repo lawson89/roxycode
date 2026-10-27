@@ -31,6 +31,7 @@ public final class Edt {
      *
      * @param action the runnable action to execute on the EDT (ignored if {@code null})
      */
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public static void runAndWait(Runnable action) {
         if (action == null) {
             return;

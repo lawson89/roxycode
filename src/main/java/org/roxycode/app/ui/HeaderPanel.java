@@ -111,25 +111,13 @@ public final class HeaderPanel extends JPanel {
         setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
     }
 
-    private static Color resolveAccentColor() {
-        return SwingHtmlUtils.getUiColor(
-                new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
-    }
-
-    private static Color resolveMutedColor() {
-        return SwingHtmlUtils.getUiColor(
-                new Color(0x77, 0x77, 0x77),
-                "Label.disabledForeground",
-                "Component.infoForeground");
-    }
-
     private static Color resolveForegroundColor() {
         return SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
     }
 
     void applyHeaderStyling() {
-        Color accent = resolveAccentColor();
-        Color muted = resolveMutedColor();
+        Color accent = SwingHtmlUtils.getAccentColor();
+        Color muted = SwingHtmlUtils.getMutedForegroundColor();
         Color fg = resolveForegroundColor();
         String accentHex = SwingHtmlUtils.toHex(accent);
 
@@ -250,7 +238,9 @@ public final class HeaderPanel extends JPanel {
                                     && !"Not a git repository".equals(branch)) {
                                 branchLabel.setIcon(
                                         FontIcon.of(
-                                                Codicons.SOURCE_CONTROL, 14, resolveMutedColor()));
+                                                Codicons.SOURCE_CONTROL,
+                                                14,
+                                                SwingHtmlUtils.getMutedForegroundColor()));
                                 branchLabel.setText(branch);
                                 branchLabel.setVisible(true);
                             } else {
@@ -291,7 +281,8 @@ public final class HeaderPanel extends JPanel {
     }
 
     private void updateModelDisplay(String modelName) {
-        modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, resolveMutedColor()));
+        modelLabel.setIcon(
+                FontIcon.of(Codicons.HUBOT, 14, SwingHtmlUtils.getMutedForegroundColor()));
         modelLabel.setText(modelName != null ? modelName : "No model selected");
     }
 

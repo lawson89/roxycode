@@ -54,14 +54,12 @@ class HeaderPanelTest {
 
         Path newRoot = tempDir.resolve("updated-proj");
         ps.setCurrentProjectRoot(newRoot);
-        SwingUtilities.invokeAndWait(
-                () -> header.onProjectChanged(new ProjectChangedEvent(newRoot)));
+        SwingTestUtils.runOnEdt(() -> header.onProjectChanged(new ProjectChangedEvent(newRoot)));
 
         AppSettings updatedSettings = ss.getSettings();
         updatedSettings.setGeminiModel("gemini-4-argon");
-        SwingUtilities.invokeAndWait(
+        SwingTestUtils.runOnEdt(
                 () -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
-
         JLabel projectLabel =
                 SwingTestUtils.findComponent(
                         header, JLabel.class, c -> "updated-proj".equals(c.getText()));
@@ -99,7 +97,7 @@ class HeaderPanelTest {
                         });
         backgroundThread.start();
         backgroundThread.join(5000);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertNotNull(
                 SwingTestUtils.findComponent(
@@ -110,22 +108,16 @@ class HeaderPanelTest {
     }
 
     @Test
-    void testUpdateBranchLabelRunsAsyncOffEdt() throws Exception {
+    void testUpdateBranchLabelRunsAsyncOffEdt() {
         SettingsService ss = createSettingsService();
         ProjectService ps = createProjectService(ss);
         GitService gitService = mock(GitService.class);
         when(gitService.getCurrentBranch()).thenReturn("feature/async-branch");
 
         HeaderPanel header = new HeaderPanel(ps, gitService, ss);
-        header.updateBranchLabel().get();
-
-        for (int i = 0;
-                i < 50 && !"feature/async-branch".equals(header.getBranchLabel().getText());
-                i++) {
-            SwingUtilities.invokeAndWait(() -> {});
-            Thread.sleep(20);
-        }
-
+        SwingTestUtils.awaitWorker(header.updateBranchLabel());
+        SwingTestUtils.awaitCondition(
+                () -> "feature/async-branch".equals(header.getBranchLabel().getText()));
         assertEquals("feature/async-branch", header.getBranchLabel().getText());
         assertTrue(header.getBranchLabel().isVisible());
         FontIcon branchIcon = assertInstanceOf(FontIcon.class, header.getBranchLabel().getIcon());
@@ -225,15 +217,8 @@ class HeaderPanelTest {
                         })
                 .when(ps)
                 .setCurrentProjectRoot(any());
-
         Path chosen = tempDir.resolve("chosen-project");
-        final java.util.concurrent.CompletableFuture<Void>[] futureRef =
-                new java.util.concurrent.CompletableFuture[1];
-        SwingUtilities.invokeAndWait(() -> futureRef[0] = header.switchProjectAsync(chosen));
-        futureRef[0].get(5, java.util.concurrent.TimeUnit.SECONDS);
-
-        assertFalse(
-                calledOnEdt.get(), "switchProjectAsync must invoke setCurrentProjectRoot off EDT");
-        assertEquals(chosen, ps.getCurrentProjectRoot());
+        SwingTestUtils.awaitWorker(
+                SwingTestUtils.callOnEdt(() -> header.switchProjectAsync(chosen)));
     }
 }

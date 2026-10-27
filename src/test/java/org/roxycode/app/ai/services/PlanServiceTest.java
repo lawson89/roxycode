@@ -41,7 +41,7 @@ class PlanServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PlanService(envService, eventPublisher);
+        service = new PlanService(envService, eventPublisher, null, null);
         lenient().when(envService.getCurrentUser()).thenReturn("user");
     }
 
@@ -62,6 +62,7 @@ class PlanServiceTest {
                 approved,
                 approved ? "now" : null,
                 approved ? "user" : null,
+                null,
                 null,
                 List.of());
     }
@@ -122,10 +123,6 @@ class PlanServiceTest {
         service.completePlan("user2", "2023-01-02");
         assertEquals("user2", service.getCurrentPlan().completedBy());
         assertEquals("2023-01-02", service.getCurrentPlan().completedOn());
-
-        service.completePlan("2023-01-03");
-        assertEquals("user2", service.getCurrentPlan().completedBy());
-        assertEquals("2023-01-03", service.getCurrentPlan().completedOn());
     }
 
     @Test

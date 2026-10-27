@@ -15,7 +15,6 @@ import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -38,11 +37,6 @@ public final class QaWorkspacePanel extends JPanel {
     private final JLabel mentorModeLabel;
     private final JLabel mentorSubtitleLabel;
 
-    public QaWorkspacePanel(ExploreChatPanel exploreChatPanel) {
-        this(exploreChatPanel, null);
-    }
-
-    @Autowired
     public QaWorkspacePanel(ExploreChatPanel exploreChatPanel, MemoryService memoryService) {
         super(new BorderLayout());
 
@@ -107,26 +101,18 @@ public final class QaWorkspacePanel extends JPanel {
         }
     }
 
-    static Color resolveAccentColor() {
-        return SwingHtmlUtils.getUiColor(
-                new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
-    }
-
     void applyBannerStyling() {
-        Color accent = resolveAccentColor();
-        Color mutedFg =
-                SwingHtmlUtils.getUiColor(
-                        new Color(0x77, 0x77, 0x77),
-                        "Label.disabledForeground",
-                        "Component.infoForeground");
-        String hex = SwingHtmlUtils.toHex(accent);
+        Color accent = SwingHtmlUtils.getAccentColor();
+        Color mutedFg = SwingHtmlUtils.getMutedForegroundColor();
+        Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.12);
 
+        mentorBanner.setBackground(tintedBg);
         mentorBanner.setBorder(
                 BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
                         BorderFactory.createEmptyBorder(4, 10, 4, 10)));
         mentorBanner.putClientProperty(
-                FlatClientProperties.STYLE, "background: fade(" + hex + ", 12%)");
+                FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(tintedBg));
 
         mentorModeLabel.setIcon(FontIcon.of(Codicons.SEARCH, 15, accent));
         mentorModeLabel.setForeground(accent);

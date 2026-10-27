@@ -50,7 +50,7 @@ class ChatModelTest {
         List<BufferedImage> snapshot = model.getPendingImages();
         assertEquals(1, snapshot.size());
 
-        List<byte[]> encoded = model.drainPendingImagesAsPngBytes();
+        List<byte[]> encoded = ChatModel.encodeImagesToPngBytes(model.drainPendingImages());
         assertEquals(1, encoded.size());
         assertTrue(encoded.get(0).length > 0);
         assertFalse(model.hasPendingImages());
@@ -88,6 +88,7 @@ class ChatModelTest {
                                 new ImplementationPlan.TechStep("S1", true),
                                 new ImplementationPlan.TechStep("S2", false)),
                         true,
+                        null,
                         null,
                         null,
                         null,

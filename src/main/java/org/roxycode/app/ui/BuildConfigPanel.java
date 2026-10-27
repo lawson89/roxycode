@@ -78,6 +78,7 @@ public final class BuildConfigPanel extends JPanel {
         add(title, "wrap, gapbottom 10");
 
         bannerPanel = new JPanel(new MigLayout("fillx, insets 10 14 10 14", "[][grow][][]", "[]"));
+        bannerPanel.setOpaque(false);
         bannerIconLabel = new JLabel();
         bannerMessageLabel = new JLabel();
         containerToggleCheckBox = new JCheckBox("Run builds in Testcontainers (Docker)");
@@ -256,19 +257,23 @@ public final class BuildConfigPanel extends JPanel {
                             "Component.warning.borderColor",
                             "Actions.Yellow");
             String hex = SwingHtmlUtils.toHex(warningColor);
+            String bgHex =
+                    SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warningColor, 0.15));
             applyBannerStyle(
                     Codicons.WARNING,
                     warningColor,
-                    "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: fade(" + hex + ", 15%)",
+                    "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: " + bgHex,
                     DOCKER_MISSING_WARNING_TEXT);
         } else if (containerEnabled) {
             Color verifiedColor =
                     SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
             String hex = SwingHtmlUtils.toHex(verifiedColor);
+            String bgHex =
+                    SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(verifiedColor, 0.15));
             applyBannerStyle(
                     Codicons.SHIELD,
                     verifiedColor,
-                    "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: fade(" + hex + ", 15%)",
+                    "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: " + bgHex,
                     CONTAINER_ACTIVE_TEXT);
         } else {
             Color infoColor =
@@ -315,7 +320,7 @@ public final class BuildConfigPanel extends JPanel {
         updateBannerState();
     }
 
-    @SuppressWarnings({"PMD.UnusedAssignment", "PMD.CompareObjectsWithEquals"})
+    @SuppressWarnings("PMD.UnusedAssignment")
     CompletableFuture<String> loadConfig() {
         if (buildToolService == null) {
             return CompletableFuture.completedFuture("");

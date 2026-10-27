@@ -97,7 +97,7 @@ class SettingsPanelTest {
             settings.setTheme("FlatLaf Light");
             settingsPanel.onSettingsChanged(
                     new org.roxycode.app.events.SettingsChangedEvent(settings));
-            SwingUtilities.invokeAndWait(() -> {});
+            SwingTestUtils.flushEdt();
             assertEquals("FlatLaf Light", themeCombo.getSelectedItem());
         } finally {
             SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
@@ -105,7 +105,7 @@ class SettingsPanelTest {
     }
 
     @Test
-    void testApplyThemeOffEdtWithIndeterminateProgressBarDoesNotLogSevereError() throws Exception {
+    void testApplyThemeOffEdtWithIndeterminateProgressBarDoesNotLogSevereError() {
         Assumptions.assumeFalse(
                 GraphicsEnvironment.isHeadless(), "Skipping JDialog test in headless environment");
         java.util.logging.Logger flatLafLogger =
@@ -133,7 +133,7 @@ class SettingsPanelTest {
         flatLafLogger.addHandler(handler);
         final JDialog[] dialogHolder = new JDialog[1];
         try {
-            SwingUtilities.invokeAndWait(
+            SwingTestUtils.runOnEdt(
                     () -> {
                         JDialog dialog = new JDialog();
                         JProgressBar progressBar = new JProgressBar();
@@ -152,7 +152,7 @@ class SettingsPanelTest {
         } finally {
             flatLafLogger.removeHandler(handler);
             if (dialogHolder[0] != null) {
-                SwingUtilities.invokeAndWait(
+                SwingTestUtils.runOnEdt(
                         () -> {
                             for (Component c : dialogHolder[0].getContentPane().getComponents()) {
                                 if (c instanceof JProgressBar pb) {

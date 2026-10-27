@@ -4,16 +4,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import com.formdev.flatlaf.FlatDarkLaf;
-import com.formdev.flatlaf.FlatLightLaf;
 import java.awt.Component;
 import java.awt.GridLayout;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.BooleanSupplier;
 import javax.swing.JLabel;
-import javax.swing.SwingUtilities;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -25,14 +21,6 @@ import org.roxycode.app.service.PromptService;
 import org.roxycode.app.service.PromptService.ContextFileItem;
 
 class ContextManagerPanelTest {
-
-    private static void awaitCondition(BooleanSupplier condition) throws Exception {
-        for (int i = 0; i < 50; i++) {
-            SwingUtilities.invokeAndWait(() -> {});
-            if (condition.getAsBoolean()) return;
-            Thread.sleep(20);
-        }
-    }
 
     private static void assertColumnIcons(ContextManagerPanel.ContextScopeColumn col) {
         assertEquals(
@@ -50,7 +38,7 @@ class ContextManagerPanelTest {
     }
 
     @Test
-    void testTwoColumnGlobalAndProjectContextManagementWithoutPreview() throws Exception {
+    void testTwoColumnGlobalAndProjectContextManagementWithoutPreview() {
         PromptService promptService = mock(PromptService.class);
         Path globalPath = Path.of("/global/rules.yaml");
         ContextFileItem globalItem = new ContextFileItem("/global", "rules.yaml", globalPath);
@@ -70,24 +58,23 @@ class ContextManagerPanelTest {
         assertEquals(2, panel.getComponentCount());
         assertNull(SwingTestUtils.findComponent(panel, RSyntaxTextArea.class));
 
-        awaitCondition(
+        SwingTestUtils.awaitCondition(
                 () ->
-                        panel.getGlobalFolderListModel().getSize() == 1
-                                && panel.getGlobalFileListModel().getSize() == 1
-                                && panel.getProjectFolderListModel().getSize() == 1
-                                && panel.getProjectFileListModel().getSize() == 1);
+                        panel.getGlobalColumn().getFolderListModel().getSize() == 1
+                                && panel.getGlobalColumn().getFileListModel().getSize() == 1
+                                && panel.getProjectColumn().getFolderListModel().getSize() == 1
+                                && panel.getProjectColumn().getFileListModel().getSize() == 1);
 
-        assertEquals("/global", panel.getGlobalFolderListModel().getElementAt(0));
-        assertEquals("rules.yaml", panel.getGlobalFileListModel().getElementAt(0).fileName());
-        assertEquals("/tmp/docs", panel.getProjectFolderListModel().getElementAt(0));
-        assertEquals("old.md", panel.getProjectFileListModel().getElementAt(0).fileName());
+        assertEquals("/global", panel.getGlobalColumn().getFolderListModel().getElementAt(0));
+        assertEquals(
+                "rules.yaml",
+                panel.getGlobalColumn().getFileListModel().getElementAt(0).fileName());
+        assertEquals("/tmp/docs", panel.getProjectColumn().getFolderListModel().getElementAt(0));
+        assertEquals(
+                "old.md", panel.getProjectColumn().getFileListModel().getElementAt(0).fileName());
 
         Component rendered =
-                panel.getProjectColumn()
-                        .getFileList()
-                        .getCellRenderer()
-                        .getListCellRendererComponent(
-                                panel.getProjectColumn().getFileList(), projItem, 0, false, false);
+                SwingTestUtils.renderListCell(panel.getProjectColumn().getFileList(), 0, false);
         JLabel cellLabel = assertInstanceOf(JLabel.class, rendered);
         assertEquals("old.md", cellLabel.getText());
         assertEquals(projPath.toString(), cellLabel.getToolTipText());
@@ -95,15 +82,7 @@ class ContextManagerPanelTest {
                 Codicons.FILE, assertInstanceOf(FontIcon.class, cellLabel.getIcon()).getIkon());
 
         Component folderRendered =
-                panel.getGlobalColumn()
-                        .getFolderList()
-                        .getCellRenderer()
-                        .getListCellRendererComponent(
-                                panel.getGlobalColumn().getFolderList(),
-                                "/global",
-                                0,
-                                false,
-                                false);
+                SwingTestUtils.renderListCell(panel.getGlobalColumn().getFolderList(), 0, false);
         JLabel folderCellLabel = assertInstanceOf(JLabel.class, folderRendered);
         assertEquals("/global", folderCellLabel.getText());
         assertEquals("/global", folderCellLabel.getToolTipText());
@@ -118,34 +97,39 @@ class ContextManagerPanelTest {
         when(promptService.getProjectContextFolders()).thenReturn(List.of("/tmp/docs", "/tmp/new"));
         when(promptService.listProjectContextFiles()).thenReturn(List.of(new1, new2));
 
-        panel.addProjectFolderAsync("/tmp/new").get();
+        SwingTestUtils.awaitWorker(panel.getProjectColumn().addFolderAsync("/tmp/new"));
         verify(promptService).setProjectContextFolders(List.of("/tmp/docs", "/tmp/new"));
 
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
-        awaitCondition(() -> panel.getProjectFileListModel().getSize() == 2);
+        SwingTestUtils.awaitCondition(
+                () -> panel.getProjectColumn().getFileListModel().getSize() == 2);
 
-        assertEquals("new1.java", panel.getProjectFileListModel().getElementAt(0).fileName());
-        assertEquals("new2.json", panel.getProjectFileListModel().getElementAt(1).fileName());
+        assertEquals(
+                "new1.java",
+                panel.getProjectColumn().getFileListModel().getElementAt(0).fileName());
+        assertEquals(
+                "new2.json",
+                panel.getProjectColumn().getFileListModel().getElementAt(1).fileName());
 
         when(promptService.getGlobalContextFolders()).thenReturn(List.of("/global", "/global2"));
-        panel.addGlobalFolderAsync("/global2").get();
+        SwingTestUtils.awaitWorker(panel.getGlobalColumn().addFolderAsync("/global2"));
         verify(promptService).setGlobalContextFolders(List.of("/global", "/global2"));
 
         when(promptService.getGlobalContextFolders()).thenReturn(List.of());
         when(promptService.listGlobalContextFiles()).thenReturn(List.of());
-        panel.removeGlobalFolderAsync("/global").get();
+        SwingTestUtils.awaitWorker(panel.getGlobalColumn().removeFolderAsync("/global"));
 
         panel.onSettingsChanged(new SettingsChangedEvent(new AppSettings()));
-        awaitCondition(
+        SwingTestUtils.awaitCondition(
                 () ->
-                        panel.getGlobalFolderListModel().isEmpty()
-                                && panel.getGlobalFileListModel().isEmpty());
-        assertTrue(panel.getGlobalFolderListModel().isEmpty());
-        assertTrue(panel.getGlobalFileListModel().isEmpty());
+                        panel.getGlobalColumn().getFolderListModel().isEmpty()
+                                && panel.getGlobalColumn().getFileListModel().isEmpty());
+        assertTrue(panel.getGlobalColumn().getFolderListModel().isEmpty());
+        assertTrue(panel.getGlobalColumn().getFileListModel().isEmpty());
     }
 
     @Test
-    void testVisualDistinctionIconsAccentsAndThemeUpdates() throws Exception {
+    void testVisualDistinctionIconsAccentsAndThemeUpdates() {
         PromptService promptService = mock(PromptService.class);
         ContextManagerPanel panel = new ContextManagerPanel(promptService);
         ContextManagerPanel.ContextScopeColumn globalCol = panel.getGlobalColumn();
@@ -172,21 +156,24 @@ class ContextManagerPanelTest {
         assertNotNull(globalBannerStyle);
         assertNotNull(projectBannerStyle);
         assertNotEquals(globalBannerStyle, projectBannerStyle);
+        assertFalse(globalBannerStyle.contains("fade("));
+        assertFalse(projectBannerStyle.contains("fade("));
+        assertEquals(255, globalCol.getHeaderBanner().getBackground().getAlpha());
+        assertEquals(255, projectCol.getHeaderBanner().getBackground().getAlpha());
 
         assertColumnIcons(globalCol);
         assertColumnIcons(projectCol);
 
-        FlatDarkLaf.setup();
-        SwingUtilities.updateComponentTreeUI(panel);
-        assertNotEquals(globalCol.resolveAccentColor(), projectCol.resolveAccentColor());
-
-        FlatLightLaf.setup();
-        SwingUtilities.updateComponentTreeUI(panel);
+        SwingTestUtils.withDarkTheme(
+                panel,
+                () ->
+                        assertNotEquals(
+                                globalCol.resolveAccentColor(), projectCol.resolveAccentColor()));
         assertNotEquals(globalCol.resolveAccentColor(), projectCol.resolveAccentColor());
     }
 
     @Test
-    void testAddFolderErrorSurfacesErrorMessage() throws Exception {
+    void testAddFolderErrorSurfacesErrorMessage() {
         PromptService promptService = mock(PromptService.class);
         doThrow(new IllegalStateException("No active project"))
                 .when(promptService)
@@ -197,10 +184,10 @@ class ContextManagerPanelTest {
         panel.setErrorDialogPresenter(errors::add);
 
         try {
-            panel.addProjectFolderAsync("/tmp/folder").get();
+            SwingTestUtils.awaitWorker(panel.getProjectColumn().addFolderAsync("/tmp/folder"));
         } catch (Exception ignored) {
         }
-        awaitCondition(() -> !errors.isEmpty());
+        SwingTestUtils.awaitCondition(() -> !errors.isEmpty());
         assertFalse(errors.isEmpty());
         assertTrue(errors.get(0).contains("No active project"));
         assertTrue(panel.getLastErrorMessage().contains("No active project"));

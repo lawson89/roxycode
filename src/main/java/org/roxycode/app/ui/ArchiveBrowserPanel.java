@@ -115,7 +115,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     private Timer copyFeedbackTimer;
     private String currentRawMarkdown = "";
     private String lastCopiedMarkdown;
-    private ArchiveEntrySummary currentSelectedEntry;
+    private transient ArchiveEntrySummary currentSelectedEntry;
     private transient volatile SwingWorker<List<ArchiveEntrySummary>, Void> activeSearchWorker;
     private transient volatile SwingWorker<String, Void> activeReadWorker;
 
@@ -287,11 +287,12 @@ public final class ArchiveBrowserPanel extends JPanel {
         }
     }
 
+    @SuppressWarnings("PMD.NullAssignment")
     private void applySearchResults(
             SwingWorker<List<ArchiveEntrySummary>, Void> worker,
             List<ArchiveEntrySummary> results,
             String query) {
-        if (worker != activeSearchWorker) {
+        if (!Objects.equals(worker, activeSearchWorker)) {
             return;
         }
         List<ArchiveEntrySummary> safeResults = results != null ? results : List.of();
@@ -370,7 +371,7 @@ public final class ArchiveBrowserPanel extends JPanel {
 
     private void applyDetailContent(
             SwingWorker<String, Void> worker, ArchiveEntrySummary entry, String rawMarkdown) {
-        if (worker != activeReadWorker) {
+        if (!Objects.equals(worker, activeReadWorker)) {
             return;
         }
         this.currentRawMarkdown = rawMarkdown != null ? rawMarkdown : "";
@@ -596,20 +597,8 @@ public final class ArchiveBrowserPanel extends JPanel {
                 boolean cellHasFocus) {
             Color bg = isSelected ? list.getSelectionBackground() : list.getBackground();
             Color fg = isSelected ? list.getSelectionForeground() : list.getForeground();
-            Color muted =
-                    isSelected
-                            ? fg
-                            : SwingHtmlUtils.getUiColor(
-                                    Color.GRAY,
-                                    "Label.disabledForeground",
-                                    "Component.infoForeground");
-            Color iconColor =
-                    isSelected
-                            ? fg
-                            : SwingHtmlUtils.getUiColor(
-                                    new Color(0x00, 0x7a, 0xcc),
-                                    "Component.accentColor",
-                                    "Actions.Blue");
+            Color muted = isSelected ? fg : SwingHtmlUtils.getMutedForegroundColor();
+            Color iconColor = isSelected ? fg : SwingHtmlUtils.getAccentColor();
 
             setBackground(bg);
             setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));

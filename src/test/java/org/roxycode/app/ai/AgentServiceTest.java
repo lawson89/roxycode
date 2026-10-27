@@ -11,9 +11,11 @@ import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.service.PromptService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.ChatController;
 import org.roxycode.app.ui.ChatPanel;
@@ -21,6 +23,8 @@ import org.roxycode.app.ui.ContextManagerPanel;
 import org.roxycode.app.ui.ExploreChatPanel;
 import org.roxycode.app.ui.FeatureChatPanel;
 import org.roxycode.app.ui.MainFrame;
+import org.roxycode.app.ui.QaWorkspacePanel;
+import org.roxycode.app.ui.TaskWorkspacePanel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -99,7 +103,9 @@ class AgentServiceTest {
                         GenericBuildToolService.class,
                         ProjectCacheMetaService.class,
                         FileEditorService.class,
+                        PlanService.class,
                         ProjectService.class,
+                        PromptService.class,
                         SettingsService.class,
                         JexlTool.class,
                         ContextManagerPanel.class,
@@ -107,7 +113,9 @@ class AgentServiceTest {
                         ChatController.class,
                         MainFrame.class,
                         ExploreChatPanel.class,
-                        FeatureChatPanel.class);
+                        FeatureChatPanel.class,
+                        QaWorkspacePanel.class,
+                        TaskWorkspacePanel.class);
 
         for (Class<?> clazz : singleCtorClasses) {
             Constructor<?>[] constructors = clazz.getDeclaredConstructors();

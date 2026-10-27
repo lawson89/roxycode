@@ -15,6 +15,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GrepService;
@@ -37,6 +39,7 @@ import org.springframework.stereotype.Service;
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
     static final int CTAGS_BATCH_SIZE = 100;
+    private static final int SINGLE_FILE_BATCH_SIZE = 1;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
     private static final char LF = '\n';
     private static final char SLASH = '/';
@@ -45,6 +48,28 @@ public class RepoMapPackerService {
             Set.of(
                     "java", "py", "ts", "tsx", "js", "jsx", "go", "rs", "c", "cpp", "cc", "cxx",
                     "h", "hpp", "cs", "rb", "php", "kt", "kts", "swift", "scala");
+    static final Set<String> KNOWN_TEXT_EXTENSIONS =
+            Stream.concat(
+                            SOURCE_EXTENSIONS.stream(),
+                            Stream.of(
+                                    "md",
+                                    "txt",
+                                    "json",
+                                    "xml",
+                                    "yml",
+                                    "yaml",
+                                    "toml",
+                                    "properties",
+                                    "css",
+                                    "html",
+                                    "sql",
+                                    "sh",
+                                    "bat",
+                                    "cmd",
+                                    "gradle",
+                                    "gitignore",
+                                    "csv"))
+                    .collect(Collectors.toUnmodifiableSet());
     static final Set<String> IGNORED_TAG_KINDS = Set.of("package", "namespace", "import");
     private static final Set<String> KNOWN_BINARY_EXTENSIONS =
             Set.of(
@@ -424,7 +449,7 @@ public class RepoMapPackerService {
                             if (pathNode != null && !pathNode.asText().isBlank()) {
                                 targetPath =
                                         Path.of(pathNode.asText()).toAbsolutePath().normalize();
-                            } else if (batch.size() == 1) {
+                            } else if (batch.size() == SINGLE_FILE_BATCH_SIZE) {
                                 targetPath = batch.get(0).path();
                             }
                             if (targetPath != null) {
@@ -528,7 +553,15 @@ public class RepoMapPackerService {
         return false;
     }
 
+    static boolean hasKnownTextExtension(Path path) {
+        return hasExtensionInSet(path, KNOWN_TEXT_EXTENSIONS);
+    }
+
     static boolean hasKnownBinaryExtension(Path path) {
+        return hasExtensionInSet(path, KNOWN_BINARY_EXTENSIONS);
+    }
+
+    private static boolean hasExtensionInSet(Path path, Set<String> extensions) {
         if (path == null) {
             return false;
         }
@@ -542,10 +575,13 @@ public class RepoMapPackerService {
             return false;
         }
         String ext = fileName.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
-        return KNOWN_BINARY_EXTENSIONS.contains(ext);
+        return extensions.contains(ext);
     }
 
     private boolean isBinaryFile(Path path) {
+        if (hasKnownTextExtension(path)) {
+            return false;
+        }
         if (hasKnownBinaryExtension(path)) {
             return true;
         }

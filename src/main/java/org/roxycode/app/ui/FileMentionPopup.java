@@ -64,6 +64,7 @@ public final class FileMentionPopup {
     static final int TIER_FILENAME_SUBSTRING = 3;
     static final int TIER_PATH_SUBSTRING = 4;
     static final int TIER_NO_MATCH = 0;
+    private static final char MENTION_TRIGGER_CHAR = '@';
 
     private static final Set<String> CODE_EXTENSIONS =
             Set.of(
@@ -277,7 +278,7 @@ public final class FileMentionPopup {
             if (Character.isWhitespace(c)) {
                 return null;
             }
-            if (c == '@') {
+            if (c == MENTION_TRIGGER_CHAR) {
                 if (i == 0 || Character.isWhitespace(text.charAt(i - 1))) {
                     return new MentionToken(i, caretOffset, text.substring(i + 1, caretOffset));
                 }
@@ -630,6 +631,7 @@ public final class FileMentionPopup {
         return popupActive && !listModel.isEmpty();
     }
 
+    @SuppressWarnings("PMD.NullAssignment")
     public void hidePopup() {
         popupActive = false;
         activeToken = null;
@@ -659,6 +661,7 @@ public final class FileMentionPopup {
         candidateList.ensureIndexIsVisible(prev);
     }
 
+    @SuppressWarnings("PMD.UnusedAssignment")
     public boolean acceptSelected() {
         if (!isPopupVisible()) {
             return false;
@@ -764,20 +767,8 @@ public final class FileMentionPopup {
                             ? SwingHtmlUtils.getUiColor(
                                     list.getSelectionForeground(), "List.selectionForeground")
                             : SwingHtmlUtils.getUiColor(list.getForeground(), "Label.foreground");
-            Color muted =
-                    isSelected
-                            ? fg
-                            : SwingHtmlUtils.getUiColor(
-                                    Color.GRAY,
-                                    "Label.disabledForeground",
-                                    "Component.infoForeground");
-            Color iconColor =
-                    isSelected
-                            ? fg
-                            : SwingHtmlUtils.getUiColor(
-                                    new Color(0x00, 0x7a, 0xcc),
-                                    "Component.accentColor",
-                                    "Actions.Blue");
+            Color muted = isSelected ? fg : SwingHtmlUtils.getMutedForegroundColor();
+            Color iconColor = isSelected ? fg : SwingHtmlUtils.getAccentColor();
 
             setBackground(bg);
 

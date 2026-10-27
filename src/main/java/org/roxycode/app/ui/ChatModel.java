@@ -157,10 +157,6 @@ public final class ChatModel {
         return imageBytes;
     }
 
-    public List<byte[]> drainPendingImagesAsPngBytes() {
-        return encodeImagesToPngBytes(drainPendingImages());
-    }
-
     public String formatTurnStatus(AppSettings settings, ImplementationPlan plan) {
         StringBuilder sb = new StringBuilder("Turns: ").append(currentTurn);
         if (settings != null) {

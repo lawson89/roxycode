@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import java.io.IOException;
 import java.util.List;
@@ -11,9 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.BuildContainerService;
@@ -50,21 +47,18 @@ class BuildConfigPanelTest {
                         """);
     }
 
-    private BuildConfigPanel createPanelOnEdt() throws Exception {
-        AtomicReference<BuildConfigPanel> ref = new AtomicReference<>();
-        SwingUtilities.invokeAndWait(
-                () ->
-                        ref.set(
+    private BuildConfigPanel createPanelOnEdt() {
+        BuildConfigPanel panel =
+                SwingTestUtils.callOnEdt(
+                        () ->
                                 new BuildConfigPanel(
-                                        buildToolService, settingsService, systemToolService)));
-        BuildConfigPanel panel = ref.get();
-        panel.getLoadConfigFuture().get(5, TimeUnit.SECONDS);
-        SwingUtilities.invokeAndWait(() -> {});
+                                        buildToolService, settingsService, systemToolService));
+        SwingTestUtils.awaitWorker(panel.getLoadConfigFuture());
         return panel;
     }
 
     @Test
-    void testCachedDockerAvailabilityOnInitializationWithoutReprobe() throws Exception {
+    void testCachedDockerAvailabilityOnInitializationWithoutReprobe() {
         when(systemToolService.isDockerAvailable())
                 .thenReturn(CompletableFuture.completedFuture(true));
 
@@ -103,14 +97,13 @@ class BuildConfigPanelTest {
         assertFalse(loadCalledOnEdt.get(), "loadConfig() must not execute on EDT");
         assertTrue(panel.getTextArea().getText().contains("./mvnw compile"));
 
-        SwingUtilities.invokeAndWait(
+        SwingTestUtils.runOnEdt(
                 () -> {
                     panel.getTextArea().setText("[build]\ncompile = 'mvn test'\n");
                     panel.getSaveButton().doClick();
                 });
 
-        panel.getSaveConfigFuture().get(5, TimeUnit.SECONDS);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.awaitWorker(panel.getSaveConfigFuture());
 
         assertFalse(saveCalledOnEdt.get(), "saveConfig() must not execute on EDT");
         assertTrue(panel.getSaveButton().isEnabled());
@@ -122,16 +115,16 @@ class BuildConfigPanelTest {
         panel.setErrorDialogPresenter(errorMsg::set);
         doThrow(new IOException("Disk full")).when(buildToolService).saveConfigContent(anyString());
 
-        SwingUtilities.invokeAndWait(() -> panel.getSaveButton().doClick());
+        SwingTestUtils.clickOnEdt(panel.getSaveButton());
         assertThrows(Exception.class, () -> panel.getSaveConfigFuture().get(5, TimeUnit.SECONDS));
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertTrue(panel.getSaveButton().isEnabled());
         assertEquals("Error saving config: Disk full", errorMsg.get());
     }
 
     @Test
-    void testWarningBannerWhenDockerUnavailable() throws Exception {
+    void testWarningBannerWhenDockerUnavailable() {
         when(systemToolService.isDockerAvailable())
                 .thenReturn(CompletableFuture.completedFuture(false));
 
@@ -145,7 +138,7 @@ class BuildConfigPanelTest {
     }
 
     @Test
-    void testDockerAvailableAndToggleCheckboxUpdatesTomlAndBanner() throws Exception {
+    void testDockerAvailableAndToggleCheckboxUpdatesTomlAndBanner() {
         when(systemToolService.isDockerAvailable())
                 .thenReturn(CompletableFuture.completedFuture(true));
 
@@ -157,15 +150,13 @@ class BuildConfigPanelTest {
         assertTrue(panel.getContainerToggleCheckBox().isEnabled());
         assertFalse(panel.getContainerToggleCheckBox().isSelected());
 
-        panel.getContainerToggleCheckBox().doClick();
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.clickOnEdt(panel.getContainerToggleCheckBox());
         assertTrue(panel.getContainerToggleCheckBox().isSelected());
         assertTrue(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
         assertEquals(
                 BuildConfigPanel.CONTAINER_ACTIVE_TEXT, panel.getBannerMessageLabel().getText());
 
-        panel.getContainerToggleCheckBox().doClick();
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.clickOnEdt(panel.getContainerToggleCheckBox());
         assertFalse(panel.getContainerToggleCheckBox().isSelected());
         assertFalse(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
         assertEquals(
@@ -186,26 +177,26 @@ class BuildConfigPanelTest {
         CompletableFuture<Boolean> pendingRecheck = new CompletableFuture<>();
         when(systemToolService.refreshDockerAvailable()).thenReturn(pendingRecheck);
 
-        SwingUtilities.invokeAndWait(() -> panel.getRecheckDockerButton().doClick());
+        SwingTestUtils.clickOnEdt(panel.getRecheckDockerButton());
         assertFalse(panel.getRecheckDockerButton().isEnabled());
         assertEquals(
                 BuildConfigPanel.CHECKING_DOCKER_TEXT, panel.getRecheckDockerButton().getText());
 
         pendingRecheck.complete(true);
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertTrue(panel.getRecheckDockerButton().isEnabled());
         assertEquals(
                 BuildConfigPanel.RECHECK_DOCKER_TEXT, panel.getRecheckDockerButton().getText());
         assertTrue(panel.getContainerToggleCheckBox().isEnabled());
 
-        panel.getContainerToggleCheckBox().doClick();
+        SwingTestUtils.clickOnEdt(panel.getContainerToggleCheckBox());
         assertTrue(panel.getTextArea().getText().contains("[container]"));
         assertTrue(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
     }
 
     @Test
-    void testOnSystemToolsUpdatedEventSynchronizesDockerAvailability() throws Exception {
+    void testOnSystemToolsUpdatedEventSynchronizesDockerAvailability() {
         when(systemToolService.isDockerAvailable())
                 .thenReturn(CompletableFuture.completedFuture(false));
 
@@ -215,48 +206,34 @@ class BuildConfigPanelTest {
         panel.onSystemToolsUpdated(
                 new SystemToolsUpdatedEvent(
                         List.of(new SystemTool("Docker", "28.0", "Detected", "Desc")), true));
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.flushEdt();
 
         assertTrue(panel.isDockerAvailableState());
         assertTrue(panel.getContainerToggleCheckBox().isEnabled());
     }
 
     @Test
-    void testFlatLafStyleParsingAcrossAllBannerStatesAndThemes() throws Exception {
-        LookAndFeel previousLaf = UIManager.getLookAndFeel();
-        try {
-            FlatLightLaf.setup();
-            when(systemToolService.isDockerAvailable())
-                    .thenReturn(CompletableFuture.completedFuture(false));
+    void testFlatLafStyleParsingAcrossAllBannerStatesAndThemes() {
+        FlatLightLaf.setup();
+        when(systemToolService.isDockerAvailable())
+                .thenReturn(CompletableFuture.completedFuture(false));
 
-            BuildConfigPanel panel = assertDoesNotThrow(this::createPanelOnEdt);
-            assertNotNull(panel.getBannerPanel().getBorder());
+        BuildConfigPanel panel = assertDoesNotThrow(this::createPanelOnEdt);
+        assertFalse(panel.getBannerPanel().isOpaque());
+        assertNotNull(panel.getBannerPanel().getBorder());
 
-            panel.setDockerAvailable(true);
-            assertNotNull(panel.getBannerPanel().getBorder());
+        panel.setDockerAvailable(true);
+        assertNotNull(panel.getBannerPanel().getBorder());
 
-            panel.setContainerEnabledInToml(true);
-            assertNotNull(panel.getBannerPanel().getBorder());
+        panel.setContainerEnabledInToml(true);
+        assertNotNull(panel.getBannerPanel().getBorder());
 
-            SwingUtilities.invokeAndWait(
-                    () -> {
-                        FlatDarkLaf.setup();
-                        SwingUtilities.updateComponentTreeUI(panel);
-                    });
-            assertNotNull(panel.getBannerPanel().getBorder());
-
-            panel.setDockerAvailable(false);
-            assertNotNull(panel.getBannerPanel().getBorder());
-        } finally {
-            if (previousLaf != null) {
-                SwingUtilities.invokeAndWait(
-                        () -> {
-                            try {
-                                UIManager.setLookAndFeel(previousLaf);
-                            } catch (Exception ignored) {
-                            }
-                        });
-            }
-        }
+        SwingTestUtils.withDarkTheme(
+                panel,
+                () -> {
+                    assertNotNull(panel.getBannerPanel().getBorder());
+                    panel.setDockerAvailable(false);
+                    assertNotNull(panel.getBannerPanel().getBorder());
+                });
     }
 }

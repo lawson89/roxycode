@@ -39,29 +39,6 @@ public record ImplementationPlan(
         handoffLog = handoffLog != null ? List.copyOf(handoffLog) : List.of();
     }
 
-    public ImplementationPlan(
-            String title,
-            String goal,
-            List<String> requirements,
-            List<TechStep> technicalSteps,
-            boolean userApproved,
-            String approvalTimestamp,
-            String approvedBy,
-            String completedOn,
-            List<LogEntry> handoffLog) {
-        this(
-                title,
-                goal,
-                requirements,
-                technicalSteps,
-                userApproved,
-                approvalTimestamp,
-                approvedBy,
-                null,
-                completedOn,
-                handoffLog);
-    }
-
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
         return new ImplementationPlan(
                 title,
@@ -102,10 +79,6 @@ public record ImplementationPlan(
                 user,
                 timestamp,
                 handoffLog);
-    }
-
-    public ImplementationPlan withCompletedOn(String timestamp) {
-        return withCompletion(completedBy, timestamp);
     }
 
     public ImplementationPlan withHandoffLog(List<LogEntry> newLog) {

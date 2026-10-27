@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 import java.awt.Component;
 import java.util.List;
 import javax.swing.JList;
-import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.MemoryService.ArchiveEntrySummary;
@@ -71,12 +70,8 @@ class ArchiveBrowserPanelTest {
         assertEquals("0 topics", panel.getCountLabel().getText());
         assertFalse(panel.getCopyMarkdownButton().isEnabled());
 
-        panel.refresh().get();
-        SwingUtilities.invokeAndWait(() -> {});
-        if (panel.getActiveReadWorker() != null) {
-            panel.getActiveReadWorker().get();
-            SwingUtilities.invokeAndWait(() -> {});
-        }
+        SwingTestUtils.awaitWorker(panel.refresh());
+        SwingTestUtils.awaitWorker(panel.getActiveReadWorker());
 
         assertEquals(2, panel.getListModel().getSize());
         assertEquals("2 topics", panel.getCountLabel().getText());
@@ -91,26 +86,20 @@ class ArchiveBrowserPanelTest {
 
         // Verify cell renderer renders both normal and snippet items cleanly
         JList<ArchiveEntrySummary> list = panel.getEntryList();
-        Component cell0 =
-                list.getCellRenderer().getListCellRendererComponent(list, topic1, 0, true, true);
+        Component cell0 = SwingTestUtils.renderListCell(list, 0, true);
         assertNotNull(cell0);
-        Component cell1 =
-                list.getCellRenderer().getListCellRendererComponent(list, topic2, 1, false, false);
+        Component cell1 = SwingTestUtils.renderListCell(list, 1, false);
         assertNotNull(cell1);
 
         // Copy as Markdown
-        panel.getCopyMarkdownButton().doClick();
+        SwingTestUtils.clickOnEdt(panel.getCopyMarkdownButton());
         assertEquals(rawMd1, panel.getLastCopiedMarkdown());
         assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
 
         // Search filtering
         panel.getSearchField().setText("Second");
-        panel.executeSearchAsync().get();
-        SwingUtilities.invokeAndWait(() -> {});
-        if (panel.getActiveReadWorker() != null) {
-            panel.getActiveReadWorker().get();
-            SwingUtilities.invokeAndWait(() -> {});
-        }
+        SwingTestUtils.awaitWorker(panel.executeSearchAsync());
+        SwingTestUtils.awaitWorker(panel.getActiveReadWorker());
 
         assertEquals(1, panel.getListModel().getSize());
         assertEquals("1 topic", panel.getCountLabel().getText());
@@ -119,18 +108,23 @@ class ArchiveBrowserPanelTest {
 
         // Empty search state
         panel.getSearchField().setText("NoMatch");
-        panel.executeSearchAsync().get();
-        SwingUtilities.invokeAndWait(() -> {});
+        SwingTestUtils.awaitWorker(panel.executeSearchAsync());
         assertEquals(0, panel.getListModel().getSize());
         assertEquals("0 topics", panel.getCountLabel().getText());
         assertFalse(panel.getCopyMarkdownButton().isEnabled());
         assertTrue(panel.getDisplayArea().getText().contains("No matching topics found."));
 
-        panel.updateUI();
+        SwingTestUtils.withDarkTheme(
+                panel,
+                () ->
+                        assertTrue(
+                                panel.getDisplayArea()
+                                        .getText()
+                                        .contains("No matching topics found.")));
     }
 
     @Test
-    void testPlansModePopulationAndRendering() throws Exception {
+    void testPlansModePopulationAndRendering() {
         MemoryService memoryService = mock(MemoryService.class);
         ArchiveEntrySummary plan1 =
                 new ArchiveEntrySummary(
@@ -157,13 +151,8 @@ class ArchiveBrowserPanelTest {
         ArchiveBrowserPanel panel = new ArchiveBrowserPanel(memoryService, ArchiveMode.PLANS);
         assertEquals(ArchiveMode.PLANS, panel.getMode());
 
-        panel.refresh().get();
-        SwingUtilities.invokeAndWait(() -> {});
-        if (panel.getActiveReadWorker() != null) {
-            panel.getActiveReadWorker().get();
-            SwingUtilities.invokeAndWait(() -> {});
-        }
-
+        SwingTestUtils.awaitWorker(panel.refresh());
+        SwingTestUtils.awaitWorker(panel.getActiveReadWorker());
         assertEquals(1, panel.getListModel().getSize());
         assertEquals("1 plan", panel.getCountLabel().getText());
         assertEquals("Feature Plan Alpha", panel.getDetailSummaryLabel().getText());

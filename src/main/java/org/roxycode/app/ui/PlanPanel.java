@@ -174,7 +174,7 @@ public final class PlanPanel extends JPanel {
 
     private void applyWorkerResult(
             SwingWorker<String, Void> worker, ImplementationPlan plan, String status) {
-        if (worker != activeRefreshWorker) {
+        if (!java.util.Objects.equals(worker, activeRefreshWorker)) {
             return;
         }
         String normalized = status != null ? status : "";

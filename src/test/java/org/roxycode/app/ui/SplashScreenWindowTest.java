@@ -8,7 +8,6 @@ import java.awt.image.BufferedImage;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
-import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
@@ -19,14 +18,12 @@ class SplashScreenWindowTest {
         Assumptions.assumeFalse(
                 GraphicsEnvironment.isHeadless(), "Skipping JWindow test in headless environment");
 
-        final SplashScreenWindow[] windowHolder = new SplashScreenWindow[1];
-        SwingUtilities.invokeAndWait(
-                () -> {
-                    SettingsPanel.applyTheme("FlatLaf Dark");
-                    windowHolder[0] = new SplashScreenWindow();
-                });
-
-        SplashScreenWindow splash = windowHolder[0];
+        SplashScreenWindow splash =
+                SwingTestUtils.callOnEdt(
+                        () -> {
+                            SettingsPanel.applyTheme("FlatLaf Dark");
+                            return new SplashScreenWindow();
+                        });
         try {
             assertNotNull(splash);
             assertNotNull(splash.getLogoImage(), "Logo image should be loaded from classpath");
@@ -41,11 +38,11 @@ class SplashScreenWindowTest {
 
             // Test thread-safe status update from off-EDT
             splash.setStatus("Building workspace UI...");
-            SwingUtilities.invokeAndWait(() -> {});
+            SwingTestUtils.flushEdt();
             assertEquals("Building workspace UI...", statusLabel.getText());
 
             // Test status update directly on EDT
-            SwingUtilities.invokeAndWait(
+            SwingTestUtils.runOnEdt(
                     () -> {
                         splash.setStatus("Ready");
                         assertEquals("Ready", statusLabel.getText());
@@ -82,7 +79,7 @@ class SplashScreenWindowTest {
                                 "Subtitle label 'AI Coding Harness' should be present");
                     });
         } finally {
-            SwingUtilities.invokeAndWait(
+            SwingTestUtils.runOnEdt(
                     () -> {
                         splash.dispose();
                         assertFalse(

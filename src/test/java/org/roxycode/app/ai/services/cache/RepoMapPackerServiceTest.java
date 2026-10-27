@@ -311,7 +311,7 @@ class RepoMapPackerServiceTest {
     }
 
     @Test
-    void testExcludeBinaryFilesAndKnownBinaryExtensionsFastPath() throws IOException {
+    void testExcludeBinaryFilesAndKnownTextAndBinaryExtensionsFastPath() throws IOException {
         assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("logo.PNG")));
         assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("lib/app.jar")));
         assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("archive.tar.gz")));
@@ -319,14 +319,59 @@ class RepoMapPackerServiceTest {
         assertFalse(RepoMapPackerService.hasKnownBinaryExtension(Path.of("Makefile")));
         assertFalse(RepoMapPackerService.hasKnownBinaryExtension(null));
 
+        for (String knownText :
+                List.of(
+                        "src/Main.java",
+                        "script.py",
+                        "README.MD",
+                        "notes.txt",
+                        "package.json",
+                        "pom.xml",
+                        "config.yml",
+                        "config.yaml",
+                        "build.toml",
+                        "application.properties",
+                        "styles.css",
+                        "index.html",
+                        "schema.sql",
+                        "run.sh",
+                        "build.bat",
+                        "mvnw.cmd",
+                        "build.gradle",
+                        ".gitignore",
+                        "data.csv")) {
+            assertTrue(
+                    RepoMapPackerService.hasKnownTextExtension(Path.of(knownText)),
+                    "Expected known text extension: " + knownText);
+        }
+        assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of("logo.png")));
+        assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of("custom.dat")));
+        assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of("Makefile")));
+        assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of("trailingdot.")));
+        assertFalse(RepoMapPackerService.hasKnownTextExtension(null));
+
+        // Known text extension with NUL bytes on disk is fast-passed without reading file stream;
+        // unknown extension (.dat, .custom) falls back to FileReadService.isBinaryFile byte
+        // sniffing.
+        Files.write(tempDir.resolve("fastpath.toml"), new byte[] {'a', 0, 'b'});
         Files.writeString(tempDir.resolve("test.txt"), "Hello Text");
+        Files.writeString(tempDir.resolve("readme.custom"), "Plain text with unknown extension");
         Files.write(tempDir.resolve("custom.dat"), new byte[] {0, 1, 2, 3});
         when(grepService.listFiles(null))
-                .thenReturn(List.of("test.txt", "custom.dat", "assets/icon.png", "dist/app.jar"));
+                .thenReturn(
+                        List.of(
+                                "fastpath.toml",
+                                "test.txt",
+                                "readme.custom",
+                                "custom.dat",
+                                "assets/icon.png",
+                                "dist/app.jar"));
 
         EditorResult result = service.generateRepoMap();
         assertTrue(result.success());
+        assertTrue(result.content().contains("fastpath.toml"));
         assertTrue(result.content().contains("test.txt"));
+        assertTrue(result.content().contains("readme.custom"));
         assertFalse(result.content().contains("custom.dat"));
         assertFalse(result.content().contains("icon.png"));
         assertFalse(result.content().contains("app.jar"));

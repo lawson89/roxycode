@@ -4,7 +4,6 @@ import static org.mockito.Mockito.mock;
 
 import java.util.List;
 import java.util.concurrent.Executor;
-import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.MemoryService;
@@ -63,12 +62,12 @@ abstract class ChatTestFixture {
                 environmentService);
     }
 
-    protected static void flushEdt() throws Exception {
-        SwingUtilities.invokeAndWait(() -> {});
+    protected static void flushEdt() {
+        SwingTestUtils.flushEdt();
     }
 
-    protected static void sendOnEdt(ChatPanel panel, String text) throws Exception {
-        SwingUtilities.invokeAndWait(() -> panel.getController().sendMessage(text));
+    protected static void sendOnEdt(ChatPanel panel, String text) {
+        SwingTestUtils.runOnEdt(() -> panel.getController().sendMessage(text));
     }
 
     protected static WorkflowTransitionEvent transitionEvent(
@@ -83,6 +82,7 @@ abstract class ChatTestFixture {
                 List.of("Req 1"),
                 List.of(steps),
                 true,
+                null,
                 null,
                 null,
                 null,

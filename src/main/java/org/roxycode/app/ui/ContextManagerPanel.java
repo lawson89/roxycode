@@ -112,38 +112,6 @@ public final class ContextManagerPanel extends JPanel {
         return projectColumn;
     }
 
-    SwingWorker<Void, Void> addGlobalFolderAsync(String folderPath) {
-        return globalColumn.addFolderAsync(folderPath);
-    }
-
-    SwingWorker<Void, Void> removeGlobalFolderAsync(String folderPath) {
-        return globalColumn.removeFolderAsync(folderPath);
-    }
-
-    SwingWorker<Void, Void> addProjectFolderAsync(String folderPath) {
-        return projectColumn.addFolderAsync(folderPath);
-    }
-
-    SwingWorker<Void, Void> removeProjectFolderAsync(String folderPath) {
-        return projectColumn.removeFolderAsync(folderPath);
-    }
-
-    DefaultListModel<String> getGlobalFolderListModel() {
-        return globalColumn.getFolderListModel();
-    }
-
-    DefaultListModel<ContextFileItem> getGlobalFileListModel() {
-        return globalColumn.getFileListModel();
-    }
-
-    DefaultListModel<String> getProjectFolderListModel() {
-        return projectColumn.getFolderListModel();
-    }
-
-    DefaultListModel<ContextFileItem> getProjectFileListModel() {
-        return projectColumn.getFileListModel();
-    }
-
     /** Single column section for either Global Context or Project Context. */
     static final class ContextScopeColumn extends JPanel {
         private static final long serialVersionUID = 1L;
@@ -297,8 +265,7 @@ public final class ContextManagerPanel extends JPanel {
 
         Color resolveAccentColor() {
             if (globalScope) {
-                return SwingHtmlUtils.getUiColor(
-                        new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
+                return SwingHtmlUtils.getAccentColor();
             }
             return SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
         }
@@ -307,11 +274,7 @@ public final class ContextManagerPanel extends JPanel {
             Color accent = resolveAccentColor();
             Color borderColor =
                     SwingHtmlUtils.getUiColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
-            Color mutedFg =
-                    SwingHtmlUtils.getUiColor(
-                            new Color(0x77, 0x77, 0x77),
-                            "Label.disabledForeground",
-                            "Component.infoForeground");
+            Color mutedFg = SwingHtmlUtils.getMutedForegroundColor();
             Color buttonFg =
                     SwingHtmlUtils.getUiColor(
                             new Color(0x33, 0x33, 0x33), "Button.foreground", "Label.foreground");
@@ -324,14 +287,15 @@ public final class ContextManagerPanel extends JPanel {
                                     BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor)),
                             BorderFactory.createEmptyBorder(8, 8, 8, 8)));
 
-            // Header banner: left accent bar + tinted background
-            String hex = SwingHtmlUtils.toHex(accent);
+            // Header banner: left accent bar + solid tinted background
+            Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.12);
+            headerBanner.setBackground(tintedBg);
             headerBanner.setBorder(
                     BorderFactory.createCompoundBorder(
                             BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
                             BorderFactory.createEmptyBorder(6, 10, 6, 10)));
             headerBanner.putClientProperty(
-                    FlatClientProperties.STYLE, "background: fade(" + hex + ", 12%)");
+                    FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(tintedBg));
 
             Codicons headerIcon = globalScope ? Codicons.GLOBE : Codicons.FOLDER_OPENED;
             headerLabel.setIcon(FontIcon.of(headerIcon, 18, accent));

@@ -219,7 +219,7 @@ public final class CodebaseCachePanel extends JPanel {
 
     private void applyStatusDataOnEdt(
             SwingWorker<CacheStatusData, Void> worker, CacheStatusData data) {
-        if (worker != activeRefreshWorker) {
+        if (!java.util.Objects.equals(worker, activeRefreshWorker)) {
             return;
         }
         if (data.meta().isPresent()) {
