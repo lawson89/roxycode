@@ -6,9 +6,9 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.Locale;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.util.PathUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -152,12 +152,8 @@ public class ProjectService {
 
     public static String sanitizeProjectName(Path projectRoot) {
         Path fileName = projectRoot != null ? projectRoot.getFileName() : null;
-        String raw = fileName != null ? fileName.toString().toLowerCase(Locale.ROOT) : "";
-        String sanitized = raw.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
-        if (sanitized.length() > MAX_PROJECT_NAME_LENGTH) {
-            sanitized = sanitized.substring(0, MAX_PROJECT_NAME_LENGTH).replaceAll("-+$", "");
-        }
-        return sanitized.isEmpty() ? "project" : sanitized;
+        return PathUtils.sanitizeSlug(
+                fileName != null ? fileName.toString() : "", MAX_PROJECT_NAME_LENGTH, "project");
     }
 
     static String computeProjectHash(Path normalizedRoot) {

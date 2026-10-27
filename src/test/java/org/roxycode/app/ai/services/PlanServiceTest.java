@@ -435,6 +435,18 @@ class PlanServiceTest {
         assertTrue(content.contains("REVIEW -> PLAN (User Approved): All checks passed"));
         assertTrue(content.contains("## Changes"));
         assertTrue(content.contains("M src/Main.java"));
+        verify(eventPublisher)
+                .publishEvent(
+                        argThat(
+                                (Object ev) ->
+                                        ev
+                                                        instanceof
+                                                        org.roxycode.app.events.ArchiveUpdatedEvent
+                                                                aue
+                                                && org.roxycode.app.events.ArchiveUpdatedEvent
+                                                        .TYPE_PLAN
+                                                        .equals(aue.type())
+                                                && fileName.equals(aue.filename())));
     }
 
     @Test

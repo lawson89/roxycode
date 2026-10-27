@@ -170,4 +170,37 @@ class ArchiveBrowserPanelTest {
         assertTrue(panel.getDisplayArea().getText().contains("Completed On:"));
         assertTrue(panel.getDisplayArea().getText().contains("Charlie"));
     }
+
+    @Test
+    void testBuildDetailHtmlHighlightsCodeBlocksOnceWithoutNestedSpanCorruption() {
+        ArchiveEntrySummary entry =
+                new ArchiveEntrySummary(
+                        "20250514-120000-code.md",
+                        "topic",
+                        "Code Topic",
+                        "Alice",
+                        "2025-05-14T12:00:00Z",
+                        1,
+                        "");
+        String markdownWithCode =
+                """
+                ---
+                id: "20250514-120000-code"
+                title: "Code Topic"
+                ---
+
+                ```java
+                public class Demo {
+                    int x = 1;
+                }
+                ```
+                """;
+        String detailHtml =
+                ArchiveBrowserPanel.buildDetailHtml(entry, markdownWithCode, ArchiveMode.TOPICS);
+        assertTrue(detailHtml.contains("<span class='tk-rw'>public</span>"));
+        assertTrue(detailHtml.contains("<span class='tk-nm'>1</span>"));
+        assertFalse(
+                detailHtml.contains("<span class=<span"),
+                "Syntax highlighting must not be applied twice causing nested span corruption");
+    }
 }

@@ -12,6 +12,7 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +86,15 @@ public final class QaWorkspacePanel extends JPanel {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         if (pastTopicsPanel != null) {
+            pastTopicsPanel.refresh();
+        }
+    }
+
+    @EventListener
+    public void onArchiveUpdated(ArchiveUpdatedEvent event) {
+        if (pastTopicsPanel != null
+                && event != null
+                && ArchiveUpdatedEvent.TYPE_TOPIC.equals(event.type())) {
             pastTopicsPanel.refresh();
         }
     }

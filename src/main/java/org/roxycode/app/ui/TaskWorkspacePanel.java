@@ -18,6 +18,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -123,6 +124,15 @@ public final class TaskWorkspacePanel extends JPanel {
         }
     }
 
+    @EventListener
+    public void onArchiveUpdated(ArchiveUpdatedEvent event) {
+        if (pastPlansPanel != null
+                && event != null
+                && ArchiveUpdatedEvent.TYPE_PLAN.equals(event.type())) {
+            pastPlansPanel.refresh();
+        }
+    }
+
     @Override
     public void updateUI() {
         super.updateUI();
@@ -177,6 +187,9 @@ public final class TaskWorkspacePanel extends JPanel {
                     updateActivePhase(event.phase());
                     if (sidebar != null) {
                         sidebar.setTaskWaitingApproval(planService.getPendingPhase() != null);
+                    }
+                    if (event.phase() == WorkflowPhase.PLAN && pastPlansPanel != null) {
+                        pastPlansPanel.refresh();
                     }
                 });
     }

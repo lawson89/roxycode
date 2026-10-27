@@ -637,83 +637,34 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                     }
                 });
 
-        KeyStroke tabKey = KeyStroke.getKeyStroke(KeyEvent.VK_TAB, 0);
-        Object existingTabKey = im.get(tabKey);
-        Action defaultTabAction = existingTabKey != null ? am.get(existingTabKey) : null;
-        im.put(tabKey, "autocomplete-or-tab");
-        am.put(
+        bindPopupKey(
+                im,
+                am,
+                KeyEvent.VK_TAB,
                 "autocomplete-or-tab",
-                new AbstractAction() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
-                            fileMentionPopup.acceptSelected();
-                            return;
-                        }
-                        if (defaultTabAction != null) {
-                            defaultTabAction.actionPerformed(e);
-                        } else {
-                            inputArea.insert("\t", inputArea.getCaretPosition());
-                        }
-                    }
-                });
-
-        KeyStroke upKey = KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0);
-        Object existingUpKey = im.get(upKey);
-        Action defaultUpAction = existingUpKey != null ? am.get(existingUpKey) : null;
-        im.put(upKey, "autocomplete-or-up");
-        am.put(
+                () -> fileMentionPopup.acceptSelected(),
+                () -> inputArea.insert("\t", inputArea.getCaretPosition()));
+        bindPopupKey(
+                im,
+                am,
+                KeyEvent.VK_UP,
                 "autocomplete-or-up",
-                new AbstractAction() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
-                            fileMentionPopup.selectPrevious();
-                            return;
-                        }
-                        if (defaultUpAction != null) {
-                            defaultUpAction.actionPerformed(e);
-                        }
-                    }
-                });
-
-        KeyStroke downKey = KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0);
-        Object existingDownKey = im.get(downKey);
-        Action defaultDownAction = existingDownKey != null ? am.get(existingDownKey) : null;
-        im.put(downKey, "autocomplete-or-down");
-        am.put(
+                () -> fileMentionPopup.selectPrevious(),
+                null);
+        bindPopupKey(
+                im,
+                am,
+                KeyEvent.VK_DOWN,
                 "autocomplete-or-down",
-                new AbstractAction() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
-                            fileMentionPopup.selectNext();
-                            return;
-                        }
-                        if (defaultDownAction != null) {
-                            defaultDownAction.actionPerformed(e);
-                        }
-                    }
-                });
-
-        KeyStroke escapeKey = KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0);
-        Object existingEscapeKey = im.get(escapeKey);
-        Action defaultEscapeAction = existingEscapeKey != null ? am.get(existingEscapeKey) : null;
-        im.put(escapeKey, "dismiss-autocomplete");
-        am.put(
+                () -> fileMentionPopup.selectNext(),
+                null);
+        bindPopupKey(
+                im,
+                am,
+                KeyEvent.VK_ESCAPE,
                 "dismiss-autocomplete",
-                new AbstractAction() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
-                            fileMentionPopup.hidePopup();
-                            return;
-                        }
-                        if (defaultEscapeAction != null) {
-                            defaultEscapeAction.actionPerformed(e);
-                        }
-                    }
-                });
+                () -> fileMentionPopup.hidePopup(),
+                null);
 
         im.put(
                 KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK),
@@ -753,5 +704,34 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                                 }
                             }
                         });
+    }
+
+    private void bindPopupKey(
+            InputMap im,
+            ActionMap am,
+            int keyCode,
+            String actionName,
+            Runnable onPopupVisible,
+            Runnable fallbackWhenNoDefault) {
+        KeyStroke keyStroke = KeyStroke.getKeyStroke(keyCode, 0);
+        Object existingKey = im.get(keyStroke);
+        Action defaultAction = existingKey != null ? am.get(existingKey) : null;
+        im.put(keyStroke, actionName);
+        am.put(
+                actionName,
+                new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                            onPopupVisible.run();
+                            return;
+                        }
+                        if (defaultAction != null) {
+                            defaultAction.actionPerformed(e);
+                        } else if (fallbackWhenNoDefault != null) {
+                            fallbackWhenNoDefault.run();
+                        }
+                    }
+                });
     }
 }

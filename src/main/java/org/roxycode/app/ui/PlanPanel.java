@@ -26,7 +26,7 @@ public final class PlanPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(PlanPanel.class);
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final String COPY_BUTTON_TEXT = "Copy Plan as Markdown";
-    static final String NO_FILES_CHANGED = "No files changed";
+    static final String NO_FILES_CHANGED = ImplementationPlan.NO_FILES_CHANGED;
 
     private final transient PlanService planManagerService;
     private final transient GitService gitService;
@@ -193,10 +193,7 @@ public final class PlanPanel extends JPanel {
     }
 
     static String formatChangesText(String gitStatus) {
-        if (gitStatus == null || gitStatus.isBlank()) {
-            return NO_FILES_CHANGED;
-        }
-        return gitStatus.stripTrailing();
+        return ImplementationPlan.formatChangesText(gitStatus);
     }
 
     static String buildPlanMarkdown(ImplementationPlan plan) {

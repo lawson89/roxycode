@@ -312,6 +312,11 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(html.contains("Archived previous topic as"));
         assertTrue(html.contains("RipGrep Search Architecture"));
         assertTrue(html.contains("20250514-153000-ripgrep-search-architecture.md"));
+        verify(publisher)
+                .publishEvent(
+                        new org.roxycode.app.events.ArchiveUpdatedEvent(
+                                org.roxycode.app.events.ArchiveUpdatedEvent.TYPE_TOPIC,
+                                "20250514-153000-ripgrep-search-architecture.md"));
     }
 
     @Test

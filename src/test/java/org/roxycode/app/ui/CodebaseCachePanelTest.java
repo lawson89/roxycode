@@ -120,7 +120,12 @@ class CodebaseCachePanelTest {
         when(metaService.loadRepoCache())
                 .thenReturn(Optional.of("R".repeat(CodebaseCachePanel.MAX_DISPLAY_CHARS + 12_345)));
         panel.refreshStatus().get();
-        SwingUtilities.invokeAndWait(() -> {});
+        awaitCondition(
+                () ->
+                        panel.getRepoMapArea()
+                                .getText()
+                                .contains(
+                                        "[Display truncated at 200,000 characters for UI responsiveness;"));
 
         assertTrue(
                 panel.getRepoMapArea()

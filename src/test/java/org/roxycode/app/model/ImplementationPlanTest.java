@@ -232,5 +232,16 @@ class ImplementationPlanTest {
                 plan.toArchivedMarkdown(
                         "20250514-143210-archive-feature", "roxycode", "/path/to/roxycode", "");
         assertTrue(archivedNoChanges.contains("## Changes\nNo files changed\n"));
+
+        assertEquals(
+                ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText(null));
+        assertEquals(
+                ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText("   "));
+        assertEquals(
+                " M src/App.java", ImplementationPlan.formatChangesText(" M src/App.java\n  "));
+        assertEquals("", ImplementationPlan.escapeFrontmatterValue(null));
+        assertEquals(
+                "Quote " + (char) 92 + '"' + " and newline",
+                ImplementationPlan.escapeFrontmatterValue("Quote " + '"' + "\nand\r\nnewline"));
     }
 }

@@ -197,13 +197,12 @@ public final class CodebaseCachePanel extends JPanel {
                                             createDisplayDocument(""),
                                             createDisplayDocument(""));
                         }
-                        Edt.run(() -> applyStatusDataOnEdt(this, data));
                         return data;
                     }
 
                     @Override
                     protected void done() {
-                        if (this != activeRefreshWorker) {
+                        if (isCancelled() || this != activeRefreshWorker) {
                             return;
                         }
                         try {

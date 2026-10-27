@@ -10,6 +10,7 @@ import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.service.ProjectService;
@@ -70,7 +71,8 @@ class AgentServiceTest {
                         GitService.class,
                         GrepService.class,
                         FileReadService.class,
-                        FileEditorService.class);
+                        FileEditorService.class,
+                        MemoryService.class);
 
         for (Class<?> clazz : agentServiceClasses) {
             assertNotNull(

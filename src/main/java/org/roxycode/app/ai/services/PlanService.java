@@ -17,12 +17,14 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -38,7 +40,7 @@ public class PlanService {
 
     private static final Logger log = LoggerFactory.getLogger(PlanService.class);
     static final String ARCHIVE_PLANS_SUBDIR = "archive/plans";
-    private static final int MAX_PLAN_SLUG_LENGTH = 40;
+    static final int MAX_PLAN_SLUG_LENGTH = 40;
     private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMATTER =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT);
 
@@ -629,14 +631,8 @@ public class PlanService {
 
             String baseId =
                     formatArchiveTimestamp(timestamp) + "-" + sanitizePlanTitle(plan.title());
-            String id = baseId;
-            Path targetFile = archiveDir.resolve(id + ".md");
-            int suffix = 2;
-            while (Files.exists(targetFile)) {
-                id = baseId + "-" + suffix;
-                targetFile = archiveDir.resolve(id + ".md");
-                suffix++;
-            }
+            PathUtils.ArchiveFileTarget archiveTarget =
+                    PathUtils.resolveUniqueArchiveFile(archiveDir, baseId);
 
             String projectName = projectService.getProjectName();
             Path projectRoot = projectService.getCurrentProjectRoot();
@@ -644,8 +640,15 @@ public class PlanService {
                     projectRoot != null ? projectRoot.toAbsolutePath().normalize().toString() : "";
             String changesText = getGitStatusSafely();
             String archivedMarkdown =
-                    plan.toArchivedMarkdown(id, projectName, projectPath, changesText);
-            Files.writeString(targetFile, archivedMarkdown, StandardCharsets.UTF_8);
+                    plan.toArchivedMarkdown(
+                            archiveTarget.id(), projectName, projectPath, changesText);
+            Files.writeString(archiveTarget.file(), archivedMarkdown, StandardCharsets.UTF_8);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(
+                        new ArchiveUpdatedEvent(
+                                ArchiveUpdatedEvent.TYPE_PLAN,
+                                archiveTarget.file().getFileName().toString()));
+            }
         } catch (Exception e) {
             log.warn("Failed to archive completed implementation plan", e);
         }
@@ -675,12 +678,7 @@ public class PlanService {
     }
 
     static String sanitizePlanTitle(String title) {
-        String raw = title != null ? title.toLowerCase(Locale.ROOT) : "";
-        String sanitized = raw.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
-        if (sanitized.length() > MAX_PLAN_SLUG_LENGTH) {
-            sanitized = sanitized.substring(0, MAX_PLAN_SLUG_LENGTH).replaceAll("-+$", "");
-        }
-        return sanitized.isEmpty() ? "plan" : sanitized;
+        return PathUtils.sanitizeSlug(title, MAX_PLAN_SLUG_LENGTH, "plan");
     }
 
     public WorkflowPhase getCurrentPhase() {
@@ -729,18 +727,21 @@ public class PlanService {
             this.visitedPhases.add(pendingPhase);
             this.pendingPhase = null;
             this.pendingReason = null;
-            publishPhaseChanged();
         }
         if (planToArchive != null) {
             ImplementationPlan capturedPlan = planToArchive;
             String capturedTimestamp = archiveTimestamp;
             if (javax.swing.SwingUtilities.isEventDispatchThread()) {
                 java.util.concurrent.CompletableFuture.runAsync(
-                        () -> archiveCurrentPlan(capturedPlan, capturedTimestamp));
-            } else {
-                archiveCurrentPlan(capturedPlan, capturedTimestamp);
+                        () -> {
+                            archiveCurrentPlan(capturedPlan, capturedTimestamp);
+                            publishPhaseChanged();
+                        });
+                return;
             }
+            archiveCurrentPlan(capturedPlan, capturedTimestamp);
         }
+        publishPhaseChanged();
     }
 
     public synchronized void rejectTransition() {

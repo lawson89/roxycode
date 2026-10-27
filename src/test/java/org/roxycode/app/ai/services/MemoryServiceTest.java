@@ -473,6 +473,29 @@ class MemoryServiceTest {
             assertEquals(1, planMatched.size());
             assertEquals("Archive Browser Feature", planMatched.get(0).title());
             assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
+
+            // Verify frontmatter lines (lines 1..6) are ignored while body lines starting with
+            // YAML-like prefixes (e.g. 'title: "BodyValue"') after frontmatter are matched
+            String rgFrontmatterAndBody =
+                    """
+                    %s:3:title: "Archive Browser Feature"
+                    %s:10:title: "BodyExampleTitle"
+                    """
+                            .formatted(
+                                    planFile.toAbsolutePath().normalize(),
+                                    planFile.toAbsolutePath().normalize());
+            runnerMock
+                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, rgFrontmatterAndBody, "", false));
+
+            List<MemoryService.ArchiveEntrySummary> bodyKeyMatched =
+                    memoryService.searchArchivedPlans("BodyExampleTitle");
+            assertEquals(1, bodyKeyMatched.size());
+            assertEquals(
+                    "title: " + '"' + "BodyExampleTitle" + '"',
+                    bodyKeyMatched.get(0).matchSnippet());
         }
+        assertEquals(6, MemoryService.findFrontmatterEndLine(planFile));
+        assertEquals(0, MemoryService.findFrontmatterEndLine(fallbackPlanFile));
     }
 }

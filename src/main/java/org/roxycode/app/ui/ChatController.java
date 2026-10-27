@@ -14,6 +14,7 @@ import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
+import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -322,6 +323,10 @@ public final class ChatController implements AutoCloseable {
                     String filename =
                             memoryService.archiveTopicConversation(
                                     title, user, Instant.now().toString(), capturedTranscript);
+                    if (filename != null && !filename.isBlank() && eventPublisher != null) {
+                        eventPublisher.publishEvent(
+                                new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC, filename));
+                    }
                     String finalTitle = title;
                     Edt.run(
                             () -> {

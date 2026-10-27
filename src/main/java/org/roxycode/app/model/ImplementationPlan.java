@@ -247,16 +247,26 @@ public record ImplementationPlan(
     }
 
     /**
+     * Formats raw git status text by stripping trailing whitespace or returning {@link
+     * #NO_FILES_CHANGED} when blank.
+     *
+     * @param gitStatus the raw git status text
+     * @return the formatted changes text or {@link #NO_FILES_CHANGED}
+     */
+    public static String formatChangesText(String gitStatus) {
+        return (gitStatus == null || gitStatus.isBlank())
+                ? NO_FILES_CHANGED
+                : gitStatus.stripTrailing();
+    }
+
+    /**
      * Appends the Markdown {@code ## Changes} section to the given builder.
      *
      * @param sb the target string builder
      * @param gitStatus the raw git status or changes text
      */
     public static void appendChangesMarkdown(StringBuilder sb, String gitStatus) {
-        String changes =
-                (gitStatus == null || gitStatus.isBlank())
-                        ? NO_FILES_CHANGED
-                        : gitStatus.stripTrailing();
+        String changes = formatChangesText(gitStatus);
         sb.append("\n## Changes\n");
         if (NO_FILES_CHANGED.equals(changes)) {
             sb.append(NO_FILES_CHANGED).append("\n");
@@ -288,7 +298,7 @@ public record ImplementationPlan(
         return value != null && !value.isBlank();
     }
 
-    private static String escapeFrontmatterValue(String value) {
+    public static String escapeFrontmatterValue(String value) {
         if (value == null) {
             return "";
         }

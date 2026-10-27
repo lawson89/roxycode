@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -24,14 +25,12 @@ import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 /**
  * Service providing a Two-Tier Agent Memory system supporting Global Memory (~/.roxycode/memory/)
  * and Project Memory (<projectDataDir>/memory/), topic notes with YAML frontmatter, archived plans,
  * archived Q&A topics, and unified RipGrep search.
  */
-@Service
 @AgentService(
         value = "memoryService",
         phases = {"*"})
@@ -55,12 +54,6 @@ public class MemoryService {
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String MD_EXTENSION = ".md";
     private static final String FRONTMATTER_DELIMITER = "---";
-
-    private static final char DQUOTE = 34;
-    private static final char BACKSLASH = 92;
-    private static final String DQUOTE_STR = String.valueOf(DQUOTE);
-    private static final String BACKSLASH_STR = String.valueOf(BACKSLASH);
-    private static final String ESCAPED_DQUOTE = BACKSLASH_STR + DQUOTE_STR;
 
     private final SettingsService settingsService;
     private final ProjectService projectService;
@@ -261,7 +254,9 @@ public class MemoryService {
                     "Lists archived completed implementation plans from <projectDataDir>/archive/plans/*.md (most recent first).",
             examples = "memoryService.listArchivedPlans()")
     public List<String> listArchivedPlans() {
-        return listArchivedMarkdownSummaries(getArchivedPlansDir(), "plans");
+        return listArchivedPlanSummaries().stream()
+                .map(entry -> entry.filename() + ": " + entry.title())
+                .toList();
     }
 
     /** Reads an archived implementation plan from <projectDataDir>/archive/plans/<filename>. */
@@ -271,16 +266,7 @@ public class MemoryService {
             examples = "memoryService.readArchivedPlan('20250514-153000-feature-plan.md')")
     public String readArchivedPlan(
             @AgentDoc("The archived plan filename (with or without .md)") String filename) {
-        String cleanName = sanitizeArchiveFilename(filename);
-        Path archiveDir = getArchivedPlansDir();
-        if (archiveDir == null) {
-            return "";
-        }
-        Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
-        if (!target.startsWith(archiveDir)) {
-            throw new IllegalArgumentException("Invalid archived plan filename: " + filename);
-        }
-        return readFileIfExists(target);
+        return readArchivedFile(getArchivedPlansDir(), filename, "plan");
     }
 
     /** Lists archived Q&A topics from <projectDataDir>/archive/topics/*.md. */
@@ -289,7 +275,9 @@ public class MemoryService {
                     "Lists archived Q&A topic conversations from <projectDataDir>/archive/topics/*.md (most recent first).",
             examples = "memoryService.listArchivedTopics()")
     public List<String> listArchivedTopics() {
-        return listArchivedMarkdownSummaries(getArchivedTopicsDir(), "topics");
+        return listArchivedTopicSummaries().stream()
+                .map(entry -> entry.filename() + ": " + entry.title())
+                .toList();
     }
 
     /** Reads an archived Q&A topic from <projectDataDir>/archive/topics/<filename>. */
@@ -299,14 +287,18 @@ public class MemoryService {
             examples = "memoryService.readArchivedTopic('20250514-153000-memory-architecture.md')")
     public String readArchivedTopic(
             @AgentDoc("The archived topic filename (with or without .md)") String filename) {
+        return readArchivedFile(getArchivedTopicsDir(), filename, "topic");
+    }
+
+    private String readArchivedFile(Path archiveDir, String filename, String label) {
         String cleanName = sanitizeArchiveFilename(filename);
-        Path archiveDir = getArchivedTopicsDir();
         if (archiveDir == null) {
             return "";
         }
         Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
         if (!target.startsWith(archiveDir)) {
-            throw new IllegalArgumentException("Invalid archived topic filename: " + filename);
+            throw new IllegalArgumentException(
+                    "Invalid archived " + label + " filename: " + filename);
         }
         return readFileIfExists(target);
     }
@@ -341,20 +333,15 @@ public class MemoryService {
                     (title != null && !title.isBlank())
                             ? title.trim()
                             : AiService.DEFAULT_TOPIC_TITLE;
-            String slug = PlanService.sanitizePlanTitle(resolvedTitle);
-            if ("plan".equals(slug) && !resolvedTitle.toLowerCase(Locale.ROOT).contains("plan")) {
-                slug = "topic";
-            }
+            String slug =
+                    PathUtils.sanitizeSlug(
+                            resolvedTitle, PlanService.MAX_PLAN_SLUG_LENGTH, "topic");
 
             String baseId = PlanService.formatArchiveTimestamp(isoTimestamp) + "-" + slug;
-            String id = baseId;
-            Path targetFile = archiveDir.resolve(id + MD_EXTENSION);
-            int suffix = 2;
-            while (Files.exists(targetFile)) {
-                id = baseId + "-" + suffix;
-                targetFile = archiveDir.resolve(id + MD_EXTENSION);
-                suffix++;
-            }
+            PathUtils.ArchiveFileTarget archiveTarget =
+                    PathUtils.resolveUniqueArchiveFile(archiveDir, baseId);
+            String id = archiveTarget.id();
+            Path targetFile = archiveTarget.file();
 
             String projectName = projectService.getProjectName();
             Path projectRoot = projectService.getCurrentProjectRoot();
@@ -385,12 +372,12 @@ public class MemoryService {
                     ## Conversation Transcript
                     """
                             .formatted(
-                                    escapeFrontmatter(id),
-                                    escapeFrontmatter(projectName),
-                                    escapeFrontmatter(projectPath),
-                                    escapeFrontmatter(resolvedTitle),
-                                    escapeFrontmatter(resolvedUser),
-                                    escapeFrontmatter(resolvedTimestamp),
+                                    ImplementationPlan.escapeFrontmatterValue(id),
+                                    ImplementationPlan.escapeFrontmatterValue(projectName),
+                                    ImplementationPlan.escapeFrontmatterValue(projectPath),
+                                    ImplementationPlan.escapeFrontmatterValue(resolvedTitle),
+                                    ImplementationPlan.escapeFrontmatterValue(resolvedUser),
+                                    ImplementationPlan.escapeFrontmatterValue(resolvedTimestamp),
                                     entries.size(),
                                     resolvedTitle));
 
@@ -621,9 +608,11 @@ public class MemoryService {
                 return Map.of();
             }
             Map<String, String> snippetsByFilename = new LinkedHashMap<>();
+            Map<String, Integer> frontmatterEndLineCache = new LinkedHashMap<>();
             String prefix = toSlashPrefix(archiveDir);
             for (String line : result.output().lines().toList()) {
-                parseRipGrepArchiveLine(line, prefix, snippetsByFilename);
+                parseRipGrepArchiveLine(
+                        line, prefix, archiveDir, frontmatterEndLineCache, snippetsByFilename);
             }
             return snippetsByFilename;
         } catch (IOException e) {
@@ -636,11 +625,15 @@ public class MemoryService {
     }
 
     private static void parseRipGrepArchiveLine(
-            String rawLine, String archiveSlashPrefix, Map<String, String> snippetsByFilename) {
+            String rawLine,
+            String archiveSlashPrefix,
+            Path archiveDir,
+            Map<String, Integer> frontmatterEndLineCache,
+            Map<String, String> snippetsByFilename) {
         if (rawLine == null || rawLine.isBlank()) {
             return;
         }
-        String slashLine = rawLine.replace(BACKSLASH, '/');
+        String slashLine = rawLine.replace((char) 92, '/');
         String rel =
                 (!archiveSlashPrefix.isEmpty() && slashLine.startsWith(archiveSlashPrefix))
                         ? slashLine.substring(archiveSlashPrefix.length())
@@ -656,59 +649,48 @@ public class MemoryService {
         String filePart = rel.substring(0, firstColon);
         int lastSlash = filePart.lastIndexOf('/');
         String filename = lastSlash >= 0 ? filePart.substring(lastSlash + 1) : filePart;
-        String text = rel.substring(secondColon + 1).trim();
-        if (text.isEmpty() || FRONTMATTER_DELIMITER.equals(text) || isFrontmatterLine(text)) {
+        if (snippetsByFilename.containsKey(filename)) {
             return;
         }
-        snippetsByFilename.putIfAbsent(filename, text);
-    }
-
-    private static boolean isFrontmatterLine(String text) {
-        return text.startsWith("id: " + DQUOTE_STR)
-                || text.startsWith("type: " + DQUOTE_STR)
-                || text.startsWith("project: " + DQUOTE_STR)
-                || text.startsWith("projectPath: " + DQUOTE_STR)
-                || text.startsWith("title: " + DQUOTE_STR)
-                || text.startsWith("createdBy: " + DQUOTE_STR)
-                || text.startsWith("archivedOn: " + DQUOTE_STR)
-                || text.startsWith("completedBy: " + DQUOTE_STR)
-                || text.startsWith("completedOn: " + DQUOTE_STR)
-                || text.startsWith("approvedBy: " + DQUOTE_STR)
-                || text.startsWith("approvalTimestamp: " + DQUOTE_STR)
-                || text.startsWith("userApproved: ")
-                || text.startsWith("messageCount: ");
-    }
-
-    private List<String> listArchivedMarkdownSummaries(Path archiveDir, String label) {
-        if (archiveDir == null || !Files.isDirectory(archiveDir)) {
-            return List.of();
+        int lineNumber = -1;
+        try {
+            lineNumber = Integer.parseInt(rel.substring(firstColon + 1, secondColon).trim());
+        } catch (NumberFormatException ignored) {
+            // Non-numeric line token; fall back to text check
         }
-        try (Stream<Path> stream = Files.list(archiveDir)) {
-            List<Path> files =
-                    stream.filter(Files::isRegularFile)
-                            .filter(p -> p.getFileName().toString().endsWith(MD_EXTENSION))
-                            .sorted(
-                                    Comparator.comparing(
-                                                    (Path p) -> p.getFileName().toString(),
-                                                    String.CASE_INSENSITIVE_ORDER)
-                                            .reversed())
-                            .toList();
-            List<String> summaries = new ArrayList<>(files.size());
-            for (Path file : files) {
-                String filename = file.getFileName().toString();
-                Map<String, String> fm = parseFrontmatter(file);
-                String title = fm.getOrDefault("title", "");
-                if (!title.isBlank()) {
-                    summaries.add(filename + ": " + title);
-                } else {
-                    summaries.add(filename);
+        if (lineNumber > 0 && archiveDir != null) {
+            int fmEndLine =
+                    frontmatterEndLineCache.computeIfAbsent(
+                            filename, fn -> findFrontmatterEndLine(archiveDir.resolve(fn)));
+            if (lineNumber <= fmEndLine) {
+                return;
+            }
+        }
+        String text = rel.substring(secondColon + 1).trim();
+        if (text.isEmpty() || FRONTMATTER_DELIMITER.equals(text)) {
+            return;
+        }
+        snippetsByFilename.put(filename, text);
+    }
+
+    static int findFrontmatterEndLine(Path file) {
+        if (file == null || !Files.isRegularFile(file)) {
+            return 0;
+        }
+        try {
+            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            if (lines.isEmpty() || !FRONTMATTER_DELIMITER.equals(lines.get(0).trim())) {
+                return 0;
+            }
+            for (int i = 1; i < lines.size(); i++) {
+                if (FRONTMATTER_DELIMITER.equals(lines.get(i).trim())) {
+                    return i + 1;
                 }
             }
-            return List.copyOf(summaries);
         } catch (IOException e) {
-            log.warn("Failed to list archived {} in {}: {}", label, archiveDir, e.getMessage());
-            return List.of();
+            log.debug("Failed to inspect frontmatter lines for {}: {}", file, e.getMessage());
         }
+        return 0;
     }
 
     /**
@@ -846,7 +828,7 @@ public class MemoryService {
                 sb.append('\n');
             }
             String line = lines.get(i);
-            String slashLine = line.replace(BACKSLASH, '/');
+            String slashLine = line.replace((char) 92, '/');
             if (!globalPrefix.isEmpty() && slashLine.startsWith(globalPrefix)) {
                 sb.append("[GLOBAL] ").append(slashLine.substring(globalPrefix.length()));
             } else if (!projectPrefix.isEmpty() && slashLine.startsWith(projectPrefix)) {
@@ -868,7 +850,7 @@ public class MemoryService {
         if (dir == null) {
             return "";
         }
-        String normalized = dir.toAbsolutePath().normalize().toString().replace(BACKSLASH, '/');
+        String normalized = dir.toAbsolutePath().normalize().toString().replace((char) 92, '/');
         return normalized.endsWith("/") ? normalized : normalized + "/";
     }
 
@@ -883,7 +865,7 @@ public class MemoryService {
         if (rawSlug == null || rawSlug.isBlank()) {
             throw new IllegalArgumentException("Note slug must not be blank");
         }
-        if (rawSlug.contains("..") || rawSlug.contains("/") || rawSlug.contains(BACKSLASH_STR)) {
+        if (rawSlug.contains("..") || rawSlug.indexOf('/') >= 0 || rawSlug.indexOf(92) >= 0) {
             throw new IllegalArgumentException(
                     "Invalid note slug (path traversal not allowed): " + rawSlug);
         }
@@ -891,17 +873,7 @@ public class MemoryService {
         if (trimmed.toLowerCase(Locale.ROOT).endsWith(MD_EXTENSION)) {
             trimmed = trimmed.substring(0, trimmed.length() - MD_EXTENSION.length()).trim();
         }
-        if (trimmed.contains("..") || trimmed.contains("/") || trimmed.contains(BACKSLASH_STR)) {
-            throw new IllegalArgumentException(
-                    "Invalid note slug (path traversal not allowed): " + rawSlug);
-        }
-        String sanitized =
-                trimmed.toLowerCase(Locale.ROOT)
-                        .replaceAll("[^a-z0-9]+", "-")
-                        .replaceAll("(^-+|-+$)", "");
-        if (sanitized.length() > MAX_SLUG_LENGTH) {
-            sanitized = sanitized.substring(0, MAX_SLUG_LENGTH).replaceAll("-+$", "");
-        }
+        String sanitized = PathUtils.sanitizeSlug(trimmed, MAX_SLUG_LENGTH, "");
         if (sanitized.isEmpty()) {
             throw new IllegalArgumentException(
                     "Note slug must contain alphanumeric characters: " + rawSlug);
@@ -918,7 +890,7 @@ public class MemoryService {
         if (colonIdx > 0) {
             trimmed = trimmed.substring(0, colonIdx).trim();
         }
-        if (trimmed.contains("..") || trimmed.contains("/") || trimmed.contains(BACKSLASH_STR)) {
+        if (trimmed.contains("..") || trimmed.indexOf('/') >= 0 || trimmed.indexOf(92) >= 0) {
             throw new IllegalArgumentException(
                     "Invalid archived filename (path traversal not allowed): " + filename);
         }
@@ -984,11 +956,11 @@ public class MemoryService {
 
                 """
                         .formatted(
-                                escapeFrontmatter(sanitizedSlug),
-                                escapeFrontmatter(scope),
-                                escapeFrontmatter(resolvedTitle),
-                                escapeFrontmatter(resolvedTags),
-                                escapeFrontmatter(updatedAt)));
+                                ImplementationPlan.escapeFrontmatterValue(sanitizedSlug),
+                                ImplementationPlan.escapeFrontmatterValue(scope),
+                                ImplementationPlan.escapeFrontmatterValue(resolvedTitle),
+                                ImplementationPlan.escapeFrontmatterValue(resolvedTags),
+                                ImplementationPlan.escapeFrontmatterValue(updatedAt)));
 
         if (!body.startsWith("# ") && !body.startsWith("#\t")) {
             md.append("# ").append(resolvedTitle).append("\n\n");
@@ -1042,7 +1014,7 @@ public class MemoryService {
                 String tags = fm.getOrDefault("tags", "");
                 String updatedAt = fm.getOrDefault("updatedAt", "");
                 StringBuilder line = new StringBuilder();
-                line.append(filename).append(" - ").append(DQUOTE).append(title).append(DQUOTE);
+                line.append(filename).append(" - ").append('"').append(title).append('"');
                 line.append(" [").append(tags).append("]");
                 if (!updatedAt.isEmpty()) {
                     line.append(" (").append(updatedAt).append(")");
@@ -1073,11 +1045,13 @@ public class MemoryService {
                     String key = line.substring(0, colon).trim();
                     String val = line.substring(colon + 1).trim();
                     if (val.length() >= 2
-                            && val.startsWith(DQUOTE_STR)
-                            && val.endsWith(DQUOTE_STR)) {
+                            && val.charAt(0) == '"'
+                            && val.charAt(val.length() - 1) == '"') {
                         val =
                                 val.substring(1, val.length() - 1)
-                                        .replace(ESCAPED_DQUOTE, DQUOTE_STR);
+                                        .replace(
+                                                String.valueOf((char) 92) + '"',
+                                                String.valueOf('"'));
                     }
                     map.put(key, val);
                 }
@@ -1110,16 +1084,6 @@ public class MemoryService {
             log.warn("Failed to read memory file {}: {}", path, e.getMessage());
             return "";
         }
-    }
-
-    private static String escapeFrontmatter(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace(DQUOTE_STR, ESCAPED_DQUOTE)
-                .replace("\r\n", " ")
-                .replace('\n', ' ')
-                .replace('\r', ' ');
     }
 
     Path getGlobalMemoryDir() {

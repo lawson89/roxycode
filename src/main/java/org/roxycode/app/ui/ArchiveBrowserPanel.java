@@ -386,9 +386,7 @@ public final class ArchiveBrowserPanel extends JPanel {
             return "<html><body></body></html>";
         }
         String cleanBody = MemoryService.stripFrontmatter(rawMarkdown);
-        String renderedBody =
-                JexlToHtmlConverter.highlightCodeBlocks(
-                        SwingHtmlUtils.renderMarkdownToHtml(cleanBody));
+        String renderedBody = SwingHtmlUtils.renderMarkdownToHtml(cleanBody);
 
         String formattedDate = formatTimestampDisplay(entry.timestamp());
         String author =
