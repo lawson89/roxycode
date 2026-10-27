@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Insets;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.junit.jupiter.api.Test;
@@ -25,16 +25,12 @@ class HeaderPanelTest {
     @TempDir Path tempDir;
 
     private SettingsService createSettingsService() {
-        SettingsService settingsService = new SettingsService(null, null);
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-        return settingsService;
+        SettingsService ss = new SettingsService(null, null);
+        ss.setSettingsPathOverride(tempDir.resolve("settings.toml"));
+        return ss;
     }
 
-    private ProjectService createProjectService(SettingsService ss) {
-        return new ProjectService(ss, null);
-    }
-
-    private GitService createGitService(ProjectService ps) {
+    private GitService createGitService() {
         GitService gitService = mock(GitService.class);
         lenient().when(gitService.getCurrentBranch()).thenReturn("Not a git repository");
         return gitService;
@@ -42,15 +38,14 @@ class HeaderPanelTest {
 
     private HeaderPanel createHeader() {
         SettingsService ss = createSettingsService();
-        ProjectService ps = createProjectService(ss);
-        return new HeaderPanel(ps, createGitService(ps), ss);
+        return new HeaderPanel(new ProjectService(ss, null), createGitService(), ss);
     }
 
     @Test
-    void testHeaderPanelInstantiation() throws Exception {
+    void testHeaderPanelInstantiation() {
         SettingsService ss = createSettingsService();
-        ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        ProjectService ps = new ProjectService(ss, null);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(), ss);
 
         Path newRoot = tempDir.resolve("updated-proj");
         ps.setCurrentProjectRoot(newRoot);
@@ -60,29 +55,32 @@ class HeaderPanelTest {
         updatedSettings.setGeminiModel("gemini-4-argon");
         SwingTestUtils.runOnEdt(
                 () -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
+
         JLabel projectLabel =
                 SwingTestUtils.findComponent(
                         header, JLabel.class, c -> "updated-proj".equals(c.getText()));
         assertNotNull(projectLabel);
-        FontIcon repoIcon = assertInstanceOf(FontIcon.class, projectLabel.getIcon());
-        assertEquals(Codicons.REPO, repoIcon.getIkon());
+        assertEquals(
+                Codicons.REPO, assertInstanceOf(FontIcon.class, projectLabel.getIcon()).getIkon());
 
         JLabel modelLabel =
                 SwingTestUtils.findComponent(
                         header, JLabel.class, c -> "gemini-4-argon".equals(c.getText()));
         assertNotNull(modelLabel);
-        FontIcon modelIcon = assertInstanceOf(FontIcon.class, modelLabel.getIcon());
-        assertEquals(Codicons.HUBOT, modelIcon.getIkon());
+        assertEquals(
+                Codicons.HUBOT, assertInstanceOf(FontIcon.class, modelLabel.getIcon()).getIkon());
         String modelStyle = (String) modelLabel.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(modelStyle);
-        assertTrue(modelStyle.contains("arc: 10") && modelStyle.contains("border: 3,8,3,8"));
+        assertTrue(
+                modelStyle != null
+                        && modelStyle.contains("arc: 10")
+                        && modelStyle.contains("border: 3,8,3,8"));
     }
 
     @Test
     void testOnProjectChangedAndOnSettingsChangedOffEdtDispatchToEdt() throws Exception {
         SettingsService ss = createSettingsService();
-        ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        ProjectService ps = new ProjectService(ss, null);
+        HeaderPanel header = new HeaderPanel(ps, createGitService(), ss);
 
         Path newRoot = tempDir.resolve("off-edt-proj");
         ps.setCurrentProjectRoot(newRoot);
@@ -110,24 +108,24 @@ class HeaderPanelTest {
     @Test
     void testUpdateBranchLabelRunsAsyncOffEdt() {
         SettingsService ss = createSettingsService();
-        ProjectService ps = createProjectService(ss);
         GitService gitService = mock(GitService.class);
         when(gitService.getCurrentBranch()).thenReturn("feature/async-branch");
 
-        HeaderPanel header = new HeaderPanel(ps, gitService, ss);
+        HeaderPanel header = new HeaderPanel(new ProjectService(ss, null), gitService, ss);
         SwingTestUtils.awaitWorker(header.updateBranchLabel());
         SwingTestUtils.awaitCondition(
                 () -> "feature/async-branch".equals(header.getBranchLabel().getText()));
-        assertEquals("feature/async-branch", header.getBranchLabel().getText());
         assertTrue(header.getBranchLabel().isVisible());
-        FontIcon branchIcon = assertInstanceOf(FontIcon.class, header.getBranchLabel().getIcon());
-        assertEquals(Codicons.SOURCE_CONTROL, branchIcon.getIkon());
+        assertEquals(
+                Codicons.SOURCE_CONTROL,
+                assertInstanceOf(FontIcon.class, header.getBranchLabel().getIcon()).getIkon());
         String branchStyle =
                 (String) header.getBranchLabel().getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(branchStyle);
-        assertTrue(branchStyle.contains("arc: 10") && branchStyle.contains("border: 3,8,3,8"));
+        assertTrue(
+                branchStyle != null
+                        && branchStyle.contains("arc: 10")
+                        && branchStyle.contains("border: 3,8,3,8"));
 
-        // Verify updateUI refreshes branch icon when branch text is present
         header.updateUI();
         assertNotNull(header.getBranchLabel().getIcon());
     }
@@ -145,23 +143,21 @@ class HeaderPanelTest {
         JButton openButton =
                 SwingTestUtils.findComponent(
                         header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
-        assertNotNull(openButton);
         assertSame(header.getChangeProjectButton(), openButton);
         assertEquals(HeaderPanel.CHANGE_PROJECT_TEXT, openButton.getText());
         assertEquals(Cursor.HAND_CURSOR, openButton.getCursor().getType());
-        FontIcon icon = assertInstanceOf(FontIcon.class, openButton.getIcon());
-        assertEquals(Codicons.FOLDER_OPENED, icon.getIkon());
+        assertEquals(
+                Codicons.FOLDER_OPENED,
+                assertInstanceOf(FontIcon.class, openButton.getIcon()).getIkon());
         String style = (String) openButton.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(style);
-        assertTrue(style.contains("arc: 10"));
-        assertTrue(style.contains("hoverBackground:"));
+        assertTrue(
+                style != null && style.contains("arc: 10") && style.contains("hoverBackground:"));
     }
 
     @Test
     void testThemeToggleButtonSwitchesAndSavesTheme() {
         SettingsService ss = spy(createSettingsService());
-        ProjectService ps = createProjectService(ss);
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
+        HeaderPanel header = new HeaderPanel(new ProjectService(ss, null), createGitService(), ss);
 
         JButton themeButton =
                 SwingTestUtils.findComponent(
@@ -198,18 +194,15 @@ class HeaderPanelTest {
         JButton openButton =
                 SwingTestUtils.findComponent(
                         header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
-        assertNotNull(openButton);
-        Container leftPanel = openButton.getParent();
-        assertEquals(3, leftPanel.getComponentCount());
+        assertEquals(3, openButton.getParent().getComponentCount());
     }
 
     @Test
-    void testSwitchProjectAsyncRunsOffEdt() throws Exception {
+    void testSwitchProjectAsyncRunsOffEdt() {
         SettingsService ss = createSettingsService();
-        ProjectService ps = spy(createProjectService(ss));
-        HeaderPanel header = new HeaderPanel(ps, createGitService(ps), ss);
-        java.util.concurrent.atomic.AtomicBoolean calledOnEdt =
-                new java.util.concurrent.atomic.AtomicBoolean(true);
+        ProjectService ps = spy(new ProjectService(ss, null));
+        HeaderPanel header = new HeaderPanel(ps, createGitService(), ss);
+        AtomicBoolean calledOnEdt = new AtomicBoolean(true);
         doAnswer(
                         inv -> {
                             calledOnEdt.set(SwingUtilities.isEventDispatchThread());
@@ -220,5 +213,6 @@ class HeaderPanelTest {
         Path chosen = tempDir.resolve("chosen-project");
         SwingTestUtils.awaitWorker(
                 SwingTestUtils.callOnEdt(() -> header.switchProjectAsync(chosen)));
+        assertFalse(calledOnEdt.get());
     }
 }

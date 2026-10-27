@@ -38,6 +38,11 @@ class AgentServiceTest {
     @AgentService("defaultService")
     private static class DefaultService {}
 
+    @AgentService(
+            value = "wildcardService",
+            phases = {"*"})
+    private static class WildcardService {}
+
     @Test
     void testAnnotationProperties() {
         AgentService annotation = MockService.class.getAnnotation(AgentService.class);
@@ -54,11 +59,6 @@ class AgentServiceTest {
         assertEquals(0, annotation.phases().length);
     }
 
-    @AgentService(
-            value = "wildcardService",
-            phases = {"*"})
-    private static class WildcardService {}
-
     @Test
     void testWildcardRole() {
         AgentService annotation = WildcardService.class.getAnnotation(AgentService.class);
@@ -69,36 +69,24 @@ class AgentServiceTest {
 
     @Test
     void testAgentServicesDoNotHaveRedundantServiceAnnotation() {
-        List<Class<?>> agentServiceClasses =
+        for (Class<?> clazz :
                 List.of(
                         GenericBuildToolService.class,
                         GitService.class,
                         GrepService.class,
                         FileReadService.class,
                         FileEditorService.class,
-                        MemoryService.class);
-
-        for (Class<?> clazz : agentServiceClasses) {
-            assertNotNull(
-                    clazz.getDeclaredAnnotation(AgentService.class),
-                    clazz.getSimpleName() + " should have @AgentService");
-            assertNull(
-                    clazz.getDeclaredAnnotation(Service.class),
-                    clazz.getSimpleName()
-                            + " should not declare redundant @Service alongside @AgentService");
+                        MemoryService.class)) {
+            assertNotNull(clazz.getDeclaredAnnotation(AgentService.class));
+            assertNull(clazz.getDeclaredAnnotation(Service.class));
         }
-
-        assertNull(
-                RepoMapPackerService.class.getDeclaredAnnotation(AgentService.class),
-                "RepoMapPackerService should not be exposed as an @AgentService");
-        assertNotNull(
-                RepoMapPackerService.class.getDeclaredAnnotation(Service.class),
-                "RepoMapPackerService should be annotated with @Service");
+        assertNull(RepoMapPackerService.class.getDeclaredAnnotation(AgentService.class));
+        assertNotNull(RepoMapPackerService.class.getDeclaredAnnotation(Service.class));
     }
 
     @Test
     void testSingleConstructorBeansDoNotHaveRedundantAutowired() {
-        List<Class<?>> singleCtorClasses =
+        for (Class<?> clazz :
                 List.of(
                         GenericBuildToolService.class,
                         ProjectCacheMetaService.class,
@@ -115,15 +103,10 @@ class AgentServiceTest {
                         ExploreChatPanel.class,
                         FeatureChatPanel.class,
                         QaWorkspacePanel.class,
-                        TaskWorkspacePanel.class);
-
-        for (Class<?> clazz : singleCtorClasses) {
+                        TaskWorkspacePanel.class)) {
             Constructor<?>[] constructors = clazz.getDeclaredConstructors();
             assertEquals(1, constructors.length, clazz.getSimpleName() + " should have 1 ctor");
-            assertNull(
-                    constructors[0].getDeclaredAnnotation(Autowired.class),
-                    clazz.getSimpleName()
-                            + " single constructor should not have redundant @Autowired");
+            assertNull(constructors[0].getDeclaredAnnotation(Autowired.class));
         }
     }
 }

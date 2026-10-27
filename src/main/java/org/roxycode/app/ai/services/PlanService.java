@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
@@ -32,7 +34,6 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-/** Unified service for managing project plans, specifications, and workflow phase transitions. */
 @Service
 @SuppressWarnings("PMD.NullAssignment")
 public class PlanService {
@@ -55,13 +56,6 @@ public class PlanService {
 
     private record TransitionRule(boolean autonomous, boolean requiresApprovedPlan) {}
 
-    /**
-     * Returns the semantic Human-in-the-Loop (HITL) approval label for a phase transition.
-     *
-     * @param from the source workflow phase
-     * @param to the target workflow phase
-     * @return the semantic approval label
-     */
     public static String formatApprovalLabel(WorkflowPhase from, WorkflowPhase to) {
         if (from == WorkflowPhase.PLAN && to == WorkflowPhase.CODE) {
             return APPROVAL_PLAN_TO_CODE;
@@ -72,9 +66,9 @@ public class PlanService {
         if (from == WorkflowPhase.CODE && to == WorkflowPhase.PLAN) {
             return APPROVAL_CODE_TO_PLAN;
         }
-        String fromName = from != null ? from.getDisplayName() : "";
-        String toName = to != null ? to.getDisplayName() : "";
-        return fromName + " → " + toName;
+        return (from != null ? from.getDisplayName() : "")
+                + " → "
+                + (to != null ? to.getDisplayName() : "");
     }
 
     private static final Map<TransitionKey, TransitionRule> TRANSITION_RULES =
@@ -111,12 +105,6 @@ public class PlanService {
         this.gitService = gitService;
     }
 
-    /**
-     * Submits an implementation plan for the project.
-     *
-     * @param plan the implementation plan to submit
-     * @return a success message
-     */
     public synchronized String submitPlan(ImplementationPlan plan) {
         requirePhase("submitPlan", WorkflowPhase.PLAN);
         if (plan == null) {
@@ -130,51 +118,30 @@ public class PlanService {
                         : plan.handoffLog();
 
         List<ImplementationPlan.TechStep> steps = new ArrayList<>();
-        for (ImplementationPlan.TechStep s : plan.technicalSteps()) {
-            boolean preservedCompleted =
-                    s.completed()
-                            || (!isMandatoryVerificationStep(s.description())
-                                    && previouslyCompletedSteps.contains(
-                                            normalizeStepDescription(s.description())));
-            steps.add(new ImplementationPlan.TechStep(s.description(), preservedCompleted));
-        }
-
         boolean hasCompile = false;
         boolean hasTests = false;
         boolean hasReview = false;
-        for (ImplementationPlan.TechStep s : steps) {
+        for (ImplementationPlan.TechStep s : plan.technicalSteps()) {
             String desc = s.description();
-            if (isCompileStep(desc)) {
-                hasCompile = true;
-            }
-            if (isUnitTestStep(desc)) {
-                hasTests = true;
-            }
-            if (isCodeReviewStep(desc)) {
-                hasReview = true;
-            }
+            boolean preservedCompleted =
+                    s.completed()
+                            || (!isMandatoryVerificationStep(desc)
+                                    && previouslyCompletedSteps.contains(
+                                            normalizeStepDescription(desc)));
+            steps.add(new ImplementationPlan.TechStep(desc, preservedCompleted));
+            hasCompile |= isCompileStep(desc);
+            hasTests |= isUnitTestStep(desc);
+            hasReview |= isCodeReviewStep(desc);
         }
 
-        // 1. Auto-append mandatory compile step
-        if (!hasCompile) {
-            steps.add(new ImplementationPlan.TechStep(STEP_COMPILE, false));
-        }
-
-        // 2. Auto-append mandatory test step
-        if (!hasTests) {
-            steps.add(new ImplementationPlan.TechStep(STEP_UNIT_TESTS, false));
-        }
-
-        // 3. Auto-append mandatory code review step
-        if (!hasReview) {
-            steps.add(new ImplementationPlan.TechStep(STEP_CODE_REVIEW, false));
-        }
+        if (!hasCompile) steps.add(new ImplementationPlan.TechStep(STEP_COMPILE, false));
+        if (!hasTests) steps.add(new ImplementationPlan.TechStep(STEP_UNIT_TESTS, false));
+        if (!hasReview) steps.add(new ImplementationPlan.TechStep(STEP_CODE_REVIEW, false));
 
         setCurrentPlan(plan.withTechnicalSteps(steps).withHandoffLog(preservedLog));
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
-    /** Submits a project plan covering both functional and technical specifications. */
     @Tool(
             description =
                     "Submits a project plan covering both functional requirements and technical implementation steps.")
@@ -190,10 +157,12 @@ public class PlanService {
         requirePhase("submitPlan", WorkflowPhase.PLAN);
         List<String> safeRequirements =
                 requirements != null ? List.copyOf(requirements) : List.of();
-        List<String> safeTechSteps =
-                technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
-
-        List<ImplementationPlan.TechStep> steps = toTechSteps(safeTechSteps);
+        List<ImplementationPlan.TechStep> steps =
+                technicalSteps != null
+                        ? technicalSteps.stream()
+                                .map(s -> new ImplementationPlan.TechStep(s, false))
+                                .toList()
+                        : List.of();
 
         return submitPlan(
                 new ImplementationPlan(
@@ -207,14 +176,6 @@ public class PlanService {
                         null,
                         null,
                         null));
-    }
-
-    private List<ImplementationPlan.TechStep> toTechSteps(List<String> rawTechSteps) {
-        List<ImplementationPlan.TechStep> steps = new ArrayList<>(rawTechSteps.size());
-        for (String s : rawTechSteps) {
-            steps.add(new ImplementationPlan.TechStep(s, false));
-        }
-        return steps;
     }
 
     private static Set<String> collectCompletedNonVerificationSteps(ImplementationPlan plan) {
@@ -258,7 +219,13 @@ public class PlanService {
                 || isCodeReviewStep(description);
     }
 
-    /** Adds a new technical implementation step to the active plan. */
+    private static String requireNonBlankDescription(String description) {
+        if (StringUtils.isBlank(description)) {
+            throw new IllegalArgumentException("Error: Step description cannot be null or blank.");
+        }
+        return description.trim();
+    }
+
     @Tool(
             description =
                     "Adds a new technical implementation step to the current plan (inserted before trailing verification gates) without losing progress on completed steps.")
@@ -267,10 +234,7 @@ public class PlanService {
                     String description) {
         requirePhase("addTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE);
         ensureActivePlan();
-        if (StringUtils.isBlank(description)) {
-            throw new IllegalArgumentException("Error: Step description cannot be null or blank.");
-        }
-        String trimmed = description.trim();
+        String trimmed = requireNonBlankDescription(description);
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
         int insertIndex = steps.size();
         while (insertIndex > 0
@@ -284,7 +248,6 @@ public class PlanService {
                 insertIndex, trimmed, formatRemainingIncompleteSteps(steps));
     }
 
-    /** Updates the description of an existing technical step in the active plan. */
     @Tool(
             description =
                     "Updates the description of an existing technical step at the given 0-based index while preserving its completion status.")
@@ -294,39 +257,28 @@ public class PlanService {
                     String description) {
         requirePhase("updateTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE);
         ensureActivePlan();
-        if (StringUtils.isBlank(description)) {
-            throw new IllegalArgumentException("Error: Step description cannot be null or blank.");
-        }
+        String trimmed = requireNonBlankDescription(description);
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
         validateStepIndex(index, steps.size());
-        String trimmed = description.trim();
-        ImplementationPlan.TechStep existing = steps.get(index);
-        steps.set(index, new ImplementationPlan.TechStep(trimmed, existing.completed()));
+        steps.set(index, new ImplementationPlan.TechStep(trimmed, steps.get(index).completed()));
         setCurrentPlan(currentPlan.withTechnicalSteps(steps));
         return String.format(
                 "Updated technical step %d to '%s'. %s",
                 index, trimmed, formatRemainingIncompleteSteps(steps));
     }
 
-    /** Approves the current plan. Internal lifecycle method. */
     public synchronized void approvePlan(String user, String timestamp) {
-        if (currentPlan == null) {
-            return;
+        if (currentPlan != null) {
+            setCurrentPlan(currentPlan.withApproval(user, timestamp));
         }
-        currentPlan = currentPlan.withApproval(user, timestamp);
-        publishPlanUpdated();
     }
 
-    /** Marks the current plan as completed by the specified user. Internal lifecycle method. */
     public synchronized void completePlan(String user, String timestamp) {
-        if (currentPlan == null) {
-            return;
+        if (currentPlan != null) {
+            setCurrentPlan(currentPlan.withCompletion(user, timestamp));
         }
-        currentPlan = currentPlan.withCompletion(user, timestamp);
-        publishPlanUpdated();
     }
 
-    /** Marks a specific technical implementation step as completed using its 0-based index. */
     @Tool(
             description =
                     "Marks a specific technical implementation step as completed using its 0-based index. Call this immediately after a step is verified rather than deferring to the end of the phase.")
@@ -336,10 +288,9 @@ public class PlanService {
                                     "The index of the step (0-based). Must be valid for the current plan.")
                     int index) {
         requirePhase("markStepCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
-        return updateStepStatus(index, true);
+        return updateStepsStatus(List.of(index), true);
     }
 
-    /** Marks multiple technical implementation steps as completed using their 0-based indices. */
     @Tool(
             description =
                     "Marks multiple technical implementation steps as completed using their 0-based indices. Call this immediately after a batch of steps is verified rather than deferring to the end of the phase.")
@@ -350,17 +301,15 @@ public class PlanService {
         return updateStepsStatus(indices, true);
     }
 
-    /** Marks a technical implementation step as incomplete. */
     @Tool(
             description =
                     "Marks a technical implementation step as incomplete using its 0-based index.")
     public synchronized String markStepIncomplete(
             @ToolParam(description = "The index of the step (0-based).") int index) {
         requirePhase("markStepIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
-        return updateStepStatus(index, false);
+        return updateStepsStatus(List.of(index), false);
     }
 
-    /** Marks multiple technical implementation steps as incomplete using their 0-based indices. */
     @Tool(
             description =
                     "Marks multiple technical implementation steps as incomplete using their 0-based indices.")
@@ -369,10 +318,6 @@ public class PlanService {
                     List<Integer> indices) {
         requirePhase("markStepsIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         return updateStepsStatus(indices, false);
-    }
-
-    private synchronized String updateStepStatus(int index, boolean completed) {
-        return updateStepsStatus(List.of(index), completed);
     }
 
     private synchronized String updateStepsStatus(List<Integer> indices, boolean completed) {
@@ -388,14 +333,16 @@ public class PlanService {
             validateStepIndex(index, steps.size());
         }
         for (Integer index : indices) {
-            ImplementationPlan.TechStep step = steps.get(index);
-            steps.set(index, new ImplementationPlan.TechStep(step.description(), completed));
+            steps.set(
+                    index,
+                    new ImplementationPlan.TechStep(steps.get(index).description(), completed));
         }
         setCurrentPlan(currentPlan.withTechnicalSteps(steps));
-        String statusWord = completed ? "completed" : "incomplete";
         return String.format(
                 "Marked steps %s %s. %s",
-                indices, statusWord, formatRemainingIncompleteSteps(steps));
+                indices,
+                completed ? "completed" : "incomplete",
+                formatRemainingIncompleteSteps(steps));
     }
 
     private void ensureActivePlan() {
@@ -418,10 +365,9 @@ public class PlanService {
 
     private static String formatRemainingIncompleteSteps(List<ImplementationPlan.TechStep> steps) {
         List<String> remaining = collectIncompleteSteps(steps, false);
-        if (remaining.isEmpty()) {
-            return "Remaining incomplete steps: none (all steps completed).";
-        }
-        return "Remaining incomplete steps: [" + String.join(", ", remaining) + "]";
+        return remaining.isEmpty()
+                ? "Remaining incomplete steps: none (all steps completed)."
+                : "Remaining incomplete steps: [" + String.join(", ", remaining) + "]";
     }
 
     private static List<String> collectIncompleteSteps(
@@ -437,24 +383,19 @@ public class PlanService {
         return incomplete;
     }
 
-    /** Gets the current implementation plan. */
     public ImplementationPlan getCurrentPlan() {
         return currentPlan;
     }
 
-    /** Sets the current implementation plan and publishes PlanUpdatedEvent. */
     public synchronized void setCurrentPlan(ImplementationPlan plan) {
         this.currentPlan = plan;
         publishPlanUpdated();
     }
 
-    /** Clears the existing plan. Internal lifecycle method. */
     public synchronized void clearPlan() {
-        this.currentPlan = null;
-        publishPlanUpdated();
+        setCurrentPlan(null);
     }
 
-    /** Transitions the workflow to the development (CODE) phase. */
     @Tool(description = "Requests transition to the development (CODE) phase.", returnDirect = true)
     public synchronized String requestDevelopment(
             @ToolParam(description = "The reason for requesting transition to the CODE phase.")
@@ -463,7 +404,6 @@ public class PlanService {
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
-    /** Transitions the workflow to the review phase. */
     @Tool(description = "Requests transition to the review phase.", returnDirect = true)
     public synchronized String requestReview(
             @ToolParam(description = "The reason for requesting transition to the REVIEW phase.")
@@ -472,11 +412,6 @@ public class PlanService {
         return routeToPhase(WorkflowPhase.REVIEW, reason);
     }
 
-    /**
-     * Transitions the workflow back to development (CODE) to address fixes.
-     *
-     * @param reason
-     */
     @Tool(
             description = "Requests transition back to development to address fixes.",
             returnDirect = true)
@@ -487,7 +422,6 @@ public class PlanService {
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
-    /** Signals completion of the current cycle and returns to planning. */
     @Tool(
             description = "Signals completion of the current cycle and returns to planning.",
             returnDirect = true)
@@ -498,7 +432,6 @@ public class PlanService {
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-    /** Transitions the workflow back to planning (PLAN) to address technical blockers. */
     @Tool(
             description =
                     "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.",
@@ -509,7 +442,6 @@ public class PlanService {
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-    /** Routes the workflow to the target phase. */
     public synchronized String routeToPhase(WorkflowPhase nextPhase, String reason) {
         if (nextPhase == null) {
             throw new IllegalArgumentException(
@@ -532,14 +464,12 @@ public class PlanService {
                             + nextPhase
                             + ". Only single-step transitions to adjacent phases are allowed.");
         }
-
-        if (currentPhase == WorkflowPhase.PLAN && nextPhase == WorkflowPhase.CODE) {
-            if (currentPlan == null) {
-                throw new IllegalStateException(
-                        "Error: Cannot advance to CODE. Implementation Plan is missing. Call submitPlan first.");
-            }
+        if (currentPhase == WorkflowPhase.PLAN
+                && nextPhase == WorkflowPhase.CODE
+                && currentPlan == null) {
+            throw new IllegalStateException(
+                    "Error: Cannot advance to CODE. Implementation Plan is missing. Call submitPlan first.");
         }
-
         if (rule.requiresApprovedPlan() && (currentPlan == null || !currentPlan.userApproved())) {
             throw new IllegalStateException(
                     "Error: Cannot transition from "
@@ -553,14 +483,13 @@ public class PlanService {
 
         if (rule.autonomous()) {
             WorkflowPhase oldPhase = currentPhase;
-            String timestamp = OffsetDateTime.now().toString();
-            String message = String.format("%s -> %s: %s", oldPhase, nextPhase, reason);
-            addHandoffLogEntry(timestamp, "System", message);
-
+            addHandoffLogEntry(
+                    OffsetDateTime.now().toString(),
+                    "System",
+                    String.format("%s -> %s: %s", oldPhase, nextPhase, reason));
             this.currentPhase = nextPhase;
             this.visitedPhases.add(nextPhase);
             publishPhaseChanged();
-
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(
                         new WorkflowTransitionEvent(oldPhase, nextPhase, reason, true));
@@ -575,61 +504,55 @@ public class PlanService {
         publishTransitionRequested();
 
         String summary = formatPlanSummary(currentPlan);
-        String approvalLabel = formatApprovalLabel(currentPhase, nextPhase);
         String message =
                 String.format(
-                        "**Transition Request: %s**%n%n**Reason:** %s", approvalLabel, reason);
+                        "**Transition Request: %s**%n%n**Reason:** %s",
+                        formatApprovalLabel(currentPhase, nextPhase), reason);
         return StringUtils.isNotBlank(summary)
                 ? String.format("%s%n%n%s", summary, message)
                 : message;
     }
 
     private void verifyStepCompletionGates(WorkflowPhase from, WorkflowPhase to) {
-        if (currentPlan == null) {
-            return;
-        }
+        if (currentPlan == null) return;
         if (from == WorkflowPhase.CODE && to == WorkflowPhase.REVIEW) {
-            List<String> incompletePreReview =
-                    collectIncompleteSteps(currentPlan.technicalSteps(), true);
-            if (!incompletePreReview.isEmpty()) {
+            List<String> incomplete = collectIncompleteSteps(currentPlan.technicalSteps(), true);
+            if (!incomplete.isEmpty()) {
                 throw new IllegalStateException(
                         "Error: Cannot transition from CODE to REVIEW. All implementation and build/test verification steps must be marked completed before requesting review. Incomplete steps: ["
-                                + String.join(", ", incompletePreReview)
+                                + String.join(", ", incomplete)
                                 + "]. Complete and mark them via markStepCompleted or markStepsCompleted first.");
             }
         } else if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.PLAN) {
-            List<String> incompleteAll =
-                    collectIncompleteSteps(currentPlan.technicalSteps(), false);
-            if (!incompleteAll.isEmpty()) {
+            List<String> incomplete = collectIncompleteSteps(currentPlan.technicalSteps(), false);
+            if (!incomplete.isEmpty()) {
                 throw new IllegalStateException(
                         "Error: Cannot transition from REVIEW to PLAN. All technical and verification steps (including code review) must be marked completed before requesting completion. Incomplete steps: ["
-                                + String.join(", ", incompleteAll)
+                                + String.join(", ", incomplete)
                                 + "]. Mark them completed via markStepCompleted or markStepsCompleted, or call requestFixes to return to CODE.");
             }
         }
     }
 
     private void archiveCurrentPlan(ImplementationPlan plan, String timestamp) {
-        if (plan == null || projectService == null || !projectService.hasActiveProject()) {
-            return;
-        }
+        if (plan == null || projectService == null || !projectService.hasActiveProject()) return;
         try {
             Path archiveDir = projectService.resolveProjectDataPath(ARCHIVE_PLANS_SUBDIR);
             Files.createDirectories(archiveDir);
-
             String baseId =
                     formatArchiveTimestamp(timestamp) + "-" + sanitizePlanTitle(plan.title());
             PathUtils.ArchiveFileTarget archiveTarget =
                     PathUtils.resolveUniqueArchiveFile(archiveDir, baseId);
 
-            String projectName = projectService.getProjectName();
             Path projectRoot = projectService.getCurrentProjectRoot();
             String projectPath =
                     projectRoot != null ? projectRoot.toAbsolutePath().normalize().toString() : "";
-            String changesText = getGitStatusSafely();
             String archivedMarkdown =
                     plan.toArchivedMarkdown(
-                            archiveTarget.id(), projectName, projectPath, changesText);
+                            archiveTarget.id(),
+                            projectService.getProjectName(),
+                            projectPath,
+                            getGitStatusSafely());
             Files.writeString(archiveTarget.file(), archivedMarkdown, StandardCharsets.UTF_8);
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(
@@ -643,9 +566,7 @@ public class PlanService {
     }
 
     private String getGitStatusSafely() {
-        if (gitService == null) {
-            return null;
-        }
+        if (gitService == null) return null;
         try {
             return gitService.getStatus();
         } catch (Exception e) {
@@ -659,7 +580,7 @@ public class PlanService {
             try {
                 return OffsetDateTime.parse(isoTimestamp).format(ARCHIVE_TIMESTAMP_FORMATTER);
             } catch (DateTimeParseException ignored) {
-                // Fall back to current time below
+                // Fall back to current time
             }
         }
         return OffsetDateTime.now().format(ARCHIVE_TIMESTAMP_FORMATTER);
@@ -685,23 +606,19 @@ public class PlanService {
         ImplementationPlan planToArchive = null;
         String archiveTimestamp = null;
         synchronized (this) {
-            if (pendingPhase == null) {
-                return;
-            }
+            if (pendingPhase == null) return;
             String timestamp = OffsetDateTime.now().toString();
             String user = environmentService != null ? environmentService.getCurrentUser() : "User";
-            String message =
+            addHandoffLogEntry(
+                    timestamp,
+                    user,
                     String.format(
                             "%s -> %s (User Approved): %s",
-                            currentPhase, pendingPhase, pendingReason);
-            addHandoffLogEntry(timestamp, user, message);
+                            currentPhase, pendingPhase, pendingReason));
 
-            // Plan Approval Metadata
             if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE) {
                 approvePlan(user, timestamp);
             }
-
-            // Phase Completion Metadata
             if (currentPhase == WorkflowPhase.REVIEW
                     && pendingPhase == WorkflowPhase.PLAN
                     && currentPlan != null) {
@@ -719,8 +636,8 @@ public class PlanService {
         if (planToArchive != null) {
             ImplementationPlan capturedPlan = planToArchive;
             String capturedTimestamp = archiveTimestamp;
-            if (javax.swing.SwingUtilities.isEventDispatchThread()) {
-                java.util.concurrent.CompletableFuture.runAsync(
+            if (SwingUtilities.isEventDispatchThread()) {
+                CompletableFuture.runAsync(
                         () -> {
                             archiveCurrentPlan(capturedPlan, capturedTimestamp);
                             publishPhaseChanged();
@@ -773,18 +690,19 @@ public class PlanService {
     }
 
     private String formatPlanSummary(ImplementationPlan plan) {
-        if (plan == null) {
-            return "";
-        }
-        return "PLAN SUMMARY:\n\n" + plan.toMarkdown(false).trim();
+        return plan == null
+                ? ""
+                : """
+                PLAN SUMMARY:
+
+                """
+                        + plan.toMarkdown(false).trim();
     }
 
     private void requirePhase(String methodName, WorkflowPhase... allowedPhases) {
         WorkflowPhase current = getCurrentPhase();
         for (WorkflowPhase allowed : allowedPhases) {
-            if (current == allowed) {
-                return;
-            }
+            if (current == allowed) return;
         }
         throw new IllegalStateException(
                 "Method '"
@@ -795,16 +713,12 @@ public class PlanService {
                         + current);
     }
 
-    /** Adds an entry to the handoff log. Internal lifecycle method. */
     public synchronized void addHandoffLogEntry(String timestamp, String user, String message) {
-        if (currentPlan == null) {
-            return;
+        if (currentPlan != null) {
+            setCurrentPlan(currentPlan.withAddedHandoffLogEntry(timestamp, user, message));
         }
-        currentPlan = currentPlan.withAddedHandoffLogEntry(timestamp, user, message);
-        publishPlanUpdated();
     }
 
-    /** Adds an entry to the handoff log. */
     @Tool(description = "Adds a high-level summary entry to the handoff log.")
     public synchronized String addHandoffLogEntry(
             @ToolParam(description = "The summary entry to add to the handoff log.") String entry) {

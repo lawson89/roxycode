@@ -15,11 +15,6 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Shared utility for safe external process execution. Prevents stderr buffer deadlocks, enforces
- * timeouts, closes stdin, cleans up descendant processes on timeout or interruption, and preserves
- * thread interruption status.
- */
 public final class ProcessRunner {
     private static final Logger log = LoggerFactory.getLogger(ProcessRunner.class);
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
@@ -28,7 +23,6 @@ public final class ProcessRunner {
 
     private ProcessRunner() {}
 
-    /** Result of executing an external process. */
     public record ProcessResult(
             int exitCode, String output, String errorOutput, boolean timedOut) {}
 
@@ -56,12 +50,8 @@ public final class ProcessRunner {
             boolean redirectErrorStream)
             throws IOException {
         ProcessBuilder pb = new ProcessBuilder(command);
-        if (workingDir != null) {
-            pb.directory(workingDir.toFile());
-        }
-        if (env != null && !env.isEmpty()) {
-            pb.environment().putAll(env);
-        }
+        if (workingDir != null) pb.directory(workingDir.toFile());
+        if (env != null && !env.isEmpty()) pb.environment().putAll(env);
         pb.redirectErrorStream(redirectErrorStream);
 
         Process process = pb.start();
@@ -86,15 +76,13 @@ public final class ProcessRunner {
         boolean cleanupNeeded = true;
         try {
             Duration effectiveTimeout = timeout != null ? timeout : DEFAULT_TIMEOUT;
-            boolean finished = process.waitFor(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
-            if (!finished) {
+            if (!process.waitFor(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 destroyProcessTree(process);
                 cleanupNeeded = false;
                 awaitReaders(stdoutFuture, stderrFuture, 2, TimeUnit.SECONDS);
                 return new ProcessResult(
                         -1, stdoutBuffer.toString(), stderrBuffer.toString(), true);
             }
-
             int exitCode = process.exitValue();
             cleanupNeeded = false;
             awaitReaders(stdoutFuture, stderrFuture, 5, TimeUnit.SECONDS);
@@ -108,9 +96,7 @@ public final class ProcessRunner {
             ce.initCause(e);
             throw ce;
         } finally {
-            if (cleanupNeeded || process.isAlive()) {
-                destroyProcessTree(process);
-            }
+            if (cleanupNeeded || process.isAlive()) destroyProcessTree(process);
         }
     }
 
@@ -141,9 +127,7 @@ public final class ProcessRunner {
     }
 
     public static void destroyProcessTree(Process process) {
-        if (process == null) {
-            return;
-        }
+        if (process == null) return;
         try {
             process.descendants()
                     .forEach(

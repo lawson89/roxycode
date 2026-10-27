@@ -12,7 +12,6 @@ import org.roxycode.app.util.PathUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-/** Service for managing the active project root directory. */
 @Service
 @SuppressWarnings("PMD.NullAssignment")
 public class ProjectService {
@@ -28,13 +27,8 @@ public class ProjectService {
         this.settingsService = settingsService;
         this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {};
         String savedPath = settingsService.getSettings().getCurrentProjectPath();
-        if (savedPath != null && !savedPath.isEmpty()) {
-            this.currentProjectRoot = Paths.get(savedPath);
-        } else {
-            // Fix: Do not default to user.dir to avoid accidental indexing of home
-            // directory
-            this.currentProjectRoot = null;
-        }
+        this.currentProjectRoot =
+                (savedPath != null && !savedPath.isEmpty()) ? Paths.get(savedPath) : null;
     }
 
     public Path getCurrentProjectRoot() {
@@ -57,83 +51,39 @@ public class ProjectService {
 
     public String getProjectName() {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null) {
-            return "No Project";
-        }
+        if (projectRoot == null) return "No Project";
         Path fileName = projectRoot.getFileName();
         return fileName != null ? fileName.toString() : projectRoot.toString();
     }
 
-    /**
-     * Resolves a path relative to the active project root and validates that it stays within the
-     * project sandbox.
-     *
-     * @param relativePath the path relative to the project root (null defaults to ".")
-     * @return the normalized absolute path within the project root
-     * @throws IllegalStateException if no active project root is set
-     * @throws SecurityException if the resolved path escapes the project root
-     */
     public Path resolvePath(String relativePath) {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null) {
-            throw new IllegalStateException("Project root is not set.");
-        }
+        if (projectRoot == null) throw new IllegalStateException("Project root is not set.");
         return resolveWithinSandbox(projectRoot, relativePath);
     }
 
-    /**
-     * Resolves a path within the project sandbox and returns the normalized project-relative path
-     * using forward slashes ({@code "/"}), or {@code "."} when pointing to the project root.
-     *
-     * @param relativePath the path relative to the project root (null or blank defaults to ".")
-     * @return the normalized relative path string
-     * @throws IllegalStateException if no active project root is set
-     * @throws SecurityException if the resolved path escapes the project root
-     */
     public String resolveRelativePath(String relativePath) {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null) {
-            throw new IllegalStateException("Project root is not set.");
-        }
+        if (projectRoot == null) throw new IllegalStateException("Project root is not set.");
         Path root = projectRoot.toAbsolutePath().normalize();
         String target =
                 (relativePath == null || relativePath.isBlank()) ? "." : relativePath.trim();
         Path resolved = resolveWithinSandbox(root, target);
-        String rel = root.relativize(resolved).toString().replace('\\', '/');
+        String rel = root.relativize(resolved).toString().replace((char) 92, '/');
         return rel.isEmpty() ? "." : rel;
     }
 
-    /**
-     * Returns the per-project data directory under {@code <roxyHomeDir>/projects/<name>-<hash>} for
-     * the active project.
-     *
-     * @return the normalized absolute path to the project data directory
-     * @throws IllegalStateException if no active project root is set
-     */
     public Path getProjectDataDir() {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null) {
-            throw new IllegalStateException("Project root is not set.");
-        }
+        if (projectRoot == null) throw new IllegalStateException("Project root is not set.");
         Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
         String dirName =
                 sanitizeProjectName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
         Path roxyHome = settingsService.getRoxyHomeDir();
-        if (roxyHome == null) {
-            roxyHome = SettingsService.getDefaultRoxyHomeDir();
-        }
+        if (roxyHome == null) roxyHome = SettingsService.getDefaultRoxyHomeDir();
         return roxyHome.toAbsolutePath().normalize().resolve(PROJECTS_SUBDIR).resolve(dirName);
     }
 
-    /**
-     * Resolves a path relative to the per-project data directory ({@link #getProjectDataDir()}) and
-     * validates that it stays within that directory sandbox.
-     *
-     * @param relativePath the path relative to the project data directory (null defaults to ".")
-     * @return the normalized absolute path within the project data directory
-     * @throws IllegalStateException if no active project root is set
-     * @throws SecurityException if the resolved path escapes the project data directory
-     */
     public Path resolveProjectDataPath(String relativePath) {
         return resolveWithinSandbox(getProjectDataDir(), relativePath);
     }
@@ -158,9 +108,9 @@ public class ProjectService {
 
     static String computeProjectHash(Path normalizedRoot) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hashBytes =
-                    digest.digest(normalizedRoot.toString().getBytes(StandardCharsets.UTF_8));
+                    MessageDigest.getInstance("SHA-256")
+                            .digest(normalizedRoot.toString().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hashBytes, 0, 4);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm not available", e);

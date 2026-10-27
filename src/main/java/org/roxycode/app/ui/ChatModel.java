@@ -14,7 +14,6 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Model encapsulating the state and configuration of a chat session. */
 public final class ChatModel {
     private static final Logger log = LoggerFactory.getLogger(ChatModel.class);
     public static final String QA_SESSION_PREFIX = "qa";
@@ -28,10 +27,8 @@ public final class ChatModel {
     private final String conversationId;
     private final WorkflowPhase lockedPhase;
     private final boolean taskMode;
-
     private final AtomicBoolean turnCancelled = new AtomicBoolean(false);
     private final List<BufferedImage> pendingImages = new ArrayList<>();
-
     private volatile int currentTurn = 0;
     private volatile boolean loading = false;
 
@@ -141,9 +138,7 @@ public final class ChatModel {
     }
 
     public static List<byte[]> encodeImagesToPngBytes(List<BufferedImage> images) {
-        if (images == null || images.isEmpty()) {
-            return List.of();
-        }
+        if (images == null || images.isEmpty()) return List.of();
         List<byte[]> imageBytes = new ArrayList<>(images.size());
         for (BufferedImage bimg : images) {
             try {
@@ -159,19 +154,17 @@ public final class ChatModel {
 
     public String formatTurnStatus(AppSettings settings, ImplementationPlan plan) {
         StringBuilder sb = new StringBuilder("Turns: ").append(currentTurn);
-        if (settings != null) {
-            int maxTurns = settings.getMaxAgentToolTurns();
-            sb.append(" / ").append(maxTurns);
-        }
+        if (settings != null) sb.append(" / ").append(settings.getMaxAgentToolTurns());
         if (taskMode && plan != null && !plan.technicalSteps().isEmpty()) {
-            int completed = 0;
-            for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
-                if (step.completed()) {
-                    completed++;
-                }
-            }
-            int total = plan.technicalSteps().size();
-            sb.append(" | Plan: ").append(completed).append("/").append(total).append(" steps");
+            long completed =
+                    plan.technicalSteps().stream()
+                            .filter(ImplementationPlan.TechStep::completed)
+                            .count();
+            sb.append(" | Plan: ")
+                    .append(completed)
+                    .append("/")
+                    .append(plan.technicalSteps().size())
+                    .append(" steps");
         }
         return sb.toString();
     }

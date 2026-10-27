@@ -28,12 +28,10 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/** Panel for application settings. */
 @Component
 @Lazy
 public final class SettingsPanel extends JPanel {
     private static final long serialVersionUID = 1L;
-
     private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
     private static final String MIG_WRAP = "wrap";
     static final String RESTART_LEGEND_TEXT =
@@ -118,23 +116,15 @@ public final class SettingsPanel extends JPanel {
         statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Actions.Green");
         add(statusLabel, "gapleft 10");
 
-        statusTimer =
-                new Timer(
-                        3000,
-                        e -> {
-                            statusLabel.setText("");
-                        });
+        statusTimer = new Timer(3000, e -> statusLabel.setText(""));
         statusTimer.setRepeats(false);
     }
 
     private void loadModels() {
         List<GeminiModelConfig> modelList = settingsService.getAvailableModels();
-        if (modelList == null) {
-            modelList = List.of();
-        }
-        DefaultComboBoxModel<GeminiModelConfig> model =
-                new DefaultComboBoxModel<>(modelList.toArray(new GeminiModelConfig[0]));
-        modelCombo.setModel(model);
+        if (modelList == null) modelList = List.of();
+        modelCombo.setModel(
+                new DefaultComboBoxModel<>(modelList.toArray(new GeminiModelConfig[0])));
 
         String currentModelId = settingsService.getSettings().getGeminiModel();
         for (int i = 0; i < modelCombo.getItemCount(); i++) {
@@ -148,9 +138,7 @@ public final class SettingsPanel extends JPanel {
     @EventListener
     @SuppressWarnings("PMD.UnusedAssignment")
     public void onSettingsChanged(SettingsChangedEvent event) {
-        if (event == null || event.settings() == null) {
-            return;
-        }
+        if (event == null || event.settings() == null) return;
         Edt.run(
                 () -> {
                     String theme = event.settings().getTheme();
@@ -166,9 +154,7 @@ public final class SettingsPanel extends JPanel {
     }
 
     private void updateTheme() {
-        if (updatingFromSettings) {
-            return;
-        }
+        if (updatingFromSettings) return;
         String selectedTheme = (String) themeCombo.getSelectedItem();
         if (selectedTheme != null) {
             settingsService.getSettings().setTheme(selectedTheme);
@@ -182,24 +168,18 @@ public final class SettingsPanel extends JPanel {
         String newApiKey = new String(geminiApiKeyField.getPassword());
         int oldMaxMessages = settings.getMaxChatMemoryMessages();
         int newMaxMessages = (Integer) maxMessagesSpinner.getValue();
-
         boolean restartRequiredChanged =
                 !oldApiKey.equals(newApiKey) || oldMaxMessages != newMaxMessages;
 
         settings.setGeminiApiKey(newApiKey);
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
-        if (selectedModel != null) {
-            settings.setGeminiModel(selectedModel.apiName());
-        }
+        if (selectedModel != null) settings.setGeminiModel(selectedModel.apiName());
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
         settingsService.saveSettings();
 
-        if (restartRequiredChanged) {
-            statusLabel.setText(SAVED_RESTART_REQUIRED_TEXT);
-        } else {
-            statusLabel.setText(SAVED_APPLIED_TEXT);
-        }
+        statusLabel.setText(
+                restartRequiredChanged ? SAVED_RESTART_REQUIRED_TEXT : SAVED_APPLIED_TEXT);
         statusTimer.restart();
     }
 
@@ -230,23 +210,19 @@ public final class SettingsPanel extends JPanel {
     public static boolean isDarkTheme(String themeName) {
         if (themeName != null && !themeName.isBlank()) {
             String lower = themeName.toLowerCase(Locale.ROOT);
-            if (lower.contains("dark") || "darcula".equals(lower)) {
-                return true;
-            }
-            if (lower.contains("light") || "intellij".equals(lower)) {
-                return false;
-            }
+            if (lower.contains("dark") || "darcula".equals(lower)) return true;
+            if (lower.contains("light") || "intellij".equals(lower)) return false;
         }
         return FlatLaf.isLafDark();
     }
 
     public static void applyRSyntaxTheme(
             RSyntaxTextArea textArea, SettingsService settingsService) {
-        String themeName =
+        applyRSyntaxTheme(
+                textArea,
                 settingsService != null && settingsService.getSettings() != null
                         ? settingsService.getSettings().getTheme()
-                        : null;
-        applyRSyntaxTheme(textArea, themeName);
+                        : null);
     }
 
     private static volatile Theme cachedDarkRSyntaxTheme;
@@ -254,37 +230,27 @@ public final class SettingsPanel extends JPanel {
 
     static Theme getRSyntaxTheme(boolean dark) throws IOException {
         Theme cached = dark ? cachedDarkRSyntaxTheme : cachedLightRSyntaxTheme;
-        if (cached != null) {
-            return cached;
-        }
+        if (cached != null) return cached;
         synchronized (SettingsPanel.class) {
             cached = dark ? cachedDarkRSyntaxTheme : cachedLightRSyntaxTheme;
-            if (cached != null) {
-                return cached;
-            }
+            if (cached != null) return cached;
             String themePath =
                     dark
                             ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
                             : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
             try (InputStream in = SettingsPanel.class.getResourceAsStream(themePath)) {
                 Theme loaded = Theme.load(in);
-                if (dark) {
-                    cachedDarkRSyntaxTheme = loaded;
-                } else {
-                    cachedLightRSyntaxTheme = loaded;
-                }
+                if (dark) cachedDarkRSyntaxTheme = loaded;
+                else cachedLightRSyntaxTheme = loaded;
                 return loaded;
             }
         }
     }
 
     public static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
-        if (textArea == null) {
-            return;
-        }
+        if (textArea == null) return;
         try {
-            Theme theme = getRSyntaxTheme(isDarkTheme(themeName));
-            theme.apply(textArea);
+            getRSyntaxTheme(isDarkTheme(themeName)).apply(textArea);
         } catch (IOException ioe) {
             log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
         }
@@ -296,16 +262,15 @@ public final class SettingsPanel extends JPanel {
                     try {
                         UIManager.put("TabbedPane.tabType", "card");
                         UIManager.put("TabbedPane.showTabSeparators", true);
-
-                        switch (themeName) {
-                            case "FlatLaf Light" -> UIManager.setLookAndFeel(new FlatLightLaf());
-                            case "FlatLaf Dark" -> UIManager.setLookAndFeel(new FlatDarkLaf());
-                            case "IntelliJ" -> UIManager.setLookAndFeel(new FlatIntelliJLaf());
-                            case "Darcula" -> UIManager.setLookAndFeel(new FlatDarculaLaf());
-                            case "macOS Light" -> UIManager.setLookAndFeel(new FlatMacLightLaf());
-                            case "macOS Dark" -> UIManager.setLookAndFeel(new FlatMacDarkLaf());
-                            default -> UIManager.setLookAndFeel(new FlatLightLaf());
-                        }
+                        UIManager.setLookAndFeel(
+                                switch (themeName != null ? themeName : "") {
+                                    case "FlatLaf Dark" -> new FlatDarkLaf();
+                                    case "IntelliJ" -> new FlatIntelliJLaf();
+                                    case "Darcula" -> new FlatDarculaLaf();
+                                    case "macOS Light" -> new FlatMacLightLaf();
+                                    case "macOS Dark" -> new FlatMacDarkLaf();
+                                    default -> new FlatLightLaf();
+                                });
                         FlatLaf.updateUI();
                     } catch (Exception ex) {
                         log.error("Failed to apply theme {}: {}", themeName, ex.getMessage());

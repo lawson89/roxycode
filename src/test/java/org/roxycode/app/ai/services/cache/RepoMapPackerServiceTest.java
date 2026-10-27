@@ -7,10 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +17,7 @@ import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.ui.SwingTestUtils;
 
 class RepoMapPackerServiceTest {
 
@@ -66,10 +64,8 @@ class RepoMapPackerServiceTest {
     void testUnifiedFlatSortedOutputSourceOnlySkeletonsAndBoilerplateFiltering()
             throws IOException {
         String nl = System.lineSeparator();
-        Path srcDir = tempDir.resolve("src/main/java/demo");
-        Path testDir = tempDir.resolve("src/test/java/demo");
-        Files.createDirectories(srcDir);
-        Files.createDirectories(testDir);
+        Path srcDir = Files.createDirectories(tempDir.resolve("src/main/java/demo"));
+        Path testDir = Files.createDirectories(tempDir.resolve("src/test/java/demo"));
 
         Path smallJava =
                 Files.writeString(
@@ -91,7 +87,6 @@ class RepoMapPackerServiceTest {
         Files.writeString(tempDir.resolve("pom.xml"), "<project><groupId>demo</groupId></project>");
         Files.writeString(srcDir.resolve("Empty.java"), "");
 
-        // Return unsorted list to verify lexicographical sorting
         when(grepService.listFiles(null))
                 .thenReturn(
                         List.of(
@@ -122,7 +117,7 @@ class RepoMapPackerServiceTest {
         assertTrue(result.success());
         String content = result.content();
 
-        String expectedMap =
+        assertEquals(
                 String.join(
                         "\n",
                         "# Repo Map Snapshot",
@@ -133,23 +128,18 @@ class RepoMapPackerServiceTest {
                         "  3: public class SmallService {",
                         "  5: public void execute() {}",
                         "src/test/java/demo/SmallServiceTest.java",
-                        "");
-        assertEquals(expectedMap, content);
+                        ""),
+                content);
 
-        for (String forbidden :
-                List.of(
-                        "## Project Tree",
-                        "--- ",
-                        "1: package demo;",
-                        "2: import java.util.List;",
-                        "secretBodyLine",
-                        "Some markdown prose",
-                        "testIt")) {
-            assertFalse(content.contains(forbidden), "Should not contain: " + forbidden);
-        }
-
-        // Only SmallService.java should be passed to ctags (not README.md, pom.xml, Empty.java, or
-        // SmallServiceTest.java)
+        SwingTestUtils.assertContainsNone(
+                content,
+                "## Project Tree",
+                "--- ",
+                "1: package demo;",
+                "2: import java.util.List;",
+                "secretBodyLine",
+                "Some markdown prose",
+                "testIt");
         assertEquals(1, ctagsCommands.size());
         assertEquals(6, ctagsCommands.get(0).size());
         assertTrue(ctagsCommands.get(0).get(5).endsWith("SmallService.java"));
@@ -158,75 +148,25 @@ class RepoMapPackerServiceTest {
     @Test
     void testSourceAndTestClassificationHelpers() {
         for (String src :
-                List.of(
-                        "src/main/java/App.java",
-                        "app/main.py",
-                        "web/index.ts",
-                        "web/Component.tsx",
-                        "web/script.js",
-                        "web/View.jsx",
-                        "cmd/server.go",
-                        "src/lib.rs",
-                        "native/core.c",
-                        "native/core.cpp",
-                        "native/core.h",
-                        "native/core.hpp",
-                        "Program.cs",
-                        "app.rb",
-                        "index.php",
-                        "Main.kt",
-                        "build.gradle.kts",
-                        "App.swift",
-                        "Main.scala")) {
-            assertTrue(RepoMapPackerService.isSourceFile(src), "Expected source: " + src);
-            assertTrue(
-                    RepoMapPackerService.shouldGenerateSkeleton(src), "Expected skeleton: " + src);
+                "src/main/java/App.java,app/main.py,web/index.ts,web/Component.tsx,web/script.js,web/View.jsx,cmd/server.go,src/lib.rs,native/core.c,native/core.cpp,native/core.h,native/core.hpp,Program.cs,app.rb,index.php,Main.kt,build.gradle.kts,App.swift,Main.scala"
+                        .split(",")) {
+            assertTrue(RepoMapPackerService.isSourceFile(src));
+            assertTrue(RepoMapPackerService.shouldGenerateSkeleton(src));
         }
 
         for (String nonSrc :
-                List.of(
-                        "README.md",
-                        "pom.xml",
-                        "settings.toml",
-                        "application.properties",
-                        "styles.css",
-                        "package.json",
-                        "config.yml",
-                        "config.yaml",
-                        "mvnw",
-                        "LICENSE",
-                        "")) {
-            assertFalse(
-                    RepoMapPackerService.isSourceFile(nonSrc), "Expected non-source: " + nonSrc);
+                "README.md,pom.xml,settings.toml,application.properties,styles.css,package.json,config.yml,config.yaml,mvnw,LICENSE,"
+                        .split(",", -1)) {
+            assertFalse(RepoMapPackerService.isSourceFile(nonSrc));
             assertFalse(RepoMapPackerService.shouldGenerateSkeleton(nonSrc));
         }
         assertFalse(RepoMapPackerService.isSourceFile(null));
 
         for (String testPath :
-                List.of(
-                        "src/test/java/org/roxycode/Helper.java",
-                        "module/src/test/java/Helper.java",
-                        "test/unit/helper.py",
-                        "pkg/test/helper.go",
-                        "tests/integration/run.py",
-                        "app/tests/run.py",
-                        "__tests__/App.tsx",
-                        "src/__tests__/App.tsx",
-                        "src/main/java/MyTest.java",
-                        "src/main/java/MyTests.java",
-                        "src/main/java/MyIT.java",
-                        "src/test_runner.py",
-                        "src/runner_test.py",
-                        "pkg/server_test.go",
-                        "src/app.test.ts",
-                        "src/app.spec.ts",
-                        "src/app.test.js",
-                        "src/app.spec.js")) {
-            assertTrue(
-                    RepoMapPackerService.isTestFile(testPath), "Expected test file: " + testPath);
-            assertFalse(
-                    RepoMapPackerService.shouldGenerateSkeleton(testPath),
-                    "Expected no skeleton for test: " + testPath);
+                "src/test/java/org/roxycode/Helper.java,module/src/test/java/Helper.java,test/unit/helper.py,pkg/test/helper.go,tests/integration/run.py,app/tests/run.py,__tests__/App.tsx,src/__tests__/App.tsx,src/main/java/MyTest.java,src/main/java/MyTests.java,src/main/java/MyIT.java,src/test_runner.py,src/runner_test.py,pkg/server_test.go,src/app.test.ts,src/app.spec.ts,src/app.test.js,src/app.spec.js"
+                        .split(",")) {
+            assertTrue(RepoMapPackerService.isTestFile(testPath));
+            assertFalse(RepoMapPackerService.shouldGenerateSkeleton(testPath));
         }
         assertFalse(RepoMapPackerService.isTestFile("src/main/java/ContestService.java"));
         assertFalse(RepoMapPackerService.isTestFile(null));
@@ -252,13 +192,10 @@ class RepoMapPackerServiceTest {
         assertTrue(secondResult.content().contains("Fresh.java\n  1: public class Fresh {}"));
         verify(grepService, times(1)).listFiles(null);
 
-        // Modify file without firing FileChangedEvent; generateRepoMap returns in-memory cache
         Files.writeString(testFile, "public class FreshUpdated {}\n");
-        EditorResult cachedResult = service.generateRepoMap();
-        assertTrue(cachedResult.content().contains("public class Fresh {}"));
+        assertTrue(service.generateRepoMap().content().contains("public class Fresh {}"));
         verify(grepService, times(1)).listFiles(null);
 
-        // forceRegenerateRepoMap deletes disk cache, clears in-memory caches, and regenerates
         EditorResult forcedResult = service.forceRegenerateRepoMap();
         assertTrue(forcedResult.success());
         assertTrue(
@@ -270,14 +207,14 @@ class RepoMapPackerServiceTest {
     @Test
     void testBatchedCtagsExecutionAndPerFileSkeletonCache() throws IOException {
         when(metaService.loadRepoCache()).thenReturn(Optional.empty());
-
-        Path largeA = tempDir.resolve("LargeA.java");
-        Path largeB = tempDir.resolve("LargeB.java");
         String nl = System.lineSeparator();
         String padding = "// " + "x".repeat(2200) + nl;
-        Files.writeString(largeA, "public class LargeA {" + nl + padding + "}" + nl);
-        Files.writeString(largeB, "public class LargeB {" + nl + padding + "}" + nl);
-
+        Path largeA =
+                Files.writeString(
+                        tempDir.resolve("LargeA.java"),
+                        "public class LargeA {" + nl + padding + "}" + nl);
+        Files.writeString(
+                tempDir.resolve("LargeB.java"), "public class LargeB {" + nl + padding + "}" + nl);
         when(grepService.listFiles(null)).thenReturn(List.of("LargeA.java", "LargeB.java"));
 
         List<List<String>> ctagsCommands = new ArrayList<>();
@@ -293,8 +230,8 @@ class RepoMapPackerServiceTest {
 
         EditorResult first = service.generateRepoMap();
         assertTrue(first.success());
-        assertTrue(first.content().contains("  1: public class LargeA {"));
-        assertTrue(first.content().contains("  1: public class LargeB {"));
+        SwingTestUtils.assertContainsAll(
+                first.content(), "  1: public class LargeA {", "  1: public class LargeB {");
         assertEquals(1, ctagsCommands.size());
         assertEquals(7, ctagsCommands.get(0).size());
 
@@ -303,8 +240,10 @@ class RepoMapPackerServiceTest {
 
         EditorResult second = service.generateRepoMap();
         assertTrue(second.success());
-        assertTrue(second.content().contains("  1: public class LargeAUpdated {"));
-        assertTrue(second.content().contains("  1: public class LargeB {"));
+        SwingTestUtils.assertContainsAll(
+                second.content(),
+                "  1: public class LargeAUpdated {",
+                "  1: public class LargeB {");
         assertEquals(2, ctagsCommands.size());
         assertEquals(6, ctagsCommands.get(1).size());
         assertTrue(ctagsCommands.get(1).get(5).endsWith("LargeA.java"));
@@ -312,47 +251,24 @@ class RepoMapPackerServiceTest {
 
     @Test
     void testExcludeBinaryFilesAndKnownTextAndBinaryExtensionsFastPath() throws IOException {
-        assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("logo.PNG")));
-        assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("lib/app.jar")));
-        assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of("archive.tar.gz")));
-        assertFalse(RepoMapPackerService.hasKnownBinaryExtension(Path.of("Main.java")));
-        assertFalse(RepoMapPackerService.hasKnownBinaryExtension(Path.of("Makefile")));
+        for (String bin : List.of("logo.PNG", "lib/app.jar", "archive.tar.gz")) {
+            assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of(bin)));
+        }
+        for (String nonBin : List.of("Main.java", "Makefile")) {
+            assertFalse(RepoMapPackerService.hasKnownBinaryExtension(Path.of(nonBin)));
+        }
         assertFalse(RepoMapPackerService.hasKnownBinaryExtension(null));
 
         for (String knownText :
-                List.of(
-                        "src/Main.java",
-                        "script.py",
-                        "README.MD",
-                        "notes.txt",
-                        "package.json",
-                        "pom.xml",
-                        "config.yml",
-                        "config.yaml",
-                        "build.toml",
-                        "application.properties",
-                        "styles.css",
-                        "index.html",
-                        "schema.sql",
-                        "run.sh",
-                        "build.bat",
-                        "mvnw.cmd",
-                        "build.gradle",
-                        ".gitignore",
-                        "data.csv")) {
-            assertTrue(
-                    RepoMapPackerService.hasKnownTextExtension(Path.of(knownText)),
-                    "Expected known text extension: " + knownText);
+                "src/Main.java,script.py,README.MD,notes.txt,package.json,pom.xml,config.yml,config.yaml,build.toml,application.properties,styles.css,index.html,schema.sql,run.sh,build.bat,mvnw.cmd,build.gradle,.gitignore,data.csv"
+                        .split(",")) {
+            assertTrue(RepoMapPackerService.hasKnownTextExtension(Path.of(knownText)));
         }
-        assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of("logo.png")));
-        assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of("custom.dat")));
-        assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of("Makefile")));
-        assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of("trailingdot.")));
+        for (String nonText : List.of("logo.png", "custom.dat", "Makefile", "trailingdot.")) {
+            assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of(nonText)));
+        }
         assertFalse(RepoMapPackerService.hasKnownTextExtension(null));
 
-        // Known text extension with NUL bytes on disk is fast-passed without reading file stream;
-        // unknown extension (.dat, .custom) falls back to FileReadService.isBinaryFile byte
-        // sniffing.
         Files.write(tempDir.resolve("fastpath.toml"), new byte[] {'a', 0, 'b'});
         Files.writeString(tempDir.resolve("test.txt"), "Hello Text");
         Files.writeString(tempDir.resolve("readme.custom"), "Plain text with unknown extension");
@@ -369,12 +285,9 @@ class RepoMapPackerServiceTest {
 
         EditorResult result = service.generateRepoMap();
         assertTrue(result.success());
-        assertTrue(result.content().contains("fastpath.toml"));
-        assertTrue(result.content().contains("test.txt"));
-        assertTrue(result.content().contains("readme.custom"));
-        assertFalse(result.content().contains("custom.dat"));
-        assertFalse(result.content().contains("icon.png"));
-        assertFalse(result.content().contains("app.jar"));
+        SwingTestUtils.assertContainsAll(
+                result.content(), "fastpath.toml", "test.txt", "readme.custom");
+        SwingTestUtils.assertContainsNone(result.content(), "custom.dat", "icon.png", "app.jar");
     }
 
     @Test

@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.awt.Color;
 import java.awt.Insets;
@@ -9,11 +10,7 @@ import javax.swing.border.Border;
 import javax.swing.text.Element;
 import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
-import javax.swing.text.html.BlockView;
-import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.html.InlineView;
-import javax.swing.text.html.ParagraphView;
+import javax.swing.text.html.*;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.JexlServiceRegistry;
 
@@ -25,10 +22,7 @@ class SwingHtmlUtilsTest {
         assertEquals("", SwingHtmlUtils.escapeHtml(""));
         assertEquals(
                 "&lt;div&gt;&quot;Hello &amp; World'&quot;&lt;/div&gt;",
-                SwingHtmlUtils.escapeHtml(
-                        """
-                        <div>"Hello & World'"</div>"""
-                                .strip()));
+                SwingHtmlUtils.escapeHtml("<div>" + '"' + "Hello & World'" + '"' + "</div>"));
     }
 
     @Test
@@ -36,52 +30,34 @@ class SwingHtmlUtilsTest {
         assertEquals("", SwingHtmlUtils.renderMarkdownToHtml(null));
         assertEquals("", SwingHtmlUtils.renderMarkdownToHtml(""));
 
-        String markdown =
-                """
-                # Heading
-
-                | Name | Value |
-                | :--- | ---: |
-                | Key | 42 |
-
-                ~~~java
-                public class Demo {}
-                ~~~
-                """;
-        String html = SwingHtmlUtils.renderMarkdownToHtml(markdown);
-
-        assertTrue(html.contains("<h1>Heading</h1>"));
-        assertTrue(html.contains("md-table"));
-        assertTrue(html.contains("cellpadding"));
-        assertTrue(html.contains("md-th"));
-        assertTrue(html.contains("md-td"));
-        assertTrue(html.contains("<span class='tk-rw'>public</span>"));
+        String html =
+                SwingHtmlUtils.renderMarkdownToHtml(
+                        "# Heading\n\n| Name | Value |\n| :--- | ---: |\n| Key | 42 |\n\n~~~java\npublic class Demo {}\n~~~\n");
+        assertContainsAll(
+                html,
+                "<h1>Heading</h1>",
+                "md-table",
+                "cellpadding",
+                "md-th",
+                "md-td",
+                "<span class='tk-rw'>public</span>");
     }
 
     @Test
     void testStyleMarkdownTablesViaFlexmarkAttributeProviderDoesNotMutateCodeOrInlineHtml() {
-        String markdown =
-                """
-                | Col A | Col B |
-                | :--- | ---: |
-                | Val 1 | Val 2 |
-
-                <table><tr><td>Inline raw HTML table</td></tr></table>
-
-                ~~~html
-                <table>
-                  <tr><th>Header</th><td>Cell</td></tr>
-                </table>
-                ~~~
-                """;
-        String rendered = SwingHtmlUtils.renderMarkdownToHtml(markdown);
-
-        assertTrue(rendered.contains("md-table"));
-        assertTrue(rendered.contains("md-th"));
-        assertTrue(rendered.contains("md-td"));
-        assertTrue(rendered.contains("right"));
-        assertTrue(rendered.contains("<table><tr><td>Inline raw HTML table</td></tr></table>"));
-        assertTrue(rendered.contains("&lt;table&gt;"));
+        String rendered =
+                SwingHtmlUtils.renderMarkdownToHtml(
+                        "| Col A | Col B |\n| :--- | ---: |\n| Val 1 | Val 2 |\n\n"
+                                + "<table><tr><td>Inline raw HTML table</td></tr></table>\n\n"
+                                + "~~~html\n<table>\n  <tr><th>Header</th><td>Cell</td></tr>\n</table>\n~~~\n");
+        assertContainsAll(
+                rendered,
+                "md-table",
+                "md-th",
+                "md-td",
+                "right",
+                "<table><tr><td>Inline raw HTML table</td></tr></table>",
+                "&lt;table&gt;");
     }
 
     @Test
@@ -114,12 +90,8 @@ class SwingHtmlUtilsTest {
                         + "</pre></body></html>");
 
         ViewFactory factory = ((HTMLEditorKit) pane.getEditorKit()).getViewFactory();
-        assertNotNull(factory);
-
         HTMLDocument doc = (HTMLDocument) pane.getDocument();
-        String extractedText = doc.getText(0, doc.getLength());
-        assertTrue(extractedText.contains(longCodeLine));
-        assertTrue(extractedText.contains(longInlineToken));
+        assertContainsAll(doc.getText(0, doc.getLength()), longCodeLine, longInlineToken);
         assertNotNull(SwingTestUtils.findElement(doc.getDefaultRootElement(), "br", e -> true));
         assertTrue(verifyWrappingViews(doc.getDefaultRootElement(), factory));
     }
@@ -139,9 +111,7 @@ class SwingHtmlUtilsTest {
             }
         }
         for (int i = 0; i < elem.getElementCount(); i++) {
-            if (verifyWrappingViews(elem.getElement(i), factory)) {
-                foundBr = true;
-            }
+            foundBr |= verifyWrappingViews(elem.getElement(i), factory);
         }
         return foundBr;
     }
@@ -165,13 +135,11 @@ class SwingHtmlUtilsTest {
 
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlApiPanel apiPanel = new JexlApiPanel(registry);
-
         assertEquals(JexlApiPanel.COPY_BUTTON_TEXT, apiPanel.getCopyButton().getText());
         assertEquals(0, apiPanel.getTextPane().getSelectionStart());
         assertEquals(0, apiPanel.getTextPane().getSelectionEnd());
 
         apiPanel.getCopyButton().doClick();
-
         assertEquals(JexlApiPanel.COPIED_BUTTON_TEXT, apiPanel.getCopyButton().getText());
         assertEquals(registry.getDocumentation(null), apiPanel.getLastCopiedDocumentation());
         assertEquals(
@@ -200,7 +168,6 @@ class SwingHtmlUtilsTest {
         assertEquals("Original", btn.getText());
 
         Border border = SwingHtmlUtils.createThemeMatteBorder(1, 0, 1, 0);
-        assertNotNull(border);
         assertEquals(new Insets(1, 0, 1, 0), border.getBorderInsets(btn));
     }
 

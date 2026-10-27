@@ -20,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 
-/** Service providing safe file editing capabilities within the project sandbox. */
 @AgentService(
         value = "fileEditorService",
         phases = {"CODE"})
@@ -34,8 +33,12 @@ public class FileEditorService {
     private static final int SINGLE_MATCH_COUNT = 1;
     private static final double MIN_LINE_SIMILARITY = 0.6;
     private static final JaroWinklerSimilarity JARO_WINKLER = new JaroWinklerSimilarity();
-    private static final char LF = '\n';
-    private static final String WHITESPACE_REGEX = "\\s+";
+    private static final char LF = (char) 10;
+    private static final String NL = String.valueOf(LF);
+    private static final String CRLF = String.valueOf((char) 13) + NL;
+    private static final String CR = String.valueOf((char) 13);
+    private static final String TAB_SPACE = " " + (char) 9;
+    private static final String WHITESPACE_REGEX = String.valueOf((char) 92) + "s+";
 
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
@@ -46,14 +49,6 @@ public class FileEditorService {
         this.eventPublisher = eventPublisher;
     }
 
-    /**
-     * Writes content to a file, overwriting it if it exists.
-     *
-     * @param relativePath the path relative to the project root
-     * @param content the content to write
-     * @return EditorResult indicating success
-     * @throws IOException if an I/O error occurs
-     */
     @AgentDoc(
             value = "Writes content to a file, overwriting it if it exists.",
             examples =
@@ -68,20 +63,10 @@ public class FileEditorService {
         }
         PathUtils.createParentDirectories(path);
         Files.writeString(path, content);
-
         return completeFileMutation(
                 path, relativePath, "File written successfully: " + relativePath);
     }
 
-    /**
-     * Replaces a unique block of text with new content.
-     *
-     * @param relativePath the path relative to the project root
-     * @param targetBlock the text block to replace
-     * @param replacementBlock the new content
-     * @return EditorResult indicating success or diagnostic error hint
-     * @throws IOException if an I/O error occurs
-     */
     @AgentDoc(
             value = "Replaces a unique block of text with new content.",
             examples =
@@ -93,9 +78,7 @@ public class FileEditorService {
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
         EditorResult validationError = validateRegularFile(path, relativePath);
-        if (validationError != null) {
-            return validationError;
-        }
+        if (validationError != null) return validationError;
 
         String content = Files.readString(path);
         if (targetBlock == null || targetBlock.isBlank()) {
@@ -110,32 +93,30 @@ public class FileEditorService {
                         ? ""
                         : normalizeLineEndings(replacementBlock, lineSeparator);
 
-        // Pass 1: Exact match with normalized line endings
         List<Integer> exactMatchOffsets = findExactMatches(content, normalizedTarget);
         if (exactMatchOffsets.size() == SINGLE_MATCH_COUNT) {
             int start = exactMatchOffsets.get(0);
-            int end = start + normalizedTarget.length();
-            return applyReplacement(path, relativePath, content, start, end, normalizedReplacement);
+            return applyReplacement(
+                    path,
+                    relativePath,
+                    content,
+                    start,
+                    start + normalizedTarget.length(),
+                    normalizedReplacement);
         }
         if (exactMatchOffsets.size() > SINGLE_MATCH_COUNT) {
             return nonUniqueMatchResult(relativePath, content, exactMatchOffsets);
         }
 
-        // Pass 2: Whitespace-agnostic regex fallback with leading indentation preservation
         String[] parts = normalizedTarget.trim().split(WHITESPACE_REGEX);
         StringBuilder sb = new StringBuilder("(?s)");
         for (int i = 0; i < parts.length; i++) {
-            if (parts[i].isEmpty()) {
-                continue;
-            }
-            sb.append(Pattern.quote(parts[i]));
-            if (i < parts.length - 1) {
-                sb.append(WHITESPACE_REGEX);
+            if (!parts[i].isEmpty()) {
+                sb.append(Pattern.quote(parts[i]));
+                if (i < parts.length - 1) sb.append(WHITESPACE_REGEX);
             }
         }
-        Pattern pattern = Pattern.compile(sb.toString());
-        Matcher matcher = pattern.matcher(content);
-
+        Matcher matcher = Pattern.compile(sb.toString()).matcher(content);
         List<int[]> regexMatches = new ArrayList<>();
         while (matcher.find()) {
             regexMatches.add(new int[] {matcher.start(), matcher.end()});
@@ -146,97 +127,65 @@ public class FileEditorService {
                     false, "", buildTargetNotFoundHint(relativePath, content, targetBlock));
         }
         if (regexMatches.size() > SINGLE_MATCH_COUNT) {
-            List<Integer> offsets = new ArrayList<>(regexMatches.size());
-            for (int[] match : regexMatches) {
-                offsets.add(match[0]);
-            }
-            return nonUniqueMatchResult(relativePath, content, offsets);
+            return nonUniqueMatchResult(
+                    relativePath, content, regexMatches.stream().map(m -> m[0]).toList());
         }
 
         int start = regexMatches.get(0)[0];
         int end = regexMatches.get(0)[1];
-
-        int lineStart = start == 0 ? 0 : content.lastIndexOf('\n', start - 1) + 1;
+        int lineStart = start == 0 ? 0 : content.lastIndexOf(LF, start - 1) + 1;
         String linePrefix = content.substring(lineStart, start);
         if (isHorizontalWhitespaceOnly(linePrefix)
                 && (startsWithHorizontalWhitespace(stripLeadingNewlines(normalizedTarget))
                         || startsWithHorizontalWhitespace(normalizedReplacement))) {
             start = lineStart;
         }
-
         return applyReplacement(path, relativePath, content, start, end, normalizedReplacement);
     }
 
-    /**
-     * Replaces a range of lines with new content.
-     *
-     * @param relativePath the path relative to the project root
-     * @param startLine the start line number (1-based)
-     * @param endLine the end line number (1-based, inclusive)
-     * @param replacementText the new content for the range
-     * @return EditorResult indicating success or diagnostic error hint
-     * @throws IOException if an I/O error occurs
-     */
     @AgentDoc(
             value = "Replaces a range of lines with new content using 1-based indexing.",
             examples =
-                    "fileEditorService.replaceLines('pom.xml', 10, 15, '    <dependencies>\n        ...\n    </dependencies>')")
+                    """
+                    fileEditorService.replaceLines('pom.xml', 10, 15, '    <dependencies>
+                        ...
+                    </dependencies>')""")
     public EditorResult replaceLines(
             @AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("The 1-based start line number (inclusive)") int startLine,
             @AgentDoc("The 1-based end line number (inclusive)") int endLine,
             @AgentDoc("The replacement content for the line range") String replacementText)
             throws IOException {
-        Path path = projectService.resolvePath(relativePath);
-        EditorResult validationError = validateRegularFile(path, relativePath);
-        if (validationError != null) {
-            return validationError;
-        }
-
-        String rawContent = Files.readString(path);
-        String lineSeparator = detectLineSeparator(rawContent, replacementText);
-        boolean hasTrailingNewline = hasTrailingLineSeparator(rawContent);
-        List<String> lines = rawContent.lines().toList();
-
-        if (startLine < 1
-                || startLine > lines.size()
-                || endLine < startLine
-                || endLine > lines.size()) {
-            return new EditorResult(
-                    false,
-                    "",
-                    "Invalid line range: "
-                            + startLine
-                            + " to "
-                            + endLine
-                            + " (valid range: 1 to "
-                            + lines.size()
-                            + ", file has "
-                            + lines.size()
-                            + " lines)");
-        }
-
-        List<String> newLines = new ArrayList<>(lines);
-        newLines.subList(startLine - 1, endLine).clear();
-        newLines.addAll(
-                startLine - 1,
-                replacementText.isEmpty() ? List.of("") : replacementText.lines().toList());
-
-        writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
-
-        return completeFileMutation(
-                path, relativePath, "Lines replaced successfully in: " + relativePath);
+        return mutateLines(
+                relativePath,
+                replacementText,
+                false,
+                lines -> {
+                    if (startLine < 1
+                            || startLine > lines.size()
+                            || endLine < startLine
+                            || endLine > lines.size()) {
+                        return "Invalid line range: "
+                                + startLine
+                                + " to "
+                                + endLine
+                                + " (valid range: 1 to "
+                                + lines.size()
+                                + ", file has "
+                                + lines.size()
+                                + " lines)";
+                    }
+                    lines.subList(startLine - 1, endLine).clear();
+                    lines.addAll(
+                            startLine - 1,
+                            replacementText.isEmpty()
+                                    ? List.of("")
+                                    : replacementText.lines().toList());
+                    return null;
+                },
+                "Lines replaced successfully in: " + relativePath);
     }
 
-    /**
-     * Inserts content at a specific line number.
-     *
-     * @param relativePath the path relative to the project root
-     * @param lineNumber the line number to insert at (1-based)
-     * @param content the content to insert
-     * @return EditorResult indicating success or diagnostic error hint
-     * @throws IOException if an I/O error occurs
-     */
     @AgentDoc(
             value = "Inserts content at a specific line number using 1-based indexing.",
             examples =
@@ -246,50 +195,60 @@ public class FileEditorService {
             @AgentDoc("The 1-based line number at which to insert") int lineNumber,
             @AgentDoc("The content to insert") String content)
             throws IOException {
-        Path path = projectService.resolvePath(relativePath);
-        EditorResult validationError = validateRegularFile(path, relativePath);
-        if (validationError != null) {
-            return validationError;
-        }
-
-        String rawContent = Files.readString(path);
-        String lineSeparator = detectLineSeparator(rawContent, content);
-        boolean hasTrailingNewline =
-                rawContent.isEmpty()
-                        ? hasTrailingLineSeparator(content)
-                        : hasTrailingLineSeparator(rawContent);
-        List<String> lines = rawContent.lines().toList();
-
-        int maxInsertLine = lines.size() + 1;
-        if (lineNumber < 1 || lineNumber > maxInsertLine) {
-            return new EditorResult(
-                    false,
-                    "",
-                    "Invalid line number: "
-                            + lineNumber
-                            + " (valid range: 1 to "
-                            + maxInsertLine
-                            + ", file has "
-                            + lines.size()
-                            + " lines)");
-        }
-
-        List<String> newLines = new ArrayList<>(lines);
-        newLines.addAll(lineNumber - 1, content.isEmpty() ? List.of("") : content.lines().toList());
-
-        writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
-
-        return completeFileMutation(
-                path, relativePath, "Content inserted successfully in: " + relativePath);
+        return mutateLines(
+                relativePath,
+                content,
+                true,
+                lines -> {
+                    int maxInsertLine = lines.size() + 1;
+                    if (lineNumber < 1 || lineNumber > maxInsertLine) {
+                        return "Invalid line number: "
+                                + lineNumber
+                                + " (valid range: 1 to "
+                                + maxInsertLine
+                                + ", file has "
+                                + lines.size()
+                                + " lines)";
+                    }
+                    lines.addAll(
+                            lineNumber - 1,
+                            content.isEmpty() ? List.of("") : content.lines().toList());
+                    return null;
+                },
+                "Content inserted successfully in: " + relativePath);
     }
 
-    /**
-     * Deletes a file at the given path relative to the project root.
-     *
-     * @param relativePath the path relative to the project root
-     * @return EditorResult indicating success or diagnostic error hint
-     * @throws IOException if an I/O error occurs
-     */
+    @FunctionalInterface
+    private interface LineMutator {
+        String mutate(List<String> mutableLines);
+    }
+
+    private EditorResult mutateLines(
+            String relativePath,
+            String inputContent,
+            boolean fallbackTrailingToInputWhenEmpty,
+            LineMutator mutator,
+            String successMessage)
+            throws IOException {
+        Path path = projectService.resolvePath(relativePath);
+        EditorResult validationError = validateRegularFile(path, relativePath);
+        if (validationError != null) return validationError;
+
+        String rawContent = Files.readString(path);
+        String lineSeparator = detectLineSeparator(rawContent, inputContent);
+        boolean hasTrailingNewline =
+                (fallbackTrailingToInputWhenEmpty && rawContent.isEmpty())
+                        ? hasTrailingLineSeparator(inputContent)
+                        : hasTrailingLineSeparator(rawContent);
+        List<String> newLines = new ArrayList<>(rawContent.lines().toList());
+        String error = mutator.mutate(newLines);
+        if (error != null) {
+            return new EditorResult(false, "", error);
+        }
+        writeLinesPreservingFormat(path, newLines, lineSeparator, hasTrailingNewline);
+        return completeFileMutation(path, relativePath, successMessage);
+    }
+
     @AgentDoc(
             value = "Deletes a file at the given path relative to the project root.",
             examples = "fileEditorService.deleteFile('src/main/java/OldClass.java')")
@@ -299,24 +258,13 @@ public class FileEditorService {
         Path path = projectService.resolvePath(relativePath);
         EditorResult validationError =
                 validateRegularFile(path, relativePath, "Cannot delete directory: ");
-        if (validationError != null) {
-            return validationError;
-        }
+        if (validationError != null) return validationError;
         Files.delete(path);
         log.info("Deleted file: {} at {}", relativePath, path.toAbsolutePath());
-
         eventPublisher.publishEvent(new FileChangedEvent(relativePath));
         return new EditorResult(true, "File deleted successfully: " + relativePath, null);
     }
 
-    /**
-     * Moves or renames a file within the project sandbox.
-     *
-     * @param sourcePath the source path relative to the project root
-     * @param targetPath the target path relative to the project root
-     * @return EditorResult indicating success or diagnostic error hint
-     * @throws IOException if an I/O error occurs
-     */
     @AgentDoc(
             value = "Moves or renames a file within the project sandbox.",
             examples =
@@ -333,21 +281,12 @@ public class FileEditorService {
         PathUtils.createParentDirectories(target);
         Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Moved file from {} to {}", sourcePath, targetPath);
-
         eventPublisher.publishEvent(new FileChangedEvent(sourcePath));
         eventPublisher.publishEvent(new FileChangedEvent(targetPath));
         return new EditorResult(
                 true, "File moved successfully from " + sourcePath + " to " + targetPath, null);
     }
 
-    /**
-     * Copies a file to a target path within the project sandbox.
-     *
-     * @param sourcePath the source file path relative to the project root
-     * @param targetPath the target file path relative to the project root
-     * @return EditorResult indicating success or diagnostic error hint
-     * @throws IOException if an I/O error occurs
-     */
     @AgentDoc(
             value = "Copies a file to a target path within the project sandbox.",
             examples =
@@ -360,25 +299,15 @@ public class FileEditorService {
         Path target = projectService.resolvePath(targetPath);
         EditorResult validationError =
                 validateRegularFile(source, sourcePath, "Cannot copy directory: ");
-        if (validationError != null) {
-            return validationError;
-        }
+        if (validationError != null) return validationError;
         PathUtils.createParentDirectories(target);
         Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Copied file from {} to {}", sourcePath, targetPath);
-
         eventPublisher.publishEvent(new FileChangedEvent(targetPath));
         return new EditorResult(
                 true, "File copied successfully from " + sourcePath + " to " + targetPath, null);
     }
 
-    /**
-     * Creates a directory and any nonexistent parent directories within the project sandbox.
-     *
-     * @param relativePath the directory path relative to the project root
-     * @return EditorResult indicating success or diagnostic error hint
-     * @throws IOException if an I/O error occurs
-     */
     @AgentDoc(
             value =
                     "Creates a directory and any nonexistent parent directories within the project sandbox.",
@@ -393,7 +322,6 @@ public class FileEditorService {
         }
         Files.createDirectories(path);
         log.info("Created directory: {} at {}", relativePath, path.toAbsolutePath());
-
         eventPublisher.publishEvent(new FileChangedEvent(relativePath));
         return new EditorResult(true, "Directory created successfully: " + relativePath, null);
     }
@@ -407,10 +335,9 @@ public class FileEditorService {
         if (!Files.exists(path)) {
             return new EditorResult(false, "", "File does not exist: " + relativePath);
         }
-        if (Files.isDirectory(path)) {
-            return new EditorResult(false, "", directoryErrorPrefix + relativePath);
-        }
-        return null;
+        return Files.isDirectory(path)
+                ? new EditorResult(false, "", directoryErrorPrefix + relativePath)
+                : null;
     }
 
     private EditorResult applyReplacement(
@@ -421,17 +348,15 @@ public class FileEditorService {
             int end,
             String replacementBlock)
             throws IOException {
-        String newContent = content.substring(0, start) + replacementBlock + content.substring(end);
-        Files.writeString(path, newContent);
-
+        Files.writeString(
+                path, content.substring(0, start) + replacementBlock + content.substring(end));
         return completeFileMutation(
                 path, relativePath, "Block replaced successfully in: " + relativePath);
     }
 
     private EditorResult completeFileMutation(Path path, String relativePath, String message)
             throws IOException {
-        long size = Files.size(path);
-        log.info("{} ({} bytes) at {}", message, size, path.toAbsolutePath());
+        log.info("{} ({} bytes) at {}", message, Files.size(path), path.toAbsolutePath());
         eventPublisher.publishEvent(new FileChangedEvent(relativePath));
         return new EditorResult(true, message, null);
     }
@@ -453,23 +378,17 @@ public class FileEditorService {
 
     private static List<Integer> findExactMatches(String content, String target) {
         List<Integer> offsets = new ArrayList<>();
-        if (target.isEmpty()) {
-            return offsets;
-        }
-        int index = content.indexOf(target, 0);
-        while (index != -1) {
+        if (target.isEmpty()) return offsets;
+        for (int index = content.indexOf(target, 0);
+                index != -1;
+                index = content.indexOf(target, index + target.length())) {
             offsets.add(index);
-            index = content.indexOf(target, index + target.length());
         }
         return offsets;
     }
 
     private static List<Integer> offsetsToLineNumbers(String content, List<Integer> offsets) {
-        List<Integer> lineNumbers = new ArrayList<>(offsets.size());
-        for (int offset : offsets) {
-            lineNumbers.add(lineNumberAtOffset(content, offset));
-        }
-        return lineNumbers;
+        return offsets.stream().map(offset -> lineNumberAtOffset(content, offset)).toList();
     }
 
     private static int lineNumberAtOffset(String content, int offset) {
@@ -483,8 +402,7 @@ public class FileEditorService {
                 new StringBuilder("TargetBlock not found in file: ").append(relativePath);
         List<String> fileLines = content.lines().toList();
         if (fileLines.isEmpty() || targetBlock == null || targetBlock.isBlank()) {
-            hint.append(" (file has ").append(fileLines.size()).append(" lines)");
-            return hint.toString();
+            return hint.append(" (file has ").append(fileLines.size()).append(" lines)").toString();
         }
 
         String firstTargetLine =
@@ -501,9 +419,7 @@ public class FileEditorService {
         if (!firstTargetLine.isEmpty()) {
             for (int i = 0; i < fileLines.size(); i++) {
                 String lineTrimmed = fileLines.get(i).trim().toLowerCase(Locale.ROOT);
-                if (lineTrimmed.isEmpty()) {
-                    continue;
-                }
+                if (lineTrimmed.isEmpty()) continue;
                 double similarity =
                         lineTrimmed.contains(firstTargetLine)
                                 ? 1.0
@@ -522,7 +438,8 @@ public class FileEditorService {
             int count = Math.min(MAX_DIAGNOSTIC_LINES, scoredLines.size());
             for (int i = 0; i < count; i++) {
                 int lineNum = scoredLines.get(i).lineNum();
-                hint.append("\nLine ")
+                hint.append(NL)
+                        .append("Line ")
                         .append(lineNum)
                         .append(": ")
                         .append(fileLines.get(lineNum - 1));
@@ -536,40 +453,31 @@ public class FileEditorService {
     }
 
     private static String normalizeLineEndings(String text, String lineSeparator) {
-        return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", lineSeparator);
+        return text.replace(CRLF, NL).replace(CR, NL).replace(NL, lineSeparator);
     }
 
     private static String stripLeadingNewlines(String text) {
-        return StringUtils.stripStart(text, "\r\n");
+        return StringUtils.stripStart(text, CRLF);
     }
 
     private static boolean isHorizontalWhitespaceOnly(String text) {
-        return !text.isEmpty() && StringUtils.containsOnly(text, " \t");
+        return !text.isEmpty() && StringUtils.containsOnly(text, TAB_SPACE);
     }
 
     private static boolean startsWithHorizontalWhitespace(String text) {
-        if (text == null || text.isEmpty()) {
-            return false;
-        }
-        char first = text.charAt(0);
-        return first == ' ' || first == '\t';
+        return text != null
+                && !text.isEmpty()
+                && (text.charAt(0) == ' ' || text.charAt(0) == (char) 9);
     }
 
     private static String detectLineSeparator(String rawContent, String fallbackText) {
-        if (rawContent.contains("\r\n")) {
-            return "\r\n";
-        }
-        if (rawContent.contains("\n")) {
-            return "\n";
-        }
-        if (fallbackText != null && fallbackText.contains("\r\n")) {
-            return "\r\n";
-        }
-        return "\n";
+        if (rawContent.contains(CRLF)) return CRLF;
+        if (rawContent.contains(NL)) return NL;
+        return (fallbackText != null && fallbackText.contains(CRLF)) ? CRLF : NL;
     }
 
     private static boolean hasTrailingLineSeparator(String text) {
-        return text != null && (text.endsWith("\n") || text.endsWith("\r"));
+        return text != null && (text.endsWith(NL) || text.endsWith(CR));
     }
 
     private static void writeLinesPreservingFormat(
@@ -580,9 +488,6 @@ public class FileEditorService {
             return;
         }
         String joined = String.join(lineSeparator, lines);
-        if (hasTrailingNewline) {
-            joined += lineSeparator;
-        }
-        Files.writeString(path, joined);
+        Files.writeString(path, hasTrailingNewline ? joined + lineSeparator : joined);
     }
 }

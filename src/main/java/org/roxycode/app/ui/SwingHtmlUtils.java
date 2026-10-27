@@ -1,5 +1,6 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
 import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
 import com.vladsch.flexmark.ext.tables.TableBlock;
@@ -22,6 +23,8 @@ import java.awt.event.MouseEvent;
 import java.net.URL;
 import java.util.Arrays;
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.Element;
@@ -37,10 +40,6 @@ import javax.swing.text.html.ParagraphView;
 import javax.swing.text.html.StyleSheet;
 import org.apache.commons.text.StringEscapeUtils;
 
-/**
- * Shared utility for Swing HTML 3.2 and CSS 1.0 styling, theming, and common editor component
- * behaviors.
- */
 public final class SwingHtmlUtils {
 
     private static final DataHolder FLEXMARK_OPTIONS =
@@ -58,11 +57,6 @@ public final class SwingHtmlUtils {
 
     private SwingHtmlUtils() {}
 
-    /**
-     * Flexmark {@link HtmlRenderer.HtmlRendererExtension} that decorates AST {@link TableBlock} and
-     * {@link TableCell} nodes with Swing HTML 3.2 / CSS 1.0 classes and attributes directly during
-     * rendering without post-hoc string replacement.
-     */
     private static final class MarkdownTableAttributeExtension
             implements HtmlRenderer.HtmlRendererExtension {
         @Override
@@ -92,27 +86,57 @@ public final class SwingHtmlUtils {
         }
     }
 
-    /**
-     * Renders Markdown into Swing-compatible HTML with GFM table styling and code block syntax
-     * highlighting applied.
-     *
-     * @param markdown the raw Markdown string
-     * @return the rendered and styled HTML fragment
-     */
     public static String renderMarkdownToHtml(String markdown) {
-        if (markdown == null || markdown.isEmpty()) {
-            return "";
-        }
-        String html = MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown));
-        return JexlToHtmlConverter.highlightCodeBlocks(html);
+        return (markdown == null || markdown.isEmpty())
+                ? ""
+                : JexlToHtmlConverter.highlightCodeBlocks(
+                        MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
     }
 
-    /**
-     * Applies theme-aware stylesheet and editor kit to a JEditorPane or JTextPane.
-     *
-     * @param textPane the text pane to style
-     * @param marginPx the body margin in pixels
-     */
+    public static JEditorPane createHtmlEditorPane() {
+        JEditorPane pane = new JEditorPane();
+        pane.setEditable(false);
+        pane.setContentType("text/html");
+        pane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        installTextContextMenu(pane);
+        return pane;
+    }
+
+    public static void addChangeListener(JTextComponent component, Runnable onChange) {
+        component
+                .getDocument()
+                .addDocumentListener(
+                        new DocumentListener() {
+                            @Override
+                            public void insertUpdate(DocumentEvent e) {
+                                onChange.run();
+                            }
+
+                            @Override
+                            public void removeUpdate(DocumentEvent e) {
+                                onChange.run();
+                            }
+
+                            @Override
+                            public void changedUpdate(DocumentEvent e) {
+                                onChange.run();
+                            }
+                        });
+    }
+
+    public static void applyTintedBannerStyle(
+            JComponent banner, Color accent, int topBottomPad, int leftPad, int rightPad) {
+        Color tintedBg = getTintedBackground(accent, 0.12);
+        banner.setOpaque(true);
+        banner.setBackground(tintedBg);
+        banner.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
+                        BorderFactory.createEmptyBorder(
+                                topBottomPad, leftPad, topBottomPad, rightPad)));
+        banner.putClientProperty(FlatClientProperties.STYLE, "background: " + toHex(tintedBg));
+    }
+
     public static void applyTheme(JEditorPane textPane, int marginPx) {
         HTMLEditorKit kit =
                 new HTMLEditorKit() {
@@ -125,27 +149,24 @@ public final class SwingHtmlUtils {
                     }
                 };
         StyleSheet sheet = new StyleSheet();
-
         boolean isDark = FlatLaf.isLafDark();
-        String cssPath = isDark ? "/css/chat-styles-dark.css" : "/css/chat-styles-light.css";
-        URL cssUrl = SwingHtmlUtils.class.getResource(cssPath);
+        URL cssUrl =
+                SwingHtmlUtils.class.getResource(
+                        isDark ? "/css/chat-styles-dark.css" : "/css/chat-styles-light.css");
         if (cssUrl != null) {
             sheet.importStyleSheet(cssUrl);
         }
 
         Color bg = getUiColor(isDark ? new Color(30, 30, 30) : Color.WHITE, "TextPane.background");
         Color fg = getUiColor(isDark ? Color.LIGHT_GRAY : Color.BLACK, "TextPane.foreground");
-
         textPane.setBackground(bg);
         textPane.setForeground(fg);
         textPane.setOpaque(true);
 
-        String bodyRule =
+        sheet.addRule(
                 String.format(
                         "body { background-color: %s; color: %s; margin: %dpx; }",
-                        toHex(bg), toHex(fg), marginPx);
-        sheet.addRule(bodyRule);
-
+                        toHex(bg), toHex(fg), marginPx));
         kit.setStyleSheet(sheet);
         textPane.setEditorKit(kit);
     }
@@ -154,13 +175,9 @@ public final class SwingHtmlUtils {
         for (Element curr = elem; curr != null; curr = curr.getParentElement()) {
             AttributeSet attrs = curr.getAttributes();
             if (attrs != null) {
-                if (attrs.isDefined(HTML.Attribute.NOWRAP)) {
-                    return true;
-                }
+                if (attrs.isDefined(HTML.Attribute.NOWRAP)) return true;
                 Object ws = attrs.getAttribute(CSS.Attribute.WHITE_SPACE);
-                if (ws != null && "nowrap".equalsIgnoreCase(ws.toString())) {
-                    return true;
-                }
+                if (ws != null && "nowrap".equalsIgnoreCase(ws.toString())) return true;
             }
             if ("td".equalsIgnoreCase(curr.getName()) || "th".equalsIgnoreCase(curr.getName())) {
                 break;
@@ -173,9 +190,7 @@ public final class SwingHtmlUtils {
         @Override
         public View create(Element elem) {
             View view = super.create(elem);
-            if (isNoWrap(elem)) {
-                return view;
-            }
+            if (isNoWrap(elem)) return view;
             if (view.getClass() == InlineView.class) {
                 return new InlineView(elem) {
                     @Override
@@ -204,12 +219,6 @@ public final class SwingHtmlUtils {
         }
     }
 
-    /**
-     * Installs a standard context menu (Cut/Paste when editable, Copy, Select All) on a text
-     * component.
-     *
-     * @param component the text component to attach the menu to
-     */
     public static void installTextContextMenu(JTextComponent component) {
         component.addMouseListener(
                 new MouseAdapter() {
@@ -244,37 +253,16 @@ public final class SwingHtmlUtils {
                 });
     }
 
-    /**
-     * Copies the given text to the system clipboard, ignoring errors in headless or restricted
-     * environments.
-     *
-     * @param text the text to copy
-     */
     public static void copyToClipboard(String text) {
-        if (text == null) {
-            return;
-        }
+        if (text == null) return;
         try {
-            StringSelection selection = new StringSelection(text);
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
+            Toolkit.getDefaultToolkit()
+                    .getSystemClipboard()
+                    .setContents(new StringSelection(text), null);
         } catch (Exception ignored) {
-            // Ignore clipboard access errors in headless or restricted environments
         }
     }
 
-    /**
-     * Updates a button with temporary copy feedback text and icon, stopping any existing timer, and
-     * starts a non-repeating Swing {@link Timer} to restore the original text and icon.
-     *
-     * @param button the button to update
-     * @param existingTimer any previously started feedback timer (stopped if running)
-     * @param copiedText the temporary text to display while copied
-     * @param copiedIcon the temporary icon to display while copied
-     * @param originalText the original text to restore after the delay
-     * @param originalIcon the original icon to restore after the delay
-     * @param delayMs the duration in milliseconds before restoring the original state
-     * @return the newly started non-repeating {@link Timer}
-     */
     public static Timer showCopyButtonFeedback(
             JButton button,
             Timer existingTimer,
@@ -300,70 +288,30 @@ public final class SwingHtmlUtils {
         return timer;
     }
 
-    /**
-     * Creates a theme-aware {@link javax.swing.border.MatteBorder} using {@code
-     * Component.borderColor} from {@link UIManager} (with a gray fallback).
-     *
-     * @param top the top inset in pixels
-     * @param left the left inset in pixels
-     * @param bottom the bottom inset in pixels
-     * @param right the right inset in pixels
-     * @return the matte border
-     */
     public static javax.swing.border.Border createThemeMatteBorder(
             int top, int left, int bottom, int right) {
         return BorderFactory.createMatteBorder(
                 top, left, bottom, right, getUiColor(Color.GRAY, "Component.borderColor"));
     }
 
-    /**
-     * Resolves the first non-null {@link Color} from {@link UIManager} for the given keys, or
-     * returns the fallback color.
-     *
-     * @param fallback the fallback color if none of the keys resolve
-     * @param uiKeys the UIManager color keys to check in order
-     * @return the resolved color
-     */
     public static Color getUiColor(Color fallback, String... uiKeys) {
         if (uiKeys != null) {
             for (String key : uiKeys) {
                 Color color = UIManager.getColor(key);
-                if (color != null) {
-                    return color;
-                }
+                if (color != null) return color;
             }
         }
         return fallback;
     }
 
-    /**
-     * Resolves the theme accent color from {@link UIManager}, falling back to RoxyCode blue.
-     *
-     * @return the resolved accent color
-     */
     public static Color getAccentColor() {
         return getUiColor(new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
     }
 
-    /**
-     * Resolves the theme muted foreground color from {@link UIManager}, falling back to {@link
-     * Color#GRAY}.
-     *
-     * @return the resolved muted foreground color
-     */
     public static Color getMutedForegroundColor() {
         return getUiColor(Color.GRAY, "Label.disabledForeground", "Component.infoForeground");
     }
 
-    /**
-     * Blends a foreground color over a background color at the specified ratio, returning a 100%
-     * opaque ({@code alpha = 255}) {@link Color}.
-     *
-     * @param foreground the foreground tint color
-     * @param background the base background color
-     * @param foregroundRatio the blend weight of {@code foreground} in {@code [0.0, 1.0]}
-     * @return the solid blended color
-     */
     public static Color blendColor(Color foreground, Color background, double foregroundRatio) {
         double clamped = Math.clamp(foregroundRatio, 0.0, 1.0);
         double bgRatio = 1.0 - clamped;
@@ -373,36 +321,15 @@ public final class SwingHtmlUtils {
         return new Color(Math.clamp(r, 0, 255), Math.clamp(g, 0, 255), Math.clamp(b, 0, 255));
     }
 
-    /**
-     * Blends the given tint color over the current theme's {@code Panel.background} color at the
-     * specified ratio, returning a solid ({@code alpha = 255}) {@link Color} suitable for opaque
-     * Swing panels without repaint bleed-through artifacts.
-     *
-     * @param tint the tint color to blend
-     * @param tintRatio the blend weight of {@code tint} in {@code [0.0, 1.0]}
-     * @return the solid tinted background color
-     */
     public static Color getTintedBackground(Color tint, double tintRatio) {
-        Color panelBg = getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background");
-        return blendColor(tint, panelBg, tintRatio);
+        return blendColor(
+                tint, getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background"), tintRatio);
     }
 
-    /**
-     * Formats a {@link Color} as a 6-digit hex string (e.g. {@code #1a2b3c}).
-     *
-     * @param color the color to format
-     * @return the hex color string
-     */
     public static String toHex(Color color) {
         return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
     }
 
-    /**
-     * Escapes text for safe inclusion in HTML bodies.
-     *
-     * @param text the raw text
-     * @return HTML entity escaped text
-     */
     public static String escapeHtml(String text) {
         return text == null ? "" : StringEscapeUtils.escapeHtml4(text);
     }

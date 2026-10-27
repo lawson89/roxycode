@@ -17,18 +17,13 @@ import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.ui.SwingTestUtils;
 import org.springframework.aop.framework.ProxyFactory;
 
 class LLMDocGeneratorTest {
 
     private static Arguments serviceCase(Class<?> clazz, Object instance, String... signatures) {
         return Arguments.of(clazz, instance, List.of(signatures));
-    }
-
-    private static void assertDocContainsAll(String doc, String... snippets) {
-        for (String s : snippets) {
-            assertTrue(doc.contains(s), "Missing '" + s + "'");
-        }
     }
 
     static Stream<Arguments> agentServiceProvider() {
@@ -94,7 +89,7 @@ class LLMDocGeneratorTest {
     @Test
     void testGenerateDoc() {
         String doc = new LLMDocGenerator().generateDoc(List.of(new MockAgentService()));
-        assertDocContainsAll(
+        SwingTestUtils.assertContainsAll(
                 doc,
                 "### JEXL API Documentation",
                 "// Global variable exposed in JEXL: mockService",
@@ -110,7 +105,7 @@ class LLMDocGeneratorTest {
         proxyFactory.setProxyTargetClass(true);
 
         String doc = generator.generateDoc(List.of(proxyFactory.getProxy()));
-        assertDocContainsAll(
+        SwingTestUtils.assertContainsAll(
                 doc,
                 "// Global variable exposed in JEXL: mockService",
                 "interface MockAgentService {",
@@ -118,9 +113,8 @@ class LLMDocGeneratorTest {
                 "doSomething(input: string): string;");
         assertFalse(doc.contains("SpringCGLIB"));
 
-        String subclassDoc = generator.generateDoc(List.of(new SubclassMockAgentService()));
-        assertDocContainsAll(
-                subclassDoc,
+        SwingTestUtils.assertContainsAll(
+                generator.generateDoc(List.of(new SubclassMockAgentService())),
                 "interface SubclassMockAgentService {",
                 "doSomething(input: string): string;",
                 "extraAction(): string;");
@@ -137,7 +131,7 @@ class LLMDocGeneratorTest {
                                         new MockAgentService(),
                                         new GenericBuildToolService(projectService, null, null)));
 
-        assertDocContainsAll(
+        SwingTestUtils.assertContainsAll(
                 doc,
                 "* @param input The input string to process",
                 "* @param testName The name of the test class or method (e.g., MyTest or MyTest#myMethod)",
@@ -153,9 +147,8 @@ class LLMDocGeneratorTest {
 
     @Test
     void testSupportingTypes() {
-        String doc = new LLMDocGenerator().generateDoc(List.of(new ServiceWithTypes()));
-        assertDocContainsAll(
-                doc,
+        SwingTestUtils.assertContainsAll(
+                new LLMDocGenerator().generateDoc(List.of(new ServiceWithTypes())),
                 "interface ServiceWithTypes",
                 "getDetails(): Details;",
                 "getStatus(): Status;",
@@ -176,7 +169,7 @@ class LLMDocGeneratorTest {
                         () ->
                                 new LLMDocGenerator()
                                         .generateDoc(List.of(new ServiceWithNestedTypes())));
-        assertDocContainsAll(
+        SwingTestUtils.assertContainsAll(
                 doc,
                 "interface ServiceWithNestedTypes",
                 "getParent(): ParentRecord;",

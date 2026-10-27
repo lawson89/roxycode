@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.ui.SwingTestUtils;
 import org.springframework.context.ApplicationEventPublisher;
 
 class FileEditorServiceTest {
@@ -27,34 +28,25 @@ class FileEditorServiceTest {
         projectService = mock(ProjectService.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         fileEditorService = new FileEditorService(projectService, eventPublisher);
-
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
     }
 
     private String writeAndReplace(
             String relPath, String initial, String target, String replacement) throws IOException {
-        Path file = tempDir.resolve(relPath);
-        Files.writeString(file, initial);
-        EditorResult result = fileEditorService.replaceBlock(relPath, target, replacement);
-        assertTrue(result.success());
+        Path file = Files.writeString(tempDir.resolve(relPath), initial);
+        assertTrue(fileEditorService.replaceBlock(relPath, target, replacement).success());
         return Files.readString(file);
     }
 
     private static void assertEditFails(EditorResult result, String... expectedHints) {
         assertFalse(result.success());
-        assertNotNull(result.errorHint());
-        for (String hint : expectedHints) {
-            assertTrue(
-                    result.errorHint().contains(hint),
-                    "Missing '" + hint + "' in: " + result.errorHint());
-        }
+        SwingTestUtils.assertContainsAll(result.errorHint(), expectedHints);
     }
 
     @Test
     void testWriteFileSuccess() throws IOException {
-        EditorResult result = fileEditorService.writeFile("test.txt", "Hello World");
-        assertTrue(result.success());
+        assertTrue(fileEditorService.writeFile("test.txt", "Hello World").success());
         Path filePath = tempDir.resolve("test.txt");
         assertTrue(Files.exists(filePath));
         assertEquals("Hello World", Files.readString(filePath));
@@ -81,7 +73,6 @@ class FileEditorServiceTest {
                         "def calculate(x):\n    if x == 1:\n        return 10\n    return 0\n",
                         "    if x == 1:\n        return 10",
                         "    if x == 1:\n        return 100"));
-
         assertEquals(
                 "def calculate(x):\n    if x == 2:\n        return 20\n    return 0\n",
                 writeAndReplace(
@@ -89,7 +80,6 @@ class FileEditorServiceTest {
                         "def calculate(x):\n    if x   ==   1:\n        return 10\n    return 0\n",
                         "    if x == 1:\n        return 10",
                         "    if x == 2:\n        return 20"));
-
         assertEquals(
                 "server:\n  host: 0.0.0.0\n  port: 9090\n",
                 writeAndReplace(
@@ -134,8 +124,7 @@ class FileEditorServiceTest {
 
     @Test
     void testReplaceBlockNotUniqueReturnsFailureWithLineNumbers() throws IOException {
-        Path filePath = tempDir.resolve("test.java");
-        Files.writeString(filePath, "// TODO\n // TODO");
+        Path filePath = Files.writeString(tempDir.resolve("test.java"), "// TODO\n // TODO");
         assertEditFails(
                 fileEditorService.replaceBlock("test.java", "// TODO", "// Done"),
                 "not unique",
@@ -153,14 +142,7 @@ class FileEditorServiceTest {
     void testReplaceBlockNotFoundReturnsDiagnosticClosestLineHint() throws IOException {
         Files.writeString(
                 tempDir.resolve("service.java"),
-                """
-                package example;
-                public class Service {
-                    public String computeTotal(int count) {
-                        return "total=" + count;
-                    }
-                }""");
-
+                "package example;\npublic class Service {\n    public String computeTotal(int count) {\n        return 'total=' + count;\n    }\n}");
         assertEditFails(
                 fileEditorService.replaceBlock(
                         "service.java",
@@ -168,7 +150,6 @@ class FileEditorServiceTest {
                         "public String computeTotal(long amount)"),
                 "TargetBlock not found in file: service.java",
                 "Line 3:     public String computeTotal(int count) {");
-
         assertEditFails(
                 fileEditorService.replaceBlock("nonexistent.java", "foo", "bar"),
                 "File does not exist: nonexistent.java");
@@ -203,7 +184,6 @@ class FileEditorServiceTest {
     @Test
     void testReplaceLinesAndInsertAtLineOutOfBoundsReturnStructuredErrorHints() throws IOException {
         Files.write(tempDir.resolve("bounds.txt"), List.of("Line 1", "Line 2", "Line 3"));
-
         assertEditFails(
                 fileEditorService.replaceLines("bounds.txt", 2, 5, "Replacement"),
                 "Invalid line range: 2 to 5",
@@ -283,7 +263,6 @@ class FileEditorServiceTest {
         assertEditFails(
                 fileEditorService.moveFile("existing.txt", "moved/again.txt"),
                 "File does not exist: existing.txt");
-
         assertThrows(
                 SecurityException.class,
                 () -> fileEditorService.moveFile("../outside.txt", "inside.txt"));
@@ -295,11 +274,12 @@ class FileEditorServiceTest {
 
     @Test
     void testPathTraversalReturnsFailure() {
-        SecurityException ex =
+        assertTrue(
                 assertThrows(
-                        SecurityException.class,
-                        () -> fileEditorService.writeFile("../outside.txt", "content"));
-        assertTrue(ex.getMessage().contains("Path traversal"));
+                                SecurityException.class,
+                                () -> fileEditorService.writeFile("../outside.txt", "content"))
+                        .getMessage()
+                        .contains("Path traversal"));
     }
 
     @Test

@@ -34,7 +34,6 @@ public class RoxyCode {
     public static void main(String[] args) {
         String theme = AppSettings.DEFAULT_THEME;
         AppSettings settings = null;
-
         try {
             settings = SettingsService.loadFromDisk();
             if (settings.getTheme() != null && !settings.getTheme().isBlank()) {
@@ -77,8 +76,7 @@ public class RoxyCode {
         }
 
         try {
-            SystemToolService systemToolService = context.getBean(SystemToolService.class);
-            initializeSystemTools(systemToolService, splashRef.get());
+            initializeSystemTools(context.getBean(SystemToolService.class), splashRef.get());
         } catch (Exception e) {
             log.warn("Failed to initialize system tools during startup: {}", e.getMessage());
         }
@@ -87,12 +85,8 @@ public class RoxyCode {
                 () -> {
                     SplashScreenWindow splash = splashRef.get();
                     try {
-                        if (splash != null) {
-                            splash.setStatus("Building workspace UI...");
-                        }
-
-                        MainFrame frame = context.getBean(MainFrame.class);
-                        frame.setVisible(true);
+                        if (splash != null) splash.setStatus("Building workspace UI...");
+                        context.getBean(MainFrame.class).setVisible(true);
                     } finally {
                         disposeSplash(splash);
                     }
@@ -101,16 +95,10 @@ public class RoxyCode {
 
     public static void initializeSystemTools(
             SystemToolService systemToolService, SplashScreenWindow splash) {
-        if (systemToolService == null || systemToolService.hasCachedTools()) {
-            return;
-        }
-        if (splash != null) {
-            Edt.run(() -> splash.setStatus("Checking system tools..."));
-        }
+        if (systemToolService == null || systemToolService.hasCachedTools()) return;
+        if (splash != null) Edt.run(() -> splash.setStatus("Checking system tools..."));
         CompletableFuture<?> future = systemToolService.detectTools();
-        if (future != null) {
-            future.join();
-        }
+        if (future != null) future.join();
     }
 
     public static ApplicationContextInitializer<ConfigurableApplicationContext>
@@ -136,9 +124,6 @@ public class RoxyCode {
     }
 
     private static void disposeSplash(SplashScreenWindow splash) {
-        if (splash == null) {
-            return;
-        }
-        Edt.run(splash::dispose);
+        if (splash != null) Edt.run(splash::dispose);
     }
 }

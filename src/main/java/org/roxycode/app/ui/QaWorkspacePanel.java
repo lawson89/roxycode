@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
 import java.awt.Color;
-import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
@@ -19,7 +18,6 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/** Workspace panel for Q&A / Explore mode (read-only mentor mode). */
 @Component
 @Lazy
 public final class QaWorkspacePanel extends JPanel {
@@ -53,7 +51,6 @@ public final class QaWorkspacePanel extends JPanel {
         mentorBanner.add(mentorModeLabel);
         mentorBanner.add(mentorSubtitleLabel);
         applyBannerStyling();
-
         qaHeaderBar.add(mentorBanner, "right, center");
 
         this.qaTabs = new JTabbedPane();
@@ -73,15 +70,12 @@ public final class QaWorkspacePanel extends JPanel {
                         pastTopicsPanel.refresh();
                     }
                 });
-
         add(qaTabs, BorderLayout.CENTER);
     }
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        if (pastTopicsPanel != null) {
-            pastTopicsPanel.refresh();
-        }
+        if (pastTopicsPanel != null) pastTopicsPanel.refresh();
     }
 
     @EventListener
@@ -96,27 +90,15 @@ public final class QaWorkspacePanel extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (mentorBanner != null) {
-            applyBannerStyling();
-        }
+        if (mentorBanner != null) applyBannerStyling();
     }
 
     void applyBannerStyling() {
         Color accent = SwingHtmlUtils.getAccentColor();
-        Color mutedFg = SwingHtmlUtils.getMutedForegroundColor();
-        Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.12);
-
-        mentorBanner.setBackground(tintedBg);
-        mentorBanner.setBorder(
-                BorderFactory.createCompoundBorder(
-                        BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
-                        BorderFactory.createEmptyBorder(4, 10, 4, 10)));
-        mentorBanner.putClientProperty(
-                FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(tintedBg));
-
+        SwingHtmlUtils.applyTintedBannerStyle(mentorBanner, accent, 4, 10, 10);
         mentorModeLabel.setIcon(FontIcon.of(Codicons.SEARCH, 15, accent));
         mentorModeLabel.setForeground(accent);
-        mentorSubtitleLabel.setForeground(mutedFg);
+        mentorSubtitleLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
     }
 
     public void bindSidebar(SidebarPanel sidebar) {

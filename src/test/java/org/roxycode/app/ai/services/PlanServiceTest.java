@@ -2,6 +2,7 @@ package org.roxycode.app.ai.services;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -23,6 +24,7 @@ import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
@@ -69,21 +71,15 @@ class PlanServiceTest {
 
     private static void assertIllegalState(Executable action, String... expectedSubstrings) {
         IllegalStateException ex = assertThrows(IllegalStateException.class, action);
-        for (String sub : expectedSubstrings) {
-            assertTrue(ex.getMessage().contains(sub));
-        }
+        assertContainsAll(ex.getMessage(), expectedSubstrings);
     }
 
     private static void assertIllegalStates(Executable... actions) {
-        for (Executable action : actions) {
-            assertThrows(IllegalStateException.class, action);
-        }
+        for (Executable action : actions) assertThrows(IllegalStateException.class, action);
     }
 
     private static void assertBadArgs(Executable... actions) {
-        for (Executable action : actions) {
-            assertThrows(IllegalArgumentException.class, action);
-        }
+        for (Executable action : actions) assertThrows(IllegalArgumentException.class, action);
     }
 
     @Test
@@ -139,26 +135,25 @@ class PlanServiceTest {
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
         assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
 
-        String completedMsg = service.markStepsCompleted(List.of(0, 1));
+        assertContainsAll(
+                service.markStepsCompleted(List.of(0, 1)),
+                "Marked steps [0, 1] completed.",
+                "Remaining incomplete steps: [2: Code compiles successfully, 3: Unit tests pass, 4: Automated code review passes]");
         assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
         assertTrue(service.getCurrentPlan().technicalSteps().get(1).completed());
-        assertTrue(completedMsg.contains("Marked steps [0, 1] completed."));
-        assertTrue(
-                completedMsg.contains(
-                        "Remaining incomplete steps: [2: Code compiles successfully, 3: Unit tests pass, 4: Automated code review passes]"));
 
-        String singleCompletedMsg = service.markStepCompleted(2);
-        assertTrue(singleCompletedMsg.contains("Marked steps [2] completed."));
-        assertTrue(
-                singleCompletedMsg.contains(
-                        "Remaining incomplete steps: [3: Unit tests pass, 4: Automated code review passes]"));
+        assertContainsAll(
+                service.markStepCompleted(2),
+                "Marked steps [2] completed.",
+                "Remaining incomplete steps: [3: Unit tests pass, 4: Automated code review passes]");
 
-        String incompleteMsg = service.markStepsIncomplete(List.of(0, 1));
+        assertContainsAll(
+                service.markStepsIncomplete(List.of(0, 1)),
+                "Marked steps [0, 1] incomplete.",
+                "0: Step 1",
+                "1: Step 2");
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
         assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
-        assertTrue(incompleteMsg.contains("Marked steps [0, 1] incomplete."));
-        assertTrue(incompleteMsg.contains("0: Step 1"));
-        assertTrue(incompleteMsg.contains("1: Step 2"));
 
         assertTrue(
                 service.markStepsCompleted(List.of(0, 1, 2, 3, 4))
@@ -259,9 +254,10 @@ class PlanServiceTest {
                 () -> service.requestDevelopment("Reason"), "Implementation Plan is missing");
 
         service.submitPlan("T", "G", List.of("R1"), List.of("S1"));
-        String devResponse = service.requestDevelopment("Ready to build");
-        assertTrue(devResponse.contains("PLAN SUMMARY:"));
-        assertTrue(devResponse.contains("Transition Request: Approve Plan and proceed to Code"));
+        assertContainsAll(
+                service.requestDevelopment("Ready to build"),
+                "PLAN SUMMARY:",
+                "Transition Request: Approve Plan and proceed to Code");
         assertEquals(
                 "Approve Plan and proceed to Code",
                 PlanService.formatApprovalLabel(WorkflowPhase.PLAN, WorkflowPhase.CODE));
@@ -379,7 +375,6 @@ class PlanServiceTest {
 
         PlanService archivingService =
                 new PlanService(envService, eventPublisher, projectService, gitService);
-
         archivingService.submitPlan(
                 "Archive Feature Plan!",
                 "Persist completed plans",
@@ -416,33 +411,32 @@ class PlanServiceTest {
 
         String content = Files.readString(archivedFile);
         assertTrue(content.startsWith("---\n"));
-        assertTrue(content.contains("project: \"my-project\"\n"));
-        assertTrue(
-                content.contains(
-                        "projectPath: \"" + projectRoot.toAbsolutePath().normalize() + "\"\n"));
-        assertTrue(content.contains("title: \"Archive Feature Plan!\"\n"));
-        assertTrue(content.contains("userApproved: true\n"));
-        assertTrue(content.contains("approvedBy: \"alice\"\n"));
-        assertTrue(content.contains("completedBy: \"bob\"\n"));
-        assertTrue(content.contains("# Implementation Plan: Archive Feature Plan!"));
-        assertTrue(content.contains("## Approvals"));
-        assertTrue(content.contains("- **Move to Code:** Approved by alice on "));
-        assertTrue(content.contains("- **Final Acceptance:** Accepted by bob on "));
-        assertTrue(content.contains("## Handoff Log"));
-        assertTrue(content.contains("REVIEW -> PLAN (User Approved): All checks passed"));
-        assertTrue(content.contains("## Changes"));
-        assertTrue(content.contains("M src/Main.java"));
+        assertContainsAll(
+                content,
+                "project: ",
+                "my-project",
+                "projectPath: ",
+                projectRoot.toAbsolutePath().normalize().toString(),
+                "title: ",
+                "Archive Feature Plan!",
+                "userApproved: true\n",
+                "approvedBy: ",
+                "alice",
+                "completedBy: ",
+                "bob",
+                "# Implementation Plan: Archive Feature Plan!",
+                "## Approvals",
+                "- **Move to Code:** Approved by alice on ",
+                "- **Final Acceptance:** Accepted by bob on ",
+                "## Handoff Log",
+                "REVIEW -> PLAN (User Approved): All checks passed",
+                "## Changes",
+                "M src/Main.java");
         verify(eventPublisher)
                 .publishEvent(
                         argThat(
                                 (Object ev) ->
-                                        ev
-                                                        instanceof
-                                                        org.roxycode.app.events.ArchiveUpdatedEvent
-                                                                aue
-                                                && org.roxycode.app.events.ArchiveUpdatedEvent
-                                                        .TYPE_PLAN
-                                                        .equals(aue.type())
+                                        ev instanceof ArchiveUpdatedEvent aue
                                                 && fileName.equals(aue.filename())));
     }
 

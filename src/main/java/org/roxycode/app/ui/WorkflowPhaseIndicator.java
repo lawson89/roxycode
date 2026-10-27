@@ -8,7 +8,6 @@ import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.WorkflowPhase;
 
-/** Shared UI component for workflow phase indicators with safe color fallbacks. */
 public final class WorkflowPhaseIndicator extends JPanel {
     private static final long serialVersionUID = 1L;
     private final WorkflowPhase phase;
@@ -25,9 +24,7 @@ public final class WorkflowPhaseIndicator extends JPanel {
         this.phase = phase;
         this.defaultFontStyle = fontStyle != null ? fontStyle : "font: -1";
         setLayout(new MigLayout("insets 0", "[center]", "center"));
-
         textLabel = new JLabel(phase.getDisplayName());
-
         add(textLabel);
         updateStyle();
     }
@@ -59,42 +56,30 @@ public final class WorkflowPhaseIndicator extends JPanel {
     }
 
     private void updateStyle() {
-        Color accentColor =
-                SwingHtmlUtils.getUiColor(
-                        new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
+        Color accentColor = SwingHtmlUtils.getAccentColor();
         Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
-        Color disabledForeground =
-                SwingHtmlUtils.getUiColor(
-                        Color.GRAY, "Label.disabledForeground", "Component.infoForeground");
+        Color disabledFg = SwingHtmlUtils.getMutedForegroundColor();
 
         setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
         textLabel.setIcon(null);
-
+        setOpaque(active);
         if (active) {
-            String accentHex = SwingHtmlUtils.toHex(accentColor);
-            setOpaque(true);
             setBackground(accentColor);
-            putClientProperty(FlatClientProperties.STYLE, "background: " + accentHex);
+            putClientProperty(
+                    FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(accentColor));
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
             textLabel.setForeground(Color.WHITE);
-        } else if (completed) {
-            setOpaque(false);
-            putClientProperty(FlatClientProperties.STYLE, null);
-            textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
-            textLabel.setForeground(greenColor);
         } else {
-            setOpaque(false);
             putClientProperty(FlatClientProperties.STYLE, null);
-            textLabel.putClientProperty(FlatClientProperties.STYLE, defaultFontStyle);
-            textLabel.setForeground(disabledForeground);
+            textLabel.putClientProperty(
+                    FlatClientProperties.STYLE, completed ? "font: bold -1" : defaultFontStyle);
+            textLabel.setForeground(completed ? greenColor : disabledFg);
         }
     }
 
     @Override
     public void updateUI() {
         super.updateUI();
-        if (textLabel != null) {
-            updateStyle();
-        }
+        if (textLabel != null) updateStyle();
     }
 }

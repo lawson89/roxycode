@@ -16,7 +16,6 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/** Main application window for RoxyCode. */
 @Component
 @Lazy
 public final class MainFrame extends JFrame {
@@ -109,21 +108,15 @@ public final class MainFrame extends JFrame {
                 new java.awt.event.WindowAdapter() {
                     @Override
                     public void windowOpened(java.awt.event.WindowEvent e) {
-                        if (qaWorkspacePanel != null) {
-                            qaWorkspacePanel.focusChatInput();
-                        }
+                        if (qaWorkspacePanel != null) qaWorkspacePanel.focusChatInput();
                     }
                 });
 
         try {
             java.net.URL iconUrl = getClass().getResource("/static/images/roxy.png");
-            if (iconUrl != null) {
-                setIconImage(new ImageIcon(iconUrl).getImage());
-            }
+            if (iconUrl != null) setIconImage(new ImageIcon(iconUrl).getImage());
         } catch (Exception e) {
-            if (log.isTraceEnabled()) {
-                log.trace("Failed to load icon: {}", e.getMessage());
-            }
+            log.trace("Failed to load icon: {}", e.getMessage());
         }
     }
 
@@ -137,16 +130,13 @@ public final class MainFrame extends JFrame {
             ContextManagerPanel contextManagerPanel) {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
-        // Sidebar
         SidebarPanel sidebar = new SidebarPanel(this::showCard);
         qaWorkspacePanel.bindSidebar(sidebar);
         taskWorkspacePanel.bindSidebar(sidebar);
 
-        // Main Workspace
         JPanel workspace =
                 new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
 
-        // Content Area Panels
         contentArea.add(qaWorkspacePanel, QA_VIEW);
         contentArea.add(taskWorkspacePanel, TASK_VIEW);
         contentArea.add(codebaseCachePanel, CACHE_VIEW);
@@ -162,8 +152,6 @@ public final class MainFrame extends JFrame {
 
         add(sidebar, "grow");
         add(workspace, "grow");
-
-        // Default to QA View
         showCard(QA_VIEW);
     }
 

@@ -1,5 +1,9 @@
 package org.roxycode.app.ui;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import java.awt.Component;
@@ -9,49 +13,53 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
-import javax.swing.AbstractButton;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JList;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 import javax.swing.text.Element;
 import javax.swing.text.html.HTML;
 import org.junit.jupiter.api.Assertions;
 
-/** Shared component, EDT, async worker, theme, and HTML document utilities for UI tests. */
-final class SwingTestUtils {
+public final class SwingTestUtils {
 
     @FunctionalInterface
-    interface ThrowingRunnable {
+    public interface ThrowingRunnable {
         void run() throws Exception;
     }
 
     private SwingTestUtils() {}
 
+    public static void assertContainsAll(String actual, String... expectedSubstrings) {
+        assertNotNull(actual, "Actual string must not be null");
+        for (String sub : expectedSubstrings) {
+            assertTrue(actual.contains(sub), () -> "Expected '" + sub + "' in: " + actual);
+        }
+    }
+
+    public static void assertContainsNone(String actual, String... forbiddenSubstrings) {
+        assertNotNull(actual, "Actual string must not be null");
+        for (String sub : forbiddenSubstrings) {
+            assertFalse(actual.contains(sub), () -> "Unexpected '" + sub + "' in: " + actual);
+        }
+    }
+
     static void flushEdt() {
         runOnEdt(() -> {});
     }
 
-    static void runOnEdt(ThrowingRunnable action) {
+    private static void invokeUnchecked(ThrowingRunnable action) {
         try {
-            if (SwingUtilities.isEventDispatchThread()) {
-                action.run();
-            } else {
-                SwingUtilities.invokeAndWait(
-                        () -> {
-                            try {
-                                action.run();
-                            } catch (RuntimeException e) {
-                                throw e;
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
-            }
+            action.run();
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    static void runOnEdt(ThrowingRunnable action) {
+        if (SwingUtilities.isEventDispatchThread()) {
+            invokeUnchecked(action);
+        } else {
+            invokeUnchecked(() -> SwingUtilities.invokeAndWait(() -> invokeUnchecked(action)));
         }
     }
 
@@ -67,23 +75,19 @@ final class SwingTestUtils {
     }
 
     static <T> T awaitWorker(Future<T> worker) {
-        try {
-            T result = worker != null ? worker.get() : null;
-            flushEdt();
-            return result;
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        AtomicReference<T> ref = new AtomicReference<>();
+        invokeUnchecked(
+                () -> {
+                    ref.set(worker != null ? worker.get() : null);
+                    flushEdt();
+                });
+        return ref.get();
     }
 
     static void awaitCondition(BooleanSupplier condition) {
         for (int i = 0; i < 50; i++) {
             flushEdt();
-            if (condition.getAsBoolean()) {
-                return;
-            }
+            if (condition.getAsBoolean()) return;
             try {
                 Thread.sleep(20);
             } catch (InterruptedException e) {
@@ -102,49 +106,34 @@ final class SwingTestUtils {
             runOnEdt(
                     () -> {
                         FlatDarkLaf.setup();
-                        if (component != null) {
-                            SwingUtilities.updateComponentTreeUI(component);
-                        }
+                        if (component != null) SwingUtilities.updateComponentTreeUI(component);
                     });
-            assertions.run();
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            invokeUnchecked(assertions);
         } finally {
             runOnEdt(
                     () -> {
                         FlatLightLaf.setup();
-                        if (component != null) {
-                            SwingUtilities.updateComponentTreeUI(component);
-                        }
+                        if (component != null) SwingUtilities.updateComponentTreeUI(component);
                     });
         }
     }
 
     static <E> Component renderListCell(JList<E> list, int index, boolean isSelected) {
-        E value = list.getModel().getElementAt(index);
         return list.getCellRenderer()
-                .getListCellRendererComponent(list, value, index, isSelected, false);
+                .getListCellRendererComponent(
+                        list, list.getModel().getElementAt(index), index, isSelected, false);
     }
 
     static <T extends Component> T findComponent(
             Container root, Class<T> type, Predicate<T> predicate) {
-        if (root == null) {
-            return null;
-        }
+        if (root == null) return null;
         for (Component comp : root.getComponents()) {
-            if (type.isInstance(comp)) {
-                T typed = type.cast(comp);
-                if (predicate.test(typed)) {
-                    return typed;
-                }
+            if (type.isInstance(comp) && predicate.test(type.cast(comp))) {
+                return type.cast(comp);
             }
-            if (comp instanceof Container childContainer) {
-                T found = findComponent(childContainer, type, predicate);
-                if (found != null) {
-                    return found;
-                }
+            if (comp instanceof Container child) {
+                T found = findComponent(child, type, predicate);
+                if (found != null) return found;
             }
         }
         return null;
@@ -159,17 +148,13 @@ final class SwingTestUtils {
     }
 
     static Element findElement(Element root, String tagName, Predicate<Element> predicate) {
-        if (root == null) {
-            return null;
-        }
+        if (root == null) return null;
         if ((tagName == null || tagName.equalsIgnoreCase(root.getName())) && predicate.test(root)) {
             return root;
         }
         for (int i = 0; i < root.getElementCount(); i++) {
             Element found = findElement(root.getElement(i), tagName, predicate);
-            if (found != null) {
-                return found;
-            }
+            if (found != null) return found;
         }
         return null;
     }
@@ -191,8 +176,9 @@ final class SwingTestUtils {
                 elem -> {
                     try {
                         int start = elem.getStartOffset();
-                        int end = elem.getEndOffset();
-                        return elem.getDocument().getText(start, end - start).contains(snippet);
+                        return elem.getDocument()
+                                .getText(start, elem.getEndOffset() - start)
+                                .contains(snippet);
                     } catch (Exception e) {
                         return false;
                     }

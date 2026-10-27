@@ -7,11 +7,6 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
-/**
- * Encapsulates per-turn tool context parameters (conversation ID, workflow phase, and turn counter)
- * passed between {@link org.roxycode.app.service.AiService}, {@link
- * ReturnDirectToolCallingManager}, and {@link JexlTool}.
- */
 public record TurnToolContext(
         String conversationId,
         WorkflowPhase phase,
@@ -60,18 +55,12 @@ public record TurnToolContext(
             Map<String, Object> contextMap, WorkflowPhase fallbackPhase) {
         WorkflowPhase defaultPhase = fallbackPhase != null ? fallbackPhase : WorkflowPhase.EXPLORE;
         if (contextMap == null || contextMap.isEmpty()) {
-            return new TurnToolContext(
-                    DEFAULT_CONVERSATION_ID,
-                    defaultPhase,
-                    new AtomicInteger(0),
-                    new StringBuilder());
+            return new TurnToolContext(DEFAULT_CONVERSATION_ID, defaultPhase, null, null);
         }
-
         String convId =
                 contextMap.get(CONVERSATION_ID_KEY) instanceof String s && StringUtils.isNotBlank(s)
                         ? s
                         : DEFAULT_CONVERSATION_ID;
-
         WorkflowPhase resolvedPhase = defaultPhase;
         Object phaseObj = contextMap.get(PHASE_KEY);
         if (phaseObj instanceof WorkflowPhase wp) {
@@ -80,20 +69,12 @@ public record TurnToolContext(
             try {
                 resolvedPhase = WorkflowPhase.valueOf(s);
             } catch (IllegalArgumentException ignored) {
-                // Keep fallback phase
             }
         }
-
-        AtomicInteger counter =
-                contextMap.get(TURN_COUNTER_KEY) instanceof AtomicInteger ai
-                        ? ai
-                        : new AtomicInteger(0);
-
-        StringBuilder accumulator =
-                contextMap.get(TEXT_ACCUMULATOR_KEY) instanceof StringBuilder sb
-                        ? sb
-                        : new StringBuilder();
-
-        return new TurnToolContext(convId, resolvedPhase, counter, accumulator);
+        return new TurnToolContext(
+                convId,
+                resolvedPhase,
+                contextMap.get(TURN_COUNTER_KEY) instanceof AtomicInteger ai ? ai : null,
+                contextMap.get(TEXT_ACCUMULATOR_KEY) instanceof StringBuilder sb ? sb : null);
     }
 }

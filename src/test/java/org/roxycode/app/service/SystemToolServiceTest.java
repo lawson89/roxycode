@@ -16,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.AiConfig;
@@ -61,62 +62,43 @@ class SystemToolServiceTest {
         List<SystemTool> tools = service.detectTools().get();
 
         assertEquals(5, tools.size());
-        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Ripgrep")));
-        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Git")));
-        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Universal Ctags")));
-        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Java")));
-        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Docker")));
+        for (String expectedName : List.of("Ripgrep", "Git", "Universal Ctags", "Java", "Docker")) {
+            assertTrue(tools.stream().anyMatch(t -> t.name().equals(expectedName)));
+        }
         for (SystemTool tool : tools) {
             assertNotNull(tool.name());
             assertNotNull(tool.status());
             assertNotNull(tool.version());
-            assertFalse(
-                    tool.description().isBlank(),
-                    "Description should not be blank for " + tool.name());
-            assertFalse(tool.license().isBlank(), "License should not be blank for " + tool.name());
-            assertTrue(
-                    tool.websiteUrl().startsWith("https://"),
-                    "Website URL should be https for " + tool.name());
+            assertFalse(tool.description().isBlank());
+            assertFalse(tool.license().isBlank());
+            assertTrue(tool.websiteUrl().startsWith("https://"));
         }
-
-        Boolean dockerAvailable = service.isDockerAvailable().get();
-        assertEquals(service.checkDockerAvailable(), dockerAvailable);
+        assertEquals(service.checkDockerAvailable(), service.isDockerAvailable().get());
     }
 
     @Test
     void testParseVersionExtractsCleanFirstLineOnly() {
-        String rgOutput =
-                """
-                ripgrep 14.1.0
-                features:-simd-accel,+pcre2
-                simd(compile):+SSE2,-SSSE3,-AVX2
-                simd(runtime):+SSE2,+SSSE3,+AVX2
-                """;
-        assertEquals("ripgrep 14.1.0", SystemToolService.parseVersion(rgOutput, "Ripgrep"));
-
-        String ctagsOutput =
-                """
-                Universal Ctags 5.9.0, Copyright (C) 2015-2022 Universal Ctags Team
-                Universal Ctags is derived from Exuberant Ctags.
-                Exuberant Ctags 5.8, Copyright (C) 1996-2009 Darren Hiebert
-                """;
+        assertEquals(
+                "ripgrep 14.1.0",
+                SystemToolService.parseVersion(
+                        "ripgrep 14.1.0\nfeatures:-simd-accel,+pcre2\nsimd(compile):+SSE2,-SSSE3,-AVX2\n",
+                        "Ripgrep"));
         assertEquals(
                 "Universal Ctags 5.9.0",
-                SystemToolService.parseVersion(ctagsOutput, "Universal Ctags"));
-
-        String javaOutput =
-                """
-                openjdk version "25.0.4" 2026-07-21 LTS
-                OpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)
-                OpenJDK 64-Bit Server VM Temurin-25.0.4+7 (build 25.0.4+7-LTS, mixed mode, sharing)
-                """;
+                SystemToolService.parseVersion(
+                        "Universal Ctags 5.9.0, Copyright (C) 2015-2022 Universal Ctags Team\n",
+                        "Universal Ctags"));
+        String expectedJavaVer = "version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS";
         assertEquals(
-                "version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS",
-                SystemToolService.parseVersion(javaOutput, "Java"));
-        String gitOutput = "git version 2.43.0" + (char) 10;
-        assertEquals("git version 2.43.0", SystemToolService.parseVersion(gitOutput, "Git"));
-
-        // Legacy concatenated multi-line strings and overly long Java versions
+                expectedJavaVer,
+                SystemToolService.parseVersion(
+                        "openjdk "
+                                + expectedJavaVer
+                                + "\nOpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)\n",
+                        "Java"));
+        assertEquals(
+                "git version 2.43.0",
+                SystemToolService.parseVersion("git version 2.43.0\n", "Git"));
         assertEquals(
                 "ripgrep 14.1.0",
                 SystemToolService.parseVersion(
@@ -127,24 +109,22 @@ class SystemToolServiceTest {
                         "Universal Ctags 5.9.0, Copyright (C) 2015 Universal Ctags Team",
                         "Universal Ctags"));
         assertEquals(
-                "version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS",
+                expectedJavaVer,
                 SystemToolService.parseVersion(
-                        "version "
-                                + '"'
-                                + "25.0.4"
-                                + '"'
-                                + " 2026-07-21 LTSOpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)OpenJDK 64-Bit Server VM",
+                        expectedJavaVer
+                                + "OpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)OpenJDK 64-Bit Server VM",
                         "Java"));
-        String veryLongJavaLine =
-                "version "
-                        + '"'
-                        + "25.0.4-custom-build-identifier-with-extra-suffixes-exceeding-fifty-chars"
-                        + '"';
-        String parsedLongJava = SystemToolService.parseVersion(veryLongJavaLine, "Java");
-        assertTrue(parsedLongJava.length() <= 50, "Java version must be capped to 50 chars");
-
+        assertTrue(
+                SystemToolService.parseVersion(
+                                        "version "
+                                                + '"'
+                                                + "25.0.4-custom-build-identifier-with-extra-suffixes-exceeding-fifty-chars"
+                                                + '"',
+                                        "Java")
+                                .length()
+                        <= 50);
         assertEquals("Unknown", SystemToolService.parseVersion("", "Git"));
-        assertEquals("Unknown", SystemToolService.parseVersion("   " + (char) 10 + "  ", "Git"));
+        assertEquals("Unknown", SystemToolService.parseVersion("   \n  ", "Git"));
     }
 
     @Test
@@ -267,9 +247,7 @@ class SystemToolServiceTest {
                         settingsService,
                         mapper,
                         event -> {
-                            if (event instanceof SystemToolsUpdatedEvent e) {
-                                publishedEvents.add(e);
-                            }
+                            if (event instanceof SystemToolsUpdatedEvent e) publishedEvents.add(e);
                         });
         service1.setToolProber(
                 () -> {
@@ -305,16 +283,14 @@ class SystemToolServiceTest {
                     return List.of();
                 });
 
-        // On EDT, hasCachedTools() does not block on disk I/O, while detectTools() loads disk cache
-        // off EDT
         final boolean[] edtHasCached = new boolean[1];
         final CompletableFuture<List<SystemTool>>[] edtDetectFuture = new CompletableFuture[1];
-        javax.swing.SwingUtilities.invokeAndWait(
+        SwingUtilities.invokeAndWait(
                 () -> {
                     edtHasCached[0] = service2.hasCachedTools();
                     edtDetectFuture[0] = service2.detectTools();
                 });
-        assertFalse(edtHasCached[0], "hasCachedTools() on EDT must not read disk synchronously");
+        assertFalse(edtHasCached[0]);
         List<SystemTool> diskLoaded = edtDetectFuture[0].get(5, TimeUnit.SECONDS);
         assertTrue(service2.hasCachedTools());
         assertEquals(2, diskLoaded.size());

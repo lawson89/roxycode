@@ -1,9 +1,6 @@
 package org.roxycode.app.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,6 +11,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,7 +35,6 @@ class SettingsServiceTest {
         settings.setGlobalContextFolders(List.of("/tmp/global-a", "/tmp/global-b"));
         service.saveSettings();
 
-        // New service instance to verify persistence
         SettingsService service2 = new SettingsService(null, null);
         service2.setSettingsPathOverride(settingsFile);
         assertEquals("Darcula", service2.getSettings().getTheme());
@@ -47,7 +44,6 @@ class SettingsServiceTest {
                 service2.getSettings().getGlobalContextFolders());
         assertTrue(Files.exists(settingsFile));
 
-        // Verify static loadFromDisk helper
         AppSettings staticLoaded =
                 SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
         assertEquals("Darcula", staticLoaded.getTheme());
@@ -62,8 +58,7 @@ class SettingsServiceTest {
         assertTrue(defaultHome.endsWith(".roxycode"));
         assertEquals(SettingsService.getDefaultRoxyHomeDir(), defaultHome);
 
-        Path customSettings = tempDir.resolve("custom-roxy").resolve("settings.toml");
-        service.setSettingsPathOverride(customSettings);
+        service.setSettingsPathOverride(tempDir.resolve("custom-roxy").resolve("settings.toml"));
         assertEquals(tempDir.resolve("custom-roxy"), service.getRoxyHomeDir());
     }
 
@@ -73,16 +68,13 @@ class SettingsServiceTest {
         assertNotNull(defaultPath);
         assertTrue(defaultPath.endsWith(Path.of(".roxycode", "settings.toml")));
 
-        Path missingFile = tempDir.resolve("missing.toml");
         AppSettings fromMissing =
-                SettingsService.loadFromDisk(missingFile, AiConfig.SHARED_TOML_MAPPER);
-        assertNotNull(fromMissing);
+                SettingsService.loadFromDisk(
+                        tempDir.resolve("missing.toml"), AiConfig.SHARED_TOML_MAPPER);
         assertEquals("FlatLaf Light", fromMissing.getTheme());
 
-        Path corruptFile = tempDir.resolve("corrupt.toml");
-        Files.writeString(corruptFile, "invalid = [toml");
+        Path corruptFile = Files.writeString(tempDir.resolve("corrupt.toml"), "invalid = [toml");
         AppSettings fromCorrupt = SettingsService.loadFromDisk(corruptFile, null);
-        assertNotNull(fromCorrupt);
         assertEquals("FlatLaf Light", fromCorrupt.getTheme());
     }
 
@@ -98,7 +90,6 @@ class SettingsServiceTest {
                             }
                         });
         service.setSettingsPathOverride(tempDir.resolve("test_listener.toml"));
-
         service.saveSettings();
         assertTrue(
                 listenerCalled.get(),
@@ -110,17 +101,16 @@ class SettingsServiceTest {
         SettingsService service = new SettingsService(null, null);
         var models = service.getAvailableModels();
         assertNotNull(models);
-        assertTrue(!models.isEmpty(), "Available models from /models.toml should not be empty");
+        assertFalse(models.isEmpty(), "Available models from /models.toml should not be empty");
         assertTrue(models.stream().anyMatch(m -> "gemini-3.5-flash".equals(m.apiName())));
         assertSame(
                 models, service.getAvailableModels(), "Repeated calls should return cached list");
 
-        // Verify saveSettings on EDT writes asynchronously off the EDT
         Path edtSettingsFile = tempDir.resolve("edt_settings.toml");
         service.setSettingsPathOverride(edtSettingsFile);
         service.getSettings().setTheme("FlatLaf Dark");
         javax.swing.SwingUtilities.invokeAndWait(service::saveSettings);
-        service.getLastSaveFuture().get(5, java.util.concurrent.TimeUnit.SECONDS);
+        service.getLastSaveFuture().get(5, TimeUnit.SECONDS);
         assertTrue(Files.exists(edtSettingsFile));
         assertEquals(
                 "FlatLaf Dark",

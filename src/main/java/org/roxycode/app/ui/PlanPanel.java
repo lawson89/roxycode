@@ -1,7 +1,10 @@
 package org.roxycode.app.ui;
 
 import java.awt.*;
+import java.util.List;
+import java.util.Objects;
 import javax.swing.*;
+import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
@@ -18,7 +21,6 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/** UI panel for displaying the current project plan and specifications. */
 @Component
 @Lazy
 public final class PlanPanel extends JPanel {
@@ -40,7 +42,7 @@ public final class PlanPanel extends JPanel {
     public PlanPanel(PlanService planManagerService, GitService gitService) {
         this.planManagerService = planManagerService;
         this.gitService = gitService;
-        this.setLayout(new BorderLayout());
+        setLayout(new BorderLayout());
 
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         toolbar.setOpaque(false);
@@ -48,19 +50,13 @@ public final class PlanPanel extends JPanel {
         copyMarkdownButton.setEnabled(false);
         copyMarkdownButton.addActionListener(e -> copyPlanAsMarkdown());
         toolbar.add(copyMarkdownButton);
-        this.add(toolbar, BorderLayout.NORTH);
+        add(toolbar, BorderLayout.NORTH);
 
-        displayArea = new JEditorPane();
-        displayArea.setEditable(false);
-        displayArea.setContentType("text/html");
-        displayArea.setOpaque(true);
-        displayArea.putClientProperty("JEditorPane.honorDisplayProperties", true);
-
+        displayArea = SwingHtmlUtils.createHtmlEditorPane();
         JScrollPane scrollPane = new JScrollPane(displayArea);
         scrollPane.setBorder(null);
-        this.add(scrollPane, BorderLayout.CENTER);
+        add(scrollPane, BorderLayout.CENTER);
 
-        SwingHtmlUtils.installTextContextMenu(displayArea);
         updateTheme();
         refresh();
     }
@@ -92,9 +88,7 @@ public final class PlanPanel extends JPanel {
 
     private void copyPlanAsMarkdown() {
         ImplementationPlan plan = planManagerService.getCurrentPlan();
-        if (plan == null) {
-            return;
-        }
+        if (plan == null) return;
         String gitStatus =
                 SwingUtilities.isEventDispatchThread() ? lastGitStatus : getGitStatusText();
         String markdown = buildPlanMarkdown(plan, gitStatus);
@@ -174,21 +168,17 @@ public final class PlanPanel extends JPanel {
 
     private void applyWorkerResult(
             SwingWorker<String, Void> worker, ImplementationPlan plan, String status) {
-        if (!java.util.Objects.equals(worker, activeRefreshWorker)) {
-            return;
-        }
+        if (!Objects.equals(worker, activeRefreshWorker)) return;
         String normalized = status != null ? status : "";
         lastGitStatus = normalized;
         applyDisplayOnEdt(plan, normalized);
     }
 
     private void applyDisplayOnEdt(ImplementationPlan plan, String gitStatus) {
-        String html = buildPlanHtml(plan, gitStatus);
-        boolean hasPlan = plan != null;
         if (copyMarkdownButton != null) {
-            copyMarkdownButton.setEnabled(hasPlan);
+            copyMarkdownButton.setEnabled(plan != null);
         }
-        displayArea.setText(html);
+        displayArea.setText(buildPlanHtml(plan, gitStatus));
         displayArea.setCaretPosition(0);
     }
 
@@ -201,9 +191,7 @@ public final class PlanPanel extends JPanel {
     }
 
     static String buildPlanMarkdown(ImplementationPlan plan, String gitStatus) {
-        if (plan == null) {
-            return "";
-        }
+        if (plan == null) return "";
         StringBuilder sb = new StringBuilder(plan.toMarkdown(true));
         ImplementationPlan.appendChangesMarkdown(sb, formatChangesText(gitStatus));
         return sb.toString();
@@ -236,7 +224,6 @@ public final class PlanPanel extends JPanel {
                             ? "<span class='plan-step-done'><b>[x]</b></span>"
                             : "<span class='plan-muted'>[&nbsp;]</span>";
             String textClass = step.completed() ? "class='plan-step-completed'" : "";
-
             stepRows.append(
                     """
                     <tr>
@@ -246,11 +233,10 @@ public final class PlanPanel extends JPanel {
                     </tr>
                     """
                             .formatted(
-                                    index,
+                                    index++,
                                     checkbox,
                                     textClass,
                                     SwingHtmlUtils.escapeHtml(step.description())));
-            index++;
         }
 
         return """
@@ -280,65 +266,47 @@ public final class PlanPanel extends JPanel {
     }
 
     private static String renderApprovalsHtml(ImplementationPlan plan) {
-        if (!plan.hasApprovals()) {
-            return "";
-        }
+        if (!plan.hasApprovals()) return "";
         StringBuilder items = new StringBuilder();
         if (plan.hasMoveToCodeApproval()) {
-            String user =
-                    plan.approvedBy() != null && !plan.approvedBy().isBlank()
-                            ? plan.approvedBy()
-                            : "User";
-            String timestamp =
-                    plan.approvalTimestamp() != null && !plan.approvalTimestamp().isBlank()
-                            ? plan.approvalTimestamp()
-                            : "N/A";
-            items.append("<li><b>Move to Code:</b> Approved by ")
-                    .append(SwingHtmlUtils.escapeHtml(user))
-                    .append(" on ")
-                    .append(SwingHtmlUtils.escapeHtml(timestamp))
-                    .append("</li>");
+            appendApprovalItem(
+                    items,
+                    "Move to Code",
+                    "Approved by ",
+                    plan.approvedBy(),
+                    plan.approvalTimestamp());
         }
         if (plan.hasFinalAcceptance()) {
-            String user =
-                    plan.completedBy() != null && !plan.completedBy().isBlank()
-                            ? plan.completedBy()
-                            : "User";
-            String timestamp =
-                    plan.completedOn() != null && !plan.completedOn().isBlank()
-                            ? plan.completedOn()
-                            : "N/A";
-            items.append("<li><b>Final Acceptance:</b> Accepted by ")
-                    .append(SwingHtmlUtils.escapeHtml(user))
-                    .append(" on ")
-                    .append(SwingHtmlUtils.escapeHtml(timestamp))
-                    .append("</li>");
+            appendApprovalItem(
+                    items,
+                    "Final Acceptance",
+                    "Accepted by ",
+                    plan.completedBy(),
+                    plan.completedOn());
         }
-        return """
-                <h3>Approvals:</h3>
-                <ul>%s</ul>
-                """
-                .formatted(items);
+        return "<h3>Approvals:</h3><ul>%s</ul>".formatted(items);
+    }
+
+    private static void appendApprovalItem(
+            StringBuilder items, String label, String verb, String rawUser, String rawTimestamp) {
+        items.append("<li><b>")
+                .append(label)
+                .append(":</b> ")
+                .append(verb)
+                .append(SwingHtmlUtils.escapeHtml(StringUtils.defaultIfBlank(rawUser, "User")))
+                .append(" on ")
+                .append(SwingHtmlUtils.escapeHtml(StringUtils.defaultIfBlank(rawTimestamp, "N/A")))
+                .append("</li>");
     }
 
     private static String renderChangesHtml(String gitStatus) {
         String changes = formatChangesText(gitStatus);
-        if (NO_FILES_CHANGED.equals(changes)) {
-            return """
-                    <h3>Changes:</h3>
-                    <p class='plan-muted'>%s</p>
-                    """
-                    .formatted(NO_FILES_CHANGED);
-        }
-        return """
-                <h3>Changes:</h3>
-                <pre>%s</pre>
-                """
-                .formatted(SwingHtmlUtils.escapeHtml(changes));
+        return NO_FILES_CHANGED.equals(changes)
+                ? "<h3>Changes:</h3><p class='plan-muted'>%s</p>".formatted(NO_FILES_CHANGED)
+                : "<h3>Changes:</h3><pre>%s</pre>".formatted(SwingHtmlUtils.escapeHtml(changes));
     }
 
-    private static String renderLogTable(
-            String title, java.util.List<ImplementationPlan.LogEntry> logs) {
+    private static String renderLogTable(String title, List<ImplementationPlan.LogEntry> logs) {
         if (logs == null || logs.isEmpty()) return "";
 
         StringBuilder rows = new StringBuilder();

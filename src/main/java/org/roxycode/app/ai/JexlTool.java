@@ -18,10 +18,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
-/**
- * Stateless singleton tool for executing JEXL scripts against workspace services registered in the
- * {@link JexlServiceRegistry}.
- */
 @Component
 public class JexlTool {
 
@@ -49,24 +45,10 @@ public class JexlTool {
         this.mapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
     }
 
-    /**
-     * Convenience overload for executing a JEXL script in default EXPLORE context (useful for unit
-     * testing).
-     *
-     * @param script The JEXL script to execute.
-     * @return The result of the execution as a JSON String, or an error message.
-     */
     public String executeJexl(String script) {
         return executeJexl(script, null);
     }
 
-    /**
-     * Executes a Jexl script and returns the result.
-     *
-     * @param script The Jexl script to execute.
-     * @param toolContext The Spring AI tool context containing conversationId and phase.
-     * @return The result of the execution as a String, or an error message.
-     */
     @Tool(
             description =
                     "Executes a Jexl script and returns the result as a string. Useful for workspace file, search, git, and build operations.")
@@ -93,38 +75,27 @@ public class JexlTool {
             JexlContext context = new MapContext(registry.getServices(phase));
             Object result = jexlScript.execute(context);
             ExceptionUtils.checkInterrupted("JEXL execution cancelled");
-
             publishToolEvent(conversationId, script, result, true, null);
-
             return serializeResult(result);
         } catch (Exception e) {
             if (ExceptionUtils.isCancellation(e)) {
                 try {
                     publishToolEvent(conversationId, script, null, false, "Execution cancelled");
                 } catch (Exception ignored) {
-                    // Ignore listener exceptions during cancellation
                 }
                 throw ExceptionUtils.asCancellationException(e, "JEXL execution cancelled");
             }
-
             log.warn("Error executing JEXL script: {}", e.getMessage());
             Throwable cause = ExceptionUtils.getRootCause(e);
-            String error = cause.getMessage();
-            if (error == null) {
-                error = cause.toString();
-            }
+            String error = cause.getMessage() != null ? cause.getMessage() : cause.toString();
             publishToolEvent(conversationId, script, null, false, error);
             return toJsonError(error);
         }
     }
 
     private String serializeResult(@Nullable Object result) throws Exception {
-        if (result == null) {
-            return mapper.writeValueAsString(Map.of(RESULT_KEY, "null"));
-        }
-        if (result instanceof Map) {
-            return mapper.writeValueAsString(result);
-        }
+        if (result == null) return mapper.writeValueAsString(Map.of(RESULT_KEY, "null"));
+        if (result instanceof Map) return mapper.writeValueAsString(result);
         if (isScalarResult(result) || AgentJexlPermissions.isAgentServiceClass(result.getClass())) {
             return serializeStringResult(result.toString());
         }

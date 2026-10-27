@@ -5,6 +5,9 @@ import static org.mockito.Mockito.*;
 
 import java.awt.*;
 import java.awt.event.ActionListener;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.*;
 import javax.swing.*;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,10 +16,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.RoxyCode;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SettingsService;
-import org.springframework.context.ApplicationContextInitializer;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
 
@@ -24,7 +26,6 @@ import org.springframework.core.env.ConfigurableEnvironment;
 class SettingsPanelTest {
 
     @Mock private SettingsService settingsService;
-
     private SettingsPanel settingsPanel;
     private AppSettings settings;
 
@@ -35,68 +36,44 @@ class SettingsPanelTest {
         lenient()
                 .when(settingsService.getAvailableModels())
                 .thenReturn(new SettingsService(null, null).getAvailableModels());
-
         settingsPanel = new SettingsPanel(settingsService);
     }
 
     @Test
     void testSaveLiveSettingsShowsAppliedAndPreservesRestartLegendAfterTimer() {
-        assertEquals(
-                SettingsPanel.RESTART_LEGEND_TEXT,
-                settingsPanel.getLegendLabel().getText(),
-                "Permanent restart legend should be displayed initially");
-        assertEquals(
-                "",
-                settingsPanel.getStatusLabel().getText(),
-                "Transient status label should be empty initially");
+        assertEquals(SettingsPanel.RESTART_LEGEND_TEXT, settingsPanel.getLegendLabel().getText());
+        assertEquals("", settingsPanel.getStatusLabel().getText());
 
-        // Change a live setting (maxAgentToolTurns) without changing API key or max chat history
         settingsPanel.getMaxAgentToolTurnsSpinner().setValue(12);
-
         JButton saveButton = SwingTestUtils.findButton(settingsPanel, "Save Settings");
-        assertNotNull(saveButton, "Save button should exist");
+        assertNotNull(saveButton);
         saveButton.doClick();
 
         verify(settingsService, times(1)).saveSettings();
         assertEquals(12, settings.getMaxAgentToolTurns());
-        assertEquals(
-                SettingsPanel.SAVED_APPLIED_TEXT,
-                settingsPanel.getStatusLabel().getText(),
-                "Saving only live settings should show 'Settings saved and applied.'");
+        assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
 
-        // Simulate statusTimer firing after 3 seconds
         for (ActionListener listener : settingsPanel.getStatusTimer().getActionListeners()) {
             listener.actionPerformed(null);
         }
-
-        assertEquals(
-                "",
-                settingsPanel.getStatusLabel().getText(),
-                "Transient status label should clear after timer expires");
-        assertEquals(
-                SettingsPanel.RESTART_LEGEND_TEXT,
-                settingsPanel.getLegendLabel().getText(),
-                "Permanent (*) restart legend must remain visible after status timer expires");
+        assertEquals("", settingsPanel.getStatusLabel().getText());
+        assertEquals(SettingsPanel.RESTART_LEGEND_TEXT, settingsPanel.getLegendLabel().getText());
     }
 
     @Test
-    void testThemeSelectionUpdatesSettingsButDoesNotSave() throws Exception {
+    void testThemeSelectionUpdatesSettingsButDoesNotSave() {
         try {
             @SuppressWarnings("unchecked")
             JComboBox<String> themeCombo =
                     SwingTestUtils.findComponent(settingsPanel, JComboBox.class);
-            assertNotNull(themeCombo, "Theme combo should exist");
+            assertNotNull(themeCombo);
 
             themeCombo.setSelectedItem("FlatLaf Dark");
-
             assertEquals("FlatLaf Dark", settings.getTheme());
             verify(settingsService, never()).saveSettings();
 
-            // Verify SettingsChangedEvent synchronizes themeCombo when changed externally (e.g.
-            // HeaderPanel)
             settings.setTheme("FlatLaf Light");
-            settingsPanel.onSettingsChanged(
-                    new org.roxycode.app.events.SettingsChangedEvent(settings));
+            settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
             SwingTestUtils.flushEdt();
             assertEquals("FlatLaf Light", themeCombo.getSelectedItem());
         } finally {
@@ -108,17 +85,14 @@ class SettingsPanelTest {
     void testApplyThemeOffEdtWithIndeterminateProgressBarDoesNotLogSevereError() {
         Assumptions.assumeFalse(
                 GraphicsEnvironment.isHeadless(), "Skipping JDialog test in headless environment");
-        java.util.logging.Logger flatLafLogger =
-                java.util.logging.Logger.getLogger("com.formdev.flatlaf");
-        java.util.List<java.util.logging.LogRecord> severeRecords =
-                new java.util.concurrent.CopyOnWriteArrayList<>();
-        java.util.logging.Handler handler =
-                new java.util.logging.Handler() {
+        Logger flatLafLogger = Logger.getLogger("com.formdev.flatlaf");
+        List<LogRecord> severeRecords = new CopyOnWriteArrayList<>();
+        Handler handler =
+                new Handler() {
                     @Override
-                    public void publish(java.util.logging.LogRecord record) {
+                    public void publish(LogRecord record) {
                         if (record != null
-                                && record.getLevel().intValue()
-                                        >= java.util.logging.Level.SEVERE.intValue()) {
+                                && record.getLevel().intValue() >= Level.SEVERE.intValue()) {
                             severeRecords.add(record);
                         }
                     }
@@ -145,19 +119,14 @@ class SettingsPanelTest {
             assertFalse(SwingUtilities.isEventDispatchThread());
             SettingsPanel.applyTheme("FlatLaf Dark");
             SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
-
-            assertTrue(
-                    severeRecords.isEmpty(),
-                    "Applying theme off EDT must execute on EDT without FlatProgressBarUI SEVERE logs");
+            assertTrue(severeRecords.isEmpty());
         } finally {
             flatLafLogger.removeHandler(handler);
             if (dialogHolder[0] != null) {
                 SwingTestUtils.runOnEdt(
                         () -> {
                             for (Component c : dialogHolder[0].getContentPane().getComponents()) {
-                                if (c instanceof JProgressBar pb) {
-                                    pb.setIndeterminate(false);
-                                }
+                                if (c instanceof JProgressBar pb) pb.setIndeterminate(false);
                             }
                             dialogHolder[0].dispose();
                         });
@@ -170,9 +139,7 @@ class SettingsPanelTest {
     void testRestartRequiredSettingsShowRestartWarningOnSave() {
         JPasswordField apiKeyField =
                 SwingTestUtils.findComponent(settingsPanel, JPasswordField.class);
-        assertNotNull(apiKeyField, "API key field should exist");
-
-        // Case 1: Changing Gemini API Key triggers restart warning
+        assertNotNull(apiKeyField);
         apiKeyField.setText("new-secret-key");
 
         JButton saveButton = SwingTestUtils.findButton(settingsPanel, "Save Settings");
@@ -184,14 +151,11 @@ class SettingsPanelTest {
                 settingsPanel.getStatusLabel().getText());
         verify(settingsService, times(1)).saveSettings();
 
-        // Saving again without further changes to restart-required settings shows live applied text
         saveButton.doClick();
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
 
-        // Case 2: Changing Max Chat History Messages triggers restart warning
         settingsPanel.getMaxMessagesSpinner().setValue(120);
         saveButton.doClick();
-
         assertEquals(120, settings.getMaxChatMemoryMessages());
         assertEquals(
                 SettingsPanel.SAVED_RESTART_REQUIRED_TEXT,
@@ -205,10 +169,7 @@ class SettingsPanelTest {
         customSettings.setGeminiModel("gemini-3.8-flash");
 
         try (GenericApplicationContext ctx = new GenericApplicationContext()) {
-            ApplicationContextInitializer<ConfigurableApplicationContext> initializer =
-                    RoxyCode.createSettingsInitializer(customSettings);
-            initializer.initialize(ctx);
-
+            RoxyCode.createSettingsInitializer(customSettings).initialize(ctx);
             ConfigurableEnvironment env = ctx.getEnvironment();
             assertEquals("custom-api-key-999", env.getProperty("spring.ai.google.genai.api-key"));
             assertEquals(
@@ -216,7 +177,6 @@ class SettingsPanelTest {
                     env.getProperty("spring.ai.google.genai.chat.options.model"));
         }
 
-        // Verify fallback when settings or model are empty
         AppSettings emptySettings = new AppSettings();
         emptySettings.setGeminiApiKey("");
         emptySettings.setGeminiModel("");
@@ -237,14 +197,11 @@ class SettingsPanelTest {
     @Test
     void testGetRSyntaxThemeCachesLightAndDarkInstances() throws Exception {
         var light1 = SettingsPanel.getRSyntaxTheme(false);
-        var light2 = SettingsPanel.getRSyntaxTheme(false);
         var dark1 = SettingsPanel.getRSyntaxTheme(true);
-        var dark2 = SettingsPanel.getRSyntaxTheme(true);
-
         assertNotNull(light1);
         assertNotNull(dark1);
-        assertSame(light1, light2);
-        assertSame(dark1, dark2);
+        assertSame(light1, SettingsPanel.getRSyntaxTheme(false));
+        assertSame(dark1, SettingsPanel.getRSyntaxTheme(true));
         assertNotSame(light1, dark1);
     }
 }

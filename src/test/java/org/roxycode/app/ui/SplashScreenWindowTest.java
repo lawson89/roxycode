@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class SplashScreenWindowTest {
 
     @Test
-    void testSplashScreenWindowComponentsAndStatusUpdates() throws Exception {
+    void testSplashScreenWindowComponentsAndStatusUpdates() {
         Assumptions.assumeFalse(
                 GraphicsEnvironment.isHeadless(), "Skipping JWindow test in headless environment");
 
@@ -25,47 +25,35 @@ class SplashScreenWindowTest {
                             return new SplashScreenWindow();
                         });
         try {
-            assertNotNull(splash);
-            assertNotNull(splash.getLogoImage(), "Logo image should be loaded from classpath");
-
+            assertNotNull(splash.getLogoImage());
             JProgressBar progressBar = splash.getProgressBar();
-            assertNotNull(progressBar);
-            assertTrue(progressBar.isIndeterminate(), "Progress bar should be indeterminate");
+            assertTrue(progressBar.isIndeterminate());
 
             JLabel statusLabel = splash.getStatusLabel();
-            assertNotNull(statusLabel);
             assertEquals("Starting Spring context...", statusLabel.getText());
 
-            // Test thread-safe status update from off-EDT
             splash.setStatus("Building workspace UI...");
             SwingTestUtils.flushEdt();
             assertEquals("Building workspace UI...", statusLabel.getText());
 
-            // Test status update directly on EDT
             SwingTestUtils.runOnEdt(
                     () -> {
                         splash.setStatus("Ready");
                         assertEquals("Ready", statusLabel.getText());
-
-                        // Verify root panel structure and painting
-                        assertInstanceOf(JPanel.class, splash.getContentPane());
-                        JPanel root = (JPanel) splash.getContentPane();
+                        JPanel root = assertInstanceOf(JPanel.class, splash.getContentPane());
                         assertNotNull(root.getBorder());
 
                         boolean foundTitle = false;
                         boolean foundSubtitle = false;
                         for (Component comp : root.getComponents()) {
                             if (comp instanceof JLabel label) {
-                                if ("RoxyCode".equals(label.getText())) {
-                                    foundTitle = true;
-                                } else if ("AI Coding Harness".equals(label.getText())) {
-                                    foundSubtitle = true;
-                                }
+                                foundTitle |= "RoxyCode".equals(label.getText());
+                                foundSubtitle |= "AI Coding Harness".equals(label.getText());
                             } else if (comp instanceof JPanel logoPanel) {
                                 logoPanel.setSize(80, 80);
-                                BufferedImage img =
-                                        new BufferedImage(80, 80, BufferedImage.TYPE_INT_ARGB);
-                                var g2 = img.createGraphics();
+                                var g2 =
+                                        new BufferedImage(80, 80, BufferedImage.TYPE_INT_ARGB)
+                                                .createGraphics();
                                 try {
                                     assertDoesNotThrow(() -> logoPanel.paint(g2));
                                 } finally {
@@ -73,18 +61,14 @@ class SplashScreenWindowTest {
                                 }
                             }
                         }
-                        assertTrue(foundTitle, "Title label 'RoxyCode' should be present");
-                        assertTrue(
-                                foundSubtitle,
-                                "Subtitle label 'AI Coding Harness' should be present");
+                        assertTrue(foundTitle);
+                        assertTrue(foundSubtitle);
                     });
         } finally {
             SwingTestUtils.runOnEdt(
                     () -> {
                         splash.dispose();
-                        assertFalse(
-                                splash.getProgressBar().isIndeterminate(),
-                                "Disposing splash screen should disable indeterminate progress bar");
+                        assertFalse(splash.getProgressBar().isIndeterminate());
                         SettingsPanel.applyTheme("FlatLaf Light");
                     });
         }

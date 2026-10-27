@@ -7,6 +7,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import javax.swing.SwingUtilities;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
@@ -19,7 +21,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
-/** Service for managing application settings. */
 @Service
 @SuppressWarnings("PMD.NullAssignment")
 public class SettingsService {
@@ -29,52 +30,35 @@ public class SettingsService {
 
     private final TomlMapper mapper;
     private final ApplicationEventPublisher eventPublisher;
+    private AppSettings settings;
+    private Path settingsPathOverride;
+    private volatile List<GeminiModelConfig> cachedAvailableModels;
+    private volatile CompletableFuture<Void> lastSaveFuture =
+            CompletableFuture.completedFuture(null);
 
     public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
         this.mapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
         this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {};
     }
 
-    private AppSettings settings;
-    private Path settingsPathOverride;
-    private volatile List<GeminiModelConfig> cachedAvailableModels;
-    private volatile java.util.concurrent.CompletableFuture<Void> lastSaveFuture =
-            java.util.concurrent.CompletableFuture.completedFuture(null);
-
-    /** Returns the default RoxyCode home directory (~/.roxycode). */
     public static Path getDefaultRoxyHomeDir() {
-        String userHome = System.getProperty("user.home");
-        return Paths.get(userHome, SETTINGS_DIR);
+        return Paths.get(System.getProperty("user.home"), SETTINGS_DIR);
     }
 
-    /** Returns the default user settings file path (~/.roxycode/settings.toml). */
     public static Path getDefaultSettingsPath() {
         return getDefaultRoxyHomeDir().resolve(SETTINGS_FILE);
     }
 
-    /**
-     * Returns the active RoxyCode home directory (~/.roxycode by default, or the parent directory
-     * of {@code settingsPathOverride} when overridden in tests).
-     */
     public synchronized Path getRoxyHomeDir() {
-        if (settingsPathOverride != null && settingsPathOverride.getParent() != null) {
-            return settingsPathOverride.getParent();
-        }
-        return getDefaultRoxyHomeDir();
+        return (settingsPathOverride != null && settingsPathOverride.getParent() != null)
+                ? settingsPathOverride.getParent()
+                : getDefaultRoxyHomeDir();
     }
 
-    /**
-     * Loads {@link AppSettings} from the default settings path using {@link
-     * AiConfig#SHARED_TOML_MAPPER}, falling back to default settings if missing or unreadable.
-     */
     public static AppSettings loadFromDisk() {
         return loadFromDisk(getDefaultSettingsPath(), AiConfig.SHARED_TOML_MAPPER);
     }
 
-    /**
-     * Loads {@link AppSettings} from the given path using the provided {@link TomlMapper}, falling
-     * back to default settings if missing or unreadable.
-     */
     public static AppSettings loadFromDisk(Path path, TomlMapper mapper) {
         TomlMapper effectiveMapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
         if (path != null && Files.exists(path)) {
@@ -87,23 +71,15 @@ public class SettingsService {
         return new AppSettings();
     }
 
-    /**
-     * Loads the available Gemini model configurations from {@code /models.toml}.
-     *
-     * @return list of available model configurations
-     */
     public List<GeminiModelConfig> getAvailableModels() {
         List<GeminiModelConfig> cached = this.cachedAvailableModels;
-        if (cached != null) {
-            return cached;
-        }
+        if (cached != null) return cached;
         synchronized (this) {
-            if (this.cachedAvailableModels != null) {
-                return this.cachedAvailableModels;
-            }
-            ClassPathResource resource = new ClassPathResource("models.toml");
+            if (this.cachedAvailableModels != null) return this.cachedAvailableModels;
             try {
-                String content = resource.getContentAsString(StandardCharsets.UTF_8);
+                String content =
+                        new ClassPathResource("models.toml")
+                                .getContentAsString(StandardCharsets.UTF_8);
                 GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
                 List<GeminiModelConfig> loaded =
                         geminiModels != null && geminiModels.models() != null
@@ -118,19 +94,11 @@ public class SettingsService {
         }
     }
 
-    /**
-     * Gets the current application settings.
-     *
-     * @return AppSettings object.
-     */
     public synchronized AppSettings getSettings() {
-        if (settings == null) {
-            loadSettings();
-        }
+        if (settings == null) loadSettings();
         return settings;
     }
 
-    /** Saves the current settings to the TOML file. */
     public void saveSettings() {
         AppSettings currentSettings;
         Path path;
@@ -139,13 +107,12 @@ public class SettingsService {
             path = getSettingsPath();
         }
         eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
-        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+        if (SwingUtilities.isEventDispatchThread()) {
             lastSaveFuture =
-                    java.util.concurrent.CompletableFuture.runAsync(
-                            () -> writeSettingsToDisk(path, currentSettings));
+                    CompletableFuture.runAsync(() -> writeSettingsToDisk(path, currentSettings));
         } else {
             writeSettingsToDisk(path, currentSettings);
-            lastSaveFuture = java.util.concurrent.CompletableFuture.completedFuture(null);
+            lastSaveFuture = CompletableFuture.completedFuture(null);
         }
     }
 
@@ -158,18 +125,13 @@ public class SettingsService {
         }
     }
 
-    java.util.concurrent.CompletableFuture<Void> getLastSaveFuture() {
+    CompletableFuture<Void> getLastSaveFuture() {
         return lastSaveFuture;
     }
 
-    /**
-     * Overrides the settings path, useful for testing.
-     *
-     * @param path The path to use for settings.
-     */
     public synchronized void setSettingsPathOverride(Path path) {
         this.settingsPathOverride = path;
-        this.settings = null; // Force reload
+        this.settings = null;
     }
 
     private void loadSettings() {
@@ -177,9 +139,6 @@ public class SettingsService {
     }
 
     private Path getSettingsPath() {
-        if (settingsPathOverride != null) {
-            return settingsPathOverride;
-        }
-        return getDefaultSettingsPath();
+        return settingsPathOverride != null ? settingsPathOverride : getDefaultSettingsPath();
     }
 }

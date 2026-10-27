@@ -57,9 +57,8 @@ public class ProjectCacheMetaService {
     public synchronized void deleteRepoCache() {
         invalidateCache();
         if (!projectService.hasActiveProject()) return;
-        Path path = projectService.resolveProjectDataPath(REPO_CACHE_FILE);
         try {
-            Files.deleteIfExists(path);
+            Files.deleteIfExists(projectService.resolveProjectDataPath(REPO_CACHE_FILE));
         } catch (IOException e) {
             log.error("Failed to delete repo cache: {}", e.getMessage());
         }
@@ -74,17 +73,15 @@ public class ProjectCacheMetaService {
         if (cachedMeta != null && Objects.equals(cachedProjectRoot, currentRoot)) {
             return cachedMeta;
         }
-
         Path cachePath = projectService.resolveProjectDataPath(REPO_CACHE_FILE);
         if (!Files.exists(cachePath)) {
             cachedProjectRoot = currentRoot;
             cachedMeta = Optional.empty();
             return cachedMeta;
         }
-
         try {
-            String content = Files.readString(cachePath, StandardCharsets.UTF_8);
-            return cacheAndBuildMeta(currentRoot, cachePath, content);
+            return cacheAndBuildMeta(
+                    currentRoot, cachePath, Files.readString(cachePath, StandardCharsets.UTF_8));
         } catch (IOException e) {
             log.error("Failed to derive cache meta: {}", e.getMessage());
             return Optional.empty();
@@ -109,10 +106,12 @@ public class ProjectCacheMetaService {
         LocalDateTime lastUpdated =
                 LocalDateTime.ofInstant(
                         Files.getLastModifiedTime(cachePath).toInstant(), ZoneId.systemDefault());
-        long tokens = TokenUtils.estimateTokens(content);
         Optional<ProjectCacheMeta> derived =
                 Optional.of(
-                        new ProjectCacheMeta(projectService.getProjectName(), lastUpdated, tokens));
+                        new ProjectCacheMeta(
+                                projectService.getProjectName(),
+                                lastUpdated,
+                                TokenUtils.estimateTokens(content)));
         cachedProjectRoot = currentRoot;
         cachedMeta = derived;
         return derived;

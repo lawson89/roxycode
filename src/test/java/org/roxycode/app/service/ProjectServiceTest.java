@@ -17,25 +17,25 @@ class ProjectServiceTest {
 
     @TempDir Path tempDir;
 
+    private SettingsService createSettingsService() {
+        SettingsService s = new SettingsService(null, null);
+        s.setSettingsPathOverride(tempDir.resolve("settings.toml"));
+        return s;
+    }
+
     @Test
     void testCurrentProjectRootFieldIsVolatile() throws Exception {
         Field field = ProjectService.class.getDeclaredField("currentProjectRoot");
-        assertTrue(
-                Modifier.isVolatile(field.getModifiers()),
-                "currentProjectRoot must be declared volatile for cross-thread visibility");
+        assertTrue(Modifier.isVolatile(field.getModifiers()));
     }
 
     @Test
     void testProjectPersistence() {
-        SettingsService settingsService = new SettingsService(null, null);
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-
+        SettingsService settingsService = createSettingsService();
         ProjectService projectService = new ProjectService(settingsService, null);
         Path projectPath = tempDir.resolve("my-project");
-
         projectService.setCurrentProjectRoot(projectPath);
 
-        // Verify persistence
         ProjectService projectService2 = new ProjectService(settingsService, null);
         assertEquals(
                 projectPath.toAbsolutePath().toString(),
@@ -45,31 +45,23 @@ class ProjectServiceTest {
 
     @Test
     void testProjectListener() {
-        SettingsService settingsService = new SettingsService(null, null);
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-
         AtomicReference<Path> notifiedPath = new AtomicReference<>();
         ProjectService projectService =
                 new ProjectService(
-                        settingsService,
+                        createSettingsService(),
                         event -> {
                             if (event instanceof ProjectChangedEvent pce) {
                                 notifiedPath.set(pce.projectRoot());
                             }
                         });
-
         Path projectPath = tempDir.resolve("new-project");
         projectService.setCurrentProjectRoot(projectPath);
-
         assertEquals(projectPath, notifiedPath.get());
     }
 
     @Test
     void testResolvePathWithinAndOutsideSandbox() {
-        SettingsService settingsService = new SettingsService(null, null);
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-
-        ProjectService projectService = new ProjectService(settingsService, null);
+        ProjectService projectService = new ProjectService(createSettingsService(), null);
         assertThrows(IllegalStateException.class, () -> projectService.resolvePath("file.txt"));
 
         Path projectPath = tempDir.resolve("sandbox-project");
@@ -89,35 +81,24 @@ class ProjectServiceTest {
 
     @Test
     void testGetProjectDataDirAndResolveProjectDataPath() {
-        SettingsService settingsService = new SettingsService(null, null);
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-
-        ProjectService projectService = new ProjectService(settingsService, null);
+        ProjectService projectService = new ProjectService(createSettingsService(), null);
         assertThrows(IllegalStateException.class, projectService::getProjectDataDir);
         assertThrows(
                 IllegalStateException.class,
                 () -> projectService.resolveProjectDataPath("build.toml"));
 
-        Path projectA = tempDir.resolve("workspaceA").resolve("My Cool Project!");
-        projectService.setCurrentProjectRoot(projectA);
-
+        projectService.setCurrentProjectRoot(
+                tempDir.resolve("workspaceA").resolve("My Cool Project!"));
         Path dataDirA = projectService.getProjectDataDir();
         assertEquals(tempDir.resolve("projects"), dataDirA.getParent());
-        String dirNameA = dataDirA.getFileName().toString();
-        assertTrue(
-                dirNameA.matches("^my-cool-project-[0-9a-f]{8}$"),
-                "Expected sanitized name + 8-char hex hash, got: " + dirNameA);
+        assertTrue(dataDirA.getFileName().toString().matches("^my-cool-project-[0-9a-f]{8}$"));
 
-        // Same folder name in a different parent directory produces a distinct hash
-        Path projectB = tempDir.resolve("workspaceB").resolve("My Cool Project!");
-        projectService.setCurrentProjectRoot(projectB);
+        projectService.setCurrentProjectRoot(
+                tempDir.resolve("workspaceB").resolve("My Cool Project!"));
         Path dataDirB = projectService.getProjectDataDir();
         assertNotEquals(dataDirA, dataDirB);
-        assertTrue(
-                dataDirB.getFileName().toString().startsWith("my-cool-project-"),
-                "Both should share sanitized prefix");
+        assertTrue(dataDirB.getFileName().toString().startsWith("my-cool-project-"));
 
-        // Sandbox resolution within project data dir
         assertEquals(dataDirB, projectService.resolveProjectDataPath(null));
         assertEquals(
                 dataDirB.resolve("build.toml"),
@@ -132,13 +113,8 @@ class ProjectServiceTest {
 
     @Test
     void testNotAnnotatedWithAgentServiceOrAgentDoc() {
-        assertNull(
-                ProjectService.class.getAnnotation(AgentService.class),
-                "ProjectService must not be exposed as an @AgentService");
-        assertNull(
-                ProjectService.class.getAnnotation(AgentDoc.class),
-                "ProjectService class must not have @AgentDoc");
-
+        assertNull(ProjectService.class.getAnnotation(AgentService.class));
+        assertNull(ProjectService.class.getAnnotation(AgentDoc.class));
         for (Method method : ProjectService.class.getDeclaredMethods()) {
             assertNull(
                     method.getAnnotation(AgentDoc.class),

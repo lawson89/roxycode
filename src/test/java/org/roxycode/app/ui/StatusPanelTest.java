@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Component;
+import java.awt.Insets;
 import javax.swing.JLabel;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.service.EnvironmentService;
@@ -10,42 +11,25 @@ import org.roxycode.app.service.EnvironmentService;
 class StatusPanelTest {
     @Test
     void testStatusPanelInstantiation() {
-        EnvironmentService envService = new EnvironmentService();
-        StatusPanel status = new StatusPanel(envService);
-        assertNotNull(status);
+        StatusPanel status = new StatusPanel(new EnvironmentService());
         assertEquals(3, status.getComponentCount());
         status.updateUI();
-        assertEquals(
-                new java.awt.Insets(1, 0, 0, 0),
-                status.getBorder().getBorderInsets(status),
-                "StatusPanel should maintain a 1px top MatteBorder across updateUI()");
+        assertEquals(new Insets(1, 0, 0, 0), status.getBorder().getBorderInsets(status));
 
         JLabel memLabel = (JLabel) status.getComponent(2);
         assertTrue(memLabel.getText().contains("Mem:"));
         assertFalse(memLabel.getText().contains("Repo Map:"));
-        assertFalse(memLabel.getText().contains("Messages:"));
 
         for (Component comp : status.getComponents()) {
             if (comp instanceof JLabel label) {
-                assertFalse(
-                        label.getText().contains("Messages:"),
-                        "Status bar should not contain Messages count");
+                assertFalse(label.getText().contains("Messages:"));
             }
         }
-
-        assertNotNull(status.getStatsTimer());
-        assertTrue(status.getStatsTimer().isRunning(), "Timer should start running initially");
-
+        assertTrue(status.getStatsTimer().isRunning());
         status.removeNotify();
-        assertFalse(
-                status.getStatsTimer().isRunning(),
-                "Timer must be stopped when StatusPanel is removed from hierarchy");
-
+        assertFalse(status.getStatsTimer().isRunning());
         status.addNotify();
-        assertTrue(
-                status.getStatsTimer().isRunning(),
-                "Timer should restart when StatusPanel is re-added to hierarchy");
-
+        assertTrue(status.getStatsTimer().isRunning());
         status.removeNotify();
     }
 }

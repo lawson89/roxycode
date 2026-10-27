@@ -1,9 +1,7 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -14,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -26,7 +25,6 @@ class CodebaseCachePanelTest {
     @Mock private PromptService promptService;
     @Mock private RepoMapPackerService packerService;
     @Mock private ProjectCacheMetaService metaService;
-
     private CodebaseCachePanel panel;
 
     @BeforeEach
@@ -47,9 +45,7 @@ class CodebaseCachePanelTest {
                 () -> !"Status: Unknown".equals(panel.getStatusLabel().getText()));
 
         when(packerService.forceRegenerateRepoMap())
-                .thenReturn(
-                        new org.roxycode.app.ai.services.EditorResult(
-                                true, "# Forced Repo Map", null));
+                .thenReturn(new EditorResult(true, "# Forced Repo Map", null));
         when(metaService.loadRepoCache()).thenReturn(Optional.of("# Forced Repo Map"));
 
         JButton packButton = SwingTestUtils.findButton(panel, "Update Implicit Cache");
@@ -60,7 +56,6 @@ class CodebaseCachePanelTest {
                 () ->
                         "# Forced Repo Map".equals(panel.getRepoMapArea().getText())
                                 && packButton.isEnabled());
-
         verify(packerService).forceRegenerateRepoMap();
         assertEquals("# Forced Repo Map", panel.getRepoMapArea().getText());
     }
@@ -84,7 +79,6 @@ class CodebaseCachePanelTest {
                         "\n\n... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]",
                         oversizedLen);
         String truncated = CodebaseCachePanel.truncateForDisplay("x".repeat(oversizedLen));
-
         assertTrue(truncated.endsWith(suffix));
         assertEquals(CodebaseCachePanel.MAX_DISPLAY_CHARS + suffix.length(), truncated.length());
     }
@@ -119,12 +113,6 @@ class CodebaseCachePanelTest {
                                 .getText()
                                 .contains(
                                         "[Display truncated at 200,000 characters for UI responsiveness;"));
-
-        assertTrue(
-                panel.getRepoMapArea()
-                        .getText()
-                        .contains(
-                                "[Display truncated at 200,000 characters for UI responsiveness;"));
         assertEquals(0, panel.getRepoMapArea().getCaretPosition());
 
         when(metaService.loadRepoCache()).thenReturn(Optional.of("new project repo map"));
@@ -132,7 +120,6 @@ class CodebaseCachePanelTest {
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp")));
         SwingTestUtils.awaitCondition(
                 () -> "new project repo map".equals(panel.getRepoMapArea().getText()));
-        assertEquals("new project repo map", panel.getRepoMapArea().getText());
 
         when(metaService.loadMeta()).thenReturn(Optional.empty());
         when(metaService.loadRepoCache()).thenReturn(Optional.of("local only repo map"));
@@ -140,13 +127,11 @@ class CodebaseCachePanelTest {
         SwingTestUtils.awaitCondition(
                 () -> "local only repo map".equals(panel.getRepoMapArea().getText()));
         assertEquals("Status: Repo Map available locally.", panel.getStatusLabel().getText());
-        assertEquals("local only repo map", panel.getRepoMapArea().getText());
 
         when(metaService.loadRepoCache()).thenReturn(Optional.empty());
         SwingTestUtils.awaitWorker(panel.refreshStatus());
         SwingTestUtils.awaitCondition(
                 () -> "Status: No implicit cache found.".equals(panel.getStatusLabel().getText()));
-        assertEquals("Status: No implicit cache found.", panel.getStatusLabel().getText());
         assertEquals(
                 "Repo Map will appear here after generation.", panel.getRepoMapArea().getText());
     }

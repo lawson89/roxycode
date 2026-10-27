@@ -19,9 +19,12 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MimeTypeUtils;
 
 @Service
 public class AiService {
@@ -43,6 +46,7 @@ public class AiService {
             "⚠️ **Empty Response Returned (finishReason:";
     public static final String EMPTY_STOP_MESSAGE =
             "Roxy completed the turn without generating a visible text message.";
+    private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~" + (char) 96 + '"' + "']";
 
     private final ChatClient statelessChatClient;
     private final ChatClient chatClient;
@@ -78,36 +82,30 @@ public class AiService {
     }
 
     public String generateTopicTitle(String conversationExcerpt) {
-        if (StringUtils.isBlank(conversationExcerpt)) {
-            return DEFAULT_TOPIC_TITLE;
-        }
+        if (StringUtils.isBlank(conversationExcerpt)) return DEFAULT_TOPIC_TITLE;
         String excerpt =
                 conversationExcerpt.length() > MAX_EXCERPT_LENGTH
                         ? conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH)
                         : conversationExcerpt;
         try {
-            String activeModel = settingsService.getSettings().getGeminiModel();
             ChatResponse response =
                     statelessChatClient
                             .prompt()
                             .system(TOPIC_TITLE_SYSTEM_PROMPT)
                             .user(u -> u.text(excerpt))
                             .options(
-                                    org.springframework.ai.google.genai.GoogleGenAiChatOptions
-                                            .builder()
-                                            .model(activeModel))
+                                    GoogleGenAiChatOptions.builder()
+                                            .model(settingsService.getSettings().getGeminiModel()))
                             .call()
                             .chatResponse();
-            String rawTitle = null;
-            if (response != null
-                    && response.getResult() != null
-                    && response.getResult().getOutput() != null) {
-                rawTitle = response.getResult().getOutput().getText();
-            }
+            String rawTitle =
+                    (response != null
+                                    && response.getResult() != null
+                                    && response.getResult().getOutput() != null)
+                            ? response.getResult().getOutput().getText()
+                            : null;
             String sanitized = sanitizeTopicTitle(rawTitle);
-            if (!sanitized.isEmpty()) {
-                return sanitized;
-            }
+            if (!sanitized.isEmpty()) return sanitized;
         } catch (Exception e) {
             log.warn("Failed to generate topic title via LLM, using fallback: {}", e.getMessage());
         }
@@ -115,42 +113,32 @@ public class AiService {
     }
 
     static String sanitizeTopicTitle(String rawTitle) {
-        if (StringUtils.isBlank(rawTitle)) {
-            return "";
-        }
+        if (StringUtils.isBlank(rawTitle)) return "";
         String firstLine =
                 rawTitle.lines()
                         .map(String::trim)
                         .filter(line -> !line.isEmpty())
                         .findFirst()
                         .orElse("");
-        if (firstLine.isEmpty()) {
-            return "";
-        }
+        if (firstLine.isEmpty()) return "";
         String cleaned =
                 firstLine
-                        .replaceAll("[#*_`~" + '"' + "']", " ")
-                        .replaceAll("\s+", " ")
+                        .replaceAll(STRIP_TITLE_CHARS_REGEX, " ")
+                        .replaceAll(String.valueOf((char) 92) + "s+", " ")
                         .replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "")
                         .trim();
-        if (cleaned.length() > MAX_TOPIC_TITLE_LENGTH) {
-            cleaned =
-                    cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH)
-                            .replaceAll("[^a-zA-Z0-9]+$", "")
-                            .trim();
-        }
-        return cleaned;
+        return cleaned.length() > MAX_TOPIC_TITLE_LENGTH
+                ? cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH)
+                        .replaceAll("[^a-zA-Z0-9]+$", "")
+                        .trim()
+                : cleaned;
     }
 
     public static String deriveFallbackTopicTitle(String conversationExcerpt) {
-        if (StringUtils.isBlank(conversationExcerpt)) {
-            return DEFAULT_TOPIC_TITLE;
-        }
+        if (StringUtils.isBlank(conversationExcerpt)) return DEFAULT_TOPIC_TITLE;
         for (String rawLine : conversationExcerpt.lines().toList()) {
             String line = rawLine.trim();
-            if (line.isEmpty()) {
-                continue;
-            }
+            if (line.isEmpty()) continue;
             if (line.regionMatches(true, 0, "User:", 0, 5)) {
                 line = line.substring(5).trim();
             } else if (line.regionMatches(true, 0, "Roxy:", 0, 5)
@@ -158,9 +146,7 @@ public class AiService {
                 continue;
             }
             String sanitized = sanitizeTopicTitle(line);
-            if (!sanitized.isEmpty()) {
-                return sanitized;
-            }
+            if (!sanitized.isEmpty()) return sanitized;
         }
         String fallback = sanitizeTopicTitle(conversationExcerpt);
         return fallback.isEmpty() ? DEFAULT_TOPIC_TITLE : fallback;
@@ -186,7 +172,6 @@ public class AiService {
                         new AtomicInteger(0),
                         new StringBuilder());
         String convId = turnContext.conversationId();
-        AtomicInteger turnCounter = turnContext.turnCounter();
 
         try {
             ChatClient.ChatClientRequestSpec promptSpec =
@@ -199,13 +184,11 @@ public class AiService {
                             .chatResponse();
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
             String content = formatChatResponse(chatResponse, turnContext);
-            publishTurnComplete(convId, turnCounter.get(), content);
+            publishTurnComplete(convId, turnContext.turnCounter().get(), content);
             return content;
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, "Chat turn cancelled");
-            if (e instanceof RuntimeException re) {
-                throw re;
-            }
+            if (e instanceof RuntimeException re) throw re;
             throw new RuntimeException("Unexpected error during chat turn", e);
         }
     }
@@ -220,16 +203,12 @@ public class AiService {
         if (chatResponse != null) {
             Generation result = chatResponse.getResult();
             if (result != null) {
-                if (result.getOutput() != null) {
-                    content = result.getOutput().getText();
-                }
+                if (result.getOutput() != null) content = result.getOutput().getText();
                 if (result.getMetadata() != null) {
                     rawFinishReason = result.getMetadata().getFinishReason();
                 }
             }
-            if (chatResponse.getMetadata() != null) {
-                usage = chatResponse.getMetadata().getUsage();
-            }
+            if (chatResponse.getMetadata() != null) usage = chatResponse.getMetadata().getUsage();
         }
 
         String finishReason =
@@ -241,24 +220,22 @@ public class AiService {
         if (isTokenLimitFinishReason(finishReason)) {
             if (hasVisibleContent) {
                 StringBuilder sb =
-                        new StringBuilder(prependAccumulatedText(accumulatedText, content));
-                sb.append("\n\n---\n> ")
-                        .append(TRUNCATED_MARKER)
-                        .append(" ")
-                        .append(finishReason)
-                        .append(
-                                ")**: The response was cut off because it reached the maximum output token limit.");
+                        new StringBuilder(prependAccumulatedText(accumulatedText, content))
+                                .append("\n\n---\n> ")
+                                .append(TRUNCATED_MARKER)
+                                .append(" ")
+                                .append(finishReason)
+                                .append(
+                                        ")**: The response was cut off because it reached the maximum output token limit.");
                 if (!usageSummary.isEmpty()) {
                     sb.append(" (Token usage: ").append(usageSummary).append(")");
                 }
-                sb.append(" Reply **'continue'** so Roxy can resume where she left off.");
-                return sb.toString();
+                return sb.append(" Reply **'continue'** so Roxy can resume where she left off.")
+                        .toString();
             }
 
             StringBuilder sb = new StringBuilder();
-            if (!accumulatedText.isEmpty()) {
-                sb.append(accumulatedText).append("\n\n---\n\n");
-            }
+            if (!accumulatedText.isEmpty()) sb.append(accumulatedText).append("\n\n---\n\n");
             sb.append(NO_VISIBLE_RESPONSE_MARKER)
                     .append(" ")
                     .append(finishReason)
@@ -266,21 +243,21 @@ public class AiService {
                     .append(
                             "Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
             appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
-            sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.");
-            return sb.toString();
+            return sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.")
+                    .toString();
         }
 
         if (!hasVisibleContent) {
             boolean normalStop =
                     "STOP".equalsIgnoreCase(finishReason)
                             || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
+            if (normalStop && !accumulatedText.isEmpty()) return accumulatedText;
 
-            if (normalStop && !accumulatedText.isEmpty()) {
-                return accumulatedText;
-            }
-
-            StringBuilder sb = new StringBuilder();
-            sb.append(EMPTY_RESPONSE_MARKER).append(" ").append(finishReason).append(")**\n\n");
+            StringBuilder sb =
+                    new StringBuilder(EMPTY_RESPONSE_MARKER)
+                            .append(" ")
+                            .append(finishReason)
+                            .append(")**\n\n");
             if (normalStop) {
                 sb.append(EMPTY_STOP_MESSAGE);
             } else {
@@ -289,39 +266,32 @@ public class AiService {
                         .append(").");
             }
             appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
-            if (normalStop) {
-                sb.append(
-                        "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response.");
-            } else {
-                sb.append(
-                        "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
-            }
+            sb.append(
+                    normalStop
+                            ? "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response."
+                            : "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
             return sb.toString();
         }
-
         return prependAccumulatedText(accumulatedText, content);
     }
 
     private static String prependAccumulatedText(String accumulatedText, String content) {
-        if (!accumulatedText.isEmpty() && !content.startsWith(accumulatedText)) {
-            return (accumulatedText + "\n\n" + content).trim();
-        }
-        return content;
+        return (!accumulatedText.isEmpty() && !content.startsWith(accumulatedText))
+                ? (accumulatedText + "\n\n" + content).trim()
+                : content;
     }
 
     private static void appendDiagnosticMetadata(
             StringBuilder sb, String finishReason, int toolTurns, String usageSummary) {
-        sb.append("\n- **Finish reason:** ").append(finishReason);
-        sb.append("\n- **Tool turns executed:** ").append(toolTurns);
-        if (!usageSummary.isEmpty()) {
-            sb.append("\n- **Token usage:** ").append(usageSummary);
-        }
+        sb.append("\n- **Finish reason:** ")
+                .append(finishReason)
+                .append("\n- **Tool turns executed:** ")
+                .append(toolTurns);
+        if (!usageSummary.isEmpty()) sb.append("\n- **Token usage:** ").append(usageSummary);
     }
 
     public static boolean isAutoNudgeableResponse(String response, boolean hadToolTurns) {
-        if (StringUtils.isBlank(response)) {
-            return false;
-        }
+        if (StringUtils.isBlank(response)) return false;
         if (response.startsWith(ReturnDirectToolCallingManager.MAX_TURNS_EXCEEDED_PREFIX)
                 || response.contains(TRUNCATED_MARKER)
                 || response.contains(NO_VISIBLE_RESPONSE_MARKER)) {
@@ -338,19 +308,16 @@ public class AiService {
     }
 
     private static String formatUsageSummary(Usage usage) {
-        if (usage == null) {
-            return "";
-        }
+        if (usage == null) return "";
         int promptTokens = usage.getPromptTokens() != null ? usage.getPromptTokens() : 0;
         int completionTokens =
                 usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
         int totalTokens = usage.getTotalTokens() != null ? usage.getTotalTokens() : 0;
-        if (promptTokens <= 0 && completionTokens <= 0 && totalTokens <= 0) {
-            return "";
-        }
-        return String.format(
-                "promptTokens=%d, completionTokens=%d, totalTokens=%d",
-                promptTokens, completionTokens, totalTokens);
+        return (promptTokens <= 0 && completionTokens <= 0 && totalTokens <= 0)
+                ? ""
+                : String.format(
+                        "promptTokens=%d, completionTokens=%d, totalTokens=%d",
+                        promptTokens, completionTokens, totalTokens);
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(
@@ -358,37 +325,33 @@ public class AiService {
             String message,
             String additionalInstructions,
             List<byte[]> images) {
-        String activeModel = settingsService.getSettings().getGeminiModel();
         WorkflowPhase currentPhase = turnContext.phase();
-        String systemPrompt = promptService.buildSystemPrompt(currentPhase, additionalInstructions);
-
         ChatClient.ChatClientRequestSpec promptSpec =
                 chatClient
                         .prompt()
-                        .system(systemPrompt)
+                        .system(
+                                promptService.buildSystemPrompt(
+                                        currentPhase, additionalInstructions))
                         .user(
                                 u -> {
                                     u.text(message);
                                     if (images != null) {
                                         for (byte[] img : images) {
                                             u.media(
-                                                    org.springframework.util.MimeTypeUtils
-                                                            .IMAGE_PNG,
-                                                    new org.springframework.core.io
-                                                            .ByteArrayResource(img));
+                                                    MimeTypeUtils.IMAGE_PNG,
+                                                    new ByteArrayResource(img));
                                         }
                                     }
                                 })
                         .options(
-                                org.springframework.ai.google.genai.GoogleGenAiChatOptions.builder()
-                                        .model(activeModel));
+                                GoogleGenAiChatOptions.builder()
+                                        .model(settingsService.getSettings().getGeminiModel()));
         if (currentPhase == WorkflowPhase.EXPLORE) {
             promptSpec.tools(jexlTool);
         } else {
             promptSpec.tools(jexlTool, planService);
         }
-        promptSpec.toolContext(turnContext.toMap());
-        return promptSpec;
+        return promptSpec.toolContext(turnContext.toMap());
     }
 
     private void publishTurnComplete(String conversationId, int totalTurns, String result) {

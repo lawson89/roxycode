@@ -47,7 +47,7 @@ class MentorModeIntegrationTest {
 
         AiService aiService = mock(AiService.class);
         GitService gitService = mock(GitService.class);
-        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        ApplicationEventPublisher pub = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         qaWorkspacePanel =
@@ -55,7 +55,7 @@ class MentorModeIntegrationTest {
                         new ExploreChatPanel(
                                 aiService,
                                 planService,
-                                eventPublisher,
+                                pub,
                                 chatMemory,
                                 settingsService,
                                 null,
@@ -65,12 +65,7 @@ class MentorModeIntegrationTest {
         taskWorkspacePanel =
                 new TaskWorkspacePanel(
                         new FeatureChatPanel(
-                                aiService,
-                                planService,
-                                eventPublisher,
-                                chatMemory,
-                                settingsService,
-                                null),
+                                aiService, planService, pub, chatMemory, settingsService, null),
                         planService,
                         new PlanPanel(planService, gitService),
                         null);
@@ -105,16 +100,19 @@ class MentorModeIntegrationTest {
         assertSame(qaWorkspacePanel.getMentorBanner(), mentorBanner);
         assertEquals(255, mentorBanner.getBackground().getAlpha());
         String bannerStyle = (String) mentorBanner.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(bannerStyle);
-        assertTrue(bannerStyle.startsWith("background: #"));
+        assertTrue(bannerStyle != null && bannerStyle.startsWith("background: #"));
         assertFalse(bannerStyle.contains("fade("));
 
         JLabel mentorModeLabel = qaWorkspacePanel.getMentorModeLabel();
         assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
-        FontIcon searchIcon = assertInstanceOf(FontIcon.class, mentorModeLabel.getIcon());
-        assertEquals(Codicons.SEARCH, searchIcon.getIkon());
-        JLabel subtitleLabel = qaWorkspacePanel.getMentorSubtitleLabel();
-        assertTrue(subtitleLabel.getText().contains(QaWorkspacePanel.MENTOR_MODE_SUBTITLE));
+        assertEquals(
+                Codicons.SEARCH,
+                assertInstanceOf(FontIcon.class, mentorModeLabel.getIcon()).getIkon());
+        assertTrue(
+                qaWorkspacePanel
+                        .getMentorSubtitleLabel()
+                        .getText()
+                        .contains(QaWorkspacePanel.MENTOR_MODE_SUBTITLE));
 
         qaWorkspacePanel.updateUI();
         assertNotNull(mentorModeLabel.getIcon());
@@ -144,15 +142,18 @@ class MentorModeIntegrationTest {
         assertEquals(255, progressTracker.getBackground().getAlpha());
         CompoundBorder trackerBorder =
                 assertInstanceOf(CompoundBorder.class, progressTracker.getBorder());
-        MatteBorder leftBlazeBorder =
-                assertInstanceOf(MatteBorder.class, trackerBorder.getOutsideBorder());
-        assertEquals(4, leftBlazeBorder.getBorderInsets().left);
+        assertEquals(
+                4,
+                assertInstanceOf(MatteBorder.class, trackerBorder.getOutsideBorder())
+                        .getBorderInsets()
+                        .left);
         String trackerStyle =
                 (String) progressTracker.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(trackerStyle);
-        assertFalse(trackerStyle.contains("arc:"));
-        assertTrue(trackerStyle.startsWith("background: #"));
-        assertFalse(trackerStyle.contains("fade("));
+        assertTrue(
+                trackerStyle != null
+                        && trackerStyle.startsWith("background: #")
+                        && !trackerStyle.contains("arc:")
+                        && !trackerStyle.contains("fade("));
 
         assertEquals(6, progressTracker.getComponentCount());
         assertSame(phaseHeaderLabel, progressTracker.getComponent(0));
@@ -160,17 +161,18 @@ class MentorModeIntegrationTest {
         assertEquals(
                 "font: bold -2", phaseHeaderLabel.getClientProperty(FlatClientProperties.STYLE));
         assertEquals(SwingHtmlUtils.getAccentColor(), phaseHeaderLabel.getForeground());
-        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(1));
-        JLabel connector1 = assertInstanceOf(JLabel.class, progressTracker.getComponent(2));
-        FontIcon chevron1 = assertInstanceOf(FontIcon.class, connector1.getIcon());
-        assertEquals(Codicons.CHEVRON_RIGHT, chevron1.getIkon());
-        assertEquals(12, chevron1.getIconSize());
-        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(3));
-        JLabel connector2 = assertInstanceOf(JLabel.class, progressTracker.getComponent(4));
-        FontIcon chevron2 = assertInstanceOf(FontIcon.class, connector2.getIcon());
-        assertEquals(Codicons.CHEVRON_RIGHT, chevron2.getIkon());
-        assertEquals(12, chevron2.getIconSize());
-        assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(5));
+        for (int idx : new int[] {1, 3, 5}) {
+            assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(idx));
+        }
+        for (int idx : new int[] {2, 4}) {
+            FontIcon chevron =
+                    assertInstanceOf(
+                            FontIcon.class,
+                            assertInstanceOf(JLabel.class, progressTracker.getComponent(idx))
+                                    .getIcon());
+            assertEquals(Codicons.CHEVRON_RIGHT, chevron.getIkon());
+            assertEquals(12, chevron.getIconSize());
+        }
 
         when(planService.getVisitedPhases())
                 .thenReturn(EnumSet.of(WorkflowPhase.PLAN, WorkflowPhase.CODE));
@@ -179,12 +181,13 @@ class MentorModeIntegrationTest {
         assertTrue(planLabel.isVisible());
         assertEquals("MY FEATURE PLAN", planLabel.getText());
         assertEquals("My Feature Plan", planLabel.getToolTipText());
-        FontIcon projectIcon = assertInstanceOf(FontIcon.class, planLabel.getIcon());
-        assertEquals(Codicons.PROJECT, projectIcon.getIkon());
+        assertEquals(
+                Codicons.PROJECT, assertInstanceOf(FontIcon.class, planLabel.getIcon()).getIkon());
         String planStyle = (String) planLabel.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(planStyle);
-        assertTrue(planStyle.contains("background: #"));
-        assertFalse(planStyle.contains("fade("));
+        assertTrue(
+                planStyle != null
+                        && planStyle.contains("background: #")
+                        && !planStyle.contains("fade("));
 
         taskWorkspacePanel.updateUI();
         assertNotNull(planLabel.getIcon());
@@ -207,7 +210,7 @@ class MentorModeIntegrationTest {
     }
 
     @Test
-    void testShowCardFocusesInputAndSetsCaretToEnd() throws Exception {
+    void testShowCardFocusesInputAndSetsCaretToEnd() {
         ChatPanel qaChatPanel = qaWorkspacePanel.getQaChatPanel();
         ChatPanel taskChatPanel = taskWorkspacePanel.getTaskChatPanel();
         JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
@@ -220,7 +223,6 @@ class MentorModeIntegrationTest {
 
         taskWorkspacePanel.onViewShown();
         SwingTestUtils.flushEdt();
-
         assertEquals(taskChatPanel, taskTabs.getSelectedComponent());
         assertEquals(
                 "Task draft message".length(), taskChatPanel.getInputArea().getCaretPosition());

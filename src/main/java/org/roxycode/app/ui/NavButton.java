@@ -7,7 +7,6 @@ import javax.swing.*;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 
-/** Styled navigation button for the sidebar. */
 public final class NavButton extends JButton {
     private static final long serialVersionUID = 1L;
     private static final int VERTICAL_PADDING = 8;
@@ -43,11 +42,10 @@ public final class NavButton extends JButton {
     }
 
     public void setBusy(boolean busy) {
-        if (this.busy == busy) {
-            return;
+        if (this.busy != busy) {
+            this.busy = busy;
+            updateStatusIcon();
         }
-        this.busy = busy;
-        updateStatusIcon();
     }
 
     public boolean isBusy() {
@@ -55,11 +53,10 @@ public final class NavButton extends JButton {
     }
 
     public void setWaitingApproval(boolean waitingApproval) {
-        if (this.waitingApproval == waitingApproval) {
-            return;
+        if (this.waitingApproval != waitingApproval) {
+            this.waitingApproval = waitingApproval;
+            updateStatusIcon();
         }
-        this.waitingApproval = waitingApproval;
-        updateStatusIcon();
     }
 
     public boolean isWaitingApproval() {
@@ -92,9 +89,7 @@ public final class NavButton extends JButton {
         super.removeNotify();
     }
 
-    @SuppressWarnings({
-        "PMD.NullAssignment",
-    })
+    @SuppressWarnings("PMD.NullAssignment")
     private void updateStatusIcon() {
         if (busy) {
             statusIcon = hourglassAnimator.start();
@@ -127,16 +122,11 @@ public final class NavButton extends JButton {
     public void setSelected(boolean b) {
         super.setSelected(b);
         if (b) {
-            if (FlatLaf.isLafDark()) {
-                putClientProperty(
-                        FlatClientProperties.STYLE,
-                        "background: $Component.accentColor; "
-                                + "foreground: $Component.accentForeground");
-            } else {
-                putClientProperty(
-                        FlatClientProperties.STYLE,
-                        "background: #0d6efd; " + "foreground: #ffffff");
-            }
+            putClientProperty(
+                    FlatClientProperties.STYLE,
+                    FlatLaf.isLafDark()
+                            ? "background: $Component.accentColor; foreground: $Component.accentForeground"
+                            : "background: #0d6efd; foreground: #ffffff");
             setContentAreaFilled(true);
         } else {
             putClientProperty(FlatClientProperties.STYLE, "");
@@ -146,13 +136,8 @@ public final class NavButton extends JButton {
     }
 
     private void updateIconColor() {
-        Icon icon = getIcon();
-        if (icon instanceof FontIcon) {
-            FontIcon fontIcon = (FontIcon) icon;
-            Color fg = getForeground();
-            if (fg != null) {
-                fontIcon.setIconColor(fg);
-            }
+        if (getIcon() instanceof FontIcon fontIcon && getForeground() != null) {
+            fontIcon.setIconColor(getForeground());
         }
     }
 
@@ -160,11 +145,6 @@ public final class NavButton extends JButton {
     public void updateUI() {
         super.updateUI();
         setSelected(isSelected());
-    }
-
-    private Color resolveBusyStatusColor() {
-        return SwingHtmlUtils.getUiColor(
-                getForeground(), "Label.disabledForeground", "Component.accentColor");
     }
 
     @Override
@@ -201,10 +181,7 @@ public final class NavButton extends JButton {
             int y = (getHeight() - statusIcon.getIconHeight()) / 2;
 
             if (isSelected()) {
-                Color fg = getForeground();
-                if (fg != null) {
-                    statusIcon.setIconColor(fg);
-                }
+                if (getForeground() != null) statusIcon.setIconColor(getForeground());
             } else if (highlightWaiting) {
                 if (g instanceof Graphics2D) {
                     Graphics2D g2 = (Graphics2D) g.create();
@@ -212,21 +189,24 @@ public final class NavButton extends JButton {
                         g2.setRenderingHint(
                                 RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                         g2.setColor(amberAccent);
-                        int badgeX = x - (BADGE_SIZE - statusIcon.getIconWidth()) / 2;
-                        int badgeY = (getHeight() - BADGE_SIZE) / 2;
-                        g2.fillOval(badgeX, badgeY, BADGE_SIZE, BADGE_SIZE);
+                        g2.fillOval(
+                                x - (BADGE_SIZE - statusIcon.getIconWidth()) / 2,
+                                (getHeight() - BADGE_SIZE) / 2,
+                                BADGE_SIZE,
+                                BADGE_SIZE);
                     } finally {
                         g2.dispose();
                     }
                 }
                 statusIcon.setIconColor(Color.WHITE);
             } else {
-                Color color = resolveBusyStatusColor();
-                if (color != null) {
-                    statusIcon.setIconColor(color);
-                }
+                Color color =
+                        SwingHtmlUtils.getUiColor(
+                                getForeground(),
+                                "Label.disabledForeground",
+                                "Component.accentColor");
+                if (color != null) statusIcon.setIconColor(color);
             }
-
             statusIcon.paintIcon(this, g, x, y);
         }
     }

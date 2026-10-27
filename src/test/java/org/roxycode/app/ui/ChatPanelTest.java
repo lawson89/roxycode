@@ -5,37 +5,25 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.BorderLayout;
-import java.awt.Container;
-import java.awt.Dimension;
-import java.awt.Insets;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.nio.file.Path;
+import java.util.*;
 import java.util.List;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.swing.Action;
-import javax.swing.JButton;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
-import javax.swing.JTextArea;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.SwingUtilities;
+import javax.imageio.ImageIO;
+import javax.swing.*;
 import javax.swing.border.MatteBorder;
 import net.miginfocom.swing.MigLayout;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.events.AgentTurnEvent;
-import org.roxycode.app.events.PhaseChangedEvent;
-import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.ToolExecutionEvent;
-import org.roxycode.app.events.WorkflowTransitionEvent;
+import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.events.*;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.springframework.context.event.EventListener;
@@ -79,12 +67,10 @@ public class ChatPanelTest extends ChatTestFixture {
 
         assertFalse(stopButton.isEnabled());
         assertTrue(sendButton.isEnabled());
-
         inputArea.setText("test message");
         for (ActionListener al : sendButton.getActionListeners()) {
             al.actionPerformed(new ActionEvent(sendButton, ActionEvent.ACTION_PERFORMED, null));
         }
-
         assertTrue(stopButton.isEnabled());
         assertFalse(sendButton.isEnabled());
         assertFalse(inputArea.isEnabled());
@@ -94,7 +80,6 @@ public class ChatPanelTest extends ChatTestFixture {
     public void testStopButtonCancelsTurnAndBlocksLateAutonomousTransitionsAndEvents()
             throws Exception {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
-
         CountDownLatch callStarted = new CountDownLatch(1);
         CountDownLatch allowExit = new CountDownLatch(1);
         AtomicInteger chatCalls = new AtomicInteger(0);
@@ -116,12 +101,10 @@ public class ChatPanelTest extends ChatTestFixture {
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
         chatPanel.getInputArea().setText("Start coding");
         chatPanel.getSendButton().doClick();
-
         assertTrue(callStarted.await(5, TimeUnit.SECONDS));
 
         chatPanel.onWorkflowTransition(
-                transitionEvent(
-                        WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop transition", true));
+                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop", true));
         flushEdt();
         SwingTestUtils.clickOnEdt(chatPanel.getStopButton());
         chatPanel.onWorkflowTransition(
@@ -144,7 +127,6 @@ public class ChatPanelTest extends ChatTestFixture {
     @Test
     public void testAutonomousTransitionSuppressesTurnForPlan() throws Exception {
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
-
         chatPanel.onWorkflowTransition(
                 transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
         Thread.sleep(300);
@@ -159,7 +141,6 @@ public class ChatPanelTest extends ChatTestFixture {
     @Test
     public void testTransitionRequestedDuringWorkerAppendsAfterAiResponse() throws Exception {
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
-
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(aiService.chat(anyString(), any(), anyString(), any()))
                 .thenAnswer(
@@ -168,14 +149,13 @@ public class ChatPanelTest extends ChatTestFixture {
                                     transitionEvent(
                                             WorkflowPhase.PLAN,
                                             WorkflowPhase.CODE,
-                                            "Plan ready",
+                                            "Ready",
                                             false));
                             return "FINAL_PLAN_SUMMARY";
                         });
 
         chatPanel.getInputArea().setText("Build feature");
         chatPanel.getSendButton().doClick();
-
         Thread.sleep(500);
         flushEdt();
 
@@ -229,13 +209,11 @@ public class ChatPanelTest extends ChatTestFixture {
         assertEquals(new Insets(0, 0, 1, 0), scrollPane.getBorder().getBorderInsets(scrollPane));
 
         Container outputWrapper = scrollPane.getParent();
-        assertNotNull(outputWrapper);
         BorderLayout layout = assertInstanceOf(BorderLayout.class, outputWrapper.getLayout());
         assertNotNull(layout.getLayoutComponent(BorderLayout.SOUTH));
 
         JSplitPane splitPane =
                 (JSplitPane) SwingUtilities.getAncestorOfClass(JSplitPane.class, scrollPane);
-        assertNotNull(splitPane);
         assertEquals(new Insets(0, 0, 0, 0), splitPane.getInsets());
         assertEquals(1.0, splitPane.getResizeWeight(), 0.001);
 
@@ -248,7 +226,6 @@ public class ChatPanelTest extends ChatTestFixture {
         assertEquals(
                 "Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)",
                 chatPanel.getInputArea().getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
-        assertNotNull(chatPanel.getAttachImageButton());
         assertEquals("Attach Image", chatPanel.getAttachImageButton().getToolTipText());
 
         MigLayout inputLayout = assertInstanceOf(MigLayout.class, inputSection.getLayout());
@@ -272,23 +249,19 @@ public class ChatPanelTest extends ChatTestFixture {
         assertTrue(featureChatPanel.getModel().isTaskMode());
         assertEquals("Reset Session", featureChatPanel.getResetSessionButton().getText());
 
-        Method[] exploreDeclared = ExploreChatPanel.class.getDeclaredMethods();
         assertFalse(
-                Arrays.stream(exploreDeclared)
+                Arrays.stream(ExploreChatPanel.class.getDeclaredMethods())
                         .anyMatch(m -> m.isAnnotationPresent(EventListener.class)));
-
-        assertTrue(
-                FeatureChatPanel.class
-                        .getDeclaredMethod("onWorkflowTransition", WorkflowTransitionEvent.class)
-                        .isAnnotationPresent(EventListener.class));
-        assertTrue(
-                FeatureChatPanel.class
-                        .getDeclaredMethod("onPhaseChanged", PhaseChangedEvent.class)
-                        .isAnnotationPresent(EventListener.class));
-        assertTrue(
-                FeatureChatPanel.class
-                        .getDeclaredMethod("onPlanUpdated", PlanUpdatedEvent.class)
-                        .isAnnotationPresent(EventListener.class));
+        for (var m :
+                List.of(
+                        FeatureChatPanel.class.getDeclaredMethod(
+                                "onWorkflowTransition", WorkflowTransitionEvent.class),
+                        FeatureChatPanel.class.getDeclaredMethod(
+                                "onPhaseChanged", PhaseChangedEvent.class),
+                        FeatureChatPanel.class.getDeclaredMethod(
+                                "onPlanUpdated", PlanUpdatedEvent.class))) {
+            assertTrue(m.isAnnotationPresent(EventListener.class));
+        }
     }
 
     @Test
@@ -369,7 +342,7 @@ public class ChatPanelTest extends ChatTestFixture {
     }
 
     @Test
-    public void testTurnLabelDisplaysMaxTurnsAndLivePlanStepProgress() throws Exception {
+    public void testTurnLabelDisplaysMaxTurnsAndLivePlanStepProgress() {
         AppSettings appSettings = new AppSettings();
         appSettings.setMaxAgentToolTurns(5);
         when(settingsService.getSettings()).thenReturn(appSettings);
@@ -400,23 +373,19 @@ public class ChatPanelTest extends ChatTestFixture {
     }
 
     @Test
-    public void testLoadImageAttachmentAsyncAndBilinearThumbnailCreation(
-            @org.junit.jupiter.api.io.TempDir java.nio.file.Path tempDir) throws Exception {
+    public void testLoadImageAttachmentAsyncAndBilinearThumbnailCreation(@TempDir Path tempDir)
+            throws Exception {
         ChatPanel chatPanel = createChatPanel();
-        java.awt.image.BufferedImage src =
-                new java.awt.image.BufferedImage(
-                        120, 80, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-        java.awt.image.BufferedImage thumb =
-                ChatPanel.createThumbnail(src, ChatPanel.THUMBNAIL_SIZE);
+        BufferedImage src = new BufferedImage(120, 80, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage thumb = ChatPanel.createThumbnail(src, ChatPanel.THUMBNAIL_SIZE);
         assertEquals(64, thumb.getWidth());
         assertEquals(64, thumb.getHeight());
 
-        java.io.File imgFile = tempDir.resolve("sample.png").toFile();
-        javax.imageio.ImageIO.write(src, "png", imgFile);
+        File imgFile = tempDir.resolve("sample.png").toFile();
+        ImageIO.write(src, "png", imgFile);
 
-        java.awt.image.BufferedImage loaded =
+        BufferedImage loaded =
                 SwingTestUtils.awaitWorker(chatPanel.loadImageAttachmentAsync(imgFile));
-
         assertNotNull(loaded);
         assertEquals(120, loaded.getWidth());
         assertTrue(chatPanel.getModel().hasPendingImages());
@@ -424,11 +393,9 @@ public class ChatPanelTest extends ChatTestFixture {
     }
 
     @Test
-    public void testFileMentionAutocompleteKeyboardNavigationAndEnterInterception()
-            throws Exception {
+    public void testFileMentionAutocompleteKeyboardNavigationAndEnterInterception() {
         ChatPanel chatPanel = createChatPanel();
-        org.roxycode.app.ai.services.GrepService grepService =
-                mock(org.roxycode.app.ai.services.GrepService.class);
+        GrepService grepService = mock(GrepService.class);
         when(grepService.listFiles())
                 .thenReturn(
                         List.of(
@@ -455,30 +422,26 @@ public class ChatPanelTest extends ChatTestFixture {
                 "src/main/java/org/roxycode/app/ui/ChatModel.java",
                 mentionPopup.getListModel().get(0).relativePath());
 
-        Action downAction = inputArea.getActionMap().get("autocomplete-or-down");
-        Action upAction = inputArea.getActionMap().get("autocomplete-or-up");
-        Action enterAction = inputArea.getActionMap().get("send-message");
-        Action tabAction = inputArea.getActionMap().get("autocomplete-or-tab");
-        Action escapeAction = inputArea.getActionMap().get("dismiss-autocomplete");
+        ActionMap am = inputArea.getActionMap();
+        Action downAction = am.get("autocomplete-or-down");
+        Action upAction = am.get("autocomplete-or-up");
+        Action enterAction = am.get("send-message");
+        Action tabAction = am.get("autocomplete-or-tab");
+        Action escapeAction = am.get("dismiss-autocomplete");
 
-        // Navigate DOWN to index 1 (ChatPanel.java)
         SwingTestUtils.runOnEdt(() -> downAction.actionPerformed(null));
         assertEquals(1, mentionPopup.getCandidateList().getSelectedIndex());
         assertEquals(
                 "src/main/java/org/roxycode/app/ui/ChatPanel.java",
                 mentionPopup.getCandidateList().getSelectedValue().relativePath());
 
-        // Navigate UP back to index 0, then UP again to wrap around to index 2
         SwingTestUtils.runOnEdt(() -> upAction.actionPerformed(null));
         assertEquals(0, mentionPopup.getCandidateList().getSelectedIndex());
         SwingTestUtils.runOnEdt(() -> upAction.actionPerformed(null));
         assertEquals(2, mentionPopup.getCandidateList().getSelectedIndex());
 
-        // Press ENTER while popup is visible: must insert mention + trailing space and NOT send
-        // message
         SwingTestUtils.runOnEdt(() -> enterAction.actionPerformed(null));
         flushEdt();
-
         assertFalse(mentionPopup.isPopupVisible());
         assertEquals(
                 "Review @src/main/java/org/roxycode/app/ui/ChatController.java ",
@@ -486,11 +449,7 @@ public class ChatPanelTest extends ChatTestFixture {
         assertEquals(inputArea.getText().length(), inputArea.getCaretPosition());
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
-        // Type another @ mention and accept with TAB
-        SwingTestUtils.runOnEdt(
-                () -> {
-                    inputArea.insert("@ChatM", inputArea.getCaretPosition());
-                });
+        SwingTestUtils.runOnEdt(() -> inputArea.insert("@ChatM", inputArea.getCaretPosition()));
         flushEdt();
         assertTrue(mentionPopup.isPopupVisible());
 
@@ -502,11 +461,7 @@ public class ChatPanelTest extends ChatTestFixture {
                         + "@src/main/java/org/roxycode/app/ui/ChatModel.java ",
                 inputArea.getText());
 
-        // Type another @ mention and dismiss with ESCAPE
-        SwingTestUtils.runOnEdt(
-                () -> {
-                    inputArea.insert("@ChatP", inputArea.getCaretPosition());
-                });
+        SwingTestUtils.runOnEdt(() -> inputArea.insert("@ChatP", inputArea.getCaretPosition()));
         flushEdt();
         assertTrue(mentionPopup.isPopupVisible());
 
@@ -514,7 +469,6 @@ public class ChatPanelTest extends ChatTestFixture {
         assertFalse(mentionPopup.isPopupVisible());
         assertTrue(inputArea.getText().endsWith("@ChatP"));
 
-        // Subsequent ENTER when popup is hidden sends the message as normal
         SwingTestUtils.runOnEdt(() -> enterAction.actionPerformed(null));
         flushEdt();
         assertEquals("", inputArea.getText());
@@ -523,18 +477,16 @@ public class ChatPanelTest extends ChatTestFixture {
     @Test
     public void testFileMentionCacheInvalidatedOnProjectAndFileEvents() {
         ChatPanel chatPanel = createChatPanel();
-        org.roxycode.app.ai.services.GrepService grepService =
-                mock(org.roxycode.app.ai.services.GrepService.class);
+        GrepService grepService = mock(GrepService.class);
         when(grepService.listFiles()).thenReturn(List.of("src/App.java"));
         chatPanel.getFileMentionPopup().setBackgroundExecutor(Runnable::run);
         chatPanel.setGrepService(grepService);
         verify(grepService, times(1)).listFiles();
 
-        chatPanel.onProjectChanged(
-                new org.roxycode.app.events.ProjectChangedEvent(java.nio.file.Path.of(".")));
+        chatPanel.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
         verify(grepService, times(2)).listFiles();
 
-        chatPanel.onFileChanged(new org.roxycode.app.events.FileChangedEvent("src/NewFile.java"));
+        chatPanel.onFileChanged(new FileChangedEvent("src/NewFile.java"));
         verify(grepService, times(3)).listFiles();
     }
 }

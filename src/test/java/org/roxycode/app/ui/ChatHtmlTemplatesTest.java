@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import javax.swing.JEditorPane;
 import javax.swing.text.Element;
@@ -14,39 +15,39 @@ class ChatHtmlTemplatesTest {
     void testRenderChatEntry() {
         String result =
                 ChatHtmlTemplates.renderChatEntry("user", "<p>Hello</p>", "12:00:00", -1, false);
-        assertTrue(result.contains("user-entry"));
-        assertTrue(result.contains("user-accent"));
-        assertTrue(result.contains("nowrap"));
-        assertTrue(result.contains("message-body"));
-        assertTrue(result.contains("padding: 8px 12px;"));
-        assertFalse(result.contains("chat-entry"));
-        assertFalse(result.contains("accent-bar"));
-        assertTrue(result.contains("role-user"));
-        assertTrue(result.contains("margin-top: 4px;"));
-        assertTrue(result.contains("<p>Hello</p>"));
-        assertTrue(result.contains("12:00:00"));
-        assertFalse(result.contains("copy-action"));
-        assertFalse(result.contains("copy-cell-"));
+        assertContainsAll(
+                result,
+                "user-entry",
+                "user-accent",
+                "nowrap",
+                "message-body",
+                "padding: 8px 12px;",
+                "role-user",
+                "margin-top: 4px;",
+                "<p>Hello</p>",
+                "12:00:00");
+        for (String absent :
+                new String[] {"chat-entry", "accent-bar", "copy-action", "copy-cell-"}) {
+            assertFalse(result.contains(absent));
+        }
     }
 
     @Test
     void testRenderCopyActionHtml() {
-        String copyLink = ChatHtmlTemplates.renderCopyActionHtml(3, false);
-        assertEquals("<a class='copy-action' href='copy:3'>[Copy]</a>", copyLink);
-
-        String copiedSpan = ChatHtmlTemplates.renderCopyActionHtml(3, true);
-        assertEquals("<span class='copy-feedback'>&#10003; Copied!</span>", copiedSpan);
+        assertEquals(
+                "<a class='copy-action' href='copy:3'>[Copy]</a>",
+                ChatHtmlTemplates.renderCopyActionHtml(3, false));
+        assertEquals(
+                "<span class='copy-feedback'>&#10003; Copied!</span>",
+                ChatHtmlTemplates.renderCopyActionHtml(3, true));
     }
 
     @Test
     void testRenderAiChatEntryWithCopyAction() {
         String result =
                 ChatHtmlTemplates.renderChatEntry("ai", "<p>Response</p>", "12:00:00", 2, false);
-        assertTrue(result.contains("ai-entry"));
-        assertTrue(result.contains("id='copy-cell-2'"));
-        assertTrue(result.contains("href='copy:2'"));
-        assertTrue(result.contains("copy-action"));
-        assertTrue(result.contains("[Copy]"));
+        assertContainsAll(
+                result, "ai-entry", "id='copy-cell-2'", "href='copy:2'", "copy-action", "[Copy]");
         assertFalse(result.contains("&#128203;"));
         assertFalse(result.contains("copy-feedback"));
     }
@@ -55,10 +56,8 @@ class ChatHtmlTemplatesTest {
     void testRenderAiChatEntryWithCopiedFeedback() {
         String result =
                 ChatHtmlTemplates.renderChatEntry("ai", "<p>Response</p>", "12:00:00", 2, true);
-        assertTrue(result.contains("ai-entry"));
-        assertTrue(result.contains("id='copy-cell-2'"));
-        assertTrue(result.contains("copy-feedback"));
-        assertTrue(result.contains("&#10003; Copied!"));
+        assertContainsAll(
+                result, "ai-entry", "id='copy-cell-2'", "copy-feedback", "&#10003; Copied!");
         assertFalse(result.contains("href='copy:2'"));
     }
 
@@ -67,48 +66,45 @@ class ChatHtmlTemplatesTest {
         String result =
                 ChatHtmlTemplates.renderChatEntry("user", "<p>Prompt</p>", "12:00:00", 0, false);
         assertTrue(result.contains("user-entry"));
-        assertFalse(result.contains("copy-action"));
-        assertFalse(result.contains("href='copy:0'"));
-        assertFalse(result.contains("id='copy-cell-0'"));
+        for (String absent : new String[] {"copy-action", "href='copy:0'", "id='copy-cell-0'"}) {
+            assertFalse(result.contains(absent));
+        }
     }
 
     @Test
     void testRenderToolLog() {
         String result = ChatHtmlTemplates.renderToolLog("diff output", true, null);
-        assertTrue(result.contains("tool-call"));
-        assertTrue(result.contains("tool-accent"));
-        assertTrue(result.contains("tool-body-container"));
-        assertFalse(result.contains("accent-bar"));
-        assertFalse(result.contains("tool-header"));
-        assertTrue(result.contains("diff output"));
-        assertTrue(
-                result.contains("tool-result")
-                        && result.contains("&#10003; Executed successfully"));
-        assertFalse(result.contains("tool-error"));
+        assertContainsAll(
+                result,
+                "tool-call",
+                "tool-accent",
+                "tool-body-container",
+                "diff output",
+                "tool-result",
+                "&#10003; Executed successfully");
+        for (String absent : new String[] {"accent-bar", "tool-header", "tool-error"}) {
+            assertFalse(result.contains(absent));
+        }
     }
 
     @Test
     void testRenderToolLogSuccessAndFailure() {
         String successHtml = ChatHtmlTemplates.renderToolLog("1 + 1", true, null);
-        assertTrue(
-                successHtml.contains("tool-result")
-                        && successHtml.contains("&#10003; Executed successfully"));
+        assertContainsAll(successHtml, "tool-result", "&#10003; Executed successfully");
         assertFalse(successHtml.contains("tool-error"));
 
         String failureHtml =
                 ChatHtmlTemplates.renderToolLog(
                         "bad()", false, "Syntax Error: <unexpected> & token");
-        assertTrue(
-                failureHtml.contains("tool-error")
-                        && failureHtml.contains(
-                                "&#10007; Error: Syntax Error: &lt;unexpected&gt; &amp; token"));
+        assertContainsAll(
+                failureHtml,
+                "tool-error",
+                "&#10007; Error: Syntax Error: &lt;unexpected&gt; &amp; token");
         assertFalse(failureHtml.contains("<unexpected>"));
         assertFalse(failureHtml.contains("tool-result"));
 
         String fallbackHtml = ChatHtmlTemplates.renderToolLog("bad()", false, "   ");
-        assertTrue(
-                fallbackHtml.contains("tool-error")
-                        && fallbackHtml.contains("&#10007; Error: Unknown error"));
+        assertContainsAll(fallbackHtml, "tool-error", "&#10007; Error: Unknown error");
     }
 
     @Test
@@ -121,21 +117,21 @@ class ChatHtmlTemplatesTest {
         String entryResult =
                 ChatHtmlTemplates.renderChatEntry(
                         "user<bad>", "<p>Safe</p>", "12:00<img src=x>", -1, false);
-        assertTrue(entryResult.contains("user&lt;bad&gt;-entry"));
-        assertTrue(entryResult.contains("12:00&lt;img src=x&gt;"));
+        assertContainsAll(entryResult, "user&lt;bad&gt;-entry", "12:00&lt;img src=x&gt;");
         assertFalse(entryResult.contains("<img src=x>"));
     }
 
     @Test
     void testRenderWelcomeCard() {
-        String welcomeHtml = ChatHtmlTemplates.renderWelcomeCard();
-        assertTrue(welcomeHtml.contains("welcome-card"));
-        assertTrue(welcomeHtml.contains("ai-accent"));
-        assertTrue(welcomeHtml.contains("welcome-title"));
-        assertTrue(welcomeHtml.contains("welcome-hint"));
-        assertTrue(welcomeHtml.contains("Enter"));
-        assertTrue(welcomeHtml.contains("Shift+Enter"));
-        assertTrue(welcomeHtml.contains("Attach Image"));
+        assertContainsAll(
+                ChatHtmlTemplates.renderWelcomeCard(),
+                "welcome-card",
+                "ai-accent",
+                "welcome-title",
+                "welcome-hint",
+                "Enter",
+                "Shift+Enter",
+                "Attach Image");
     }
 
     @Test

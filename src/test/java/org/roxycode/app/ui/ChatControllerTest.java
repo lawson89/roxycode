@@ -3,23 +3,25 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.awt.image.BufferedImage;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.events.AgentTurnEvent;
-import org.roxycode.app.events.ToolExecutionEvent;
-import org.roxycode.app.events.UserMessageEvent;
+import org.roxycode.app.events.*;
 
 class ChatControllerTest extends ChatTestFixture {
 
     @Test
-    void testRejectPhaseNotifiesWorkflowAndTriggersTurn() throws Exception {
+    void testRejectPhaseNotifiesWorkflowAndTriggersTurn() {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
         when(aiService.chat(anyString(), any(), anyString(), any()))
@@ -43,7 +45,7 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testPerformResetSessionResetsWorkflowAndClearsMemory() throws Exception {
+    void testPerformResetSessionResetsWorkflowAndClearsMemory() {
         FeatureChatPanel panel = createFeatureChatPanel(null);
         panel.getModel().setCurrentTurn(3);
         panel.getController().performResetSession();
@@ -57,9 +59,8 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testOnToolExecutionRendersSuccessAndErrorStatus() throws Exception {
+    void testOnToolExecutionRendersSuccessAndErrorStatus() {
         FeatureChatPanel panel = createFeatureChatPanel(null);
-
         panel.onToolExecution(new ToolExecutionEvent("task:default", "1 + 1", 2, true, null));
         panel.onToolExecution(
                 new ToolExecutionEvent("task:default", "if (", null, false, "Syntax Error: <bad>"));
@@ -68,8 +69,7 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
 
         String html = panel.getOutputArea().getText();
-        assertTrue(html.contains("Executed successfully"));
-        assertTrue(html.contains("Error: Syntax Error: &lt;bad&gt;"));
+        assertContainsAll(html, "Executed successfully", "Error: Syntax Error: &lt;bad&gt;");
         assertFalse(html.contains("<bad>"));
         assertFalse(html.contains("ignoredCall"));
     }
@@ -85,7 +85,6 @@ class ChatControllerTest extends ChatTestFixture {
     @Test
     void testCloseAndManagedChatTurnExecutorLifecycle() {
         ExecutorService executorService = new AiConfig().chatTurnExecutor();
-        assertNotNull(executorService);
         assertFalse(executorService.isShutdown());
 
         ExploreChatPanel panel = createExploreChatPanel(executorService);
@@ -141,10 +140,8 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testTransientErrorWhenCurrentTurnPositiveAutoNudgesWhileTurnZeroDoesNot()
-            throws Exception {
+    void testTransientErrorWhenCurrentTurnPositiveAutoNudgesWhileTurnZeroDoesNot() {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
-
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
         panel.getController().setErrorNudgeDelayMs(0);
 
@@ -152,7 +149,6 @@ class ChatControllerTest extends ChatTestFixture {
                 .thenThrow(new RuntimeException("Failed to generate content"));
 
         sendOnEdt(panel, "Bad API call");
-
         verify(aiService, times(1)).chat(anyString(), any(), anyString(), any());
         assertEquals(0, panel.getController().getConsecutiveAutoNudges());
         assertFalse(panel.getOutputArea().getText().contains("Auto-nudging Roxy to continue"));
@@ -172,7 +168,6 @@ class ChatControllerTest extends ChatTestFixture {
                         });
 
         sendOnEdt(panel, "Implement step");
-
         assertEquals(2, callCount.get());
         verify(aiService)
                 .chat(eq("task:default"), eq(WorkflowPhase.CODE), eq("Implement step"), any());
@@ -183,16 +178,16 @@ class ChatControllerTest extends ChatTestFixture {
                         eq(ChatController.AUTO_NUDGE_PROMPT),
                         any());
         assertEquals(1, panel.getController().getConsecutiveAutoNudges());
-        String html = panel.getOutputArea().getText();
-        assertTrue(html.contains("Error: Failed to generate content"));
-        assertTrue(html.contains("Auto-nudging Roxy to continue (1/2)..."));
-        assertTrue(html.contains("Recovered and completed."));
+        assertContainsAll(
+                panel.getOutputArea().getText(),
+                "Error: Failed to generate content",
+                "Auto-nudging Roxy to continue (1/2)...",
+                "Recovered and completed.");
         assertFalse(panel.getModel().isLoading());
     }
 
     @Test
-    void testMaxToolTurnsTruncatedAndEmptyPostToolResponseAutoNudgeUpToCapAndResetOnUserAction()
-            throws Exception {
+    void testMaxToolTurnsTruncatedAndEmptyPostToolResponseAutoNudgeUpToCapAndResetOnUserAction() {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
 
@@ -205,13 +200,14 @@ class ChatControllerTest extends ChatTestFixture {
                                         : "Autonomous execution stopped: Maximum tool turns (5) exceeded.");
 
         sendOnEdt(panel, "Run long task");
-
         assertEquals(3, callCount.get());
         assertEquals(
                 ChatController.MAX_AUTO_NUDGES, panel.getController().getConsecutiveAutoNudges());
         String html = panel.getOutputArea().getText();
-        assertTrue(html.contains("Auto-nudging Roxy to continue (1/2)..."));
-        assertTrue(html.contains("Auto-nudging Roxy to continue (2/2)..."));
+        assertContainsAll(
+                html,
+                "Auto-nudging Roxy to continue (1/2)...",
+                "Auto-nudging Roxy to continue (2/2)...");
         assertFalse(html.contains("Auto-nudging Roxy to continue (3/2)..."));
         assertFalse(panel.getModel().isLoading());
 
@@ -235,9 +231,8 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testStopTurnAndPhaseActionsCancelPendingAutoNudgeTimerAndResetCounter() throws Exception {
+    void testStopTurnAndPhaseActionsCancelPendingAutoNudgeTimerAndResetCounter() {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
-
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
         panel.getController().setErrorNudgeDelayMs(5000);
 
@@ -250,12 +245,12 @@ class ChatControllerTest extends ChatTestFixture {
                         });
 
         sendOnEdt(panel, "Start work");
-
         assertEquals(1, panel.getController().getConsecutiveAutoNudges());
         assertNotNull(panel.getController().getAutoNudgeTimer());
         assertTrue(panel.getController().isTurnActive());
         assertTrue(panel.getModel().isLoading());
         assertTrue(panel.getStopButton().isEnabled());
+
         SwingTestUtils.runOnEdt(() -> panel.getController().stopTurn());
         assertEquals(0, panel.getController().getConsecutiveAutoNudges());
         assertNull(panel.getController().getAutoNudgeTimer());
@@ -271,10 +266,8 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testPerformResetSessionInQaModeArchivesNonEmptyTopicAndSkipsWhenEmpty() throws Exception {
+    void testPerformResetSessionInQaModeArchivesNonEmptyTopicAndSkipsWhenEmpty() {
         ExploreChatPanel panel = createExploreChatPanel(directExecutor);
-
-        // 1. Empty Q&A session: resets cleanly without archiving
         SwingTestUtils.runOnEdt(() -> panel.getController().performResetSession());
         flushEdt();
 
@@ -282,7 +275,6 @@ class ChatControllerTest extends ChatTestFixture {
         verifyNoInteractions(memoryService);
         assertTrue(panel.getOutputArea().getText().contains("Started a new topic."));
 
-        // 2. Non-empty Q&A session: names topic via AiService and archives via MemoryService
         clearInvocations(chatMemory, aiService, memoryService);
         when(environmentService.getCurrentUser()).thenReturn("DevUser");
         when(aiService.generateTopicTitle(anyString())).thenReturn("RipGrep Search Architecture");
@@ -306,25 +298,23 @@ class ChatControllerTest extends ChatTestFixture {
                         eq("DevUser"),
                         anyString(),
                         argThat(list -> list.size() == 2));
-        String html = panel.getOutputArea().getText();
-        assertTrue(html.contains("Archived previous topic as"));
-        assertTrue(html.contains("RipGrep Search Architecture"));
-        assertTrue(html.contains("20250514-153000-ripgrep-search-architecture.md"));
+        assertContainsAll(
+                panel.getOutputArea().getText(),
+                "Archived previous topic as",
+                "RipGrep Search Architecture",
+                "20250514-153000-ripgrep-search-architecture.md");
         verify(publisher)
                 .publishEvent(
-                        new org.roxycode.app.events.ArchiveUpdatedEvent(
-                                org.roxycode.app.events.ArchiveUpdatedEvent.TYPE_TOPIC,
+                        new ArchiveUpdatedEvent(
+                                ArchiveUpdatedEvent.TYPE_TOPIC,
                                 "20250514-153000-ripgrep-search-architecture.md"));
     }
 
     @Test
     void testApprovePhaseAndImageEncodingRunOnTurnExecutorOffEdt() {
-        java.util.concurrent.atomic.AtomicBoolean approveOnEdt =
-                new java.util.concurrent.atomic.AtomicBoolean(true);
-        java.util.concurrent.atomic.AtomicBoolean chatOnEdt =
-                new java.util.concurrent.atomic.AtomicBoolean(true);
-        java.util.concurrent.atomic.AtomicReference<java.util.List<byte[]>> capturedImages =
-                new java.util.concurrent.atomic.AtomicReference<>();
+        AtomicBoolean approveOnEdt = new AtomicBoolean(true);
+        AtomicBoolean chatOnEdt = new AtomicBoolean(true);
+        AtomicReference<List<byte[]>> capturedImages = new AtomicReference<>();
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
@@ -352,9 +342,8 @@ class ChatControllerTest extends ChatTestFixture {
         SwingTestUtils.runOnEdt(() -> panel.getController().approvePhase());
         SwingTestUtils.awaitCondition(() -> capturedImages.get() != null);
 
-        assertFalse(approveOnEdt.get(), "planService.approveTransition() must run off EDT");
-        assertFalse(chatOnEdt.get(), "aiService.chat() and PNG encoding must run off EDT");
-        assertNotNull(capturedImages.get());
+        assertFalse(approveOnEdt.get());
+        assertFalse(chatOnEdt.get());
         assertEquals(1, capturedImages.get().size());
         assertTrue(capturedImages.get().get(0).length > 0);
         assertFalse(panel.getModel().hasPendingImages());

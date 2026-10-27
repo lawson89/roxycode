@@ -2,8 +2,8 @@ package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
-import java.awt.Component;
 import java.util.List;
 import javax.swing.JList;
 import org.junit.jupiter.api.Test;
@@ -36,28 +36,9 @@ class ArchiveBrowserPanelTest {
                         "Matched line in second topic");
 
         String rawMd1 =
-                """
-                ---
-                id: "20250514-153000-first"
-                title: "First Topic Title"
-                ---
-
-                # Topic: First Topic Title
-
-                ### User (15:30:00)
-                Hello world
-                """;
+                "---\nid: '20250514-153000-first'\ntitle: 'First Topic Title'\n---\n\n# Topic: First Topic Title\n\n### User (15:30:00)\nHello world\n";
         String rawMd2 =
-                """
-                ---
-                id: "20250513-100000-second"
-                title: "Second Topic Title"
-                ---
-
-                # Topic: Second Topic Title
-
-                Matched line in second topic
-                """;
+                "---\nid: '20250513-100000-second'\ntitle: 'Second Topic Title'\n---\n\n# Topic: Second Topic Title\n\nMatched line in second topic\n";
 
         when(memoryService.listArchivedTopicSummaries()).thenReturn(List.of(topic1, topic2));
         when(memoryService.readArchivedTopic("20250514-153000-first.md")).thenReturn(rawMd1);
@@ -80,23 +61,17 @@ class ArchiveBrowserPanelTest {
         assertTrue(panel.getCopyMarkdownButton().isEnabled());
 
         String html = panel.getDisplayArea().getText();
-        assertTrue(html.contains("First Topic Title"));
-        assertTrue(html.contains("Hello world"));
-        assertFalse(html.contains("id: &quot;20250514-153000-first&quot;"));
+        assertContainsAll(html, "First Topic Title", "Hello world");
+        assertFalse(html.contains("id:"));
 
-        // Verify cell renderer renders both normal and snippet items cleanly
         JList<ArchiveEntrySummary> list = panel.getEntryList();
-        Component cell0 = SwingTestUtils.renderListCell(list, 0, true);
-        assertNotNull(cell0);
-        Component cell1 = SwingTestUtils.renderListCell(list, 1, false);
-        assertNotNull(cell1);
+        assertNotNull(SwingTestUtils.renderListCell(list, 0, true));
+        assertNotNull(SwingTestUtils.renderListCell(list, 1, false));
 
-        // Copy as Markdown
         SwingTestUtils.clickOnEdt(panel.getCopyMarkdownButton());
         assertEquals(rawMd1, panel.getLastCopiedMarkdown());
         assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
 
-        // Search filtering
         panel.getSearchField().setText("Second");
         SwingTestUtils.awaitWorker(panel.executeSearchAsync());
         SwingTestUtils.awaitWorker(panel.getActiveReadWorker());
@@ -106,7 +81,6 @@ class ArchiveBrowserPanelTest {
         assertEquals("Second Topic Title", panel.getDetailSummaryLabel().getText());
         assertTrue(panel.getDisplayArea().getText().contains("Matched line in second topic"));
 
-        // Empty search state
         panel.getSearchField().setText("NoMatch");
         SwingTestUtils.awaitWorker(panel.executeSearchAsync());
         assertEquals(0, panel.getListModel().getSize());
@@ -136,14 +110,7 @@ class ArchiveBrowserPanelTest {
                         0,
                         "");
         String rawPlanMd =
-                """
-                ---
-                id: "20250514-120000-plan"
-                title: "Feature Plan Alpha"
-                ---
-                # Implementation Plan: Feature Plan Alpha
-                - [x] 0. First step
-                """;
+                "---\nid: '20250514-120000-plan'\ntitle: 'Feature Plan Alpha'\n---\n# Implementation Plan: Feature Plan Alpha\n- [x] 0. First step\n";
 
         when(memoryService.listArchivedPlanSummaries()).thenReturn(List.of(plan1));
         when(memoryService.readArchivedPlan("20250514-120000-plan.md")).thenReturn(rawPlanMd);
@@ -156,8 +123,7 @@ class ArchiveBrowserPanelTest {
         assertEquals(1, panel.getListModel().getSize());
         assertEquals("1 plan", panel.getCountLabel().getText());
         assertEquals("Feature Plan Alpha", panel.getDetailSummaryLabel().getText());
-        assertTrue(panel.getDisplayArea().getText().contains("Completed On:"));
-        assertTrue(panel.getDisplayArea().getText().contains("Charlie"));
+        assertContainsAll(panel.getDisplayArea().getText(), "Completed On:", "Charlie");
     }
 
     @Test
@@ -171,25 +137,17 @@ class ArchiveBrowserPanelTest {
                         "2025-05-14T12:00:00Z",
                         1,
                         "");
+        String bt3 = String.valueOf((char) 96).repeat(3);
         String markdownWithCode =
-                """
-                ---
-                id: "20250514-120000-code"
-                title: "Code Topic"
-                ---
-
-                ```java
-                public class Demo {
-                    int x = 1;
-                }
-                ```
-                """;
+                "---\nid: '20250514-120000-code'\ntitle: 'Code Topic'\n---\n\n"
+                        + bt3
+                        + "java\npublic class Demo {\n    int x = 1;\n}\n"
+                        + bt3
+                        + "\n";
         String detailHtml =
                 ArchiveBrowserPanel.buildDetailHtml(entry, markdownWithCode, ArchiveMode.TOPICS);
-        assertTrue(detailHtml.contains("<span class='tk-rw'>public</span>"));
-        assertTrue(detailHtml.contains("<span class='tk-nm'>1</span>"));
-        assertFalse(
-                detailHtml.contains("<span class=<span"),
-                "Syntax highlighting must not be applied twice causing nested span corruption");
+        assertContainsAll(
+                detailHtml, "<span class='tk-rw'>public</span>", "<span class='tk-nm'>1</span>");
+        assertFalse(detailHtml.contains("<span class=<span"));
     }
 }

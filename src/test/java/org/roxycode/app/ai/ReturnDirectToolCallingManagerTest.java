@@ -75,7 +75,6 @@ class ReturnDirectToolCallingManagerTest {
         ToolCallingChatOptions options = mock(ToolCallingChatOptions.class);
         List<ToolDefinition> expected = List.of(mock(ToolDefinition.class));
         when(delegate.resolveToolDefinitions(options)).thenReturn(expected);
-
         assertSame(expected, manager.resolveToolDefinitions(options));
         verify(delegate).resolveToolDefinitions(options);
     }
@@ -97,7 +96,7 @@ class ReturnDirectToolCallingManagerTest {
                                                 "function",
                                                 "executeJexl",
                                                 """
-                                                {"script":"1"}""")))
+                        {"script":"1"}""")))
                         .build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
@@ -143,7 +142,7 @@ class ReturnDirectToolCallingManagerTest {
                                                 "function",
                                                 "requestDevelopment",
                                                 """
-                                                {"reason":"Ready"}""")))
+                        {"reason":"Ready"}""")))
                         .build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
@@ -156,7 +155,7 @@ class ReturnDirectToolCallingManagerTest {
                                         "call-1",
                                         "requestDevelopment",
                                         """
-                                        {"error":"Plan missing"}""")))
+                        {"error":"Plan missing"}""")))
                 .when(delegate)
                 .executeToolCalls(prompt, chatResponse);
 
@@ -167,7 +166,7 @@ class ReturnDirectToolCallingManagerTest {
                         new ToolExecutionEvent(
                                 "task:default",
                                 """
-                                planService.requestDevelopment({"reason":"Ready"})""",
+                planService.requestDevelopment({"reason":"Ready"})""",
                                 null,
                                 false,
                                 "Plan missing"));
@@ -190,13 +189,13 @@ class ReturnDirectToolCallingManagerTest {
                                                 "function",
                                                 "markStepsCompleted",
                                                 """
-                                                {"indices":[3,4]}"""),
+                                {"indices":[3,4]}"""),
                                         new AssistantMessage.ToolCall(
                                                 "",
                                                 "function",
                                                 "requestReview",
                                                 """
-                                                {"reason":"All steps verified"}""")))
+                                {"reason":"All steps verified"}""")))
                         .build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
@@ -208,11 +207,7 @@ class ReturnDirectToolCallingManagerTest {
                                 new ToolResponseMessage.ToolResponse(
                                         "", "markStepsCompleted", "null"),
                                 new ToolResponseMessage.ToolResponse(
-                                        "",
-                                        "requestReview",
-                                        """
-                                        "Transitioned to REVIEW" """
-                                                .strip())))
+                                        "", "requestReview", '"' + "Transitioned to REVIEW" + '"')))
                 .when(delegate)
                 .executeToolCalls(prompt, chatResponse);
 
@@ -223,7 +218,7 @@ class ReturnDirectToolCallingManagerTest {
                         new ToolExecutionEvent(
                                 "task:default",
                                 """
-                                planService.markStepsCompleted({"indices":[3,4]})""",
+                planService.markStepsCompleted({"indices":[3,4]})""",
                                 "null",
                                 true,
                                 null));
@@ -232,7 +227,7 @@ class ReturnDirectToolCallingManagerTest {
                         new ToolExecutionEvent(
                                 "task:default",
                                 """
-                                planService.requestReview({"reason":"All steps verified"})""",
+                planService.requestReview({"reason":"All steps verified"})""",
                                 "Transitioned to REVIEW",
                                 true,
                                 null));

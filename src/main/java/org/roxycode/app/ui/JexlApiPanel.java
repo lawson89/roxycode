@@ -6,7 +6,6 @@ import org.roxycode.app.ai.JexlServiceRegistry;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
-/** Dedicated panel for viewing JEXL API documentation with syntax highlighting. */
 @Component
 @Lazy
 public final class JexlApiPanel extends JPanel {
@@ -16,8 +15,8 @@ public final class JexlApiPanel extends JPanel {
     static final String COPIED_BUTTON_TEXT = "Copied!";
 
     private final transient JexlServiceRegistry registry;
-    private final JTextPane textPane;
-    private final JButton copyBtn;
+    private final JTextPane textPane = new JTextPane();
+    private final JButton copyBtn = new JButton(COPY_BUTTON_TEXT);
     private Timer copyFeedbackTimer;
     private String lastCopiedDocumentation;
 
@@ -25,22 +24,17 @@ public final class JexlApiPanel extends JPanel {
         this.registry = registry;
         setLayout(new BorderLayout());
 
-        textPane = new JTextPane();
         textPane.setEditable(false);
         textPane.setContentType("text/html");
-        textPane.putClientProperty("JEditorPane.honorDisplayProperties", Boolean.TRUE);
-
+        textPane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
         SwingHtmlUtils.installTextContextMenu(textPane);
         updateTheme();
-
         add(new JScrollPane(textPane), BorderLayout.CENTER);
 
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         toolbar.setOpaque(false);
         JButton refreshBtn = new JButton("Refresh");
         refreshBtn.addActionListener(e -> refresh());
-
-        copyBtn = new JButton(COPY_BUTTON_TEXT);
         copyBtn.addActionListener(e -> copyDocumentation());
 
         toolbar.add(copyBtn);
@@ -52,7 +46,6 @@ public final class JexlApiPanel extends JPanel {
         String doc = registry.getDocumentation(null);
         this.lastCopiedDocumentation = doc;
         SwingHtmlUtils.copyToClipboard(doc);
-
         copyFeedbackTimer =
                 SwingHtmlUtils.showCopyButtonFeedback(
                         copyBtn,
@@ -84,7 +77,6 @@ public final class JexlApiPanel extends JPanel {
         }
     }
 
-    /** Updates the look and feel of the documentation view. */
     public void updateTheme() {
         SwingHtmlUtils.applyTheme(textPane, 10);
         refresh();
@@ -92,9 +84,8 @@ public final class JexlApiPanel extends JPanel {
 
     private void refresh() {
         String doc = registry.getDocumentation(null);
-        String highlighted = JexlToHtmlConverter.convert(doc);
-        String html = "<html><body><pre>" + highlighted + "</pre></body></html>";
-        textPane.setText(html);
+        textPane.setText(
+                "<html><body><pre>" + JexlToHtmlConverter.convert(doc) + "</pre></body></html>");
         textPane.setCaretPosition(0);
     }
 }

@@ -16,9 +16,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -36,11 +38,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 
-/**
- * Service for interacting with arbitrary build tools via per-project build.toml. Provides methods
- * for compilation, testing, and cleaning, either on the host or inside a warm reusable
- * Testcontainers Docker container managed by {@link BuildContainerService}.
- */
 @AgentService(
         value = "buildToolService",
         phases = {"CODE", "EXPLORE", "PLAN", "REVIEW"})
@@ -49,6 +46,21 @@ public class GenericBuildToolService {
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
     private static final String CONFIG_FILE = "build.toml";
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
+    private static final String DEFAULT_FALLBACK_TOML =
+            """
+            [build]
+            compile = 'echo No build command'""";
+
+    private record TemplateRule(String template, List<String> markerFiles) {}
+
+    private static final List<TemplateRule> TEMPLATE_RULES =
+            List.of(
+                    new TemplateRule("maven", List.of("pom.xml")),
+                    new TemplateRule("gradle", List.of("build.gradle", "build.gradle.kts")),
+                    new TemplateRule("npm", List.of("package.json")),
+                    new TemplateRule("python", List.of("requirements.txt", "pyproject.toml")),
+                    new TemplateRule("go", List.of("go.mod", "main.go")),
+                    new TemplateRule("cmake", List.of("CMakeLists.txt")));
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record BuildSection(String compile, String clean) {
@@ -82,11 +94,10 @@ public class GenericBuildToolService {
                 env = Map.of();
             } else {
                 Map<String, String> sanitized = new HashMap<>();
-                for (Map.Entry<String, String> entry : env.entrySet()) {
-                    if (entry.getKey() != null && entry.getValue() != null) {
-                        sanitized.put(entry.getKey(), entry.getValue());
-                    }
-                }
+                env.forEach(
+                        (k, v) -> {
+                            if (k != null && v != null) sanitized.put(k, v);
+                        });
                 env = Collections.unmodifiableMap(sanitized);
             }
             parse = parse != null ? parse : ParseSection.EMPTY;
@@ -112,8 +123,8 @@ public class GenericBuildToolService {
 
     @EventListener
     public void handleProjectChanged(ProjectChangedEvent event) {
-        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
-            java.util.concurrent.CompletableFuture.runAsync(this::performProjectChanged);
+        if (SwingUtilities.isEventDispatchThread()) {
+            CompletableFuture.runAsync(this::performProjectChanged);
         } else {
             performProjectChanged();
         }
@@ -148,10 +159,7 @@ public class GenericBuildToolService {
             value = "Checks if a generic build configuration exists (build.toml)",
             examples = "buildToolService.detect()")
     public boolean detect() {
-        if (!projectService.hasActiveProject()) {
-            return false;
-        }
-        return Files.exists(getConfigPath());
+        return projectService.hasActiveProject() && Files.exists(getConfigPath());
     }
 
     @AgentDoc(
@@ -193,10 +201,9 @@ public class GenericBuildToolService {
     public BuildResult buildAndTest() {
         BuildResult compileResult = compile();
         if (!compileResult.success()) {
-            return compileResult; // Fast fail if compilation breaks
+            return compileResult;
         }
         BuildResult testResult = runTests();
-        // Combine outputs for the LLM
         return new BuildResult(
                 testResult.success(),
                 testResult.exitCode(),
@@ -220,7 +227,6 @@ public class GenericBuildToolService {
             return new BuildResult(
                     false, -1, "", List.of("No active project"), List.of(), "No active project");
         }
-
         ensureConfig();
 
         try {
@@ -235,23 +241,19 @@ public class GenericBuildToolService {
                         List.of(),
                         "Command not configured");
             }
-
             if (!placeholders.isEmpty()) {
                 command = new StringSubstitutor(placeholders, "{", "}").replace(command);
             }
-
             String errorRegex = config.parse().errorRegex();
             String testFailureRegex = config.parse().testFailureRegex();
-
             Map<String, String> env = config.env();
             ContainerConfig containerConfig = config.container();
             if (containerConfig.enabled()) {
                 return executeInContainer(
                         command, containerConfig, env, errorRegex, testFailureRegex);
-            } else {
-                stopActiveContainer();
-                return execute(command, env, errorRegex, testFailureRegex);
             }
+            stopActiveContainer();
+            return execute(command, env, errorRegex, testFailureRegex);
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
@@ -265,17 +267,11 @@ public class GenericBuildToolService {
         return projectService.resolveProjectDataPath(CONFIG_FILE);
     }
 
-    private static final String DEFAULT_FALLBACK_TOML =
-            """
-            [build]
-            compile = 'echo No build command'""";
-
     private String loadDefaultTemplateContent() {
         String templateName = detectTemplate();
-        ClassPathResource resource =
-                new ClassPathResource("templates/build/" + templateName + ".toml");
         try {
-            return resource.getContentAsString(StandardCharsets.UTF_8);
+            return new ClassPathResource("templates/build/" + templateName + ".toml")
+                    .getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.warn("Failed to read build template: {}", templateName, e);
             return DEFAULT_FALLBACK_TOML;
@@ -284,10 +280,7 @@ public class GenericBuildToolService {
 
     private void ensureConfig() {
         Path configPath = getConfigPath();
-        if (Files.exists(configPath)) {
-            return;
-        }
-
+        if (Files.exists(configPath)) return;
         try {
             PathUtils.createParentDirectories(configPath);
             Files.writeString(configPath, loadDefaultTemplateContent(), StandardCharsets.UTF_8);
@@ -298,25 +291,10 @@ public class GenericBuildToolService {
 
     private String detectTemplate() {
         Path root = projectService.getCurrentProjectRoot();
-        if (Files.exists(root.resolve("pom.xml"))) {
-            return "maven";
-        }
-        if (Files.exists(root.resolve("build.gradle"))
-                || Files.exists(root.resolve("build.gradle.kts"))) {
-            return "gradle";
-        }
-        if (Files.exists(root.resolve("package.json"))) {
-            return "npm";
-        }
-        if (Files.exists(root.resolve("requirements.txt"))
-                || Files.exists(root.resolve("pyproject.toml"))) {
-            return "python";
-        }
-        if (Files.exists(root.resolve("go.mod")) || Files.exists(root.resolve("main.go"))) {
-            return "go";
-        }
-        if (Files.exists(root.resolve("CMakeLists.txt"))) {
-            return "cmake";
+        for (TemplateRule rule : TEMPLATE_RULES) {
+            if (rule.markerFiles().stream().anyMatch(m -> Files.exists(root.resolve(m)))) {
+                return rule.template();
+            }
         }
         return "default";
     }
@@ -396,7 +374,6 @@ public class GenericBuildToolService {
                             env,
                             BUILD_TIMEOUT,
                             true);
-
             fullOutput = result.output();
             exitCode = result.exitCode();
             if (result.timedOut()) {
@@ -429,8 +406,7 @@ public class GenericBuildToolService {
         List<String> matches = new ArrayList<>();
         if (regex != null && !regex.isBlank()) {
             try {
-                Pattern p = Pattern.compile(regex);
-                Matcher m = p.matcher(output);
+                Matcher m = Pattern.compile(regex).matcher(output);
                 while (m.find()) {
                     matches.add(m.group(m.groupCount() > 0 ? 1 : 0));
                 }
@@ -442,17 +418,13 @@ public class GenericBuildToolService {
     }
 
     public String getConfigContent() throws IOException {
-        if (!projectService.hasActiveProject()) {
-            return "";
-        }
+        if (!projectService.hasActiveProject()) return "";
         Path configPath = getConfigPath();
-        if (!Files.exists(configPath)) {
-            ensureConfig();
-        }
+        if (!Files.exists(configPath)) ensureConfig();
         if (Files.exists(configPath)) {
             try {
                 return Files.readString(configPath, StandardCharsets.UTF_8);
-            } catch (java.nio.file.NoSuchFileException e) {
+            } catch (NoSuchFileException e) {
                 log.warn("Build config file not found at {}, falling back to template", configPath);
             }
         }
@@ -460,9 +432,7 @@ public class GenericBuildToolService {
     }
 
     public void saveConfigContent(String content) throws IOException {
-        if (!projectService.hasActiveProject()) {
-            return;
-        }
+        if (!projectService.hasActiveProject()) return;
         stopActiveContainer();
         Path configPath = getConfigPath();
         PathUtils.createParentDirectories(configPath);

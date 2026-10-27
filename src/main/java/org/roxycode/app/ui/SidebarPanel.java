@@ -11,7 +11,6 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 
-/** Sidebar panel containing branding and navigation. */
 public final class SidebarPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
@@ -32,17 +31,13 @@ public final class SidebarPanel extends JPanel {
                         "wrap, fillx, insets 15 12 15 12",
                         "[fill, grow]",
                         "[]20[]5[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
-
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
-
         add(createBrandingHeader());
 
         add(createSectionHeader("WORKSPACES"), "gaptop 10");
-
         qaBtn = createNavButton("Codebase Q&A", "QA_VIEW", Codicons.COMMENT_DISCUSSION);
         add(qaBtn);
-
         taskBtn = createNavButton("Feature Request", "TASK_VIEW", Codicons.GIT_PULL_REQUEST);
         add(taskBtn);
 
@@ -74,22 +69,17 @@ public final class SidebarPanel extends JPanel {
                 new JPanel(
                         new MigLayout("fillx, insets 10 10 15 10, wrap 1", "[center]", "[]10[]"));
         brandingPanel.setOpaque(false);
-
-        JPanel logoPanel = new RoundedImagePanel(LOGO_RESOURCE_PATH, LOGO_SIZE, 22);
-
         JLabel titleLabel = new JLabel("RoxyCode");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
-
-        brandingPanel.add(logoPanel, "w " + LOGO_SIZE + "!, h " + LOGO_SIZE + "!");
+        brandingPanel.add(
+                new RoundedImagePanel(LOGO_RESOURCE_PATH, LOGO_SIZE, 22),
+                "w " + LOGO_SIZE + "!, h " + LOGO_SIZE + "!");
         brandingPanel.add(titleLabel);
-
         return brandingPanel;
     }
 
     public void setQaBusy(boolean busy) {
-        if (qaBtn != null) {
-            qaBtn.setBusy(busy);
-        }
+        if (qaBtn != null) qaBtn.setBusy(busy);
     }
 
     public boolean isQaBusy() {
@@ -97,9 +87,7 @@ public final class SidebarPanel extends JPanel {
     }
 
     public void setTaskBusy(boolean busy) {
-        if (taskBtn != null) {
-            taskBtn.setBusy(busy);
-        }
+        if (taskBtn != null) taskBtn.setBusy(busy);
     }
 
     public boolean isTaskBusy() {
@@ -107,9 +95,7 @@ public final class SidebarPanel extends JPanel {
     }
 
     public void setTaskWaitingApproval(boolean waitingApproval) {
-        if (taskBtn != null) {
-            taskBtn.setWaitingApproval(waitingApproval);
-        }
+        if (taskBtn != null) taskBtn.setWaitingApproval(waitingApproval);
     }
 
     public boolean isTaskWaitingApproval() {
@@ -117,9 +103,7 @@ public final class SidebarPanel extends JPanel {
     }
 
     private void updateSelection(NavButton selectedBtn) {
-        for (NavButton btn : navButtons) {
-            btn.setSelected(btn.equals(selectedBtn));
-        }
+        for (NavButton btn : navButtons) btn.setSelected(btn.equals(selectedBtn));
     }
 
     private JLabel createSectionHeader(String text) {
@@ -131,8 +115,7 @@ public final class SidebarPanel extends JPanel {
     }
 
     private NavButton createNavButton(String text, String cardName, Codicons iconCode) {
-        FontIcon icon = FontIcon.of(iconCode, 16);
-        NavButton btn = new NavButton(text, icon);
+        NavButton btn = new NavButton(text, FontIcon.of(iconCode, 16));
         btn.addActionListener(
                 e -> {
                     updateSelection(btn);

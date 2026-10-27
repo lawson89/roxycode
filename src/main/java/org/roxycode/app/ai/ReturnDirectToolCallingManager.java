@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
@@ -19,10 +20,6 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.context.ApplicationEventPublisher;
 
-/**
- * Decorator {@link ToolCallingManager} that enforces maximum tool turns, publishes turn and tool
- * execution events, and post-processes {@code returnDirect} transition results.
- */
 public class ReturnDirectToolCallingManager implements ToolCallingManager {
 
     private static final String AGENT_NAME = "Roxy";
@@ -66,17 +63,14 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
     public ToolExecutionResult executeToolCalls(Prompt prompt, ChatResponse chatResponse) {
         TurnToolContext turnContext =
                 TurnToolContext.fromPrompt(prompt, planService.getCurrentPhase());
-        String conversationId = turnContext.conversationId();
-        WorkflowPhase phase = turnContext.phase();
         AtomicInteger turnCounter = turnContext.turnCounter();
 
-        // Accumulate text from the assistant message before executing tools
         if (chatResponse != null
                 && chatResponse.getResult() != null
                 && chatResponse.getResult().getOutput() != null) {
-            AssistantMessage assistantMsg = chatResponse.getResult().getOutput();
-            if (org.apache.commons.lang3.StringUtils.isNotBlank(assistantMsg.getText())) {
-                turnContext.textAccumulator().append(assistantMsg.getText()).append("\n\n");
+            String text = chatResponse.getResult().getOutput().getText();
+            if (StringUtils.isNotBlank(text)) {
+                turnContext.textAccumulator().append(text).append("\n\n");
             }
         }
 
@@ -90,22 +84,16 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
 
         int currentTurn = turnCounter.incrementAndGet();
         eventPublisher.publishEvent(
-                new AgentTurnEvent(conversationId, AGENT_NAME, currentTurn, phase.name()));
+                new AgentTurnEvent(
+                        turnContext.conversationId(),
+                        AGENT_NAME,
+                        currentTurn,
+                        turnContext.phase().name()));
 
-        ToolExecutionResult result = delegate.executeToolCalls(prompt, chatResponse);
-        return postProcessToolExecutionResult(turnContext, chatResponse, result);
+        return postProcessToolExecutionResult(
+                turnContext, chatResponse, delegate.executeToolCalls(prompt, chatResponse));
     }
 
-    /**
-     * Post-processes tool execution responses.
-     *
-     * <p>When a Spring AI tool is annotated with {@code returnDirect = true}, its serialized result
-     * is returned directly to the caller instead of being sent back to the model. However, if a
-     * {@code returnDirect} tool (such as {@code requestDevelopment} when no plan has been
-     * submitted) fails validation and returns an {@code "Error: ..."} message via {@link
-     * RoxyToolExecutionExceptionProcessor}, {@code effectiveReturnDirect} is overridden to {@code
-     * false} so control returns to the LLM to self-correct.
-     */
     private ToolExecutionResult postProcessToolExecutionResult(
             TurnToolContext turnContext, ChatResponse chatResponse, ToolExecutionResult result) {
         List<Message> history = result.conversationHistory();
@@ -118,18 +106,15 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
             List<ToolResponseMessage.ToolResponse> responses = toolMsg.getResponses();
             List<ToolResponseMessage.ToolResponse> updatedResponses =
                     new ArrayList<>(responses.size());
-            for (int responseIndex = 0; responseIndex < responses.size(); responseIndex++) {
-                ToolResponseMessage.ToolResponse tr = responses.get(responseIndex);
+            for (int i = 0; i < responses.size(); i++) {
+                ToolResponseMessage.ToolResponse tr = responses.get(i);
                 String unquoted = unquoteIfJsonString(tr.responseData());
                 if (RoxyToolExecutionExceptionProcessor.isErrorResponse(unquoted)) {
                     anyError = true;
                 }
                 ToolResponseMessage.ToolResponse processed =
-                        processSingleToolResponse(
-                                tr, responseIndex, chatResponse, turnContext, returnDirect);
-                if (!processed.equals(tr)) {
-                    historyModified = true;
-                }
+                        processSingleToolResponse(tr, i, chatResponse, turnContext, returnDirect);
+                if (!processed.equals(tr)) historyModified = true;
                 updatedResponses.add(processed);
             }
             if (historyModified) {
@@ -137,7 +122,6 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
             }
         }
 
-        // Guard: if any tool failed validation, suppress returnDirect so the LLM can self-correct.
         boolean effectiveReturnDirect = returnDirect && !anyError;
         if (effectiveReturnDirect != returnDirect || historyModified) {
             return ToolExecutionResult.builder()
@@ -148,10 +132,6 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
         return result;
     }
 
-    /**
-     * Unquotes the tool response if {@code returnDirect} is active and the call succeeded, and
-     * publishes a synthetic {@link ToolExecutionEvent} for non-JEXL ({@link PlanService}) tools.
-     */
     private ToolResponseMessage.ToolResponse processSingleToolResponse(
             ToolResponseMessage.ToolResponse tr,
             int responseIndex,
@@ -163,45 +143,22 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
         boolean failed = RoxyToolExecutionExceptionProcessor.isErrorResponse(unquoted);
 
         if (!JEXL_TOOL_NAME.equals(tr.name())) {
-            publishPlanToolExecutionEvent(
-                    tr, responseIndex, chatResponse, turnContext, unquoted, failed);
+            String args = findToolCallArguments(chatResponse, tr, responseIndex);
+            eventPublisher.publishEvent(
+                    new ToolExecutionEvent(
+                            turnContext.conversationId(),
+                            "planService." + tr.name() + "(" + args + ")",
+                            failed ? null : unquoted,
+                            !failed,
+                            failed
+                                    ? RoxyToolExecutionExceptionProcessor.stripErrorPrefix(unquoted)
+                                    : null));
         }
-
-        if (returnDirect && !failed && !unquoted.equals(rawData)) {
-            return new ToolResponseMessage.ToolResponse(tr.id(), tr.name(), unquoted);
-        }
-        return tr;
+        return (returnDirect && !failed && !unquoted.equals(rawData))
+                ? new ToolResponseMessage.ToolResponse(tr.id(), tr.name(), unquoted)
+                : tr;
     }
 
-    /**
-     * Formats {@code "planService.<toolName>(<args>)"} and publishes a {@link ToolExecutionEvent}
-     * so dedicated {@link PlanService} tool invocations appear in the UI tool log.
-     */
-    private void publishPlanToolExecutionEvent(
-            ToolResponseMessage.ToolResponse tr,
-            int responseIndex,
-            ChatResponse chatResponse,
-            TurnToolContext turnContext,
-            String unquotedResponse,
-            boolean failed) {
-        String args = findToolCallArguments(chatResponse, tr, responseIndex);
-        String scriptDesc = "planService." + tr.name() + "(" + args + ")";
-        eventPublisher.publishEvent(
-                new ToolExecutionEvent(
-                        turnContext.conversationId(),
-                        scriptDesc,
-                        failed ? null : unquotedResponse,
-                        !failed,
-                        failed
-                                ? RoxyToolExecutionExceptionProcessor.stripErrorPrefix(
-                                        unquotedResponse)
-                                : null));
-    }
-
-    /**
-     * Replaces the trailing {@link ToolResponseMessage} in the conversation history when tool
-     * responses were unquoted for direct return.
-     */
     private static List<Message> replaceLastToolResponseMessage(
             List<Message> history,
             ToolResponseMessage original,
@@ -224,7 +181,6 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
             try {
                 return objectMapper.readValue(raw, String.class);
             } catch (Exception ignored) {
-                // Keep original if not valid JSON string literal
             }
         }
         return raw;
@@ -232,37 +188,31 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
 
     private static String findToolCallArguments(
             ChatResponse chatResponse, ToolResponseMessage.ToolResponse tr, int responseIndex) {
-        if (chatResponse != null
-                && chatResponse.getResult() != null
-                && chatResponse.getResult().getOutput() != null
-                && chatResponse.getResult().getOutput().getToolCalls() != null) {
-            List<AssistantMessage.ToolCall> toolCalls =
-                    chatResponse.getResult().getOutput().getToolCalls();
-
-            // Step 1: Non-blank ID match (with optional tool name verification)
-            if (tr.id() != null && !tr.id().isBlank()) {
-                for (AssistantMessage.ToolCall tc : toolCalls) {
-                    if (tr.id().equals(tc.id())
-                            && (tr.name() == null || tr.name().equals(tc.name()))) {
-                        return tc.arguments() != null ? tc.arguments() : "";
-                    }
+        if (chatResponse == null
+                || chatResponse.getResult() == null
+                || chatResponse.getResult().getOutput() == null
+                || chatResponse.getResult().getOutput().getToolCalls() == null) {
+            return "";
+        }
+        List<AssistantMessage.ToolCall> toolCalls =
+                chatResponse.getResult().getOutput().getToolCalls();
+        if (StringUtils.isNotBlank(tr.id())) {
+            for (AssistantMessage.ToolCall tc : toolCalls) {
+                if (tr.id().equals(tc.id()) && (tr.name() == null || tr.name().equals(tc.name()))) {
+                    return StringUtils.defaultString(tc.arguments());
                 }
             }
-
-            // Step 2: Positional index + name match
-            if (responseIndex >= 0 && responseIndex < toolCalls.size()) {
-                AssistantMessage.ToolCall indexed = toolCalls.get(responseIndex);
-                if (tr.name() != null && tr.name().equals(indexed.name())) {
-                    return indexed.arguments() != null ? indexed.arguments() : "";
-                }
+        }
+        if (responseIndex >= 0 && responseIndex < toolCalls.size()) {
+            AssistantMessage.ToolCall indexed = toolCalls.get(responseIndex);
+            if (tr.name() != null && tr.name().equals(indexed.name())) {
+                return StringUtils.defaultString(indexed.arguments());
             }
-
-            // Step 3: Fallback name match
-            if (tr.name() != null) {
-                for (AssistantMessage.ToolCall tc : toolCalls) {
-                    if (tr.name().equals(tc.name())) {
-                        return tc.arguments() != null ? tc.arguments() : "";
-                    }
+        }
+        if (tr.name() != null) {
+            for (AssistantMessage.ToolCall tc : toolCalls) {
+                if (tr.name().equals(tc.name())) {
+                    return StringUtils.defaultString(tc.arguments());
                 }
             }
         }
@@ -283,7 +233,7 @@ public class ReturnDirectToolCallingManager implements ToolCallingManager {
         List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
         if (assistantMsg != null) {
             history.add(assistantMsg);
-            if (assistantMsg.getToolCalls() != null && !assistantMsg.getToolCalls().isEmpty()) {
+            if (assistantMsg.getToolCalls() != null) {
                 for (AssistantMessage.ToolCall tc : assistantMsg.getToolCalls()) {
                     responses.add(
                             new ToolResponseMessage.ToolResponse(tc.id(), tc.name(), stopMsg));

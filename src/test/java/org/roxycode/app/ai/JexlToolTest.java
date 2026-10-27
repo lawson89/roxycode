@@ -143,8 +143,10 @@ public class JexlToolTest {
     @Test
     public void testBuildResultSupportsBothRecordAndBeanAccessorsInJexl() throws Exception {
         JexlTool tool = createTool(new TestService());
-        String script =
-                """
+        JsonNode node =
+                evalJson(
+                        tool,
+                        """
                 var res = testService.sampleBuildResult();
                 {
                   "recordSuccess": res.success(), "beanIsSuccess": res.isSuccess(), "propSuccess": res.success,
@@ -152,8 +154,7 @@ public class JexlToolTest {
                   "recordErrors": res.errors(), "beanErrors": res.getErrors(),
                   "recordFailedTests": res.failedTests(), "beanFailedTests": res.getFailedTests()
                 }
-                """;
-        JsonNode node = evalJson(tool, script);
+                """);
         assertFalse(node.get("recordSuccess").asBoolean());
         assertFalse(node.get("beanIsSuccess").asBoolean());
         assertFalse(node.get("propSuccess").asBoolean());

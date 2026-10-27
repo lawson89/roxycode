@@ -21,6 +21,7 @@ import org.roxycode.app.ai.services.BuildContainerService.ContainerSession;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSessionKey;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
+import org.roxycode.app.ui.SwingTestUtils;
 import org.testcontainers.containers.GenericContainer;
 
 class BuildContainerServiceTest {
@@ -60,7 +61,6 @@ class BuildContainerServiceTest {
                         Map.of("ROXY_CODE", "true"));
 
         GenericContainer<?> container = BuildContainerService.createConfiguredContainer(key);
-
         assertEquals("/workspace", container.getWorkingDirectory());
         assertEquals("true", container.getEnvMap().get("ROXY_CODE"));
         assertEquals("roxycode", container.getLabels().get("app"));
@@ -178,17 +178,8 @@ class BuildContainerServiceTest {
                 }) {
             assertFalse(BuildContainerService.isContainerEnabledInToml(invalid));
         }
-
         String tomlWithDisabled =
-                """
-                [build]
-                compile = "./mvnw compile"
-
-                [container]
-                enabled = false # inline comment
-                image = "eclipse-temurin:25-jdk"
-                """;
-        assertFalse(BuildContainerService.isContainerEnabledInToml(tomlWithDisabled));
+                "[build]\ncompile = './mvnw compile'\n\n[container]\nenabled = false # inline comment\nimage = 'eclipse-temurin:25-jdk'\n";
 
         String enabledToml =
                 BuildContainerService.updateContainerEnabledInToml(tomlWithDisabled, true);
@@ -201,13 +192,11 @@ class BuildContainerServiceTest {
         String appended =
                 BuildContainerService.updateContainerEnabledInToml(
                         "[build]\ncompile = './mvnw compile'\n", true);
-        assertTrue(appended.contains("[container]"));
-        assertTrue(
-                appended.contains(
-                        "image = '" + BuildContainerService.DEFAULT_CONTAINER_IMAGE + "'"));
-        assertTrue(
-                appended.contains(
-                        "workdir = '" + BuildContainerService.DEFAULT_CONTAINER_WORKDIR + "'"));
+        SwingTestUtils.assertContainsAll(
+                appended,
+                "[container]",
+                "image = '" + BuildContainerService.DEFAULT_CONTAINER_IMAGE + "'",
+                "workdir = '" + BuildContainerService.DEFAULT_CONTAINER_WORKDIR + "'");
         assertTrue(BuildContainerService.isContainerEnabledInToml(appended));
     }
 }

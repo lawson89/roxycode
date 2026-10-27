@@ -12,7 +12,6 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
 
-/** Service providing read-only file access to AI agents. */
 @AgentService(
         value = "fileReadService",
         phases = {"*"})
@@ -28,26 +27,13 @@ public class FileReadService {
         this.projectService = projectService;
     }
 
-    /**
-     * Checks whether the given file appears to be a binary file by sniffing its initial bytes for a
-     * NUL byte ({@code 0x00}).
-     *
-     * @param path the path to check
-     * @return {@code true} if the file contains a NUL byte in the first {@value
-     *     #BINARY_SNIFF_BYTES} bytes, {@code false} otherwise
-     * @throws IOException if an I/O error occurs reading the file
-     */
     public static boolean isBinaryFile(Path path) throws IOException {
-        if (path == null || !Files.isRegularFile(path)) {
-            return false;
-        }
+        if (path == null || !Files.isRegularFile(path)) return false;
         try (InputStream in = Files.newInputStream(path)) {
             byte[] buf = new byte[BINARY_SNIFF_BYTES];
             int read = in.read(buf);
             for (int i = 0; i < read; i++) {
-                if (buf[i] == 0) {
-                    return true;
-                }
+                if (buf[i] == 0) return true;
             }
             return false;
         }
@@ -60,8 +46,7 @@ public class FileReadService {
     public boolean fileExists(
             @AgentDoc("The file or directory path relative to the project root")
                     String relativePath) {
-        Path path = projectService.resolvePath(relativePath);
-        return Files.exists(path);
+        return Files.exists(projectService.resolvePath(relativePath));
     }
 
     @AgentDoc(
@@ -94,19 +79,13 @@ public class FileReadService {
                             + endLine
                             + " (startLine must be >= 1 and endLine >= startLine)");
         }
-        if (content.isEmpty()) {
-            return "";
-        }
+        if (content.isEmpty()) return "";
         List<String> lines = content.lines().toList();
-        if (startLine > lines.size()) {
-            return "";
-        }
+        if (startLine > lines.size()) return "";
         int clampedEnd = Math.min(endLine, lines.size());
         StringBuilder sb = new StringBuilder();
         for (int i = startLine; i <= clampedEnd; i++) {
-            if (i > startLine) {
-                sb.append('\n');
-            }
+            if (i > startLine) sb.append((char) 10);
             sb.append(i).append(": ").append(lines.get(i - 1));
         }
         return sb.toString();
@@ -125,8 +104,7 @@ public class FileReadService {
             value = "Returns the total number of lines in a file.",
             examples = "fileReadService.getLineCount('src/main/java/Main.java')")
     public int getLineCount(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
-        String content = readFile(relativePath);
-        return (int) content.lines().count();
+        return (int) readFile(relativePath).lines().count();
     }
 
     @AgentDoc(

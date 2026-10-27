@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Color;
-import java.awt.Component;
 import javax.swing.JLabel;
 import javax.swing.UIManager;
 import org.junit.jupiter.api.Test;
@@ -17,10 +16,8 @@ class WorkflowPhaseIndicatorTest {
         Object oldAccent = UIManager.get("Component.accentForeground");
         try {
             UIManager.put("Component.accentForeground", null);
-
             WorkflowPhaseIndicator indicator = new WorkflowPhaseIndicator(WorkflowPhase.PLAN);
             indicator.setActive(true);
-
             assertEquals(WorkflowPhase.PLAN, indicator.getPhase());
             assertTrue(indicator.isActive());
         } finally {
@@ -31,9 +28,8 @@ class WorkflowPhaseIndicatorTest {
     @Test
     void testWorkflowPhaseIndicatorDisplaysPhaseIconByDefault() {
         WorkflowPhaseIndicator indicator = new WorkflowPhaseIndicator(WorkflowPhase.PLAN);
-        assertEquals(1, indicator.getComponentCount(), "Indicator should have textLabel");
-        Component comp = indicator.getComponent(0);
-        JLabel label = assertInstanceOf(JLabel.class, comp);
+        assertEquals(1, indicator.getComponentCount());
+        JLabel label = assertInstanceOf(JLabel.class, indicator.getComponent(0));
         assertEquals("Plan", label.getText());
         assertNull(label.getIcon());
         assertFalse(indicator.isOpaque());
@@ -45,7 +41,6 @@ class WorkflowPhaseIndicatorTest {
         WorkflowPhaseIndicator indicator = new WorkflowPhaseIndicator(WorkflowPhase.CODE);
         JLabel label = indicator.getTextLabel();
 
-        // Inactive initially: transparent segment inside the unified bar with no icon
         assertFalse(indicator.isActive());
         assertFalse(indicator.isCompleted());
         assertFalse(indicator.isOpaque());
@@ -53,7 +48,6 @@ class WorkflowPhaseIndicatorTest {
         assertNull(label.getIcon());
         assertEquals("font: -1", label.getClientProperty(FlatClientProperties.STYLE));
 
-        // Active state: solid rectangular accent background with white bold text and no icon
         indicator.setActive(true);
         assertTrue(indicator.isActive());
         assertTrue(indicator.isOpaque());
@@ -61,12 +55,11 @@ class WorkflowPhaseIndicatorTest {
         assertEquals(Color.WHITE, label.getForeground());
         assertEquals("font: bold -1", label.getClientProperty(FlatClientProperties.STYLE));
         String activeStyle = (String) indicator.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(activeStyle);
-        assertTrue(activeStyle.startsWith("background: #"));
-        assertFalse(activeStyle.contains("arc:"));
+        assertTrue(
+                activeStyle != null
+                        && activeStyle.startsWith("background: #")
+                        && !activeStyle.contains("arc:"));
 
-        // Completed state (when not active): transparent without rounded pill, green bold text, no
-        // icon
         indicator.setActive(false);
         indicator.setCompleted(true);
         assertFalse(indicator.isActive());
@@ -75,8 +68,6 @@ class WorkflowPhaseIndicatorTest {
         assertNull(label.getIcon());
         assertNull(indicator.getClientProperty(FlatClientProperties.STYLE));
         assertEquals("font: bold -1", label.getClientProperty(FlatClientProperties.STYLE));
-
-        // Theme refresh
         assertDoesNotThrow(indicator::updateUI);
     }
 }

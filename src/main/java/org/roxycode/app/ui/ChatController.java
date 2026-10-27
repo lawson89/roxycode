@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.ApplicationEventPublisher;
 
-/** Controller coordinating chat turns, service events, and workflow transitions. */
 @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
 public final class ChatController implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
@@ -50,6 +49,7 @@ public final class ChatController implements AutoCloseable {
     static final int DEFAULT_ERROR_NUDGE_DELAY_MS = 1000;
     private static final int MAX_EXCERPT_ENTRIES = 8;
     private static final int MAX_ENTRY_CHARS = 500;
+    private static final String BT = String.valueOf((char) 96);
 
     private final ChatModel model;
     private final ChatPanel view;
@@ -142,13 +142,13 @@ public final class ChatController implements AutoCloseable {
 
     private boolean cancelAutoNudgeTimer() {
         Timer timer = autoNudgeTimer;
-        if (timer != null) {
-            autoNudgeTimer = null;
-            boolean wasRunning = timer.isRunning();
-            timer.stop();
-            return wasRunning;
+        if (timer == null) {
+            return false;
         }
-        return false;
+        autoNudgeTimer = null;
+        boolean wasRunning = timer.isRunning();
+        timer.stop();
+        return wasRunning;
     }
 
     @Override
@@ -188,7 +188,6 @@ public final class ChatController implements AutoCloseable {
             }
             return;
         }
-
         consecutiveAutoNudges = 0;
         cancelAutoNudgeTimer();
         if (eventPublisher != null) {
@@ -229,50 +228,48 @@ public final class ChatController implements AutoCloseable {
     public void approvePhase() {
         WorkflowPhase current = planService.getCurrentPhase();
         WorkflowPhase requested = planService.getPendingPhase();
-        if (requested != null) {
-            cancelActiveTurnState(false);
-            consecutiveAutoNudges = 0;
-            Edt.run(view::hideTransitionBanner);
-            turnExecutor.execute(
-                    () -> {
-                        planService.approveTransition();
-                        Edt.run(
-                                () -> {
+        if (requested == null) return;
+        cancelActiveTurnState(false);
+        consecutiveAutoNudges = 0;
+        Edt.run(view::hideTransitionBanner);
+        turnExecutor.execute(
+                () -> {
+                    planService.approveTransition();
+                    Edt.run(
+                            () -> {
+                                view.appendMessage(
+                                        ROLE_SYSTEM,
+                                        "Transition to **"
+                                                + requested.getDisplayName()
+                                                + "** approved.");
+                                if (current == WorkflowPhase.REVIEW
+                                        && requested == WorkflowPhase.PLAN) {
+                                    chatMemory.clear(model.getConversationId());
                                     view.appendMessage(
                                             ROLE_SYSTEM,
-                                            "Transition to **"
+                                            "Task complete. What is the next feature you would like to work on?");
+                                } else {
+                                    triggerTurn(
+                                            "I approve the transition to "
                                                     + requested.getDisplayName()
-                                                    + "** approved.");
-                                    if (current == WorkflowPhase.REVIEW
-                                            && requested == WorkflowPhase.PLAN) {
-                                        chatMemory.clear(model.getConversationId());
-                                        view.appendMessage(
-                                                ROLE_SYSTEM,
-                                                "Task complete. What is the next feature you would like to work on?");
-                                    } else {
-                                        triggerTurn(
-                                                "I approve the transition to "
-                                                        + requested.getDisplayName()
-                                                        + ". Please proceed with the next phase.");
-                                    }
-                                });
-                    });
-        }
+                                                    + ". Please proceed with the next phase.");
+                                }
+                            });
+                });
     }
 
     public void rejectPhase() {
         WorkflowPhase requested = planService.getPendingPhase();
-        if (requested != null) {
-            cancelActiveTurnState(false);
-            consecutiveAutoNudges = 0;
-            planService.rejectTransition();
-            view.appendMessage(
-                    ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
-            triggerTurn(
-                    "I have rejected the transition to "
-                            + requested.getDisplayName()
-                            + ". Let's discuss what needs to be fixed or adjusted.");
-        }
+        if (requested == null) return;
+        cancelActiveTurnState(false);
+        consecutiveAutoNudges = 0;
+        planService.rejectTransition();
+        view.appendMessage(
+                ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
+        triggerTurn(
+                "I have rejected the transition to "
+                        + requested.getDisplayName()
+                        + ". Let's discuss what needs to be fixed or adjusted.");
     }
 
     public void resetSession() {
@@ -284,9 +281,9 @@ public final class ChatController implements AutoCloseable {
     void performResetSession() {
         if (!model.isTaskMode()) {
             performNewTopicReset();
-            return;
+        } else {
+            resetSessionState(true, "Session reset.");
         }
-        resetSessionState(true, "Session reset.");
     }
 
     public void resetForProjectChange() {
@@ -297,9 +294,8 @@ public final class ChatController implements AutoCloseable {
         List<ChatTranscriptEntry> capturedTranscript = view.getConversationMessages();
         boolean shouldArchive = !capturedTranscript.isEmpty() && memoryService != null;
         resetSessionState(true, shouldArchive ? null : "Started a new topic.");
-        if (!shouldArchive) {
-            return;
-        }
+        if (!shouldArchive) return;
+
         turnExecutor.execute(
                 () -> {
                     String excerpt = buildTranscriptExcerpt(capturedTranscript);
@@ -314,12 +310,9 @@ public final class ChatController implements AutoCloseable {
                     if (title == null || title.isBlank()) {
                         title = AiService.deriveFallbackTopicTitle(excerpt);
                     }
-                    String user =
-                            (environmentService != null
-                                            && environmentService.getCurrentUser() != null
-                                            && !environmentService.getCurrentUser().isBlank())
-                                    ? environmentService.getCurrentUser()
-                                    : "User";
+                    String rawUser =
+                            environmentService != null ? environmentService.getCurrentUser() : null;
+                    String user = (rawUser != null && !rawUser.isBlank()) ? rawUser : "User";
                     String filename =
                             memoryService.archiveTopicConversation(
                                     title, user, Instant.now().toString(), capturedTranscript);
@@ -329,19 +322,18 @@ public final class ChatController implements AutoCloseable {
                     }
                     String finalTitle = title;
                     Edt.run(
-                            () -> {
-                                if (filename != null && !filename.isBlank()) {
+                            () ->
                                     view.appendMessage(
                                             ROLE_SYSTEM,
-                                            "Archived previous topic as **"
-                                                    + finalTitle
-                                                    + "** (`"
-                                                    + filename
-                                                    + "`) and started a new topic.");
-                                } else {
-                                    view.appendMessage(ROLE_SYSTEM, "Started a new topic.");
-                                }
-                            });
+                                            (filename != null && !filename.isBlank())
+                                                    ? "Archived previous topic as **"
+                                                            + finalTitle
+                                                            + "** ("
+                                                            + BT
+                                                            + filename
+                                                            + BT
+                                                            + ") and started a new topic."
+                                                    : "Started a new topic."));
                 });
     }
 
@@ -358,9 +350,7 @@ public final class ChatController implements AutoCloseable {
             if (content.length() > MAX_ENTRY_CHARS) {
                 content = content.substring(0, MAX_ENTRY_CHARS) + "...";
             }
-            if (i > 0) {
-                sb.append('\n');
-            }
+            if (i > 0) sb.append((char) 10);
             sb.append(speaker).append(": ").append(content);
         }
         return sb.toString();
@@ -393,7 +383,6 @@ public final class ChatController implements AutoCloseable {
         if (text == null || text.trim().isEmpty()) return;
 
         cancelActiveTurnState(false);
-
         long turnId = turnSequence.incrementAndGet();
         activeTurnId = turnId;
 
@@ -453,28 +442,21 @@ public final class ChatController implements AutoCloseable {
 
     private void finishTurn(
             long turnId, String role, String message, boolean autoNudge, int nudgeDelayMs) {
-        if (activeTurnId != turnId || model.isTurnCancelled()) {
-            return;
-        }
+        if (activeTurnId != turnId || model.isTurnCancelled()) return;
         activeTurnId = 0;
         activeTurnFuture = null;
         WorkflowTransitionEvent transition = deferredTransitionEvent;
         deferredTransitionEvent = null;
 
         view.appendMessage(role, message);
-
         if (transition != null && !model.isTurnCancelled()) {
             view.setLoading(false);
             applyWorkflowTransition(transition);
-            return;
-        }
-
-        if (autoNudge) {
+        } else if (autoNudge) {
             scheduleAutoNudge(nudgeDelayMs);
-            return;
+        } else {
+            view.setLoading(false);
         }
-
-        view.setLoading(false);
     }
 
     private boolean shouldAutoNudgeOnError() {
@@ -485,12 +467,10 @@ public final class ChatController implements AutoCloseable {
     }
 
     private boolean shouldAutoNudgeOnResponse(String response) {
-        if (model.isTurnCancelled()
-                || hasPendingPhase()
-                || consecutiveAutoNudges >= MAX_AUTO_NUDGES) {
-            return false;
-        }
-        return AiService.isAutoNudgeableResponse(response, model.getCurrentTurn() > 0);
+        return !model.isTurnCancelled()
+                && !hasPendingPhase()
+                && consecutiveAutoNudges < MAX_AUTO_NUDGES
+                && AiService.isAutoNudgeableResponse(response, model.getCurrentTurn() > 0);
     }
 
     private void scheduleAutoNudge(int delayMs) {
@@ -523,9 +503,7 @@ public final class ChatController implements AutoCloseable {
     }
 
     private void finishTurnCancelled(long turnId) {
-        if (activeTurnId != turnId) {
-            return;
-        }
+        if (activeTurnId != turnId) return;
         activeTurnId = 0;
         activeTurnFuture = null;
         model.setTurnCancelled(true);
@@ -567,43 +545,40 @@ public final class ChatController implements AutoCloseable {
                                 + ". Please proceed with the tasks in the new phase.");
             }
         } else {
-            String label = PlanService.formatApprovalLabel(event.from(), event.to());
-            view.showTransitionBanner(label);
+            view.showTransitionBanner(PlanService.formatApprovalLabel(event.from(), event.to()));
         }
     }
 
+    private boolean isMatchingActiveTurnEvent(String conversationId) {
+        return model.getConversationId().equals(conversationId) && !model.isTurnCancelled();
+    }
+
     void onAgentTurn(AgentTurnEvent event) {
-        if (event == null
-                || !model.getConversationId().equals(event.conversationId())
-                || model.isTurnCancelled()) {
-            return;
-        }
+        if (event == null || !isMatchingActiveTurnEvent(event.conversationId())) return;
         Edt.run(
                 () -> {
-                    if (model.isTurnCancelled()) return;
-                    model.setCurrentTurn(event.turnNumber());
-                    view.updateTurnLabel();
+                    if (!model.isTurnCancelled()) {
+                        model.setCurrentTurn(event.turnNumber());
+                        view.updateTurnLabel();
+                    }
                 });
     }
 
     void onToolExecution(ToolExecutionEvent event) {
-        if (event == null
-                || !model.getConversationId().equals(event.conversationId())
-                || model.isTurnCancelled()) {
-            return;
-        }
+        if (event == null || !isMatchingActiveTurnEvent(event.conversationId())) return;
         Edt.run(
                 () -> {
-                    if (model.isTurnCancelled()) return;
-                    String output = JexlToHtmlConverter.convert(event.script());
-                    view.appendToolLog(output, event.success(), event.error());
+                    if (!model.isTurnCancelled()) {
+                        view.appendToolLog(
+                                JexlToHtmlConverter.convert(event.script()),
+                                event.success(),
+                                event.error());
+                    }
                 });
     }
 
     void onAgentTurnComplete(AgentTurnCompleteEvent event) {
-        if (event == null || !model.getConversationId().equals(event.conversationId())) {
-            return;
-        }
+        if (event == null || !model.getConversationId().equals(event.conversationId())) return;
         Edt.run(
                 () -> {
                     if (!isTurnActive()) {
@@ -617,14 +592,13 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onPlanUpdated(PlanUpdatedEvent event) {
-        if (!model.isTaskMode()) return;
-        Edt.run(view::updateTurnLabel);
+        if (model.isTaskMode()) {
+            Edt.run(view::updateTurnLabel);
+        }
     }
 
     void onPhaseChanged(PhaseChangedEvent event) {
-        if (event == null) {
-            return;
-        }
+        if (event == null) return;
         log.debug("Phase changed to: {}", event.phase());
         Edt.run(
                 () -> {

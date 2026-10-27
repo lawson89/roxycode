@@ -16,6 +16,7 @@ public record ImplementationPlan(
         List<LogEntry> handoffLog) {
 
     public static final String NO_FILES_CHANGED = "No files changed";
+    private static final String CODE_FENCE = String.valueOf((char) 96).repeat(3);
 
     public record TechStep(String description, boolean completed) {}
 
@@ -23,13 +24,10 @@ public record ImplementationPlan(
         private static final int TIMESTAMP_LENGTH = 19;
 
         public String formattedTimestamp() {
-            if (timestamp == null) {
-                return "";
-            }
-            if (timestamp.length() > TIMESTAMP_LENGTH) {
-                return timestamp.substring(0, TIMESTAMP_LENGTH).replace('T', ' ');
-            }
-            return timestamp;
+            if (timestamp == null) return "";
+            return timestamp.length() > TIMESTAMP_LENGTH
+                    ? timestamp.substring(0, TIMESTAMP_LENGTH).replace('T', ' ')
+                    : timestamp;
         }
     }
 
@@ -114,21 +112,13 @@ public record ImplementationPlan(
         return hasMoveToCodeApproval() || hasFinalAcceptance();
     }
 
-    /**
-     * Formats the implementation plan as Markdown.
-     *
-     * @param includeHandoffLog whether to include the handoff log table if non-empty
-     * @return the Markdown representation of this plan
-     */
     public String toMarkdown(boolean includeHandoffLog) {
-        StringBuilder md = new StringBuilder();
-        md.append(
-                """
-                # Implementation Plan: %s
-
-                **Goal:** %s
-                """
-                        .formatted(title != null ? title : "", goal != null ? goal : ""));
+        StringBuilder md =
+                new StringBuilder("# Implementation Plan: ")
+                        .append(title != null ? title : "")
+                        .append("\n\n**Goal:** ")
+                        .append(goal != null ? goal : "")
+                        .append("\n");
 
         if (hasApprovals()) {
             md.append("\n## Approvals\n");
@@ -155,13 +145,7 @@ public record ImplementationPlan(
         md.append("\n## Technical Steps\n").append(formatStepsMarkdown());
 
         if (includeHandoffLog && !handoffLog.isEmpty()) {
-            md.append(
-                    """
-
-                    ## Handoff Log
-                    | Timestamp | User | Message |
-                    | :--- | :--- | :--- |
-                    """);
+            md.append("\n## Handoff Log\n| Timestamp | User | Message |\n| :--- | :--- | :--- |\n");
             for (LogEntry entry : handoffLog) {
                 md.append("| ")
                         .append(escapeMarkdownTableCell(entry.formattedTimestamp()))
@@ -172,20 +156,9 @@ public record ImplementationPlan(
                         .append(" |\n");
             }
         }
-
         return md.toString();
     }
 
-    /**
-     * Formats the implementation plan as an archived Markdown document with YAML frontmatter,
-     * approvals, handoff log, and changes section.
-     *
-     * @param id the archive identifier (e.g., timestamp and slug)
-     * @param projectName the project name
-     * @param projectPath the project root path
-     * @param changesText the git status or changes summary
-     * @return the archived Markdown document with frontmatter
-     */
     public String toArchivedMarkdown(
             String id, String projectName, String projectPath, String changesText) {
         StringBuilder sb = new StringBuilder();
@@ -219,50 +192,36 @@ public record ImplementationPlan(
         return sb.toString();
     }
 
-    /**
-     * Formats raw git status text by stripping trailing whitespace or returning {@link
-     * #NO_FILES_CHANGED} when blank.
-     *
-     * @param gitStatus the raw git status text
-     * @return the formatted changes text or {@link #NO_FILES_CHANGED}
-     */
     public static String formatChangesText(String gitStatus) {
         return (gitStatus == null || gitStatus.isBlank())
                 ? NO_FILES_CHANGED
                 : gitStatus.stripTrailing();
     }
 
-    /**
-     * Appends the Markdown {@code ## Changes} section to the given builder.
-     *
-     * @param sb the target string builder
-     * @param gitStatus the raw git status or changes text
-     */
     public static void appendChangesMarkdown(StringBuilder sb, String gitStatus) {
         String changes = formatChangesText(gitStatus);
         sb.append("\n## Changes\n");
         if (NO_FILES_CHANGED.equals(changes)) {
             sb.append(NO_FILES_CHANGED).append("\n");
         } else {
-            sb.append("```text\n").append(changes).append("\n```\n");
+            sb.append(CODE_FENCE)
+                    .append("text\n")
+                    .append(changes)
+                    .append("\n")
+                    .append(CODE_FENCE)
+                    .append("\n");
         }
     }
 
-    /**
-     * Formats the technical steps as a 0-based numbered Markdown checklist.
-     *
-     * @return the Markdown checklist of technical steps
-     */
     public String formatStepsMarkdown() {
         StringBuilder sb = new StringBuilder();
-        int index = 0;
-        for (TechStep step : technicalSteps) {
+        for (int i = 0; i < technicalSteps.size(); i++) {
+            TechStep step = technicalSteps.get(i);
             sb.append(step.completed() ? "- [x] " : "- [ ] ")
-                    .append(index)
+                    .append(i)
                     .append(". ")
                     .append(step.description())
                     .append("\n");
-            index++;
         }
         return sb.toString();
     }
@@ -272,19 +231,18 @@ public record ImplementationPlan(
     }
 
     public static String escapeFrontmatterValue(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\"", "\\\"")
+        if (value == null) return "";
+        return value.replace(String.valueOf('"'), String.valueOf((char) 92) + '"')
                 .replace("\r\n", " ")
                 .replace('\n', ' ')
                 .replace('\r', ' ');
     }
 
     private static String escapeMarkdownTableCell(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("|", "\\|").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
+        if (value == null) return "";
+        return value.replace("|", String.valueOf((char) 92) + "|")
+                .replace("\r\n", " ")
+                .replace('\n', ' ')
+                .replace('\r', ' ');
     }
 }

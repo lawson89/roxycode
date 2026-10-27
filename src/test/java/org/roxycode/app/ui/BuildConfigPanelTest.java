@@ -36,15 +36,7 @@ class BuildConfigPanelTest {
         when(settingsService.getSettings()).thenReturn(new AppSettings());
         when(buildToolService.getConfigContent())
                 .thenReturn(
-                        """
-                        [build]
-                        compile = './mvnw compile'
-
-                        [container]
-                        enabled = false
-                        image = 'eclipse-temurin:25-jdk'
-                        workdir = '/workspace'
-                        """);
+                        "[build]\ncompile = './mvnw compile'\n\n[container]\nenabled = false\nimage = 'eclipse-temurin:25-jdk'\nworkdir = '/workspace'\n");
     }
 
     private BuildConfigPanel createPanelOnEdt() {
@@ -94,7 +86,7 @@ class BuildConfigPanelTest {
                 .thenReturn(CompletableFuture.completedFuture(false));
 
         BuildConfigPanel panel = createPanelOnEdt();
-        assertFalse(loadCalledOnEdt.get(), "loadConfig() must not execute on EDT");
+        assertFalse(loadCalledOnEdt.get());
         assertTrue(panel.getTextArea().getText().contains("./mvnw compile"));
 
         SwingTestUtils.runOnEdt(
@@ -102,15 +94,13 @@ class BuildConfigPanelTest {
                     panel.getTextArea().setText("[build]\ncompile = 'mvn test'\n");
                     panel.getSaveButton().doClick();
                 });
-
         SwingTestUtils.awaitWorker(panel.getSaveConfigFuture());
 
-        assertFalse(saveCalledOnEdt.get(), "saveConfig() must not execute on EDT");
+        assertFalse(saveCalledOnEdt.get());
         assertTrue(panel.getSaveButton().isEnabled());
         assertEquals("Configuration saved successfully!", panel.getStatusLabel().getText());
         verify(buildToolService).saveConfigContent("[build]\ncompile = 'mvn test'\n");
 
-        // Verify save failure reports error via presenter and re-enables button
         AtomicReference<String> errorMsg = new AtomicReference<>();
         panel.setErrorDialogPresenter(errorMsg::set);
         doThrow(new IOException("Disk full")).when(buildToolService).saveConfigContent(anyString());

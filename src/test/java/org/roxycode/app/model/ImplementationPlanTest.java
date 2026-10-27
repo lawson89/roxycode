@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ui.SwingTestUtils;
 
 class ImplementationPlanTest {
 
@@ -151,24 +152,23 @@ class ImplementationPlanTest {
                                         "Architect",
                                         "Created plan | verified\ndetails")));
         String withoutLog = plan.toMarkdown(false);
-        assertTrue(withoutLog.contains("# Implementation Plan: Feature Plan"));
-        assertTrue(withoutLog.contains("**Goal:** Deliver feature"));
-        assertTrue(withoutLog.contains("## Approvals"));
-        assertTrue(
-                withoutLog.contains(
-                        "- **Move to Code:** Approved by alice on 2026-04-06T12:00:00Z"));
-        assertTrue(
-                withoutLog.contains(
-                        "- **Final Acceptance:** Accepted by bob on 2026-04-06T12:30:00Z"));
-        assertTrue(withoutLog.contains("## Requirements\n- Req A"));
-        assertTrue(withoutLog.contains("## Technical Steps\n- [x] 0. Step 0\n- [ ] 1. Step 1"));
+        SwingTestUtils.assertContainsAll(
+                withoutLog,
+                "# Implementation Plan: Feature Plan",
+                "**Goal:** Deliver feature",
+                "## Approvals",
+                "- **Move to Code:** Approved by alice on 2026-04-06T12:00:00Z",
+                "- **Final Acceptance:** Accepted by bob on 2026-04-06T12:30:00Z",
+                "## Requirements\n- Req A",
+                "## Technical Steps\n- [x] 0. Step 0\n- [ ] 1. Step 1");
         assertFalse(withoutLog.contains("## Handoff Log"));
 
         String withLog = plan.toMarkdown(true);
-        assertTrue(withLog.contains("## Handoff Log"));
-        assertTrue(
-                withLog.contains("| 2026-04-06 12:05:30 | Architect | Created plan ")
-                        && withLog.contains("| verified details |"));
+        SwingTestUtils.assertContainsAll(
+                withLog,
+                "## Handoff Log",
+                "| 2026-04-06 12:05:30 | Architect | Created plan ",
+                "| verified details |");
     }
 
     @Test
@@ -198,36 +198,41 @@ class ImplementationPlanTest {
                         " M src/App.java\n");
 
         assertTrue(archived.startsWith("---\n"));
-        assertTrue(
-                archived.contains(
-                        """
-                id: "20250514-143210-archive-feature"
-                project: "roxycode"
-                projectPath: "/path/to/roxycode"
-                title: "Archive Feature"
-                userApproved: true
-                approvedBy: "alice"
-                approvalTimestamp: "2025-05-14T14:10:00Z"
-                completedBy: "bob"
-                completedOn: "2025-05-14T14:32:10Z"
-                ---
+        SwingTestUtils.assertContainsAll(
+                archived,
+                "id: ",
+                "20250514-143210-archive-feature",
+                "project: ",
+                "roxycode",
+                "projectPath: ",
+                "/path/to/roxycode",
+                "title: ",
+                "Archive Feature",
+                "userApproved: true",
+                "approvedBy: ",
+                "alice",
+                "approvalTimestamp: ",
+                "2025-05-14T14:10:00Z",
+                "completedBy: ",
+                "bob",
+                "completedOn: ",
+                "2025-05-14T14:32:10Z",
+                "# Implementation Plan: Archive Feature",
+                "## Approvals",
+                "- **Move to Code:** Approved by alice on 2025-05-14T14:10:00Z",
+                "- **Final Acceptance:** Accepted by bob on 2025-05-14T14:32:10Z",
+                "## Handoff Log",
+                "REVIEW -> PLAN (User Approved): Complete",
+                "## Changes\n",
+                "M src/App.java");
 
-                # Implementation Plan: Archive Feature"""));
-        assertTrue(archived.contains("## Approvals"));
         assertTrue(
-                archived.contains("- **Move to Code:** Approved by alice on 2025-05-14T14:10:00Z"));
-        assertTrue(
-                archived.contains(
-                        "- **Final Acceptance:** Accepted by bob on 2025-05-14T14:32:10Z"));
-        assertTrue(archived.contains("## Handoff Log"));
-        assertTrue(archived.contains("REVIEW -> PLAN (User Approved): Complete"));
-        assertTrue(archived.contains("## Changes\n"));
-        assertTrue(archived.contains("M src/App.java"));
-
-        String archivedNoChanges =
                 plan.toArchivedMarkdown(
-                        "20250514-143210-archive-feature", "roxycode", "/path/to/roxycode", "");
-        assertTrue(archivedNoChanges.contains("## Changes\nNo files changed\n"));
+                                "20250514-143210-archive-feature",
+                                "roxycode",
+                                "/path/to/roxycode",
+                                "")
+                        .contains("## Changes\nNo files changed\n"));
 
         assertEquals(
                 ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText(null));

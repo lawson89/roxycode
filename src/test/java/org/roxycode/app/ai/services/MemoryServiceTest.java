@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -35,15 +36,12 @@ class MemoryServiceTest {
     void setUp() throws IOException {
         roxyHomeDir = Files.createDirectories(tempDir.resolve("roxyhome"));
         projectDataDir = Files.createDirectories(tempDir.resolve("project-data"));
-
         settingsService = mock(SettingsService.class);
         projectService = mock(ProjectService.class);
-
         when(settingsService.getRoxyHomeDir()).thenReturn(roxyHomeDir);
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
-
         memoryService = new MemoryService(settingsService, projectService);
     }
 
@@ -52,14 +50,16 @@ class MemoryServiceTest {
         assertEquals("", memoryService.readGlobalMemory());
         assertEquals("", memoryService.readProjectMemory());
 
-        EditorResult globalRes =
-                memoryService.updateGlobalMemory("# Global Prefs\n- Prefer Java records");
-        assertTrue(globalRes.success());
+        assertTrue(
+                memoryService
+                        .updateGlobalMemory("# Global Prefs\n- Prefer Java records")
+                        .success());
         assertEquals("# Global Prefs\n- Prefer Java records", memoryService.readGlobalMemory());
 
-        EditorResult projRes =
-                memoryService.updateProjectMemory("# Project Rules\n- Swing HTML 3.2 only");
-        assertTrue(projRes.success());
+        assertTrue(
+                memoryService
+                        .updateProjectMemory("# Project Rules\n- Swing HTML 3.2 only")
+                        .success());
         assertEquals("# Project Rules\n- Swing HTML 3.2 only", memoryService.readProjectMemory());
 
         when(projectService.hasActiveProject()).thenReturn(false);
@@ -74,58 +74,66 @@ class MemoryServiceTest {
         assertTrue(memoryService.listGlobalNotes().isEmpty());
         assertTrue(memoryService.listProjectNotes().isEmpty());
 
-        EditorResult saveGlobal =
-                memoryService.saveGlobalNote(
-                        "Java Style.md",
-                        "Java Style Guide",
-                        "java, style",
-                        "Always use immutable records.");
-        assertTrue(saveGlobal.success());
+        assertTrue(
+                memoryService
+                        .saveGlobalNote(
+                                "Java Style.md",
+                                "Java Style Guide",
+                                "java, style",
+                                "Always use immutable records.")
+                        .success());
 
         String globalContent = memoryService.readGlobalNote("java-style");
         assertTrue(globalContent.startsWith("---\n"));
-        assertTrue(globalContent.contains("id: ") && globalContent.contains("java-style"));
-        assertTrue(globalContent.contains("scope: ") && globalContent.contains("global"));
-        assertTrue(globalContent.contains("title: ") && globalContent.contains("Java Style Guide"));
-        assertTrue(globalContent.contains("tags: ") && globalContent.contains("java, style"));
-        assertTrue(globalContent.contains("updatedAt: "));
-        assertTrue(globalContent.contains("# Java Style Guide"));
-        assertTrue(globalContent.contains("Always use immutable records."));
+        assertContainsAll(
+                globalContent,
+                "id: ",
+                "java-style",
+                "scope: ",
+                "global",
+                "title: ",
+                "Java Style Guide",
+                "tags: ",
+                "java, style",
+                "updatedAt: ",
+                "# Java Style Guide",
+                "Always use immutable records.");
 
         List<String> globalList = memoryService.listGlobalNotes();
         assertEquals(1, globalList.size());
-        assertTrue(globalList.get(0).contains("java-style.md - "));
-        assertTrue(globalList.get(0).contains("Java Style Guide"));
-        assertTrue(globalList.get(0).contains("[java, style] ("));
+        assertContainsAll(
+                globalList.get(0), "java-style.md - ", "Java Style Guide", "[java, style] (");
 
-        EditorResult saveProj =
-                memoryService.saveProjectNote(
-                        "swing-html-tables",
-                        "Swing HTML 3.2 Table Layout Rules",
-                        "ui, swing, html",
-                        "Use old-school HTML tables for layout.");
-        assertTrue(saveProj.success());
+        assertTrue(
+                memoryService
+                        .saveProjectNote(
+                                "swing-html-tables",
+                                "Swing HTML 3.2 Table Layout Rules",
+                                "ui, swing, html",
+                                "Use old-school HTML tables for layout.")
+                        .success());
 
-        String projContent = memoryService.readProjectNote("swing-html-tables.md");
-        assertTrue(projContent.contains("swing-html-tables"));
-        assertTrue(projContent.contains("project"));
-        assertTrue(projContent.contains("Swing HTML 3.2 Table Layout Rules"));
-        assertTrue(projContent.contains("ui, swing, html"));
+        assertContainsAll(
+                memoryService.readProjectNote("swing-html-tables.md"),
+                "swing-html-tables",
+                "project",
+                "Swing HTML 3.2 Table Layout Rules",
+                "ui, swing, html");
 
         List<String> projList = memoryService.listProjectNotes();
         assertEquals(1, projList.size());
-        assertTrue(projList.get(0).contains("swing-html-tables.md - "));
-        assertTrue(projList.get(0).contains("Swing HTML 3.2 Table Layout Rules"));
-        assertTrue(projList.get(0).contains("[ui, swing, html] ("));
+        assertContainsAll(
+                projList.get(0),
+                "swing-html-tables.md - ",
+                "Swing HTML 3.2 Table Layout Rules",
+                "[ui, swing, html] (");
 
-        EditorResult delGlobal = memoryService.deleteGlobalNote("java-style");
-        assertTrue(delGlobal.success());
+        assertTrue(memoryService.deleteGlobalNote("java-style").success());
         assertEquals("", memoryService.readGlobalNote("java-style"));
         assertTrue(memoryService.listGlobalNotes().isEmpty());
         assertFalse(memoryService.deleteGlobalNote("java-style").success());
 
-        EditorResult delProj = memoryService.deleteProjectNote("swing-html-tables");
-        assertTrue(delProj.success());
+        assertTrue(memoryService.deleteProjectNote("swing-html-tables").success());
         assertEquals("", memoryService.readProjectNote("swing-html-tables"));
         assertTrue(memoryService.listProjectNotes().isEmpty());
     }
@@ -181,9 +189,9 @@ class MemoryServiceTest {
 
         var entries =
                 List.of(
-                        new org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry(
+                        new ChatTranscriptEntry(
                                 "user", "How does MemoryService search work?", "15:28:10"),
-                        new org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry(
+                        new ChatTranscriptEntry(
                                 "ai", "It executes rg across memory and archives.", "15:28:18"));
 
         String file1 =
@@ -196,41 +204,26 @@ class MemoryServiceTest {
                         "Memory Service Architecture", "Alice", "2025-05-14T15:30:00Z", entries);
         assertEquals("20250514-153000-memory-service-architecture-2.md", file2);
 
-        List<String> topics = memoryService.listArchivedTopics();
-        assertEquals(2, topics.size());
         assertEquals(
-                "20250514-153000-memory-service-architecture.md: Memory Service Architecture",
-                topics.get(0));
-        assertEquals(
-                "20250514-153000-memory-service-architecture-2.md: Memory Service Architecture",
-                topics.get(1));
+                List.of(
+                        "20250514-153000-memory-service-architecture.md: Memory Service Architecture",
+                        "20250514-153000-memory-service-architecture-2.md: Memory Service Architecture"),
+                memoryService.listArchivedTopics());
 
         String content = memoryService.readArchivedTopic(file1);
-        assertTrue(
-                content.contains(
-                        """
-                        type: "topic"
-                        """
-                                .strip()));
-        assertTrue(
-                content.contains(
-                        """
-                        title: "Memory Service Architecture"
-                        """
-                                .strip()));
-        assertTrue(
-                content.contains(
-                        """
-                        createdBy: "Alice"
-                        """
-                                .strip()));
-        assertTrue(content.contains("messageCount: 2"));
-        assertTrue(content.contains("# Topic: Memory Service Architecture"));
-        assertTrue(content.contains("## Conversation Transcript"));
-        assertTrue(content.contains("### User (15:28:10)\nHow does MemoryService search work?"));
-        assertTrue(
-                content.contains(
-                        "### Roxy (15:28:18)\nIt executes rg across memory and archives."));
+        assertContainsAll(
+                content,
+                "type: ",
+                "topic",
+                "title: ",
+                "Memory Service Architecture",
+                "createdBy: ",
+                "Alice",
+                "messageCount: 2",
+                "# Topic: Memory Service Architecture",
+                "## Conversation Transcript",
+                "### User (15:28:10)\nHow does MemoryService search work?",
+                "### Roxy (15:28:18)\nIt executes rg across memory and archives.");
         assertEquals(
                 content,
                 memoryService.readArchivedTopic("20250514-153000-memory-service-architecture"));
@@ -264,11 +257,11 @@ class MemoryServiceTest {
                 plan2,
                 StandardCharsets.UTF_8);
 
-        List<String> plans = memoryService.listArchivedPlans();
-        assertEquals(2, plans.size());
-        assertEquals("20250514-120000-second-plan.md: Second Feature Plan", plans.get(0));
-        assertEquals("20250513-100000-first-plan.md: First Feature Plan", plans.get(1));
-
+        assertEquals(
+                List.of(
+                        "20250514-120000-second-plan.md: Second Feature Plan",
+                        "20250513-100000-first-plan.md: First Feature Plan"),
+                memoryService.listArchivedPlans());
         assertEquals(plan2, memoryService.readArchivedPlan("20250514-120000-second-plan.md"));
         assertEquals(plan2, memoryService.readArchivedPlan("20250514-120000-second-plan"));
     }
@@ -278,7 +271,6 @@ class MemoryServiceTest {
         EditorResult emptySearch = memoryService.search("nonexistent");
         assertTrue(emptySearch.success());
         assertEquals("", emptySearch.content());
-
         assertFalse(memoryService.search("").success());
 
         memoryService.saveGlobalNote("foo", "Global Foo", "global", "UniqueCrossScopeToken alpha");
@@ -286,34 +278,24 @@ class MemoryServiceTest {
                 "bar", "Project Bar", "project", "UniqueCrossScopeToken beta");
 
         Path archiveDir = Files.createDirectories(projectDataDir.resolve("archive/plans"));
-        String bazPlan =
-                """
-                ---
-                title: "Baz Plan"
-                ---
-                UniqueCrossScopeToken gamma
-                """;
         Path bazFile = archiveDir.resolve("20250514-baz.md");
-        Files.writeString(bazFile, bazPlan, StandardCharsets.UTF_8);
+        Files.writeString(
+                bazFile,
+                "---\ntitle: 'Baz Plan'\n---\nUniqueCrossScopeToken gamma\n",
+                StandardCharsets.UTF_8);
 
         Path archiveTopicsDir = Files.createDirectories(projectDataDir.resolve("archive/topics"));
         Path topicFile = archiveTopicsDir.resolve("20250514-topic.md");
         Files.writeString(topicFile, "UniqueCrossScopeToken delta\n", StandardCharsets.UTF_8);
 
-        Path globalNote = roxyHomeDir.resolve("memory/notes/foo.md").toAbsolutePath().normalize();
-        Path projectNote =
-                projectDataDir.resolve("memory/notes/bar.md").toAbsolutePath().normalize();
-        Path archivePlan = bazFile.toAbsolutePath().normalize();
-        Path archiveTopic = topicFile.toAbsolutePath().normalize();
-
         String simulatedRgStdout =
-                globalNote
+                roxyHomeDir.resolve("memory/notes/foo.md").toAbsolutePath().normalize()
                         + ":12:UniqueCrossScopeToken alpha\n"
-                        + projectNote
+                        + projectDataDir.resolve("memory/notes/bar.md").toAbsolutePath().normalize()
                         + ":5:UniqueCrossScopeToken beta\n"
-                        + archivePlan
+                        + bazFile.toAbsolutePath().normalize()
                         + ":8:UniqueCrossScopeToken gamma\n"
-                        + archiveTopic
+                        + topicFile.toAbsolutePath().normalize()
                         + ":15:UniqueCrossScopeToken delta\n";
 
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
@@ -323,28 +305,21 @@ class MemoryServiceTest {
 
             EditorResult searchRes = memoryService.search("UniqueCrossScopeToken");
             assertTrue(searchRes.success());
-            String output = searchRes.content();
-            assertTrue(
-                    output.contains("[GLOBAL] notes/foo.md:12:UniqueCrossScopeToken alpha"),
-                    "Output was: " + output);
-            assertTrue(
-                    output.contains("[PROJECT] notes/bar.md:5:UniqueCrossScopeToken beta"),
-                    "Output was: " + output);
-            assertTrue(
-                    output.contains(
-                            "[ARCHIVE] plans/20250514-baz.md:8:UniqueCrossScopeToken gamma"),
-                    "Output was: " + output);
-            assertTrue(
-                    output.contains(
-                            "[ARCHIVE] topics/20250514-topic.md:15:UniqueCrossScopeToken delta"),
-                    "Output was: " + output);
+            assertContainsAll(
+                    searchRes.content(),
+                    "[GLOBAL] notes/foo.md:12:UniqueCrossScopeToken alpha",
+                    "[PROJECT] notes/bar.md:5:UniqueCrossScopeToken beta",
+                    "[ARCHIVE] plans/20250514-baz.md:8:UniqueCrossScopeToken gamma",
+                    "[ARCHIVE] topics/20250514-topic.md:15:UniqueCrossScopeToken delta");
 
             EditorResult caseInsensitiveRes =
                     memoryService.searchIgnoreCase("uniquecrossscopetoken");
             assertTrue(caseInsensitiveRes.success());
-            assertTrue(caseInsensitiveRes.content().contains("[GLOBAL] notes/foo.md:12:"));
-            assertTrue(caseInsensitiveRes.content().contains("[PROJECT] notes/bar.md:5:"));
-            assertTrue(caseInsensitiveRes.content().contains("[ARCHIVE] plans/20250514-baz.md:8:"));
+            assertContainsAll(
+                    caseInsensitiveRes.content(),
+                    "[GLOBAL] notes/foo.md:12:",
+                    "[PROJECT] notes/bar.md:5:",
+                    "[ARCHIVE] plans/20250514-baz.md:8:");
 
             runnerMock
                     .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
@@ -359,10 +334,9 @@ class MemoryServiceTest {
     void testCapPinnedMemoryForPrompt() {
         assertEquals("", MemoryService.capPinnedMemoryForPrompt(null));
         assertEquals("short", MemoryService.capPinnedMemoryForPrompt("short"));
-
-        String manyLines = "line\n".repeat(250);
-        String capped = MemoryService.capPinnedMemoryForPrompt(manyLines);
-        assertTrue(capped.contains("truncated at 200 lines / 8 KB limit"));
+        assertTrue(
+                MemoryService.capPinnedMemoryForPrompt("line\n".repeat(250))
+                        .contains("truncated at 200 lines / 8 KB limit"));
     }
 
     @Test
@@ -374,8 +348,9 @@ class MemoryServiceTest {
                 "---\nunclosed frontmatter",
                 MemoryService.stripFrontmatter("---\nunclosed frontmatter"));
 
-        String doc =
-                """
+        String stripped =
+                MemoryService.stripFrontmatter(
+                        """
                 ---
                 id: "20250514-topic"
                 title: "Test Topic"
@@ -384,8 +359,7 @@ class MemoryServiceTest {
                 # Topic: Test Topic
 
                 Body text here.
-                """;
-        String stripped = MemoryService.stripFrontmatter(doc);
+                """);
         assertFalse(stripped.contains("id: "));
         assertTrue(stripped.startsWith("# Topic: Test Topic"));
         assertTrue(stripped.contains("Body text here."));
@@ -420,7 +394,9 @@ class MemoryServiceTest {
         assertEquals(1, topicSummaries.get(1).messageCount());
 
         Path plansDir = Files.createDirectories(projectDataDir.resolve("archive/plans"));
-        String planDoc =
+        Path planFile = plansDir.resolve("20250514-120000-feature-plan.md");
+        Files.writeString(
+                planFile,
                 """
                 ---
                 id: "20250514-120000-feature-plan"
@@ -431,16 +407,11 @@ class MemoryServiceTest {
 
                 # Implementation Plan: Archive Browser Feature
                 UniqueBodyMatchToken in plan steps
-                """;
-        Path planFile = plansDir.resolve("20250514-120000-feature-plan.md");
-        Files.writeString(planFile, planDoc, StandardCharsets.UTF_8);
-        Path fallbackPlanFile = plansDir.resolve("20250512-090000-raw-plan.md");
-        Files.writeString(
-                fallbackPlanFile,
-                """
-                # Raw Plan Without Frontmatter
                 """,
                 StandardCharsets.UTF_8);
+        Path fallbackPlanFile = plansDir.resolve("20250512-090000-raw-plan.md");
+        Files.writeString(
+                fallbackPlanFile, "# Raw Plan Without Frontmatter\n", StandardCharsets.UTF_8);
 
         List<MemoryService.ArchiveEntrySummary> planSummaries =
                 memoryService.listArchivedPlanSummaries();
@@ -462,11 +433,15 @@ class MemoryServiceTest {
             assertEquals(1, metaMatched.size());
             assertEquals("First Q&A Topic", metaMatched.get(0).title());
 
-            String rgOut =
-                    planFile.toAbsolutePath().normalize() + ":9:UniqueBodyMatchToken in plan steps";
+            Path normPlan = planFile.toAbsolutePath().normalize();
             runnerMock
                     .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, rgOut, "", false));
+                    .thenReturn(
+                            new ProcessResult(
+                                    0,
+                                    normPlan + ":9:UniqueBodyMatchToken in plan steps",
+                                    "",
+                                    false));
 
             List<MemoryService.ArchiveEntrySummary> planMatched =
                     memoryService.searchArchivedPlans("UniqueBodyMatchToken");
@@ -474,16 +449,20 @@ class MemoryServiceTest {
             assertEquals("Archive Browser Feature", planMatched.get(0).title());
             assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
 
-            // Verify frontmatter lines (lines 1..6) are ignored while body lines starting with
-            // YAML-like prefixes (e.g. 'title: "BodyValue"') after frontmatter are matched
+            String dq = String.valueOf('"');
             String rgFrontmatterAndBody =
-                    """
-                    %s:3:title: "Archive Browser Feature"
-                    %s:10:title: "BodyExampleTitle"
-                    """
-                            .formatted(
-                                    planFile.toAbsolutePath().normalize(),
-                                    planFile.toAbsolutePath().normalize());
+                    normPlan
+                            + ":3:title: "
+                            + dq
+                            + "Archive Browser Feature"
+                            + dq
+                            + "\n"
+                            + normPlan
+                            + ":10:title: "
+                            + dq
+                            + "BodyExampleTitle"
+                            + dq
+                            + "\n";
             runnerMock
                     .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
                     .thenReturn(new ProcessResult(0, rgFrontmatterAndBody, "", false));
@@ -492,8 +471,7 @@ class MemoryServiceTest {
                     memoryService.searchArchivedPlans("BodyExampleTitle");
             assertEquals(1, bodyKeyMatched.size());
             assertEquals(
-                    "title: " + '"' + "BodyExampleTitle" + '"',
-                    bodyKeyMatched.get(0).matchSnippet());
+                    "title: " + dq + "BodyExampleTitle" + dq, bodyKeyMatched.get(0).matchSnippet());
         }
         assertEquals(6, MemoryService.findFrontmatterEndLine(planFile));
         assertEquals(0, MemoryService.findFrontmatterEndLine(fallbackPlanFile));

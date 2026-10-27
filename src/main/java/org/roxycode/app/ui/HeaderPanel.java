@@ -5,6 +5,7 @@ import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
 import java.io.File;
 import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -22,7 +23,6 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/** Header panel containing application controls and project selection. */
 @Component
 @Lazy
 public final class HeaderPanel extends JPanel {
@@ -49,13 +49,10 @@ public final class HeaderPanel extends JPanel {
         this.gitService = gitService;
         this.settingsService = settingsService;
 
-        // 2-column layout: Left (Project), Right (Utils)
         setLayout(new MigLayout("insets 2 15 2 15, fillx", "[left]push[right]", LAYOUT_CENTER));
-
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
-        // --- LEFT SECTION: Project Info ---
         JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]8[]12[]", LAYOUT_CENTER));
         leftPanel.setOpaque(false);
 
@@ -69,16 +66,13 @@ public final class HeaderPanel extends JPanel {
         branchLabel = new JLabel();
         branchLabel.setVisible(false);
         leftPanel.add(branchLabel);
-
         add(leftPanel, "left");
 
-        // --- RIGHT SECTION: Model & Utils ---
         JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]8[]", LAYOUT_CENTER));
         rightPanel.setOpaque(false);
 
         modelLabel = new JLabel();
         updateModelDisplay(settingsService.getSettings().getGeminiModel());
-
         themeToggleButton =
                 createIconButton(
                         Codicons.COLOR_MODE, "Toggle Light/Dark Theme", e -> toggleTheme());
@@ -89,13 +83,12 @@ public final class HeaderPanel extends JPanel {
 
         applyHeaderStyling();
         updateBranchLabel();
+        updateProjectTooltip(projectService.getCurrentProjectRoot());
+    }
 
-        if (projectService.getCurrentProjectRoot() != null) {
-            projectLabel.setToolTipText(
-                    projectService.getCurrentProjectRoot().toAbsolutePath().toString());
-        } else {
-            projectLabel.setToolTipText("No project selected");
-        }
+    private void updateProjectTooltip(Path root) {
+        projectLabel.setToolTipText(
+                root != null ? root.toAbsolutePath().toString() : "No project selected");
     }
 
     @Override
@@ -118,7 +111,6 @@ public final class HeaderPanel extends JPanel {
     void applyHeaderStyling() {
         Color accent = SwingHtmlUtils.getAccentColor();
         Color muted = SwingHtmlUtils.getMutedForegroundColor();
-        Color fg = resolveForegroundColor();
         String accentHex = SwingHtmlUtils.toHex(accent);
 
         projectLabel.setIcon(FontIcon.of(Codicons.REPO, 16, accent));
@@ -126,17 +118,13 @@ public final class HeaderPanel extends JPanel {
         changeProjectButton.setIcon(FontIcon.of(Codicons.FOLDER_OPENED, 14, accent));
         changeProjectButton.putClientProperty(
                 FlatClientProperties.STYLE,
-                "arc: 10; font: -1; margin: 2,8,2,8; "
-                        + "background: fade("
+                "arc: 10; font: -1; margin: 2,8,2,8; background: fade("
                         + accentHex
-                        + ", 10%); "
-                        + "hoverBackground: fade("
+                        + ", 10%); hoverBackground: fade("
                         + accentHex
-                        + ", 20%); "
-                        + "pressedBackground: fade("
+                        + ", 20%); pressedBackground: fade("
                         + accentHex
-                        + ", 28%); "
-                        + "borderColor: fade("
+                        + ", 28%); borderColor: fade("
                         + accentHex
                         + ", 35%)");
 
@@ -147,21 +135,15 @@ public final class HeaderPanel extends JPanel {
 
         modelLabel.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE);
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, muted));
-
-        themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, fg));
+        themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, resolveForegroundColor()));
     }
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(
                 () -> {
-                    Path newRoot = event.projectRoot();
                     projectLabel.setText(projectService.getProjectName());
-                    if (newRoot != null) {
-                        projectLabel.setToolTipText(newRoot.toAbsolutePath().toString());
-                    } else {
-                        projectLabel.setToolTipText("No project selected");
-                    }
+                    updateProjectTooltip(event.projectRoot());
                     updateBranchLabel();
                 });
     }
@@ -202,7 +184,6 @@ public final class HeaderPanel extends JPanel {
         button.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.addActionListener(listener);
-
         button.addMouseListener(
                 new java.awt.event.MouseAdapter() {
                     @Override
@@ -216,7 +197,6 @@ public final class HeaderPanel extends JPanel {
                         button.setContentAreaFilled(false);
                     }
                 });
-
         return button;
     }
 
@@ -232,22 +212,20 @@ public final class HeaderPanel extends JPanel {
                     protected void done() {
                         try {
                             String branch = get();
-                            if (branch != null
-                                    && !branch.isEmpty()
-                                    && !branch.startsWith("Error")
-                                    && !"Not a git repository".equals(branch)) {
-                                branchLabel.setIcon(
-                                        FontIcon.of(
-                                                Codicons.SOURCE_CONTROL,
-                                                14,
-                                                SwingHtmlUtils.getMutedForegroundColor()));
-                                branchLabel.setText(branch);
-                                branchLabel.setVisible(true);
-                            } else {
-                                branchLabel.setIcon(null);
-                                branchLabel.setText("");
-                                branchLabel.setVisible(false);
-                            }
+                            boolean valid =
+                                    branch != null
+                                            && !branch.isEmpty()
+                                            && !branch.startsWith("Error")
+                                            && !"Not a git repository".equals(branch);
+                            branchLabel.setIcon(
+                                    valid
+                                            ? FontIcon.of(
+                                                    Codicons.SOURCE_CONTROL,
+                                                    14,
+                                                    SwingHtmlUtils.getMutedForegroundColor())
+                                            : null);
+                            branchLabel.setText(valid ? branch : "");
+                            branchLabel.setVisible(valid);
                         } catch (Exception e) {
                             log.error("Failed to fetch git branch", e);
                             branchLabel.setIcon(null);
@@ -292,9 +270,7 @@ public final class HeaderPanel extends JPanel {
         if (projectService.getCurrentProjectRoot() != null) {
             chooser.setCurrentDirectory(projectService.getCurrentProjectRoot().toFile());
         }
-
-        int returnVal = chooser.showOpenDialog(this);
-        if (returnVal == JFileChooser.APPROVE_OPTION) {
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
             if (file != null) {
                 switchProjectAsync(file.toPath());
@@ -302,8 +278,7 @@ public final class HeaderPanel extends JPanel {
         }
     }
 
-    java.util.concurrent.CompletableFuture<Void> switchProjectAsync(Path projectPath) {
-        return java.util.concurrent.CompletableFuture.runAsync(
-                () -> projectService.setCurrentProjectRoot(projectPath));
+    CompletableFuture<Void> switchProjectAsync(Path projectPath) {
+        return CompletableFuture.runAsync(() -> projectService.setCurrentProjectRoot(projectPath));
     }
 }

@@ -30,41 +30,27 @@ public class ProjectAnalysisService {
 
     public String getDominantLanguage() {
         String cached = this.cachedDominantLanguage;
-        if (cached != null) {
-            return cached;
-        }
+        if (cached != null) return cached;
         synchronized (this) {
-            if (this.cachedDominantLanguage != null) {
-                return this.cachedDominantLanguage;
-            }
-            String computed = computeDominantLanguage();
-            this.cachedDominantLanguage = computed;
-            return computed;
+            if (this.cachedDominantLanguage != null) return this.cachedDominantLanguage;
+            this.cachedDominantLanguage = computeDominantLanguage();
+            return this.cachedDominantLanguage;
         }
     }
 
     private String computeDominantLanguage() {
         List<String> files = grepService.listFiles(null);
-        if (files == null || files.isEmpty()) {
-            return "Unknown";
-        }
+        if (files == null || files.isEmpty()) return "Unknown";
 
         Map<String, Integer> extensionCounts = new HashMap<>();
-
         for (String filePath : files) {
             String ext = extractExtension(filePath);
-            if (ext != null) {
-                extensionCounts.merge(ext, 1, Integer::sum);
-            }
+            if (ext != null) extensionCounts.merge(ext, 1, Integer::sum);
         }
-
-        if (extensionCounts.isEmpty()) {
-            return "Unknown";
-        }
+        if (extensionCounts.isEmpty()) return "Unknown";
 
         String dominantExt =
                 Collections.max(extensionCounts.entrySet(), Map.Entry.comparingByValue()).getKey();
-
         return switch (dominantExt) {
             case ".java" -> "Java";
             case ".py" -> "Python";
@@ -85,19 +71,14 @@ public class ProjectAnalysisService {
     }
 
     static String extractExtension(String filePath) {
-        if (StringUtils.isBlank(filePath)) {
-            return null;
-        }
+        if (StringUtils.isBlank(filePath)) return null;
         Path fileNamePath = Path.of(filePath).getFileName();
-        if (fileNamePath == null) {
-            return null;
-        }
+        if (fileNamePath == null) return null;
         String fileName = fileNamePath.toString();
         String baseName = StringUtils.substringBeforeLast(fileName, ".");
         String ext = StringUtils.substringAfterLast(fileName, ".");
-        if (StringUtils.isEmpty(baseName) || StringUtils.isEmpty(ext)) {
-            return null;
-        }
-        return "." + ext.toLowerCase(Locale.ROOT);
+        return (StringUtils.isEmpty(baseName) || StringUtils.isEmpty(ext))
+                ? null
+                : "." + ext.toLowerCase(Locale.ROOT);
     }
 }

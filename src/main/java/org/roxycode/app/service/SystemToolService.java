@@ -6,13 +6,13 @@ import com.github.dockerjava.api.model.Version;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.roxycode.app.ai.AiConfig;
@@ -46,6 +46,8 @@ public class SystemToolService {
     static final String VERSION_UNKNOWN = "Unknown";
     private static final int MAX_DOCKER_ERROR_LENGTH = 120;
     private static final int MAX_VERSION_LENGTH = 50;
+    private static final List<String> LEGACY_VERSION_NOISE_MARKERS =
+            List.of("features:", ", Copyright", "OpenJDK", "Java(TM)");
 
     public record DockerVersionInfo(String version, String apiVersion) {}
 
@@ -147,17 +149,9 @@ public class SystemToolService {
         }
     }
 
-    /**
-     * Checks whether system tool results are already cached in memory or persisted on disk without
-     * running any subprocess or Docker probes.
-     */
     public synchronized boolean hasCachedTools() {
-        if (cachedTools != null && !cachedTools.isEmpty()) {
-            return true;
-        }
-        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
-            return false;
-        }
+        if (cachedTools != null && !cachedTools.isEmpty()) return true;
+        if (SwingUtilities.isEventDispatchThread()) return false;
         return !loadDiskCacheIntoMemory().isEmpty();
     }
 
@@ -173,48 +167,28 @@ public class SystemToolService {
         return List.of();
     }
 
-    /**
-     * Returns the cached system tool results (loading from disk if available) without triggering a
-     * new probe, or an empty list if no cached state exists.
-     */
     public synchronized List<SystemTool> getCachedTools() {
-        if (hasCachedTools()) {
-            return List.copyOf(cachedTools);
-        }
-        return List.of();
+        return hasCachedTools() ? List.copyOf(cachedTools) : List.of();
     }
 
-    /**
-     * Returns the cached system tools immediately if available, or performs an asynchronous
-     * detection and caches/persists the result.
-     */
     public CompletableFuture<List<SystemTool>> detectTools() {
         synchronized (this) {
             if (cachedTools != null && !cachedTools.isEmpty()) {
                 return CompletableFuture.completedFuture(List.copyOf(cachedTools));
             }
         }
-        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+        if (SwingUtilities.isEventDispatchThread()) {
             return CompletableFuture.supplyAsync(this::loadDiskCacheIntoMemory)
                     .thenCompose(
-                            diskTools -> {
-                                if (!diskTools.isEmpty()) {
-                                    return CompletableFuture.completedFuture(diskTools);
-                                }
-                                return refreshTools();
-                            });
+                            diskTools ->
+                                    !diskTools.isEmpty()
+                                            ? CompletableFuture.completedFuture(diskTools)
+                                            : refreshTools());
         }
         List<SystemTool> diskTools = loadDiskCacheIntoMemory();
-        if (!diskTools.isEmpty()) {
-            return CompletableFuture.completedFuture(diskTools);
-        }
-        return refreshTools();
+        return !diskTools.isEmpty() ? CompletableFuture.completedFuture(diskTools) : refreshTools();
     }
 
-    /**
-     * Forces a fresh asynchronous probe of all system tools, updating the in-memory and disk cache
-     * and deduplicating concurrent in-flight refresh requests.
-     */
     @SuppressWarnings("PMD.CompareObjectsWithEquals")
     public synchronized CompletableFuture<List<SystemTool>> refreshTools() {
         if (inFlightRefresh != null && !inFlightRefresh.isDone()) {
@@ -239,10 +213,6 @@ public class SystemToolService {
         return future;
     }
 
-    /**
-     * Asynchronously checks whether Docker is reachable and compatible with Testcontainers, using
-     * cached state if available.
-     */
     public CompletableFuture<Boolean> isDockerAvailable() {
         synchronized (this) {
             if (cachedTools != null && !cachedTools.isEmpty()) {
@@ -252,18 +222,10 @@ public class SystemToolService {
         return detectTools().thenApply(SystemToolService::isDockerDetected);
     }
 
-    /**
-     * Forces a fresh asynchronous tool refresh and returns whether Docker is reachable and
-     * compatible with Testcontainers.
-     */
     public CompletableFuture<Boolean> refreshDockerAvailable() {
         return refreshTools().thenApply(SystemToolService::isDockerDetected);
     }
 
-    /**
-     * Synchronously checks whether Docker is reachable and compatible with Testcontainers, using
-     * cached state if available.
-     */
     public boolean checkDockerAvailable() {
         synchronized (this) {
             if (hasCachedTools()) {
@@ -274,21 +236,19 @@ public class SystemToolService {
     }
 
     static boolean isDockerDetected(List<SystemTool> tools) {
-        if (tools == null) {
-            return false;
-        }
-        return tools.stream()
-                .anyMatch(t -> DOCKER.equals(t.name()) && STATUS_DETECTED.equals(t.status()));
+        return tools != null
+                && tools.stream()
+                        .anyMatch(
+                                t -> DOCKER.equals(t.name()) && STATUS_DETECTED.equals(t.status()));
     }
 
     private List<SystemTool> probeAllTools() {
-        List<SystemTool> tools = new ArrayList<>();
-        tools.add(detectTool(RIPGREP, "rg", ARG_VERSION));
-        tools.add(detectTool(GIT, "git", ARG_VERSION));
-        tools.add(detectTool(CTAGS, "ctags", ARG_VERSION));
-        tools.add(detectTool(JAVA, "java", "-version"));
-        tools.add(detectDockerTool());
-        return tools;
+        return List.of(
+                detectTool(RIPGREP, "rg", ARG_VERSION),
+                detectTool(GIT, "git", ARG_VERSION),
+                detectTool(CTAGS, "ctags", ARG_VERSION),
+                detectTool(JAVA, "java", "-version"),
+                detectDockerTool());
     }
 
     private void updateCacheAndPublish(List<SystemTool> detected) {
@@ -296,28 +256,21 @@ public class SystemToolService {
             cachedTools = detected;
             saveToDisk(detected);
         }
-        boolean dockerAvail = isDockerDetected(detected);
-        eventPublisher.publishEvent(new SystemToolsUpdatedEvent(detected, dockerAvail));
+        eventPublisher.publishEvent(
+                new SystemToolsUpdatedEvent(detected, isDockerDetected(detected)));
     }
 
     Path getCacheFilePath() {
-        if (settingsService == null) {
-            return null;
-        }
-        Path homeDir = settingsService.getRoxyHomeDir();
+        Path homeDir = settingsService != null ? settingsService.getRoxyHomeDir() : null;
         return homeDir != null ? homeDir.resolve(SYSTEM_TOOLS_FILE) : null;
     }
 
     private List<SystemTool> loadFromDisk() {
         Path path = getCacheFilePath();
-        if (path == null || !Files.exists(path)) {
-            return List.of();
-        }
+        if (path == null || !Files.exists(path)) return List.of();
         try {
             SystemToolsCache cache = mapper.readValue(path.toFile(), SystemToolsCache.class);
-            if (cache == null || cache.tools() == null) {
-                return List.of();
-            }
+            if (cache == null || cache.tools() == null) return List.of();
             return cache.tools().stream()
                     .map(SystemTool::enrichLegacyMetadata)
                     .map(SystemToolService::sanitizeCachedToolVersion)
@@ -330,9 +283,7 @@ public class SystemToolService {
 
     private void saveToDisk(List<SystemTool> tools) {
         Path path = getCacheFilePath();
-        if (path == null) {
-            return;
-        }
+        if (path == null) return;
         try {
             PathUtils.createParentDirectories(path);
             mapper.writeValue(path.toFile(), new SystemToolsCache(tools));
@@ -383,9 +334,7 @@ public class SystemToolService {
     }
 
     private static boolean isGenericEnvironmentNotFound(String message) {
-        if (StringUtils.isBlank(message)) {
-            return true;
-        }
+        if (StringUtils.isBlank(message)) return true;
         String lower = message.toLowerCase(Locale.ROOT);
         return lower.contains("could not find a valid docker environment")
                 || lower.contains("previous attempts to find a docker environment failed")
@@ -393,33 +342,27 @@ public class SystemToolService {
     }
 
     private static String formatDockerErrorMessage(String rawMessage) {
-        if (StringUtils.isBlank(rawMessage)) {
-            return "Testcontainers connection failed";
-        }
-        String normalized = StringUtils.normalizeSpace(rawMessage);
-        return StringUtils.abbreviate(normalized, MAX_DOCKER_ERROR_LENGTH);
+        return StringUtils.isBlank(rawMessage)
+                ? "Testcontainers connection failed"
+                : StringUtils.abbreviate(
+                        StringUtils.normalizeSpace(rawMessage), MAX_DOCKER_ERROR_LENGTH);
     }
 
     private SystemTool detectTool(String name, String command, String versionArg) {
         try {
             ProcessResult result = ProcessRunner.run(List.of(command, versionArg), null, true);
             if (!result.timedOut() && result.exitCode() == 0) {
-                String version = parseVersion(result.output(), name);
-                return SystemTool.ofKnownTool(name, version, STATUS_DETECTED);
-            } else {
-                log.warn("Tool {} detection failed with exit code {}", name, result.exitCode());
-                return SystemTool.ofKnownTool(name, VERSION_NOT_FOUND, STATUS_MISSING);
+                return SystemTool.ofKnownTool(
+                        name, parseVersion(result.output(), name), STATUS_DETECTED);
             }
+            log.warn("Tool {} detection failed with exit code {}", name, result.exitCode());
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
             log.debug("Tool {} not detected: {}", name, e.getMessage());
-            return SystemTool.ofKnownTool(name, VERSION_NOT_FOUND, STATUS_MISSING);
         }
+        return SystemTool.ofKnownTool(name, VERSION_NOT_FOUND, STATUS_MISSING);
     }
-
-    private static final List<String> LEGACY_VERSION_NOISE_MARKERS =
-            List.of("features:", ", Copyright", "OpenJDK", "Java(TM)");
 
     private static SystemTool sanitizeCachedToolVersion(SystemTool tool) {
         if (tool == null
@@ -427,37 +370,21 @@ public class SystemToolService {
                 || VERSION_NOT_FOUND.equals(tool.version())) {
             return tool;
         }
-        if (DOCKER.equals(tool.name()) && STATUS_ERROR.equals(tool.status())) {
-            return new SystemTool(
-                    tool.name(),
-                    formatDockerErrorMessage(tool.version()),
-                    tool.status(),
-                    tool.description(),
-                    tool.license(),
-                    tool.websiteUrl());
-        }
-        return new SystemTool(
-                tool.name(),
-                parseVersion(tool.version(), tool.name()),
-                tool.status(),
-                tool.description(),
-                tool.license(),
-                tool.websiteUrl());
+        return tool.withVersion(
+                (DOCKER.equals(tool.name()) && STATUS_ERROR.equals(tool.status()))
+                        ? formatDockerErrorMessage(tool.version())
+                        : parseVersion(tool.version(), tool.name()));
     }
 
     static String parseVersion(String output, String toolName) {
-        if (StringUtils.isBlank(output)) {
-            return VERSION_UNKNOWN;
-        }
+        if (StringUtils.isBlank(output)) return VERSION_UNKNOWN;
         String firstLine =
                 output.lines()
                         .map(String::trim)
                         .filter(line -> !line.isEmpty())
                         .findFirst()
                         .orElse(VERSION_UNKNOWN);
-        if (VERSION_UNKNOWN.equals(firstLine)) {
-            return firstLine;
-        }
+        if (VERSION_UNKNOWN.equals(firstLine)) return firstLine;
         if (JAVA.equals(toolName) && firstLine.contains("version")) {
             firstLine = firstLine.substring(firstLine.indexOf("version"));
         }

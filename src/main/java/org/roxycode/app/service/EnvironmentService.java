@@ -7,7 +7,6 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.springframework.stereotype.Service;
 
-/** Service providing environment and system information. */
 @Service
 public class EnvironmentService {
 
@@ -37,14 +36,10 @@ public class EnvironmentService {
     }
 
     public FontIcon getOsIcon() {
-        Codicons icon = SystemUtils.IS_OS_WINDOWS ? Codicons.WINDOW : Codicons.TERMINAL;
-
-        FontIcon fontIcon = FontIcon.of(icon);
-        fontIcon.setIconSize(14);
+        FontIcon fontIcon =
+                FontIcon.of(SystemUtils.IS_OS_WINDOWS ? Codicons.WINDOW : Codicons.TERMINAL, 14);
         Color color = UIManager.getColor("Label.foreground");
-        if (color != null) {
-            fontIcon.setIconColor(color);
-        }
+        if (color != null) fontIcon.setIconColor(color);
         return fontIcon;
     }
 }

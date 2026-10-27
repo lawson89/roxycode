@@ -2,6 +2,7 @@ package org.roxycode.app.ai.services;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -61,6 +63,29 @@ class GenericBuildToolServiceTest {
                 .thenReturn(CompletableFuture.completedFuture(available));
     }
 
+    private static ContainerSession createMockSession(
+            int exitCode, String stdout, List<String[]> captured, Runnable onClose) {
+        AtomicBoolean closed = new AtomicBoolean(false);
+        return new ContainerSession() {
+            @Override
+            public ContainerExecResult execInContainer(String... command) {
+                if (captured != null) captured.add(command);
+                return new ContainerExecResult(exitCode, stdout, "");
+            }
+
+            @Override
+            public boolean isRunning() {
+                return !closed.get();
+            }
+
+            @Override
+            public void close() {
+                closed.set(true);
+                if (onClose != null) onClose.run();
+            }
+        };
+    }
+
     @Test
     void testDetectNoConfig() {
         assertFalse(buildToolService.detect());
@@ -81,10 +106,8 @@ class GenericBuildToolServiceTest {
         Path configPath = projectDataDir.resolve("build.toml");
         assertTrue(Files.exists(configPath));
         assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
-        String content = Files.readString(configPath);
-        assertTrue(content.contains("compile"));
-        assertTrue(content.contains("[container]"));
-        assertTrue(content.contains("eclipse-temurin:25-jdk"));
+        assertContainsAll(
+                Files.readString(configPath), "compile", "[container]", "eclipse-temurin:25-jdk");
     }
 
     @Test
@@ -122,23 +145,11 @@ class GenericBuildToolServiceTest {
         stubDockerAvailable(true);
         buildContainerService.setContainerSessionFactory(
                 key ->
-                        new ContainerSession() {
-                            @Override
-                            public ContainerExecResult execInContainer(String... command) {
-                                return new ContainerExecResult(
-                                        1,
-                                        "[ERROR] Container compile failure\nFAIL: ContainerTest#fail",
-                                        "");
-                            }
-
-                            @Override
-                            public boolean isRunning() {
-                                return true;
-                            }
-
-                            @Override
-                            public void close() {}
-                        });
+                        createMockSession(
+                                1,
+                                "[ERROR] Container compile failure\nFAIL: ContainerTest#fail",
+                                null,
+                                null));
 
         writeBuildToml(
                 """
@@ -170,14 +181,7 @@ class GenericBuildToolServiceTest {
     void testContainerEnabledFailsFastWhenDockerUnavailable() throws IOException {
         stubDockerAvailable(false);
         writeBuildToml(
-                """
-                [build]
-                compile = './mvnw compile'
-                [container]
-                enabled = true
-                image = 'eclipse-temurin:25-jdk'
-                workdir = '/workspace'
-                """);
+                "[build]\ncompile = './mvnw compile'\n[container]\nenabled = true\nimage = 'eclipse-temurin:25-jdk'\nworkdir = '/workspace'\n");
 
         BuildResult result = buildToolService.compile();
         assertFalse(result.isSuccess());
@@ -195,14 +199,7 @@ class GenericBuildToolServiceTest {
                             "client version 1.32 is too old. Minimum supported API version is 1.44");
                 });
         writeBuildToml(
-                """
-                [build]
-                compile = './mvnw compile'
-                [container]
-                enabled = true
-                image = 'eclipse-temurin:25-jdk'
-                workdir = '/workspace'
-                """);
+                "[build]\ncompile = './mvnw compile'\n[container]\nenabled = true\nimage = 'eclipse-temurin:25-jdk'\nworkdir = '/workspace'\n");
 
         BuildResult result = buildToolService.compile();
         assertFalse(result.isSuccess());
@@ -229,23 +226,11 @@ class GenericBuildToolServiceTest {
                     sessionsCreated.incrementAndGet();
                     sessionKeys.add(key);
                     sessionClosed.set(false);
-                    return new ContainerSession() {
-                        @Override
-                        public ContainerExecResult execInContainer(String... command) {
-                            executedCommands.add(command);
-                            return new ContainerExecResult(0, "Container build OK", "");
-                        }
-
-                        @Override
-                        public boolean isRunning() {
-                            return !sessionClosed.get();
-                        }
-
-                        @Override
-                        public void close() {
-                            sessionClosed.set(true);
-                        }
-                    };
+                    return createMockSession(
+                            0,
+                            "Container build OK",
+                            executedCommands,
+                            () -> sessionClosed.set(true));
                 });
 
         String toml =
@@ -286,36 +271,25 @@ class GenericBuildToolServiceTest {
         buildToolService.handleProjectChanged(new ProjectChangedEvent(projectRoot));
         assertTrue(sessionClosed.get());
 
-        // Verify handleProjectChanged on EDT offloads stopActiveContainer off the EDT
         buildToolService.compile();
         assertFalse(sessionClosed.get());
         AtomicBoolean stoppedOnEdt = new AtomicBoolean(true);
         buildContainerService.setContainerSessionFactory(
                 key ->
-                        new ContainerSession() {
-                            @Override
-                            public ContainerExecResult execInContainer(String... command) {
-                                return new ContainerExecResult(0, "OK", "");
-                            }
-
-                            @Override
-                            public boolean isRunning() {
-                                return !sessionClosed.get();
-                            }
-
-                            @Override
-                            public void close() {
-                                stoppedOnEdt.set(
-                                        javax.swing.SwingUtilities.isEventDispatchThread());
-                                sessionClosed.set(true);
-                            }
-                        });
+                        createMockSession(
+                                0,
+                                "OK",
+                                null,
+                                () -> {
+                                    stoppedOnEdt.set(SwingUtilities.isEventDispatchThread());
+                                    sessionClosed.set(true);
+                                }));
         buildToolService.stopActiveContainer();
         sessionClosed.set(false);
         buildToolService.compile();
 
         try {
-            javax.swing.SwingUtilities.invokeAndWait(
+            SwingUtilities.invokeAndWait(
                     () ->
                             buildToolService.handleProjectChanged(
                                     new ProjectChangedEvent(projectRoot)));
@@ -337,8 +311,7 @@ class GenericBuildToolServiceTest {
         Files.writeString(projectDataDir, "not a directory");
 
         String content = assertDoesNotThrow(() -> buildToolService.getConfigContent());
-        assertTrue(content.contains("./mvnw compile"));
-        assertTrue(content.contains("[container]"));
+        assertContainsAll(content, "./mvnw compile", "[container]");
     }
 
     @Test

@@ -18,7 +18,6 @@ import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Service for read-only Git operations. */
 @AgentService(
         value = "gitService",
         phases = {"*"})
@@ -29,9 +28,9 @@ public class GitService {
     private static final String NOT_A_GIT_REPOSITORY = "Not a git repository";
     private static final String GIT_DIFF = "diff";
     private static final int MIN_PORCELAIN_LINE_LENGTH = 4;
-    private static final char NL = '\n';
+    private static final char NL = (char) 10;
     private static final char DQUOTE = '"';
-    private static final char BACKSLASH = '\\';
+    private static final char BACKSLASH = (char) 92;
     private final ProjectService projectService;
 
     public GitService(ProjectService projectService) {
@@ -55,15 +54,7 @@ public class GitService {
                     "Returns the git diff including staged, unstaged, and untracked changes in the working tree.",
             examples = "gitService.getDiff()")
     public String getDiff() {
-        if (!projectService.hasActiveProject()) {
-            return NO_ACTIVE_PROJECT;
-        }
-        String headDiff = getDiffHead();
-        if (isGitError(headDiff)) {
-            return headDiff;
-        }
-        String untrackedDiff = buildUntrackedDiffs(null);
-        return combineDiffs(headDiff, untrackedDiff);
+        return computeDiff(null);
     }
 
     @AgentDoc(
@@ -73,19 +64,22 @@ public class GitService {
     public String getDiff(
             @AgentDoc("The file or directory path relative to the project root")
                     String relativePath) {
-        if (relativePath == null || relativePath.isBlank()) {
-            return getDiff();
-        }
+        return (relativePath == null || relativePath.isBlank())
+                ? getDiff()
+                : computeDiff(relativePath);
+    }
+
+    private String computeDiff(String relativePath) {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
-        String normalizedPath = resolveRelativeSandboxPath(relativePath);
-        String headDiff = getDiffHead(normalizedPath);
+        String normalizedPath =
+                relativePath != null ? projectService.resolveRelativePath(relativePath) : null;
+        String headDiff = computeTrackedDiffAgainstHead(normalizedPath);
         if (isGitError(headDiff)) {
             return headDiff;
         }
-        String untrackedDiff = buildUntrackedDiffs(normalizedPath);
-        return combineDiffs(headDiff, untrackedDiff);
+        return combineDiffs(headDiff, buildUntrackedDiffs(normalizedPath));
     }
 
     @AgentDoc(
@@ -109,8 +103,7 @@ public class GitService {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
-        String normalizedPath = resolveRelativeSandboxPath(relativePath);
-        return computeTrackedDiffAgainstHead(normalizedPath);
+        return computeTrackedDiffAgainstHead(projectService.resolveRelativePath(relativePath));
     }
 
     @AgentDoc(
@@ -127,9 +120,7 @@ public class GitService {
         }
         Set<String> files = new LinkedHashSet<>();
         for (String line : statusOutput.lines().toList()) {
-            if (line.length() < MIN_PORCELAIN_LINE_LENGTH) {
-                continue;
-            }
+            if (line.length() < MIN_PORCELAIN_LINE_LENGTH) continue;
             String rawPath = line.substring(3).trim();
             int arrowIdx = rawPath.indexOf(" -> ");
             if (arrowIdx >= 0) {
@@ -164,8 +155,12 @@ public class GitService {
                             + endLine
                             + " (startLine must be >= 1 and endLine >= startLine)");
         }
-        String normalizedPath = resolveRelativeSandboxPath(relativePath);
-        return executeGitCommand("blame", "-L", startLine + "," + endLine, "--", normalizedPath);
+        return executeGitCommand(
+                "blame",
+                "-L",
+                startLine + "," + endLine,
+                "--",
+                projectService.resolveRelativePath(relativePath));
     }
 
     @AgentDoc(value = "Returns the git log (last 10 commits).", examples = "gitService.getLog()")
@@ -185,10 +180,6 @@ public class GitService {
         return executeGitCommand("show", hash);
     }
 
-    private String resolveRelativeSandboxPath(String relativePath) {
-        return projectService.resolveRelativePath(relativePath);
-    }
-
     private String executeGitCommandWithPath(String normalizedPath, String... baseArgs) {
         if (normalizedPath == null) {
             return executeGitCommand(baseArgs);
@@ -204,22 +195,15 @@ public class GitService {
             return NO_ACTIVE_PROJECT;
         }
         String headOut = executeGitCommandWithPath(normalizedPath, GIT_DIFF, "HEAD");
-        if (!isGitError(headOut)) {
+        if (!isGitError(headOut)
+                || headOut.contains(NOT_A_GIT_REPOSITORY)
+                || headOut.contains("Command timed out")) {
             return headOut;
         }
-        if (headOut.contains(NOT_A_GIT_REPOSITORY) || headOut.contains("Command timed out")) {
-            return headOut;
-        }
-        // Fallback for unborn HEAD (initial commit not created yet)
         String staged = executeGitCommandWithPath(normalizedPath, GIT_DIFF, "--cached");
-        if (isGitError(staged)) {
-            return staged;
-        }
+        if (isGitError(staged)) return staged;
         String unstaged = executeGitCommandWithPath(normalizedPath, GIT_DIFF);
-        if (isGitError(unstaged)) {
-            return unstaged;
-        }
-        return combineDiffs(staged, unstaged);
+        return isGitError(unstaged) ? unstaged : combineDiffs(staged, unstaged);
     }
 
     private String buildUntrackedDiffs(String normalizedPath) {
@@ -232,24 +216,18 @@ public class GitService {
         StringBuilder sb = new StringBuilder();
         for (String line : untrackedOut.lines().toList()) {
             String relFile = line.trim().replace(BACKSLASH, '/');
-            if (relFile.isEmpty()) {
-                continue;
-            }
-            Path filePath;
+            if (relFile.isEmpty()) continue;
             try {
-                filePath = projectService.resolvePath(relFile);
-            } catch (SecurityException e) {
-                continue;
-            }
-            if (!Files.isRegularFile(filePath)) {
-                continue;
-            }
-            String formatted = formatUntrackedFileDiff(relFile, filePath);
-            if (!formatted.isEmpty()) {
-                if (!sb.isEmpty()) {
-                    sb.append(NL);
+                Path filePath = projectService.resolvePath(relFile);
+                if (Files.isRegularFile(filePath)) {
+                    String formatted = formatUntrackedFileDiff(relFile, filePath);
+                    if (!formatted.isEmpty()) {
+                        if (!sb.isEmpty()) sb.append(NL);
+                        sb.append(formatted);
+                    }
                 }
-                sb.append(formatted);
+            } catch (SecurityException ignored) {
+                // Skip outside sandbox
             }
         }
         return sb.toString();
@@ -257,32 +235,22 @@ public class GitService {
 
     private String formatUntrackedFileDiff(String relFile, Path filePath) {
         try {
+            String header =
+                    "diff --git a/" + relFile + " b/" + relFile + NL + "new file mode 100644" + NL;
             if (FileReadService.isBinaryFile(filePath)) {
-                return "diff --git a/"
-                        + relFile
-                        + " b/"
-                        + relFile
-                        + NL
-                        + "new file mode 100644"
-                        + NL
-                        + "Binary files /dev/null and b/"
-                        + relFile
-                        + " differ";
+                return header + "Binary files /dev/null and b/" + relFile + " differ";
             }
             String content = Files.readString(filePath);
-            StringBuilder sb = new StringBuilder();
-            sb.append("diff --git a/").append(relFile).append(" b/").append(relFile).append(NL);
-            sb.append("new file mode 100644").append(NL);
-            sb.append("--- /dev/null").append(NL);
-            sb.append("+++ b/").append(relFile);
-            if (content.isEmpty()) {
-                return sb.toString();
-            }
-            List<String> lines = content.lines().toList();
-            int lineCount = lines.size();
-            sb.append(NL).append("@@ -0,0 +1,").append(lineCount).append(" @@");
-            for (int i = 0; i < lineCount; i++) {
-                sb.append(NL).append('+').append(lines.get(i));
+            StringBuilder sb =
+                    new StringBuilder(header)
+                            .append("--- /dev/null")
+                            .append(NL)
+                            .append("+++ b/")
+                            .append(relFile);
+            if (!content.isEmpty()) {
+                List<String> lines = content.lines().toList();
+                sb.append(NL).append("@@ -0,0 +1,").append(lines.size()).append(" @@");
+                lines.forEach(l -> sb.append(NL).append('+').append(l));
             }
             return sb.toString();
         } catch (IOException e) {
@@ -301,25 +269,17 @@ public class GitService {
     private static String combineDiffs(String first, String second) {
         String a = first == null ? "" : first.trim();
         String b = second == null ? "" : second.trim();
-        if (a.isEmpty()) {
-            return b;
-        }
-        if (b.isEmpty()) {
-            return a;
-        }
-        return a + NL + b;
+        if (a.isEmpty()) return b;
+        return b.isEmpty() ? a : a + NL + b;
     }
 
     static String unquotePorcelainPath(String path) {
-        if (path == null) {
-            return "";
-        }
-        if (path.length() >= 2
-                && path.charAt(0) == DQUOTE
-                && path.charAt(path.length() - 1) == DQUOTE) {
-            return StringEscapeUtils.unescapeJava(path.substring(1, path.length() - 1));
-        }
-        return path;
+        if (path == null) return "";
+        return (path.length() >= 2
+                        && path.charAt(0) == DQUOTE
+                        && path.charAt(path.length() - 1) == DQUOTE)
+                ? StringEscapeUtils.unescapeJava(path.substring(1, path.length() - 1))
+                : path;
     }
 
     private String executeGitCommand(String... args) {
@@ -330,7 +290,6 @@ public class GitService {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
-
         try {
             List<String> command = new ArrayList<>();
             command.add("git");
@@ -341,17 +300,15 @@ public class GitService {
                             command,
                             projectService.getCurrentProjectRoot(),
                             Map.of("GIT_TERMINAL_PROMPT", "0"));
-
             if (result.timedOut()) {
                 log.warn("Git command {} timed out", String.join(" ", args));
                 return "Error executing git command: Command timed out";
             }
-
             int exitCode = result.exitCode();
             String out = result.output();
             if (exitCode != 0) {
                 if (out.contains("not a git repository")) {
-                    return "Not a git repository";
+                    return NOT_A_GIT_REPOSITORY;
                 }
                 log.warn(
                         "Git command {} failed with exit code {}: {}",
@@ -360,7 +317,6 @@ public class GitService {
                         out.trim());
                 return "Error (" + exitCode + "): " + out.trim();
             }
-
             return trimLeadingWhitespace ? out.trim() : out.stripTrailing();
         } catch (IOException e) {
             log.warn(

@@ -3,34 +3,34 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.awt.Component;
+import java.awt.GraphicsEnvironment;
+import java.awt.image.BufferedImage;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import net.miginfocom.swing.MigLayout;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.services.GenericBuildToolService;
-import org.roxycode.app.ai.services.GitService;
-import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
-import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.ai.services.*;
+import org.roxycode.app.ai.services.cache.*;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.service.AiService;
-import org.roxycode.app.service.EnvironmentService;
-import org.roxycode.app.service.ProjectService;
-import org.roxycode.app.service.PromptService;
-import org.roxycode.app.service.SettingsService;
-import org.roxycode.app.service.SystemToolService;
+import org.roxycode.app.service.*;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.ApplicationEventPublisher;
 
 class MainFrameTest {
     @Test
     void testProjectChangedEventClearsQaAndTaskConversationsAndUpdatesTitle() throws Exception {
-        org.junit.jupiter.api.Assumptions.assumeFalse(
-                java.awt.GraphicsEnvironment.isHeadless(),
-                "Skipping JFrame test in headless environment");
+        Assumptions.assumeFalse(
+                GraphicsEnvironment.isHeadless(), "Skipping JFrame test in headless environment");
         SettingsService settingsService = mock(SettingsService.class);
         when(settingsService.getSettings()).thenReturn(new AppSettings());
         ProjectService projectService = mock(ProjectService.class);
@@ -46,18 +46,15 @@ class MainFrameTest {
         EnvironmentService envService = mock(EnvironmentService.class);
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
         when(jexlServiceRegistry.getDocumentation(any())).thenReturn("");
-        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
-        RepoMapPackerService packerService = mock(RepoMapPackerService.class);
-        ProjectCacheMetaService cacheMetaService = mock(ProjectCacheMetaService.class);
+        ApplicationEventPublisher pub = mock(ApplicationEventPublisher.class);
         PromptService promptService = mock(PromptService.class);
-        GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
         ExploreChatPanel exploreChatPanel =
                 new ExploreChatPanel(
                         aiService,
                         planService,
-                        eventPublisher,
+                        pub,
                         chatMemory,
                         settingsService,
                         null,
@@ -65,22 +62,16 @@ class MainFrameTest {
                         envService);
         FeatureChatPanel featureChatPanel =
                 new FeatureChatPanel(
-                        aiService, planService, eventPublisher, chatMemory, settingsService, null);
+                        aiService, planService, pub, chatMemory, settingsService, null);
 
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
-        StatusPanel statusPanel = new StatusPanel(envService);
         QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel, null);
-        PlanPanel planPanel = new PlanPanel(planService, gitService);
         TaskWorkspacePanel taskWorkspacePanel =
-                new TaskWorkspacePanel(featureChatPanel, planService, planPanel, null);
-        CodebaseCachePanel codebaseCachePanel =
-                new CodebaseCachePanel(packerService, cacheMetaService, promptService);
-        JexlApiPanel jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
-        SystemToolsPanel systemToolsPanel = new SystemToolsPanel(toolService);
-        SettingsPanel settingsPanel = new SettingsPanel(settingsService);
-        BuildConfigPanel buildConfigPanel =
-                new BuildConfigPanel(buildToolService, settingsService, toolService);
-        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(promptService);
+                new TaskWorkspacePanel(
+                        featureChatPanel,
+                        planService,
+                        new PlanPanel(planService, gitService),
+                        null);
 
         MainFrame mainFrame =
                 new MainFrame(
@@ -88,36 +79,33 @@ class MainFrameTest {
                         projectService,
                         chatMemory,
                         headerPanel,
-                        statusPanel,
+                        new StatusPanel(envService),
                         qaWorkspacePanel,
                         taskWorkspacePanel,
-                        codebaseCachePanel,
-                        jexlApiPanel,
-                        systemToolsPanel,
-                        settingsPanel,
-                        buildConfigPanel,
-                        contextManagerPanel);
+                        new CodebaseCachePanel(
+                                mock(RepoMapPackerService.class),
+                                mock(ProjectCacheMetaService.class),
+                                promptService),
+                        new JexlApiPanel(jexlServiceRegistry),
+                        new SystemToolsPanel(toolService),
+                        new SettingsPanel(settingsService),
+                        new BuildConfigPanel(
+                                mock(GenericBuildToolService.class), settingsService, toolService),
+                        new ContextManagerPanel(promptService));
 
         assertEquals(1, MainFrame.class.getDeclaredConstructors().length);
         assertEquals("RoxyCode - [OldProject]", mainFrame.getTitle());
 
-        net.miginfocom.swing.MigLayout rootLayout =
-                assertInstanceOf(
-                        net.miginfocom.swing.MigLayout.class,
-                        mainFrame.getContentPane().getLayout());
+        MigLayout rootLayout =
+                assertInstanceOf(MigLayout.class, mainFrame.getContentPane().getLayout());
         assertEquals("[210!, fill]0[fill, grow]", rootLayout.getColumnConstraints());
-        java.awt.Component sidebarComp = mainFrame.getContentPane().getComponent(0);
+        Component sidebarComp = mainFrame.getContentPane().getComponent(0);
         assertInstanceOf(SidebarPanel.class, sidebarComp);
         assertEquals("grow", rootLayout.getComponentConstraints(sidebarComp));
 
         HeaderPanel header = mainFrame.getHeader();
-        javax.swing.JPanel workspace = (javax.swing.JPanel) header.getParent();
-        net.miginfocom.swing.MigLayout workspaceLayout =
-                (net.miginfocom.swing.MigLayout) workspace.getLayout();
-        assertEquals(
-                "h 36!, wrap",
-                workspaceLayout.getComponentConstraints(header),
-                "Main header bar should have a compact height constraint of h 36!");
+        MigLayout workspaceLayout = (MigLayout) ((JPanel) header.getParent()).getLayout();
+        assertEquals("h 36!, wrap", workspaceLayout.getComponentConstraints(header));
 
         featureChatPanel.getInputArea().setText("Task draft");
         featureChatPanel.getInputArea().setCaretPosition(0);
@@ -132,10 +120,9 @@ class MainFrameTest {
         mainFrame.showCard("QA_VIEW");
         SwingTestUtils.flushEdt();
         assertEquals("QA draft".length(), exploreChatPanel.getInputArea().getCaretPosition());
-        // Simulate active turns and pending images on both panels before switching project
-        java.util.concurrent.CountDownLatch turnStarted =
-                new java.util.concurrent.CountDownLatch(2);
-        java.util.concurrent.CountDownLatch blockTurn = new java.util.concurrent.CountDownLatch(1);
+
+        CountDownLatch turnStarted = new CountDownLatch(2);
+        CountDownLatch blockTurn = new CountDownLatch(1);
         when(aiService.chat(anyString(), any(), anyString(), any()))
                 .thenAnswer(
                         inv -> {
@@ -146,30 +133,19 @@ class MainFrameTest {
 
         exploreChatPanel.getController().triggerTurn("QA in progress");
         featureChatPanel.getController().triggerTurn("Task in progress");
-        try {
-            assertTrue(
-                    turnStarted.await(5, java.util.concurrent.TimeUnit.SECONDS),
-                    "Both turns should start");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            fail("Interrupted waiting for turns to start");
-        }
+        assertTrue(turnStarted.await(5, TimeUnit.SECONDS));
         assertTrue(exploreChatPanel.getController().isTurnActive());
         assertTrue(featureChatPanel.getController().isTurnActive());
 
         exploreChatPanel
                 .getModel()
-                .addPendingImage(
-                        new java.awt.image.BufferedImage(
-                                4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB));
+                .addPendingImage(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB));
         featureChatPanel
                 .getModel()
-                .addPendingImage(
-                        new java.awt.image.BufferedImage(
-                                4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB));
+                .addPendingImage(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB));
 
         when(projectService.getProjectName()).thenReturn("NewProject");
-        assertFalse(javax.swing.SwingUtilities.isEventDispatchThread());
+        assertFalse(SwingUtilities.isEventDispatchThread());
         mainFrame.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new")));
         SwingTestUtils.flushEdt();
         blockTurn.countDown();

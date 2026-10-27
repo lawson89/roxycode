@@ -3,10 +3,10 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import javax.swing.*;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import net.miginfocom.swing.MigLayout;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
@@ -61,7 +61,7 @@ public final class BuildConfigPanel extends JPanel {
             CompletableFuture.completedFuture("");
     private transient volatile CompletableFuture<Void> saveConfigFuture =
             CompletableFuture.completedFuture(null);
-    private transient java.util.function.Consumer<String> errorDialogPresenter;
+    private transient Consumer<String> errorDialogPresenter;
 
     public BuildConfigPanel(
             GenericBuildToolService buildToolService,
@@ -93,41 +93,19 @@ public final class BuildConfigPanel extends JPanel {
         bannerPanel.add(bannerMessageLabel, "growx, wmin 100");
         bannerPanel.add(containerToggleCheckBox, "gapleft 10");
         bannerPanel.add(recheckDockerButton, "gapleft 10");
-
         add(bannerPanel, "growx, wrap, gapbottom 12");
 
         textArea = new RSyntaxTextArea();
-        // Using PROPERTIES as a safe fallback if TOML is not available in the library
-        // version
         textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_INI);
         textArea.setCodeFoldingEnabled(true);
         textArea.setAntiAliasingEnabled(true);
-        textArea.getDocument()
-                .addDocumentListener(
-                        new DocumentListener() {
-                            @Override
-                            public void insertUpdate(DocumentEvent e) {
-                                onTomlTextEdited();
-                            }
-
-                            @Override
-                            public void removeUpdate(DocumentEvent e) {
-                                onTomlTextEdited();
-                            }
-
-                            @Override
-                            public void changedUpdate(DocumentEvent e) {
-                                onTomlTextEdited();
-                            }
-                        });
+        SwingHtmlUtils.addChangeListener(textArea, this::onTomlTextEdited);
         updateTextAreaTheme();
 
-        RTextScrollPane scrollPane = new RTextScrollPane(textArea);
-        add(scrollPane, "grow, wrap");
+        add(new RTextScrollPane(textArea), "grow, wrap");
 
         JPanel buttonPanel = new JPanel(new MigLayout("insets 0", "[]10push[]"));
         buttonPanel.setOpaque(false);
-
         saveButton = new JButton("Save Changes");
         saveButton.addActionListener(e -> saveConfig());
         buttonPanel.add(saveButton);
@@ -136,7 +114,6 @@ public final class BuildConfigPanel extends JPanel {
         statusLabel.setForeground(
                 SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
         buttonPanel.add(statusLabel);
-
         add(buttonPanel, "growx, gaptop 15");
 
         statusTimer = new Timer(3000, e -> statusLabel.setText(""));
@@ -173,11 +150,8 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     private void loadInitialDockerStatus() {
-        if (systemToolService == null) {
-            setDockerAvailable(false);
-            return;
-        }
-        CompletableFuture<Boolean> future = systemToolService.isDockerAvailable();
+        CompletableFuture<Boolean> future =
+                systemToolService != null ? systemToolService.isDockerAvailable() : null;
         if (future == null) {
             setDockerAvailable(false);
             return;
@@ -251,34 +225,20 @@ public final class BuildConfigPanel extends JPanel {
         containerToggleCheckBox.setEnabled(dockerAvailable);
 
         if (!dockerAvailable) {
-            Color warningColor =
+            applyTintedBanner(
+                    Codicons.WARNING,
                     SwingHtmlUtils.getUiColor(
                             new Color(0xd9, 0x77, 0x06),
                             "Component.warning.borderColor",
-                            "Actions.Yellow");
-            String hex = SwingHtmlUtils.toHex(warningColor);
-            String bgHex =
-                    SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warningColor, 0.15));
-            applyBannerStyle(
-                    Codicons.WARNING,
-                    warningColor,
-                    "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: " + bgHex,
+                            "Actions.Yellow"),
                     DOCKER_MISSING_WARNING_TEXT);
         } else if (containerEnabled) {
-            Color verifiedColor =
-                    SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
-            String hex = SwingHtmlUtils.toHex(verifiedColor);
-            String bgHex =
-                    SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(verifiedColor, 0.15));
-            applyBannerStyle(
+            applyTintedBanner(
                     Codicons.SHIELD,
-                    verifiedColor,
-                    "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: " + bgHex,
+                    SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"),
                     CONTAINER_ACTIVE_TEXT);
         } else {
-            Color infoColor =
-                    SwingHtmlUtils.getUiColor(
-                            new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
+            Color infoColor = SwingHtmlUtils.getAccentColor();
             Color borderColor =
                     SwingHtmlUtils.getUiColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
             Color panelBg =
@@ -295,6 +255,16 @@ public final class BuildConfigPanel extends JPanel {
         }
         bannerPanel.revalidate();
         bannerPanel.repaint();
+    }
+
+    private void applyTintedBanner(Codicons icon, Color color, String message) {
+        String hex = SwingHtmlUtils.toHex(color);
+        String bgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(color, 0.15));
+        applyBannerStyle(
+                icon,
+                color,
+                "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: " + bgHex,
+                message);
     }
 
     private void applyBannerStyle(Codicons icon, Color iconColor, String style, String message) {
@@ -325,34 +295,33 @@ public final class BuildConfigPanel extends JPanel {
         if (buildToolService == null) {
             return CompletableFuture.completedFuture("");
         }
-        CompletableFuture<String> future =
-                CompletableFuture.supplyAsync(
-                        () -> {
-                            try {
-                                String content = buildToolService.getConfigContent();
-                                return content != null ? content : "";
-                            } catch (IOException e) {
-                                log.error("Failed to load build config", e);
-                                return "# Error loading config: " + e.getMessage();
-                            }
-                        });
         CompletableFuture<String> completed =
-                future.whenComplete(
-                        (content, ex) -> {
-                            if (ex == null) {
-                                Edt.run(
-                                        () -> {
-                                            updatingTextProgrammatically = true;
-                                            try {
-                                                textArea.setText(content);
-                                                textArea.setCaretPosition(0);
-                                            } finally {
-                                                updatingTextProgrammatically = false;
-                                            }
-                                            updateBannerState();
-                                        });
-                            }
-                        });
+                CompletableFuture.supplyAsync(
+                                () -> {
+                                    try {
+                                        String content = buildToolService.getConfigContent();
+                                        return content != null ? content : "";
+                                    } catch (IOException e) {
+                                        log.error("Failed to load build config", e);
+                                        return "# Error loading config: " + e.getMessage();
+                                    }
+                                })
+                        .whenComplete(
+                                (content, ex) -> {
+                                    if (ex == null) {
+                                        Edt.run(
+                                                () -> {
+                                                    updatingTextProgrammatically = true;
+                                                    try {
+                                                        textArea.setText(content);
+                                                        textArea.setCaretPosition(0);
+                                                    } finally {
+                                                        updatingTextProgrammatically = false;
+                                                    }
+                                                    updateBannerState();
+                                                });
+                                    }
+                                });
         this.loadConfigFuture = completed;
         return completed;
     }
@@ -369,7 +338,7 @@ public final class BuildConfigPanel extends JPanel {
                                     try {
                                         buildToolService.saveConfigContent(contentToSave);
                                     } catch (IOException e) {
-                                        throw new java.io.UncheckedIOException(e);
+                                        throw new UncheckedIOException(e);
                                     }
                                 })
                         .whenComplete(
@@ -404,7 +373,7 @@ public final class BuildConfigPanel extends JPanel {
         }
     }
 
-    void setErrorDialogPresenter(java.util.function.Consumer<String> errorDialogPresenter) {
+    void setErrorDialogPresenter(Consumer<String> errorDialogPresenter) {
         this.errorDialogPresenter = errorDialogPresenter;
     }
 

@@ -30,6 +30,7 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.ui.SwingTestUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -302,11 +303,9 @@ class AiServiceTest {
     @Test
     void testBlankResponseAfterToolExecutionWithStopReturnsDiagnosticMessage() {
         stubToolTurnsAndResponse(3, "", "STOP", new DefaultUsage(2500, 300, 2800));
-
         String result = aiService.chat("default", null, "Analyze project", null);
-        assertTrue(result.contains("STOP"));
-        assertTrue(result.contains("3"));
-        assertTrue(result.contains("promptTokens=2500, completionTokens=300, totalTokens=2800"));
+        SwingTestUtils.assertContainsAll(
+                result, "STOP", "3", "promptTokens=2500, completionTokens=300, totalTokens=2800");
         assertTrue(result.toLowerCase().contains("continue"));
         verify(requestSpec, times(1)).call();
     }
@@ -353,10 +352,10 @@ class AiServiceTest {
                                 "  '# **Memory Service RipGrep Search**'\nExtra line",
                                 "STOP",
                                 null));
-        String title =
+        assertEquals(
+                "Memory Service RipGrep Search",
                 aiService.generateTopicTitle(
-                        "User: How does memory search work?\nRoxy: It uses RipGrep.");
-        assertEquals("Memory Service RipGrep Search", title);
+                        "User: How does memory search work?\nRoxy: It uses RipGrep."));
         verify(requestSpec).system(AiService.TOPIC_TITLE_SYSTEM_PROMPT);
         verify(requestSpec, never()).tools(any(Object[].class));
 

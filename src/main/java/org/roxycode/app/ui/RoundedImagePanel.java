@@ -16,10 +16,6 @@ import javax.swing.JPanel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Reusable Swing panel that renders an image clipped to a rounded rectangle with a theme-aware
- * border, caching the scaled rounded {@link BufferedImage} across repaints of the same dimensions.
- */
 final class RoundedImagePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(RoundedImagePanel.class);
@@ -45,9 +41,7 @@ final class RoundedImagePanel extends JPanel {
     static Image loadClasspathImage(String resourcePath) {
         try {
             URL url = RoundedImagePanel.class.getResource(resourcePath);
-            if (url != null) {
-                return ImageIO.read(url);
-            }
+            if (url != null) return ImageIO.read(url);
         } catch (IOException e) {
             log.warn("Failed to load image resource {}: {}", resourcePath, e.getMessage());
         }
@@ -62,32 +56,31 @@ final class RoundedImagePanel extends JPanel {
         return cachedBuffer;
     }
 
+    private static void applyQualityHints(Graphics2D g2) {
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(
+                RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         int width = getWidth();
         int height = getHeight();
-        if (width <= 0 || height <= 0) {
-            return;
-        }
+        if (width <= 0 || height <= 0) return;
 
         Graphics2D g2 = (Graphics2D) g.create();
         try {
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setRenderingHint(
-                    RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-
+            applyQualityHints(g2);
             if (image != null) {
-                BufferedImage buffer = getOrCreateRoundedBuffer(width, height);
-                g2.drawImage(buffer, 0, 0, null);
+                g2.drawImage(getOrCreateRoundedBuffer(width, height), 0, 0, null);
             } else {
                 g2.setColor(
                         SwingHtmlUtils.getUiColor(
                                 new Color(100, 100, 255), "Component.accentColor"));
                 g2.fillRoundRect(INSET, INSET, width - (2 * INSET), height - (2 * INSET), arc, arc);
             }
-
             g2.setColor(SwingHtmlUtils.getUiColor(new Color(80, 80, 80), "Component.borderColor"));
             g2.setStroke(new BasicStroke(1.5f));
             g2.drawRoundRect(
@@ -104,12 +97,7 @@ final class RoundedImagePanel extends JPanel {
         BufferedImage buffer = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D gBuffer = buffer.createGraphics();
         try {
-            gBuffer.setRenderingHint(
-                    RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            gBuffer.setRenderingHint(
-                    RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-            gBuffer.setRenderingHint(
-                    RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            applyQualityHints(gBuffer);
             gBuffer.setColor(Color.BLACK);
             gBuffer.fillRoundRect(
                     INSET, INSET, width - (2 * INSET), height - (2 * INSET), arc, arc);

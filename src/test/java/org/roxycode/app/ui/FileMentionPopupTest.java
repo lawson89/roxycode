@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Point;
 import java.util.ArrayList;
@@ -21,30 +20,20 @@ class FileMentionPopupTest {
 
     @Test
     void testExtractMentionTokenAtStartAfterWhitespaceAndMidSentence() {
-        MentionToken atStart = FileMentionPopup.extractMentionToken("@", 1);
-        assertNotNull(atStart);
-        assertEquals(0, atStart.startOffset());
-        assertEquals(1, atStart.endOffset());
-        assertEquals("", atStart.query());
-
-        MentionToken withQuery = FileMentionPopup.extractMentionToken("@ChatP", 6);
-        assertNotNull(withQuery);
-        assertEquals(0, withQuery.startOffset());
-        assertEquals(6, withQuery.endOffset());
-        assertEquals("ChatP", withQuery.query());
+        assertEquals(new MentionToken(0, 1, ""), FileMentionPopup.extractMentionToken("@", 1));
+        assertEquals(
+                new MentionToken(0, 6, "ChatP"), FileMentionPopup.extractMentionToken("@ChatP", 6));
 
         String sentence = "Please inspect @src/main/ChatPanel.java for details";
         int caretAfterPath = "Please inspect @src/main/ChatPanel.java".length();
-        MentionToken midSentence = FileMentionPopup.extractMentionToken(sentence, caretAfterPath);
-        assertNotNull(midSentence);
-        assertEquals(15, midSentence.startOffset());
-        assertEquals(caretAfterPath, midSentence.endOffset());
+        assertEquals(
+                new MentionToken(15, caretAfterPath, "src/main/ChatPanel.java"),
+                FileMentionPopup.extractMentionToken(sentence, caretAfterPath));
+
         String multiLine = "First line\n@Pom";
-        MentionToken afterNewline =
-                FileMentionPopup.extractMentionToken(multiLine, multiLine.length());
-        assertNotNull(afterNewline);
-        assertEquals(11, afterNewline.startOffset());
-        assertEquals("Pom", afterNewline.query());
+        assertEquals(
+                new MentionToken(11, multiLine.length(), "Pom"),
+                FileMentionPopup.extractMentionToken(multiLine, multiLine.length()));
     }
 
     @Test
@@ -61,23 +50,10 @@ class FileMentionPopupTest {
 
     @Test
     void testFileCandidateFromPathNormalizesSlashesAndExtractsParent() {
-        char bs = (char) 92;
-        String winPath =
-                "."
-                        + bs
-                        + "src"
-                        + bs
-                        + "main"
-                        + bs
-                        + "java"
-                        + bs
-                        + "org"
-                        + bs
-                        + "roxycode"
-                        + bs
-                        + "ChatPanel.java";
-        FileCandidate nested = FileCandidate.fromPath(winPath);
-        assertEquals("src/main/java/org/roxycode/chatpanel.java", nested.pathLower());
+        String winPath = ".\\src\\main\\java\\org\\roxycode\\ChatPanel.java";
+        assertEquals(
+                "src/main/java/org/roxycode/chatpanel.java",
+                FileCandidate.fromPath(winPath).pathLower());
 
         FileCandidate rootFile = FileCandidate.fromPath("/pom.xml");
         assertEquals("pom.xml", rootFile.relativePath());
@@ -90,25 +66,23 @@ class FileMentionPopupTest {
     void testMultiTierRankingOrderAndTieBreaking() {
         List<FileCandidate> index =
                 List.of(
-                        FileCandidate.fromPath(
-                                "docs/chat_notes/guide.md"), // Tier 4: path match "chat"
-                        FileCandidate.fromPath(
-                                "src/ui/MyChatView.java"), // Tier 2: word boundary "Chat"
-                        FileCandidate.fromPath(
-                                "src/ui/WechatHelper.java"), // Tier 3: filename substring "chat"
-                        FileCandidate.fromPath(
-                                "src/ui/ChatPanelTest.java"), // Tier 1: prefix "chat" (longer)
-                        FileCandidate.fromPath(
-                                "src/ui/ChatPanel.java"), // Tier 1: prefix "chat" (shorter)
+                        FileCandidate.fromPath("docs/chat_notes/guide.md"),
+                        FileCandidate.fromPath("src/ui/MyChatView.java"),
+                        FileCandidate.fromPath("src/ui/WechatHelper.java"),
+                        FileCandidate.fromPath("src/ui/ChatPanelTest.java"),
+                        FileCandidate.fromPath("src/ui/ChatPanel.java"),
                         FileCandidate.fromPath("src/ui/Unrelated.java"));
 
-        List<FileCandidate> ranked = FileMentionPopup.rankCandidates(index, "chat");
-        assertEquals(5, ranked.size());
-        assertEquals("src/ui/ChatPanel.java", ranked.get(0).relativePath());
-        assertEquals("src/ui/ChatPanelTest.java", ranked.get(1).relativePath());
-        assertEquals("src/ui/MyChatView.java", ranked.get(2).relativePath());
-        assertEquals("src/ui/WechatHelper.java", ranked.get(3).relativePath());
-        assertEquals("docs/chat_notes/guide.md", ranked.get(4).relativePath());
+        assertEquals(
+                List.of(
+                        "src/ui/ChatPanel.java",
+                        "src/ui/ChatPanelTest.java",
+                        "src/ui/MyChatView.java",
+                        "src/ui/WechatHelper.java",
+                        "docs/chat_notes/guide.md"),
+                FileMentionPopup.rankCandidates(index, "chat").stream()
+                        .map(FileCandidate::relativePath)
+                        .toList());
     }
 
     @Test
@@ -120,17 +94,19 @@ class FileMentionPopupTest {
                         FileCandidate.fromPath("src/ui/CopyHelper.java"),
                         FileCandidate.fromPath("src/cp/Other.java"));
 
-        List<FileCandidate> rankedCp = FileMentionPopup.rankCandidates(index, "cp");
-        assertEquals(3, rankedCp.size());
-        // ChatPanel.java (C + P) and CodebaseCachePanel.java (C + P) are Tier 2; src/cp/Other.java
-        // is Tier 4
-        assertEquals("src/ui/ChatPanel.java", rankedCp.get(0).relativePath());
-        assertEquals("src/ui/CodebaseCachePanel.java", rankedCp.get(1).relativePath());
-        assertEquals("src/cp/Other.java", rankedCp.get(2).relativePath());
-
-        List<FileCandidate> rankedChPa = FileMentionPopup.rankCandidates(index, "ChPa");
-        assertEquals(1, rankedChPa.size());
-        assertEquals("src/ui/ChatPanel.java", rankedChPa.get(0).relativePath());
+        assertEquals(
+                List.of(
+                        "src/ui/ChatPanel.java",
+                        "src/ui/CodebaseCachePanel.java",
+                        "src/cp/Other.java"),
+                FileMentionPopup.rankCandidates(index, "cp").stream()
+                        .map(FileCandidate::relativePath)
+                        .toList());
+        assertEquals(
+                List.of("src/ui/ChatPanel.java"),
+                FileMentionPopup.rankCandidates(index, "ChPa").stream()
+                        .map(FileCandidate::relativePath)
+                        .toList());
     }
 
     @Test
@@ -143,13 +119,13 @@ class FileMentionPopupTest {
         assertEquals(FileMentionPopup.MAX_RESULTS, emptyQueryRanked.size());
         assertEquals("src/File01.java", emptyQueryRanked.get(0).relativePath());
         assertEquals("src/File15.java", emptyQueryRanked.get(14).relativePath());
-
-        List<FileCandidate> filteredRanked = FileMentionPopup.rankCandidates(manyFiles, "File");
-        assertEquals(FileMentionPopup.MAX_RESULTS, filteredRanked.size());
+        assertEquals(
+                FileMentionPopup.MAX_RESULTS,
+                FileMentionPopup.rankCandidates(manyFiles, "File").size());
     }
 
     @Test
-    void testUpwardPopupLocationClampingAndCellRenderer() throws Exception {
+    void testUpwardPopupLocationClampingAndCellRenderer() {
         JTextArea inputArea = new JTextArea(3, 40);
         inputArea.setSize(new Dimension(400, 70));
         JScrollPane scrollPane = new JScrollPane(inputArea);
@@ -166,8 +142,6 @@ class FileMentionPopupTest {
                                 "README.md",
                                 "LICENSE"));
         popup.setGrepService(grepService);
-
-        // Verify zero extra process spawns when typing multiple characters with warm cache
         verify(grepService, times(1)).listFiles();
 
         inputArea.setText("Check @Chat");
@@ -180,10 +154,10 @@ class FileMentionPopupTest {
 
         Point loc = popup.computePopupLocation(6, 320, 120);
         assertTrue(loc.x >= 0 && loc.x + 320 <= 400);
-        assertTrue(loc.y < 0, "Popup Y coordinate must be positioned above the caret line");
+        assertTrue(loc.y < 0);
 
-        Component comp = SwingTestUtils.renderListCell(popup.getCandidateList(), 0, true);
-        assertInstanceOf(JPanel.class, comp);
+        assertInstanceOf(
+                JPanel.class, SwingTestUtils.renderListCell(popup.getCandidateList(), 0, true));
         SwingTestUtils.withDarkTheme(
                 popup.getPopupMenu(),
                 () -> {

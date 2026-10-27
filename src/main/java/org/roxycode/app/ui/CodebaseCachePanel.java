@@ -2,12 +2,14 @@ package org.roxycode.app.ui;
 
 import java.awt.*;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 import java.util.Optional;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.PlainDocument;
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -57,7 +59,6 @@ public final class CodebaseCachePanel extends JPanel {
         this.packerService = packerService;
         this.metaService = metaService;
         this.promptService = promptService;
-
         initComponents();
         refreshStatus();
     }
@@ -68,16 +69,14 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     static String truncateForDisplay(String text) {
-        if (text == null) {
-            return "";
-        }
-        if (text.length() <= MAX_DISPLAY_CHARS) {
-            return text;
-        }
+        if (text == null) return "";
+        if (text.length() <= MAX_DISPLAY_CHARS) return text;
         return text.substring(0, MAX_DISPLAY_CHARS)
-                + String.format(
-                        "\n\n... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]",
-                        text.length());
+                + """
+
+
+                ... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]"""
+                        .formatted(text.length());
     }
 
     private static Document createDisplayDocument(String text) {
@@ -107,7 +106,6 @@ public final class CodebaseCachePanel extends JPanel {
         JPanel buttonPanel = new JPanel(new MigLayout("insets 0", "[]10[]"));
         buttonPanel.add(packButton);
         statusPanel.add(buttonPanel, "span 2");
-
         add(statusPanel, "growx, wrap");
 
         Font monoFont = new Font(Font.MONOSPACED, Font.PLAIN, 12);
@@ -120,11 +118,9 @@ public final class CodebaseCachePanel extends JPanel {
         tabbedPane.addTab("Repo Map (Dynamic)", new JScrollPane(repoMapArea));
         tabbedPane.addTab("Prompts & Docs (Stable)", new JScrollPane(stableContextArea));
         tabbedPane.addTab("Session Context (Dynamic)", new JScrollPane(sessionContextArea));
-
         add(tabbedPane, "grow, push");
 
         packButton.addActionListener(e -> runPack());
-
         progressBar.setStringPainted(true);
         progressBar.setVisible(false);
     }
@@ -163,48 +159,31 @@ public final class CodebaseCachePanel extends JPanel {
                                 metaService != null
                                         ? metaService.loadRepoCache()
                                         : Optional.empty();
-                        CacheStatusData data;
                         if (meta.isPresent()) {
-                            String repoMapText = packed.orElse("Content not found on disk.");
                             String stableContext = getStableContextString();
-                            long stableTokens = TokenUtils.estimateTokens(stableContext);
-                            String sessionContext = getSessionContextString();
-                            data =
-                                    new CacheStatusData(
-                                            meta,
-                                            packed,
-                                            stableTokens,
-                                            createDisplayDocument(repoMapText),
-                                            createDisplayDocument(stableContext),
-                                            createDisplayDocument(sessionContext));
-                        } else if (packed.isPresent()) {
-                            data =
-                                    new CacheStatusData(
-                                            meta,
-                                            packed,
-                                            0,
-                                            createDisplayDocument(packed.get()),
-                                            createDisplayDocument(""),
-                                            createDisplayDocument(""));
-                        } else {
-                            data =
-                                    new CacheStatusData(
-                                            meta,
-                                            packed,
-                                            0,
-                                            createDisplayDocument(
-                                                    "Repo Map will appear here after generation."),
-                                            createDisplayDocument(""),
-                                            createDisplayDocument(""));
+                            return new CacheStatusData(
+                                    meta,
+                                    packed,
+                                    TokenUtils.estimateTokens(stableContext),
+                                    createDisplayDocument(
+                                            packed.orElse("Content not found on disk.")),
+                                    createDisplayDocument(stableContext),
+                                    createDisplayDocument(getSessionContextString()));
                         }
-                        return data;
+                        return new CacheStatusData(
+                                meta,
+                                packed,
+                                0,
+                                createDisplayDocument(
+                                        packed.orElse(
+                                                "Repo Map will appear here after generation.")),
+                                createDisplayDocument(""),
+                                createDisplayDocument(""));
                     }
 
                     @Override
                     protected void done() {
-                        if (isCancelled() || this != activeRefreshWorker) {
-                            return;
-                        }
+                        if (isCancelled() || this != activeRefreshWorker) return;
                         try {
                             applyStatusDataOnEdt(this, get());
                         } catch (Exception e) {
@@ -217,38 +196,31 @@ public final class CodebaseCachePanel extends JPanel {
         return worker;
     }
 
+    private static void setAreaDocument(JTextArea area, Document doc) {
+        area.setDocument(doc);
+        area.setCaretPosition(0);
+    }
+
     private void applyStatusDataOnEdt(
             SwingWorker<CacheStatusData, Void> worker, CacheStatusData data) {
-        if (!java.util.Objects.equals(worker, activeRefreshWorker)) {
-            return;
-        }
+        if (!Objects.equals(worker, activeRefreshWorker)) return;
+        setAreaDocument(repoMapArea, data.repoMapDoc());
         if (data.meta().isPresent()) {
             ProjectCacheMeta m = data.meta().get();
-            String status =
+            statusLabel.setText(
                     String.format(
                             "Status: Last updated on %s | Stable: %,d | Repo Map: %,d | Total: %,d",
                             m.lastUpdated().format(DATE_FORMATTER),
                             data.stableTokens(),
                             m.estimatedTokens(),
-                            data.stableTokens() + m.estimatedTokens());
-            statusLabel.setText(status);
-
-            repoMapArea.setDocument(data.repoMapDoc());
-            repoMapArea.setCaretPosition(0);
-
-            stableContextArea.setDocument(data.stableContextDoc());
-            stableContextArea.setCaretPosition(0);
-
-            sessionContextArea.setDocument(data.sessionContextDoc());
-            sessionContextArea.setCaretPosition(0);
-        } else if (data.packed().isPresent()) {
-            statusLabel.setText("Status: Repo Map available locally.");
-            repoMapArea.setDocument(data.repoMapDoc());
-            repoMapArea.setCaretPosition(0);
+                            data.stableTokens() + m.estimatedTokens()));
+            setAreaDocument(stableContextArea, data.stableContextDoc());
+            setAreaDocument(sessionContextArea, data.sessionContextDoc());
         } else {
-            statusLabel.setText("Status: No implicit cache found.");
-            repoMapArea.setDocument(data.repoMapDoc());
-            repoMapArea.setCaretPosition(0);
+            statusLabel.setText(
+                    data.packed().isPresent()
+                            ? "Status: Repo Map available locally."
+                            : "Status: No implicit cache found.");
         }
     }
 
@@ -257,10 +229,7 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     private String getSessionContextString() {
-        if (promptService == null) {
-            return "";
-        }
-        String session = promptService.getSessionContext();
+        String session = promptService != null ? promptService.getSessionContext() : null;
         return session != null ? session.trim() : "";
     }
 
@@ -286,11 +255,10 @@ public final class CodebaseCachePanel extends JPanel {
         progressBar.setIndeterminate(true);
         statusLabel.setText("Generating Repo Map...");
 
-        SwingWorker<org.roxycode.app.ai.services.EditorResult, Void> worker =
+        SwingWorker<EditorResult, Void> worker =
                 new SwingWorker<>() {
                     @Override
-                    protected org.roxycode.app.ai.services.EditorResult doInBackground()
-                            throws Exception {
+                    protected EditorResult doInBackground() {
                         return packerService.forceRegenerateRepoMap();
                     }
 

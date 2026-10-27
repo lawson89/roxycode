@@ -90,26 +90,38 @@ public record SystemTool(
                 defaultWebsiteUrlFor(name));
     }
 
+    public SystemTool withVersion(String newVersion) {
+        return new SystemTool(name, newVersion, status, description, license, websiteUrl);
+    }
+
     public SystemTool enrichLegacyMetadata() {
-        String enrichedDescription =
+        return new SystemTool(
+                name,
+                version,
+                status,
                 LEGACY_DESCRIPTIONS.contains(description)
                         ? defaultDescriptionFor(name)
-                        : description;
-        return new SystemTool(name, version, status, enrichedDescription, license, websiteUrl);
+                        : description,
+                license,
+                websiteUrl);
+    }
+
+    private static ToolMetadata metadataFor(String toolName) {
+        return toolName != null ? KNOWN_METADATA.get(toolName) : null;
     }
 
     public static String defaultDescriptionFor(String toolName) {
-        ToolMetadata meta = toolName != null ? KNOWN_METADATA.get(toolName) : null;
+        ToolMetadata meta = metadataFor(toolName);
         return meta != null ? meta.description() : "";
     }
 
     public static String defaultLicenseFor(String toolName) {
-        ToolMetadata meta = toolName != null ? KNOWN_METADATA.get(toolName) : null;
+        ToolMetadata meta = metadataFor(toolName);
         return meta != null ? meta.license() : "";
     }
 
     public static String defaultWebsiteUrlFor(String toolName) {
-        ToolMetadata meta = toolName != null ? KNOWN_METADATA.get(toolName) : null;
+        ToolMetadata meta = metadataFor(toolName);
         return meta != null ? meta.websiteUrl() : "";
     }
 }
