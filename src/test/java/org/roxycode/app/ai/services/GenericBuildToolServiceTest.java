@@ -6,6 +6,8 @@ import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -334,5 +336,20 @@ class GenericBuildToolServiceTest {
         BuildResult malformedSectionResult = assertDoesNotThrow(() -> buildToolService.compile());
         assertFalse(malformedSectionResult.isSuccess());
         assertEquals(-1, malformedSectionResult.getExitCode());
+    }
+
+    @Test
+    void testLoadTemplatesWithIsolatedThreadContextClassLoader() throws IOException {
+        Files.writeString(projectRoot.resolve("pyproject.toml"), "[project]");
+
+        ClassLoader originalTCCL = Thread.currentThread().getContextClassLoader();
+        try (URLClassLoader emptyClassLoader = new URLClassLoader(new URL[0], null)) {
+            Thread.currentThread().setContextClassLoader(emptyClassLoader);
+
+            String content = buildToolService.getConfigContent();
+            assertContainsAll(content, "pytest", "[container]", "python:3.12");
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalTCCL);
+        }
     }
 }

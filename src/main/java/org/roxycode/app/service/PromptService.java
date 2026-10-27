@@ -484,7 +484,8 @@ public class PromptService {
 
     private String readClasspathResource(String path) {
         try {
-            return new ClassPathResource(path).getContentAsString(StandardCharsets.UTF_8);
+            return new ClassPathResource(path, PromptService.class.getClassLoader())
+                    .getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.error("Failed to load resource {} from classpath: {}", path, e.getMessage());
             return "";

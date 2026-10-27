@@ -78,7 +78,7 @@ public class SettingsService {
             if (this.cachedAvailableModels != null) return this.cachedAvailableModels;
             try {
                 String content =
-                        new ClassPathResource("models.toml")
+                        new ClassPathResource("models.toml", SettingsService.class.getClassLoader())
                                 .getContentAsString(StandardCharsets.UTF_8);
                 GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
                 List<GeminiModelConfig> loaded =

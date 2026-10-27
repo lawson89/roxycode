@@ -270,7 +270,9 @@ public class GenericBuildToolService {
     private String loadDefaultTemplateContent() {
         String templateName = detectTemplate();
         try {
-            return new ClassPathResource("templates/build/" + templateName + ".toml")
+            return new ClassPathResource(
+                            "templates/build/" + templateName + ".toml",
+                            GenericBuildToolService.class.getClassLoader())
                     .getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.warn("Failed to read build template: {}", templateName, e);
