@@ -87,8 +87,10 @@ class MentorModeIntegrationTest {
     @Test
     void testWorkspaceBarsLocatedInRespectiveViews() {
         JTabbedPane qaTabs = qaWorkspacePanel.getQaTabs();
-        assertEquals(1, qaTabs.getTabCount());
+        assertEquals(2, qaTabs.getTabCount());
         assertEquals("Chat", qaTabs.getTitleAt(0));
+        assertEquals("Past Topics", qaTabs.getTitleAt(1));
+        assertInstanceOf(ArchiveBrowserPanel.class, qaTabs.getComponentAt(1));
         assertEquals(
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
                 qaTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE));
@@ -118,9 +120,11 @@ class MentorModeIntegrationTest {
         JLabel phaseHeaderLabel = taskWorkspacePanel.getPhaseHeaderLabel();
         JLabel planLabel = taskWorkspacePanel.getPlanLabel();
         JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
-        assertEquals(2, taskTabs.getTabCount());
+        assertEquals(3, taskTabs.getTabCount());
         assertEquals("Chat", taskTabs.getTitleAt(0));
         assertEquals("Plan", taskTabs.getTitleAt(1));
+        assertEquals("Past Plans", taskTabs.getTitleAt(2));
+        assertInstanceOf(ArchiveBrowserPanel.class, taskTabs.getComponentAt(2));
         assertEquals(
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
                 taskTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE));

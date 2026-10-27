@@ -11,7 +11,12 @@ import javax.swing.SwingUtilities;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /** Workspace panel for Q&A / Explore mode (read-only mentor mode). */
@@ -22,15 +27,22 @@ public final class QaWorkspacePanel extends JPanel {
     private static final String LAYOUT_CENTER = "center";
     static final String MENTOR_MODE_TITLE = "READ-ONLY MENTOR MODE";
     static final String MENTOR_MODE_SUBTITLE = "Explore & Q&A";
+    static final String PAST_TOPICS_TAB_TITLE = "Past Topics";
 
     private final JTabbedPane qaTabs;
     private final ExploreChatPanel qaChatPanel;
+    private final ArchiveBrowserPanel pastTopicsPanel;
     private final JPanel qaHeaderBar;
     private final JPanel mentorBanner;
     private final JLabel mentorModeLabel;
     private final JLabel mentorSubtitleLabel;
 
     public QaWorkspacePanel(ExploreChatPanel exploreChatPanel) {
+        this(exploreChatPanel, null);
+    }
+
+    @Autowired
+    public QaWorkspacePanel(ExploreChatPanel exploreChatPanel, MemoryService memoryService) {
         super(new BorderLayout());
 
         qaHeaderBar =
@@ -55,15 +67,26 @@ public final class QaWorkspacePanel extends JPanel {
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
         qaTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, qaHeaderBar);
         this.qaChatPanel = exploreChatPanel;
+        this.pastTopicsPanel = new ArchiveBrowserPanel(memoryService, ArchiveMode.TOPICS);
         qaTabs.addTab("Chat", qaChatPanel);
+        qaTabs.addTab(PAST_TOPICS_TAB_TITLE, pastTopicsPanel);
         qaTabs.addChangeListener(
                 e -> {
-                    if (qaChatPanel.equals(qaTabs.getSelectedComponent())) {
+                    if (qaChatPanel != null && qaChatPanel.equals(qaTabs.getSelectedComponent())) {
                         SwingUtilities.invokeLater(qaChatPanel::focusInput);
+                    } else if (pastTopicsPanel.equals(qaTabs.getSelectedComponent())) {
+                        pastTopicsPanel.refresh();
                     }
                 });
 
         add(qaTabs, BorderLayout.CENTER);
+    }
+
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
+        if (pastTopicsPanel != null) {
+            pastTopicsPanel.refresh();
+        }
     }
 
     @Override
@@ -135,5 +158,9 @@ public final class QaWorkspacePanel extends JPanel {
 
     ChatPanel getQaChatPanel() {
         return qaChatPanel;
+    }
+
+    ArchiveBrowserPanel getPastTopicsPanel() {
+        return pastTopicsPanel;
     }
 }

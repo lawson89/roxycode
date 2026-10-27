@@ -16,12 +16,16 @@ import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
 import org.roxycode.app.util.Edt;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -33,11 +37,13 @@ public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
     static final String PHASE_HEADER_TEXT = "CURRENT PHASE";
+    static final String PAST_PLANS_TAB_TITLE = "Past Plans";
     static final int MAX_PLAN_TITLE_LENGTH = 40;
 
     private final transient PlanService planService;
     private final PlanPanel planPanel;
     private final FeatureChatPanel taskChatPanel;
+    private final ArchiveBrowserPanel pastPlansPanel;
     private final JTabbedPane taskTabs;
     private final JPanel topBar;
     private final JLabel phaseHeaderLabel;
@@ -48,10 +54,20 @@ public final class TaskWorkspacePanel extends JPanel {
 
     public TaskWorkspacePanel(
             FeatureChatPanel taskChatPanel, PlanService planService, PlanPanel planPanel) {
+        this(taskChatPanel, planService, planPanel, null);
+    }
+
+    @Autowired
+    public TaskWorkspacePanel(
+            FeatureChatPanel taskChatPanel,
+            PlanService planService,
+            PlanPanel planPanel,
+            MemoryService memoryService) {
         super(new BorderLayout());
         this.planService = planService;
         this.planPanel = planPanel;
         this.taskChatPanel = taskChatPanel;
+        this.pastPlansPanel = new ArchiveBrowserPanel(memoryService, ArchiveMode.PLANS);
 
         topBar =
                 new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
@@ -83,17 +99,28 @@ public final class TaskWorkspacePanel extends JPanel {
         taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, topBar);
         taskTabs.addTab("Chat", taskChatPanel);
         taskTabs.addTab("Plan", planPanel);
+        taskTabs.addTab(PAST_PLANS_TAB_TITLE, pastPlansPanel);
         taskTabs.addChangeListener(
                 e -> {
-                    if (taskChatPanel.equals(taskTabs.getSelectedComponent())) {
+                    if (taskChatPanel != null
+                            && taskChatPanel.equals(taskTabs.getSelectedComponent())) {
                         SwingUtilities.invokeLater(taskChatPanel::focusInput);
                     } else if (planPanel != null
                             && planPanel.equals(taskTabs.getSelectedComponent())) {
                         planPanel.refresh();
+                    } else if (pastPlansPanel.equals(taskTabs.getSelectedComponent())) {
+                        pastPlansPanel.refresh();
                     }
                 });
 
         add(taskTabs, BorderLayout.CENTER);
+    }
+
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
+        if (pastPlansPanel != null) {
+            pastPlansPanel.refresh();
+        }
     }
 
     @Override
@@ -254,5 +281,9 @@ public final class TaskWorkspacePanel extends JPanel {
 
     PlanPanel getPlanPanel() {
         return planPanel;
+    }
+
+    ArchiveBrowserPanel getPastPlansPanel() {
+        return pastPlansPanel;
     }
 }

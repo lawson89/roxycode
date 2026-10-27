@@ -413,6 +413,272 @@ public class MemoryService {
         }
     }
 
+    public record ArchiveEntrySummary(
+            String filename,
+            String type,
+            String title,
+            String createdBy,
+            String timestamp,
+            int messageCount,
+            String matchSnippet) {
+        public ArchiveEntrySummary withMatchSnippet(String snippet) {
+            return new ArchiveEntrySummary(
+                    filename, type, title, createdBy, timestamp, messageCount, snippet);
+        }
+    }
+
+    /**
+     * Lists structured summaries of archived Q&A topics from {@code
+     * <projectDataDir>/archive/topics/*.md}, sorted reverse-chronologically (most recent first).
+     */
+    public List<ArchiveEntrySummary> listArchivedTopicSummaries() {
+        return listArchivedEntrySummaries(getArchivedTopicsDir(), "topic");
+    }
+
+    /**
+     * Lists structured summaries of archived implementation plans from {@code
+     * <projectDataDir>/archive/plans/*.md}, sorted reverse-chronologically (most recent first).
+     */
+    public List<ArchiveEntrySummary> listArchivedPlanSummaries() {
+        return listArchivedEntrySummaries(getArchivedPlansDir(), "plan");
+    }
+
+    /**
+     * Searches archived Q&A topics by metadata and full-text RipGrep content, preserving
+     * reverse-chronological order.
+     */
+    public List<ArchiveEntrySummary> searchArchivedTopics(String query) {
+        return searchArchiveEntries(listArchivedTopicSummaries(), getArchivedTopicsDir(), query);
+    }
+
+    /**
+     * Searches archived implementation plans by metadata and full-text RipGrep content, preserving
+     * reverse-chronological order.
+     */
+    public List<ArchiveEntrySummary> searchArchivedPlans(String query) {
+        return searchArchiveEntries(listArchivedPlanSummaries(), getArchivedPlansDir(), query);
+    }
+
+    /**
+     * Strips the leading YAML frontmatter block ({@code --- ... ---}) from a Markdown document so
+     * that UI readers render clean Markdown without raw metadata headers.
+     */
+    public static String stripFrontmatter(String rawMarkdown) {
+        if (rawMarkdown == null || rawMarkdown.isEmpty()) {
+            return "";
+        }
+        List<String> lines = rawMarkdown.lines().toList();
+        if (lines.isEmpty() || !FRONTMATTER_DELIMITER.equals(lines.get(0).trim())) {
+            return rawMarkdown;
+        }
+        int closingIdx = -1;
+        for (int i = 1; i < lines.size(); i++) {
+            if (FRONTMATTER_DELIMITER.equals(lines.get(i).trim())) {
+                closingIdx = i;
+                break;
+            }
+        }
+        if (closingIdx < 0) {
+            return rawMarkdown;
+        }
+        int startIdx = closingIdx + 1;
+        while (startIdx < lines.size() && lines.get(startIdx).isBlank()) {
+            startIdx++;
+        }
+        if (startIdx >= lines.size()) {
+            return "";
+        }
+        return String.join(String.valueOf((char) 10), lines.subList(startIdx, lines.size()));
+    }
+
+    private List<ArchiveEntrySummary> listArchivedEntrySummaries(
+            Path archiveDir, String defaultType) {
+        if (archiveDir == null || !Files.isDirectory(archiveDir)) {
+            return List.of();
+        }
+        try (Stream<Path> stream = Files.list(archiveDir)) {
+            List<Path> files =
+                    stream.filter(Files::isRegularFile)
+                            .filter(p -> p.getFileName().toString().endsWith(MD_EXTENSION))
+                            .sorted(
+                                    Comparator.comparing(
+                                                    (Path p) -> p.getFileName().toString(),
+                                                    String.CASE_INSENSITIVE_ORDER)
+                                            .reversed())
+                            .toList();
+            List<ArchiveEntrySummary> summaries = new ArrayList<>(files.size());
+            for (Path file : files) {
+                summaries.add(buildArchiveEntrySummary(file, defaultType));
+            }
+            return List.copyOf(summaries);
+        } catch (IOException e) {
+            log.warn(
+                    "Failed to list archived {} summaries in {}: {}",
+                    defaultType,
+                    archiveDir,
+                    e.getMessage());
+            return List.of();
+        }
+    }
+
+    private static ArchiveEntrySummary buildArchiveEntrySummary(Path file, String defaultType) {
+        String filename = file.getFileName().toString();
+        Map<String, String> fm = parseFrontmatter(file);
+        String type = fm.getOrDefault("type", defaultType);
+        if (type.isBlank()) {
+            type = defaultType;
+        }
+        String rawTitle = fm.getOrDefault("title", "").trim();
+        String title =
+                !rawTitle.isEmpty() ? rawTitle : StringUtils.removeEnd(filename, MD_EXTENSION);
+        String createdBy =
+                firstNonBlank(
+                        fm.get("createdBy"), fm.get("completedBy"), fm.get("approvedBy"), "User");
+        String timestamp =
+                firstNonBlank(
+                        fm.get("archivedOn"),
+                        fm.get("completedOn"),
+                        fm.get("approvalTimestamp"),
+                        "");
+        int messageCount = 0;
+        String msgCountStr = fm.get("messageCount");
+        if (msgCountStr != null && !msgCountStr.isBlank()) {
+            try {
+                messageCount = Integer.parseInt(msgCountStr.trim());
+            } catch (NumberFormatException ignored) {
+                messageCount = 0;
+            }
+        }
+        return new ArchiveEntrySummary(
+                filename, type, title, createdBy, timestamp, messageCount, "");
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String v : values) {
+            if (v != null && !v.isBlank()) {
+                return v.trim();
+            }
+        }
+        return "";
+    }
+
+    private List<ArchiveEntrySummary> searchArchiveEntries(
+            List<ArchiveEntrySummary> allEntries, Path archiveDir, String query) {
+        if (query == null || query.isBlank()) {
+            return allEntries;
+        }
+        if (allEntries.isEmpty()) {
+            return List.of();
+        }
+        String trimmedQuery = query.trim();
+        String lowerQuery = trimmedQuery.toLowerCase(Locale.ROOT);
+        Map<String, String> contentSnippets = findArchiveContentMatches(archiveDir, trimmedQuery);
+
+        List<ArchiveEntrySummary> matched = new ArrayList<>();
+        for (ArchiveEntrySummary entry : allEntries) {
+            boolean metaMatch =
+                    containsIgnoreCase(entry.title(), lowerQuery)
+                            || containsIgnoreCase(entry.filename(), lowerQuery)
+                            || containsIgnoreCase(entry.createdBy(), lowerQuery);
+            String snippet = contentSnippets.get(entry.filename());
+            if (metaMatch || snippet != null) {
+                matched.add(
+                        snippet != null && !snippet.isBlank()
+                                ? entry.withMatchSnippet(snippet)
+                                : entry);
+            }
+        }
+        return List.copyOf(matched);
+    }
+
+    private static boolean containsIgnoreCase(String value, String lowerQuery) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(lowerQuery);
+    }
+
+    private Map<String, String> findArchiveContentMatches(Path archiveDir, String query) {
+        if (archiveDir == null || !Files.isDirectory(archiveDir) || query.isBlank()) {
+            return Map.of();
+        }
+        List<String> command =
+                List.of(
+                        "rg",
+                        "--no-heading",
+                        "--with-filename",
+                        "--line-number",
+                        "--color",
+                        "never",
+                        "--ignore-case",
+                        "--fixed-strings",
+                        "-e",
+                        query,
+                        archiveDir.toString());
+        try {
+            ProcessResult result = ProcessRunner.run(command, null, true);
+            if (result.timedOut() || result.exitCode() != 0) {
+                return Map.of();
+            }
+            Map<String, String> snippetsByFilename = new LinkedHashMap<>();
+            String prefix = toSlashPrefix(archiveDir);
+            for (String line : result.output().lines().toList()) {
+                parseRipGrepArchiveLine(line, prefix, snippetsByFilename);
+            }
+            return snippetsByFilename;
+        } catch (IOException e) {
+            log.warn(
+                    "Failed to run RipGrep on archive directory {}: {}",
+                    archiveDir,
+                    e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private static void parseRipGrepArchiveLine(
+            String rawLine, String archiveSlashPrefix, Map<String, String> snippetsByFilename) {
+        if (rawLine == null || rawLine.isBlank()) {
+            return;
+        }
+        String slashLine = rawLine.replace(BACKSLASH, '/');
+        String rel =
+                (!archiveSlashPrefix.isEmpty() && slashLine.startsWith(archiveSlashPrefix))
+                        ? slashLine.substring(archiveSlashPrefix.length())
+                        : slashLine;
+        int firstColon = rel.indexOf(':');
+        if (firstColon <= 0) {
+            return;
+        }
+        int secondColon = rel.indexOf(':', firstColon + 1);
+        if (secondColon <= firstColon) {
+            return;
+        }
+        String filePart = rel.substring(0, firstColon);
+        int lastSlash = filePart.lastIndexOf('/');
+        String filename = lastSlash >= 0 ? filePart.substring(lastSlash + 1) : filePart;
+        String text = rel.substring(secondColon + 1).trim();
+        if (text.isEmpty() || FRONTMATTER_DELIMITER.equals(text) || isFrontmatterLine(text)) {
+            return;
+        }
+        snippetsByFilename.putIfAbsent(filename, text);
+    }
+
+    private static boolean isFrontmatterLine(String text) {
+        return text.startsWith("id: " + DQUOTE_STR)
+                || text.startsWith("type: " + DQUOTE_STR)
+                || text.startsWith("project: " + DQUOTE_STR)
+                || text.startsWith("projectPath: " + DQUOTE_STR)
+                || text.startsWith("title: " + DQUOTE_STR)
+                || text.startsWith("createdBy: " + DQUOTE_STR)
+                || text.startsWith("archivedOn: " + DQUOTE_STR)
+                || text.startsWith("completedBy: " + DQUOTE_STR)
+                || text.startsWith("completedOn: " + DQUOTE_STR)
+                || text.startsWith("approvedBy: " + DQUOTE_STR)
+                || text.startsWith("approvalTimestamp: " + DQUOTE_STR)
+                || text.startsWith("userApproved: ")
+                || text.startsWith("messageCount: ");
+    }
+
     private List<String> listArchivedMarkdownSummaries(Path archiveDir, String label) {
         if (archiveDir == null || !Files.isDirectory(archiveDir)) {
             return List.of();

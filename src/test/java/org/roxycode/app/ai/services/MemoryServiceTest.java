@@ -19,6 +19,7 @@ import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
 
 class MemoryServiceTest {
 
@@ -362,5 +363,116 @@ class MemoryServiceTest {
         String manyLines = "line\n".repeat(250);
         String capped = MemoryService.capPinnedMemoryForPrompt(manyLines);
         assertTrue(capped.contains("truncated at 200 lines / 8 KB limit"));
+    }
+
+    @Test
+    void testStripFrontmatter() {
+        assertEquals("", MemoryService.stripFrontmatter(null));
+        assertEquals("", MemoryService.stripFrontmatter(""));
+        assertEquals("# Heading\nBody", MemoryService.stripFrontmatter("# Heading\nBody"));
+        assertEquals(
+                "---\nunclosed frontmatter",
+                MemoryService.stripFrontmatter("---\nunclosed frontmatter"));
+
+        String doc =
+                """
+                ---
+                id: "20250514-topic"
+                title: "Test Topic"
+                ---
+
+                # Topic: Test Topic
+
+                Body text here.
+                """;
+        String stripped = MemoryService.stripFrontmatter(doc);
+        assertFalse(stripped.contains("id: "));
+        assertTrue(stripped.startsWith("# Topic: Test Topic"));
+        assertTrue(stripped.contains("Body text here."));
+    }
+
+    @Test
+    void testArchiveSummariesAndScopedSearch() throws IOException {
+        assertTrue(memoryService.listArchivedTopicSummaries().isEmpty());
+        assertTrue(memoryService.listArchivedPlanSummaries().isEmpty());
+
+        memoryService.archiveTopicConversation(
+                "First Q&A Topic",
+                "Alice",
+                "2025-05-13T10:00:00Z",
+                List.of(new ChatTranscriptEntry("user", "Question about caching", "10:00:00")));
+        memoryService.archiveTopicConversation(
+                "Second Q&A Topic",
+                "Bob",
+                "2025-05-14T15:30:00Z",
+                List.of(
+                        new ChatTranscriptEntry("user", "How does RipGrep work?", "15:29:00"),
+                        new ChatTranscriptEntry("ai", "RipGrep searches fast.", "15:29:10")));
+
+        List<MemoryService.ArchiveEntrySummary> topicSummaries =
+                memoryService.listArchivedTopicSummaries();
+        assertEquals(2, topicSummaries.size());
+        assertEquals("Second Q&A Topic", topicSummaries.get(0).title());
+        assertEquals("Bob", topicSummaries.get(0).createdBy());
+        assertEquals(2, topicSummaries.get(0).messageCount());
+        assertEquals("First Q&A Topic", topicSummaries.get(1).title());
+        assertEquals("Alice", topicSummaries.get(1).createdBy());
+        assertEquals(1, topicSummaries.get(1).messageCount());
+
+        Path plansDir = Files.createDirectories(projectDataDir.resolve("archive/plans"));
+        String planDoc =
+                """
+                ---
+                id: "20250514-120000-feature-plan"
+                title: "Archive Browser Feature"
+                completedBy: "Charlie"
+                completedOn: "2025-05-14T12:00:00Z"
+                ---
+
+                # Implementation Plan: Archive Browser Feature
+                UniqueBodyMatchToken in plan steps
+                """;
+        Path planFile = plansDir.resolve("20250514-120000-feature-plan.md");
+        Files.writeString(planFile, planDoc, StandardCharsets.UTF_8);
+        Path fallbackPlanFile = plansDir.resolve("20250512-090000-raw-plan.md");
+        Files.writeString(
+                fallbackPlanFile,
+                """
+                # Raw Plan Without Frontmatter
+                """,
+                StandardCharsets.UTF_8);
+
+        List<MemoryService.ArchiveEntrySummary> planSummaries =
+                memoryService.listArchivedPlanSummaries();
+        assertEquals(2, planSummaries.size());
+        assertEquals("Archive Browser Feature", planSummaries.get(0).title());
+        assertEquals("Charlie", planSummaries.get(0).createdBy());
+        assertEquals("20250512-090000-raw-plan", planSummaries.get(1).title());
+
+        assertEquals(2, memoryService.searchArchivedTopics("").size());
+        assertEquals(2, memoryService.searchArchivedPlans("   ").size());
+
+        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
+            runnerMock
+                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(1, "", "", false));
+
+            List<MemoryService.ArchiveEntrySummary> metaMatched =
+                    memoryService.searchArchivedTopics("alice");
+            assertEquals(1, metaMatched.size());
+            assertEquals("First Q&A Topic", metaMatched.get(0).title());
+
+            String rgOut =
+                    planFile.toAbsolutePath().normalize() + ":9:UniqueBodyMatchToken in plan steps";
+            runnerMock
+                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, rgOut, "", false));
+
+            List<MemoryService.ArchiveEntrySummary> planMatched =
+                    memoryService.searchArchivedPlans("UniqueBodyMatchToken");
+            assertEquals(1, planMatched.size());
+            assertEquals("Archive Browser Feature", planMatched.get(0).title());
+            assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
+        }
     }
 }
