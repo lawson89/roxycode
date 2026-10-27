@@ -13,7 +13,7 @@ The workflow follows a structured sequence:
                                                                                                    **PLAN** (Next Feature)
 
 ### Tooling Architecture: JEXL Workspace Services vs. Native Plan Tools
-- **Workspace Services (`executeJexl`)**: Workspace inspection, editing, search, git, and build operations (`fileReadService`, `fileEditorService`, `grepService`, `gitService`, `buildToolService`) are executed via the `executeJexl` tool.
+- **Workspace Services (`executeJexl`)**: Workspace inspection, editing, search, git, build, and agent memory operations (`fileReadService`, `fileEditorService`, `grepService`, `gitService`, `buildToolService`, `memoryService`) are executed via the `executeJexl` tool.
 - **Native Plan & Workflow Tools (`PlanService` / `planService`)**: Plan management and phase transitions (`submitPlan`, `addTechnicalStep`, `updateTechnicalStep`, `markStepCompleted`, `markStepsCompleted`, `markStepIncomplete`, `markStepsIncomplete`, `addHandoffLogEntry`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`) are dedicated native tools called directly—**NOT** inside JEXL scripts.
 
 ### Transition Protocol Summary
@@ -61,6 +61,16 @@ The workflow follows a structured sequence:
 * **Transition Decisions:**
   - **Defects Found:** Call the native `requestFixes(reason)` tool to autonomously route back to the CODE phase.
   - **Verification Passed:** Mark the verification checklist items completed (`markStepCompleted` / `markStepsCompleted`) and call the native `requestCompletion(reason)` tool to request final user verification and sign-off.
+
+---
+
+## 🧠 AGENT MEMORY PROTOCOL
+
+RoxyCode provides a persistent Two-Tier Agent Memory system accessible via `memoryService` inside `executeJexl` across **all** workflow phases (`EXPLORE`, `PLAN`, `CODE`, `REVIEW`):
+- **Global Memory (`memoryService.*Global*`):** For user preferences, coding style, and cross-project habits (`~/.roxycode/memory/MEMORY.md` and `notes/<slug>.md`).
+- **Project Memory (`memoryService.*Project*`):** For project-specific architecture decisions, build/test gotchas, and domain conventions (`<projectDataDir>/memory/MEMORY.md` and `notes/<slug>.md`).
+- **Unified Search (`memoryService.search(pattern)` / `memoryService.searchIgnoreCase(pattern)`):** Searches Global Memory, Project Memory, and Archived Implementation Plans (`archive/plans/`).
+- **Immediate Persistence:** Whenever the user explicitly states a preference or asks you to remember something, immediately persist it in Global or Project memory via `memoryService` (available in all phases).
 
 ---
 

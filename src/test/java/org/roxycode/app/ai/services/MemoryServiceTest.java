@@ -1,0 +1,290 @@
+package org.roxycode.app.ai.services;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
+import org.roxycode.app.service.ProcessRunner;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
+import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.service.SettingsService;
+
+class MemoryServiceTest {
+
+    @TempDir Path tempDir;
+
+    private SettingsService settingsService;
+    private ProjectService projectService;
+    private MemoryService memoryService;
+    private Path roxyHomeDir;
+    private Path projectDataDir;
+
+    @BeforeEach
+    void setUp() throws IOException {
+        roxyHomeDir = Files.createDirectories(tempDir.resolve("roxyhome"));
+        projectDataDir = Files.createDirectories(tempDir.resolve("project-data"));
+
+        settingsService = mock(SettingsService.class);
+        projectService = mock(ProjectService.class);
+
+        when(settingsService.getRoxyHomeDir()).thenReturn(roxyHomeDir);
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.resolveProjectDataPath(anyString()))
+                .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
+
+        memoryService = new MemoryService(settingsService, projectService);
+    }
+
+    @Test
+    void testGlobalAndProjectMemoryIndexReadAndUpdate() {
+        assertEquals("", memoryService.readGlobalMemory());
+        assertEquals("", memoryService.readProjectMemory());
+
+        EditorResult globalRes =
+                memoryService.updateGlobalMemory("# Global Prefs\n- Prefer Java records");
+        assertTrue(globalRes.success());
+        assertEquals("# Global Prefs\n- Prefer Java records", memoryService.readGlobalMemory());
+
+        EditorResult projRes =
+                memoryService.updateProjectMemory("# Project Rules\n- Swing HTML 3.2 only");
+        assertTrue(projRes.success());
+        assertEquals("# Project Rules\n- Swing HTML 3.2 only", memoryService.readProjectMemory());
+
+        when(projectService.hasActiveProject()).thenReturn(false);
+        assertEquals("", memoryService.readProjectMemory());
+        EditorResult noProjRes = memoryService.updateProjectMemory("content");
+        assertFalse(noProjRes.success());
+        assertEquals("No active project", noProjRes.errorHint());
+    }
+
+    @Test
+    void testSaveReadListAndDeleteTopicNotesWithFrontmatter() {
+        assertTrue(memoryService.listGlobalNotes().isEmpty());
+        assertTrue(memoryService.listProjectNotes().isEmpty());
+
+        EditorResult saveGlobal =
+                memoryService.saveGlobalNote(
+                        "Java Style.md",
+                        "Java Style Guide",
+                        "java, style",
+                        "Always use immutable records.");
+        assertTrue(saveGlobal.success());
+
+        String globalContent = memoryService.readGlobalNote("java-style");
+        assertTrue(globalContent.startsWith("---\n"));
+        assertTrue(globalContent.contains("id: ") && globalContent.contains("java-style"));
+        assertTrue(globalContent.contains("scope: ") && globalContent.contains("global"));
+        assertTrue(globalContent.contains("title: ") && globalContent.contains("Java Style Guide"));
+        assertTrue(globalContent.contains("tags: ") && globalContent.contains("java, style"));
+        assertTrue(globalContent.contains("updatedAt: "));
+        assertTrue(globalContent.contains("# Java Style Guide"));
+        assertTrue(globalContent.contains("Always use immutable records."));
+
+        List<String> globalList = memoryService.listGlobalNotes();
+        assertEquals(1, globalList.size());
+        assertTrue(globalList.get(0).contains("java-style.md - "));
+        assertTrue(globalList.get(0).contains("Java Style Guide"));
+        assertTrue(globalList.get(0).contains("[java, style] ("));
+
+        EditorResult saveProj =
+                memoryService.saveProjectNote(
+                        "swing-html-tables",
+                        "Swing HTML 3.2 Table Layout Rules",
+                        "ui, swing, html",
+                        "Use old-school HTML tables for layout.");
+        assertTrue(saveProj.success());
+
+        String projContent = memoryService.readProjectNote("swing-html-tables.md");
+        assertTrue(projContent.contains("swing-html-tables"));
+        assertTrue(projContent.contains("project"));
+        assertTrue(projContent.contains("Swing HTML 3.2 Table Layout Rules"));
+        assertTrue(projContent.contains("ui, swing, html"));
+
+        List<String> projList = memoryService.listProjectNotes();
+        assertEquals(1, projList.size());
+        assertTrue(projList.get(0).contains("swing-html-tables.md - "));
+        assertTrue(projList.get(0).contains("Swing HTML 3.2 Table Layout Rules"));
+        assertTrue(projList.get(0).contains("[ui, swing, html] ("));
+
+        EditorResult delGlobal = memoryService.deleteGlobalNote("java-style");
+        assertTrue(delGlobal.success());
+        assertEquals("", memoryService.readGlobalNote("java-style"));
+        assertTrue(memoryService.listGlobalNotes().isEmpty());
+        assertFalse(memoryService.deleteGlobalNote("java-style").success());
+
+        EditorResult delProj = memoryService.deleteProjectNote("swing-html-tables");
+        assertTrue(delProj.success());
+        assertEquals("", memoryService.readProjectNote("swing-html-tables"));
+        assertTrue(memoryService.listProjectNotes().isEmpty());
+    }
+
+    @Test
+    void testSlugSanitizationAndPathTraversalRejection() {
+        assertEquals("swing-html-tables", MemoryService.sanitizeSlug("Swing HTML Tables.md"));
+        assertEquals(
+                "a".repeat(MemoryService.MAX_SLUG_LENGTH),
+                MemoryService.sanitizeSlug("a".repeat(80)));
+
+        String backslashPath = "notes" + (char) 92 + "sub";
+        for (String invalid :
+                new String[] {
+                    null,
+                    "",
+                    "   ",
+                    "../secret",
+                    "../../etc/passwd",
+                    "notes/sub",
+                    backslashPath,
+                    "---"
+                }) {
+            assertThrows(IllegalArgumentException.class, () -> MemoryService.sanitizeSlug(invalid));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> memoryService.saveGlobalNote(invalid, "Title", "tag", "body"));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> memoryService.saveProjectNote(invalid, "Title", "tag", "body"));
+            assertThrows(
+                    IllegalArgumentException.class, () -> memoryService.readGlobalNote(invalid));
+            assertThrows(
+                    IllegalArgumentException.class, () -> memoryService.readProjectNote(invalid));
+            assertThrows(
+                    IllegalArgumentException.class, () -> memoryService.deleteGlobalNote(invalid));
+            assertThrows(
+                    IllegalArgumentException.class, () -> memoryService.deleteProjectNote(invalid));
+        }
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> memoryService.readArchivedPlan("../secret.md"));
+    }
+
+    @Test
+    void testListAndReadArchivedPlans() throws IOException {
+        assertTrue(memoryService.listArchivedPlans().isEmpty());
+
+        Path archiveDir = Files.createDirectories(projectDataDir.resolve("archive/plans"));
+        String plan1 =
+                """
+                ---
+                id: "20250513-100000-first-plan"
+                title: "First Feature Plan"
+                ---
+                # Implementation Plan: First Feature Plan
+                """;
+        String plan2 =
+                """
+                ---
+                id: "20250514-120000-second-plan"
+                title: "Second Feature Plan"
+                ---
+                # Implementation Plan: Second Feature Plan
+                """;
+        Files.writeString(
+                archiveDir.resolve("20250513-100000-first-plan.md"), plan1, StandardCharsets.UTF_8);
+        Files.writeString(
+                archiveDir.resolve("20250514-120000-second-plan.md"),
+                plan2,
+                StandardCharsets.UTF_8);
+
+        List<String> plans = memoryService.listArchivedPlans();
+        assertEquals(2, plans.size());
+        assertEquals("20250514-120000-second-plan.md: Second Feature Plan", plans.get(0));
+        assertEquals("20250513-100000-first-plan.md: First Feature Plan", plans.get(1));
+
+        assertEquals(plan2, memoryService.readArchivedPlan("20250514-120000-second-plan.md"));
+        assertEquals(plan2, memoryService.readArchivedPlan("20250514-120000-second-plan"));
+    }
+
+    @Test
+    void testUnifiedRipgrepSearchAndSearchIgnoreCase() throws IOException {
+        EditorResult emptySearch = memoryService.search("nonexistent");
+        assertTrue(emptySearch.success());
+        assertEquals("", emptySearch.content());
+
+        assertFalse(memoryService.search("").success());
+
+        memoryService.saveGlobalNote("foo", "Global Foo", "global", "UniqueCrossScopeToken alpha");
+        memoryService.saveProjectNote(
+                "bar", "Project Bar", "project", "UniqueCrossScopeToken beta");
+
+        Path archiveDir = Files.createDirectories(projectDataDir.resolve("archive/plans"));
+        String bazPlan =
+                """
+                ---
+                title: "Baz Plan"
+                ---
+                UniqueCrossScopeToken gamma
+                """;
+        Path bazFile = archiveDir.resolve("20250514-baz.md");
+        Files.writeString(bazFile, bazPlan, StandardCharsets.UTF_8);
+
+        Path globalNote = roxyHomeDir.resolve("memory/notes/foo.md").toAbsolutePath().normalize();
+        Path projectNote =
+                projectDataDir.resolve("memory/notes/bar.md").toAbsolutePath().normalize();
+        Path archivePlan = bazFile.toAbsolutePath().normalize();
+
+        String simulatedRgStdout =
+                globalNote
+                        + ":12:UniqueCrossScopeToken alpha\n"
+                        + projectNote
+                        + ":5:UniqueCrossScopeToken beta\n"
+                        + archivePlan
+                        + ":8:UniqueCrossScopeToken gamma\n";
+
+        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
+            runnerMock
+                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, simulatedRgStdout, "", false));
+
+            EditorResult searchRes = memoryService.search("UniqueCrossScopeToken");
+            assertTrue(searchRes.success());
+            String output = searchRes.content();
+            assertTrue(
+                    output.contains("[GLOBAL] notes/foo.md:12:UniqueCrossScopeToken alpha"),
+                    "Output was: " + output);
+            assertTrue(
+                    output.contains("[PROJECT] notes/bar.md:5:UniqueCrossScopeToken beta"),
+                    "Output was: " + output);
+            assertTrue(
+                    output.contains(
+                            "[ARCHIVE] plans/20250514-baz.md:8:UniqueCrossScopeToken gamma"),
+                    "Output was: " + output);
+
+            EditorResult caseInsensitiveRes =
+                    memoryService.searchIgnoreCase("uniquecrossscopetoken");
+            assertTrue(caseInsensitiveRes.success());
+            assertTrue(caseInsensitiveRes.content().contains("[GLOBAL] notes/foo.md:12:"));
+            assertTrue(caseInsensitiveRes.content().contains("[PROJECT] notes/bar.md:5:"));
+            assertTrue(caseInsensitiveRes.content().contains("[ARCHIVE] plans/20250514-baz.md:8:"));
+
+            runnerMock
+                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(1, "", "", false));
+            EditorResult noMatchRes = memoryService.search("DEFINITELY_NOT_FOUND_99999");
+            assertTrue(noMatchRes.success());
+            assertEquals("", noMatchRes.content());
+        }
+    }
+
+    @Test
+    void testCapPinnedMemoryForPrompt() {
+        assertEquals("", MemoryService.capPinnedMemoryForPrompt(null));
+        assertEquals("short", MemoryService.capPinnedMemoryForPrompt("short"));
+
+        String manyLines = "line\n".repeat(250);
+        String capped = MemoryService.capPinnedMemoryForPrompt(manyLines);
+        assertTrue(capped.contains("truncated at 200 lines / 8 KB limit"));
+    }
+}

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.FileEditorService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.ai.services.MemoryService;
 
 class JexlServiceRegistryTest {
 
@@ -74,6 +75,22 @@ class JexlServiceRegistryTest {
         assertTrue(registry.getServices(WorkflowPhase.EXPLORE).containsValue(buildTool));
         assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(buildTool));
         assertTrue(registry.getServices(WorkflowPhase.REVIEW).containsValue(buildTool));
+    }
+
+    @Test
+    void testMemoryServiceAvailableInAllPhases() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        MemoryService memoryService = mock(MemoryService.class);
+        registry.register(memoryService);
+
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            assertTrue(
+                    registry.getServices(phase).containsValue(memoryService),
+                    "MemoryService should be exposed in " + phase);
+            assertTrue(
+                    registry.getDocumentation(phase).contains("memoryService"),
+                    "JEXL docs should include memoryService in " + phase);
+        }
     }
 
     public interface ServiceContract {

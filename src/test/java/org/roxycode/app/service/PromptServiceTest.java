@@ -17,6 +17,7 @@ import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.AppSettings;
@@ -87,6 +88,7 @@ class PromptServiceTest {
                 "fileReadService",
                 "grepService",
                 "gitService",
+                "memoryService",
                 "planService");
         assertContainsNone(
                 prompt,
@@ -309,5 +311,65 @@ class PromptServiceTest {
                 "- [x] 0. Update prompts",
                 "- [ ] 1. Update PlanService",
                 "- [ ] 2. Update PromptService");
+    }
+
+    @Test
+    void testAgentMemoryContextInjectionAndEmptyState() {
+        MemoryService memoryService = mock(MemoryService.class);
+        PromptService psWithMemory =
+                new PromptService(
+                        projectService,
+                        settingsService,
+                        planService,
+                        jexlServiceRegistry,
+                        gitService,
+                        projectAnalysisService,
+                        repoMapPackerService,
+                        memoryService);
+
+        when(memoryService.readGlobalMemory()).thenReturn("");
+        when(memoryService.listGlobalNotes()).thenReturn(List.of());
+        when(memoryService.readProjectMemory()).thenReturn("");
+        when(memoryService.listProjectNotes()).thenReturn(List.of());
+        when(memoryService.listArchivedPlans()).thenReturn(List.of());
+
+        assertEquals("", psWithMemory.loadAgentMemoryContext());
+        assertContainsNone(
+                psWithMemory.getStableContext(),
+                "## GLOBAL AGENT MEMORY",
+                "## PROJECT AGENT MEMORY & ARCHIVE");
+
+        when(memoryService.readGlobalMemory()).thenReturn("# Global Prefs\n- Use Java 21");
+        when(memoryService.listGlobalNotes())
+                .thenReturn(List.of("style.md - \"Style Guide\" [java] (2025-05-14T00:00:00Z)"));
+        when(memoryService.readProjectMemory()).thenReturn("# Project Rules\n- Use MigLayout");
+        when(memoryService.listProjectNotes())
+                .thenReturn(
+                        List.of(
+                                "swing-tables.md - \"Swing Tables\" [ui, swing] (2025-05-14T00:00:00Z)"));
+        when(memoryService.listArchivedPlans())
+                .thenReturn(
+                        List.of(
+                                "p6.md: Plan 6",
+                                "p5.md: Plan 5",
+                                "p4.md: Plan 4",
+                                "p3.md: Plan 3",
+                                "p2.md: Plan 2",
+                                "p1.md: Plan 1"));
+
+        String stable = psWithMemory.getStableContext();
+        assertContainsAll(
+                stable,
+                "## GLOBAL AGENT MEMORY",
+                "# Global Prefs\n- Use Java 21",
+                "- style.md - \"Style Guide\" [java]",
+                "Use memoryService.readGlobalNote(slug) or memoryService.search(pattern) to inspect.",
+                "## PROJECT AGENT MEMORY & ARCHIVE",
+                "# Project Rules\n- Use MigLayout",
+                "- swing-tables.md - \"Swing Tables\" [ui, swing]",
+                "- p6.md: Plan 6",
+                "- p2.md: Plan 2",
+                "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), or memoryService.search(pattern) to inspect.");
+        assertContainsNone(stable, "- p1.md: Plan 1");
     }
 }

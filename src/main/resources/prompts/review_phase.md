@@ -7,4 +7,5 @@ Key Instructions:
 4. Feedback: Provide a concise summary of the implementation and verification results to the user. Always summarize your findings after running verification tools.
 5. Transition: Use the dedicated native `PlanService` tools (do NOT call them inside `executeJexl`) to transition the workflow:
    - If fixes are required based on your review, call the native `requestFixes` tool to return to the CODE phase.
+   - Before calling `requestCompletion`, if the feature established new architectural patterns, conventions, or lessons worth preserving, record them in project memory via `memoryService` (`saveProjectNote` or `updateProjectMemory`).
    - If the implementation is verified and complete, mark the verification steps completed using the native `markStepCompleted` or `markStepsCompleted` tool and call the native `requestCompletion` tool to close the current plan.

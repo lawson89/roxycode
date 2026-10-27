@@ -21,6 +21,7 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.AppSettings;
@@ -28,6 +29,7 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -42,9 +44,13 @@ public class PromptService {
     private static final String PLAN_PROMPT_PATH = "prompts/plan_phase.md";
     private static final String CODE_PROMPT_PATH = "prompts/code_phase.md";
     static final String PROJECT_CONTEXT_CONFIG_FILE = "context.toml";
+    private static final int MAX_RECENT_ARCHIVED_PLANS = 5;
 
     private static final String NEWLINE_DOUBLE = "\n\n";
     private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
+    private static final String HEADER_GLOBAL_AGENT_MEMORY = "\n\n## GLOBAL AGENT MEMORY\n";
+    private static final String HEADER_PROJECT_AGENT_MEMORY =
+            "\n\n## PROJECT AGENT MEMORY & ARCHIVE\n";
     private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
     private static final String HEADER_SESSION_CONTEXT = "\n\n## SESSION CONTEXT\n";
     private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
@@ -73,6 +79,7 @@ public class PromptService {
     private final GitService gitService;
     private final ProjectAnalysisService projectAnalysisService;
     private final RepoMapPackerService repoMapPackerService;
+    private final MemoryService memoryService;
 
     public PromptService(
             ProjectService projectService,
@@ -82,6 +89,27 @@ public class PromptService {
             GitService gitService,
             ProjectAnalysisService projectAnalysisService,
             RepoMapPackerService repoMapPackerService) {
+        this(
+                projectService,
+                settingsService,
+                planService,
+                jexlServiceRegistry,
+                gitService,
+                projectAnalysisService,
+                repoMapPackerService,
+                null);
+    }
+
+    @Autowired
+    public PromptService(
+            ProjectService projectService,
+            SettingsService settingsService,
+            PlanService planService,
+            JexlServiceRegistry jexlServiceRegistry,
+            GitService gitService,
+            ProjectAnalysisService projectAnalysisService,
+            RepoMapPackerService repoMapPackerService,
+            MemoryService memoryService) {
         this.projectService = projectService;
         this.settingsService = settingsService;
         this.planService = planService;
@@ -89,6 +117,7 @@ public class PromptService {
         this.gitService = gitService;
         this.projectAnalysisService = projectAnalysisService;
         this.repoMapPackerService = repoMapPackerService;
+        this.memoryService = memoryService;
     }
 
     public String getStableContext() {
@@ -96,6 +125,88 @@ public class PromptService {
         sb.append(HEADER_JEXL_CONTEXT).append(loadJexlContext()).append(NEWLINE_DOUBLE);
         sb.append(loadGlobalContext());
         sb.append(loadProjectContext());
+        sb.append(loadAgentMemoryContext());
+        return sb.toString();
+    }
+
+    /**
+     * Loads the Tier-1 pinned agent memory (MEMORY.md), note catalogs, and recent archived plans
+     * for Global and Project scopes.
+     *
+     * @return the formatted agent memory context section, or empty string if none exists
+     */
+    public String loadAgentMemoryContext() {
+        if (memoryService == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+
+        String globalMemory =
+                MemoryService.capPinnedMemoryForPrompt(memoryService.readGlobalMemory());
+        List<String> globalNotes = memoryService.listGlobalNotes();
+        if (globalNotes == null) {
+            globalNotes = List.of();
+        }
+
+        if (!globalMemory.isBlank() || !globalNotes.isEmpty()) {
+            sb.append(HEADER_GLOBAL_AGENT_MEMORY);
+            if (!globalMemory.isBlank()) {
+                sb.append(globalMemory.stripTrailing()).append("\n");
+            }
+            if (!globalNotes.isEmpty()) {
+                if (!globalMemory.isBlank()) {
+                    sb.append("\n");
+                }
+                sb.append("### Available Global Notes\n");
+                for (String note : globalNotes) {
+                    sb.append("- ").append(note).append("\n");
+                }
+                sb.append(
+                        "Use memoryService.readGlobalNote(slug) or memoryService.search(pattern) to inspect.\n");
+            }
+        }
+
+        String projectMemory =
+                MemoryService.capPinnedMemoryForPrompt(memoryService.readProjectMemory());
+        List<String> projectNotes = memoryService.listProjectNotes();
+        if (projectNotes == null) {
+            projectNotes = List.of();
+        }
+        List<String> archivedPlans = memoryService.listArchivedPlans();
+        if (archivedPlans == null) {
+            archivedPlans = List.of();
+        }
+
+        if (!projectMemory.isBlank() || !projectNotes.isEmpty() || !archivedPlans.isEmpty()) {
+            sb.append(HEADER_PROJECT_AGENT_MEMORY);
+            if (!projectMemory.isBlank()) {
+                sb.append(projectMemory.stripTrailing()).append("\n");
+            }
+            if (!projectNotes.isEmpty()) {
+                if (!projectMemory.isBlank()) {
+                    sb.append("\n");
+                }
+                sb.append("### Available Project Notes\n");
+                for (String note : projectNotes) {
+                    sb.append("- ").append(note).append("\n");
+                }
+            }
+            if (!archivedPlans.isEmpty()) {
+                if (!projectMemory.isBlank() || !projectNotes.isEmpty()) {
+                    sb.append("\n");
+                }
+                sb.append("### Recent Archived Plans\n");
+                int limit = Math.min(MAX_RECENT_ARCHIVED_PLANS, archivedPlans.size());
+                for (int i = 0; i < limit; i++) {
+                    sb.append("- ").append(archivedPlans.get(i)).append("\n");
+                }
+            }
+            if (!projectNotes.isEmpty() || !archivedPlans.isEmpty()) {
+                sb.append(
+                        "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), or memoryService.search(pattern) to inspect.\n");
+            }
+        }
+
         return sb.toString();
     }
 
