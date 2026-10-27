@@ -4,15 +4,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.AgentService;
@@ -23,6 +27,7 @@ import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
+import org.roxycode.app.service.ProjectService;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -114,8 +119,13 @@ class PlanServiceTest {
         assertTrue(service.getCurrentPlan().userApproved());
         assertEquals("user1", service.getCurrentPlan().approvedBy());
 
-        service.completePlan("2023-01-02");
+        service.completePlan("user2", "2023-01-02");
+        assertEquals("user2", service.getCurrentPlan().completedBy());
         assertEquals("2023-01-02", service.getCurrentPlan().completedOn());
+
+        service.completePlan("2023-01-03");
+        assertEquals("user2", service.getCurrentPlan().completedBy());
+        assertEquals("2023-01-03", service.getCurrentPlan().completedOn());
     }
 
     @Test
@@ -347,7 +357,84 @@ class PlanServiceTest {
         service.approveTransition();
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         assertNull(service.getCurrentPlan());
-        assertTrue(updates.stream().anyMatch(p -> p != null && p.completedOn() != null));
+        assertTrue(
+                updates.stream()
+                        .anyMatch(
+                                p ->
+                                        p != null
+                                                && "user".equals(p.completedBy())
+                                                && p.completedOn() != null));
+    }
+
+    @Test
+    void testReviewToPlanArchivesCompletedPlanWithHitlMetadataAndFrontmatter(@TempDir Path tempDir)
+            throws Exception {
+        ProjectService projectService = mock(ProjectService.class);
+        GitService gitService = mock(GitService.class);
+        Path projectRoot = tempDir.resolve("my-project");
+        Path archiveDir = tempDir.resolve("roxy-home/projects/my-project-12345678/archive/plans");
+
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getProjectName()).thenReturn("my-project");
+        when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
+        when(projectService.resolveProjectDataPath("archive/plans")).thenReturn(archiveDir);
+        when(gitService.getStatus()).thenReturn(" M src/Main.java\n");
+
+        PlanService archivingService =
+                new PlanService(envService, eventPublisher, projectService, gitService);
+
+        archivingService.submitPlan(
+                "Archive Feature Plan!",
+                "Persist completed plans",
+                List.of("Include frontmatter", "Include approvals"),
+                List.of("Implement archiving"));
+
+        when(envService.getCurrentUser()).thenReturn("alice");
+        archivingService.requestDevelopment("Ready for code");
+        archivingService.approveTransition();
+        assertEquals(WorkflowPhase.CODE, archivingService.getCurrentPhase());
+
+        archivingService.markStepsCompleted(List.of(0, 1, 2));
+        archivingService.requestReview("Ready for review");
+        assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
+
+        archivingService.markStepCompleted(3);
+        archivingService.requestCompletion("All checks passed");
+
+        when(envService.getCurrentUser()).thenReturn("bob");
+        archivingService.approveTransition();
+
+        assertEquals(WorkflowPhase.PLAN, archivingService.getCurrentPhase());
+        assertNull(archivingService.getCurrentPlan());
+        assertTrue(Files.isDirectory(archiveDir));
+
+        List<Path> archivedFiles;
+        try (Stream<Path> stream = Files.list(archiveDir)) {
+            archivedFiles = stream.toList();
+        }
+        assertEquals(1, archivedFiles.size());
+        Path archivedFile = archivedFiles.get(0);
+        String fileName = archivedFile.getFileName().toString();
+        assertTrue(fileName.endsWith("-archive-feature-plan.md"));
+
+        String content = Files.readString(archivedFile);
+        assertTrue(content.startsWith("---\n"));
+        assertTrue(content.contains("project: \"my-project\"\n"));
+        assertTrue(
+                content.contains(
+                        "projectPath: \"" + projectRoot.toAbsolutePath().normalize() + "\"\n"));
+        assertTrue(content.contains("title: \"Archive Feature Plan!\"\n"));
+        assertTrue(content.contains("userApproved: true\n"));
+        assertTrue(content.contains("approvedBy: \"alice\"\n"));
+        assertTrue(content.contains("completedBy: \"bob\"\n"));
+        assertTrue(content.contains("# Implementation Plan: Archive Feature Plan!"));
+        assertTrue(content.contains("## Approvals"));
+        assertTrue(content.contains("- **Move to Code:** Approved by alice on "));
+        assertTrue(content.contains("- **Final Acceptance:** Accepted by bob on "));
+        assertTrue(content.contains("## Handoff Log"));
+        assertTrue(content.contains("REVIEW -> PLAN (User Approved): All checks passed"));
+        assertTrue(content.contains("## Changes"));
+        assertTrue(content.contains("M src/Main.java"));
     }
 
     @Test

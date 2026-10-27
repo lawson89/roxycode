@@ -207,15 +207,8 @@ public final class PlanPanel extends JPanel {
         if (plan == null) {
             return "";
         }
-        String baseMd = plan.toMarkdown(true);
-        String changes = formatChangesText(gitStatus);
-        StringBuilder sb = new StringBuilder(baseMd);
-        sb.append("\n## Changes\n");
-        if (NO_FILES_CHANGED.equals(changes)) {
-            sb.append(NO_FILES_CHANGED).append("\n");
-        } else {
-            sb.append("```text\n").append(changes).append("\n```\n");
-        }
+        StringBuilder sb = new StringBuilder(plan.toMarkdown(true));
+        ImplementationPlan.appendChangesMarkdown(sb, formatChangesText(gitStatus));
         return sb.toString();
     }
 
@@ -268,6 +261,7 @@ public final class PlanPanel extends JPanel {
                 <h2 class='spec-technical-header'>Implementation Plan</h2>
                 <p><b>Title:</b> %s</p>
                 <p><b>Goal:</b> %s</p>
+                %s
                 <h3>Requirements:</h3>
                 <ul>%s</ul>
                 <h3>Technical Steps:</h3>
@@ -281,10 +275,53 @@ public final class PlanPanel extends JPanel {
                 .formatted(
                         SwingHtmlUtils.escapeHtml(plan.title()),
                         SwingHtmlUtils.escapeHtml(plan.goal()),
+                        renderApprovalsHtml(plan),
                         reqItems,
                         stepRows,
                         renderLogTable("Handoff Log", plan.handoffLog()),
                         renderChangesHtml(gitStatus));
+    }
+
+    private static String renderApprovalsHtml(ImplementationPlan plan) {
+        if (!plan.hasApprovals()) {
+            return "";
+        }
+        StringBuilder items = new StringBuilder();
+        if (plan.hasMoveToCodeApproval()) {
+            String user =
+                    plan.approvedBy() != null && !plan.approvedBy().isBlank()
+                            ? plan.approvedBy()
+                            : "User";
+            String timestamp =
+                    plan.approvalTimestamp() != null && !plan.approvalTimestamp().isBlank()
+                            ? plan.approvalTimestamp()
+                            : "N/A";
+            items.append("<li><b>Move to Code:</b> Approved by ")
+                    .append(SwingHtmlUtils.escapeHtml(user))
+                    .append(" on ")
+                    .append(SwingHtmlUtils.escapeHtml(timestamp))
+                    .append("</li>");
+        }
+        if (plan.hasFinalAcceptance()) {
+            String user =
+                    plan.completedBy() != null && !plan.completedBy().isBlank()
+                            ? plan.completedBy()
+                            : "User";
+            String timestamp =
+                    plan.completedOn() != null && !plan.completedOn().isBlank()
+                            ? plan.completedOn()
+                            : "N/A";
+            items.append("<li><b>Final Acceptance:</b> Accepted by ")
+                    .append(SwingHtmlUtils.escapeHtml(user))
+                    .append(" on ")
+                    .append(SwingHtmlUtils.escapeHtml(timestamp))
+                    .append("</li>");
+        }
+        return """
+                <h3>Approvals:</h3>
+                <ul>%s</ul>
+                """
+                .formatted(items);
     }
 
     private static String renderChangesHtml(String gitStatus) {

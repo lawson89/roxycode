@@ -1,6 +1,11 @@
 package org.roxycode.app.ai.services;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -17,8 +22,12 @@ import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
+import org.roxycode.app.service.ProjectService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +35,12 @@ import org.springframework.stereotype.Service;
 @Service
 @SuppressWarnings("PMD.NullAssignment")
 public class PlanService {
+
+    private static final Logger log = LoggerFactory.getLogger(PlanService.class);
+    static final String ARCHIVE_PLANS_SUBDIR = "archive/plans";
+    private static final int MAX_PLAN_SLUG_LENGTH = 40;
+    private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT);
 
     public static final String APPROVAL_PLAN_TO_CODE = "Approve Plan and proceed to Code";
     public static final String APPROVAL_REVIEW_TO_PLAN = "Approve Feature Request as complete";
@@ -76,6 +91,8 @@ public class PlanService {
 
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProjectService projectService;
+    private final GitService gitService;
     private volatile ImplementationPlan currentPlan;
     private volatile WorkflowPhase currentPhase = WorkflowPhase.PLAN;
     private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.PLAN);
@@ -84,8 +101,19 @@ public class PlanService {
 
     public PlanService(
             EnvironmentService environmentService, ApplicationEventPublisher eventPublisher) {
+        this(environmentService, eventPublisher, null, null);
+    }
+
+    @Autowired
+    public PlanService(
+            EnvironmentService environmentService,
+            ApplicationEventPublisher eventPublisher,
+            ProjectService projectService,
+            GitService gitService) {
         this.environmentService = environmentService;
         this.eventPublisher = eventPublisher;
+        this.projectService = projectService;
+        this.gitService = gitService;
     }
 
     /**
@@ -179,6 +207,7 @@ public class PlanService {
                         safeRequirements,
                         steps,
                         false,
+                        null,
                         null,
                         null,
                         null,
@@ -295,10 +324,15 @@ public class PlanService {
 
     /** Marks the current plan as completed. Internal lifecycle method. */
     public synchronized void completePlan(String timestamp) {
+        completePlan(currentPlan != null ? currentPlan.completedBy() : null, timestamp);
+    }
+
+    /** Marks the current plan as completed by the specified user. Internal lifecycle method. */
+    public synchronized void completePlan(String user, String timestamp) {
         if (currentPlan == null) {
             return;
         }
-        currentPlan = currentPlan.withCompletedOn(timestamp);
+        currentPlan = currentPlan.withCompletion(user, timestamp);
         publishPlanUpdated();
     }
 
@@ -533,7 +567,7 @@ public class PlanService {
             String message = String.format("%s -> %s: %s", oldPhase, nextPhase, reason);
             addHandoffLogEntry(timestamp, "System", message);
 
-            handleCompletionMetadata(oldPhase, nextPhase, timestamp);
+            handleCompletionMetadata(oldPhase, nextPhase, "System", timestamp);
 
             this.currentPhase = nextPhase;
             this.visitedPhases.add(nextPhase);
@@ -587,13 +621,79 @@ public class PlanService {
         }
     }
 
-    private void handleCompletionMetadata(WorkflowPhase from, WorkflowPhase to, String timestamp) {
+    private void handleCompletionMetadata(
+            WorkflowPhase from, WorkflowPhase to, String user, String timestamp) {
         if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.PLAN) {
             if (currentPlan != null) {
-                completePlan(timestamp);
+                completePlan(user, timestamp);
+                archiveCurrentPlan(currentPlan, timestamp);
                 clearPlan();
             }
         }
+    }
+
+    private void archiveCurrentPlan(ImplementationPlan plan, String timestamp) {
+        if (plan == null || projectService == null || !projectService.hasActiveProject()) {
+            return;
+        }
+        try {
+            Path archiveDir = projectService.resolveProjectDataPath(ARCHIVE_PLANS_SUBDIR);
+            Files.createDirectories(archiveDir);
+
+            String baseId =
+                    formatArchiveTimestamp(timestamp) + "-" + sanitizePlanTitle(plan.title());
+            String id = baseId;
+            Path targetFile = archiveDir.resolve(id + ".md");
+            int suffix = 2;
+            while (Files.exists(targetFile)) {
+                id = baseId + "-" + suffix;
+                targetFile = archiveDir.resolve(id + ".md");
+                suffix++;
+            }
+
+            String projectName = projectService.getProjectName();
+            Path projectRoot = projectService.getCurrentProjectRoot();
+            String projectPath =
+                    projectRoot != null ? projectRoot.toAbsolutePath().normalize().toString() : "";
+            String changesText = getGitStatusSafely();
+            String archivedMarkdown =
+                    plan.toArchivedMarkdown(id, projectName, projectPath, changesText);
+            Files.writeString(targetFile, archivedMarkdown, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.warn("Failed to archive completed implementation plan", e);
+        }
+    }
+
+    private String getGitStatusSafely() {
+        if (gitService == null) {
+            return null;
+        }
+        try {
+            return gitService.getStatus();
+        } catch (Exception e) {
+            log.debug("Failed to retrieve git status for archived plan", e);
+            return null;
+        }
+    }
+
+    static String formatArchiveTimestamp(String isoTimestamp) {
+        if (isoTimestamp != null && !isoTimestamp.isBlank()) {
+            try {
+                return OffsetDateTime.parse(isoTimestamp).format(ARCHIVE_TIMESTAMP_FORMATTER);
+            } catch (DateTimeParseException ignored) {
+                // Fall back to current time below
+            }
+        }
+        return OffsetDateTime.now().format(ARCHIVE_TIMESTAMP_FORMATTER);
+    }
+
+    static String sanitizePlanTitle(String title) {
+        String raw = title != null ? title.toLowerCase(Locale.ROOT) : "";
+        String sanitized = raw.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
+        if (sanitized.length() > MAX_PLAN_SLUG_LENGTH) {
+            sanitized = sanitized.substring(0, MAX_PLAN_SLUG_LENGTH).replaceAll("-+$", "");
+        }
+        return sanitized.isEmpty() ? "plan" : sanitized;
     }
 
     public WorkflowPhase getCurrentPhase() {
@@ -624,7 +724,7 @@ public class PlanService {
             }
 
             // Phase Completion Metadata
-            handleCompletionMetadata(currentPhase, pendingPhase, timestamp);
+            handleCompletionMetadata(currentPhase, pendingPhase, user, timestamp);
 
             this.currentPhase = pendingPhase;
             this.visitedPhases.add(pendingPhase);

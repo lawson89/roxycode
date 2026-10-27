@@ -147,16 +147,30 @@ class PlanPanelTest {
                         true,
                         "2026-04-06T12:00:00",
                         "user",
-                        null,
+                        "reviewer",
+                        "2026-04-06T13:00:00",
                         List.of(
                                 new ImplementationPlan.LogEntry(
                                         "2026-04-06T12:05:30.123",
                                         "Architect",
                                         "Created plan | verified\ndetails")));
 
+        String html = PlanPanel.buildPlanHtml(plan);
+        assertTrue(html.contains("<h3>Approvals:</h3>"));
+        assertTrue(
+                html.contains(
+                        "<li><b>Move to Code:</b> Approved by user on 2026-04-06T12:00:00</li>"));
+        assertTrue(
+                html.contains(
+                        "<li><b>Final Acceptance:</b> Accepted by reviewer on 2026-04-06T13:00:00</li>"));
+
         String md = PlanPanel.buildPlanMarkdown(plan);
         assertTrue(md.contains("# Implementation Plan: Visibility Feature"));
         assertTrue(md.contains("**Goal:** Improve visibility"));
+        assertTrue(md.contains("## Approvals"));
+        assertTrue(md.contains("- **Move to Code:** Approved by user on 2026-04-06T12:00:00"));
+        assertTrue(
+                md.contains("- **Final Acceptance:** Accepted by reviewer on 2026-04-06T13:00:00"));
         assertTrue(md.contains("## Requirements\n- Show turns\n- Export markdown"));
         assertTrue(
                 md.contains(

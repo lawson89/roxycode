@@ -11,8 +11,12 @@ public record ImplementationPlan(
         boolean userApproved,
         String approvalTimestamp,
         String approvedBy,
+        String completedBy,
         String completedOn,
         List<LogEntry> handoffLog) {
+
+    public static final String NO_FILES_CHANGED = "No files changed";
+
     public record TechStep(String description, boolean completed) {}
 
     public record LogEntry(String timestamp, String user, String message) {
@@ -35,6 +39,29 @@ public record ImplementationPlan(
         handoffLog = handoffLog != null ? List.copyOf(handoffLog) : List.of();
     }
 
+    public ImplementationPlan(
+            String title,
+            String goal,
+            List<String> requirements,
+            List<TechStep> technicalSteps,
+            boolean userApproved,
+            String approvalTimestamp,
+            String approvedBy,
+            String completedOn,
+            List<LogEntry> handoffLog) {
+        this(
+                title,
+                goal,
+                requirements,
+                technicalSteps,
+                userApproved,
+                approvalTimestamp,
+                approvedBy,
+                null,
+                completedOn,
+                handoffLog);
+    }
+
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
         return new ImplementationPlan(
                 title,
@@ -44,6 +71,7 @@ public record ImplementationPlan(
                 userApproved,
                 approvalTimestamp,
                 approvedBy,
+                completedBy,
                 completedOn,
                 handoffLog);
     }
@@ -57,11 +85,12 @@ public record ImplementationPlan(
                 true,
                 timestamp,
                 user,
+                completedBy,
                 completedOn,
                 handoffLog);
     }
 
-    public ImplementationPlan withCompletedOn(String timestamp) {
+    public ImplementationPlan withCompletion(String user, String timestamp) {
         return new ImplementationPlan(
                 title,
                 goal,
@@ -70,8 +99,13 @@ public record ImplementationPlan(
                 userApproved,
                 approvalTimestamp,
                 approvedBy,
+                user,
                 timestamp,
                 handoffLog);
+    }
+
+    public ImplementationPlan withCompletedOn(String timestamp) {
+        return withCompletion(completedBy, timestamp);
     }
 
     public ImplementationPlan withHandoffLog(List<LogEntry> newLog) {
@@ -83,6 +117,7 @@ public record ImplementationPlan(
                 userApproved,
                 approvalTimestamp,
                 approvedBy,
+                completedBy,
                 completedOn,
                 newLog);
     }
@@ -92,6 +127,18 @@ public record ImplementationPlan(
         List<LogEntry> updatedLog = new ArrayList<>(handoffLog);
         updatedLog.add(new LogEntry(timestamp, user, message));
         return withHandoffLog(updatedLog);
+    }
+
+    public boolean hasMoveToCodeApproval() {
+        return userApproved || isNonBlank(approvedBy) || isNonBlank(approvalTimestamp);
+    }
+
+    public boolean hasFinalAcceptance() {
+        return isNonBlank(completedBy) || isNonBlank(completedOn);
+    }
+
+    public boolean hasApprovals() {
+        return hasMoveToCodeApproval() || hasFinalAcceptance();
     }
 
     /**
@@ -107,11 +154,28 @@ public record ImplementationPlan(
                 # Implementation Plan: %s
 
                 **Goal:** %s
-
-                ## Requirements
                 """
                         .formatted(title != null ? title : "", goal != null ? goal : ""));
 
+        if (hasApprovals()) {
+            md.append("\n## Approvals\n");
+            if (hasMoveToCodeApproval()) {
+                md.append("- **Move to Code:** Approved by ")
+                        .append(isNonBlank(approvedBy) ? approvedBy : "User")
+                        .append(" on ")
+                        .append(isNonBlank(approvalTimestamp) ? approvalTimestamp : "N/A")
+                        .append("\n");
+            }
+            if (hasFinalAcceptance()) {
+                md.append("- **Final Acceptance:** Accepted by ")
+                        .append(isNonBlank(completedBy) ? completedBy : "User")
+                        .append(" on ")
+                        .append(isNonBlank(completedOn) ? completedOn : "N/A")
+                        .append("\n");
+            }
+        }
+
+        md.append("\n## Requirements\n");
         for (String req : requirements) {
             md.append("- ").append(req).append("\n");
         }
@@ -140,6 +204,68 @@ public record ImplementationPlan(
     }
 
     /**
+     * Formats the implementation plan as an archived Markdown document with YAML frontmatter,
+     * approvals, handoff log, and changes section.
+     *
+     * @param id the archive identifier (e.g., timestamp and slug)
+     * @param projectName the project name
+     * @param projectPath the project root path
+     * @param changesText the git status or changes summary
+     * @return the archived Markdown document with frontmatter
+     */
+    public String toArchivedMarkdown(
+            String id, String projectName, String projectPath, String changesText) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(
+                """
+                ---
+                id: "%s"
+                project: "%s"
+                projectPath: "%s"
+                title: "%s"
+                userApproved: %s
+                approvedBy: "%s"
+                approvalTimestamp: "%s"
+                completedBy: "%s"
+                completedOn: "%s"
+                ---
+
+                """
+                        .formatted(
+                                escapeFrontmatterValue(id),
+                                escapeFrontmatterValue(projectName),
+                                escapeFrontmatterValue(projectPath),
+                                escapeFrontmatterValue(title),
+                                userApproved,
+                                escapeFrontmatterValue(approvedBy),
+                                escapeFrontmatterValue(approvalTimestamp),
+                                escapeFrontmatterValue(completedBy),
+                                escapeFrontmatterValue(completedOn)));
+        sb.append(toMarkdown(true));
+        appendChangesMarkdown(sb, changesText);
+        return sb.toString();
+    }
+
+    /**
+     * Appends the Markdown {@code ## Changes} section to the given builder.
+     *
+     * @param sb the target string builder
+     * @param gitStatus the raw git status or changes text
+     */
+    public static void appendChangesMarkdown(StringBuilder sb, String gitStatus) {
+        String changes =
+                (gitStatus == null || gitStatus.isBlank())
+                        ? NO_FILES_CHANGED
+                        : gitStatus.stripTrailing();
+        sb.append("\n## Changes\n");
+        if (NO_FILES_CHANGED.equals(changes)) {
+            sb.append(NO_FILES_CHANGED).append("\n");
+        } else {
+            sb.append("```text\n").append(changes).append("\n```\n");
+        }
+    }
+
+    /**
      * Formats the technical steps as a 0-based numbered Markdown checklist.
      *
      * @return the Markdown checklist of technical steps
@@ -156,6 +282,20 @@ public record ImplementationPlan(
             index++;
         }
         return sb.toString();
+    }
+
+    private static boolean isNonBlank(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static String escapeFrontmatterValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\"", "\\\"")
+                .replace("\r\n", " ")
+                .replace('\n', ' ')
+                .replace('\r', ' ');
     }
 
     private static String escapeMarkdownTableCell(String value) {
