@@ -1,5 +1,6 @@
 package org.roxycode.app.ui;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -7,15 +8,21 @@ import java.util.List;
 import java.util.Locale;
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Element;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.html.HTML;
+import javax.swing.text.html.HTMLDocument;
 
 /**
- * A JTextPane that renders Markdown messages using native Java templates. Supports streaming
- * updates by re-rendering the message history.
+ * A JTextPane that renders Markdown messages using native Java templates. Supports incremental DOM
+ * updates and pre-rendered HTML caching.
  */
 public final class MarkdownPane extends JTextPane {
     private static final long serialVersionUID = 1L;
     private static final String COPY_PREFIX = "copy:";
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
+    private static final String ERROR_RENDERING_HTML = "<div>Error rendering message</div>";
 
     private final List<Message> messages = new ArrayList<>();
     private int copiedMessageIndex = -1;
@@ -31,7 +38,8 @@ public final class MarkdownPane extends JTextPane {
             String timestamp,
             boolean isTool,
             boolean success,
-            String error) {}
+            String error,
+            String renderedHtml) {}
 
     public MarkdownPane() {
         setEditable(false);
@@ -78,28 +86,22 @@ public final class MarkdownPane extends JTextPane {
 
     public void appendMessage(String role, String content) {
         String safeContent = content != null ? content : "";
-        messages.add(
-                new Message(
-                        role,
-                        safeContent,
-                        LocalDateTime.now().format(TIME_FORMATTER),
-                        false,
-                        true,
-                        null));
-        renderAll(true);
+        String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
+        String renderedHtml = renderMarkdownBodySafely(safeContent);
+        int index = messages.size();
+        Message msg = new Message(role, safeContent, timestamp, false, true, null, renderedHtml);
+        messages.add(msg);
+        appendRenderedEntry(formatMessageEntryHtml(msg, index));
     }
 
     public void appendToolLog(String output, boolean success, String error) {
         String safeOutput = output != null ? output : "";
-        messages.add(
-                new Message(
-                        null,
-                        safeOutput,
-                        LocalDateTime.now().format(TIME_FORMATTER),
-                        true,
-                        success,
-                        error));
-        renderAll(true);
+        String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
+        String renderedHtml = renderToolLogSafely(safeOutput, success, error);
+        int index = messages.size();
+        Message msg = new Message(null, safeOutput, timestamp, true, success, error, renderedHtml);
+        messages.add(msg);
+        appendRenderedEntry(formatMessageEntryHtml(msg, index));
     }
 
     /**
@@ -120,18 +122,30 @@ public final class MarkdownPane extends JTextPane {
         this.lastCopiedMarkdown = rawMarkdown;
         SwingHtmlUtils.copyToClipboard(rawMarkdown);
 
-        this.copiedMessageIndex = index;
-        renderAll(false);
-
         if (copyFeedbackTimer != null && copyFeedbackTimer.isRunning()) {
             copyFeedbackTimer.stop();
         }
+
+        int previousCopiedIndex = this.copiedMessageIndex;
+        this.copiedMessageIndex = index;
+
+        if (previousCopiedIndex >= 0 && previousCopiedIndex != index) {
+            updateCopyCellInPlace(previousCopiedIndex, false);
+        }
+        if (!updateCopyCellInPlace(index, true)) {
+            renderAll(false);
+        }
+
         copyFeedbackTimer =
                 new Timer(
                         COPY_FEEDBACK_DELAY_MS,
                         e -> {
+                            int indexToRevert = this.copiedMessageIndex;
                             this.copiedMessageIndex = -1;
-                            renderAll(false);
+                            if (indexToRevert >= 0
+                                    && !updateCopyCellInPlace(indexToRevert, false)) {
+                                renderAll(false);
+                            }
                         });
         copyFeedbackTimer.setRepeats(false);
         copyFeedbackTimer.start();
@@ -145,6 +159,105 @@ public final class MarkdownPane extends JTextPane {
         return lastCopiedMarkdown;
     }
 
+    Timer getCopyFeedbackTimer() {
+        return copyFeedbackTimer;
+    }
+
+    private boolean updateCopyCellInPlace(int messageIndex, boolean copied) {
+        if (!(getDocument() instanceof HTMLDocument doc)) {
+            return false;
+        }
+        Element cellElem = doc.getElement(ChatHtmlTemplates.COPY_CELL_ID_PREFIX + messageIndex);
+        if (cellElem == null) {
+            return false;
+        }
+        int savedCaret = getCaretPosition();
+        try {
+            doc.setInnerHTML(
+                    cellElem, ChatHtmlTemplates.renderCopyActionHtml(messageIndex, copied));
+            int docLen = doc.getLength();
+            setCaretPosition(Math.min(savedCaret, docLen));
+            return true;
+        } catch (BadLocationException | IOException e) {
+            return false;
+        }
+    }
+
+    private void appendRenderedEntry(String entryHtml) {
+        if (messages.size() == 1) {
+            setText("<html><body>" + entryHtml + "</body></html>");
+            scrollToBottomLater();
+            return;
+        }
+        if (getDocument() instanceof HTMLDocument doc) {
+            Element bodyElement = findBodyElement(doc.getDefaultRootElement());
+            if (bodyElement != null) {
+                try {
+                    doc.insertBeforeEnd(bodyElement, entryHtml);
+                    scrollToBottomLater();
+                    return;
+                } catch (BadLocationException | IOException ignored) {
+                    // Fall back to full re-render
+                }
+            }
+        }
+        renderAll(true);
+    }
+
+    private void scrollToBottomLater() {
+        SwingUtilities.invokeLater(() -> setCaretPosition(getDocument().getLength()));
+    }
+
+    private static Element findBodyElement(Element element) {
+        if (element == null) {
+            return null;
+        }
+        if (element.getAttributes().getAttribute(StyleConstants.NameAttribute) == HTML.Tag.BODY
+                || "body".equalsIgnoreCase(element.getName())) {
+            return element;
+        }
+        for (int i = 0; i < element.getElementCount(); i++) {
+            Element found = findBodyElement(element.getElement(i));
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private static String renderMarkdownBodySafely(String content) {
+        try {
+            return SwingHtmlUtils.renderMarkdownToHtml(content);
+        } catch (Exception e) {
+            return ERROR_RENDERING_HTML;
+        }
+    }
+
+    private static String renderToolLogSafely(String output, boolean success, String error) {
+        try {
+            return ChatHtmlTemplates.renderToolLog(output, success, error);
+        } catch (Exception e) {
+            return ERROR_RENDERING_HTML;
+        }
+    }
+
+    private String formatMessageEntryHtml(Message msg, int index) {
+        try {
+            if (msg.isTool()) {
+                return msg.renderedHtml();
+            }
+            String safeRole = msg.role() != null ? msg.role().toLowerCase(Locale.ROOT) : "";
+            return ChatHtmlTemplates.renderChatEntry(
+                    safeRole,
+                    msg.renderedHtml(),
+                    msg.timestamp(),
+                    index,
+                    index == copiedMessageIndex);
+        } catch (Exception e) {
+            return ERROR_RENDERING_HTML;
+        }
+    }
+
     private void renderAll(boolean scrollToBottom) {
         int savedCaret = getCaretPosition();
         StringBuilder fullHtml = new StringBuilder("<html><body>");
@@ -152,31 +265,13 @@ public final class MarkdownPane extends JTextPane {
             fullHtml.append(ChatHtmlTemplates.renderWelcomeCard());
         } else {
             for (int i = 0; i < messages.size(); i++) {
-                Message msg = messages.get(i);
-                try {
-                    if (msg.isTool()) {
-                        fullHtml.append(
-                                ChatHtmlTemplates.renderToolLog(
-                                        msg.content(), msg.success(), msg.error()));
-                    } else {
-                        String highlightedHtml = SwingHtmlUtils.renderMarkdownToHtml(msg.content());
-                        fullHtml.append(
-                                ChatHtmlTemplates.renderChatEntry(
-                                        msg.role().toLowerCase(Locale.ROOT),
-                                        highlightedHtml,
-                                        msg.timestamp(),
-                                        i,
-                                        i == copiedMessageIndex));
-                    }
-                } catch (Exception e) {
-                    fullHtml.append("<div>Error rendering message</div>");
-                }
+                fullHtml.append(formatMessageEntryHtml(messages.get(i), i));
             }
         }
         fullHtml.append("</body></html>");
         setText(fullHtml.toString());
         if (scrollToBottom) {
-            SwingUtilities.invokeLater(() -> setCaretPosition(getDocument().getLength()));
+            scrollToBottomLater();
         } else {
             int docLen = getDocument().getLength();
             setCaretPosition(Math.min(savedCaret, docLen));

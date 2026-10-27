@@ -26,6 +26,16 @@ class ChatHtmlTemplatesTest {
         assertTrue(result.contains("<p>Hello</p>"));
         assertTrue(result.contains("12:00:00"));
         assertFalse(result.contains("copy-action"));
+        assertFalse(result.contains("copy-cell-"));
+    }
+
+    @Test
+    void testRenderCopyActionHtml() {
+        String copyLink = ChatHtmlTemplates.renderCopyActionHtml(3, false);
+        assertEquals("<a class='copy-action' href='copy:3'>[Copy]</a>", copyLink);
+
+        String copiedSpan = ChatHtmlTemplates.renderCopyActionHtml(3, true);
+        assertEquals("<span class='copy-feedback'>&#10003; Copied!</span>", copiedSpan);
     }
 
     @Test
@@ -33,6 +43,7 @@ class ChatHtmlTemplatesTest {
         String result =
                 ChatHtmlTemplates.renderChatEntry("ai", "<p>Response</p>", "12:00:00", 2, false);
         assertTrue(result.contains("ai-entry"));
+        assertTrue(result.contains("id='copy-cell-2'"));
         assertTrue(result.contains("href='copy:2'"));
         assertTrue(result.contains("copy-action"));
         assertTrue(result.contains("[Copy]"));
@@ -45,6 +56,7 @@ class ChatHtmlTemplatesTest {
         String result =
                 ChatHtmlTemplates.renderChatEntry("ai", "<p>Response</p>", "12:00:00", 2, true);
         assertTrue(result.contains("ai-entry"));
+        assertTrue(result.contains("id='copy-cell-2'"));
         assertTrue(result.contains("copy-feedback"));
         assertTrue(result.contains("&#10003; Copied!"));
         assertFalse(result.contains("href='copy:2'"));
@@ -57,6 +69,7 @@ class ChatHtmlTemplatesTest {
         assertTrue(result.contains("user-entry"));
         assertFalse(result.contains("copy-action"));
         assertFalse(result.contains("href='copy:0'"));
+        assertFalse(result.contains("id='copy-cell-0'"));
     }
 
     @Test

@@ -9,6 +9,13 @@ public class ChatHtmlTemplates {
     private static final String ROLE_AI = "ai";
     private static final String ROLE_USER = "user";
     private static final String ROLE_SYSTEM = "system";
+    public static final String COPY_CELL_ID_PREFIX = "copy-cell-";
+
+    public static String renderCopyActionHtml(int messageIndex, boolean copied) {
+        return copied
+                ? "<span class='copy-feedback'>&#10003; Copied!</span>"
+                : "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
+    }
 
     public static String renderChatEntry(
             String role, String content, String timestamp, int messageIndex, boolean copied) {
@@ -28,12 +35,14 @@ public class ChatHtmlTemplates {
 
         String actionCell = "";
         if (ROLE_AI.equals(role) && messageIndex >= 0) {
-            String actionContent =
-                    copied
-                            ? "<span class='copy-feedback'>&#10003; Copied!</span>"
-                            : "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
+            String actionContent = renderCopyActionHtml(messageIndex, copied);
             actionCell =
-                    "<td align='right' valign='middle' nowrap='nowrap'>" + actionContent + "</td>";
+                    "<td id='"
+                            + COPY_CELL_ID_PREFIX
+                            + messageIndex
+                            + "' align='right' valign='middle' nowrap='nowrap'>"
+                            + actionContent
+                            + "</td>";
         }
 
         String template =

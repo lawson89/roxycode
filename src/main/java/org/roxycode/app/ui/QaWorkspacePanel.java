@@ -26,7 +26,7 @@ public final class QaWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
     static final String MENTOR_MODE_TITLE = "READ-ONLY MENTOR MODE";
-    static final String MENTOR_MODE_SUBTITLE = "Explore & Q&A";
+    static final String MENTOR_MODE_SUBTITLE = "Explore & Ask Questions";
     static final String PAST_TOPICS_TAB_TITLE = "Past Topics";
 
     private final JTabbedPane qaTabs;
