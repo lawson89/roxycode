@@ -317,7 +317,10 @@ public class SystemToolService {
             if (cache == null || cache.tools() == null) {
                 return List.of();
             }
-            return cache.tools().stream().map(SystemTool::enrichLegacyMetadata).toList();
+            return cache.tools().stream()
+                    .map(SystemTool::enrichLegacyMetadata)
+                    .map(SystemToolService::sanitizeCachedToolVersion)
+                    .toList();
         } catch (IOException e) {
             log.warn("Failed to load cached system tools from {}: {}", path, e.getMessage());
             return List.of();
@@ -413,6 +416,33 @@ public class SystemToolService {
         }
     }
 
+    private static final List<String> LEGACY_VERSION_NOISE_MARKERS =
+            List.of("features:", ", Copyright", "OpenJDK", "Java(TM)");
+
+    private static SystemTool sanitizeCachedToolVersion(SystemTool tool) {
+        if (tool == null
+                || StringUtils.isBlank(tool.version())
+                || VERSION_NOT_FOUND.equals(tool.version())) {
+            return tool;
+        }
+        if (DOCKER.equals(tool.name()) && STATUS_ERROR.equals(tool.status())) {
+            return new SystemTool(
+                    tool.name(),
+                    formatDockerErrorMessage(tool.version()),
+                    tool.status(),
+                    tool.description(),
+                    tool.license(),
+                    tool.websiteUrl());
+        }
+        return new SystemTool(
+                tool.name(),
+                parseVersion(tool.version(), tool.name()),
+                tool.status(),
+                tool.description(),
+                tool.license(),
+                tool.websiteUrl());
+    }
+
     static String parseVersion(String output, String toolName) {
         if (StringUtils.isBlank(output)) {
             return "Unknown";
@@ -426,14 +456,14 @@ public class SystemToolService {
         if ("Unknown".equals(firstLine)) {
             return firstLine;
         }
-        if (JAVA.equals(toolName)) {
-            return firstLine.contains("version")
-                    ? firstLine.substring(firstLine.indexOf("version"))
-                    : firstLine;
+        if (JAVA.equals(toolName) && firstLine.contains("version")) {
+            firstLine = firstLine.substring(firstLine.indexOf("version"));
         }
-        int copyrightIdx = firstLine.indexOf(", Copyright");
-        if (copyrightIdx > 0) {
-            firstLine = firstLine.substring(0, copyrightIdx).trim();
+        for (String marker : LEGACY_VERSION_NOISE_MARKERS) {
+            int idx = firstLine.indexOf(marker);
+            if (idx > 0) {
+                firstLine = firstLine.substring(0, idx).trim();
+            }
         }
         return StringUtils.abbreviate(firstLine, MAX_VERSION_LENGTH);
     }

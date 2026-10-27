@@ -116,6 +116,33 @@ class SystemToolServiceTest {
         String gitOutput = "git version 2.43.0" + (char) 10;
         assertEquals("git version 2.43.0", SystemToolService.parseVersion(gitOutput, "Git"));
 
+        // Legacy concatenated multi-line strings and overly long Java versions
+        assertEquals(
+                "ripgrep 14.1.0",
+                SystemToolService.parseVersion(
+                        "ripgrep 14.1.0features:-simd-accel,+pcre2simd(compile):+SSE2", "Ripgrep"));
+        assertEquals(
+                "Universal Ctags 5.9.0",
+                SystemToolService.parseVersion(
+                        "Universal Ctags 5.9.0, Copyright (C) 2015 Universal Ctags Team",
+                        "Universal Ctags"));
+        assertEquals(
+                "version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS",
+                SystemToolService.parseVersion(
+                        "version "
+                                + '"'
+                                + "25.0.4"
+                                + '"'
+                                + " 2026-07-21 LTSOpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)OpenJDK 64-Bit Server VM",
+                        "Java"));
+        String veryLongJavaLine =
+                "version "
+                        + '"'
+                        + "25.0.4-custom-build-identifier-with-extra-suffixes-exceeding-fifty-chars"
+                        + '"';
+        String parsedLongJava = SystemToolService.parseVersion(veryLongJavaLine, "Java");
+        assertTrue(parsedLongJava.length() <= 50, "Java version must be capped to 50 chars");
+
         assertEquals("Unknown", SystemToolService.parseVersion("", "Git"));
         assertEquals("Unknown", SystemToolService.parseVersion("   " + (char) 10 + "  ", "Git"));
     }
@@ -130,9 +157,15 @@ class SystemToolServiceTest {
                 """
                 [[tools]]
                 name = "Ripgrep"
-                version = "ripgrep 14.1.0"
+                version = "ripgrep 14.1.0features:-simd-accel,+pcre2sim..."
                 status = "Detected"
                 description = "Required for fast file searching."
+
+                [[tools]]
+                name = "Java"
+                version = 'version "25.0.4" 2026-07-21 LTSOpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)OpenJDK 64-Bit Server VM'
+                status = "Detected"
+                description = "The runtime environment for this application."
 
                 [[tools]]
                 name = "Docker"
@@ -145,14 +178,21 @@ class SystemToolServiceTest {
         SystemToolService service = new SystemToolService(settingsService, mapper, event -> {});
         List<SystemTool> loaded = service.detectTools().get(5, TimeUnit.SECONDS);
 
-        assertEquals(2, loaded.size());
+        assertEquals(3, loaded.size());
         SystemTool rg = loaded.get(0);
         assertEquals("Ripgrep", rg.name());
+        assertEquals("ripgrep 14.1.0", rg.version());
         assertEquals("Unlicense / MIT", rg.license());
         assertEquals("https://github.com/BurntSushi/ripgrep", rg.websiteUrl());
         assertTrue(rg.description().contains("GrepService"));
 
-        SystemTool docker = loaded.get(1);
+        SystemTool javaTool = loaded.get(1);
+        assertEquals("Java", javaTool.name());
+        assertEquals("version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS", javaTool.version());
+        assertEquals("GPL-2.0 with Classpath Exception", javaTool.license());
+        assertEquals("https://adoptium.net", javaTool.websiteUrl());
+
+        SystemTool docker = loaded.get(2);
         assertEquals("Docker", docker.name());
         assertEquals("Apache-2.0", docker.license());
         assertEquals("https://www.docker.com", docker.websiteUrl());

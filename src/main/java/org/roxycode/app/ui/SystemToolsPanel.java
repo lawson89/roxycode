@@ -21,6 +21,7 @@ import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
@@ -58,7 +59,11 @@ public final class SystemToolsPanel extends JPanel {
 
     public SystemToolsPanel(SystemToolService toolService) {
         this.toolService = toolService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow]", "[]10[]10[grow]"));
+        setLayout(
+                new MigLayout(
+                        "fill, insets 20, hidemode 3",
+                        "[0:0, grow, fill]",
+                        "[]10[]10[grow, fill]"));
         setOpaque(true);
 
         titleLabel = new JLabel("System Tools Status");
@@ -66,35 +71,38 @@ public final class SystemToolsPanel extends JPanel {
 
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
 
-        JPanel titleBlock = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[grow]", "[]"));
+        JPanel titleBlock =
+                new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[0:0, grow, fill]", "[]"));
         titleBlock.setOpaque(false);
-        titleBlock.add(titleLabel, "growx");
-        titleBlock.add(subtitleLabel, "growx");
+        titleBlock.add(titleLabel, "growx, wmin 0");
+        titleBlock.add(subtitleLabel, "growx, wmin 0");
 
         refreshBtn = new JButton("Refresh Status");
         refreshBtn.addActionListener(e -> refreshTools());
 
-        JPanel header = new JPanel(new MigLayout("fillx, insets 0", "[grow][]", "[center]"));
+        JPanel header =
+                new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill][]", "[center]"));
         header.setOpaque(false);
-        header.add(titleBlock, "growx");
+        header.add(titleBlock, "growx, wmin 0");
         header.add(refreshBtn);
-        add(header, "growx, wrap");
+        add(header, "growx, wmin 0, wrap");
 
         progressBar = new JProgressBar();
         progressBar.setVisible(false);
-        add(progressBar, "growx, wrap, hidemode 3");
+        add(progressBar, "growx, wmin 0, wrap, hidemode 3");
 
         cardsContainer = new ScrollableCardsPanel();
         cardsContainer.setLayout(
-                new MigLayout("fillx, wrap 1, insets 4 2 12 6, gapy 12", "[grow, fill]", ""));
+                new MigLayout("fillx, wrap 1, insets 4 2 12 6, gapy 12", "[0:0, grow, fill]", ""));
         cardsContainer.setOpaque(true);
 
         scrollPane = new JScrollPane(cardsContainer);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setOpaque(true);
         scrollPane.getViewport().setOpaque(true);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-        add(scrollPane, "grow");
+        add(scrollPane, "grow, wmin 0");
 
         applyThemeStyling();
         loadInitialTools();
@@ -165,7 +173,7 @@ public final class SystemToolsPanel extends JPanel {
                 if (tool != null) {
                     ToolCard card = new ToolCard(tool, this::openWebsite);
                     toolCards.add(card);
-                    cardsContainer.add(card, "growx");
+                    cardsContainer.add(card, "growx, wmin 0");
                 }
             }
         }
@@ -326,25 +334,26 @@ public final class SystemToolsPanel extends JPanel {
         ToolCard(SystemTool tool, Consumer<String> websiteOpener) {
             this.tool = tool;
             setLayout(
-                    new MigLayout("fillx, wrap 1, insets 14 16 14 16, gapy 8", "[grow, fill]", ""));
+                    new MigLayout(
+                            "fillx, wrap 1, insets 14 16 14 16, gapy 8", "[0:0, grow, fill]", ""));
             setOpaque(true);
 
             // 1. Header Row: Tool Icon + Name (left), Status Pill (right)
             JPanel headerRow =
-                    new JPanel(new MigLayout("fillx, insets 0", "[grow][right]", "[center]"));
+                    new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow][right]", "[center]"));
             headerRow.setOpaque(false);
 
             nameLabel = new JLabel(tool.name());
             nameLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
             nameLabel.setIconTextGap(8);
-            headerRow.add(nameLabel, "left");
+            headerRow.add(nameLabel, "left, wmin 0");
 
             statusBadge = new JLabel(tool.status());
             statusBadge.setHorizontalTextPosition(SwingConstants.RIGHT);
             statusBadge.setIconTextGap(6);
             headerRow.add(statusBadge, "right");
 
-            add(headerRow, "growx");
+            add(headerRow, "growx, wmin 0");
 
             // 2. Description Row: Multi-line wrapped purpose text
             descriptionArea = new JTextArea(tool.description());
@@ -354,19 +363,21 @@ public final class SystemToolsPanel extends JPanel {
             descriptionArea.setOpaque(false);
             descriptionArea.setFocusable(false);
             descriptionArea.setBorder(BorderFactory.createEmptyBorder());
-            add(descriptionArea, "growx");
+            add(descriptionArea, "growx, wmin 0");
 
             // 3. Footer Row: Version Pill, License Badge, Website Link
             JPanel footerRow =
                     new JPanel(
                             new MigLayout(
-                                    "insets 2 0 0 0, gapx 10", "[]10[]push[right]", "[center]"));
+                                    "fillx, insets 2 0 0 0, gapx 10",
+                                    "[]10[]push[right]",
+                                    "[center]"));
             footerRow.setOpaque(false);
 
             String versionText = StringUtils.defaultIfBlank(tool.version(), "Unknown");
             versionBadge = new JLabel(versionText);
             versionBadge.setIconTextGap(6);
-            footerRow.add(versionBadge);
+            footerRow.add(versionBadge, "wmin 0");
 
             licenseBadge =
                     new JLabel(
@@ -375,7 +386,7 @@ public final class SystemToolsPanel extends JPanel {
                                     : "");
             licenseBadge.setIconTextGap(5);
             licenseBadge.setVisible(StringUtils.isNotBlank(tool.license()));
-            footerRow.add(licenseBadge, "hidemode 3");
+            footerRow.add(licenseBadge, "wmin 0, hidemode 3");
 
             String websiteUrl = tool.websiteUrl();
             websiteLinkButton = new JButton(formatWebsiteDisplay(websiteUrl));
@@ -390,7 +401,7 @@ public final class SystemToolsPanel extends JPanel {
             }
             footerRow.add(websiteLinkButton, "right, hidemode 3");
 
-            add(footerRow, "growx");
+            add(footerRow, "growx, wmin 0");
 
             applyCardTheme();
         }

@@ -221,4 +221,82 @@ public class SystemToolsPanelTest {
         verify(splash, times(1)).setStatus("Checking system tools...");
         verify(service, times(1)).detectTools();
     }
+
+    @Test
+    public void testCardsFitWithinConstrainedViewportWithoutHorizontalOverflow() throws Exception {
+        SystemToolService service = Mockito.mock(SystemToolService.class);
+        List<SystemTool> tools =
+                List.of(
+                        SystemTool.ofKnownTool("Ripgrep", "ripgrep 14.1.0", "Detected"),
+                        SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"),
+                        SystemTool.ofKnownTool(
+                                "Universal Ctags", "Universal Ctags 5.9.0", "Detected"),
+                        SystemTool.ofKnownTool(
+                                "Java",
+                                "version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS",
+                                "Detected"),
+                        SystemTool.ofKnownTool("Docker", "Docker 29.1.3 (API 1.52)", "Detected"));
+        when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(tools));
+
+        SystemToolsPanel panel = new SystemToolsPanel(service);
+        SwingUtilities.invokeAndWait(
+                () -> {
+                    panel.setSize(700, 600);
+                    layoutRecursively(panel);
+                    layoutRecursively(panel);
+                });
+
+        int viewportWidth = panel.getCardsContainer().getParent().getWidth();
+        assertTrue(viewportWidth > 0 && viewportWidth <= 700, "Viewport width should be <= 700");
+        assertTrue(
+                panel.getCardsContainer().getWidth() <= viewportWidth,
+                "cardsContainer width ("
+                        + panel.getCardsContainer().getWidth()
+                        + ") must not exceed viewport width ("
+                        + viewportWidth
+                        + ")");
+
+        for (ToolCard card : panel.getToolCards()) {
+            assertTrue(
+                    card.getWidth() > 0 && card.getWidth() <= viewportWidth,
+                    "Card width ("
+                            + card.getWidth()
+                            + ") for "
+                            + card.getTool().name()
+                            + " must not exceed viewport width ("
+                            + viewportWidth
+                            + ")");
+            int headerWidth = card.getStatusBadge().getParent().getWidth();
+            int statusRightEdge = card.getStatusBadge().getX() + card.getStatusBadge().getWidth();
+            assertTrue(
+                    statusRightEdge <= headerWidth,
+                    "Status badge right edge ("
+                            + statusRightEdge
+                            + ") must stay inside header width ("
+                            + headerWidth
+                            + ") for "
+                            + card.getTool().name());
+
+            int footerWidth = card.getWebsiteLinkButton().getParent().getWidth();
+            int websiteRightEdge =
+                    card.getWebsiteLinkButton().getX() + card.getWebsiteLinkButton().getWidth();
+            assertTrue(
+                    websiteRightEdge <= footerWidth,
+                    "Website link button right edge ("
+                            + websiteRightEdge
+                            + ") must stay inside footer width ("
+                            + footerWidth
+                            + ") for "
+                            + card.getTool().name());
+        }
+    }
+
+    private static void layoutRecursively(java.awt.Container container) {
+        container.doLayout();
+        for (java.awt.Component child : container.getComponents()) {
+            if (child instanceof java.awt.Container childContainer) {
+                layoutRecursively(childContainer);
+            }
+        }
+    }
 }
