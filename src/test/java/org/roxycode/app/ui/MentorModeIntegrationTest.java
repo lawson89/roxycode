@@ -111,7 +111,7 @@ class MentorModeIntegrationTest {
         FontIcon searchIcon = assertInstanceOf(FontIcon.class, mentorModeLabel.getIcon());
         assertEquals(Codicons.SEARCH, searchIcon.getIkon());
         JLabel subtitleLabel = qaWorkspacePanel.getMentorSubtitleLabel();
-        assertTrue(subtitleLabel.getText().contains("Explore & Q&A"));
+        assertTrue(subtitleLabel.getText().contains(QaWorkspacePanel.MENTOR_MODE_SUBTITLE));
 
         qaWorkspacePanel.updateUI();
         assertNotNull(mentorModeLabel.getIcon());

@@ -33,16 +33,18 @@ import org.testcontainers.DockerClientFactory;
 public class SystemToolService {
     private static final Logger log = LoggerFactory.getLogger(SystemToolService.class);
     static final String SYSTEM_TOOLS_FILE = "system-tools.toml";
-    private static final String JAVA = "Java";
-    private static final String DOCKER = "Docker";
+    private static final String RIPGREP = SystemTool.TOOL_RIPGREP;
+    private static final String GIT = SystemTool.TOOL_GIT;
+    private static final String CTAGS = SystemTool.TOOL_CTAGS;
+    private static final String JAVA = SystemTool.TOOL_JAVA;
+    private static final String DOCKER = SystemTool.TOOL_DOCKER;
     private static final String ARG_VERSION = "--version";
     public static final String STATUS_DETECTED = "Detected";
     public static final String STATUS_ERROR = "Error";
     public static final String STATUS_MISSING = "Missing";
     static final String VERSION_NOT_FOUND = "Not found";
     private static final int MAX_DOCKER_ERROR_LENGTH = 120;
-    private static final String DOCKER_DESCRIPTION =
-            "Required for isolated build and test execution via Testcontainers.";
+    private static final int MAX_VERSION_LENGTH = 50;
 
     public record DockerVersionInfo(String version, String apiVersion) {}
 
@@ -280,18 +282,10 @@ public class SystemToolService {
 
     private List<SystemTool> probeAllTools() {
         List<SystemTool> tools = new ArrayList<>();
-        tools.add(detectTool("Ripgrep", "rg", ARG_VERSION, "Required for fast file searching."));
-        tools.add(
-                detectTool("Git", "git", ARG_VERSION, "Required for version control integration."));
-        tools.add(
-                detectTool(
-                        "Universal Ctags",
-                        "ctags",
-                        ARG_VERSION,
-                        "Required for code navigation and symbol extraction."));
-        tools.add(
-                detectTool(
-                        JAVA, "java", "-version", "The runtime environment for this application."));
+        tools.add(detectTool(RIPGREP, "rg", ARG_VERSION));
+        tools.add(detectTool(GIT, "git", ARG_VERSION));
+        tools.add(detectTool(CTAGS, "ctags", ARG_VERSION));
+        tools.add(detectTool(JAVA, "java", "-version"));
         tools.add(detectDockerTool());
         return tools;
     }
@@ -320,7 +314,10 @@ public class SystemToolService {
         }
         try {
             SystemToolsCache cache = mapper.readValue(path.toFile(), SystemToolsCache.class);
-            return cache != null && cache.tools() != null ? cache.tools() : List.of();
+            if (cache == null || cache.tools() == null) {
+                return List.of();
+            }
+            return cache.tools().stream().map(SystemTool::enrichLegacyMetadata).toList();
         } catch (IOException e) {
             log.warn("Failed to load cached system tools from {}: {}", path, e.getMessage());
             return List.of();
@@ -354,7 +351,7 @@ public class SystemToolService {
                     !apiVersion.isEmpty()
                             ? "Docker " + serverVersion + " (API " + apiVersion + ")"
                             : "Docker " + serverVersion;
-            return new SystemTool(DOCKER, versionDisplay, STATUS_DETECTED, DOCKER_DESCRIPTION);
+            return SystemTool.ofKnownTool(DOCKER, versionDisplay, STATUS_DETECTED);
         } catch (Throwable t) {
             ExceptionUtils.rethrowIfCancelled(t, "Docker detection cancelled");
             String rootMessage = extractDiagnosticMessage(t);
@@ -362,14 +359,10 @@ public class SystemToolService {
             if (isGenericEnvironmentNotFound(rootMessage)
                     && (dockerCliPresentSupplier == null
                             || !dockerCliPresentSupplier.getAsBoolean())) {
-                return new SystemTool(
-                        DOCKER, VERSION_NOT_FOUND, STATUS_MISSING, DOCKER_DESCRIPTION);
+                return SystemTool.ofKnownTool(DOCKER, VERSION_NOT_FOUND, STATUS_MISSING);
             }
-            return new SystemTool(
-                    DOCKER,
-                    formatDockerErrorMessage(rootMessage),
-                    STATUS_ERROR,
-                    DOCKER_DESCRIPTION);
+            return SystemTool.ofKnownTool(
+                    DOCKER, formatDockerErrorMessage(rootMessage), STATUS_ERROR);
         }
     }
 
@@ -402,33 +395,46 @@ public class SystemToolService {
         return StringUtils.abbreviate(normalized, MAX_DOCKER_ERROR_LENGTH);
     }
 
-    private SystemTool detectTool(
-            String name, String command, String versionArg, String description) {
+    private SystemTool detectTool(String name, String command, String versionArg) {
         try {
             ProcessResult result = ProcessRunner.run(List.of(command, versionArg), null, true);
             if (!result.timedOut() && result.exitCode() == 0) {
                 String version = parseVersion(result.output(), name);
-                return new SystemTool(name, version, STATUS_DETECTED, description);
+                return SystemTool.ofKnownTool(name, version, STATUS_DETECTED);
             } else {
                 log.warn("Tool {} detection failed with exit code {}", name, result.exitCode());
-                return new SystemTool(name, VERSION_NOT_FOUND, STATUS_MISSING, description);
+                return SystemTool.ofKnownTool(name, VERSION_NOT_FOUND, STATUS_MISSING);
             }
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
             log.debug("Tool {} not detected: {}", name, e.getMessage());
-            return new SystemTool(name, VERSION_NOT_FOUND, STATUS_MISSING, description);
+            return SystemTool.ofKnownTool(name, VERSION_NOT_FOUND, STATUS_MISSING);
         }
     }
 
-    private String parseVersion(String output, String toolName) {
-        if (StringUtils.isEmpty(output)) return "Unknown";
-        String fullOutput = output.trim();
-        if (JAVA.equals(toolName)) {
-            return fullOutput.contains("version")
-                    ? fullOutput.substring(fullOutput.indexOf("version"))
-                    : fullOutput;
+    static String parseVersion(String output, String toolName) {
+        if (StringUtils.isBlank(output)) {
+            return "Unknown";
         }
-        return StringUtils.abbreviate(fullOutput, 50);
+        String firstLine =
+                output.lines()
+                        .map(String::trim)
+                        .filter(line -> !line.isEmpty())
+                        .findFirst()
+                        .orElse("Unknown");
+        if ("Unknown".equals(firstLine)) {
+            return firstLine;
+        }
+        if (JAVA.equals(toolName)) {
+            return firstLine.contains("version")
+                    ? firstLine.substring(firstLine.indexOf("version"))
+                    : firstLine;
+        }
+        int copyrightIdx = firstLine.indexOf(", Copyright");
+        if (copyrightIdx > 0) {
+            firstLine = firstLine.substring(0, copyrightIdx).trim();
+        }
+        return StringUtils.abbreviate(firstLine, MAX_VERSION_LENGTH);
     }
 }

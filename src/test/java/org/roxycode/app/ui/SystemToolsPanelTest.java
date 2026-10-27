@@ -3,16 +3,21 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.mockito.Mockito;
 import org.roxycode.app.RoxyCode;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService;
+import org.roxycode.app.ui.SystemToolsPanel.ToolCard;
 
 public class SystemToolsPanelTest {
 
@@ -20,7 +25,7 @@ public class SystemToolsPanelTest {
     public void testSystemToolsPanelInstantiationWithCachedTools() throws Exception {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         List<SystemTool> cached =
-                List.of(new SystemTool("Ripgrep", "14.1.0", "Detected", "Fast search"));
+                List.of(new SystemTool("Ripgrep", "ripgrep 14.1.0", "Detected", "Fast search"));
         when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(cached));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
@@ -34,8 +39,18 @@ public class SystemToolsPanelTest {
                 panel.getProgressBar().isIndeterminate(),
                 "Progress bar should not be indeterminate while hidden");
         assertTrue(panel.getRefreshButton().isEnabled());
-        assertEquals(1, panel.tableModel.getRowCount());
-        assertEquals("Ripgrep", panel.tableModel.getValueAt(0, 0));
+        assertEquals(1, panel.getToolCards().size());
+        ToolCard card = panel.getToolCards().get(0);
+        assertEquals("Ripgrep", card.getNameLabel().getText());
+        assertEquals("ripgrep 14.1.0", card.getVersionBadge().getText());
+        assertEquals("Detected", card.getStatusBadge().getText());
+        assertEquals("Fast search", card.getDescriptionArea().getText());
+        assertEquals("License: Unlicense / MIT", card.getLicenseBadge().getText());
+        assertEquals("github.com/BurntSushi/ripgrep", card.getWebsiteLinkButton().getText());
+        assertEquals(
+                "https://github.com/BurntSushi/ripgrep",
+                card.getWebsiteLinkButton().getToolTipText());
+
         verify(service, times(1)).detectTools();
         verify(service, never()).hasCachedTools();
         verify(service, never()).getCachedTools();
@@ -43,7 +58,7 @@ public class SystemToolsPanelTest {
     }
 
     @Test
-    public void testRefreshToolsShowsProgressBarDisablesButtonAndPopulatesTable() throws Exception {
+    public void testRefreshToolsShowsProgressBarDisablesButtonAndPopulatesCards() throws Exception {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of()));
 
@@ -69,7 +84,14 @@ public class SystemToolsPanelTest {
 
         // Complete the async refresh
         List<SystemTool> tools = new ArrayList<>();
-        tools.add(new SystemTool("Test Tool", "1.0", "Detected", "Description"));
+        tools.add(
+                new SystemTool(
+                        "Test Tool",
+                        "1.0",
+                        "Detected",
+                        "Description",
+                        "MIT",
+                        "https://example.com/tool/"));
         pendingRefresh.complete(tools);
         SwingUtilities.invokeAndWait(() -> {});
 
@@ -82,30 +104,99 @@ public class SystemToolsPanelTest {
         assertTrue(
                 panel.getRefreshButton().isEnabled(),
                 "Refresh button must be re-enabled after refresh completes");
-        assertEquals(1, panel.tableModel.getRowCount());
-        assertEquals("Test Tool", panel.tableModel.getValueAt(0, 0));
-        assertEquals("1.0", panel.tableModel.getValueAt(0, 1));
-        assertEquals("Detected", panel.tableModel.getValueAt(0, 2));
-        assertEquals("Description", panel.tableModel.getValueAt(0, 3));
+        assertEquals(1, panel.getToolCards().size());
+        ToolCard card = panel.getToolCards().get(0);
+        assertEquals("Test Tool", card.getNameLabel().getText());
+        assertEquals("1.0", card.getVersionBadge().getText());
+        assertEquals("Detected", card.getStatusBadge().getText());
+        assertEquals("Description", card.getDescriptionArea().getText());
+        assertEquals("License: MIT", card.getLicenseBadge().getText());
+        assertEquals("example.com/tool", card.getWebsiteLinkButton().getText());
     }
 
     @Test
-    public void testOnSystemToolsUpdatedEventSynchronizesTable() throws Exception {
+    public void testOnSystemToolsUpdatedEventSynchronizesCardsAndStatuses() throws Exception {
         SystemToolService service = Mockito.mock(SystemToolService.class);
         when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of()));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
         SwingUtilities.invokeAndWait(() -> {});
-        assertEquals(0, panel.tableModel.getRowCount());
+        assertEquals(0, panel.getToolCards().size());
 
         List<SystemTool> updated =
-                List.of(new SystemTool("Docker", "Docker 28.0.1", "Detected", "Testcontainers"));
-        panel.onSystemToolsUpdated(new SystemToolsUpdatedEvent(updated, true));
+                List.of(
+                        SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"),
+                        SystemTool.ofKnownTool("Docker", "Client API version mismatch", "Error"),
+                        SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing"));
+        panel.onSystemToolsUpdated(new SystemToolsUpdatedEvent(updated, false));
         SwingUtilities.invokeAndWait(() -> {});
 
-        assertEquals(1, panel.tableModel.getRowCount());
-        assertEquals("Docker", panel.tableModel.getValueAt(0, 0));
-        assertEquals("Detected", panel.tableModel.getValueAt(0, 2));
+        assertEquals(3, panel.getToolCards().size());
+
+        ToolCard gitCard = panel.getToolCards().get(0);
+        assertEquals("Git", gitCard.getNameLabel().getText());
+        assertEquals("Detected", gitCard.getStatusBadge().getText());
+        assertEquals(
+                Codicons.CHECK,
+                assertInstanceOf(FontIcon.class, gitCard.getStatusBadge().getIcon()).getIkon());
+        assertEquals(
+                Codicons.SOURCE_CONTROL,
+                assertInstanceOf(FontIcon.class, gitCard.getNameLabel().getIcon()).getIkon());
+
+        ToolCard dockerCard = panel.getToolCards().get(1);
+        assertEquals("Docker", dockerCard.getNameLabel().getText());
+        assertEquals("Error", dockerCard.getStatusBadge().getText());
+        assertEquals(
+                Codicons.WARNING,
+                assertInstanceOf(FontIcon.class, dockerCard.getStatusBadge().getIcon()).getIkon());
+        assertEquals(
+                Codicons.SERVER_ENVIRONMENT,
+                assertInstanceOf(FontIcon.class, dockerCard.getNameLabel().getIcon()).getIkon());
+
+        ToolCard ctagsCard = panel.getToolCards().get(2);
+        assertEquals("Universal Ctags", ctagsCard.getNameLabel().getText());
+        assertEquals("Missing", ctagsCard.getStatusBadge().getText());
+        assertEquals(
+                Codicons.ERROR,
+                assertInstanceOf(FontIcon.class, ctagsCard.getStatusBadge().getIcon()).getIkon());
+        assertEquals(
+                Codicons.SYMBOL_CLASS,
+                assertInstanceOf(FontIcon.class, ctagsCard.getNameLabel().getIcon()).getIkon());
+    }
+
+    @Test
+    public void testWebsiteLinkClickInvokesBrowserLauncherAndUpdateUiRefreshesTheme()
+            throws Exception {
+        SystemToolService service = Mockito.mock(SystemToolService.class);
+        List<SystemTool> tools =
+                List.of(SystemTool.ofKnownTool("Java", "version 25.0.4", "Detected"));
+        when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(tools));
+
+        SystemToolsPanel panel = new SystemToolsPanel(service);
+        SwingUtilities.invokeAndWait(() -> {});
+
+        AtomicReference<URI> launchedUri = new AtomicReference<>();
+        panel.setBrowserLauncher(launchedUri::set);
+
+        ToolCard javaCard = panel.getToolCards().get(0);
+        assertEquals("adoptium.net", javaCard.getWebsiteLinkButton().getText());
+        SwingUtilities.invokeAndWait(() -> javaCard.getWebsiteLinkButton().doClick());
+        assertEquals(URI.create("https://adoptium.net"), launchedUri.get());
+
+        // Fallback when browser launcher throws
+        panel.setBrowserLauncher(
+                uri -> {
+                    throw new UnsupportedOperationException("Headless test");
+                });
+        assertDoesNotThrow(
+                () ->
+                        SwingUtilities.invokeAndWait(
+                                () -> javaCard.getWebsiteLinkButton().doClick()));
+
+        // Verify updateUI refreshes cards cleanly
+        SwingUtilities.invokeAndWait(panel::updateUI);
+        assertNotNull(javaCard.getNameLabel().getIcon());
+        assertNotNull(javaCard.getStatusBadge().getIcon());
     }
 
     @Test

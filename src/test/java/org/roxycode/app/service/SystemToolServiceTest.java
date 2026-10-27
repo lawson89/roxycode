@@ -50,7 +50,7 @@ class SystemToolServiceTest {
     }
 
     @Test
-    void testDetectToolsIncludesDockerAndJava() throws Exception {
+    void testDetectToolsIncludesRichMetadataForAllCuratedTools() throws Exception {
         SystemToolService service =
                 new SystemToolService(
                         null,
@@ -60,18 +60,103 @@ class SystemToolServiceTest {
                         () -> true);
         List<SystemTool> tools = service.detectTools().get();
 
-        assertFalse(tools.isEmpty());
+        assertEquals(5, tools.size());
+        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Ripgrep")));
+        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Git")));
+        assertTrue(tools.stream().anyMatch(t -> t.name().equals("Universal Ctags")));
         assertTrue(tools.stream().anyMatch(t -> t.name().equals("Java")));
         assertTrue(tools.stream().anyMatch(t -> t.name().equals("Docker")));
         for (SystemTool tool : tools) {
             assertNotNull(tool.name());
             assertNotNull(tool.status());
             assertNotNull(tool.version());
-            assertNotNull(tool.description());
+            assertFalse(
+                    tool.description().isBlank(),
+                    "Description should not be blank for " + tool.name());
+            assertFalse(tool.license().isBlank(), "License should not be blank for " + tool.name());
+            assertTrue(
+                    tool.websiteUrl().startsWith("https://"),
+                    "Website URL should be https for " + tool.name());
         }
 
         Boolean dockerAvailable = service.isDockerAvailable().get();
         assertEquals(service.checkDockerAvailable(), dockerAvailable);
+    }
+
+    @Test
+    void testParseVersionExtractsCleanFirstLineOnly() {
+        String rgOutput =
+                """
+                ripgrep 14.1.0
+                features:-simd-accel,+pcre2
+                simd(compile):+SSE2,-SSSE3,-AVX2
+                simd(runtime):+SSE2,+SSSE3,+AVX2
+                """;
+        assertEquals("ripgrep 14.1.0", SystemToolService.parseVersion(rgOutput, "Ripgrep"));
+
+        String ctagsOutput =
+                """
+                Universal Ctags 5.9.0, Copyright (C) 2015-2022 Universal Ctags Team
+                Universal Ctags is derived from Exuberant Ctags.
+                Exuberant Ctags 5.8, Copyright (C) 1996-2009 Darren Hiebert
+                """;
+        assertEquals(
+                "Universal Ctags 5.9.0",
+                SystemToolService.parseVersion(ctagsOutput, "Universal Ctags"));
+
+        String javaOutput =
+                """
+                openjdk version "25.0.4" 2026-07-21 LTS
+                OpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)
+                OpenJDK 64-Bit Server VM Temurin-25.0.4+7 (build 25.0.4+7-LTS, mixed mode, sharing)
+                """;
+        assertEquals(
+                "version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS",
+                SystemToolService.parseVersion(javaOutput, "Java"));
+        String gitOutput = "git version 2.43.0" + (char) 10;
+        assertEquals("git version 2.43.0", SystemToolService.parseVersion(gitOutput, "Git"));
+
+        assertEquals("Unknown", SystemToolService.parseVersion("", "Git"));
+        assertEquals("Unknown", SystemToolService.parseVersion("   " + (char) 10 + "  ", "Git"));
+    }
+
+    @Test
+    void testLegacyTomlCacheEnrichesMissingLicenseWebsiteAndLegacyDescriptions() throws Exception {
+        TomlMapper mapper = AiConfig.SHARED_TOML_MAPPER;
+        SettingsService settingsService = new SettingsService(mapper, null);
+        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
+
+        String legacyToml =
+                """
+                [[tools]]
+                name = "Ripgrep"
+                version = "ripgrep 14.1.0"
+                status = "Detected"
+                description = "Required for fast file searching."
+
+                [[tools]]
+                name = "Docker"
+                version = "Docker 28.0.1 (API 1.48)"
+                status = "Detected"
+                description = "Required for isolated build and test execution via Testcontainers."
+                """;
+        Files.writeString(tempDir.resolve(SystemToolService.SYSTEM_TOOLS_FILE), legacyToml);
+
+        SystemToolService service = new SystemToolService(settingsService, mapper, event -> {});
+        List<SystemTool> loaded = service.detectTools().get(5, TimeUnit.SECONDS);
+
+        assertEquals(2, loaded.size());
+        SystemTool rg = loaded.get(0);
+        assertEquals("Ripgrep", rg.name());
+        assertEquals("Unlicense / MIT", rg.license());
+        assertEquals("https://github.com/BurntSushi/ripgrep", rg.websiteUrl());
+        assertTrue(rg.description().contains("GrepService"));
+
+        SystemTool docker = loaded.get(1);
+        assertEquals("Docker", docker.name());
+        assertEquals("Apache-2.0", docker.license());
+        assertEquals("https://www.docker.com", docker.websiteUrl());
+        assertTrue(docker.description().contains("BuildContainerService"));
     }
 
     @Test
@@ -80,6 +165,8 @@ class SystemToolServiceTest {
                 assertDockerTool(
                         () -> new DockerVersionInfo("28.0.1", "1.48"), true, "Detected", true);
         assertEquals("Docker 28.0.1 (API 1.48)", dockerTool.version());
+        assertEquals("Apache-2.0", dockerTool.license());
+        assertEquals("https://www.docker.com", dockerTool.websiteUrl());
     }
 
     @Test
@@ -192,6 +279,8 @@ class SystemToolServiceTest {
         assertTrue(service2.hasCachedTools());
         assertEquals(2, diskLoaded.size());
         assertEquals("2.45.1", diskLoaded.get(0).version());
+        assertEquals("GPL-2.0", diskLoaded.get(0).license());
+        assertEquals("https://git-scm.com", diskLoaded.get(0).websiteUrl());
         assertEquals(0, secondProbeCount.get());
         assertEquals(diskLoaded, service2.detectTools().get(5, TimeUnit.SECONDS));
         assertEquals(0, secondProbeCount.get());
