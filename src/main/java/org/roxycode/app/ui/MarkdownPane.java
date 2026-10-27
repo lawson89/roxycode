@@ -23,6 +23,8 @@ public final class MarkdownPane extends JTextPane {
     private String lastCopiedMarkdown;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
+    public record ChatTranscriptEntry(String role, String content, String timestamp) {}
+
     private record Message(
             String role,
             String content,
@@ -179,6 +181,18 @@ public final class MarkdownPane extends JTextPane {
             int docLen = getDocument().getLength();
             setCaretPosition(Math.min(savedCaret, docLen));
         }
+    }
+
+    public List<ChatTranscriptEntry> getConversationMessages() {
+        List<ChatTranscriptEntry> transcript = new ArrayList<>();
+        for (Message msg : messages) {
+            if (!msg.isTool()
+                    && msg.role() != null
+                    && ("user".equalsIgnoreCase(msg.role()) || "ai".equalsIgnoreCase(msg.role()))) {
+                transcript.add(new ChatTranscriptEntry(msg.role(), msg.content(), msg.timestamp()));
+            }
+        }
+        return List.copyOf(transcript);
     }
 
     public void clear() {

@@ -356,20 +356,33 @@ class PromptServiceTest {
                                 "p3.md: Plan 3",
                                 "p2.md: Plan 2",
                                 "p1.md: Plan 1"));
+        when(memoryService.listArchivedTopics())
+                .thenReturn(
+                        List.of(
+                                "t6.md: Topic 6",
+                                "t5.md: Topic 5",
+                                "t4.md: Topic 4",
+                                "t3.md: Topic 3",
+                                "t2.md: Topic 2",
+                                "t1.md: Topic 1"));
 
         String stable = psWithMemory.getStableContext();
         assertContainsAll(
                 stable,
                 "## GLOBAL AGENT MEMORY",
                 "# Global Prefs\n- Use Java 21",
-                "- style.md - \"Style Guide\" [java]",
+                "style.md",
                 "Use memoryService.readGlobalNote(slug) or memoryService.search(pattern) to inspect.",
                 "## PROJECT AGENT MEMORY & ARCHIVE",
                 "# Project Rules\n- Use MigLayout",
-                "- swing-tables.md - \"Swing Tables\" [ui, swing]",
+                "swing-tables.md",
+                "### Recent Archived Plans",
                 "- p6.md: Plan 6",
                 "- p2.md: Plan 2",
-                "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), or memoryService.search(pattern) to inspect.");
-        assertContainsNone(stable, "- p1.md: Plan 1");
+                "### Recent Archived Topics",
+                "- t6.md: Topic 6",
+                "- t2.md: Topic 2",
+                "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), memoryService.readArchivedTopic(filename), or memoryService.search(pattern) to inspect.");
+        assertContainsNone(stable, "- p1.md: Plan 1", "- t1.md: Topic 1");
     }
 }

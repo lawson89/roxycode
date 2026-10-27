@@ -2,8 +2,10 @@ package org.roxycode.app.ui;
 
 import java.util.concurrent.Executor;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.service.AiService;
+import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -23,7 +25,9 @@ public final class ExploreChatPanel extends ChatPanel {
             ApplicationEventPublisher eventPublisher,
             ChatMemory chatMemory,
             SettingsService settingsService,
-            @Qualifier("chatTurnExecutor") Executor turnExecutor) {
+            @Qualifier("chatTurnExecutor") Executor turnExecutor,
+            MemoryService memoryService,
+            EnvironmentService environmentService) {
         super(
                 aiService,
                 planService,
@@ -34,5 +38,6 @@ public final class ExploreChatPanel extends ChatPanel {
                 false,
                 settingsService,
                 turnExecutor);
+        getController().setTopicArchiveServices(memoryService, environmentService);
     }
 }

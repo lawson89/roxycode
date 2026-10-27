@@ -42,6 +42,11 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
     private static final String MIG_GROWX_WRAP = "growx, wrap";
 
+    static final String NEW_TOPIC_BUTTON_TEXT = "New Topic";
+    static final String RESET_SESSION_BUTTON_TEXT = "Reset Session";
+    static final String NEW_TOPIC_TOOLTIP =
+            "Archive current conversation and start a new Q&A topic";
+
     private final transient ChatModel model;
     private final transient ChatController controller;
 
@@ -81,10 +86,8 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                         chatMemory,
                         settingsService,
                         turnExecutor);
-
         attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         attachmentPanel.setOpaque(false);
-        attachmentPanel.setVisible(false);
 
         setLayout(new BorderLayout());
 
@@ -198,7 +201,15 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                 FlatClientProperties.STYLE, "arc: 8; foreground: $Label.disabledForeground");
         attachImageButton.addActionListener(e -> chooseImageAttachment());
 
-        resetSessionButton = new JButton("Reset Session", FontIcon.of(Codicons.REFRESH, 16));
+        if (isTaskMode) {
+            resetSessionButton =
+                    new JButton(RESET_SESSION_BUTTON_TEXT, FontIcon.of(Codicons.REFRESH, 16));
+        } else {
+            resetSessionButton =
+                    new JButton(
+                            NEW_TOPIC_BUTTON_TEXT, FontIcon.of(Codicons.COMMENT_DISCUSSION, 16));
+            resetSessionButton.setToolTipText(NEW_TOPIC_TOOLTIP);
+        }
         resetSessionButton.setMargin(new Insets(4, 10, 4, 10));
         resetSessionButton.putClientProperty(
                 FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
@@ -344,12 +355,12 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     boolean confirmResetSession() {
-        int result =
-                JOptionPane.showConfirmDialog(
-                        this,
-                        "Reset session? This cancels active tasks and clears chat history.",
-                        "Reset",
-                        JOptionPane.YES_NO_OPTION);
+        String message =
+                model.isTaskMode()
+                        ? "Reset session? This cancels active tasks and clears chat history."
+                        : "Start a new topic? The current conversation will be archived.";
+        String title = model.isTaskMode() ? "Reset" : NEW_TOPIC_BUTTON_TEXT;
+        int result = JOptionPane.showConfirmDialog(this, message, title, JOptionPane.YES_NO_OPTION);
         return result == JOptionPane.YES_OPTION;
     }
 
@@ -455,6 +466,10 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
+    public List<MarkdownPane.ChatTranscriptEntry> getConversationMessages() {
+        return outputArea.getConversationMessages();
+    }
+
     public MarkdownPane getOutputArea() {
         return outputArea;
     }
@@ -473,6 +488,10 @@ public class ChatPanel extends JPanel implements AutoCloseable {
 
     public JButton getAttachImageButton() {
         return attachImageButton;
+    }
+
+    public JButton getResetSessionButton() {
+        return resetSessionButton;
     }
 
     JPanel getInlineActionPanel() {

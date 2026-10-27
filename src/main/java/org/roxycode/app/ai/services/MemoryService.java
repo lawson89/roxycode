@@ -15,10 +15,12 @@ import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,14 +29,14 @@ import org.springframework.stereotype.Service;
 /**
  * Service providing a Two-Tier Agent Memory system supporting Global Memory (~/.roxycode/memory/)
  * and Project Memory (<projectDataDir>/memory/), topic notes with YAML frontmatter, archived plans,
- * and unified RipGrep search.
+ * archived Q&A topics, and unified RipGrep search.
  */
 @Service
 @AgentService(
         value = "memoryService",
         phases = {"*"})
 @AgentDoc(
-        "Provides two-tier Global and Project Agent Memory (MEMORY.md cheat-sheets, frontmatter topic notes, archived plans, and unified RipGrep search) across all workflow phases.")
+        "Provides two-tier Global and Project Agent Memory (MEMORY.md cheat-sheets, frontmatter topic notes, archived plans, archived Q&A topics, and unified RipGrep search) across all workflow phases.")
 public class MemoryService {
     private static final Logger log = LoggerFactory.getLogger(MemoryService.class);
 
@@ -42,6 +44,7 @@ public class MemoryService {
     static final String MEMORY_INDEX_FILE = "MEMORY.md";
     static final String NOTES_SUBDIR = "notes";
     static final String ARCHIVE_PLANS_SUBDIR = PlanService.ARCHIVE_PLANS_SUBDIR;
+    public static final String ARCHIVE_TOPICS_SUBDIR = "archive/topics";
     static final int MAX_SLUG_LENGTH = 50;
     static final int MAX_PINNED_MEMORY_LINES = 200;
     static final int MAX_PINNED_MEMORY_CHARS = 8192;
@@ -258,7 +261,159 @@ public class MemoryService {
                     "Lists archived completed implementation plans from <projectDataDir>/archive/plans/*.md (most recent first).",
             examples = "memoryService.listArchivedPlans()")
     public List<String> listArchivedPlans() {
+        return listArchivedMarkdownSummaries(getArchivedPlansDir(), "plans");
+    }
+
+    /** Reads an archived implementation plan from <projectDataDir>/archive/plans/<filename>. */
+    @AgentDoc(
+            value =
+                    "Reads an archived implementation plan from <projectDataDir>/archive/plans/<filename>.",
+            examples = "memoryService.readArchivedPlan('20250514-153000-feature-plan.md')")
+    public String readArchivedPlan(
+            @AgentDoc("The archived plan filename (with or without .md)") String filename) {
+        String cleanName = sanitizeArchiveFilename(filename);
         Path archiveDir = getArchivedPlansDir();
+        if (archiveDir == null) {
+            return "";
+        }
+        Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
+        if (!target.startsWith(archiveDir)) {
+            throw new IllegalArgumentException("Invalid archived plan filename: " + filename);
+        }
+        return readFileIfExists(target);
+    }
+
+    /** Lists archived Q&A topics from <projectDataDir>/archive/topics/*.md. */
+    @AgentDoc(
+            value =
+                    "Lists archived Q&A topic conversations from <projectDataDir>/archive/topics/*.md (most recent first).",
+            examples = "memoryService.listArchivedTopics()")
+    public List<String> listArchivedTopics() {
+        return listArchivedMarkdownSummaries(getArchivedTopicsDir(), "topics");
+    }
+
+    /** Reads an archived Q&A topic from <projectDataDir>/archive/topics/<filename>. */
+    @AgentDoc(
+            value =
+                    "Reads an archived Q&A topic conversation from <projectDataDir>/archive/topics/<filename>.",
+            examples = "memoryService.readArchivedTopic('20250514-153000-memory-architecture.md')")
+    public String readArchivedTopic(
+            @AgentDoc("The archived topic filename (with or without .md)") String filename) {
+        String cleanName = sanitizeArchiveFilename(filename);
+        Path archiveDir = getArchivedTopicsDir();
+        if (archiveDir == null) {
+            return "";
+        }
+        Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
+        if (!target.startsWith(archiveDir)) {
+            throw new IllegalArgumentException("Invalid archived topic filename: " + filename);
+        }
+        return readFileIfExists(target);
+    }
+
+    /**
+     * Archives a Q&A topic conversation transcript with YAML frontmatter to {@code
+     * <projectDataDir>/archive/topics/<YYYYMMDD-HHmmss>-<slug>.md}.
+     *
+     * @param title the topic title
+     * @param user the user who created/archived the topic
+     * @param isoTimestamp the ISO-8601 timestamp when archived
+     * @param entries the non-empty conversation transcript entries
+     * @return the saved archive filename (e.g. {@code 20250514-153000-topic.md}), or {@code null}
+     *     if skipped or failed
+     */
+    public String archiveTopicConversation(
+            String title, String user, String isoTimestamp, List<ChatTranscriptEntry> entries) {
+        if (entries == null
+                || entries.isEmpty()
+                || projectService == null
+                || !projectService.hasActiveProject()) {
+            return null;
+        }
+        Path archiveDir = getArchivedTopicsDir();
+        if (archiveDir == null) {
+            return null;
+        }
+        try {
+            Files.createDirectories(archiveDir);
+
+            String resolvedTitle =
+                    (title != null && !title.isBlank())
+                            ? title.trim()
+                            : AiService.DEFAULT_TOPIC_TITLE;
+            String slug = PlanService.sanitizePlanTitle(resolvedTitle);
+            if ("plan".equals(slug) && !resolvedTitle.toLowerCase(Locale.ROOT).contains("plan")) {
+                slug = "topic";
+            }
+
+            String baseId = PlanService.formatArchiveTimestamp(isoTimestamp) + "-" + slug;
+            String id = baseId;
+            Path targetFile = archiveDir.resolve(id + MD_EXTENSION);
+            int suffix = 2;
+            while (Files.exists(targetFile)) {
+                id = baseId + "-" + suffix;
+                targetFile = archiveDir.resolve(id + MD_EXTENSION);
+                suffix++;
+            }
+
+            String projectName = projectService.getProjectName();
+            Path projectRoot = projectService.getCurrentProjectRoot();
+            String projectPath =
+                    projectRoot != null ? projectRoot.toAbsolutePath().normalize().toString() : "";
+            String resolvedUser = (user != null && !user.isBlank()) ? user.trim() : "User";
+            String resolvedTimestamp =
+                    (isoTimestamp != null && !isoTimestamp.isBlank())
+                            ? isoTimestamp.trim()
+                            : Instant.now().toString();
+
+            StringBuilder md = new StringBuilder();
+            md.append(
+                    """
+                    ---
+                    id: "%s"
+                    type: "topic"
+                    project: "%s"
+                    projectPath: "%s"
+                    title: "%s"
+                    createdBy: "%s"
+                    archivedOn: "%s"
+                    messageCount: %d
+                    ---
+
+                    # Topic: %s
+
+                    ## Conversation Transcript
+                    """
+                            .formatted(
+                                    escapeFrontmatter(id),
+                                    escapeFrontmatter(projectName),
+                                    escapeFrontmatter(projectPath),
+                                    escapeFrontmatter(resolvedTitle),
+                                    escapeFrontmatter(resolvedUser),
+                                    escapeFrontmatter(resolvedTimestamp),
+                                    entries.size(),
+                                    resolvedTitle));
+
+            for (ChatTranscriptEntry entry : entries) {
+                String speaker = "user".equalsIgnoreCase(entry.role()) ? "User" : "Roxy";
+                md.append("\n### ").append(speaker);
+                if (entry.timestamp() != null && !entry.timestamp().isBlank()) {
+                    md.append(" (").append(entry.timestamp().trim()).append(")");
+                }
+                md.append("\n");
+                String content = entry.content() != null ? entry.content().stripTrailing() : "";
+                md.append(content).append("\n");
+            }
+
+            Files.writeString(targetFile, md.toString(), StandardCharsets.UTF_8);
+            return targetFile.getFileName().toString();
+        } catch (Exception e) {
+            log.warn("Failed to archive Q&A topic conversation: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<String> listArchivedMarkdownSummaries(Path archiveDir, String label) {
         if (archiveDir == null || !Files.isDirectory(archiveDir)) {
             return List.of();
         }
@@ -285,54 +440,36 @@ public class MemoryService {
             }
             return List.copyOf(summaries);
         } catch (IOException e) {
-            log.warn("Failed to list archived plans in {}: {}", archiveDir, e.getMessage());
+            log.warn("Failed to list archived {} in {}: {}", label, archiveDir, e.getMessage());
             return List.of();
         }
     }
 
-    /** Reads an archived implementation plan from <projectDataDir>/archive/plans/<filename>. */
-    @AgentDoc(
-            value =
-                    "Reads an archived implementation plan from <projectDataDir>/archive/plans/<filename>.",
-            examples = "memoryService.readArchivedPlan('20250514-153000-feature-plan.md')")
-    public String readArchivedPlan(
-            @AgentDoc("The archived plan filename (with or without .md)") String filename) {
-        String cleanName = sanitizeArchiveFilename(filename);
-        Path archiveDir = getArchivedPlansDir();
-        if (archiveDir == null) {
-            return "";
-        }
-        Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
-        if (!target.startsWith(archiveDir)) {
-            throw new IllegalArgumentException("Invalid archived plan filename: " + filename);
-        }
-        return readFileIfExists(target);
-    }
-
     /**
-     * Searches across Global Memory, Project Memory, and Archived Plans using RipGrep.
+     * Searches across Global Memory, Project Memory, Archived Plans, and Archived Topics using
+     * RipGrep.
      *
      * @param pattern the regex pattern to search for
      * @return the search results with [GLOBAL], [PROJECT], and [ARCHIVE] prefixes
      */
     @AgentDoc(
             value =
-                    "Searches across Global Memory (~/.roxycode/memory/), Project Memory (<projectDataDir>/memory/), and Archived Plans (<projectDataDir>/archive/plans/) using RipGrep.",
+                    "Searches across Global Memory (~/.roxycode/memory/), Project Memory (<projectDataDir>/memory/), Archived Plans (<projectDataDir>/archive/plans/), and Archived Topics (<projectDataDir>/archive/topics/) using RipGrep.",
             examples = "memoryService.search('swing')")
     public EditorResult search(@AgentDoc("The regex pattern to search for") String pattern) {
         return executeSearch(pattern, false);
     }
 
     /**
-     * Searches case-insensitively across Global Memory, Project Memory, and Archived Plans using
-     * RipGrep.
+     * Searches case-insensitively across Global Memory, Project Memory, Archived Plans, and
+     * Archived Topics using RipGrep.
      *
      * @param pattern the regex pattern to search for case-insensitively
      * @return the search results with [GLOBAL], [PROJECT], and [ARCHIVE] prefixes
      */
     @AgentDoc(
             value =
-                    "Searches case-insensitively across Global Memory, Project Memory, and Archived Plans using RipGrep.",
+                    "Searches case-insensitively across Global Memory, Project Memory, Archived Plans, and Archived Topics using RipGrep.",
             examples = "memoryService.searchIgnoreCase('table layout')")
     public EditorResult searchIgnoreCase(
             @AgentDoc("The regex pattern to search for case-insensitively") String pattern) {
@@ -347,8 +484,9 @@ public class MemoryService {
         Path globalDir = getGlobalMemoryDir();
         Path projectDir = getProjectMemoryDir();
         Path archiveDir = getArchivedPlansDir();
+        Path archiveTopicsDir = getArchivedTopicsDir();
 
-        List<Path> existingDirs = new ArrayList<>(3);
+        List<Path> existingDirs = new ArrayList<>(4);
         if (globalDir != null && Files.isDirectory(globalDir)) {
             existingDirs.add(globalDir);
         }
@@ -357,6 +495,9 @@ public class MemoryService {
         }
         if (archiveDir != null && Files.isDirectory(archiveDir)) {
             existingDirs.add(archiveDir);
+        }
+        if (archiveTopicsDir != null && Files.isDirectory(archiveTopicsDir)) {
+            existingDirs.add(archiveTopicsDir);
         }
 
         if (existingDirs.isEmpty()) {
@@ -400,7 +541,11 @@ public class MemoryService {
 
             String normalized =
                     normalizeSearchOutput(
-                            result.output().trim(), globalDir, projectDir, archiveDir);
+                            result.output().trim(),
+                            globalDir,
+                            projectDir,
+                            archiveDir,
+                            archiveTopicsDir);
             String capped = GrepService.capOutputLines(normalized, GrepService.MAX_OUTPUT_LINES);
             return new EditorResult(true, capped, null);
         } catch (IOException e) {
@@ -411,12 +556,22 @@ public class MemoryService {
 
     static String normalizeSearchOutput(
             String rawOutput, Path globalDir, Path projectDir, Path archiveDir) {
+        return normalizeSearchOutput(rawOutput, globalDir, projectDir, archiveDir, null);
+    }
+
+    static String normalizeSearchOutput(
+            String rawOutput,
+            Path globalDir,
+            Path projectDir,
+            Path archiveDir,
+            Path archiveTopicsDir) {
         if (rawOutput == null || rawOutput.isEmpty()) {
             return "";
         }
         String globalPrefix = toSlashPrefix(globalDir);
         String projectPrefix = toSlashPrefix(projectDir);
         String archivePrefix = toSlashPrefix(archiveDir);
+        String archiveTopicsPrefix = toSlashPrefix(archiveTopicsDir);
 
         List<String> lines = rawOutput.lines().toList();
         StringBuilder sb = new StringBuilder();
@@ -432,6 +587,10 @@ public class MemoryService {
                 sb.append("[PROJECT] ").append(slashLine.substring(projectPrefix.length()));
             } else if (!archivePrefix.isEmpty() && slashLine.startsWith(archivePrefix)) {
                 sb.append("[ARCHIVE] plans/").append(slashLine.substring(archivePrefix.length()));
+            } else if (!archiveTopicsPrefix.isEmpty()
+                    && slashLine.startsWith(archiveTopicsPrefix)) {
+                sb.append("[ARCHIVE] topics/")
+                        .append(slashLine.substring(archiveTopicsPrefix.length()));
             } else {
                 sb.append(line);
             }
@@ -486,7 +645,7 @@ public class MemoryService {
 
     static String sanitizeArchiveFilename(String filename) {
         if (filename == null || filename.isBlank()) {
-            throw new IllegalArgumentException("Archived plan filename must not be blank");
+            throw new IllegalArgumentException("Archived filename must not be blank");
         }
         String trimmed = filename.trim();
         int colonIdx = trimmed.indexOf(':');
@@ -495,7 +654,7 @@ public class MemoryService {
         }
         if (trimmed.contains("..") || trimmed.contains("/") || trimmed.contains(BACKSLASH_STR)) {
             throw new IllegalArgumentException(
-                    "Invalid archived plan filename (path traversal not allowed): " + filename);
+                    "Invalid archived filename (path traversal not allowed): " + filename);
         }
         if (!trimmed.toLowerCase(Locale.ROOT).endsWith(MD_EXTENSION)) {
             trimmed = trimmed + MD_EXTENSION;
@@ -721,6 +880,14 @@ public class MemoryService {
             return null;
         }
         Path dir = projectService.resolveProjectDataPath(ARCHIVE_PLANS_SUBDIR);
+        return dir != null ? dir.toAbsolutePath().normalize() : null;
+    }
+
+    Path getArchivedTopicsDir() {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return null;
+        }
+        Path dir = projectService.resolveProjectDataPath(ARCHIVE_TOPICS_SUBDIR);
         return dir != null ? dir.toAbsolutePath().normalize() : null;
     }
 }

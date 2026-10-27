@@ -7,10 +7,12 @@ import java.util.concurrent.Executor;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
+import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -20,6 +22,8 @@ abstract class ChatTestFixture {
 
     protected AiService aiService;
     protected PlanService planService;
+    protected MemoryService memoryService;
+    protected EnvironmentService environmentService;
     protected ApplicationEventPublisher publisher;
     protected ChatMemory chatMemory;
     protected SettingsService settingsService;
@@ -29,6 +33,8 @@ abstract class ChatTestFixture {
     void setUpChatFixture() {
         aiService = mock(AiService.class);
         planService = mock(PlanService.class);
+        memoryService = mock(MemoryService.class);
+        environmentService = mock(EnvironmentService.class);
         publisher = mock(ApplicationEventPublisher.class);
         chatMemory = mock(ChatMemory.class);
         settingsService = mock(SettingsService.class);
@@ -47,7 +53,14 @@ abstract class ChatTestFixture {
 
     protected ExploreChatPanel createExploreChatPanel(Executor executor) {
         return new ExploreChatPanel(
-                aiService, planService, publisher, chatMemory, settingsService, executor);
+                aiService,
+                planService,
+                publisher,
+                chatMemory,
+                settingsService,
+                executor,
+                memoryService,
+                environmentService);
     }
 
     protected static void flushEdt() throws Exception {

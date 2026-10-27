@@ -127,4 +127,26 @@ class MarkdownPaneTest {
                                 .strip()),
                 "Chat card 4px accent bar should remain intact");
     }
+
+    @Test
+    void testGetConversationMessagesFiltersOutToolLogsAndSystemMessages() {
+        MarkdownPane pane = new MarkdownPane();
+        assertTrue(pane.getConversationMessages().isEmpty());
+
+        pane.appendMessage("user", "How does MemoryService work?");
+        pane.appendToolLog("memoryService.search('test')", true, null);
+        pane.appendMessage("ai", "It uses RipGrep across memory directories.");
+        pane.appendMessage("system", "Started a new topic.");
+
+        var transcript = pane.getConversationMessages();
+        assertEquals(2, transcript.size());
+        assertEquals("user", transcript.get(0).role());
+        assertEquals("How does MemoryService work?", transcript.get(0).content());
+        assertNotNull(transcript.get(0).timestamp());
+        assertEquals("ai", transcript.get(1).role());
+        assertEquals("It uses RipGrep across memory directories.", transcript.get(1).content());
+
+        pane.clear();
+        assertTrue(pane.getConversationMessages().isEmpty());
+    }
 }

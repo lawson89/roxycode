@@ -271,4 +271,46 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals(0, panel.getController().getConsecutiveAutoNudges());
         assertNull(panel.getController().getAutoNudgeTimer());
     }
+
+    @Test
+    void testPerformResetSessionInQaModeArchivesNonEmptyTopicAndSkipsWhenEmpty() throws Exception {
+        ExploreChatPanel panel = createExploreChatPanel(directExecutor);
+
+        // 1. Empty Q&A session: resets cleanly without archiving
+        SwingUtilities.invokeAndWait(() -> panel.getController().performResetSession());
+        flushEdt();
+
+        verify(chatMemory).clear("qa:default");
+        verifyNoInteractions(memoryService);
+        assertTrue(panel.getOutputArea().getText().contains("Started a new topic."));
+
+        // 2. Non-empty Q&A session: names topic via AiService and archives via MemoryService
+        clearInvocations(chatMemory, aiService, memoryService);
+        when(environmentService.getCurrentUser()).thenReturn("DevUser");
+        when(aiService.generateTopicTitle(anyString())).thenReturn("RipGrep Search Architecture");
+        when(memoryService.archiveTopicConversation(
+                        eq("RipGrep Search Architecture"), eq("DevUser"), anyString(), anyList()))
+                .thenReturn("20250514-153000-ripgrep-search-architecture.md");
+
+        SwingUtilities.invokeAndWait(
+                () -> {
+                    panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
+                    panel.appendMessage("ai", "It searches global, project, and archive dirs.");
+                    panel.getController().performResetSession();
+                });
+        flushEdt();
+
+        verify(chatMemory).clear("qa:default");
+        verify(aiService).generateTopicTitle(contains("How does RipGrep search work"));
+        verify(memoryService)
+                .archiveTopicConversation(
+                        eq("RipGrep Search Architecture"),
+                        eq("DevUser"),
+                        anyString(),
+                        argThat(list -> list.size() == 2));
+        String html = panel.getOutputArea().getText();
+        assertTrue(html.contains("Archived previous topic as"));
+        assertTrue(html.contains("RipGrep Search Architecture"));
+        assertTrue(html.contains("20250514-153000-ripgrep-search-architecture.md"));
+    }
 }

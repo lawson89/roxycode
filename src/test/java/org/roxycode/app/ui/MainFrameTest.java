@@ -55,7 +55,14 @@ class MainFrameTest {
 
         ExploreChatPanel exploreChatPanel =
                 new ExploreChatPanel(
-                        aiService, planService, eventPublisher, chatMemory, settingsService, null);
+                        aiService,
+                        planService,
+                        eventPublisher,
+                        chatMemory,
+                        settingsService,
+                        null,
+                        null,
+                        envService);
         FeatureChatPanel featureChatPanel =
                 new FeatureChatPanel(
                         aiService, planService, eventPublisher, chatMemory, settingsService, null);

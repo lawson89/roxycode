@@ -342,4 +342,33 @@ class AiServiceTest {
                 () -> aiService.chat("default", null, "Trigger error", null));
         verify(eventPublisher, never()).publishEvent(any(AgentTurnCompleteEvent.class));
     }
+
+    @Test
+    void testGenerateTopicTitleSanitizesAndFallsBackOnBlankOrError() {
+        assertEquals(AiService.DEFAULT_TOPIC_TITLE, aiService.generateTopicTitle("   "));
+
+        when(responseSpec.chatResponse())
+                .thenReturn(
+                        buildChatResponse(
+                                "  '# **Memory Service RipGrep Search**'\nExtra line",
+                                "STOP",
+                                null));
+        String title =
+                aiService.generateTopicTitle(
+                        "User: How does memory search work?\nRoxy: It uses RipGrep.");
+        assertEquals("Memory Service RipGrep Search", title);
+        verify(requestSpec).system(AiService.TOPIC_TITLE_SYSTEM_PROMPT);
+        verify(requestSpec, never()).tools(any(Object[].class));
+
+        when(responseSpec.chatResponse()).thenReturn(buildChatResponse("   ", "STOP", null));
+        assertEquals(
+                "How does memory search work",
+                aiService.generateTopicTitle(
+                        "User: How does memory search work?\nRoxy: It uses RipGrep."));
+
+        when(requestSpec.call()).thenThrow(new RuntimeException("LLM offline"));
+        assertEquals(
+                "Exploring Swing HTML Constraints",
+                aiService.generateTopicTitle("User: # Exploring Swing HTML Constraints!"));
+    }
 }

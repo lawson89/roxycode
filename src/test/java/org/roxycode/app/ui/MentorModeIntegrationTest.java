@@ -57,6 +57,8 @@ class MentorModeIntegrationTest {
                                 eventPublisher,
                                 chatMemory,
                                 settingsService,
+                                null,
+                                null,
                                 null));
         taskWorkspacePanel =
                 new TaskWorkspacePanel(

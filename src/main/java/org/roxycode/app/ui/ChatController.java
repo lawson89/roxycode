@@ -1,5 +1,6 @@
 package org.roxycode.app.ui;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -9,6 +10,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.Timer;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
@@ -21,7 +23,9 @@ import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
+import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
@@ -43,6 +47,8 @@ public final class ChatController implements AutoCloseable {
             "Roxy, you completed tool turns but didn't provide a final summary or answer to the user. "
                     + "Please review the tool outputs above and provide a concise summary of your actions and findings.";
     static final int DEFAULT_ERROR_NUDGE_DELAY_MS = 1000;
+    private static final int MAX_EXCERPT_ENTRIES = 8;
+    private static final int MAX_ENTRY_CHARS = 500;
 
     private final ChatModel model;
     private final ChatPanel view;
@@ -51,6 +57,8 @@ public final class ChatController implements AutoCloseable {
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
     private final PlanService planService;
+    private MemoryService memoryService;
+    private EnvironmentService environmentService;
     private final boolean turnExecutorOwned;
     private volatile Executor turnExecutor;
     private final AtomicLong turnSequence = new AtomicLong();
@@ -81,6 +89,12 @@ public final class ChatController implements AutoCloseable {
         this.turnExecutorOwned = turnExecutor == null;
         this.turnExecutor =
                 turnExecutor != null ? turnExecutor : Executors.newVirtualThreadPerTaskExecutor();
+    }
+
+    void setTopicArchiveServices(
+            MemoryService memoryService, EnvironmentService environmentService) {
+        this.memoryService = memoryService;
+        this.environmentService = environmentService;
     }
 
     Executor getTurnExecutor() {
@@ -256,21 +270,94 @@ public final class ChatController implements AutoCloseable {
     }
 
     void performResetSession() {
-        resetSessionState(true);
+        if (!model.isTaskMode()) {
+            performNewTopicReset();
+            return;
+        }
+        resetSessionState(true, "Session reset.");
     }
 
     public void resetForProjectChange() {
-        resetSessionState(false);
+        resetSessionState(false, null);
     }
 
-    private void resetSessionState(boolean clearMemoryAndAppendNotice) {
+    private void performNewTopicReset() {
+        List<ChatTranscriptEntry> capturedTranscript = view.getConversationMessages();
+        boolean shouldArchive = !capturedTranscript.isEmpty() && memoryService != null;
+        resetSessionState(true, shouldArchive ? null : "Started a new topic.");
+        if (!shouldArchive) {
+            return;
+        }
+        turnExecutor.execute(
+                () -> {
+                    String excerpt = buildTranscriptExcerpt(capturedTranscript);
+                    String title = null;
+                    if (aiService != null) {
+                        try {
+                            title = aiService.generateTopicTitle(excerpt);
+                        } catch (Exception e) {
+                            log.warn("Failed to generate topic title: {}", e.getMessage());
+                        }
+                    }
+                    if (title == null || title.isBlank()) {
+                        title = AiService.deriveFallbackTopicTitle(excerpt);
+                    }
+                    String user =
+                            (environmentService != null
+                                            && environmentService.getCurrentUser() != null
+                                            && !environmentService.getCurrentUser().isBlank())
+                                    ? environmentService.getCurrentUser()
+                                    : "User";
+                    String filename =
+                            memoryService.archiveTopicConversation(
+                                    title, user, Instant.now().toString(), capturedTranscript);
+                    String finalTitle = title;
+                    Edt.run(
+                            () -> {
+                                if (filename != null && !filename.isBlank()) {
+                                    view.appendMessage(
+                                            ROLE_SYSTEM,
+                                            "Archived previous topic as **"
+                                                    + finalTitle
+                                                    + "** (`"
+                                                    + filename
+                                                    + "`) and started a new topic.");
+                                } else {
+                                    view.appendMessage(ROLE_SYSTEM, "Started a new topic.");
+                                }
+                            });
+                });
+    }
+
+    static String buildTranscriptExcerpt(List<ChatTranscriptEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        int count = Math.min(entries.size(), MAX_EXCERPT_ENTRIES);
+        for (int i = 0; i < count; i++) {
+            ChatTranscriptEntry entry = entries.get(i);
+            String speaker = ROLE_USER.equalsIgnoreCase(entry.role()) ? "User" : "Roxy";
+            String content = entry.content() != null ? entry.content().trim() : "";
+            if (content.length() > MAX_ENTRY_CHARS) {
+                content = content.substring(0, MAX_ENTRY_CHARS) + "...";
+            }
+            if (i > 0) {
+                sb.append('\n');
+            }
+            sb.append(speaker).append(": ").append(content);
+        }
+        return sb.toString();
+    }
+
+    private void resetSessionState(boolean clearMemory, String systemNotice) {
         cancelActiveTurnState(false);
         if (model.isTaskMode() && planService != null) {
             planService.resetWorkflow();
         }
         model.clearPendingImages();
         model.setCurrentTurn(0);
-        if (clearMemoryAndAppendNotice) {
+        if (clearMemory) {
             chatMemory.clear(model.getConversationId());
         }
         Edt.run(
@@ -280,8 +367,8 @@ public final class ChatController implements AutoCloseable {
                     view.setLoading(false);
                     view.updateTurnLabel();
                     view.clearOutput();
-                    if (clearMemoryAndAppendNotice) {
-                        view.appendMessage(ROLE_SYSTEM, "Session reset.");
+                    if (systemNotice != null && !systemNotice.isEmpty()) {
+                        view.appendMessage(ROLE_SYSTEM, systemNotice);
                     }
                 });
     }

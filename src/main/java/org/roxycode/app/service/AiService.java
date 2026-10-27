@@ -10,6 +10,8 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.util.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
@@ -23,8 +25,16 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class AiService {
+    private static final Logger log = LoggerFactory.getLogger(AiService.class);
     private static final String AGENT_NAME = "Roxy";
     private static final String FINISH_REASON_UNKNOWN = "UNKNOWN";
+
+    public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
+    static final int MAX_TOPIC_TITLE_LENGTH = 80;
+    private static final int MAX_EXCERPT_LENGTH = 4000;
+    static final String TOPIC_TITLE_SYSTEM_PROMPT =
+            "Generate a concise, descriptive 3 to 6 word title summarizing this technical Q&A topic. "
+                    + "Return ONLY the plain title text without quotes, markdown, or punctuation.";
 
     public static final String TRUNCATED_MARKER = "⚠️ **Response Truncated (finishReason:";
     public static final String NO_VISIBLE_RESPONSE_MARKER =
@@ -34,6 +44,7 @@ public class AiService {
     public static final String EMPTY_STOP_MESSAGE =
             "Roxy completed the turn without generating a visible text message.";
 
+    private final ChatClient statelessChatClient;
     private final ChatClient chatClient;
     private final SettingsService settingsService;
     private final PromptService promptService;
@@ -55,6 +66,7 @@ public class AiService {
         this.jexlTool = jexlTool;
         this.planService = planService;
         this.eventPublisher = eventPublisher;
+        this.statelessChatClient = chatClientBuilder.build();
         this.chatClient =
                 chatClientBuilder
                         .defaultAdvisors(
@@ -63,6 +75,95 @@ public class AiService {
                                         .toolCallingManager(toolCallingManager)
                                         .build())
                         .build();
+    }
+
+    public String generateTopicTitle(String conversationExcerpt) {
+        if (StringUtils.isBlank(conversationExcerpt)) {
+            return DEFAULT_TOPIC_TITLE;
+        }
+        String excerpt =
+                conversationExcerpt.length() > MAX_EXCERPT_LENGTH
+                        ? conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH)
+                        : conversationExcerpt;
+        try {
+            String activeModel = settingsService.getSettings().getGeminiModel();
+            ChatResponse response =
+                    statelessChatClient
+                            .prompt()
+                            .system(TOPIC_TITLE_SYSTEM_PROMPT)
+                            .user(u -> u.text(excerpt))
+                            .options(
+                                    org.springframework.ai.google.genai.GoogleGenAiChatOptions
+                                            .builder()
+                                            .model(activeModel))
+                            .call()
+                            .chatResponse();
+            String rawTitle = null;
+            if (response != null
+                    && response.getResult() != null
+                    && response.getResult().getOutput() != null) {
+                rawTitle = response.getResult().getOutput().getText();
+            }
+            String sanitized = sanitizeTopicTitle(rawTitle);
+            if (!sanitized.isEmpty()) {
+                return sanitized;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to generate topic title via LLM, using fallback: {}", e.getMessage());
+        }
+        return deriveFallbackTopicTitle(conversationExcerpt);
+    }
+
+    static String sanitizeTopicTitle(String rawTitle) {
+        if (StringUtils.isBlank(rawTitle)) {
+            return "";
+        }
+        String firstLine =
+                rawTitle.lines()
+                        .map(String::trim)
+                        .filter(line -> !line.isEmpty())
+                        .findFirst()
+                        .orElse("");
+        if (firstLine.isEmpty()) {
+            return "";
+        }
+        String cleaned =
+                firstLine
+                        .replaceAll("[#*_`~" + '"' + "']", " ")
+                        .replaceAll("\s+", " ")
+                        .replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "")
+                        .trim();
+        if (cleaned.length() > MAX_TOPIC_TITLE_LENGTH) {
+            cleaned =
+                    cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH)
+                            .replaceAll("[^a-zA-Z0-9]+$", "")
+                            .trim();
+        }
+        return cleaned;
+    }
+
+    public static String deriveFallbackTopicTitle(String conversationExcerpt) {
+        if (StringUtils.isBlank(conversationExcerpt)) {
+            return DEFAULT_TOPIC_TITLE;
+        }
+        for (String rawLine : conversationExcerpt.lines().toList()) {
+            String line = rawLine.trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (line.regionMatches(true, 0, "User:", 0, 5)) {
+                line = line.substring(5).trim();
+            } else if (line.regionMatches(true, 0, "Roxy:", 0, 5)
+                    || line.regionMatches(true, 0, "AI:", 0, 3)) {
+                continue;
+            }
+            String sanitized = sanitizeTopicTitle(line);
+            if (!sanitized.isEmpty()) {
+                return sanitized;
+            }
+        }
+        String fallback = sanitizeTopicTitle(conversationExcerpt);
+        return fallback.isEmpty() ? DEFAULT_TOPIC_TITLE : fallback;
     }
 
     public String chat(

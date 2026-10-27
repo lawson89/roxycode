@@ -176,8 +176,15 @@ public class PromptService {
         if (archivedPlans == null) {
             archivedPlans = List.of();
         }
+        List<String> archivedTopics = memoryService.listArchivedTopics();
+        if (archivedTopics == null) {
+            archivedTopics = List.of();
+        }
 
-        if (!projectMemory.isBlank() || !projectNotes.isEmpty() || !archivedPlans.isEmpty()) {
+        if (!projectMemory.isBlank()
+                || !projectNotes.isEmpty()
+                || !archivedPlans.isEmpty()
+                || !archivedTopics.isEmpty()) {
             sb.append(HEADER_PROJECT_AGENT_MEMORY);
             if (!projectMemory.isBlank()) {
                 sb.append(projectMemory.stripTrailing()).append("\n");
@@ -201,9 +208,21 @@ public class PromptService {
                     sb.append("- ").append(archivedPlans.get(i)).append("\n");
                 }
             }
-            if (!projectNotes.isEmpty() || !archivedPlans.isEmpty()) {
+            if (!archivedTopics.isEmpty()) {
+                if (!projectMemory.isBlank()
+                        || !projectNotes.isEmpty()
+                        || !archivedPlans.isEmpty()) {
+                    sb.append("\n");
+                }
+                sb.append("### Recent Archived Topics\n");
+                int limit = Math.min(MAX_RECENT_ARCHIVED_PLANS, archivedTopics.size());
+                for (int i = 0; i < limit; i++) {
+                    sb.append("- ").append(archivedTopics.get(i)).append("\n");
+                }
+            }
+            if (!projectNotes.isEmpty() || !archivedPlans.isEmpty() || !archivedTopics.isEmpty()) {
                 sb.append(
-                        "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), or memoryService.search(pattern) to inspect.\n");
+                        "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), memoryService.readArchivedTopic(filename), or memoryService.search(pattern) to inspect.\n");
             }
         }
 

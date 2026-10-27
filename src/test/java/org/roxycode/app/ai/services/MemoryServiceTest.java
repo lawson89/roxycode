@@ -168,6 +168,71 @@ class MemoryServiceTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> memoryService.readArchivedPlan("../secret.md"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> memoryService.readArchivedTopic("../secret.md"));
+    }
+
+    @Test
+    void testArchiveListAndReadTopics() {
+        assertTrue(memoryService.listArchivedTopics().isEmpty());
+        assertNull(memoryService.archiveTopicConversation("Title", "Alice", null, List.of()));
+
+        var entries =
+                List.of(
+                        new org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry(
+                                "user", "How does MemoryService search work?", "15:28:10"),
+                        new org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry(
+                                "ai", "It executes rg across memory and archives.", "15:28:18"));
+
+        String file1 =
+                memoryService.archiveTopicConversation(
+                        "Memory Service Architecture", "Alice", "2025-05-14T15:30:00Z", entries);
+        assertEquals("20250514-153000-memory-service-architecture.md", file1);
+
+        String file2 =
+                memoryService.archiveTopicConversation(
+                        "Memory Service Architecture", "Alice", "2025-05-14T15:30:00Z", entries);
+        assertEquals("20250514-153000-memory-service-architecture-2.md", file2);
+
+        List<String> topics = memoryService.listArchivedTopics();
+        assertEquals(2, topics.size());
+        assertEquals(
+                "20250514-153000-memory-service-architecture.md: Memory Service Architecture",
+                topics.get(0));
+        assertEquals(
+                "20250514-153000-memory-service-architecture-2.md: Memory Service Architecture",
+                topics.get(1));
+
+        String content = memoryService.readArchivedTopic(file1);
+        assertTrue(
+                content.contains(
+                        """
+                        type: "topic"
+                        """
+                                .strip()));
+        assertTrue(
+                content.contains(
+                        """
+                        title: "Memory Service Architecture"
+                        """
+                                .strip()));
+        assertTrue(
+                content.contains(
+                        """
+                        createdBy: "Alice"
+                        """
+                                .strip()));
+        assertTrue(content.contains("messageCount: 2"));
+        assertTrue(content.contains("# Topic: Memory Service Architecture"));
+        assertTrue(content.contains("## Conversation Transcript"));
+        assertTrue(content.contains("### User (15:28:10)\nHow does MemoryService search work?"));
+        assertTrue(
+                content.contains(
+                        "### Roxy (15:28:18)\nIt executes rg across memory and archives."));
+        assertEquals(
+                content,
+                memoryService.readArchivedTopic("20250514-153000-memory-service-architecture"));
     }
 
     @Test
@@ -230,10 +295,15 @@ class MemoryServiceTest {
         Path bazFile = archiveDir.resolve("20250514-baz.md");
         Files.writeString(bazFile, bazPlan, StandardCharsets.UTF_8);
 
+        Path archiveTopicsDir = Files.createDirectories(projectDataDir.resolve("archive/topics"));
+        Path topicFile = archiveTopicsDir.resolve("20250514-topic.md");
+        Files.writeString(topicFile, "UniqueCrossScopeToken delta\n", StandardCharsets.UTF_8);
+
         Path globalNote = roxyHomeDir.resolve("memory/notes/foo.md").toAbsolutePath().normalize();
         Path projectNote =
                 projectDataDir.resolve("memory/notes/bar.md").toAbsolutePath().normalize();
         Path archivePlan = bazFile.toAbsolutePath().normalize();
+        Path archiveTopic = topicFile.toAbsolutePath().normalize();
 
         String simulatedRgStdout =
                 globalNote
@@ -241,7 +311,9 @@ class MemoryServiceTest {
                         + projectNote
                         + ":5:UniqueCrossScopeToken beta\n"
                         + archivePlan
-                        + ":8:UniqueCrossScopeToken gamma\n";
+                        + ":8:UniqueCrossScopeToken gamma\n"
+                        + archiveTopic
+                        + ":15:UniqueCrossScopeToken delta\n";
 
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
             runnerMock
@@ -260,6 +332,10 @@ class MemoryServiceTest {
             assertTrue(
                     output.contains(
                             "[ARCHIVE] plans/20250514-baz.md:8:UniqueCrossScopeToken gamma"),
+                    "Output was: " + output);
+            assertTrue(
+                    output.contains(
+                            "[ARCHIVE] topics/20250514-topic.md:15:UniqueCrossScopeToken delta"),
                     "Output was: " + output);
 
             EditorResult caseInsensitiveRes =

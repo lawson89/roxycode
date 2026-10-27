@@ -265,11 +265,15 @@ public class ChatPanelTest extends ChatTestFixture {
         assertEquals("qa", qaChatPanel.getModel().getSessionPrefix());
         assertEquals(WorkflowPhase.EXPLORE, qaChatPanel.getModel().getLockedPhase());
         assertFalse(qaChatPanel.getModel().isTaskMode());
+        assertEquals("New Topic", qaChatPanel.getResetSessionButton().getText());
+        assertEquals(
+                ChatPanel.NEW_TOPIC_TOOLTIP, qaChatPanel.getResetSessionButton().getToolTipText());
 
         FeatureChatPanel featureChatPanel = createFeatureChatPanel(null);
         assertEquals("task", featureChatPanel.getModel().getSessionPrefix());
         assertNull(featureChatPanel.getModel().getLockedPhase());
         assertTrue(featureChatPanel.getModel().isTaskMode());
+        assertEquals("Reset Session", featureChatPanel.getResetSessionButton().getText());
 
         Method[] exploreDeclared = ExploreChatPanel.class.getDeclaredMethods();
         assertFalse(
