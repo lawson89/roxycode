@@ -11,6 +11,7 @@ import com.google.genai.types.HttpOptions;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -56,6 +57,15 @@ public class AiConfig {
     private static final int HTTP_TOO_MANY_REQUESTS = 429;
     private static final int HTTP_INTERNAL_SERVER_ERROR = 500;
     private static final int HTTP_SERVER_ERROR_UPPER = 600;
+
+    private static final List<String> NON_RETRYABLE_MARKERS = List.of("400 BAD REQUEST", "401 UNAUTHORIZED",
+            "403 FORBIDDEN", "404 NOT FOUND", "INVALID_ARGUMENT", "PERMISSION_DENIED", "UNAUTHENTICATED",
+            "API_KEY_INVALID");
+
+    private static final List<String> TRANSIENT_STATUS_MARKERS = List.of("429", "RESOURCE_EXHAUSTED",
+            "TOO MANY REQUESTS", "RATE LIMIT", "500 INTERNAL", "502 BAD GATEWAY", "503 SERVICE UNAVAILABLE",
+            "504 GATEWAY TIMEOUT", "UNAVAILABLE", "DEADLINE_EXCEEDED", "SOCKET TIMEOUT", "READ TIMED OUT",
+            "CONNECTION RESET");
 
     private static final ThreadLocal<Throwable> HANDLED_TERMINAL_EXCEPTION = new ThreadLocal<>();
 
@@ -196,42 +206,48 @@ public class AiConfig {
         if (t == null || ExceptionUtils.isCancellation(t)) {
             return false;
         }
+        boolean foundTransient = false;
         for (Throwable curr = t; curr != null; curr = curr.getCause()) {
-            if (curr instanceof NonTransientAiException) {
+            Boolean classification = classifyCause(curr);
+            if (Boolean.FALSE.equals(classification)) {
                 return false;
             }
-            if (curr instanceof ApiException apiEx) {
-                int code = apiEx.code();
-                if (code == HTTP_TOO_MANY_REQUESTS || code == HTTP_REQUEST_TIMEOUT
-                        || (code >= HTTP_INTERNAL_SERVER_ERROR && code < HTTP_SERVER_ERROR_UPPER)) {
-                    return true;
-                }
-                if (code >= HTTP_BAD_REQUEST && code < HTTP_INTERNAL_SERVER_ERROR) {
-                    return false;
-                }
-                if (hasNonRetryableClientMessage(apiEx.status()) || hasNonRetryableClientMessage(apiEx.getMessage())) {
-                    return false;
-                }
-                if (hasTransientStatusMessage(apiEx.status()) || hasTransientStatusMessage(apiEx.getMessage())) {
-                    return true;
-                }
-            }
-            if (hasNonRetryableClientMessage(curr.getMessage())) {
-                return false;
+            if (Boolean.TRUE.equals(classification)) {
+                foundTransient = true;
             }
         }
+        return foundTransient;
+    }
 
-        for (Throwable curr = t; curr != null; curr = curr.getCause()) {
-            if (curr instanceof TransientAiException || curr instanceof ResourceAccessException
-                    || curr instanceof ServerException || curr instanceof GenAiIOException
-                    || curr instanceof IOException || curr instanceof TimeoutException) {
-                return true;
+    private static Boolean classifyCause(Throwable curr) {
+        if (curr instanceof NonTransientAiException) {
+            return Boolean.FALSE;
+        }
+        if (curr instanceof ApiException apiEx) {
+            int code = apiEx.code();
+            if (code == HTTP_TOO_MANY_REQUESTS || code == HTTP_REQUEST_TIMEOUT
+                    || (code >= HTTP_INTERNAL_SERVER_ERROR && code < HTTP_SERVER_ERROR_UPPER)) {
+                return Boolean.TRUE;
             }
-            if (hasTransientStatusMessage(curr.getMessage())) {
-                return true;
+            if (code >= HTTP_BAD_REQUEST && code < HTTP_INTERNAL_SERVER_ERROR) {
+                return Boolean.FALSE;
+            }
+            if (hasNonRetryableClientMessage(apiEx.status()) || hasNonRetryableClientMessage(apiEx.getMessage())) {
+                return Boolean.FALSE;
+            }
+            if (hasTransientStatusMessage(apiEx.status()) || hasTransientStatusMessage(apiEx.getMessage())) {
+                return Boolean.TRUE;
             }
         }
-        return false;
+        if (hasNonRetryableClientMessage(curr.getMessage())) {
+            return Boolean.FALSE;
+        }
+        if (curr instanceof TransientAiException || curr instanceof ResourceAccessException
+                || curr instanceof ServerException || curr instanceof GenAiIOException || curr instanceof IOException
+                || curr instanceof TimeoutException || hasTransientStatusMessage(curr.getMessage())) {
+            return Boolean.TRUE;
+        }
+        return null;
     }
 
     private static boolean hasNonRetryableClientMessage(String msg) {
@@ -239,10 +255,7 @@ public class AiConfig {
             return false;
         }
         String upper = msg.toUpperCase(Locale.ROOT);
-        return upper.contains("400 BAD REQUEST") || upper.contains("401 UNAUTHORIZED")
-                || upper.contains("403 FORBIDDEN") || upper.contains("404 NOT FOUND")
-                || upper.contains("INVALID_ARGUMENT") || upper.contains("PERMISSION_DENIED")
-                || upper.contains("UNAUTHENTICATED") || upper.contains("API_KEY_INVALID");
+        return NON_RETRYABLE_MARKERS.stream().anyMatch(upper::contains);
     }
 
     private static boolean hasTransientStatusMessage(String msg) {
@@ -250,12 +263,7 @@ public class AiConfig {
             return false;
         }
         String upper = msg.toUpperCase(Locale.ROOT);
-        return upper.contains("429") || upper.contains("RESOURCE_EXHAUSTED") || upper.contains("TOO MANY REQUESTS")
-                || upper.contains("RATE LIMIT") || upper.contains("500 INTERNAL") || upper.contains("502 BAD GATEWAY")
-                || upper.contains("503 SERVICE UNAVAILABLE") || upper.contains("504 GATEWAY TIMEOUT")
-                || upper.contains("UNAVAILABLE") || upper.contains("DEADLINE_EXCEEDED")
-                || upper.contains("SOCKET TIMEOUT") || upper.contains("READ TIMED OUT")
-                || upper.contains("CONNECTION RESET");
+        return TRANSIENT_STATUS_MARKERS.stream().anyMatch(upper::contains);
     }
 
     @Bean

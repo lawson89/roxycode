@@ -112,8 +112,7 @@ public class AiService {
                         .call().chatResponse());
         try {
             ChatResponse response = future.get(Math.max(1L, topicTitleTimeout.toMillis()), TimeUnit.MILLISECONDS);
-            String rawTitle = (response != null && response.getResult() != null
-                    && response.getResult().getOutput() != null) ? response.getResult().getOutput().getText() : null;
+            String rawTitle = extractResponseText(response);
             String sanitized = sanitizeTopicTitle(rawTitle);
             if (!sanitized.isEmpty())
                 return sanitized;
@@ -228,64 +227,75 @@ public class AiService {
     }
 
     String formatChatResponse(ChatResponse chatResponse, TurnToolContext turnContext) {
-        String content = null;
-        String rawFinishReason = null;
-        Usage usage = null;
-        int toolTurns = turnContext.turnCounter().get();
-
-        if (chatResponse != null) {
-            Generation result = chatResponse.getResult();
-            if (result != null) {
-                if (result.getOutput() != null)
-                    content = result.getOutput().getText();
-                if (result.getMetadata() != null) {
-                    rawFinishReason = result.getMetadata().getFinishReason();
-                }
-            }
-            if (chatResponse.getMetadata() != null)
-                usage = chatResponse.getMetadata().getUsage();
-        }
-
-        String finishReason = StringUtils.defaultIfBlank(StringUtils.trim(rawFinishReason), FINISH_REASON_UNKNOWN);
+        String content = extractResponseText(chatResponse);
+        String finishReason = extractFinishReason(chatResponse);
+        Usage usage = (chatResponse != null && chatResponse.getMetadata() != null)
+                ? chatResponse.getMetadata().getUsage()
+                : null;
         String usageSummary = formatUsageSummary(usage);
+        int toolTurns = turnContext.turnCounter().get();
         boolean hasVisibleContent = StringUtils.isNotBlank(content);
 
         if (isTokenLimitFinishReason(finishReason)) {
-            if (hasVisibleContent) {
-                StringBuilder sb = new StringBuilder(content).append("\n\n---\n> ").append(TRUNCATED_MARKER).append(" ")
-                        .append(finishReason)
-                        .append(")**: The response was cut off because it reached the maximum output token limit.");
-                if (!usageSummary.isEmpty()) {
-                    sb.append(" (Token usage: ").append(usageSummary).append(")");
-                }
-                return sb.append(" Reply **'continue'** so Roxy can resume where she left off.").toString();
-            }
-
-            StringBuilder sb = new StringBuilder().append(NO_VISIBLE_RESPONSE_MARKER).append(" ").append(finishReason)
-                    .append(")**\n\n")
-                    .append("Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
-            appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
-            return sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.").toString();
+            return formatTokenLimitResponse(content, hasVisibleContent, finishReason, toolTurns, usageSummary);
         }
-
         if (!hasVisibleContent) {
-            boolean normalStop = "STOP".equalsIgnoreCase(finishReason)
-                    || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
-
-            StringBuilder sb = new StringBuilder(EMPTY_RESPONSE_MARKER).append(" ").append(finishReason)
-                    .append(")**\n\n");
-            if (normalStop) {
-                sb.append(EMPTY_STOP_MESSAGE);
-            } else {
-                sb.append("Generation was blocked or aborted by the model (").append(finishReason).append(").");
-            }
-            appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
-            sb.append(normalStop
-                    ? "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response."
-                    : "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
-            return sb.toString();
+            return formatEmptyResponse(finishReason, toolTurns, usageSummary);
         }
         return content;
+    }
+
+    private static String extractResponseText(ChatResponse chatResponse) {
+        if (chatResponse == null || chatResponse.getResult() == null) {
+            return null;
+        }
+        Generation result = chatResponse.getResult();
+        return result.getOutput() != null ? result.getOutput().getText() : null;
+    }
+
+    private static String extractFinishReason(ChatResponse chatResponse) {
+        String rawFinishReason = null;
+        if (chatResponse != null && chatResponse.getResult() != null
+                && chatResponse.getResult().getMetadata() != null) {
+            rawFinishReason = chatResponse.getResult().getMetadata().getFinishReason();
+        }
+        return StringUtils.defaultIfBlank(StringUtils.trim(rawFinishReason), FINISH_REASON_UNKNOWN);
+    }
+
+    private static String formatTokenLimitResponse(String content, boolean hasVisibleContent, String finishReason,
+            int toolTurns, String usageSummary) {
+        if (hasVisibleContent) {
+            StringBuilder sb = new StringBuilder(content).append("\n\n---\n> ").append(TRUNCATED_MARKER).append(" ")
+                    .append(finishReason)
+                    .append(")**: The response was cut off because it reached the maximum output token limit.");
+            if (!usageSummary.isEmpty()) {
+                sb.append(" (Token usage: ").append(usageSummary).append(")");
+            }
+            return sb.append(" Reply **'continue'** so Roxy can resume where she left off.").toString();
+        }
+
+        StringBuilder sb = new StringBuilder().append(NO_VISIBLE_RESPONSE_MARKER).append(" ").append(finishReason)
+                .append(")**\n\n")
+                .append("Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
+        appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
+        return sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.").toString();
+    }
+
+    private static String formatEmptyResponse(String finishReason, int toolTurns, String usageSummary) {
+        boolean normalStop = "STOP".equalsIgnoreCase(finishReason)
+                || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
+
+        StringBuilder sb = new StringBuilder(EMPTY_RESPONSE_MARKER).append(" ").append(finishReason).append(")**\n\n");
+        if (normalStop) {
+            sb.append(EMPTY_STOP_MESSAGE);
+        } else {
+            sb.append("Generation was blocked or aborted by the model (").append(finishReason).append(").");
+        }
+        appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
+        sb.append(normalStop
+                ? "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response."
+                : "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
+        return sb.toString();
     }
 
     private static void appendDiagnosticMetadata(StringBuilder sb, String finishReason, int toolTurns,
