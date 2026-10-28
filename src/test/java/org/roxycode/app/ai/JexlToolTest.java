@@ -226,6 +226,40 @@ public class JexlToolTest {
     }
 
     @Test
+    public void testSandboxBlocksNewInstantiationReflectionAndSystemAccess() throws Exception {
+        JexlTool tool = createTool(new TestService());
+
+        JsonNode newProcessBuilder = evalJson(tool, "new('java.lang.ProcessBuilder', ['ls'])");
+        assertTrue(newProcessBuilder.has("error"));
+        assertTrue(newProcessBuilder.get("error").asText().contains("Syntax Error"));
+
+        JsonNode getClassAttempt = evalJson(tool, "''.getClass()");
+        assertTrue(getClassAttempt.has("error"));
+
+        JsonNode serviceGetClassAttempt = evalJson(tool, "testService.getClass()");
+        assertTrue(serviceGetClassAttempt.has("error"));
+
+        JsonNode systemAttempt = evalJson(tool, "System.exit(0)");
+        assertTrue(systemAttempt.has("error"));
+
+        JsonNode runtimeAttempt = evalJson(tool, "Runtime.getRuntime()");
+        assertTrue(runtimeAttempt.has("error"));
+    }
+
+    @Test
+    public void testSandboxAllowsCollectionsMapsStringsAndRecords() throws Exception {
+        JexlTool tool = createTool(new TestService());
+        JsonNode result = evalJson(tool, """
+                var list = ['alpha', 'beta', ...];
+                list.add('gamma');
+                var map = { 'greeting': testService.hello('Roxy').trim().toUpperCase(), 'count': list.size() };
+                map
+                """);
+        assertEquals("HELLO, ROXY", result.get("greeting").asText());
+        assertEquals(3, result.get("count").asInt());
+    }
+
+    @Test
     public void testExecuteJexlSuccess() throws Exception {
         assertEquals("2", evalJson(createTool(), "1 + 1").get("result").asText());
     }

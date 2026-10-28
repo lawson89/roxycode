@@ -5,6 +5,7 @@ import java.util.Map;
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
+import org.apache.commons.jexl3.JexlFeatures;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.jspecify.annotations.Nullable;
@@ -37,8 +38,9 @@ public class JexlTool {
 
     public JexlTool(JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher,
             @Nullable ObjectMapper objectMapper, @Nullable SettingsService settingsService) {
-        this.jexl = new JexlBuilder().permissions(AgentJexlPermissions.INSTANCE).strict(true).silent(false).safe(false)
-                .create();
+        JexlFeatures features = new JexlFeatures().newInstance(false);
+        this.jexl = new JexlBuilder().features(features).permissions(AgentJexlPermissions.INSTANCE).strict(true)
+                .silent(false).safe(false).create();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
         this.mapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
