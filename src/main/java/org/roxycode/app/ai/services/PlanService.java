@@ -162,23 +162,32 @@ public class PlanService {
     }
 
     private static String normalizeStepDescription(String description) {
-        return description == null ? "" : description.trim().toLowerCase(Locale.ROOT);
+        if (description == null) {
+            return "";
+        }
+        String trimmed = description.trim();
+        int end = trimmed.length();
+        while (end > 0) {
+            char c = trimmed.charAt(end - 1);
+            if (c == '.' || c == '!' || c == ':' || c == ';' || Character.isWhitespace(c)) {
+                end--;
+            } else {
+                break;
+            }
+        }
+        return trimmed.substring(0, end).toLowerCase(Locale.ROOT);
     }
 
     private static boolean isCompileStep(String description) {
-        String desc = normalizeStepDescription(description);
-        return desc.equals(STEP_COMPILE.toLowerCase(Locale.ROOT)) || desc.contains("compile");
+        return normalizeStepDescription(description).equals(STEP_COMPILE.toLowerCase(Locale.ROOT));
     }
 
     private static boolean isUnitTestStep(String description) {
-        String desc = normalizeStepDescription(description);
-        return desc.equals(STEP_UNIT_TESTS.toLowerCase(Locale.ROOT)) || desc.contains("unit test")
-                || desc.contains("tests pass");
+        return normalizeStepDescription(description).equals(STEP_UNIT_TESTS.toLowerCase(Locale.ROOT));
     }
 
     private static boolean isCodeReviewStep(String description) {
-        String desc = normalizeStepDescription(description);
-        return desc.equals(STEP_CODE_REVIEW.toLowerCase(Locale.ROOT)) || desc.contains("code review");
+        return normalizeStepDescription(description).equals(STEP_CODE_REVIEW.toLowerCase(Locale.ROOT));
     }
 
     private static boolean isMandatoryVerificationStep(String description) {

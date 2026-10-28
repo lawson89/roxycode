@@ -6,8 +6,10 @@ import com.github.dockerjava.api.model.Version;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
@@ -119,8 +121,13 @@ public class SystemToolService {
         clearDockerClientFactoryField(factory, "strategy");
     }
 
-    private static void clearDockerClientFactoryField(DockerClientFactory factory, String fieldName) {
+    static void clearDockerClientFactoryField(DockerClientFactory factory, String fieldName) {
         try {
+            if (FieldUtils.getDeclaredField(DockerClientFactory.class, fieldName, true) == null) {
+                log.warn("DockerClientFactory field '{}' not found; Testcontainers internals may have changed",
+                        fieldName);
+                return;
+            }
             FieldUtils.writeDeclaredField(factory, fieldName, null, true);
         } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
             log.debug("Could not reset DockerClientFactory.{}: {}", fieldName, e.getMessage());
@@ -234,14 +241,20 @@ public class SystemToolService {
         if (tools == null || tools.isEmpty()) {
             return false;
         }
-        for (String requiredName : SystemTool.REQUIRED_TOOL_NAMES) {
-            boolean foundDetected = tools.stream()
-                    .anyMatch(t -> t != null && requiredName.equals(t.name()) && STATUS_DETECTED.equals(t.status()));
-            if (!foundDetected) {
+        Set<String> detectedNames = new HashSet<>();
+        for (SystemTool tool : tools) {
+            if (tool == null) {
+                continue;
+            }
+            boolean detected = STATUS_DETECTED.equals(tool.status());
+            if (tool.required() && !detected) {
                 return false;
             }
+            if (detected && tool.name() != null) {
+                detectedNames.add(tool.name());
+            }
         }
-        return tools.stream().filter(t -> t != null && t.required()).allMatch(t -> STATUS_DETECTED.equals(t.status()));
+        return detectedNames.containsAll(SystemTool.REQUIRED_TOOL_NAMES);
     }
 
     static boolean isDockerDetected(List<SystemTool> tools) {

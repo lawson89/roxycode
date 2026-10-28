@@ -238,6 +238,25 @@ class FileEditorServiceTest {
         assertEquals("Alpha\nBetaUpdated\nGamma", Files.readString(noTrailingFile));
 
         fileEditorService.insertAtLine("no_trailing.txt", 3, "BeforeGamma");
-        assertEquals("Alpha\nBetaUpdated\nBeforeGamma\nGamma", Files.readString(noTrailingFile));
+        assertEquals("Alpha" + (char) 10 + "BetaUpdated" + (char) 10 + "BeforeGamma" + (char) 10 + "Gamma",
+                Files.readString(noTrailingFile));
+    }
+
+    @Test
+    void testReplaceLinesAndInsertAtLinePreserveExplicitTrailingBlankLines() throws IOException {
+        assertEquals(List.of("a"), FileEditorService.splitLines("a"));
+        assertEquals(List.of("a"), FileEditorService.splitLines("a" + (char) 10));
+        assertEquals(List.of("a", ""), FileEditorService.splitLines("a" + (char) 10 + (char) 10));
+        assertEquals(List.of("", ""), FileEditorService.splitLines("" + (char) 10));
+        assertEquals(List.of(""), FileEditorService.splitLines(""));
+
+        Path file = Files.write(tempDir.resolve("blank_lines.txt"), List.of("Line 1", "Line 2", "Line 3"));
+        assertTrue(fileEditorService.insertAtLine("blank_lines.txt", 2, "Inserted" + (char) 10 + (char) 10).success());
+        assertEquals(List.of("Line 1", "Inserted", "", "Line 2", "Line 3"), Files.readAllLines(file));
+
+        assertTrue(fileEditorService
+                .replaceLines("blank_lines.txt", 2, 3, "Replaced A" + (char) 10 + "Replaced B" + (char) 10 + (char) 10)
+                .success());
+        assertEquals(List.of("Line 1", "Replaced A", "Replaced B", "", "Line 2", "Line 3"), Files.readAllLines(file));
     }
 }

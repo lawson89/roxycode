@@ -16,6 +16,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import com.github.benmanes.caffeine.cache.AsyncCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
@@ -37,6 +40,8 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.util.Edt;
+import org.apache.commons.io.FilenameUtils;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,18 +85,17 @@ public final class FileMentionPopup {
             if (rawPath == null) {
                 return new FileCandidate("", "", "", "", "");
             }
-            String normalized = rawPath.trim().replace((char) 92, '/');
+            String normalized = FilenameUtils.separatorsToUnix(rawPath.trim());
             while (normalized.startsWith("./")) {
                 normalized = normalized.substring(2);
             }
             while (normalized.startsWith("/")) {
                 normalized = normalized.substring(1);
             }
-            int lastSlash = normalized.lastIndexOf('/');
-            String fileName = lastSlash >= 0 ? normalized.substring(lastSlash + 1) : normalized;
-            String parentDir = lastSlash > 0 ? normalized.substring(0, lastSlash) : "";
-            return new FileCandidate(normalized, fileName, parentDir, fileName.toLowerCase(Locale.ROOT),
-                    normalized.toLowerCase(Locale.ROOT));
+            String fileName = PathUtils.getFileName(normalized);
+            String parentDir = FilenameUtils.getPathNoEndSeparator(normalized);
+            return new FileCandidate(normalized, fileName, parentDir != null ? parentDir : "",
+                    fileName.toLowerCase(Locale.ROOT), normalized.toLowerCase(Locale.ROOT));
         }
     }
 
@@ -108,11 +112,13 @@ public final class FileMentionPopup {
     private final JList<FileCandidate> candidateList;
     private final JScrollPane popupScrollPane;
 
+    private static final String CANDIDATES_CACHE_KEY = "candidates";
+
     private volatile GrepService grepService;
     private volatile Executor backgroundExecutor = ForkJoinPool.commonPool();
     private volatile List<FileCandidate> cachedCandidates = List.of();
-    private volatile long lastCacheRefreshTimeMs = 0L;
-    private volatile CompletableFuture<List<FileCandidate>> inFlightRefresh;
+    private final AsyncCache<String, List<FileCandidate>> candidateCache = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofMillis(STALE_CACHE_TTL_MS)).maximumSize(1).buildAsync();
 
     private boolean popupActive = false;
     private boolean updatingInputText = false;
@@ -291,7 +297,7 @@ public final class FileMentionPopup {
             refreshIndexAsync(true);
         } else {
             cachedCandidates = List.of();
-            lastCacheRefreshTimeMs = 0L;
+            candidateCache.synchronous().invalidateAll();
         }
     }
 
@@ -304,7 +310,7 @@ public final class FileMentionPopup {
     }
 
     public void invalidateCache() {
-        lastCacheRefreshTimeMs = 0L;
+        candidateCache.synchronous().invalidateAll();
         refreshIndexAsync(true);
     }
 
@@ -317,12 +323,10 @@ public final class FileMentionPopup {
         if (service == null) {
             return CompletableFuture.completedFuture(cachedCandidates);
         }
-        CompletableFuture<List<FileCandidate>> existing = this.inFlightRefresh;
-        if (!force && existing != null && !existing.isDone()) {
-            return existing;
+        if (force) {
+            candidateCache.synchronous().invalidate(CANDIDATES_CACHE_KEY);
         }
-
-        CompletableFuture<List<FileCandidate>> future = CompletableFuture.supplyAsync(() -> {
+        return candidateCache.get(CANDIDATES_CACHE_KEY, (key, exec) -> CompletableFuture.supplyAsync(() -> {
             List<String> rawFiles = service.listFiles();
             if (rawFiles == null || rawFiles.isEmpty()) {
                 return List.<FileCandidate>of();
@@ -332,19 +336,15 @@ public final class FileMentionPopup {
         }, backgroundExecutor).exceptionally(ex -> {
             log.debug("Failed to refresh file mention index", ex);
             return cachedCandidates;
-        });
-
-        this.inFlightRefresh = future;
-        future.thenAccept(candidates -> {
+        }).thenApply(candidates -> {
             this.cachedCandidates = candidates;
-            this.lastCacheRefreshTimeMs = System.currentTimeMillis();
             Edt.run(() -> {
                 if (activeToken != null) {
                     evaluateCurrentInput();
                 }
             });
-        });
-        return future;
+            return candidates;
+        }));
     }
 
     void evaluateCurrentInput() {
@@ -359,7 +359,7 @@ public final class FileMentionPopup {
         }
         this.activeToken = token;
 
-        if (cachedCandidates.isEmpty() || System.currentTimeMillis() - lastCacheRefreshTimeMs > STALE_CACHE_TTL_MS) {
+        if (candidateCache.getIfPresent(CANDIDATES_CACHE_KEY) == null) {
             refreshIndexAsync(false);
         }
 
@@ -550,9 +550,8 @@ public final class FileMentionPopup {
     }
 
     static Codicons resolveFileIcon(String fileNameLower) {
-        int dot = fileNameLower.lastIndexOf('.');
-        return (dot >= 0 && dot + 1 < fileNameLower.length()
-                && CODE_EXTENSIONS.contains(fileNameLower.substring(dot + 1))) ? Codicons.FILE_CODE : Codicons.FILE;
+        String ext = PathUtils.getLowerExtension(fileNameLower, true);
+        return (!ext.isEmpty() && CODE_EXTENSIONS.contains(ext)) ? Codicons.FILE_CODE : Codicons.FILE;
     }
 
     private static final class FileCandidateCellRenderer extends JPanel implements ListCellRenderer<FileCandidate> {

@@ -70,7 +70,7 @@ public class ProjectService {
         Path root = projectRoot.toAbsolutePath().normalize();
         String target = (relativePath == null || relativePath.isBlank()) ? "." : relativePath.trim();
         Path resolved = resolveWithinSandbox(root, target);
-        String rel = root.relativize(resolved).toString().replace((char) 92, '/');
+        String rel = root.relativize(resolved).toString().replace('\\', '/');
         return rel.isEmpty() ? "." : rel;
     }
 

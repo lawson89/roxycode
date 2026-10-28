@@ -83,21 +83,26 @@ class GitServiceTest {
                 "+++ b/Tracked.java", "@@ -1,2 +1,2 @@", "+line 1 staged", "+line 2 unstaged");
         String statusOut = String.join("\n", "MM Tracked.java", "R  OldName.java -> Renamed.java",
                 "?? src/NewFeature.java");
+        String noIndexDiffOut = String.join("\n", "diff --git a//dev/null b/src/NewFeature.java",
+                "new file mode 100644", "index 0000000..1111111", "--- /dev/null", "+++ b/src/NewFeature.java",
+                "@@ -0,0 +1,2 @@", "+package src;", "+public class NewFeature {}");
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             stubGit(runner, 0, headDiffOut, "git", "diff", "HEAD");
             stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard");
+            stubGit(runner, 1, noIndexDiffOut, "git", "diff", "--no-index", "--", "/dev/null", "src/NewFeature.java");
             stubGit(runner, 0, "", "git", "diff", "HEAD", "--", "src/NewFeature.java");
             stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard", "--",
                     "src/NewFeature.java");
-            stubGit(runner, 0, statusOut, "git", "status", "--porcelain", "-uall");
+            stubGit(runner, 0, statusOut, "git", "-c", "core.quotePath=false", "status", "--porcelain", "-uall");
 
             SwingTestUtils.assertContainsAll(gitService.getDiff(), "+line 1 staged", "+line 2 unstaged",
                     "diff --git a/src/NewFeature.java b/src/NewFeature.java", "+++ b/src/NewFeature.java",
                     "@@ -0,0 +1,2 @@", "+public class NewFeature {}");
 
             String untrackedOnlyDiff = gitService.getDiff("src/NewFeature.java");
-            SwingTestUtils.assertContainsAll(untrackedOnlyDiff, "+++ b/src/NewFeature.java",
+            SwingTestUtils.assertContainsAll(untrackedOnlyDiff,
+                    "diff --git a/src/NewFeature.java b/src/NewFeature.java", "+++ b/src/NewFeature.java",
                     "+public class NewFeature {}");
             assertFalse(untrackedOnlyDiff.contains("Tracked.java"));
 
@@ -107,6 +112,10 @@ class GitServiceTest {
 
             assertEquals(List.of("Tracked.java", "Renamed.java", "src/NewFeature.java"), gitService.getChangedFiles());
         }
+        assertEquals(
+                "diff --git a/bin/logo.png b/bin/logo.png\nnew file mode 100644\nBinary files /dev/null and b/bin/logo.png differ",
+                GitService.normalizeUntrackedNoIndexDiff("bin/logo.png",
+                        "diff --git a//dev/null b/bin/logo.png\nnew file mode 100644\nBinary files /dev/null and b/bin/logo.png differ\n"));
     }
 
     @Test
@@ -119,10 +128,18 @@ class GitServiceTest {
                 "R  " + dq + "old name.txt" + dq + " -> " + dq + "new name.txt" + dq);
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            stubGit(runner, 0, statusOut + "\n", "git", "status", "--porcelain", "-uall");
+            stubGit(runner, 0, statusOut + (char) 10, "git", "-c", "core.quotePath=false", "status", "--porcelain",
+                    "-uall");
             assertEquals(List.of("FirstUnstaged.java", "dir with spaces/quote" + dq + "file/name.txt", "new name.txt"),
                     gitService.getChangedFiles());
         }
+
+        assertEquals("café.txt", GitService.unquotePorcelainPath(dq + "caf" + bs + "303" + bs + "251.txt" + dq));
+        assertEquals("dir/über_файл.java",
+                GitService.unquotePorcelainPath(dq + "dir/" + bs + "303" + bs + "274ber_" + bs + "321" + bs + "204" + bs
+                        + "320" + bs + "260" + bs + "320" + bs + "271" + bs + "320" + bs + "273.java" + dq));
+        assertEquals("plain.txt", GitService.unquotePorcelainPath("plain.txt"));
+        assertEquals("", GitService.unquotePorcelainPath(null));
     }
 
     @Test

@@ -133,4 +133,67 @@ class SettingsServiceTest {
             }
         }
     }
+
+    @Test
+    void testRapidEdtSaveSettingsSnapshotsAndSerializesWritesInOrder() throws Exception {
+        List<String> writtenThemes = java.util.Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch firstWriteEntered = new CountDownLatch(1);
+        CountDownLatch releaseFirstWrite = new CountDownLatch(1);
+
+        com.fasterxml.jackson.dataformat.toml.TomlMapper spyMapper = new com.fasterxml.jackson.dataformat.toml.TomlMapper() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void writeValue(java.io.File resultFile, Object value) throws IOException {
+                if (value instanceof AppSettings appSettings) {
+                    if ("Theme-1".equals(appSettings.getTheme()) && firstWriteEntered.getCount() > 0) {
+                        firstWriteEntered.countDown();
+                        try {
+                            releaseFirstWrite.await(5, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                    writtenThemes.add(appSettings.getTheme());
+                }
+                AiConfig.SHARED_TOML_MAPPER.writeValue(resultFile, value);
+            }
+        };
+
+        SettingsService service = new SettingsService(spyMapper, null);
+        Path settingsFile = tempDir.resolve("ordered_edt_settings.toml");
+        service.setSettingsPathOverride(settingsFile);
+
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            AppSettings live = service.getSettings();
+            live.setTheme("Theme-1");
+            live.setGlobalContextFolders(List.of("/folder/1"));
+            service.saveSettings();
+        });
+
+        assertTrue(firstWriteEntered.await(5, TimeUnit.SECONDS));
+
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            AppSettings live = service.getSettings();
+            live.setTheme("Theme-2");
+            live.setGlobalContextFolders(List.of("/folder/1", "/folder/2"));
+            service.saveSettings();
+
+            live.setTheme("Theme-3");
+            live.setGlobalContextFolders(List.of("/folder/1", "/folder/2", "/folder/3"));
+            service.saveSettings();
+
+            // Mutate live settings after saveSettings() without saving to verify defensive snapshot isolation
+            live.setTheme("Unsaved-Mutation");
+            live.setGlobalContextFolders(List.of("/unsaved"));
+        });
+
+        releaseFirstWrite.countDown();
+        service.getLastSaveFuture().get(5, TimeUnit.SECONDS);
+
+        assertEquals(List.of("Theme-1", "Theme-2", "Theme-3"), writtenThemes);
+        AppSettings diskSettings = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
+        assertEquals("Theme-3", diskSettings.getTheme());
+        assertEquals(List.of("/folder/1", "/folder/2", "/folder/3"), diskSettings.getGlobalContextFolders());
+    }
 }

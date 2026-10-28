@@ -201,6 +201,58 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
+    void testContainerExecutionInterruptedOrCancelledStopsActiveContainerAndThrowsCancellationException()
+            throws IOException {
+        stubDockerAvailable(true);
+        AtomicBoolean sessionClosed = new AtomicBoolean(false);
+        AtomicBoolean throwInterrupted = new AtomicBoolean(true);
+
+        buildContainerService.setContainerSessionFactory(key -> {
+            sessionClosed.set(false);
+            return new ContainerSession() {
+                @Override
+                public ContainerExecResult execInContainer(String... command) throws Exception {
+                    if (throwInterrupted.get()) {
+                        throw new InterruptedException("Simulated interrupt during docker exec");
+                    }
+                    throw new java.util.concurrent.CancellationException("Simulated cancellation during docker exec");
+                }
+
+                @Override
+                public boolean isRunning() {
+                    return !sessionClosed.get();
+                }
+
+                @Override
+                public void close() {
+                    sessionClosed.set(true);
+                }
+            };
+        });
+
+        writeBuildToml("""
+                [build]
+                compile = './mvnw compile'
+                [container]
+                enabled = true
+                image = 'eclipse-temurin:25-jdk'
+                workdir = '/workspace'
+                """);
+
+        try {
+            assertThrows(java.util.concurrent.CancellationException.class, () -> buildToolService.compile());
+            assertTrue(sessionClosed.get(), "Active container must be stopped on InterruptedException");
+            assertTrue(Thread.currentThread().isInterrupted(), "Interrupt flag must be restored");
+        } finally {
+            Thread.interrupted();
+        }
+
+        throwInterrupted.set(false);
+        assertThrows(java.util.concurrent.CancellationException.class, () -> buildToolService.compile());
+        assertTrue(sessionClosed.get(), "Active container must be stopped on CancellationException");
+    }
+
+    @Test
     void testWarmContainerSessionReusedAndStoppedOnConfigOrProjectChange() throws IOException {
         stubDockerAvailable(true);
         AtomicInteger sessionsCreated = new AtomicInteger(0);

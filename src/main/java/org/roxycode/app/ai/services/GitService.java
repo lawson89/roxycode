@@ -1,6 +1,8 @@
 package org.roxycode.app.ai.services;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -26,9 +28,9 @@ public class GitService {
     private static final String NOT_A_GIT_REPOSITORY = "Not a git repository";
     private static final String GIT_DIFF = "diff";
     private static final int MIN_PORCELAIN_LINE_LENGTH = 4;
-    private static final char NL = (char) 10;
+    private static final char NL = '\n';
     private static final char DQUOTE = '"';
-    private static final char BACKSLASH = (char) 92;
+    private static final char BACKSLASH = '\\';
     private final ProjectService projectService;
 
     public GitService(ProjectService projectService) {
@@ -42,7 +44,7 @@ public class GitService {
 
     @AgentDoc(value = "Returns the git status (porcelain).", examples = "gitService.getStatus()")
     public String getStatus() {
-        return executeGitCommand(false, "status", "--porcelain");
+        return executeGitCommand(false, "-c", "core.quotePath=false", "status", "--porcelain");
     }
 
     @AgentDoc(value = "Returns the git diff including staged, unstaged, and untracked changes in the working tree.", examples = "gitService.getDiff()")
@@ -89,7 +91,7 @@ public class GitService {
         if (!projectService.hasActiveProject()) {
             return List.of();
         }
-        String statusOutput = executeGitCommand(false, "status", "--porcelain", "-uall");
+        String statusOutput = executeGitCommand(false, "-c", "core.quotePath=false", "status", "--porcelain", "-uall");
         if (statusOutput.isEmpty() || isGitError(statusOutput)) {
             return List.of();
         }
@@ -196,24 +198,48 @@ public class GitService {
     }
 
     private String formatUntrackedFileDiff(String relFile, Path filePath) {
-        try {
-            String header = "diff --git a/" + relFile + " b/" + relFile + NL + "new file mode 100644" + NL;
-            if (FileReadService.isBinaryFile(filePath)) {
-                return header + "Binary files /dev/null and b/" + relFile + " differ";
-            }
-            String content = Files.readString(filePath);
-            StringBuilder sb = new StringBuilder(header).append("--- /dev/null").append(NL).append("+++ b/")
-                    .append(relFile);
-            if (!content.isEmpty()) {
-                List<String> lines = content.lines().toList();
-                sb.append(NL).append("@@ -0,0 +1,").append(lines.size()).append(" @@");
-                lines.forEach(l -> sb.append(NL).append('+').append(l));
-            }
-            return sb.toString();
-        } catch (IOException e) {
-            log.warn("Failed to read untracked file {} for diff: {}", relFile, e.getMessage());
+        if (!Files.isRegularFile(filePath)) {
             return "";
         }
+        try {
+            List<String> command = List.of("git", GIT_DIFF, "--no-index", "--", "/dev/null", relFile);
+            ProcessResult result = ProcessRunner.run(command, projectService.getCurrentProjectRoot(),
+                    Map.of("GIT_TERMINAL_PROMPT", "0"));
+            if (result == null || result.timedOut() || (result.exitCode() != 0 && result.exitCode() != 1)) {
+                return "";
+            }
+            return normalizeUntrackedNoIndexDiff(relFile, result.output());
+        } catch (IOException e) {
+            log.warn("Failed to run git diff --no-index for untracked file {}: {}", relFile, e.getMessage());
+            return "";
+        }
+    }
+
+    static String normalizeUntrackedNoIndexDiff(String relFile, String rawDiff) {
+        if (rawDiff == null || rawDiff.isBlank()) {
+            return "";
+        }
+        List<String> lines = rawDiff.trim().lines().toList();
+        if (lines.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) {
+                sb.append(NL);
+            }
+            String line = lines.get(i);
+            if (i == 0 && line.startsWith("diff --git ")) {
+                sb.append("diff --git a/").append(relFile).append(" b/").append(relFile);
+            } else if (line.startsWith("+++ ") && !line.equals("+++ b/" + relFile)) {
+                sb.append("+++ b/").append(relFile);
+            } else if (line.startsWith("Binary files ") && line.endsWith(" differ")) {
+                sb.append("Binary files /dev/null and b/").append(relFile).append(" differ");
+            } else {
+                sb.append(line);
+            }
+        }
+        return sb.toString();
     }
 
     private static boolean isGitError(String output) {
@@ -232,9 +258,51 @@ public class GitService {
     static String unquotePorcelainPath(String path) {
         if (path == null)
             return "";
-        return (path.length() >= 2 && path.charAt(0) == DQUOTE && path.charAt(path.length() - 1) == DQUOTE)
-                ? StringEscapeUtils.unescapeJava(path.substring(1, path.length() - 1))
-                : path;
+        if (path.length() < 2 || path.charAt(0) != DQUOTE || path.charAt(path.length() - 1) != DQUOTE) {
+            return path;
+        }
+        String inner = path.substring(1, path.length() - 1);
+        StringBuilder sb = new StringBuilder(inner.length());
+        ByteArrayOutputStream octalBytes = new ByteArrayOutputStream();
+        int i = 0;
+        while (i < inner.length()) {
+            char c = inner.charAt(i);
+            if (c == BACKSLASH && i + 1 < inner.length()) {
+                char next = inner.charAt(i + 1);
+                if (next >= '0' && next <= '7') {
+                    int val = next - '0';
+                    int consumed = 2;
+                    if (i + 2 < inner.length() && inner.charAt(i + 2) >= '0' && inner.charAt(i + 2) <= '7') {
+                        val = (val << 3) + (inner.charAt(i + 2) - '0');
+                        consumed++;
+                        if (i + 3 < inner.length() && inner.charAt(i + 3) >= '0' && inner.charAt(i + 3) <= '7') {
+                            val = (val << 3) + (inner.charAt(i + 3) - '0');
+                            consumed++;
+                        }
+                    }
+                    octalBytes.write(val & 0xFF);
+                    i += consumed;
+                    continue;
+                }
+                flushOctalBytes(octalBytes, sb);
+                int end = Math.min(inner.length(), (next == 'u' && i + 6 <= inner.length()) ? i + 6 : i + 2);
+                sb.append(StringEscapeUtils.unescapeJava(inner.substring(i, end)));
+                i = end;
+            } else {
+                flushOctalBytes(octalBytes, sb);
+                sb.append(c);
+                i++;
+            }
+        }
+        flushOctalBytes(octalBytes, sb);
+        return sb.toString();
+    }
+
+    private static void flushOctalBytes(ByteArrayOutputStream octalBytes, StringBuilder sb) {
+        if (octalBytes.size() > 0) {
+            sb.append(octalBytes.toString(StandardCharsets.UTF_8));
+            octalBytes.reset();
+        }
     }
 
     private String executeGitCommand(String... args) {

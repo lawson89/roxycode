@@ -26,8 +26,8 @@ public class GrepService {
     private static final String DOC_CONTEXT_LINES = "Number of context lines before and after each match (0-20)";
     private static final String DOC_LITERAL_TEXT = "The literal text to search for";
     private static final String DOC_IGNORE_CASE_PATTERN = "The regex pattern to search for case-insensitively";
-    private static final char BACKSLASH = (char) 92;
-    private static final char LF = (char) 10;
+    private static final char BACKSLASH = '\\';
+    private static final char LF = '\n';
 
     private final ProjectService projectService;
 

@@ -32,6 +32,7 @@ public class BuildContainerService {
     static final String LABEL_APP = "app";
     static final String LABEL_APP_VALUE = "roxycode";
     static final String LABEL_PROJECT = "roxycode.project";
+    private static final String NL = "\n";
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ContainerConfig(boolean enabled, String image, String workdir) {
@@ -117,7 +118,12 @@ public class BuildContainerService {
             Map<String, String> env, String command) throws Exception {
         ContainerSessionKey sessionKey = new ContainerSessionKey(projectRoot.toAbsolutePath().normalize(),
                 containerConfig.image(), containerConfig.workdir(), Map.copyOf(env));
-        return getOrCreateContainerSession(sessionKey).execInContainer("sh", "-c", command);
+        try {
+            return getOrCreateContainerSession(sessionKey).execInContainer("sh", "-c", command);
+        } catch (InterruptedException | java.util.concurrent.CancellationException e) {
+            stopActiveContainer();
+            throw e;
+        }
     }
 
     synchronized ContainerSession getOrCreateContainerSession(ContainerSessionKey key) throws Exception {
@@ -137,9 +143,26 @@ public class BuildContainerService {
             var parsed = AiConfig.SHARED_TOML_MAPPER.readValue(toml, GenericBuildToolService.BuildConfig.class);
             return parsed != null && parsed.container().enabled();
         } catch (Exception e) {
-            log.debug("Failed to parse TOML when checking container.enabled flag", e);
-            return false;
+            log.debug("Failed to parse full TOML when checking container.enabled flag; falling back to section scan",
+                    e);
+            return scanContainerEnabledFallback(toml);
         }
+    }
+
+    private static boolean scanContainerEnabledFallback(String toml) {
+        boolean inContainerSection = false;
+        for (String line : toml.lines().toList()) {
+            String sectionName = parseSectionHeaderName(line);
+            if (sectionName != null) {
+                inContainerSection = "container".equals(sectionName);
+            } else if (inContainerSection) {
+                Boolean enabledVal = parseEnabledAssignmentValue(line);
+                if (enabledVal != null) {
+                    return enabledVal;
+                }
+            }
+        }
+        return false;
     }
 
     public static String updateContainerEnabledInToml(String toml, boolean enabled) {
@@ -153,18 +176,18 @@ public class BuildContainerService {
 
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
-            String trimmed = line.trim();
-            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                inContainerSection = "[container]".equals(trimmed);
-                if (inContainerSection) {
+            String sectionName = parseSectionHeaderName(line);
+            if (sectionName != null) {
+                inContainerSection = "container".equals(sectionName);
+                if (inContainerSection && !foundContainerSection) {
                     foundContainerSection = true;
                     containerSectionIndex = i;
                 }
                 outputLines.add(line);
-            } else if (inContainerSection && !updatedEnabledLine && isEnabledAssignment(trimmed)) {
+            } else if (inContainerSection && !updatedEnabledLine && isEnabledAssignment(line.trim())) {
                 int eqIdx = line.indexOf('=');
                 String rest = line.substring(eqIdx + 1);
-                int commentIdx = rest.indexOf('#');
+                int commentIdx = findInlineCommentIndex(rest);
                 String commentSuffix = commentIdx >= 0 ? " " + rest.substring(commentIdx) : "";
                 outputLines.add(line.substring(0, eqIdx + 1) + " " + enabled + commentSuffix);
                 updatedEnabledLine = true;
@@ -174,14 +197,71 @@ public class BuildContainerService {
         }
 
         if (!foundContainerSection) {
-            String section = "[container]\nenabled = %s\nimage = '%s'\nworkdir = '%s'\n".formatted(enabled,
-                    DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
-            return safeToml.isEmpty() ? section : safeToml.stripTrailing() + "\n\n" + section;
+            String section = ("""
+                    [container]
+                    enabled = %s
+                    image = '%s'
+                    workdir = '%s'
+                    """).formatted(enabled, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
+            return safeToml.isEmpty() ? section : safeToml.stripTrailing() + NL + NL + section;
         }
         if (!updatedEnabledLine && containerSectionIndex >= 0) {
             outputLines.add(containerSectionIndex + 1, "enabled = " + enabled);
         }
-        return String.join("\n", outputLines);
+        return String.join(NL, outputLines);
+    }
+
+    static String parseSectionHeaderName(String line) {
+        if (line == null) {
+            return null;
+        }
+        String withoutComment = stripInlineComment(line).trim();
+        if (withoutComment.length() < 2 || withoutComment.charAt(0) != '['
+                || withoutComment.charAt(withoutComment.length() - 1) != ']') {
+            return null;
+        }
+        return withoutComment.substring(1, withoutComment.length() - 1).trim();
+    }
+
+    private static Boolean parseEnabledAssignmentValue(String line) {
+        String trimmed = stripInlineComment(line).trim();
+        if (!isEnabledAssignment(trimmed)) {
+            return null;
+        }
+        int eqIdx = trimmed.indexOf('=');
+        String val = trimmed.substring(eqIdx + 1).trim();
+        if ("true".equals(val)) {
+            return Boolean.TRUE;
+        }
+        if ("false".equals(val)) {
+            return Boolean.FALSE;
+        }
+        return null;
+    }
+
+    private static String stripInlineComment(String text) {
+        int idx = findInlineCommentIndex(text);
+        return idx >= 0 ? text.substring(0, idx) : text;
+    }
+
+    private static int findInlineCommentIndex(String text) {
+        boolean inSingleQuotes = false;
+        boolean inDoubleQuotes = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\\' && inDoubleQuotes && i + 1 < text.length()) {
+                i++;
+                continue;
+            }
+            if (c == '\'' && !inDoubleQuotes) {
+                inSingleQuotes = !inSingleQuotes;
+            } else if (c == '"' && !inSingleQuotes) {
+                inDoubleQuotes = !inDoubleQuotes;
+            } else if (c == '#' && !inSingleQuotes && !inDoubleQuotes) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static boolean isEnabledAssignment(String trimmed) {

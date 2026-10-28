@@ -76,25 +76,49 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testCloseAndManagedChatTurnExecutorLifecycle() {
+    void testClosePreservesSharedExecutorWhileCancellingActiveTurn() throws Exception {
         ExecutorService executorService = new AiConfig().chatTurnExecutor();
-        assertFalse(executorService.isShutdown());
+        try {
+            assertFalse(executorService.isShutdown());
 
-        ExploreChatPanel panel = createExploreChatPanel(executorService);
-        assertFalse(panel.getController().ownsTurnExecutor());
+            java.util.concurrent.CountDownLatch turnStarted = new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.CountDownLatch turnInterrupted = new java.util.concurrent.CountDownLatch(1);
+            when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+                turnStarted.countDown();
+                try {
+                    Thread.sleep(10_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    turnInterrupted.countDown();
+                }
+                return "done";
+            });
 
-        JPanel host = new JPanel();
-        host.add(panel);
-        host.remove(panel);
-        panel.removeNotify();
-        assertFalse(executorService.isShutdown());
+            ExploreChatPanel panel = createExploreChatPanel(executorService);
+            assertFalse(panel.getController().ownsTurnExecutor());
 
-        panel.close();
-        assertTrue(executorService.isShutdown());
+            JPanel host = new JPanel();
+            host.add(panel);
+            host.remove(panel);
+            panel.removeNotify();
+            assertFalse(executorService.isShutdown());
+
+            sendOnEdt(panel, "Long running query");
+            assertTrue(turnStarted.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertTrue(panel.getController().isTurnActive());
+
+            panel.close();
+            assertTrue(turnInterrupted.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertFalse(panel.getController().isTurnActive());
+            assertTrue(panel.getModel().isTurnCancelled());
+            assertFalse(executorService.isShutdown(), "Shared injected executor must not be shut down by close()");
+        } finally {
+            executorService.close();
+        }
     }
 
     @Test
-    void testFallbackDefaultExecutorOwnedAndClosedOnRemoveNotify() {
+    void testFallbackDefaultExecutorOwnedAndClosedOnRemoveNotifyOrClose() {
         ChatPanel panel = new ChatPanel(aiService, planService, publisher, chatMemory, ChatModel.QA_SESSION_PREFIX,
                 WorkflowPhase.EXPLORE, false, null, null);
 
@@ -105,6 +129,14 @@ class ChatControllerTest extends ChatTestFixture {
 
         panel.removeNotify();
         assertTrue(fallbackExecutor.isShutdown());
+
+        panel.addNotify();
+        ExecutorService recreatedExecutor = assertInstanceOf(ExecutorService.class,
+                panel.getController().getTurnExecutor());
+        assertFalse(recreatedExecutor.isShutdown());
+
+        panel.close();
+        assertTrue(recreatedExecutor.isShutdown());
     }
 
     @Test

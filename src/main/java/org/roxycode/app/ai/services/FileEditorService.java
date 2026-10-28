@@ -30,12 +30,12 @@ public class FileEditorService {
     private static final int SINGLE_MATCH_COUNT = 1;
     private static final double MIN_LINE_SIMILARITY = 0.6;
     private static final JaroWinklerSimilarity JARO_WINKLER = new JaroWinklerSimilarity();
-    private static final char LF = (char) 10;
-    private static final String NL = String.valueOf(LF);
-    private static final String CRLF = String.valueOf((char) 13) + NL;
-    private static final String CR = String.valueOf((char) 13);
-    private static final String TAB_SPACE = " " + (char) 9;
-    private static final String WHITESPACE_REGEX = String.valueOf((char) 92) + "s+";
+    private static final char LF = '\n';
+    private static final String NL = "\n";
+    private static final String CRLF = "\r\n";
+    private static final String CR = "\r";
+    private static final String TAB_SPACE = " \t";
+    private static final String WHITESPACE_REGEX = "\\s+";
 
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
@@ -135,7 +135,7 @@ public class FileEditorService {
                         + ", file has " + lines.size() + " lines)";
             }
             lines.subList(startLine - 1, endLine).clear();
-            lines.addAll(startLine - 1, replacementText.isEmpty() ? List.of("") : replacementText.lines().toList());
+            lines.addAll(startLine - 1, splitLines(replacementText));
             return null;
         }, "Lines replaced successfully in: " + relativePath);
     }
@@ -150,7 +150,7 @@ public class FileEditorService {
                 return "Invalid line number: " + lineNumber + " (valid range: 1 to " + maxInsertLine + ", file has "
                         + lines.size() + " lines)";
             }
-            lines.addAll(lineNumber - 1, content.isEmpty() ? List.of("") : content.lines().toList());
+            lines.addAll(lineNumber - 1, splitLines(content));
             return null;
         }, "Content inserted successfully in: " + relativePath);
     }
@@ -341,7 +341,7 @@ public class FileEditorService {
     }
 
     private static boolean startsWithHorizontalWhitespace(String text) {
-        return text != null && !text.isEmpty() && (text.charAt(0) == ' ' || text.charAt(0) == (char) 9);
+        return text != null && !text.isEmpty() && (text.charAt(0) == ' ' || text.charAt(0) == '\t');
     }
 
     private static String detectLineSeparator(String rawContent, String fallbackText) {
@@ -350,6 +350,26 @@ public class FileEditorService {
         if (rawContent.contains(NL))
             return NL;
         return (fallbackText != null && fallbackText.contains(CRLF)) ? CRLF : NL;
+    }
+
+    static List<String> splitLines(String content) {
+        if (content == null || content.isEmpty()) {
+            return List.of("");
+        }
+        String normalized = content.replace(CRLF, NL).replace(CR, NL);
+        String[] parts = normalized.split(NL, -1);
+        List<String> list = List.of(parts);
+        boolean hasNonEmptyLine = false;
+        for (String part : parts) {
+            if (!part.isEmpty()) {
+                hasNonEmptyLine = true;
+                break;
+            }
+        }
+        if (hasNonEmptyLine && parts.length > 1 && parts[parts.length - 1].isEmpty()) {
+            return list.subList(0, parts.length - 1);
+        }
+        return list;
     }
 
     private static boolean hasTrailingLineSeparator(String text) {

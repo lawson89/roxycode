@@ -105,4 +105,14 @@ public class JexlToHtmlConverterTest {
         assertEquals("", JexlToHtmlConverter.highlightCodeBlocks(""));
         assertEquals("<p>plain text</p>", JexlToHtmlConverter.highlightCodeBlocks("<p>plain text</p>"));
     }
+
+    @Test
+    public void testMultilineCommentsBackticksAndHtmlEntities() {
+        String script = String.join(System.lineSeparator(), "/* line 1", "line 2 */", "var s = 'a < b && c > d';",
+                "## JEXL hash comment");
+        String multiLine = JexlToHtmlConverter.convert(script);
+        assertContainsAll(multiLine, "<span class='tk-cm'>/* line 1</span>", "<span class='tk-cm'>line 2 */</span>",
+                "<span class='tk-rw'>var</span>", "<span class='tk-st'>'a &lt; b &amp;&amp; c &gt; d'</span>",
+                "<span class='tk-cm'>## JEXL hash comment</span>");
+    }
 }

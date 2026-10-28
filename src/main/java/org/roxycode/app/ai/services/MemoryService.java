@@ -1,5 +1,6 @@
 package org.roxycode.app.ai.services;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -12,7 +13,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
+import com.vladsch.flexmark.ext.yaml.front.matter.AbstractYamlFrontMatterVisitor;
+import com.vladsch.flexmark.ext.yaml.front.matter.YamlFrontMatterExtension;
+import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.util.ast.Node;
+import com.vladsch.flexmark.util.data.MutableDataSet;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.model.ImplementationPlan;
@@ -47,6 +54,11 @@ public class MemoryService {
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
     private static final String MD_EXTENSION = ".md";
     private static final String FRONTMATTER_DELIMITER = "---";
+    private static final int MAX_FRONTMATTER_LINES = 50;
+    private static final char DQUOTE = 34;
+    private static final char SQUOTE = 39;
+    private static final Parser FRONTMATTER_PARSER = Parser
+            .builder(new MutableDataSet().set(Parser.EXTENSIONS, List.of(YamlFrontMatterExtension.create()))).build();
 
     private final SettingsService settingsService;
     private final ProjectService projectService;
@@ -392,17 +404,19 @@ public class MemoryService {
         }
     }
 
-    private static void parseRipGrepArchiveLine(String rawLine, String archiveSlashPrefix, Path archiveDir,
+    static void parseRipGrepArchiveLine(String rawLine, String archiveSlashPrefix, Path archiveDir,
             Map<String, Integer> frontmatterEndLineCache, Map<String, String> snippetsByFilename) {
         if (rawLine == null || rawLine.isBlank()) {
             return;
         }
-        String slashLine = rawLine.replace((char) 92, '/');
-        String rel = (!archiveSlashPrefix.isEmpty() && slashLine.startsWith(archiveSlashPrefix))
+        String slashLine = rawLine.replace('\\', '/');
+        String rel = startsWithSlashPrefix(slashLine, archiveSlashPrefix)
                 ? slashLine.substring(archiveSlashPrefix.length())
                 : slashLine;
-        int firstColon = rel.indexOf(':');
-        int secondColon = firstColon > 0 ? rel.indexOf(':', firstColon + 1) : -1;
+        int colonSearchStart = (rel.length() >= 3 && Character.isLetter(rel.charAt(0)) && rel.charAt(1) == ':'
+                && rel.charAt(2) == '/') ? 3 : 0;
+        int firstColon = rel.indexOf(':', colonSearchStart);
+        int secondColon = firstColon > colonSearchStart ? rel.indexOf(':', firstColon + 1) : -1;
         if (secondColon <= firstColon) {
             return;
         }
@@ -435,13 +449,17 @@ public class MemoryService {
         if (file == null || !Files.isRegularFile(file)) {
             return 0;
         }
-        try {
-            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-            if (!lines.isEmpty() && FRONTMATTER_DELIMITER.equals(lines.get(0).trim())) {
-                for (int i = 1; i < lines.size(); i++) {
-                    if (FRONTMATTER_DELIMITER.equals(lines.get(i).trim())) {
-                        return i + 1;
-                    }
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String firstLine = reader.readLine();
+            if (firstLine == null || !FRONTMATTER_DELIMITER.equals(firstLine.trim())) {
+                return 0;
+            }
+            int lineNum = 1;
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lineNum++;
+                if (FRONTMATTER_DELIMITER.equals(line.trim())) {
+                    return lineNum;
                 }
             }
         } catch (IOException e) {
@@ -528,14 +546,14 @@ public class MemoryService {
                 sb.append('\n');
             }
             String line = lines.get(i);
-            String slashLine = line.replace((char) 92, '/');
-            if (!globalPrefix.isEmpty() && slashLine.startsWith(globalPrefix)) {
+            String slashLine = line.replace('\\', '/');
+            if (startsWithSlashPrefix(slashLine, globalPrefix)) {
                 sb.append("[GLOBAL] ").append(slashLine.substring(globalPrefix.length()));
-            } else if (!projectPrefix.isEmpty() && slashLine.startsWith(projectPrefix)) {
+            } else if (startsWithSlashPrefix(slashLine, projectPrefix)) {
                 sb.append("[PROJECT] ").append(slashLine.substring(projectPrefix.length()));
-            } else if (!archivePrefix.isEmpty() && slashLine.startsWith(archivePrefix)) {
+            } else if (startsWithSlashPrefix(slashLine, archivePrefix)) {
                 sb.append("[ARCHIVE] plans/").append(slashLine.substring(archivePrefix.length()));
-            } else if (!archiveTopicsPrefix.isEmpty() && slashLine.startsWith(archiveTopicsPrefix)) {
+            } else if (startsWithSlashPrefix(slashLine, archiveTopicsPrefix)) {
                 sb.append("[ARCHIVE] topics/").append(slashLine.substring(archiveTopicsPrefix.length()));
             } else {
                 sb.append(line);
@@ -544,11 +562,24 @@ public class MemoryService {
         return sb.toString();
     }
 
+    static boolean startsWithSlashPrefix(String slashLine, String prefix) {
+        if (slashLine == null || prefix == null || prefix.isEmpty() || slashLine.length() < prefix.length()) {
+            return false;
+        }
+        if (slashLine.startsWith(prefix)) {
+            return true;
+        }
+        return prefix.length() >= 3 && Character.isLetter(prefix.charAt(0)) && prefix.charAt(1) == ':'
+                && prefix.charAt(2) == '/'
+                && Character.toLowerCase(slashLine.charAt(0)) == Character.toLowerCase(prefix.charAt(0))
+                && slashLine.regionMatches(1, prefix, 1, prefix.length() - 1);
+    }
+
     private static String toSlashPrefix(Path dir) {
         if (dir == null) {
             return "";
         }
-        String normalized = dir.toAbsolutePath().normalize().toString().replace((char) 92, '/');
+        String normalized = dir.toAbsolutePath().normalize().toString().replace('\\', '/');
         return normalized.endsWith("/") ? normalized : normalized + "/";
     }
 
@@ -678,31 +709,56 @@ public class MemoryService {
 
     static Map<String, String> parseFrontmatter(Path file) {
         Map<String, String> map = new LinkedHashMap<>();
-        try {
-            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-            if (lines.isEmpty() || !FRONTMATTER_DELIMITER.equals(lines.get(0).trim())) {
+        if (file == null || !Files.isRegularFile(file)) {
+            return map;
+        }
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String firstLine = reader.readLine();
+            if (firstLine == null || !FRONTMATTER_DELIMITER.equals(firstLine.trim())) {
                 return map;
             }
-            for (int i = 1; i < lines.size(); i++) {
-                String line = lines.get(i).trim();
-                if (FRONTMATTER_DELIMITER.equals(line)) {
+            StringBuilder yamlBlock = new StringBuilder(firstLine.trim()).append((char) 10);
+            boolean closed = false;
+            int lineCount = 0;
+            String rawLine;
+            while (lineCount < MAX_FRONTMATTER_LINES && (rawLine = reader.readLine()) != null) {
+                lineCount++;
+                String trimmed = rawLine.trim();
+                if (FRONTMATTER_DELIMITER.equals(trimmed)) {
+                    yamlBlock.append(FRONTMATTER_DELIMITER).append((char) 10);
+                    closed = true;
                     break;
                 }
-                int colon = line.indexOf(':');
-                if (colon > 0) {
-                    String key = line.substring(0, colon).trim();
-                    String val = line.substring(colon + 1).trim();
-                    if (val.length() >= 2 && val.charAt(0) == '"' && val.charAt(val.length() - 1) == '"') {
-                        val = val.substring(1, val.length() - 1).replace(String.valueOf((char) 92) + '"',
-                                String.valueOf('"'));
-                    }
-                    map.put(key, val);
-                }
+                yamlBlock.append(rawLine).append((char) 10);
+            }
+            if (!closed) {
+                yamlBlock.append(FRONTMATTER_DELIMITER).append((char) 10);
+            }
+            Node doc = FRONTMATTER_PARSER.parse(yamlBlock.toString());
+            AbstractYamlFrontMatterVisitor visitor = new AbstractYamlFrontMatterVisitor();
+            visitor.visit(doc);
+            for (Map.Entry<String, List<String>> entry : visitor.getData().entrySet()) {
+                List<String> values = entry.getValue();
+                String rawVal = (values == null || values.isEmpty()) ? "" : String.join(", ", values).trim();
+                map.put(entry.getKey().trim(), normalizeFrontmatterValue(rawVal));
             }
         } catch (IOException e) {
             log.debug("Failed to parse frontmatter from {}: {}", file, e.getMessage());
         }
         return map;
+    }
+
+    private static String normalizeFrontmatterValue(String val) {
+        if (val == null || val.length() < 2) {
+            return val != null ? val : "";
+        }
+        if (val.charAt(0) == DQUOTE && val.charAt(val.length() - 1) == DQUOTE) {
+            return StringEscapeUtils.unescapeJava(val.substring(1, val.length() - 1));
+        }
+        if (val.charAt(0) == SQUOTE && val.charAt(val.length() - 1) == SQUOTE) {
+            return val.substring(1, val.length() - 1);
+        }
+        return val;
     }
 
     private static EditorResult writeMarkdownFile(Path path, String content, String successMessage) {

@@ -47,7 +47,7 @@ public final class ChatController implements AutoCloseable {
     static final int DEFAULT_ERROR_NUDGE_DELAY_MS = 1000;
     private static final int MAX_EXCERPT_ENTRIES = 8;
     private static final int MAX_ENTRY_CHARS = 500;
-    private static final String BT = String.valueOf((char) 96);
+    private static final String BT = "`";
 
     private final ChatModel model;
     private final ChatPanel view;
@@ -142,10 +142,11 @@ public final class ChatController implements AutoCloseable {
 
     @Override
     public void close() {
-        consecutiveAutoNudges = 0;
-        cancelAutoNudgeTimer();
-        if (turnExecutor instanceof ExecutorService executorService) {
-            executorService.close();
+        cancelActiveTurnState(true);
+        synchronized (this) {
+            if (turnExecutorOwned && turnExecutor instanceof ExecutorService executorService) {
+                executorService.close();
+            }
         }
     }
 
@@ -314,7 +315,7 @@ public final class ChatController implements AutoCloseable {
                 content = content.substring(0, MAX_ENTRY_CHARS) + "...";
             }
             if (i > 0)
-                sb.append((char) 10);
+                sb.append('\n');
             sb.append(speaker).append(": ").append(content);
         }
         return sb.toString();

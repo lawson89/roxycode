@@ -53,4 +53,18 @@ class PathUtilsTest {
         assertEquals(baseId + "-3", third.id());
         assertEquals(archiveDir.resolve(baseId + "-3.md"), third.file());
     }
+
+    @Test
+    void testGetFileNameAndLowerExtensionHelpers() {
+        String winPath = "src" + (char) 92 + "main" + (char) 92 + "ChatPanel.java";
+        assertEquals("ChatPanel.java", PathUtils.getFileName(winPath));
+        assertEquals("", PathUtils.getFileName(null));
+        assertEquals("", PathUtils.getFileName("   "));
+
+        assertEquals("java", PathUtils.getLowerExtension("src/Main.JAVA", false));
+        assertEquals("", PathUtils.getLowerExtension(".gitignore", false));
+        assertEquals("gitignore", PathUtils.getLowerExtension(".gitignore", true));
+        assertEquals("md", PathUtils.getLowerExtension(Path.of("docs/README.MD"), false));
+        assertEquals("", PathUtils.getLowerExtension((Path) null, true));
+    }
 }

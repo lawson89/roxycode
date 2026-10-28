@@ -345,7 +345,7 @@ public class PromptService {
         StringBuilder sb = new StringBuilder();
         for (ContextFileItem item : files) {
             try {
-                String content = readContextFile(item.filePath());
+                String content = readValidatedContextFile(item.filePath());
                 if (content != null && !content.isBlank()) {
                     sb.append("\n\n## ").append(headerTitle).append(": ").append(item.fileName()).append("\n")
                             .append(content);
@@ -355,6 +355,10 @@ public class PromptService {
             }
         }
         return sb.toString();
+    }
+
+    private static String readValidatedContextFile(Path normalizedFile) throws IOException {
+        return Files.readString(normalizedFile, StandardCharsets.UTF_8);
     }
 
     private boolean isInsideConfiguredContextFolder(Path normalizedFile) {

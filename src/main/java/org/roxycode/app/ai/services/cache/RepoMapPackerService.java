@@ -13,7 +13,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -25,7 +26,9 @@ import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.apache.commons.io.FilenameUtils;
 import org.roxycode.app.util.ExceptionUtils;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -37,9 +40,9 @@ public class RepoMapPackerService {
     static final int CTAGS_BATCH_SIZE = 100;
     private static final int SINGLE_FILE_BATCH_SIZE = 1;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
-    private static final char LF = (char) 10;
+    private static final char LF = '\n';
     private static final char SLASH = '/';
-    private static final char BACKSLASH = (char) 92;
+    private static final char BACKSLASH = '\\';
 
     static final Set<String> SOURCE_EXTENSIONS = Set
             .of("java,py,ts,tsx,js,jsx,go,rs,c,cpp,cc,cxx,h,hpp,cs,rb,php,kt,kts,swift,scala".split(","));
@@ -68,7 +71,9 @@ public class RepoMapPackerService {
         ProcessResult run(List<String> command) throws IOException;
     }
 
-    private final Map<Path, CachedSkeleton> skeletonCache = new ConcurrentHashMap<>();
+    static final int MAX_SKELETON_CACHE_SIZE = 10_000;
+    private final Cache<Path, CachedSkeleton> skeletonCache = Caffeine.newBuilder().maximumSize(MAX_SKELETON_CACHE_SIZE)
+            .build();
     private CtagsRunner ctagsRunner = command -> ProcessRunner.run(command, null, false);
 
     private String cachedMap = null;
@@ -106,7 +111,7 @@ public class RepoMapPackerService {
             cachedMap = null;
             cachedGeneration = 0;
             diskCacheEligible = false;
-            skeletonCache.clear();
+            skeletonCache.invalidateAll();
         }
         metaService.deleteRepoCache();
     }
@@ -122,7 +127,7 @@ public class RepoMapPackerService {
         cachedMap = null;
         cachedGeneration = 0;
         diskCacheEligible = true;
-        skeletonCache.clear();
+        skeletonCache.invalidateAll();
     }
 
     @SuppressWarnings("PMD.NullAssignment")
@@ -134,7 +139,7 @@ public class RepoMapPackerService {
         if (changedRelativePath != null && !changedRelativePath.isBlank()) {
             Path root = projectService.getCurrentProjectRoot();
             if (root != null) {
-                skeletonCache.remove(root.resolve(changedRelativePath).toAbsolutePath().normalize());
+                skeletonCache.invalidate(root.resolve(changedRelativePath).toAbsolutePath().normalize());
             }
         }
     }
@@ -221,27 +226,20 @@ public class RepoMapPackerService {
     }
 
     static boolean isSourceFile(String relPath) {
-        if (relPath == null || relPath.isBlank())
-            return false;
-        String normalized = relPath.replace(BACKSLASH, SLASH);
-        int slashIdx = normalized.lastIndexOf(SLASH);
-        String fileName = slashIdx >= 0 ? normalized.substring(slashIdx + 1) : normalized;
-        int dotIdx = fileName.lastIndexOf('.');
-        return dotIdx > 0 && dotIdx < fileName.length() - 1
-                && SOURCE_EXTENSIONS.contains(fileName.substring(dotIdx + 1).toLowerCase(Locale.ROOT));
+        String ext = PathUtils.getLowerExtension(relPath, false);
+        return !ext.isEmpty() && SOURCE_EXTENSIONS.contains(ext);
     }
 
     static boolean isTestFile(String relPath) {
         if (relPath == null || relPath.isBlank())
             return false;
-        String normalized = relPath.replace(BACKSLASH, SLASH);
+        String normalized = FilenameUtils.separatorsToUnix(relPath);
         for (String marker : TEST_DIR_MARKERS) {
             if (normalized.startsWith(marker) || normalized.contains("/" + marker)) {
                 return true;
             }
         }
-        int slashIdx = normalized.lastIndexOf(SLASH);
-        String fileName = slashIdx >= 0 ? normalized.substring(slashIdx + 1) : normalized;
+        String fileName = PathUtils.getFileName(normalized);
         if (fileName.startsWith("test_") && fileName.endsWith(".py")) {
             return true;
         }
@@ -360,7 +358,7 @@ public class RepoMapPackerService {
     }
 
     private CachedSkeleton getValidCachedSkeleton(Path path, long lastModifiedMillis, long size) {
-        CachedSkeleton cached = skeletonCache.get(path);
+        CachedSkeleton cached = skeletonCache.getIfPresent(path);
         return (cached != null && cached.lastModifiedMillis() == lastModifiedMillis && cached.size() == size)
                 ? cached
                 : null;
@@ -402,13 +400,8 @@ public class RepoMapPackerService {
     }
 
     private static boolean hasExtensionInSet(Path path, Set<String> extensions) {
-        Path fileNamePath = path != null ? path.getFileName() : null;
-        if (fileNamePath == null)
-            return false;
-        String fileName = fileNamePath.toString();
-        int dotIndex = fileName.lastIndexOf('.');
-        return dotIndex >= 0 && dotIndex < fileName.length() - 1
-                && extensions.contains(fileName.substring(dotIndex + 1).toLowerCase(Locale.ROOT));
+        String ext = PathUtils.getLowerExtension(path, true);
+        return !ext.isEmpty() && extensions.contains(ext);
     }
 
     private boolean isBinaryFile(Path path) {

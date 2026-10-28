@@ -1,14 +1,12 @@
 package org.roxycode.app.service;
 
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.util.PathUtils;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
@@ -75,14 +73,7 @@ public class ProjectAnalysisService {
     }
 
     static String extractExtension(String filePath) {
-        if (StringUtils.isBlank(filePath))
-            return null;
-        Path fileNamePath = Path.of(filePath).getFileName();
-        if (fileNamePath == null)
-            return null;
-        String fileName = fileNamePath.toString();
-        String baseName = StringUtils.substringBeforeLast(fileName, ".");
-        String ext = StringUtils.substringAfterLast(fileName, ".");
-        return (StringUtils.isEmpty(baseName) || StringUtils.isEmpty(ext)) ? null : "." + ext.toLowerCase(Locale.ROOT);
+        String ext = PathUtils.getLowerExtension(filePath, false);
+        return ext.isEmpty() ? null : "." + ext;
     }
 }

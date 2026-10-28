@@ -8,7 +8,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         List<LogEntry> handoffLog) {
 
     public static final String NO_FILES_CHANGED = "No files changed";
-    private static final String CODE_FENCE = String.valueOf((char) 96).repeat(3);
+    private static final String CODE_FENCE = "```";
 
     public record TechStep(String description, boolean completed) {
     }
@@ -157,14 +157,12 @@ public record ImplementationPlan(String title, String goal, List<String> require
     public static String escapeFrontmatterValue(String value) {
         if (value == null)
             return "";
-        return value.replace(String.valueOf('"'), String.valueOf((char) 92) + '"').replace("\r\n", " ")
-                .replace('\n', ' ').replace('\r', ' ');
+        return value.replace("\"", "\\\"").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
     }
 
     private static String escapeMarkdownTableCell(String value) {
         if (value == null)
             return "";
-        return value.replace("|", String.valueOf((char) 92) + "|").replace("\r\n", " ").replace('\n', ' ').replace('\r',
-                ' ');
+        return value.replace("|", "\\|").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
     }
 }

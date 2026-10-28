@@ -41,4 +41,30 @@ public class AppSettingsTest {
         settings.setGlobalContextFolders(null);
         assertTrue(settings.getGlobalContextFolders().isEmpty());
     }
+
+    @Test
+    void testCopyCreatesIndependentDeepCopy() {
+        AppSettings original = new AppSettings();
+        original.setTheme("FlatLaf Dark");
+        original.setGeminiApiKey("secret-key");
+        original.setCurrentProjectPath("/workspace/proj");
+        original.setGeminiModel("gemini-3.5-pro");
+        original.setMaxAgentToolTurns(12);
+        original.setMaxChatMemoryMessages(80);
+        original.setGlobalContextFolders(List.of("/context/one", "/context/two"));
+
+        AppSettings copy = original.copy();
+        assertEquals("FlatLaf Dark", copy.getTheme());
+        assertEquals("secret-key", copy.getGeminiApiKey());
+        assertEquals("/workspace/proj", copy.getCurrentProjectPath());
+        assertEquals("gemini-3.5-pro", copy.getGeminiModel());
+        assertEquals(12, copy.getMaxAgentToolTurns());
+        assertEquals(80, copy.getMaxChatMemoryMessages());
+        assertEquals(List.of("/context/one", "/context/two"), copy.getGlobalContextFolders());
+
+        original.setTheme("FlatLaf Light");
+        original.setGlobalContextFolders(List.of("/context/mutated"));
+        assertEquals("FlatLaf Dark", copy.getTheme());
+        assertEquals(List.of("/context/one", "/context/two"), copy.getGlobalContextFolders());
+    }
 }

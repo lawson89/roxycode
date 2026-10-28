@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang3.SystemUtils;
 import org.junit.jupiter.api.Test;
@@ -86,5 +87,61 @@ class ProcessRunnerTest {
         boolean isVirtual = java.util.concurrent.CompletableFuture
                 .supplyAsync(() -> Thread.currentThread().isVirtual(), ProcessRunner.getStreamReaderExecutor()).get();
         assertTrue(isVirtual, "ProcessRunner stream reader executor must run on virtual threads");
+    }
+
+    @Test
+    void testReadStreamNormalAndBoundedTruncationDrainsRemainingStream() {
+        byte[] normalBytes = "hello world\nline two".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        StringBuilder normalBuf = new StringBuilder();
+        ProcessRunner.readStream(new java.io.ByteArrayInputStream(normalBytes), normalBuf, 100);
+        assertEquals("hello world\nline two", normalBuf.toString());
+
+        StringBuilder exactBuf = new StringBuilder();
+        ProcessRunner.readStream(
+                new java.io.ByteArrayInputStream("12345".getBytes(java.nio.charset.StandardCharsets.UTF_8)), exactBuf,
+                5);
+        assertEquals("12345", exactBuf.toString());
+
+        AtomicBoolean closed = new AtomicBoolean(false);
+        int totalBytes = 32_768;
+        java.io.InputStream largeStream = new java.io.InputStream() {
+            private int remaining = totalBytes;
+
+            @Override
+            public int read() {
+                if (remaining <= 0) {
+                    return -1;
+                }
+                remaining--;
+                return 'A';
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) {
+                if (remaining <= 0) {
+                    return -1;
+                }
+                int toProvide = Math.min(len, remaining);
+                java.util.Arrays.fill(b, off, off + toProvide, (byte) 'A');
+                remaining -= toProvide;
+                return toProvide;
+            }
+
+            @Override
+            public void close() {
+                closed.set(true);
+            }
+
+            int getRemaining() {
+                return remaining;
+            }
+        };
+
+        StringBuilder truncatedBuf = new StringBuilder();
+        int cap = 100;
+        ProcessRunner.readStream(largeStream, truncatedBuf, cap);
+        assertEquals("A".repeat(cap) + ProcessRunner.TRUNCATION_SUFFIX, truncatedBuf.toString());
+        assertTrue(closed.get(), "Stream must be closed after draining");
+        assertEquals(-1, assertDoesNotThrow(() -> largeStream.read()), "Entire stream must be drained to EOF");
     }
 }

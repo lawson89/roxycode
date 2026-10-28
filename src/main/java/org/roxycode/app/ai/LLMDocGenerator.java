@@ -13,8 +13,8 @@ public class LLMDocGenerator {
 
     private static final String DOC_END = " */\n";
     private static final String DOC_LINE_START = " * ";
-    private static final String FENCE_START = String.valueOf((char) 96).repeat(3) + "typescript\n";
-    private static final String FENCE_END = String.valueOf((char) 96).repeat(3) + "\n";
+    private static final String FENCE_START = "```typescript\n";
+    private static final String FENCE_END = "```\n";
 
     public String generateDoc(Collection<Object> services) {
         StringBuilder sb = new StringBuilder("### JEXL API Documentation\n\n").append(FENCE_START).append("""

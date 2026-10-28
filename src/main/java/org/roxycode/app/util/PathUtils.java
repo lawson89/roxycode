@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
 
 public final class PathUtils {
 
@@ -19,6 +21,31 @@ public final class PathUtils {
         if (filePath != null && filePath.getParent() != null) {
             Files.createDirectories(filePath.getParent());
         }
+    }
+
+    public static String getFileName(String path) {
+        if (StringUtils.isBlank(path)) {
+            return "";
+        }
+        return FilenameUtils.getName(FilenameUtils.separatorsToUnix(path.trim()));
+    }
+
+    public static String getLowerExtension(String path, boolean allowLeadingDotFile) {
+        String fileName = getFileName(path);
+        if (fileName.isEmpty()) {
+            return "";
+        }
+        if (!allowLeadingDotFile && StringUtils.isEmpty(FilenameUtils.getBaseName(fileName))) {
+            return "";
+        }
+        return FilenameUtils.getExtension(fileName).toLowerCase(Locale.ROOT);
+    }
+
+    public static String getLowerExtension(Path path, boolean allowLeadingDotFile) {
+        if (path == null || path.getFileName() == null) {
+            return "";
+        }
+        return getLowerExtension(path.getFileName().toString(), allowLeadingDotFile);
     }
 
     public static String sanitizeSlug(String raw, int maxLength, String fallback) {

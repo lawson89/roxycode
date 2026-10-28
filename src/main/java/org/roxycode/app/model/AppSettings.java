@@ -18,6 +18,24 @@ public class AppSettings {
     public AppSettings() {
     }
 
+    public AppSettings(AppSettings other) {
+        if (other != null) {
+            this.theme = other.theme;
+            this.geminiApiKey = other.geminiApiKey;
+            this.currentProjectPath = other.currentProjectPath;
+            this.geminiModel = other.geminiModel;
+            this.maxAgentToolTurns = other.maxAgentToolTurns;
+            this.maxChatMemoryMessages = other.maxChatMemoryMessages;
+            this.globalContextFolders = other.globalContextFolders == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(other.globalContextFolders);
+        }
+    }
+
+    public AppSettings copy() {
+        return new AppSettings(this);
+    }
+
     public String getTheme() {
         return theme;
     }

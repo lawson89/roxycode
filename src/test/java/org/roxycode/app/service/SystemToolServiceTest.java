@@ -99,6 +99,14 @@ class SystemToolServiceTest {
                 SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "2.43.0", SystemToolService.STATUS_DETECTED));
         assertFalse(SystemToolService.areAllRequiredToolsDetected(incompleteList));
 
+        List<SystemTool> customRequiredMissing = List.of(
+                SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "2.43.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_CTAGS, "5.9.0", SystemToolService.STATUS_DETECTED),
+                new SystemTool("CustomRequired", "Not found", SystemToolService.STATUS_MISSING, "Desc", "MIT",
+                        "https://example.com", true));
+        assertFalse(SystemToolService.areAllRequiredToolsDetected(customRequiredMissing));
+
         SystemToolService service = new SystemToolService(null, null, null);
         service.setToolProber(() -> allRequiredDetectedDockerMissing);
         assertTrue(service.checkRequiredToolsAvailable());
@@ -284,6 +292,7 @@ class SystemToolServiceTest {
             assertNotNull(failureField.get(factory));
             SystemToolService.resetTestcontainersFailureCache();
             assertNull(failureField.get(factory));
+            assertDoesNotThrow(() -> SystemToolService.clearDockerClientFactoryField(factory, "nonExistentField"));
 
             DockerClient mockClient = mock(DockerClient.class);
             DockerClientProviderStrategy mockStrategy = mock(DockerClientProviderStrategy.class);

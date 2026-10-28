@@ -42,7 +42,7 @@ public class AiService {
     public static final String NO_VISIBLE_RESPONSE_MARKER = "⚠️ **No Visible Response (finishReason:";
     public static final String EMPTY_RESPONSE_MARKER = "⚠️ **Empty Response Returned (finishReason:";
     public static final String EMPTY_STOP_MESSAGE = "Roxy completed the turn without generating a visible text message.";
-    private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~" + (char) 96 + '"' + "']";
+    private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
 
     private final ChatClient statelessChatClient;
     private final ChatClient chatClient;
@@ -93,9 +93,8 @@ public class AiService {
         String firstLine = rawTitle.lines().map(String::trim).filter(line -> !line.isEmpty()).findFirst().orElse("");
         if (firstLine.isEmpty())
             return "";
-        String cleaned = firstLine.replaceAll(STRIP_TITLE_CHARS_REGEX, " ")
-                .replaceAll(String.valueOf((char) 92) + "s+", " ").replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "")
-                .trim();
+        String cleaned = firstLine.replaceAll(STRIP_TITLE_CHARS_REGEX, " ").replaceAll("\\s+", " ")
+                .replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "").trim();
         return cleaned.length() > MAX_TOPIC_TITLE_LENGTH
                 ? cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH).replaceAll("[^a-zA-Z0-9]+$", "").trim()
                 : cleaned;

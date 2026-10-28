@@ -163,7 +163,9 @@ class PromptServiceTest {
                 "## Global Context: b_global.txt\nGlobal B text");
         assertContainsNone(globalContext, "Hidden file", "Nested should be ignored");
 
+        clearInvocations(projectService);
         String projectContext = promptService.loadProjectContext();
+        verify(projectService, times(1)).resolveProjectDataPath(PromptService.PROJECT_CONTEXT_CONFIG_FILE);
         SwingTestUtils.assertContainsAll(projectContext,
                 "## Project Context: a_architecture.md\nArchitecture guidelines",
                 "## Project Context: z_spec.json\n{spec: true}");

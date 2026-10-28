@@ -129,6 +129,16 @@ class BuildConfigPanelTest {
         assertFalse(panel.getContainerToggleCheckBox().isSelected());
         assertFalse(BuildContainerService.isContainerEnabledInToml(panel.getTextArea().getText()));
         assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.getBannerMessageLabel().getText());
+
+        SwingTestUtils.runOnEdt(() -> panel.getTextArea().setText("""
+                [build]
+                compile =
+
+                [container] # inline comment
+                enabled = true # keep enabled
+                """));
+        assertTrue(panel.getContainerToggleCheckBox().isSelected());
+        assertEquals(BuildConfigPanel.CONTAINER_ACTIVE_TEXT, panel.getBannerMessageLabel().getText());
     }
 
     @Test

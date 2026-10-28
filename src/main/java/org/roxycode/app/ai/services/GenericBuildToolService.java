@@ -283,8 +283,10 @@ public class GenericBuildToolService {
             fullOutput = result.combinedOutput();
             exitCode = result.exitCode();
         } catch (CancellationException e) {
+            stopActiveContainer();
             throw e;
         } catch (InterruptedException e) {
+            stopActiveContainer();
             Thread.currentThread().interrupt();
             throw new CancellationException("Container build command interrupted");
         } catch (Exception e) {

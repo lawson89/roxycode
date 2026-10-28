@@ -30,6 +30,7 @@ public class SettingsService {
 
     private final TomlMapper mapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final Object writeLock = new Object();
     private AppSettings settings;
     private Path settingsPathOverride;
     private volatile List<GeminiModelConfig> cachedAvailableModels;
@@ -101,27 +102,30 @@ public class SettingsService {
     }
 
     public void saveSettings() {
-        AppSettings currentSettings;
+        AppSettings snapshot;
         Path path;
+        CompletableFuture<Void> saveFuture;
         synchronized (this) {
-            currentSettings = getSettings();
+            snapshot = getSettings().copy();
             path = getSettingsPath();
+            lastSaveFuture = lastSaveFuture.handle((v, ex) -> null)
+                    .thenRunAsync(() -> writeSettingsToDisk(path, snapshot));
+            saveFuture = lastSaveFuture;
         }
-        eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
-        if (SwingUtilities.isEventDispatchThread()) {
-            lastSaveFuture = CompletableFuture.runAsync(() -> writeSettingsToDisk(path, currentSettings));
-        } else {
-            writeSettingsToDisk(path, currentSettings);
-            lastSaveFuture = CompletableFuture.completedFuture(null);
+        eventPublisher.publishEvent(new SettingsChangedEvent(snapshot));
+        if (!SwingUtilities.isEventDispatchThread()) {
+            saveFuture.join();
         }
     }
 
-    private synchronized void writeSettingsToDisk(Path path, AppSettings currentSettings) {
-        try {
-            PathUtils.createParentDirectories(path);
-            mapper.writeValue(path.toFile(), currentSettings);
-        } catch (IOException e) {
-            log.error("Failed to save settings: {}", e.getMessage(), e);
+    private void writeSettingsToDisk(Path path, AppSettings currentSettings) {
+        synchronized (writeLock) {
+            try {
+                PathUtils.createParentDirectories(path);
+                mapper.writeValue(path.toFile(), currentSettings);
+            } catch (IOException e) {
+                log.error("Failed to save settings: {}", e.getMessage(), e);
+            }
         }
     }
 

@@ -5,7 +5,7 @@ public class ChatHtmlTemplates {
     private static final String ROLE_AI = "ai";
     private static final String ROLE_USER = "user";
     private static final String ROLE_SYSTEM = "system";
-    private static final String CAT_EARS = "/" + (char) 92 + "_/" + (char) 92;
+    private static final String CAT_EARS = "/\\_/\\";
     public static final String COPY_CELL_ID_PREFIX = "copy-cell-";
 
     public static String renderCopyActionHtml(int messageIndex, boolean copied) {

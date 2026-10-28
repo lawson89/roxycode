@@ -155,6 +155,45 @@ class BuildContainerServiceTest {
     }
 
     @Test
+    void testExecuteCommandStopsActiveContainerOnInterruptionOrCancellation() {
+        AtomicBoolean sessionClosed = new AtomicBoolean(false);
+        AtomicBoolean throwInterrupted = new AtomicBoolean(true);
+
+        buildContainerService.setContainerSessionFactory(key -> {
+            sessionClosed.set(false);
+            return new ContainerSession() {
+                @Override
+                public ContainerExecResult execInContainer(String... command) throws Exception {
+                    if (throwInterrupted.get()) {
+                        throw new InterruptedException("exec interrupted");
+                    }
+                    throw new java.util.concurrent.CancellationException("exec cancelled");
+                }
+
+                @Override
+                public boolean isRunning() {
+                    return !sessionClosed.get();
+                }
+
+                @Override
+                public void close() {
+                    sessionClosed.set(true);
+                }
+            };
+        });
+
+        ContainerConfig config = new ContainerConfig(true, "eclipse-temurin:25-jdk", "/workspace");
+        assertThrows(InterruptedException.class,
+                () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw test"));
+        assertTrue(sessionClosed.get(), "Active container session must be stopped when interrupted");
+
+        throwInterrupted.set(false);
+        assertThrows(java.util.concurrent.CancellationException.class,
+                () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw test"));
+        assertTrue(sessionClosed.get(), "Active container session must be stopped when cancelled");
+    }
+
+    @Test
     void testIsAndUpdateContainerEnabledInToml() {
         for (String invalid : new String[]{null, "", "   ", "[container\nenabled = true\n", "invalid = = toml"}) {
             assertFalse(BuildContainerService.isContainerEnabledInToml(invalid));
@@ -167,11 +206,52 @@ class BuildContainerServiceTest {
         assertFalse(BuildContainerService
                 .isContainerEnabledInToml(BuildContainerService.updateContainerEnabledInToml(enabledToml, false)));
 
-        String appended = BuildContainerService.updateContainerEnabledInToml("[build]\ncompile = './mvnw compile'\n",
-                true);
+        String appended = BuildContainerService.updateContainerEnabledInToml("""
+                [build]
+                compile = './mvnw compile'
+                """, true);
         SwingTestUtils.assertContainsAll(appended, "[container]",
                 "image = '" + BuildContainerService.DEFAULT_CONTAINER_IMAGE + "'",
                 "workdir = '" + BuildContainerService.DEFAULT_CONTAINER_WORKDIR + "'");
         assertTrue(BuildContainerService.isContainerEnabledInToml(appended));
+
+        String commentedSectionToml = """
+                [build]
+                compile = './mvnw'
+
+                [container] # container settings
+                enabled = false # comment
+                """;
+        String updatedCommented = BuildContainerService.updateContainerEnabledInToml(commentedSectionToml, true);
+        assertEquals(1, updatedCommented.lines().filter(l -> l.contains("[container]")).count());
+        assertTrue(updatedCommented.contains("[container] # container settings"));
+        assertTrue(updatedCommented.contains("enabled = true # comment"));
+        assertTrue(BuildContainerService.isContainerEnabledInToml(updatedCommented));
+
+        String spacedSectionToml = """
+                [ container ]
+                enabled = false
+                """;
+        String updatedSpaced = BuildContainerService.updateContainerEnabledInToml(spacedSectionToml, true);
+        assertEquals(1, updatedSpaced.lines().filter(l -> l.contains("container")).count());
+        assertTrue(updatedSpaced.contains("enabled = true"));
+        assertTrue(BuildContainerService.isContainerEnabledInToml(updatedSpaced));
+
+        String transientSyntaxErrorInBuild = """
+                [build]
+                compile =
+
+                [ container ] # comment
+                enabled = true # inline
+                """;
+        assertTrue(BuildContainerService.isContainerEnabledInToml(transientSyntaxErrorInBuild));
+        String transientDisabled = """
+                [build]
+                compile =
+
+                [container]
+                enabled = false
+                """;
+        assertFalse(BuildContainerService.isContainerEnabledInToml(transientDisabled));
     }
 }

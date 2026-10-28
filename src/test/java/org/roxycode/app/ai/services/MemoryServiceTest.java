@@ -339,5 +339,40 @@ class MemoryServiceTest {
         }
         assertEquals(6, MemoryService.findFrontmatterEndLine(planFile));
         assertEquals(0, MemoryService.findFrontmatterEndLine(fallbackPlanFile));
+        assertEquals(0, MemoryService.findFrontmatterEndLine(null));
+        assertTrue(MemoryService.parseFrontmatter(fallbackPlanFile).isEmpty());
+        assertTrue(MemoryService.parseFrontmatter(null).isEmpty());
+
+        Path unclosedFrontmatterFile = plansDir.resolve("20250511-080000-unclosed.md");
+        Files.writeString(unclosedFrontmatterFile, """
+                ---
+                title: "Unclosed \"Quote\" Plan"
+                created_by: "Dave"
+                # Missing closing delimiter
+                """, StandardCharsets.UTF_8);
+        assertEquals(0, MemoryService.findFrontmatterEndLine(unclosedFrontmatterFile));
+        assertEquals("Unclosed \"Quote\" Plan", MemoryService.parseFrontmatter(unclosedFrontmatterFile).get("title"));
+    }
+
+    @Test
+    void testWindowsDriveLetterCaseAndColonHandlingInArchiveAndSearchOutput() {
+        assertTrue(MemoryService.startsWithSlashPrefix("c:/Users/dev/.roxycode/archive/plans/plan.md:8:text",
+                "C:/Users/dev/.roxycode/archive/plans/"));
+        assertTrue(MemoryService.startsWithSlashPrefix("C:/Users/dev/.roxycode/archive/plans/plan.md:8:text",
+                "c:/Users/dev/.roxycode/archive/plans/"));
+        assertFalse(MemoryService.startsWithSlashPrefix("d:/Users/dev/.roxycode/archive/plans/plan.md:8:text",
+                "C:/Users/dev/.roxycode/archive/plans/"));
+
+        java.util.Map<String, String> snippets = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Integer> fmCache = new java.util.LinkedHashMap<>();
+        MemoryService.parseRipGrepArchiveLine(
+                "c:/Users/dev/archive/plans/20250514-win-plan.md:12:Matched Windows snippet",
+                "C:/Users/dev/archive/plans/", null, fmCache, snippets);
+        assertEquals("Matched Windows snippet", snippets.get("20250514-win-plan.md"));
+
+        MemoryService.parseRipGrepArchiveLine(
+                "D:/Other/archive/plans/20250514-unmatched-prefix.md:14:Fallback Windows path snippet",
+                "C:/Users/dev/archive/plans/", null, fmCache, snippets);
+        assertEquals("Fallback Windows path snippet", snippets.get("20250514-unmatched-prefix.md"));
     }
 }

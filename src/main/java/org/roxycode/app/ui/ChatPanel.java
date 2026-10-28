@@ -546,7 +546,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         }));
 
         bindPopupKey(im, am, KeyEvent.VK_TAB, "autocomplete-or-tab", fileMentionPopup::acceptSelected,
-                () -> inputArea.insert(String.valueOf((char) 9), inputArea.getCaretPosition()));
+                () -> inputArea.insert("\t", inputArea.getCaretPosition()));
         bindPopupKey(im, am, KeyEvent.VK_UP, "autocomplete-or-up", fileMentionPopup::selectPrevious, null);
         bindPopupKey(im, am, KeyEvent.VK_DOWN, "autocomplete-or-down", fileMentionPopup::selectNext, null);
         bindPopupKey(im, am, KeyEvent.VK_ESCAPE, "dismiss-autocomplete", fileMentionPopup::hidePopup, null);
@@ -556,7 +556,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
             if (fileMentionPopup != null) {
                 fileMentionPopup.hidePopup();
             }
-            inputArea.insert(String.valueOf((char) 10), inputArea.getCaretPosition());
+            inputArea.insert("\n", inputArea.getCaretPosition());
         }));
 
         Action defaultPaste = inputArea.getActionMap().get(DefaultEditorKit.pasteAction);
