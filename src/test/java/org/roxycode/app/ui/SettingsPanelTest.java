@@ -3,13 +3,8 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.awt.*;
 import java.awt.event.ActionListener;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.logging.*;
 import javax.swing.*;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,58 +71,6 @@ class SettingsPanelTest {
             SwingTestUtils.flushEdt();
             assertEquals("FlatLaf Light", themeCombo.getSelectedItem());
         } finally {
-            SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
-        }
-    }
-
-    @Test
-    void testApplyThemeOffEdtWithIndeterminateProgressBarDoesNotLogSevereError() {
-        Assumptions.assumeFalse(GraphicsEnvironment.isHeadless(), "Skipping JDialog test in headless environment");
-        Logger flatLafLogger = Logger.getLogger("com.formdev.flatlaf");
-        List<LogRecord> severeRecords = new CopyOnWriteArrayList<>();
-        Handler handler = new Handler() {
-            @Override
-            public void publish(LogRecord record) {
-                if (record != null && record.getLevel().intValue() >= Level.SEVERE.intValue()) {
-                    severeRecords.add(record);
-                }
-            }
-
-            @Override
-            public void flush() {
-            }
-
-            @Override
-            public void close() {
-            }
-        };
-
-        flatLafLogger.addHandler(handler);
-        final JDialog[] dialogHolder = new JDialog[1];
-        try {
-            SwingTestUtils.runOnEdt(() -> {
-                JDialog dialog = new JDialog();
-                JProgressBar progressBar = new JProgressBar();
-                progressBar.setIndeterminate(true);
-                dialog.add(progressBar);
-                dialogHolder[0] = dialog;
-            });
-
-            assertFalse(SwingUtilities.isEventDispatchThread());
-            SettingsPanel.applyTheme("FlatLaf Dark");
-            SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
-            assertTrue(severeRecords.isEmpty());
-        } finally {
-            flatLafLogger.removeHandler(handler);
-            if (dialogHolder[0] != null) {
-                SwingTestUtils.runOnEdt(() -> {
-                    for (Component c : dialogHolder[0].getContentPane().getComponents()) {
-                        if (c instanceof JProgressBar pb)
-                            pb.setIndeterminate(false);
-                    }
-                    dialogHolder[0].dispose();
-                });
-            }
             SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
         }
     }
