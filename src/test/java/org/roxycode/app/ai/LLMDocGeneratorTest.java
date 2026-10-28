@@ -108,11 +108,13 @@ class LLMDocGeneratorTest {
         String doc = new LLMDocGenerator()
                 .generateDoc(List.of(new MockAgentService(), new GenericBuildToolService(projectService, null, null)));
 
-        SwingTestUtils.assertContainsAll(doc, "* @param input The input string to process",
+        SwingTestUtils.assertContainsAll(doc,
+                "executeJexl is a lightweight JavaScript-like orchestration layer over RoxyCode's Java services.",
+                "* @param input The input string to process",
                 "* @param testName The name of the test class or method (e.g., MyTest or MyTest#myMethod)",
-                "// Java Record: access fields via method calls, e.g. obj.field()", "interface BuildResult {",
-                "success: boolean;", "exitCode: number;", "output: string;", "errors: List<String>;",
-                "failedTests: List<String>;", "log: string;");
+                "// Supporting Result Type: access fields as JS properties (obj.field) or method calls (obj.field())",
+                "interface BuildResult {", "success: boolean;", "exitCode: number;", "output: string;",
+                "errors: List<String>;", "failedTests: List<String>;", "log: string;");
     }
 
     @Test

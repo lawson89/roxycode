@@ -31,6 +31,6 @@ fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.j
 fileReadService.readFilesNumbered(['src/main/java/App.java', 'src/main/java/Config.java']);
 ```
 
-### CRITICAL INSTRUCTION: Batch Reading
-When you need to read multiple files or perform multiple searches, you **MUST** batch them into a single JEXL execution by combining the calls into a Map or List literal rather than executing separate turns.
+### CRITICAL INSTRUCTION: Batch Reading & JS-Style Orchestration
+When you need to read multiple files or perform multiple searches, you **MUST** batch them into a single JEXL execution using built-in batch methods (e.g., `fileReadService.readFiles(['a', 'b'])`, `grepService.readMatchingFiles(...)`) or a Map/Array literal (`{ "files": ..., "matches": ... }`) rather than executing separate turns.
 8. Final Summary: After completing your tool turns, you **MUST** provide a final summary of your findings to the user. Do not end a turn with a tool call result if it is the conclusion of your exploration.

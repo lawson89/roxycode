@@ -16,14 +16,15 @@ public class LLMDocGenerator {
     private static final String FENCE_END = "```\n";
 
     public String generateDoc(Collection<Object> services) {
-        StringBuilder sb = new StringBuilder("### JEXL API Documentation\n\n").append(FENCE_START).append("""
-                /**
-                 * ⚠️ INTEROP WARNING: These services return Java objects in Apache Commons JEXL.
-                 * Always return objects as the last expression of your script to inspect them.
-                 * Note: Code must be written in Apache Commons JEXL 3 syntax.
-                 */
+        StringBuilder sb = new StringBuilder("### JEXL API Documentation\n\n").append(FENCE_START)
+                .append("""
+                        /**
+                         * ⚠️ INTEROP WARNING: executeJexl is a lightweight JavaScript-like orchestration layer over RoxyCode's Java services.
+                         * Always return objects as the last expression of your script to inspect them.
+                         * Note: Code must be written in Apache Commons JEXL 3 syntax.
+                         */
 
-                """);
+                        """);
         Set<Class<?>> extraTypes = new LinkedHashSet<>();
 
         for (Object service : services) {
@@ -188,7 +189,8 @@ public class LLMDocGenerator {
             }
             sb.append("\n}\n");
         } else if (type.isRecord()) {
-            sb.append("// Java Record: access fields via method calls, e.g. obj.field()\ninterface ")
+            sb.append(
+                    "// Supporting Result Type: access fields as JS properties (obj.field) or method calls (obj.field())\ninterface ")
                     .append(type.getSimpleName()).append(" {\n");
             for (RecordComponent comp : type.getRecordComponents()) {
                 sb.append("    ").append(comp.getName()).append(": ")

@@ -13,7 +13,7 @@ The workflow follows a structured sequence:
                                                                                                    **PLAN** (Next Feature)
 
 ### Tooling Architecture: JEXL Workspace Services vs. Native Plan Tools
-- **Workspace Services (`executeJexl`)**: Workspace inspection, editing, search, git, build, and agent memory operations (`fileReadService`, `fileEditorService`, `grepService`, `gitService`, `buildToolService`, `memoryService`) are executed via the `executeJexl` tool.
+- **Workspace Services (`executeJexl`)**: Workspace inspection, editing, search, git, build, and agent memory operations (`fileReadService`, `fileEditorService`, `grepService`, `gitService`, `buildToolService`, `memoryService`) are executed via the `executeJexl` tool. `executeJexl` uses JavaScript-compatible JEXL syntax strictly as a lightweight orchestration layer to batch and coordinate Java workspace services—never to implement complex procedural algorithms in JEXL.
 - **Native Plan & Workflow Tools (`PlanService` / `planService`)**: Plan management and phase transitions (`submitPlan`, `addTechnicalStep`, `updateTechnicalStep`, `markStepCompleted`, `markStepsCompleted`, `markStepIncomplete`, `markStepsIncomplete`, `addHandoffLogEntry`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`) are dedicated native tools called directly—**NOT** inside JEXL scripts.
 
 ### Transition Protocol Summary

@@ -139,26 +139,43 @@ public class JexlToolTest {
     }
 
     @Test
-    public void testBuildResultSupportsBothRecordAndBeanAccessorsInJexl() throws Exception {
+    public void testBuildResultAndEditorResultSupportBothRecordAndJsPropertyAccessInJexl() throws Exception {
         JexlTool tool = createTool(new TestService());
-        JsonNode node = evalJson(tool, """
-                var res = testService.sampleBuildResult();
-                {
-                  "recordSuccess": res.success(), "beanIsSuccess": res.isSuccess(), "propSuccess": res.success,
-                  "recordExitCode": res.exitCode(), "beanExitCode": res.getExitCode(),
-                  "recordErrors": res.errors(), "beanErrors": res.getErrors(),
-                  "recordFailedTests": res.failedTests(), "beanFailedTests": res.getFailedTests()
-                }
-                """);
+        JsonNode node = evalJson(tool,
+                """
+                        var res = testService.sampleBuildResult();
+                        var ed = testService.sampleEditorResult();
+                        {
+                          "recordSuccess": res.success(), "beanIsSuccess": res.isSuccess(), "propSuccess": res.success,
+                          "recordExitCode": res.exitCode(), "beanExitCode": res.getExitCode(), "propExitCode": res.exitCode,
+                          "recordErrors": res.errors(), "beanErrors": res.getErrors(), "propErrors": res.errors,
+                          "recordFailedTests": res.failedTests(), "beanFailedTests": res.getFailedTests(), "propFailedTests": res.failedTests,
+                          "edRecordSuccess": ed.success(), "edBeanSuccess": ed.isSuccess(), "edPropSuccess": ed.success,
+                          "edRecordContent": ed.content(), "edBeanContent": ed.getContent(), "edPropContent": ed.content,
+                          "edRecordHint": ed.errorHint(), "edBeanHint": ed.getErrorHint(), "edPropHint": ed.errorHint
+                        }
+                        """);
         assertFalse(node.get("recordSuccess").asBoolean());
         assertFalse(node.get("beanIsSuccess").asBoolean());
         assertFalse(node.get("propSuccess").asBoolean());
         assertEquals(1, node.get("recordExitCode").asInt());
         assertEquals(1, node.get("beanExitCode").asInt());
+        assertEquals(1, node.get("propExitCode").asInt());
         assertEquals("App.java:10: error", node.get("recordErrors").get(0).asText());
         assertEquals("App.java:10: error", node.get("beanErrors").get(0).asText());
+        assertEquals("App.java:10: error", node.get("propErrors").get(0).asText());
         assertEquals("AppTest#testFoo", node.get("recordFailedTests").get(0).asText());
         assertEquals("AppTest#testFoo", node.get("beanFailedTests").get(0).asText());
+        assertEquals("AppTest#testFoo", node.get("propFailedTests").get(0).asText());
+        assertTrue(node.get("edRecordSuccess").asBoolean());
+        assertTrue(node.get("edBeanSuccess").asBoolean());
+        assertTrue(node.get("edPropSuccess").asBoolean());
+        assertEquals("matched content", node.get("edRecordContent").asText());
+        assertEquals("matched content", node.get("edBeanContent").asText());
+        assertEquals("matched content", node.get("edPropContent").asText());
+        assertTrue(node.get("edRecordHint").isNull());
+        assertTrue(node.get("edBeanHint").isNull());
+        assertTrue(node.get("edPropHint").isNull());
 
         BuildResult nullListResult = new BuildResult(true, 0, "ok", null, null, "");
         assertTrue(nullListResult.errors().isEmpty());

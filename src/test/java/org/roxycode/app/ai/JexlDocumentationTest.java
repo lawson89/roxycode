@@ -20,6 +20,7 @@ public class JexlDocumentationTest {
     public void testJexlDocForbidsArbitraryClassInstantiationAndUsesValidServices() throws IOException {
         Path path = Paths.get("src/main/resources/docs/jexl.md");
         String content = Files.readString(path);
+        assertTrue(content.contains("Purpose: Lightweight JS-Style Orchestration of Java Services"));
         assertTrue(content.contains("FORBIDDEN: Arbitrary Java Class Instantiation"));
         assertTrue(content.contains("buildToolService"));
         assertTrue(content.contains("fileEditorService"));
@@ -30,6 +31,8 @@ public class JexlDocumentationTest {
         assertTrue(content.contains("grepService.findMatchingFiles("));
         assertTrue(content.contains("grepService.readMatchingFiles("));
         assertTrue(content.contains("memoryService"));
+        assertTrue(content.contains("result.success"));
+        assertTrue(content.contains("build.errors"));
         assertTrue(content.contains("JEXL API Documentation"));
         assertFalse(content.contains("textEditorService"));
         assertFalse(content.contains("genericBuildToolService"));

@@ -2,6 +2,10 @@
 
 This document describes the Apache Commons JEXL 3 syntax and safety rules for the RoxyCode environment. Always consult the injected **JEXL API Documentation** in your session context for the exact workspace services and methods available in your current phase.
 
+## Purpose: Lightweight JS-Style Orchestration of Java Services
+- **Heavy Lifting Lives in Java Services**: File I/O, RipGrep text search, Git operations, build/test execution, and agent memory management are implemented in dedicated Java `@AgentService` classes (`fileReadService`, `fileEditorService`, `grepService`, `gitService`, `buildToolService`, `memoryService`).
+- **JEXL is the Glue Layer**: Use `executeJexl` strictly as a concise, JavaScript-like orchestration layer to batch and coordinate multiple service calls in a single turn (e.g., reading multiple files, applying edits, and running `buildToolService.compile()`), rather than writing complex procedural algorithms in JEXL.
+
 ## Tool Separation: Workspace Services (`executeJexl`) vs. Native Plan Tools
 - **`executeJexl` (`JexlTool`)** is strictly for workspace services: `fileReadService`, `fileEditorService`, `grepService`, `gitService`, `buildToolService`, and `memoryService`.
 - **`PlanService` tools** (`submitPlan`, `addTechnicalStep`, `updateTechnicalStep`, `markStepCompleted`, `markStepsCompleted`, `markStepIncomplete`, `markStepsIncomplete`, `addHandoffLogEntry`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`) are dedicated native tools called directly—**NOT** inside JEXL scripts.
@@ -25,41 +29,39 @@ line 2`;
 
 fileEditorService.replaceLines('src/App.java', 1, 2, good);
 
-### Array vs. List Literals (Crucial for Java Interop)
-JEXL supports distinct syntax for creating native arrays versus `java.util.List` objects. You must use the correct literal syntax to match the expected Java method signature in the provided JEXL API Documentation.
+### Array vs. List Literals (JS-Friendly Service Boundaries)
+All `@AgentService` batch methods (such as `fileReadService.readFiles(['a', 'b'])` and `fileReadService.readFilesNumbered(['a', 'b'])`) accept standard JavaScript-style array literals `[...]`.
 
-- **Array Literals (`Object[]`)**: Use standard brackets `[...]`.
+- **Standard Array Literals (`['a', 'b']`)**: Use standard brackets `[...]` when passing arrays to `@AgentService` methods or returning fixed collections.
   ```javascript
-  // Creating a fixed-size native Java array
-  var arr = ['src/main/java/App.java', 'pom.xml'];
+  // Standard JS-style array literal works directly with all @AgentService methods
+  var files = fileReadService.readFiles(['src/main/java/App.java', 'pom.xml']);
   ```
-- **List Literals (`ArrayList`)**: Use brackets with a trailing comma and ellipsis `[...,...]`.
+- **Mutable List Literals (`[..., ...]`)**: Only needed if you explicitly call `java.util.List` mutation methods like `.add()` on a local collection in your script.
   ```javascript
-  // Creating a mutable java.util.List
+  // Creating a mutable java.util.List when .add() is needed
   var customList = ['First Item', 'Second Item', ...];
   ```
 
-### Handling Java Records
-For Java records (like `EditorResult` and `BuildResult`), you **must** use the exact property name as a method call.
+### Handling Result Objects (`EditorResult` and `BuildResult`)
+Result objects returned by workspace services (`EditorResult` and `BuildResult`) support both **standard JavaScript property syntax** (`obj.field`) and **record method syntax** (`obj.field()`).
 ```javascript
 var result = grepService.grep('pattern', 'src', '*.java');
 
-if (result.success() == false) {
-    result.errorHint();
+if (!result.success) {
+    result.errorHint;
 } else {
-    result.content();
+    result.content;
 }
 
 var build = buildToolService.buildAndTest();
-if (build.success() == false) {
-    build.errors();
-    build.failedTests();
+if (!build.success) {
+    { "errors": build.errors, "failedTests": build.failedTests };
 }
 ```
-*Note: Do NOT use standard JavaBean getters like `getSuccess()` on records.*
 
-### Iterating over Lists
-JEXL handles Java Lists seamlessly in iteration.
+### Iterating over Collections
+JEXL handles Java Lists and Arrays seamlessly in iteration.
 ```javascript
 var files = grepService.listFiles('src');
 
@@ -73,24 +75,28 @@ if (files.size() > 0) {
 ```
 
 ### ⚠️ Safety Tip: Arrays vs. Lists and the `.add()` Method
-When accumulating results dynamically, do not initialize empty collections with standard brackets `[]` if you intend to use `.add()`. Standard brackets create a fixed-size native Java array, which does not support `.add()`.
+When accumulating results dynamically, prefer inline array/map initialization or batch service methods. If you do use `.add()`, remember that standard brackets `[]` create a fixed-size Java array rather than a mutable `List`.
 
 - **❌ Incorrect**:
   ```javascript
   var results = []; 
   results.add(fileReadService.readFile("file.txt")); // Fails: arrays do not have add()
   ```
-- **✅ Correct (Option 1: List Literal)**:
+- **✅ Correct (Option 1: Batch Service Call - Preferred)**:
   ```javascript
-  var results = [...]; 
-  results.add(fileReadService.readFile("file.txt"));
+  var results = fileReadService.readFiles(["file1.txt", "file2.txt"]);
   ```
-- **✅ Correct (Option 2: Inline Initialization)**:
+- **✅ Correct (Option 2: Inline Array Initialization)**:
   ```javascript
   var results = [
       fileReadService.readFile("file1.txt"),
       fileReadService.readFile("file2.txt")
   ];
+  ```
+- **✅ Correct (Option 3: Mutable List Literal)**:
+  ```javascript
+  var results = [...]; 
+  results.add(fileReadService.readFile("file.txt"));
   ```
 
 ### JEXL Batching & Literal Syntax Rules
@@ -129,4 +135,4 @@ Do NOT attempt to instantiate arbitrary Java classes using `new('com.example.Cla
 ### ⚠️ Pitfalls & Constraints
 1. **Output Size**: Returning extremely large objects (e.g., contents of 50 files) may exceed context limits. Be selective.
 2. **Map Syntax**: Use `{ "key": value, ... }` for Map literals.
-3. **Error Handling**: Always check `.success()` on service results within your script to avoid cascading failures.
+3. **Error Handling**: Always check `.success` (or `.success()`) on service results within your script to avoid cascading failures.
