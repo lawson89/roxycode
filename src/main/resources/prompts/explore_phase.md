@@ -14,22 +14,21 @@ Key Instructions:
 
 Minimize tool-call overhead by batching logic into a single JEXL script. Always consult the provided JEXL API documentation for exact service and method signatures.
 
-### Pattern: Search and Read
-Find a pattern and read the matching files immediately.
+### Pattern: Search and Read (One-Liner)
+Find files matching a pattern and read their contents (or list matching file paths) in a single call:
 ```javascript
-var grepResult = grepService.grep('class AuthService', 'src', '*.java');
-var results = [...];
-if (grepResult.success()) {
-    results.add(fileReadService.readFile('src/main/java/org/roxycode/app/AuthService.java'));
-}
-results;
+// Read contents of all matching files (up to 10 files) as a Map<String, String>
+grepService.readMatchingFiles('class AuthService', 'src', '*.java');
+
+// Or list matching file paths first and selectively read numbered lines
+var paths = grepService.findMatchingFiles('@AgentService', 'src', '*.java');
+fileReadService.readFilesNumbered(paths);
 ```
 
-### Pattern: Multi-File Inspection
+### Pattern: Multi-File Inspection (One-Liner)
+Read multiple files (plain or line-numbered) in a single resilient batch call using a `List` literal `[..., ...]`:
 ```javascript
-var config = fileReadService.readFile('pom.xml');
-var main = fileReadService.readFile('src/main/java/org/roxycode/app/RoxyCode.java');
-{ "pom": config, "main": main };
+fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.java', ...]);
 ```
 
 ### CRITICAL INSTRUCTION: Batch Reading

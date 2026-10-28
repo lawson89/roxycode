@@ -80,7 +80,8 @@ class AgentServiceTest {
     @Test
     void testSingleConstructorBeansDoNotHaveRedundantAutowired() {
         for (Class<?> clazz : List.of(GenericBuildToolService.class, ProjectCacheMetaService.class,
-                FileEditorService.class, PlanService.class, ProjectService.class, PromptService.class,
+                FileEditorService.class, FileReadService.class, GrepService.class, GitService.class,
+                MemoryService.class, PlanService.class, ProjectService.class, PromptService.class,
                 SettingsService.class, JexlTool.class, ContextManagerPanel.class, ChatPanel.class, ChatController.class,
                 MainFrame.class, ExploreChatPanel.class, FeatureChatPanel.class, QaWorkspacePanel.class,
                 TaskWorkspacePanel.class)) {

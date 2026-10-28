@@ -7,7 +7,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
@@ -17,7 +19,12 @@ import org.roxycode.app.service.ProjectService;
 public class FileReadService {
 
     private static final String DOC_FILE_PATH = "The file path relative to the project root";
+    private static final String DOC_FILE_PATHS = "List of file paths relative to the project root";
+    private static final String ERROR_PREFIX = "Error: ";
     static final int BINARY_SNIFF_BYTES = 8000;
+    static final int MAX_BATCH_FILES = 25;
+    static final int MAX_BATCH_CHARS = 250_000;
+    static final String TRUNCATED_KEY = "_truncated";
 
     private final ProjectService projectService;
 
@@ -54,6 +61,74 @@ public class FileReadService {
         return Files.readString(path);
     }
 
+    @AgentDoc(value = "Reads multiple files in a single batch call, returning a map of relativePath to file content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFiles(['pom.xml', 'src/main/java/Main.java', ...])")
+    public Map<String, String> readFiles(@AgentDoc(DOC_FILE_PATHS) List<String> relativePaths) {
+        return readBatch(relativePaths, false);
+    }
+
+    @AgentDoc(value = "Reads multiple files with 1-based line numbers ('<line>: <content>') in a single batch call, returning a map of relativePath to numbered content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFilesNumbered(['src/main/java/Main.java', 'src/main/java/App.java', ...])")
+    public Map<String, String> readFilesNumbered(@AgentDoc(DOC_FILE_PATHS) List<String> relativePaths) {
+        return readBatch(relativePaths, true);
+    }
+
+    private Map<String, String> readBatch(List<String> relativePaths, boolean numbered) {
+        Map<String, String> results = new LinkedHashMap<>();
+        if (relativePaths == null || relativePaths.isEmpty()) {
+            return results;
+        }
+        int filesProcessed = 0;
+        int totalChars = 0;
+        for (int i = 0; i < relativePaths.size(); i++) {
+            String relativePath = relativePaths.get(i);
+            if (relativePath == null || relativePath.isBlank()) {
+                continue;
+            }
+            if (results.containsKey(relativePath)) {
+                continue;
+            }
+            if (filesProcessed >= MAX_BATCH_FILES) {
+                int omitted = relativePaths.size() - i;
+                results.put(TRUNCATED_KEY, "Batch file limit (" + MAX_BATCH_FILES + " files) reached; " + omitted
+                        + " remaining file(s) omitted.");
+                break;
+            }
+            filesProcessed++;
+            String entryContent = readSingleFileForBatch(relativePath, numbered);
+            if (totalChars + entryContent.length() > MAX_BATCH_CHARS) {
+                int remainingBudget = MAX_BATCH_CHARS - totalChars;
+                if (remainingBudget > 0) {
+                    results.put(relativePath, entryContent.substring(0, remainingBudget) + (char) 10
+                            + "... [Truncated at batch character limit]");
+                }
+                results.put(TRUNCATED_KEY,
+                        "Batch character limit (" + MAX_BATCH_CHARS + " chars) reached; remaining content omitted.");
+                break;
+            }
+            totalChars += entryContent.length();
+            results.put(relativePath, entryContent);
+        }
+        return results;
+    }
+
+    private String readSingleFileForBatch(String relativePath, boolean numbered) {
+        try {
+            Path path = projectService.resolvePath(relativePath);
+            if (!Files.exists(path)) {
+                return ERROR_PREFIX + "File does not exist: " + relativePath;
+            }
+            if (!Files.isRegularFile(path)) {
+                return ERROR_PREFIX + "Path is not a regular file: " + relativePath;
+            }
+            if (isBinaryFile(path)) {
+                return ERROR_PREFIX + "Binary file cannot be read as text: " + relativePath;
+            }
+            return numbered ? readFileNumbered(relativePath) : readFile(relativePath);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            return msg.startsWith(ERROR_PREFIX) ? msg : ERROR_PREFIX + msg;
+        }
+    }
+
     @AgentDoc(value = "Reads a 1-based inclusive range of lines from a file, prefixed with line numbers.", examples = "fileReadService.readLines('src/main/java/Main.java', 1, 50)")
     public String readLines(@AgentDoc(DOC_FILE_PATH) String relativePath,
             @AgentDoc("The 1-based start line number (inclusive)") int startLine,
@@ -72,7 +147,7 @@ public class FileReadService {
         StringBuilder sb = new StringBuilder();
         for (int i = startLine; i <= clampedEnd; i++) {
             if (i > startLine)
-                sb.append('\n');
+                sb.append((char) 10);
             sb.append(i).append(": ").append(lines.get(i - 1));
         }
         return sb.toString();

@@ -89,8 +89,9 @@ class PromptServiceTest {
     @Test
     void testLoadExplorePrompt() {
         String prompt = promptService.loadPhasePrompt(WorkflowPhase.EXPLORE);
-        SwingTestUtils.assertContainsAll(prompt, "EXPLORE phase", "grepService", "fileReadService");
-        assertContainsNone(prompt, "textEditorService", "readFiles");
+        SwingTestUtils.assertContainsAll(prompt, "EXPLORE phase", "grepService", "fileReadService",
+                "fileReadService.readFiles", "grepService.readMatchingFiles");
+        assertContainsNone(prompt, "textEditorService");
     }
 
     @Test

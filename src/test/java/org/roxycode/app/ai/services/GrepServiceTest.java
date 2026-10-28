@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,10 +23,13 @@ import org.roxycode.app.service.ProjectService;
 
 class GrepServiceTest {
 
+    private static final String NL = String.valueOf((char) 10);
+
     @TempDir
     Path tempDir;
 
     private ProjectService projectService;
+    private FileReadService fileReadService;
     private GrepService grepService;
 
     @BeforeEach
@@ -35,7 +39,8 @@ class GrepServiceTest {
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
         lenient().when(projectService.resolveRelativePath(any())).thenCallRealMethod();
-        grepService = new GrepService(projectService);
+        fileReadService = new FileReadService(projectService);
+        grepService = new GrepService(projectService, fileReadService);
     }
 
     private static Arguments rgCase(Function<GrepService, EditorResult> fn, String cmd, String out, String expected) {
@@ -44,19 +49,19 @@ class GrepServiceTest {
 
     @Test
     void testGrepSuccessAndRelativePaths() throws IOException {
-        Path testFile = Files.writeString(tempDir.resolve("test.txt"), "hello world");
+        Files.writeString(tempDir.resolve("test.txt"), "hello world");
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
             runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, testFile + ":1:hello world\n", "", false));
+                    .thenReturn(new ProcessResult(0, "./test.txt:1:hello world" + NL, "", false));
             EditorResult result = grepService.grep("hello world", ".", "*.txt");
             assertTrue(result.success());
             assertTrue(result.content().contains("test.txt:1:hello world"));
-            assertFalse(result.content().startsWith(tempDir.toAbsolutePath().toString()));
+            assertFalse(result.content().startsWith("./"));
         }
     }
 
     static Stream<Arguments> grepCommandVariants() {
-        String ctxOut = String.join("\n", "src/Sample.java-1-line 1 before", "src/Sample.java-2-line 2 before",
+        String ctxOut = String.join(NL, "src/Sample.java-1-line 1 before", "src/Sample.java-2-line 2 before",
                 "src/Sample.java:3:@AgentDoc", "src/Sample.java-4-public void targetMethod() {");
         String fixOut = "src/Notes.java:1:1:// FIXME: urgent";
         return Stream.of(
@@ -105,7 +110,7 @@ class GrepServiceTest {
         StringBuilder manyLines = new StringBuilder();
         for (int i = 1; i <= 250; i++) {
             if (i > 1)
-                manyLines.append('\n');
+                manyLines.append(NL);
             manyLines.append("src/Many.java:").append(i).append(":1:match ").append(i);
         }
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
@@ -123,18 +128,66 @@ class GrepServiceTest {
 
     @Test
     void testListFilesReturnsProjectRelativePaths() throws IOException {
-        Path rootFile = Files.writeString(tempDir.resolve("root.txt"), "root");
-        Path nestedFile = Files.writeString(Files.createDirectories(tempDir.resolve("sub")).resolve("nested.txt"),
-                "nested");
+        Files.writeString(tempDir.resolve("root.txt"), "root");
+        Files.writeString(Files.createDirectories(tempDir.resolve("sub")).resolve("nested.txt"), "nested");
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, rootFile + "\n" + nestedFile + "\n", "", false));
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean())).thenReturn(
+                    new ProcessResult(0, "./root.txt" + NL + "sub" + (char) 92 + "nested.txt" + NL, "", false));
             List<String> files = grepService.listFiles(null);
             assertTrue(files.containsAll(List.of("root.txt", "sub/nested.txt")));
             for (String file : files) {
                 assertFalse(Path.of(file).isAbsolute());
-                assertFalse(file.startsWith(tempDir.toAbsolutePath().toString()));
+                assertFalse(file.startsWith("./"));
             }
+        }
+    }
+
+    @Test
+    void testFindMatchingFilesAndReadMatchingFiles() throws IOException {
+        Path srcDir = Files.createDirectories(tempDir.resolve("src"));
+        Files.writeString(srcDir.resolve("One.java"), "class One {}");
+        Files.writeString(srcDir.resolve("Two.java"), "class Two {}");
+
+        assertTrue(grepService.findMatchingFiles("").isEmpty());
+        assertTrue(grepService.findMatchingFiles(null).isEmpty());
+
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            String rawOut = String.join(NL, "./src/One.java", "src" + (char) 92 + "Two.java", "src/One.java") + NL;
+            runner.when(() -> ProcessRunner.run(anyList(), eq(tempDir), eq(true)))
+                    .thenReturn(new ProcessResult(0, rawOut, "", false));
+
+            List<String> matched = grepService.findMatchingFiles("class", "src", "*.java");
+            assertEquals(List.of("src/One.java", "src/Two.java"), matched);
+            runner.verify(() -> ProcessRunner.run(
+                    eq(List.of("rg", "-l", "--color=never", "-g", "*.java", "--", "class", "src")), eq(tempDir),
+                    eq(true)));
+
+            Map<String, String> contents = grepService.readMatchingFiles("class", "src", "*.java");
+            assertEquals(2, contents.size());
+            assertEquals("class One {}", contents.get("src/One.java"));
+            assertEquals("class Two {}", contents.get("src/Two.java"));
+        }
+    }
+
+    @Test
+    void testReadMatchingFilesCapsAtMaxFiles() throws IOException {
+        StringBuilder stdout = new StringBuilder();
+        for (int i = 1; i <= 12; i++) {
+            String name = "File" + i + ".java";
+            Files.writeString(tempDir.resolve(name), "content " + i);
+            stdout.append(name).append(NL);
+        }
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(anyList(), eq(tempDir), eq(true)))
+                    .thenReturn(new ProcessResult(0, stdout.toString(), "", false));
+
+            Map<String, String> contents = grepService.readMatchingFiles("content");
+            assertEquals(GrepService.MAX_READ_MATCHING_FILES + 1, contents.size());
+            assertEquals("content 1", contents.get("File1.java"));
+            assertEquals("content 10", contents.get("File10.java"));
+            assertFalse(contents.containsKey("File11.java"));
+            assertTrue(contents.get(FileReadService.TRUNCATED_KEY)
+                    .contains("Matched 12 files; showing first 10 files (2 more matching file(s) omitted)."));
         }
     }
 
@@ -149,5 +202,7 @@ class GrepServiceTest {
         EditorResult result = grepService.grep("pattern", "src", null);
         assertFalse(result.success());
         assertEquals("No active project", result.errorHint());
+        assertTrue(grepService.findMatchingFiles("pattern").isEmpty());
+        assertTrue(grepService.readMatchingFiles("pattern").isEmpty());
     }
 }

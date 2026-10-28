@@ -95,14 +95,31 @@ When accumulating results dynamically, do not initialize empty collections with 
 
 ### JEXL Batching & Literal Syntax Rules
 
-1. **Map Literals MUST use curly braces `{ ... }`**:
-   When returning multiple named results in `executeJexl`, ALWAYS wrap `"key": value` pairs in `{ ... }`:
+1. **Prefer Built-in Batch Helpers for Multi-File Reads and Search-and-Read**:
+   Instead of writing manual loops or multi-key maps to read several files, use the one-liner batch helpers on `fileReadService` and `grepService` (remembering to use the `[..., ...]` list literal syntax for `List<String>` parameters):
+   ```javascript
+   // Read multiple files in one call (returns Map<String, String>, resilient to missing/binary files)
+   fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.java', ...]);
+
+   // Read multiple files with 1-based line numbers in one call
+   fileReadService.readFilesNumbered(['src/main/java/App.java', 'src/main/java/Config.java', ...]);
+
+   // Find matching file paths and immediately read their contents in one call
+   grepService.readMatchingFiles('class AuthService', 'src', '*.java');
+
+   // Or get a deduplicated List<String> of matching file paths via RipGrep (-l)
+   grepService.findMatchingFiles('@AgentService', 'src', '*.java');
+   ```
+
+2. **Map Literals MUST use curly braces `{ ... }`**:
+   When returning multiple heterogeneous results in `executeJexl`, ALWAYS wrap `"key": value` pairs in `{ ... }`:
    ```javascript
    {
-     "FileA": fileReadService.readFile("path/to/FileA.java"),
-     "FileB": fileReadService.readFile("path/to/FileB.java")
+     "files": fileReadService.readFiles(['path/to/FileA.java', 'path/to/FileB.java', ...]),
+     "matches": grepService.findMatchingFiles('TODO', 'src', '*.java')
    }
-NEVER use square brackets [ ... ] with colons ("key": value): [ "key": value ] is invalid JEXL syntax and will fail with parsing error in '['. Square brackets [ val1, val2 ] are strictly for unkeyed Lists/Arrays.
+   ```
+   NEVER use square brackets `[ ... ]` with colons (`"key": value`): `[ "key": value ]` is invalid JEXL syntax and will fail with `parsing error in '['`. Square brackets `[ val1, val2 ]` are strictly for unkeyed Lists/Arrays.
 
 ### ❌ FORBIDDEN: Arbitrary Java Class Instantiation
 Do NOT attempt to instantiate arbitrary Java classes using `new('com.example.ClassName')` or attempt to call static methods on native Java classes. 

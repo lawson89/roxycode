@@ -24,7 +24,11 @@ public class JexlDocumentationTest {
         assertTrue(content.contains("buildToolService"));
         assertTrue(content.contains("fileEditorService"));
         assertTrue(content.contains("fileReadService"));
+        assertTrue(content.contains("fileReadService.readFiles("));
+        assertTrue(content.contains("fileReadService.readFilesNumbered("));
         assertTrue(content.contains("grepService"));
+        assertTrue(content.contains("grepService.findMatchingFiles("));
+        assertTrue(content.contains("grepService.readMatchingFiles("));
         assertTrue(content.contains("memoryService"));
         assertTrue(content.contains("JEXL API Documentation"));
         assertFalse(content.contains("textEditorService"));

@@ -282,24 +282,27 @@ public class MemoryService {
             return "";
         }
         List<String> lines = rawMarkdown.lines().toList();
-        if (lines.isEmpty() || !FRONTMATTER_DELIMITER.equals(lines.get(0).trim())) {
+        int endLine = findFrontmatterEndLine(lines);
+        if (endLine <= 0) {
             return rawMarkdown;
         }
-        int closingIdx = -1;
-        for (int i = 1; i < lines.size(); i++) {
-            if (FRONTMATTER_DELIMITER.equals(lines.get(i).trim())) {
-                closingIdx = i;
-                break;
-            }
-        }
-        if (closingIdx < 0) {
-            return rawMarkdown;
-        }
-        int startIdx = closingIdx + 1;
+        int startIdx = endLine;
         while (startIdx < lines.size() && lines.get(startIdx).isBlank()) {
             startIdx++;
         }
         return startIdx >= lines.size() ? "" : String.join("\n", lines.subList(startIdx, lines.size()));
+    }
+
+    private static int findFrontmatterEndLine(List<String> lines) {
+        if (lines == null || lines.isEmpty() || !FRONTMATTER_DELIMITER.equals(lines.get(0).trim())) {
+            return 0;
+        }
+        for (int i = 1; i < lines.size(); i++) {
+            if (FRONTMATTER_DELIMITER.equals(lines.get(i).trim())) {
+                return i + 1;
+            }
+        }
+        return 0;
     }
 
     private List<ArchiveEntrySummary> listArchivedEntrySummaries(Path archiveDir, String defaultType) {
@@ -385,17 +388,16 @@ public class MemoryService {
             return Map.of();
         }
         List<String> command = buildBaseRipGrepCommand();
-        command.addAll(List.of("--ignore-case", "--fixed-strings", "-e", query, archiveDir.toString()));
+        command.addAll(List.of("--ignore-case", "--fixed-strings", "-e", query, "."));
         try {
-            ProcessResult result = ProcessRunner.run(command, null, true);
+            ProcessResult result = ProcessRunner.run(command, archiveDir, true);
             if (result.timedOut() || result.exitCode() != 0) {
                 return Map.of();
             }
             Map<String, String> snippetsByFilename = new LinkedHashMap<>();
             Map<String, Integer> frontmatterEndLineCache = new LinkedHashMap<>();
-            String prefix = toSlashPrefix(archiveDir);
             for (String line : result.output().lines().toList()) {
-                parseRipGrepArchiveLine(line, prefix, archiveDir, frontmatterEndLineCache, snippetsByFilename);
+                parseRipGrepArchiveLine(line, archiveDir, frontmatterEndLineCache, snippetsByFilename);
             }
             return snippetsByFilename;
         } catch (IOException e) {
@@ -404,15 +406,12 @@ public class MemoryService {
         }
     }
 
-    static void parseRipGrepArchiveLine(String rawLine, String archiveSlashPrefix, Path archiveDir,
-            Map<String, Integer> frontmatterEndLineCache, Map<String, String> snippetsByFilename) {
+    static void parseRipGrepArchiveLine(String rawLine, Path archiveDir, Map<String, Integer> frontmatterEndLineCache,
+            Map<String, String> snippetsByFilename) {
         if (rawLine == null || rawLine.isBlank()) {
             return;
         }
-        String slashLine = rawLine.replace('\\', '/');
-        String rel = startsWithSlashPrefix(slashLine, archiveSlashPrefix)
-                ? slashLine.substring(archiveSlashPrefix.length())
-                : slashLine;
+        String rel = StringUtils.removeStart(rawLine.replace((char) 92, '/'), "./");
         int colonSearchStart = (rel.length() >= 3 && Character.isLetter(rel.charAt(0)) && rel.charAt(1) == ':'
                 && rel.charAt(2) == '/') ? 3 : 0;
         int firstColon = rel.indexOf(':', colonSearchStart);
@@ -446,27 +445,33 @@ public class MemoryService {
     }
 
     static int findFrontmatterEndLine(Path file) {
+        return findFrontmatterEndLine(readFrontmatterLines(file));
+    }
+
+    private static List<String> readFrontmatterLines(Path file) {
         if (file == null || !Files.isRegularFile(file)) {
-            return 0;
+            return List.of();
         }
         try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             String firstLine = reader.readLine();
             if (firstLine == null || !FRONTMATTER_DELIMITER.equals(firstLine.trim())) {
-                return 0;
+                return List.of();
             }
-            int lineNum = 1;
+            List<String> lines = new ArrayList<>();
+            lines.add(firstLine.trim());
             String line = reader.readLine();
-            while (line != null) {
-                lineNum++;
+            while (lines.size() <= MAX_FRONTMATTER_LINES && line != null) {
+                lines.add(line);
                 if (FRONTMATTER_DELIMITER.equals(line.trim())) {
-                    return lineNum;
+                    break;
                 }
                 line = reader.readLine();
             }
+            return lines;
         } catch (IOException e) {
-            log.debug("Failed to inspect frontmatter lines for {}: {}", file, e.getMessage());
+            log.debug("Failed to read frontmatter lines from {}: {}", file, e.getMessage());
+            return List.of();
         }
-        return 0;
     }
 
     @AgentDoc(value = "Searches across Global Memory (~/.roxycode/memory/), Project Memory (<projectDataDir>/memory/), Archived Plans (<projectDataDir>/archive/plans/), and Archived Topics (<projectDataDir>/archive/topics/) using RipGrep.", examples = "memoryService.search('swing')")
@@ -710,42 +715,19 @@ public class MemoryService {
 
     static Map<String, String> parseFrontmatter(Path file) {
         Map<String, String> map = new LinkedHashMap<>();
-        if (file == null || !Files.isRegularFile(file)) {
+        List<String> lines = readFrontmatterLines(file);
+        if (lines.isEmpty()) {
             return map;
         }
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            String firstLine = reader.readLine();
-            if (firstLine == null || !FRONTMATTER_DELIMITER.equals(firstLine.trim())) {
-                return map;
-            }
-            StringBuilder yamlBlock = new StringBuilder(firstLine.trim()).append((char) 10);
-            boolean closed = false;
-            int lineCount = 0;
-            String rawLine = reader.readLine();
-            while (lineCount < MAX_FRONTMATTER_LINES && rawLine != null) {
-                lineCount++;
-                String trimmed = rawLine.trim();
-                if (FRONTMATTER_DELIMITER.equals(trimmed)) {
-                    yamlBlock.append(FRONTMATTER_DELIMITER).append((char) 10);
-                    closed = true;
-                    break;
-                }
-                yamlBlock.append(rawLine).append((char) 10);
-                rawLine = reader.readLine();
-            }
-            if (!closed) {
-                yamlBlock.append(FRONTMATTER_DELIMITER).append((char) 10);
-            }
-            Node doc = FRONTMATTER_PARSER.parse(yamlBlock.toString());
-            AbstractYamlFrontMatterVisitor visitor = new AbstractYamlFrontMatterVisitor();
-            visitor.visit(doc);
-            for (Map.Entry<String, List<String>> entry : visitor.getData().entrySet()) {
-                List<String> values = entry.getValue();
-                String rawVal = (values == null || values.isEmpty()) ? "" : String.join(", ", values).trim();
-                map.put(entry.getKey().trim(), normalizeFrontmatterValue(rawVal));
-            }
-        } catch (IOException e) {
-            log.debug("Failed to parse frontmatter from {}: {}", file, e.getMessage());
+        String yamlBlock = String.join("\n", lines)
+                + (findFrontmatterEndLine(lines) > 0 ? "\n" : "\n" + FRONTMATTER_DELIMITER + "\n");
+        Node doc = FRONTMATTER_PARSER.parse(yamlBlock);
+        AbstractYamlFrontMatterVisitor visitor = new AbstractYamlFrontMatterVisitor();
+        visitor.visit(doc);
+        for (Map.Entry<String, List<String>> entry : visitor.getData().entrySet()) {
+            List<String> values = entry.getValue();
+            String rawVal = (values == null || values.isEmpty()) ? "" : String.join(", ", values).trim();
+            map.put(entry.getKey().trim(), normalizeFrontmatterValue(rawVal));
         }
         return map;
     }

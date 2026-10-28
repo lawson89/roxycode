@@ -366,13 +366,11 @@ class MemoryServiceTest {
         java.util.Map<String, String> snippets = new java.util.LinkedHashMap<>();
         java.util.Map<String, Integer> fmCache = new java.util.LinkedHashMap<>();
         MemoryService.parseRipGrepArchiveLine(
-                "c:/Users/dev/archive/plans/20250514-win-plan.md:12:Matched Windows snippet",
-                "C:/Users/dev/archive/plans/", null, fmCache, snippets);
+                "c:/Users/dev/archive/plans/20250514-win-plan.md:12:Matched Windows snippet", null, fmCache, snippets);
         assertEquals("Matched Windows snippet", snippets.get("20250514-win-plan.md"));
 
-        MemoryService.parseRipGrepArchiveLine(
-                "D:/Other/archive/plans/20250514-unmatched-prefix.md:14:Fallback Windows path snippet",
-                "C:/Users/dev/archive/plans/", null, fmCache, snippets);
+        MemoryService.parseRipGrepArchiveLine("./20250514-unmatched-prefix.md:14:Fallback Windows path snippet", null,
+                fmCache, snippets);
         assertEquals("Fallback Windows path snippet", snippets.get("20250514-unmatched-prefix.md"));
     }
 }

@@ -233,8 +233,9 @@ public class AiService {
     }
 
     private static String formatUsageSummary(Usage usage) {
-        if (usage == null)
+        if (usage == null) {
             return "";
+        }
         int promptTokens = usage.getPromptTokens() != null ? usage.getPromptTokens() : 0;
         int completionTokens = usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
         int totalTokens = usage.getTotalTokens() != null ? usage.getTotalTokens() : 0;

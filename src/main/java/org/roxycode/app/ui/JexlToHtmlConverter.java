@@ -17,8 +17,6 @@ import org.fife.ui.rsyntaxtextarea.modes.JavaScriptTokenMaker;
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class JexlToHtmlConverter {
 
-    private static final char LF = 10;
-    private static final char CR = 13;
     private static final char SQUOTE = 39;
     private static final char DQUOTE = 34;
     private static final char BACKSLASH = 92;
@@ -85,34 +83,11 @@ public class JexlToHtmlConverter {
         StringBuilder sb = new StringBuilder(escapedCode.length() + 64);
         int initialTokenType = TokenTypes.NULL;
 
-        int lineStart = 0;
-        int len = rawCode.length();
-        while (lineStart <= len) {
-            int lineEnd = rawCode.indexOf(LF, lineStart);
-            boolean hasNewline = lineEnd >= 0;
-            if (!hasNewline) {
-                lineEnd = len;
-            }
-            int contentEnd = lineEnd;
-            boolean hasCarriageReturn = contentEnd > lineStart && rawCode.charAt(contentEnd - 1) == CR;
-            if (hasCarriageReturn) {
-                contentEnd--;
-            }
-
-            String lineText = rawCode.substring(lineStart, contentEnd);
-            initialTokenType = highlightLine(lineText, tokenMaker, initialTokenType, sb);
-
-            if (hasCarriageReturn) {
-                sb.append(CR);
-            }
-            if (hasNewline) {
-                sb.append(LF);
-                lineStart = lineEnd + 1;
-                if (lineStart == len) {
-                    break;
-                }
-            } else {
-                break;
+        String[] parts = rawCode.splitWithDelimiters("\\r?\\n", -1);
+        for (int i = 0; i < parts.length; i += 2) {
+            initialTokenType = highlightLine(parts[i], tokenMaker, initialTokenType, sb);
+            if (i + 1 < parts.length) {
+                sb.append(parts[i + 1]);
             }
         }
         return sb.toString();

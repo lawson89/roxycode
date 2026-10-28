@@ -1,8 +1,6 @@
 package org.roxycode.app.ai.services;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -11,7 +9,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProcessRunner;
@@ -28,9 +25,8 @@ public class GitService {
     private static final String NOT_A_GIT_REPOSITORY = "Not a git repository";
     private static final String GIT_DIFF = "diff";
     private static final int MIN_PORCELAIN_LINE_LENGTH = 4;
-    private static final char NL = '\n';
-    private static final char DQUOTE = '"';
-    private static final char BACKSLASH = '\\';
+    private static final char NL = 10;
+    private static final char BACKSLASH = 92;
     private final ProjectService projectService;
 
     public GitService(ProjectService projectService) {
@@ -91,20 +87,23 @@ public class GitService {
         if (!projectService.hasActiveProject()) {
             return List.of();
         }
-        String statusOutput = executeGitCommand(false, "-c", "core.quotePath=false", "status", "--porcelain", "-uall");
+        String statusOutput = executeGitCommand(false, "status", "--porcelain", "-z", "-uall");
         if (statusOutput.isEmpty() || isGitError(statusOutput)) {
             return List.of();
         }
         Set<String> files = new LinkedHashSet<>();
-        for (String line : statusOutput.lines().toList()) {
-            if (line.length() < MIN_PORCELAIN_LINE_LENGTH)
+        String[] entries = statusOutput.split(String.valueOf((char) 0));
+        for (int i = 0; i < entries.length; i++) {
+            String entry = entries[i];
+            if (entry.length() < MIN_PORCELAIN_LINE_LENGTH) {
                 continue;
-            String rawPath = line.substring(3).trim();
-            int arrowIdx = rawPath.indexOf(" -> ");
-            if (arrowIdx >= 0) {
-                rawPath = rawPath.substring(arrowIdx + 4).trim();
             }
-            rawPath = unquotePorcelainPath(rawPath);
+            char x = entry.charAt(0);
+            char y = entry.charAt(1);
+            String rawPath = entry.substring(3);
+            if ((x == 'R' || x == 'C' || y == 'R' || y == 'C') && i + 1 < entries.length) {
+                i++;
+            }
             if (!rawPath.isEmpty()) {
                 files.add(rawPath.replace(BACKSLASH, '/'));
             }
@@ -253,56 +252,6 @@ public class GitService {
         if (a.isEmpty())
             return b;
         return b.isEmpty() ? a : a + NL + b;
-    }
-
-    static String unquotePorcelainPath(String path) {
-        if (path == null)
-            return "";
-        if (path.length() < 2 || path.charAt(0) != DQUOTE || path.charAt(path.length() - 1) != DQUOTE) {
-            return path;
-        }
-        String inner = path.substring(1, path.length() - 1);
-        StringBuilder sb = new StringBuilder(inner.length());
-        ByteArrayOutputStream octalBytes = new ByteArrayOutputStream();
-        int i = 0;
-        while (i < inner.length()) {
-            char c = inner.charAt(i);
-            if (c == BACKSLASH && i + 1 < inner.length()) {
-                char next = inner.charAt(i + 1);
-                if (next >= '0' && next <= '7') {
-                    int val = next - '0';
-                    int consumed = 2;
-                    if (i + 2 < inner.length() && inner.charAt(i + 2) >= '0' && inner.charAt(i + 2) <= '7') {
-                        val = (val << 3) + (inner.charAt(i + 2) - '0');
-                        consumed++;
-                        if (i + 3 < inner.length() && inner.charAt(i + 3) >= '0' && inner.charAt(i + 3) <= '7') {
-                            val = (val << 3) + (inner.charAt(i + 3) - '0');
-                            consumed++;
-                        }
-                    }
-                    octalBytes.write(val & 0xFF);
-                    i += consumed;
-                    continue;
-                }
-                flushOctalBytes(octalBytes, sb);
-                int end = Math.min(inner.length(), (next == 'u' && i + 6 <= inner.length()) ? i + 6 : i + 2);
-                sb.append(StringEscapeUtils.unescapeJava(inner.substring(i, end)));
-                i = end;
-            } else {
-                flushOctalBytes(octalBytes, sb);
-                sb.append(c);
-                i++;
-            }
-        }
-        flushOctalBytes(octalBytes, sb);
-        return sb.toString();
-    }
-
-    private static void flushOctalBytes(ByteArrayOutputStream octalBytes, StringBuilder sb) {
-        if (octalBytes.size() > 0) {
-            sb.append(octalBytes.toString(StandardCharsets.UTF_8));
-            octalBytes.reset();
-        }
     }
 
     private String executeGitCommand(String... args) {

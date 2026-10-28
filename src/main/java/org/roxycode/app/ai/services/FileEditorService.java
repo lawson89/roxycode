@@ -356,20 +356,8 @@ public class FileEditorService {
         if (content == null || content.isEmpty()) {
             return List.of("");
         }
-        String normalized = content.replace(CRLF, NL).replace(CR, NL);
-        String[] parts = normalized.split(NL, -1);
-        List<String> list = List.of(parts);
-        boolean hasNonEmptyLine = false;
-        for (String part : parts) {
-            if (!part.isEmpty()) {
-                hasNonEmptyLine = true;
-                break;
-            }
-        }
-        if (hasNonEmptyLine && parts.length > 1 && parts[parts.length - 1].isEmpty()) {
-            return list.subList(0, parts.length - 1);
-        }
-        return list;
+        List<String> lines = content.lines().toList();
+        return lines.stream().allMatch(String::isEmpty) ? List.of(content.split("\\R", -1)) : lines;
     }
 
     private static boolean hasTrailingLineSeparator(String text) {

@@ -8,6 +8,8 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.service.ProjectService;
@@ -33,11 +35,11 @@ public class BuildContainerService {
     static final String LABEL_APP_VALUE = "roxycode";
     static final String LABEL_PROJECT = "roxycode.project";
     private static final String NL = "\n";
-    private static final String TRUE_LITERAL = "true";
-    private static final String FALSE_LITERAL = "false";
-    private static final char BACKSLASH = 92;
-    private static final char SQUOTE = 39;
-
+    private static final Pattern CONTAINER_SECTION_PATTERN = Pattern
+            .compile("(?m)^[ \t]*\\[[ \t]*container[ \t]*\\][ \t]*(?:#.*)?$");
+    private static final Pattern ANY_SECTION_PATTERN = Pattern.compile("(?m)^[ \t]*\\[[^\\]\r\n]+\\][ \t]*(?:#.*)?$");
+    private static final Pattern ENABLED_LINE_PATTERN = Pattern
+            .compile("(?m)^([ \t]*enabled[ \t]*=[ \t]*)(true|false)([ \t]*(?:#.*)?)$");
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ContainerConfig(boolean enabled, String image, String workdir) {
         public static final ContainerConfig DEFAULT = new ContainerConfig(false, DEFAULT_CONTAINER_IMAGE,
@@ -149,58 +151,22 @@ public class BuildContainerService {
         } catch (Exception e) {
             log.debug("Failed to parse full TOML when checking container.enabled flag; falling back to section scan",
                     e);
-            return scanContainerEnabledFallback(toml);
-        }
-    }
-
-    private static boolean scanContainerEnabledFallback(String toml) {
-        boolean inContainerSection = false;
-        for (String line : toml.lines().toList()) {
-            String sectionName = parseSectionHeaderName(line);
-            if (sectionName != null) {
-                inContainerSection = "container".equals(sectionName);
-            } else if (inContainerSection) {
-                Boolean enabledVal = parseEnabledAssignmentValue(line);
-                if (enabledVal != null) {
-                    return enabledVal;
-                }
+            Matcher sectionMatcher = CONTAINER_SECTION_PATTERN.matcher(toml);
+            if (!sectionMatcher.find()) {
+                return false;
             }
+            int bodyStart = sectionMatcher.end();
+            Matcher nextSection = ANY_SECTION_PATTERN.matcher(toml);
+            int bodyEnd = nextSection.find(bodyStart) ? nextSection.start() : toml.length();
+            Matcher enabledMatcher = ENABLED_LINE_PATTERN.matcher(toml.substring(bodyStart, bodyEnd));
+            return enabledMatcher.find() && Boolean.parseBoolean(enabledMatcher.group(2));
         }
-        return false;
     }
 
     public static String updateContainerEnabledInToml(String toml, boolean enabled) {
         String safeToml = toml != null ? toml : "";
-        List<String> lines = safeToml.lines().toList();
-        boolean foundContainerSection = false;
-        boolean updatedEnabledLine = false;
-        int containerSectionIndex = -1;
-        List<String> outputLines = new ArrayList<>();
-        boolean inContainerSection = false;
-
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i);
-            String sectionName = parseSectionHeaderName(line);
-            if (sectionName != null) {
-                inContainerSection = "container".equals(sectionName);
-                if (inContainerSection && !foundContainerSection) {
-                    foundContainerSection = true;
-                    containerSectionIndex = i;
-                }
-                outputLines.add(line);
-            } else if (inContainerSection && !updatedEnabledLine && isEnabledAssignment(line.trim())) {
-                int eqIdx = line.indexOf('=');
-                String rest = line.substring(eqIdx + 1);
-                int commentIdx = findInlineCommentIndex(rest);
-                String commentSuffix = commentIdx >= 0 ? " " + rest.substring(commentIdx) : "";
-                outputLines.add(line.substring(0, eqIdx + 1) + " " + enabled + commentSuffix);
-                updatedEnabledLine = true;
-            } else {
-                outputLines.add(line);
-            }
-        }
-
-        if (!foundContainerSection) {
+        Matcher sectionMatcher = CONTAINER_SECTION_PATTERN.matcher(safeToml);
+        if (!sectionMatcher.find()) {
             String section = ("""
                     [container]
                     enabled = %s
@@ -209,69 +175,15 @@ public class BuildContainerService {
                     """).formatted(enabled, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
             return safeToml.isEmpty() ? section : safeToml.stripTrailing() + NL + NL + section;
         }
-        if (!updatedEnabledLine && containerSectionIndex >= 0) {
-            outputLines.add(containerSectionIndex + 1, "enabled = " + enabled);
-        }
-        return String.join(NL, outputLines);
-    }
-
-    static String parseSectionHeaderName(String line) {
-        if (line == null) {
-            return null;
-        }
-        String withoutComment = stripInlineComment(line).trim();
-        if (withoutComment.length() < 2 || withoutComment.charAt(0) != '['
-                || withoutComment.charAt(withoutComment.length() - 1) != ']') {
-            return null;
-        }
-        return withoutComment.substring(1, withoutComment.length() - 1).trim();
-    }
-
-    private static Boolean parseEnabledAssignmentValue(String line) {
-        String trimmed = stripInlineComment(line).trim();
-        if (!isEnabledAssignment(trimmed)) {
-            return null;
-        }
-        int eqIdx = trimmed.indexOf('=');
-        String val = trimmed.substring(eqIdx + 1).trim();
-        if (TRUE_LITERAL.equals(val)) {
-            return Boolean.TRUE;
-        }
-        if (FALSE_LITERAL.equals(val)) {
-            return Boolean.FALSE;
-        }
-        return null;
-    }
-
-    private static String stripInlineComment(String text) {
-        int idx = findInlineCommentIndex(text);
-        return idx >= 0 ? text.substring(0, idx) : text;
-    }
-
-    private static int findInlineCommentIndex(String text) {
-        boolean inSingleQuotes = false;
-        boolean inDoubleQuotes = false;
-        int i = 0;
-        while (i < text.length()) {
-            char c = text.charAt(i);
-            if (c == BACKSLASH && inDoubleQuotes && i + 1 < text.length()) {
-                i += 2;
-                continue;
-            }
-            if (c == SQUOTE && !inDoubleQuotes) {
-                inSingleQuotes = !inSingleQuotes;
-            } else if (c == '"' && !inSingleQuotes) {
-                inDoubleQuotes = !inDoubleQuotes;
-            } else if (c == '#' && !inSingleQuotes && !inDoubleQuotes) {
-                return i;
-            }
-            i++;
-        }
-        return -1;
-    }
-
-    private static boolean isEnabledAssignment(String trimmed) {
-        return trimmed.startsWith("enabled") && trimmed.substring("enabled".length()).trim().startsWith("=");
+        int bodyStart = sectionMatcher.end();
+        Matcher nextSection = ANY_SECTION_PATTERN.matcher(safeToml);
+        int bodyEnd = nextSection.find(bodyStart) ? nextSection.start() : safeToml.length();
+        String body = safeToml.substring(bodyStart, bodyEnd);
+        Matcher enabledMatcher = ENABLED_LINE_PATTERN.matcher(body);
+        String updatedBody = enabledMatcher.find()
+                ? enabledMatcher.replaceFirst("$1" + enabled + "$3")
+                : NL + "enabled = " + enabled + body;
+        return safeToml.substring(0, bodyStart) + updatedBody + safeToml.substring(bodyEnd);
     }
 
     static String buildContainerName(Path projectRoot) {

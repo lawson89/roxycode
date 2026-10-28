@@ -1,11 +1,14 @@
 package org.roxycode.app.ai.services;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import org.apache.commons.lang3.StringUtils;
+import java.util.Map;
+import java.util.Set;
+
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProcessRunner;
@@ -20,6 +23,7 @@ public class GrepService {
     private static final Logger log = LoggerFactory.getLogger(GrepService.class);
     static final int MAX_OUTPUT_LINES = 200;
     static final int MAX_CONTEXT_LINES = 20;
+    static final int MAX_READ_MATCHING_FILES = 10;
     static final int EXIT_CODE_NO_MATCHES = 1;
     private static final String DOC_REGEX_PATTERN = "The regex pattern to search for";
     private static final String DOC_RELATIVE_PATH = "The directory or file path relative to the project root";
@@ -27,18 +31,24 @@ public class GrepService {
     private static final String DOC_CONTEXT_LINES = "Number of context lines before and after each match (0-20)";
     private static final String DOC_LITERAL_TEXT = "The literal text to search for";
     private static final String DOC_IGNORE_CASE_PATTERN = "The regex pattern to search for case-insensitively";
-    private static final char BACKSLASH = '\\';
-    private static final char LF = '\n';
-
+    private static final String CURRENT_DIR = ".";
+    private static final String RG_CMD = "rg";
+    private static final String COLOR_NEVER_ARG = "--color=never";
+    private static final String GLOB_FLAG = "-g";
+    private static final String END_OF_OPTIONS = "--";
+    private static final char BACKSLASH = 92;
+    private static final char LF = 10;
     private final ProjectService projectService;
+    private final FileReadService fileReadService;
 
-    public GrepService(ProjectService projectService) {
+    public GrepService(ProjectService projectService, FileReadService fileReadService) {
         this.projectService = projectService;
+        this.fileReadService = fileReadService;
     }
 
     @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", examples = "grepService.grep('TODO')")
     public EditorResult grep(@AgentDoc(DOC_REGEX_PATTERN) String pattern) {
-        return grep(pattern, ".", null);
+        return grep(pattern, CURRENT_DIR, null);
     }
 
     @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", examples = "grepService.grep('class GrepService', 'src')")
@@ -56,7 +66,7 @@ public class GrepService {
     @AgentDoc(value = "Searches for a regex pattern in the project files with surrounding context lines.", examples = "grepService.grepWithContext('@AgentDoc', 3)")
     public EditorResult grepWithContext(@AgentDoc(DOC_REGEX_PATTERN) String pattern,
             @AgentDoc(DOC_CONTEXT_LINES) int contextLines) {
-        return grepWithContext(pattern, ".", null, contextLines);
+        return grepWithContext(pattern, CURRENT_DIR, null, contextLines);
     }
 
     @AgentDoc(value = "Searches for a regex pattern in the specified path with surrounding context lines.", examples = "grepService.grepWithContext('def process_', 'src', 3)")
@@ -74,7 +84,7 @@ public class GrepService {
 
     @AgentDoc(value = "Searches for a literal fixed string (no regex escaping needed) in the project files.", examples = "grepService.grepLiteral('std::vector<int>')")
     public EditorResult grepLiteral(@AgentDoc(DOC_LITERAL_TEXT) String text) {
-        return grepLiteral(text, ".", null);
+        return grepLiteral(text, CURRENT_DIR, null);
     }
 
     @AgentDoc(value = "Searches for a literal fixed string (no regex escaping needed) in the specified path.", examples = "grepService.grepLiteral('foo(bar)', 'src')")
@@ -91,7 +101,7 @@ public class GrepService {
 
     @AgentDoc(value = "Searches for a regex pattern case-insensitively in the project files.", examples = "grepService.grepIgnoreCase('fixme')")
     public EditorResult grepIgnoreCase(@AgentDoc(DOC_IGNORE_CASE_PATTERN) String pattern) {
-        return grepIgnoreCase(pattern, ".", null);
+        return grepIgnoreCase(pattern, CURRENT_DIR, null);
     }
 
     @AgentDoc(value = "Searches for a regex pattern case-insensitively in the specified path.", examples = "grepService.grepIgnoreCase('exception', 'src')")
@@ -104,6 +114,70 @@ public class GrepService {
     public EditorResult grepIgnoreCase(@AgentDoc(DOC_IGNORE_CASE_PATTERN) String pattern,
             @AgentDoc(DOC_RELATIVE_PATH) String relativePath, @AgentDoc(DOC_FILE_PATTERN) String filePattern) {
         return executeRipGrep(pattern, relativePath, filePattern, 0, false, true);
+    }
+
+    @AgentDoc(value = "Finds all files containing matches for the given regex pattern using RipGrep (-l), returning a deduplicated list of relative file paths.", examples = "grepService.findMatchingFiles('class AuthService')")
+    public List<String> findMatchingFiles(@AgentDoc(DOC_REGEX_PATTERN) String pattern) {
+        return findMatchingFiles(pattern, CURRENT_DIR, null);
+    }
+
+    @AgentDoc(value = "Finds all files in the specified path and file glob containing matches for the given regex pattern using RipGrep (-l), returning a deduplicated list of relative file paths.", examples = "grepService.findMatchingFiles('@AgentService', 'src', '*.java')")
+    public List<String> findMatchingFiles(@AgentDoc(DOC_REGEX_PATTERN) String pattern,
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath, @AgentDoc(DOC_FILE_PATTERN) String filePattern) {
+        if (!projectService.hasActiveProject() || pattern == null || pattern.isEmpty()) {
+            return new ArrayList<>();
+        }
+        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
+        String targetArg = projectService.resolveRelativePath(relativePath);
+
+        List<String> command = new ArrayList<>(List.of(RG_CMD, "-l", COLOR_NEVER_ARG));
+        if (filePattern != null && !filePattern.isBlank()) {
+            command.addAll(List.of(GLOB_FLAG, filePattern));
+        }
+        command.addAll(List.of(END_OF_OPTIONS, pattern, targetArg));
+
+        Set<String> matches = new LinkedHashSet<>();
+        try {
+            ProcessResult result = ProcessRunner.run(command, root, true);
+            if (result.timedOut()) {
+                log.warn("RipGrep findMatchingFiles timed out for pattern: {}", pattern);
+                return new ArrayList<>();
+            }
+            if (result.exitCode() == 0 && result.output() != null && !result.output().isEmpty()) {
+                for (String line : result.output().lines().toList()) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty()) {
+                        matches.add(normalizeRelativeOutputLine(trimmed));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to find matching files using RipGrep: {}", e.getMessage());
+        }
+        return new ArrayList<>(matches);
+    }
+
+    @AgentDoc(value = "Finds files matching the given regex pattern and immediately reads their contents into a Map of relativePath to content (capped at 10 files).", examples = "grepService.readMatchingFiles('class AuthService')")
+    public Map<String, String> readMatchingFiles(@AgentDoc(DOC_REGEX_PATTERN) String pattern) {
+        return readMatchingFiles(pattern, CURRENT_DIR, null);
+    }
+
+    @AgentDoc(value = "Finds files in the specified path and file glob matching the given regex pattern and immediately reads their contents into a Map of relativePath to content (capped at 10 files).", examples = "grepService.readMatchingFiles('implements ToolCallback', 'src', '*.java')")
+    public Map<String, String> readMatchingFiles(@AgentDoc(DOC_REGEX_PATTERN) String pattern,
+            @AgentDoc(DOC_RELATIVE_PATH) String relativePath, @AgentDoc(DOC_FILE_PATTERN) String filePattern) {
+        List<String> matchingFiles = findMatchingFiles(pattern, relativePath, filePattern);
+        if (matchingFiles.isEmpty() || fileReadService == null) {
+            return new LinkedHashMap<>();
+        }
+        if (matchingFiles.size() > MAX_READ_MATCHING_FILES) {
+            List<String> subset = matchingFiles.subList(0, MAX_READ_MATCHING_FILES);
+            Map<String, String> results = new LinkedHashMap<>(fileReadService.readFiles(subset));
+            int omitted = matchingFiles.size() - MAX_READ_MATCHING_FILES;
+            results.put(FileReadService.TRUNCATED_KEY, "Matched " + matchingFiles.size() + " files; showing first "
+                    + MAX_READ_MATCHING_FILES + " files (" + omitted + " more matching file(s) omitted).");
+            return results;
+        }
+        return fileReadService.readFiles(matchingFiles);
     }
 
     private EditorResult executeRipGrep(String pattern, String relativePath, String filePattern, int contextLines,
@@ -120,22 +194,22 @@ public class GrepService {
         int clampedContext = Math.max(0, Math.min(contextLines, MAX_CONTEXT_LINES));
 
         List<String> command = new ArrayList<>();
-        command.add("rg");
+        command.add(RG_CMD);
         if (clampedContext > 0) {
             command.addAll(List.of("-n", "-C", String.valueOf(clampedContext)));
         } else {
             command.add("--vimgrep");
         }
-        command.addAll(List.of("--no-heading", "--color=never"));
+        command.addAll(List.of("--no-heading", COLOR_NEVER_ARG));
 
         if (fixedStrings)
             command.add("-F");
         if (ignoreCase)
             command.add("-i");
         if (filePattern != null && !filePattern.isBlank()) {
-            command.addAll(List.of("-g", filePattern));
+            command.addAll(List.of(GLOB_FLAG, filePattern));
         }
-        command.addAll(List.of("--", pattern, targetArg));
+        command.addAll(List.of(END_OF_OPTIONS, pattern, targetArg));
 
         try {
             ProcessResult result = ProcessRunner.run(command, root, true);
@@ -151,12 +225,18 @@ public class GrepService {
                 log.warn("RipGrep failed with exit code {}: {}", exitCode, error);
                 return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + error);
             }
-            return new EditorResult(true,
-                    capOutputLines(stripRootPrefix(result.output().trim(), root), MAX_OUTPUT_LINES), null);
+            String cleaned = String.join(String.valueOf(LF),
+                    result.output().trim().lines().map(GrepService::normalizeRelativeOutputLine).toList());
+            return new EditorResult(true, capOutputLines(cleaned, MAX_OUTPUT_LINES), null);
         } catch (IOException e) {
             log.warn("Failed to execute ripgrep: {}", e.getMessage());
             return new EditorResult(false, "", "Error executing RipGrep: " + e.getMessage());
         }
+    }
+
+    private static String normalizeRelativeOutputLine(String line) {
+        String normalized = line.replace(BACKSLASH, '/');
+        return normalized.startsWith("./") ? normalized.substring(2) : normalized;
     }
 
     static String capOutputLines(String rawOutput, int maxLines) {
@@ -173,7 +253,7 @@ public class GrepService {
 
     @AgentDoc(value = "Lists files in the project root using RipGrep, respecting .gitignore.", examples = "grepService.listFiles()")
     public List<String> listFiles() {
-        return listFiles(".");
+        return listFiles(CURRENT_DIR);
     }
 
     @AgentDoc(value = "Lists files in a specific directory using RipGrep, respecting .gitignore.", examples = "grepService.listFiles('src/main')")
@@ -184,8 +264,8 @@ public class GrepService {
         Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
         String relSearchDir = projectService.resolveRelativePath(relativePath);
 
-        List<String> command = new ArrayList<>(List.of("rg", "--files", "--color=never"));
-        if (!".".equals(relSearchDir)) {
+        List<String> command = new ArrayList<>(List.of(RG_CMD, "--files", COLOR_NEVER_ARG));
+        if (!CURRENT_DIR.equals(relSearchDir)) {
             command.add(relSearchDir);
         }
 
@@ -198,14 +278,9 @@ public class GrepService {
             }
             String output = result.output();
             if (output != null && !output.isEmpty()) {
-                String rootPrefix = normalizeRootPrefix(root);
                 for (String line : output.lines().toList()) {
                     if (!line.isBlank()) {
-                        String normalized = line.replace(BACKSLASH, '/');
-                        if (!rootPrefix.isEmpty()) {
-                            normalized = StringUtils.removeStart(normalized, rootPrefix);
-                        }
-                        files.add(StringUtils.removeStart(normalized, "./"));
+                        files.add(normalizeRelativeOutputLine(line));
                     }
                 }
             }
@@ -213,37 +288,5 @@ public class GrepService {
             log.warn("Failed to list files using RipGrep: {}", e.getMessage());
         }
         return files;
-    }
-
-    private static String normalizeRootPrefix(Path root) {
-        if (root == null)
-            return "";
-        String prefix = root.toAbsolutePath().normalize().toString().replace(BACKSLASH, '/');
-        return prefix.endsWith("/") ? prefix : prefix + "/";
-    }
-
-    private static String stripRootPrefix(String rawOutput, Path root) {
-        if (rawOutput == null || rawOutput.isEmpty() || root == null) {
-            return rawOutput == null ? "" : rawOutput;
-        }
-        String rawRootPrefix = root.toAbsolutePath().normalize().toString();
-        String rawPrefixWithSep = rawRootPrefix.endsWith(File.separator)
-                ? rawRootPrefix
-                : rawRootPrefix + File.separator;
-        String slashPrefix = normalizeRootPrefix(root);
-        List<String> lines = rawOutput.lines().toList();
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < lines.size(); i++) {
-            if (i > 0)
-                sb.append(LF);
-            String line = lines.get(i);
-            if (line.startsWith(rawPrefixWithSep)) {
-                line = StringUtils.removeStart(line, rawPrefixWithSep);
-            } else if (!slashPrefix.isEmpty()) {
-                line = StringUtils.removeStart(line, slashPrefix);
-            }
-            sb.append(line);
-        }
-        return sb.toString();
     }
 }

@@ -29,16 +29,22 @@ class LLMDocGeneratorTest {
     static Stream<Arguments> agentServiceProvider() {
         ProjectService ps = mock(ProjectService.class);
         when(ps.hasActiveProject()).thenReturn(false);
-        return Stream.of(serviceCase(FileReadService.class, new FileReadService(ps),
+        FileReadService frs = new FileReadService(ps);
+        return Stream.of(serviceCase(FileReadService.class, frs,
                 "readLines(relativePath: string, startLine: number, endLine: number): string;",
-                "readFileNumbered(relativePath: string): string;", "getLineCount(relativePath: string): number;"),
+                "readFileNumbered(relativePath: string): string;", "getLineCount(relativePath: string): number;",
+                "readFiles(relativePaths: List): Map;", "readFilesNumbered(relativePaths: List): Map;"),
                 serviceCase(FileEditorService.class, new FileEditorService(ps, null),
                         "moveFile(sourcePath: string, targetPath: string): EditorResult;",
                         "copyFile(sourcePath: string, targetPath: string): EditorResult;",
                         "mkdirs(relativePath: string): EditorResult;"),
-                serviceCase(GrepService.class, new GrepService(ps),
+                serviceCase(GrepService.class, new GrepService(ps, frs),
                         "grepWithContext(pattern: string, contextLines: number): EditorResult;",
-                        "grepLiteral(text: string): EditorResult;", "grepIgnoreCase(pattern: string): EditorResult;"),
+                        "grepLiteral(text: string): EditorResult;", "grepIgnoreCase(pattern: string): EditorResult;",
+                        "findMatchingFiles(pattern: string): List;",
+                        "findMatchingFiles(pattern: string, relativePath: string, filePattern: string): List;",
+                        "readMatchingFiles(pattern: string): Map;",
+                        "readMatchingFiles(pattern: string, relativePath: string, filePattern: string): Map;"),
                 serviceCase(GitService.class, new GitService(ps), "getDiffHead(): string;",
                         "getDiffHead(relativePath: string): string;", "getChangedFiles(): List;",
                         "getBlame(relativePath: string, startLine: number, endLine: number): string;"),

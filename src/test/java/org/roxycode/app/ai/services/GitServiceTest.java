@@ -81,12 +81,12 @@ class GitServiceTest {
 
         String headDiffOut = String.join("\n", "diff --git a/Tracked.java b/Tracked.java", "--- a/Tracked.java",
                 "+++ b/Tracked.java", "@@ -1,2 +1,2 @@", "+line 1 staged", "+line 2 unstaged");
-        String statusOut = String.join("\n", "MM Tracked.java", "R  OldName.java -> Renamed.java",
-                "?? src/NewFeature.java");
+        String nul = String.valueOf((char) 0);
+        String statusOut = String.join(nul, "MM Tracked.java", "R  Renamed.java", "OldName.java",
+                "?? src/NewFeature.java") + nul;
         String noIndexDiffOut = String.join("\n", "diff --git a//dev/null b/src/NewFeature.java",
                 "new file mode 100644", "index 0000000..1111111", "--- /dev/null", "+++ b/src/NewFeature.java",
                 "@@ -0,0 +1,2 @@", "+package src;", "+public class NewFeature {}");
-
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             stubGit(runner, 0, headDiffOut, "git", "diff", "HEAD");
             stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard");
@@ -94,8 +94,7 @@ class GitServiceTest {
             stubGit(runner, 0, "", "git", "diff", "HEAD", "--", "src/NewFeature.java");
             stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard", "--",
                     "src/NewFeature.java");
-            stubGit(runner, 0, statusOut, "git", "-c", "core.quotePath=false", "status", "--porcelain", "-uall");
-
+            stubGit(runner, 0, statusOut, "git", "status", "--porcelain", "-z", "-uall");
             SwingTestUtils.assertContainsAll(gitService.getDiff(), "+line 1 staged", "+line 2 unstaged",
                     "diff --git a/src/NewFeature.java b/src/NewFeature.java", "+++ b/src/NewFeature.java",
                     "@@ -0,0 +1,2 @@", "+public class NewFeature {}");
@@ -119,27 +118,20 @@ class GitServiceTest {
     }
 
     @Test
-    void testGetChangedFilesPreservesFirstLineLeadingSpaceAndUnquotesEscapedPaths() {
+    void testGetChangedFilesPreservesFirstLineLeadingSpaceAndHandlesNulDelimitedPaths() {
         GitService gitService = new GitService(createActiveProjectService());
         char dq = (char) 34;
         char bs = (char) 92;
-        String statusOut = String.join("\n", " M FirstUnstaged.java",
-                "?? " + dq + "dir with spaces/quote" + bs + dq + "file" + bs + bs + "name.txt" + dq,
-                "R  " + dq + "old name.txt" + dq + " -> " + dq + "new name.txt" + dq);
+        String nul = String.valueOf((char) 0);
+        String statusOut = String.join(nul, " M FirstUnstaged.java",
+                "?? dir with spaces/quote" + dq + "file" + bs + "name.txt", "R  new name.txt", "old name.txt",
+                "?? café_über_файл.java") + nul;
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            stubGit(runner, 0, statusOut + (char) 10, "git", "-c", "core.quotePath=false", "status", "--porcelain",
-                    "-uall");
-            assertEquals(List.of("FirstUnstaged.java", "dir with spaces/quote" + dq + "file/name.txt", "new name.txt"),
-                    gitService.getChangedFiles());
+            stubGit(runner, 0, statusOut, "git", "status", "--porcelain", "-z", "-uall");
+            assertEquals(List.of("FirstUnstaged.java", "dir with spaces/quote" + dq + "file/name.txt", "new name.txt",
+                    "café_über_файл.java"), gitService.getChangedFiles());
         }
-
-        assertEquals("café.txt", GitService.unquotePorcelainPath(dq + "caf" + bs + "303" + bs + "251.txt" + dq));
-        assertEquals("dir/über_файл.java",
-                GitService.unquotePorcelainPath(dq + "dir/" + bs + "303" + bs + "274ber_" + bs + "321" + bs + "204" + bs
-                        + "320" + bs + "260" + bs + "320" + bs + "271" + bs + "320" + bs + "273.java" + dq));
-        assertEquals("plain.txt", GitService.unquotePorcelainPath("plain.txt"));
-        assertEquals("", GitService.unquotePorcelainPath(null));
     }
 
     @Test
