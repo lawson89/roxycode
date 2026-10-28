@@ -20,6 +20,7 @@ public class GrepService {
     private static final Logger log = LoggerFactory.getLogger(GrepService.class);
     static final int MAX_OUTPUT_LINES = 200;
     static final int MAX_CONTEXT_LINES = 20;
+    static final int EXIT_CODE_NO_MATCHES = 1;
     private static final String DOC_REGEX_PATTERN = "The regex pattern to search for";
     private static final String DOC_RELATIVE_PATH = "The directory or file path relative to the project root";
     private static final String DOC_FILE_PATTERN = "Optional glob pattern for filtering files (e.g., '*.java')";
@@ -143,7 +144,7 @@ public class GrepService {
                 return new EditorResult(false, "", "RipGrep timed out");
             }
             int exitCode = result.exitCode();
-            if (exitCode == 1) {
+            if (exitCode == EXIT_CODE_NO_MATCHES) {
                 return new EditorResult(true, "", null);
             } else if (exitCode != 0) {
                 String error = result.output().trim();

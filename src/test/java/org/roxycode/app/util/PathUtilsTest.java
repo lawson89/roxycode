@@ -64,7 +64,5 @@ class PathUtilsTest {
         assertEquals("java", PathUtils.getLowerExtension("src/Main.JAVA", false));
         assertEquals("", PathUtils.getLowerExtension(".gitignore", false));
         assertEquals("gitignore", PathUtils.getLowerExtension(".gitignore", true));
-        assertEquals("md", PathUtils.getLowerExtension(Path.of("docs/README.MD"), false));
-        assertEquals("", PathUtils.getLowerExtension((Path) null, true));
     }
 }

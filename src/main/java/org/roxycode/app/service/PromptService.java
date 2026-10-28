@@ -412,6 +412,7 @@ public class PromptService {
                 : folders.stream().filter(f -> f != null && !f.isBlank()).map(String::trim).distinct().toList();
     }
 
+    @SuppressWarnings("PMD.UseProperClassLoader")
     private String readClasspathResource(String path) {
         try {
             return new ClassPathResource(path, PromptService.class.getClassLoader())

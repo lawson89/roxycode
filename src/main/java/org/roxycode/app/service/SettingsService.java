@@ -72,6 +72,7 @@ public class SettingsService {
         return new AppSettings();
     }
 
+    @SuppressWarnings("PMD.UseProperClassLoader")
     public List<GeminiModelConfig> getAvailableModels() {
         List<GeminiModelConfig> cached = this.cachedAvailableModels;
         if (cached != null)

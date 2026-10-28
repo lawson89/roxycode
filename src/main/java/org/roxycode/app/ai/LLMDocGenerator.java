@@ -8,7 +8,6 @@ import java.util.*;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.core.annotation.AnnotationUtils;
 
-@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class LLMDocGenerator {
 
     private static final String DOC_END = " */\n";

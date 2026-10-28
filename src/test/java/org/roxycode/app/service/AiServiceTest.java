@@ -23,8 +23,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
-import org.roxycode.app.ai.ReturnDirectToolCallingManager;
-import org.roxycode.app.ai.RoxyToolExecutionExceptionProcessor;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
@@ -42,6 +40,8 @@ import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.execution.ToolExecutionException;
 import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -91,7 +91,7 @@ class AiServiceTest {
         lenient().when(chatClientBuilder.defaultAdvisors(any(Advisor[].class))).thenReturn(chatClientBuilder);
         lenient().when(chatClientBuilder.build()).thenReturn(chatClient);
 
-        jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher, null);
+        jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher, null, settingsService);
         aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlTool, planService, chatMemory,
                 toolCallingManager, eventPublisher);
     }
@@ -136,9 +136,13 @@ class AiServiceTest {
     void testAiConfigCreatesToolExecutionExceptionProcessorAndToolCallingManagerBeans() {
         AiConfig config = new AiConfig();
         ToolExecutionExceptionProcessor processor = config.toolExecutionExceptionProcessor();
-        assertInstanceOf(RoxyToolExecutionExceptionProcessor.class, processor);
-        assertInstanceOf(ReturnDirectToolCallingManager.class, config.toolCallingManager(processor, settingsService,
-                planService, eventPublisher, config.objectMapper()));
+        assertNotNull(processor);
+        ToolDefinition toolDef = mock(ToolDefinition.class);
+        assertEquals("Invalid parameter", processor
+                .process(new ToolExecutionException(toolDef, new IllegalArgumentException("Invalid parameter"))));
+        assertThrows(CancellationException.class, () -> processor
+                .process(new ToolExecutionException(toolDef, new CancellationException("User stopped"))));
+        assertNotNull(config.toolCallingManager(processor));
     }
 
     @Test
@@ -225,7 +229,7 @@ class AiServiceTest {
 
         String result = aiService.chat("default", null, "Prompt", null);
         String directFormatted = aiService.formatChatResponse(buildChatResponse(rawText, finishReason, usage),
-                new TurnToolContext("default", WorkflowPhase.CODE, new AtomicInteger(0), null));
+                new TurnToolContext("default", WorkflowPhase.CODE, new AtomicInteger(0)));
 
         assertEquals(directFormatted, result);
         for (String snippet : expectedSnippets) {

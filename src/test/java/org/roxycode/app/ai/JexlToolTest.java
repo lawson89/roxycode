@@ -1,6 +1,8 @@
 package org.roxycode.app.ai;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -9,16 +11,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.BuildResult;
 import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -92,7 +99,7 @@ public class JexlToolTest {
                 capturedEvent.set(tee);
             }
         };
-        return new JexlTool(registry, publisher, null);
+        return new JexlTool(registry, publisher, null, null);
     }
 
     private static JsonNode evalJson(JexlTool tool, String script) throws Exception {
@@ -160,12 +167,53 @@ public class JexlToolTest {
         assertTrue(tool.executeJexl("codeOnlyService.writeData()").contains("error"));
 
         ToolContext toolContext = new ToolContext(
-                new TurnToolContext("task:default", WorkflowPhase.CODE, null, null).toMap());
+                new TurnToolContext("task:default", WorkflowPhase.CODE, null).toMap());
         assertTrue(tool.executeJexl("codeOnlyService.writeData()", toolContext).contains("written"));
         assertEquals("task:default", capturedEvent.get().conversationId());
         assertEquals("codeOnlyService.writeData()", capturedEvent.get().script());
         assertEquals("written", capturedEvent.get().result());
         assertTrue(capturedEvent.get().success());
+    }
+
+    @Test
+    public void testExecuteJexlEnforcesMaxTurnsAndPublishesAgentTurnEvents() throws Exception {
+        SettingsService settingsService = mock(SettingsService.class);
+        AppSettings settings = new AppSettings();
+        settings.setMaxAgentToolTurns(2);
+        when(settingsService.getSettings()).thenReturn(settings);
+
+        List<AgentTurnEvent> turnEvents = new ArrayList<>();
+        List<ToolExecutionEvent> toolEvents = new ArrayList<>();
+        JexlTool tool = new JexlTool(new JexlServiceRegistry(), event -> {
+            if (event instanceof AgentTurnEvent ate) {
+                turnEvents.add(ate);
+            } else if (event instanceof ToolExecutionEvent tee) {
+                toolEvents.add(tee);
+            }
+        }, null, settingsService);
+
+        AtomicInteger turnCounter = new AtomicInteger(0);
+        ToolContext toolContext = new ToolContext(
+                new TurnToolContext("conv-1", WorkflowPhase.CODE, turnCounter).toMap());
+
+        assertEquals("2",
+                AiConfig.SHARED_OBJECT_MAPPER.readTree(tool.executeJexl("1 + 1", toolContext)).get("result").asText());
+        assertEquals("4",
+                AiConfig.SHARED_OBJECT_MAPPER.readTree(tool.executeJexl("2 + 2", toolContext)).get("result").asText());
+        assertEquals(2, turnCounter.get());
+        assertEquals(2, turnEvents.size());
+        assertEquals(1, turnEvents.get(0).turnNumber());
+        assertEquals(2, turnEvents.get(1).turnNumber());
+        assertEquals("CODE", turnEvents.get(0).phase());
+        assertEquals(2, toolEvents.size());
+
+        String thirdTurnResult = tool.executeJexl("3 + 3", toolContext);
+        assertEquals(
+                "Autonomous execution stopped: Maximum tool turns (2) reached. Stop calling tools and summarize your progress for the user.",
+                AiConfig.SHARED_OBJECT_MAPPER.readTree(thirdTurnResult).get("error").asText());
+        assertEquals(2, turnCounter.get());
+        assertEquals(2, turnEvents.size());
+        assertEquals(2, toolEvents.size());
     }
 
     @Test
@@ -210,9 +258,8 @@ public class JexlToolTest {
                 throw new JsonGenerationException("Simulated failure", (JsonGenerator) null);
             }
         };
-        JexlTool tool = new JexlTool(new JexlServiceRegistry(), null, failingMapper);
+        JexlTool tool = new JexlTool(new JexlServiceRegistry(), null, failingMapper, null);
         String result = tool.executeJexl("if (");
-        assertTrue(RoxyToolExecutionExceptionProcessor.isErrorResponse(result));
         assertEquals("Internal Error during error serialization",
                 AiConfig.SHARED_OBJECT_MAPPER.readTree(result).get("error").asText());
     }

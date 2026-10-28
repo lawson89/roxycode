@@ -223,7 +223,8 @@ public final class PlanPanel extends JPanel {
                         <td valign='top' nowrap='nowrap' class='plan-step-check'>%s</td>
                         <td width='100%%' %s>%s</td>
                     </tr>
-                    """.formatted(index++, checkbox, textClass, SwingHtmlUtils.escapeHtml(step.description())));
+                    """.formatted(index, checkbox, textClass, SwingHtmlUtils.escapeHtml(step.description())));
+            index++;
         }
 
         return """

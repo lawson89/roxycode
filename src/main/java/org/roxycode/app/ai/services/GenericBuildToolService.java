@@ -217,6 +217,7 @@ public class GenericBuildToolService {
         return projectService.resolveProjectDataPath(CONFIG_FILE);
     }
 
+    @SuppressWarnings("PMD.UseProperClassLoader")
     private String loadDefaultTemplateContent() {
         String templateName = detectTemplate();
         try {

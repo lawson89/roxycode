@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.JexlTool;
-import org.roxycode.app.ai.ReturnDirectToolCallingManager;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
@@ -129,7 +128,7 @@ public class AiService {
             List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
         TurnToolContext turnContext = new TurnToolContext(conversationId,
-                phase != null ? phase : planService.getCurrentPhase(), new AtomicInteger(0), new StringBuilder());
+                phase != null ? phase : planService.getCurrentPhase(), new AtomicInteger(0));
         String convId = turnContext.conversationId();
 
         try {
@@ -155,7 +154,6 @@ public class AiService {
         String rawFinishReason = null;
         Usage usage = null;
         int toolTurns = turnContext.turnCounter().get();
-        String accumulatedText = turnContext.textAccumulator().toString().trim();
 
         if (chatResponse != null) {
             Generation result = chatResponse.getResult();
@@ -176,8 +174,8 @@ public class AiService {
 
         if (isTokenLimitFinishReason(finishReason)) {
             if (hasVisibleContent) {
-                StringBuilder sb = new StringBuilder(prependAccumulatedText(accumulatedText, content))
-                        .append("\n\n---\n> ").append(TRUNCATED_MARKER).append(" ").append(finishReason)
+                StringBuilder sb = new StringBuilder(content).append("\n\n---\n> ").append(TRUNCATED_MARKER).append(" ")
+                        .append(finishReason)
                         .append(")**: The response was cut off because it reached the maximum output token limit.");
                 if (!usageSummary.isEmpty()) {
                     sb.append(" (Token usage: ").append(usageSummary).append(")");
@@ -185,11 +183,9 @@ public class AiService {
                 return sb.append(" Reply **'continue'** so Roxy can resume where she left off.").toString();
             }
 
-            StringBuilder sb = new StringBuilder();
-            if (!accumulatedText.isEmpty())
-                sb.append(accumulatedText).append("\n\n---\n\n");
-            sb.append(NO_VISIBLE_RESPONSE_MARKER).append(" ").append(finishReason).append(")**\n\n").append(
-                    "Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
+            StringBuilder sb = new StringBuilder().append(NO_VISIBLE_RESPONSE_MARKER).append(" ").append(finishReason)
+                    .append(")**\n\n")
+                    .append("Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
             appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
             return sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.").toString();
         }
@@ -197,8 +193,6 @@ public class AiService {
         if (!hasVisibleContent) {
             boolean normalStop = "STOP".equalsIgnoreCase(finishReason)
                     || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
-            if (normalStop && !accumulatedText.isEmpty())
-                return accumulatedText;
 
             StringBuilder sb = new StringBuilder(EMPTY_RESPONSE_MARKER).append(" ").append(finishReason)
                     .append(")**\n\n");
@@ -213,13 +207,7 @@ public class AiService {
                     : "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
             return sb.toString();
         }
-        return prependAccumulatedText(accumulatedText, content);
-    }
-
-    private static String prependAccumulatedText(String accumulatedText, String content) {
-        return (!accumulatedText.isEmpty() && !content.startsWith(accumulatedText))
-                ? (accumulatedText + "\n\n" + content).trim()
-                : content;
+        return content;
     }
 
     private static void appendDiagnosticMetadata(StringBuilder sb, String finishReason, int toolTurns,
@@ -233,8 +221,8 @@ public class AiService {
     public static boolean isAutoNudgeableResponse(String response, boolean hadToolTurns) {
         if (StringUtils.isBlank(response))
             return false;
-        if (response.startsWith(ReturnDirectToolCallingManager.MAX_TURNS_EXCEEDED_PREFIX)
-                || response.contains(TRUNCATED_MARKER) || response.contains(NO_VISIBLE_RESPONSE_MARKER)) {
+        if (response.startsWith(JexlTool.MAX_TURNS_EXCEEDED_PREFIX) || response.contains(TRUNCATED_MARKER)
+                || response.contains(NO_VISIBLE_RESPONSE_MARKER)) {
             return true;
         }
         return hadToolTurns && response.contains(EMPTY_RESPONSE_MARKER) && response.contains(EMPTY_STOP_MESSAGE);

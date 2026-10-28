@@ -8,7 +8,10 @@ import org.apache.commons.jexl3.JexlEngine;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.jspecify.annotations.Nullable;
+import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,20 +25,24 @@ import org.springframework.stereotype.Component;
 public class JexlTool {
 
     private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
+    private static final String AGENT_NAME = "Roxy";
     private static final String RESULT_KEY = "result";
+    public static final String MAX_TURNS_EXCEEDED_PREFIX = "Autonomous execution stopped: Maximum tool turns (";
 
     private final JexlEngine jexl;
     private final JexlServiceRegistry registry;
+    private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper mapper;
 
     public JexlTool(JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher,
-            @Nullable ObjectMapper objectMapper) {
+            @Nullable ObjectMapper objectMapper, @Nullable SettingsService settingsService) {
         this.jexl = new JexlBuilder().permissions(AgentJexlPermissions.INSTANCE).strict(true).silent(false).safe(false)
                 .create();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
         this.mapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
+        this.settingsService = settingsService;
     }
 
     public String executeJexl(String script) {
@@ -49,7 +56,21 @@ public class JexlTool {
         TurnToolContext ctx = TurnToolContext.fromToolContext(toolContext);
         String conversationId = ctx.conversationId();
         WorkflowPhase phase = ctx.phase();
-        log.info("Executing JEXL script in phase {}: {}", phase, script);
+
+        int maxTurns = resolveMaxTurns();
+        if (ctx.turnCounter().get() >= maxTurns) {
+            String stopMsg = MAX_TURNS_EXCEEDED_PREFIX + maxTurns
+                    + ") reached. Stop calling tools and summarize your progress for the user.";
+            log.warn("Max tool turns ({}) reached in phase {} for conversation {}", maxTurns, phase, conversationId);
+            return toJsonError(stopMsg);
+        }
+
+        int currentTurn = ctx.turnCounter().incrementAndGet();
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new AgentTurnEvent(conversationId, AGENT_NAME, currentTurn, phase.name()));
+        }
+
+        log.info("Executing JEXL script in phase {} (turn {}/{}): {}", phase, currentTurn, maxTurns, script);
 
         JexlScript jexlScript;
         try {
@@ -80,6 +101,11 @@ public class JexlTool {
             publishToolEvent(conversationId, script, null, false, error);
             return toJsonError(error);
         }
+    }
+
+    private int resolveMaxTurns() {
+        AppSettings settings = settingsService != null ? settingsService.getSettings() : null;
+        return settings != null ? Math.max(1, settings.getMaxAgentToolTurns()) : 5;
     }
 
     private String serializeResult(@Nullable Object result) throws Exception {
@@ -114,6 +140,11 @@ public class JexlTool {
     }
 
     private String toJsonError(String message) {
-        return RoxyToolExecutionExceptionProcessor.toJsonError(mapper, message);
+        try {
+            return mapper.writeValueAsString(Map.of("error", message != null ? message : "Unknown error"));
+        } catch (Exception e) {
+            return """
+                    {"error":"Internal Error during error serialization"}""";
+        }
     }
 }

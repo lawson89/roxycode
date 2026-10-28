@@ -33,6 +33,10 @@ public class BuildContainerService {
     static final String LABEL_APP_VALUE = "roxycode";
     static final String LABEL_PROJECT = "roxycode.project";
     private static final String NL = "\n";
+    private static final String TRUE_LITERAL = "true";
+    private static final String FALSE_LITERAL = "false";
+    private static final char BACKSLASH = 92;
+    private static final char SQUOTE = 39;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ContainerConfig(boolean enabled, String image, String workdir) {
@@ -230,10 +234,10 @@ public class BuildContainerService {
         }
         int eqIdx = trimmed.indexOf('=');
         String val = trimmed.substring(eqIdx + 1).trim();
-        if ("true".equals(val)) {
+        if (TRUE_LITERAL.equals(val)) {
             return Boolean.TRUE;
         }
-        if ("false".equals(val)) {
+        if (FALSE_LITERAL.equals(val)) {
             return Boolean.FALSE;
         }
         return null;
@@ -247,19 +251,21 @@ public class BuildContainerService {
     private static int findInlineCommentIndex(String text) {
         boolean inSingleQuotes = false;
         boolean inDoubleQuotes = false;
-        for (int i = 0; i < text.length(); i++) {
+        int i = 0;
+        while (i < text.length()) {
             char c = text.charAt(i);
-            if (c == '\\' && inDoubleQuotes && i + 1 < text.length()) {
-                i++;
+            if (c == BACKSLASH && inDoubleQuotes && i + 1 < text.length()) {
+                i += 2;
                 continue;
             }
-            if (c == '\'' && !inDoubleQuotes) {
+            if (c == SQUOTE && !inDoubleQuotes) {
                 inSingleQuotes = !inSingleQuotes;
             } else if (c == '"' && !inSingleQuotes) {
                 inDoubleQuotes = !inDoubleQuotes;
             } else if (c == '#' && !inSingleQuotes && !inDoubleQuotes) {
                 return i;
             }
+            i++;
         }
         return -1;
     }

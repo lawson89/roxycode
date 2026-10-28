@@ -465,7 +465,7 @@ class PlanServiceTest {
         registry.register(service);
         assertTrue(registry.getServices(WorkflowPhase.PLAN).isEmpty());
 
-        JexlTool jexlTool = new JexlTool(registry, null, null);
+        JexlTool jexlTool = new JexlTool(registry, null, null, null);
         assertTrue(jexlTool.executeJexl("planService.submitPlan('T', 'G', [], [])").contains("error"));
 
         Tool submitTool = PlanService.class.getMethod("submitPlan", String.class, String.class, List.class, List.class)
@@ -487,7 +487,7 @@ class PlanServiceTest {
         for (String name : List.of("requestDevelopment", "requestReview", "requestFixes", "requestCompletion",
                 "requestPlanRevision")) {
             Method m = PlanService.class.getMethod(name, String.class);
-            assertTrue(m.getAnnotation(Tool.class).returnDirect());
+            assertFalse(m.getAnnotation(Tool.class).returnDirect());
             assertEquals(String.class, m.getReturnType());
         }
     }

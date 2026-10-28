@@ -195,10 +195,11 @@ public class JexlToHtmlConverter {
         boolean inSingle = false;
         boolean inDouble = false;
         boolean inBacktick = false;
-        for (int i = 0; i < line.length() - 1; i++) {
+        int i = 0;
+        while (i < line.length() - 1) {
             char c = line.charAt(i);
             if (c == BACKSLASH) {
-                i++;
+                i += 2;
                 continue;
             }
             if (!inDouble && !inBacktick && c == SQUOTE) {
@@ -215,6 +216,7 @@ public class JexlToHtmlConverter {
                     return i;
                 }
             }
+            i++;
         }
         return -1;
     }

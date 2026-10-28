@@ -15,10 +15,7 @@ import java.util.Set;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.roxycode.app.ai.services.EditorResult;
-import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -43,14 +40,7 @@ public class RepoMapPackerService {
 
     static final Set<String> SOURCE_EXTENSIONS = Set
             .of("java,py,ts,tsx,js,jsx,go,rs,c,cpp,cc,cxx,h,hpp,cs,rb,php,kt,kts,swift,scala".split(","));
-    static final Set<String> KNOWN_TEXT_EXTENSIONS = Stream
-            .concat(SOURCE_EXTENSIONS.stream(), Stream.of(
-                    "md,txt,json,xml,yml,yaml,toml,properties,css,html,sql,sh,bat,cmd,gradle,gitignore,csv".split(",")))
-            .collect(Collectors.toUnmodifiableSet());
     static final Set<String> IGNORED_TAG_KINDS = Set.of("package", "namespace", "import");
-    private static final Set<String> KNOWN_BINARY_EXTENSIONS = Set.of(
-            "png,jpg,jpeg,gif,bmp,ico,webp,tiff,tif,psd,mp3,mp4,wav,ogg,flac,avi,mov,mkv,webm,zip,tar,gz,tgz,bz2,xz,7z,rar,zst,jar,war,ear,class,jmod,exe,dll,so,dylib,bin,o,a,lib,obj,pyc,pyo,pyd,wasm,pdf,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp,ttf,otf,woff,woff2,eot,sqlite,sqlite3,db,mdb,parquet,avro,orc,ds_store"
-                    .split(","));
     private static final List<String> TEST_DIR_MARKERS = List.of("src/test/", "test/", "tests/", "__tests__/");
     private static final List<String> TEST_FILE_SUFFIXES = List.of(
             "Test.java,Tests.java,IT.java,_test.py,_test.go,.test.ts,.spec.ts,.test.tsx,.spec.tsx,.test.js,.spec.js,.test.jsx,.spec.jsx"
@@ -147,7 +137,7 @@ public class RepoMapPackerService {
         List<String> files = new ArrayList<>();
         if (rawFiles != null) {
             for (String f : rawFiles) {
-                if (!isExcluded(f) && !isBinaryFile(root.resolve(f))) {
+                if (!isExcluded(f)) {
                     files.add(f);
                 }
             }
@@ -355,33 +345,6 @@ public class RepoMapPackerService {
 
     private boolean isExcluded(String filePath) {
         return excludePatterns.stream().anyMatch(filePath::startsWith);
-    }
-
-    static boolean hasKnownTextExtension(Path path) {
-        return hasExtensionInSet(path, KNOWN_TEXT_EXTENSIONS);
-    }
-
-    static boolean hasKnownBinaryExtension(Path path) {
-        return hasExtensionInSet(path, KNOWN_BINARY_EXTENSIONS);
-    }
-
-    private static boolean hasExtensionInSet(Path path, Set<String> extensions) {
-        String ext = PathUtils.getLowerExtension(path, true);
-        return !ext.isEmpty() && extensions.contains(ext);
-    }
-
-    private boolean isBinaryFile(Path path) {
-        if (hasKnownTextExtension(path))
-            return false;
-        if (hasKnownBinaryExtension(path))
-            return true;
-        try {
-            return FileReadService.isBinaryFile(path);
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-            log.warn("Could not determine if file is binary: {}", path, e);
-            return false;
-        }
     }
 
     private record Tag(int line) {

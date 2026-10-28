@@ -41,13 +41,6 @@ public final class PathUtils {
         return FilenameUtils.getExtension(fileName).toLowerCase(Locale.ROOT);
     }
 
-    public static String getLowerExtension(Path path, boolean allowLeadingDotFile) {
-        if (path == null || path.getFileName() == null) {
-            return "";
-        }
-        return getLowerExtension(path.getFileName().toString(), allowLeadingDotFile);
-    }
-
     public static String sanitizeSlug(String raw, int maxLength, String fallback) {
         String normalized = raw != null ? raw.toLowerCase(Locale.ROOT) : "";
         String sanitized = normalized.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
@@ -62,7 +55,8 @@ public final class PathUtils {
         Path targetFile = archiveDir.resolve(id + MD_EXTENSION);
         int suffix = 2;
         while (Files.exists(targetFile)) {
-            id = baseId + "-" + suffix++;
+            id = baseId + "-" + suffix;
+            suffix++;
             targetFile = archiveDir.resolve(id + MD_EXTENSION);
         }
         return new ArchiveFileTarget(id, targetFile);

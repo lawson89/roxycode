@@ -341,35 +341,35 @@ public class PlanService {
         setCurrentPlan(null);
     }
 
-    @Tool(description = "Requests transition to the development (CODE) phase.", returnDirect = true)
+    @Tool(description = "Requests transition to the development (CODE) phase.")
     public synchronized String requestDevelopment(
             @ToolParam(description = "The reason for requesting transition to the CODE phase.") String reason) {
         requirePhase("requestDevelopment", WorkflowPhase.PLAN);
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
-    @Tool(description = "Requests transition to the review phase.", returnDirect = true)
+    @Tool(description = "Requests transition to the review phase.")
     public synchronized String requestReview(
             @ToolParam(description = "The reason for requesting transition to the REVIEW phase.") String reason) {
         requirePhase("requestReview", WorkflowPhase.CODE);
         return routeToPhase(WorkflowPhase.REVIEW, reason);
     }
 
-    @Tool(description = "Requests transition back to development to address fixes.", returnDirect = true)
+    @Tool(description = "Requests transition back to development to address fixes.")
     public synchronized String requestFixes(
             @ToolParam(description = "The reason for requesting transition back to the CODE phase.") String reason) {
         requirePhase("requestFixes", WorkflowPhase.REVIEW);
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
-    @Tool(description = "Signals completion of the current cycle and returns to planning.", returnDirect = true)
+    @Tool(description = "Signals completion of the current cycle and returns to planning.")
     public synchronized String requestCompletion(
             @ToolParam(description = "The reason for completing the current cycle.") String reason) {
         requirePhase("requestCompletion", WorkflowPhase.REVIEW);
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-    @Tool(description = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.", returnDirect = true)
+    @Tool(description = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.")
     public synchronized String requestPlanRevision(
             @ToolParam(description = "The reason for requesting a plan revision.") String reason) {
         requirePhase("requestPlanRevision", WorkflowPhase.CODE);
@@ -415,8 +415,9 @@ public class PlanService {
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(new WorkflowTransitionEvent(oldPhase, nextPhase, reason, true));
             }
-            return String.format("Autonomous transition from %s to %s successful. Reason: %s", oldPhase, nextPhase,
-                    reason);
+            return String.format(
+                    "Autonomous transition from %s to %s registered. Reason: %s. Provide a brief concluding summary to the user without calling any additional tools.",
+                    oldPhase, nextPhase, reason);
         }
 
         this.pendingPhase = nextPhase;
@@ -424,7 +425,8 @@ public class PlanService {
         publishTransitionRequested();
 
         String summary = formatPlanSummary(currentPlan);
-        String message = String.format("**Transition Request: %s**%n%n**Reason:** %s",
+        String message = String.format(
+                "**Transition Request: %s**%n%n**Reason:** %s%n%nTransition request queued for user approval. Provide a brief concluding summary to the user without calling any additional tools.",
                 formatApprovalLabel(currentPhase, nextPhase), reason);
         return StringUtils.isNotBlank(summary) ? String.format("%s%n%n%s", summary, message) : message;
     }

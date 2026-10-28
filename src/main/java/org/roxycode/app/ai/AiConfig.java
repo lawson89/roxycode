@@ -5,12 +5,10 @@ import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.util.ExceptionUtils;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -35,17 +33,17 @@ public class AiConfig {
 
     @Bean
     public ToolExecutionExceptionProcessor toolExecutionExceptionProcessor() {
-        return new RoxyToolExecutionExceptionProcessor();
+        return exception -> {
+            ExceptionUtils.rethrowIfCancelled(exception, "Tool execution cancelled");
+            Throwable cause = ExceptionUtils.getRootCause(exception);
+            return cause != null && cause.getMessage() != null ? cause.getMessage() : exception.getMessage();
+        };
     }
 
     @Bean
     @Primary
-    public ToolCallingManager toolCallingManager(ToolExecutionExceptionProcessor toolExecutionExceptionProcessor,
-            SettingsService settingsService, PlanService planService, ApplicationEventPublisher eventPublisher,
-            ObjectMapper objectMapper) {
-        ToolCallingManager delegate = ToolCallingManager.builder()
-                .toolExecutionExceptionProcessor(toolExecutionExceptionProcessor).build();
-        return new ReturnDirectToolCallingManager(delegate, settingsService, planService, eventPublisher, objectMapper);
+    public ToolCallingManager toolCallingManager(ToolExecutionExceptionProcessor toolExecutionExceptionProcessor) {
+        return ToolCallingManager.builder().toolExecutionExceptionProcessor(toolExecutionExceptionProcessor).build();
     }
 
     @Bean

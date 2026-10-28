@@ -455,12 +455,13 @@ public class MemoryService {
                 return 0;
             }
             int lineNum = 1;
-            String line;
-            while ((line = reader.readLine()) != null) {
+            String line = reader.readLine();
+            while (line != null) {
                 lineNum++;
                 if (FRONTMATTER_DELIMITER.equals(line.trim())) {
                     return lineNum;
                 }
+                line = reader.readLine();
             }
         } catch (IOException e) {
             log.debug("Failed to inspect frontmatter lines for {}: {}", file, e.getMessage());
@@ -509,7 +510,7 @@ public class MemoryService {
                 return new EditorResult(false, "", "RipGrep search timed out");
             }
             int exitCode = result.exitCode();
-            if (exitCode == 1) {
+            if (exitCode == GrepService.EXIT_CODE_NO_MATCHES) {
                 return new EditorResult(true, "", null);
             } else if (exitCode != 0) {
                 String error = result.output().trim();
@@ -720,8 +721,8 @@ public class MemoryService {
             StringBuilder yamlBlock = new StringBuilder(firstLine.trim()).append((char) 10);
             boolean closed = false;
             int lineCount = 0;
-            String rawLine;
-            while (lineCount < MAX_FRONTMATTER_LINES && (rawLine = reader.readLine()) != null) {
+            String rawLine = reader.readLine();
+            while (lineCount < MAX_FRONTMATTER_LINES && rawLine != null) {
                 lineCount++;
                 String trimmed = rawLine.trim();
                 if (FRONTMATTER_DELIMITER.equals(trimmed)) {
@@ -730,6 +731,7 @@ public class MemoryService {
                     break;
                 }
                 yamlBlock.append(rawLine).append((char) 10);
+                rawLine = reader.readLine();
             }
             if (!closed) {
                 yamlBlock.append(FRONTMATTER_DELIMITER).append((char) 10);

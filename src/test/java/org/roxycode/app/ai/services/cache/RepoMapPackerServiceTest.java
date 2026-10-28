@@ -203,38 +203,6 @@ class RepoMapPackerServiceTest {
     }
 
     @Test
-    void testExcludeBinaryFilesAndKnownTextAndBinaryExtensionsFastPath() throws IOException {
-        for (String bin : List.of("logo.PNG", "lib/app.jar", "archive.tar.gz")) {
-            assertTrue(RepoMapPackerService.hasKnownBinaryExtension(Path.of(bin)));
-        }
-        for (String nonBin : List.of("Main.java", "Makefile")) {
-            assertFalse(RepoMapPackerService.hasKnownBinaryExtension(Path.of(nonBin)));
-        }
-        assertFalse(RepoMapPackerService.hasKnownBinaryExtension(null));
-
-        for (String knownText : "src/Main.java,script.py,README.MD,notes.txt,package.json,pom.xml,config.yml,config.yaml,build.toml,application.properties,styles.css,index.html,schema.sql,run.sh,build.bat,mvnw.cmd,build.gradle,.gitignore,data.csv"
-                .split(",")) {
-            assertTrue(RepoMapPackerService.hasKnownTextExtension(Path.of(knownText)));
-        }
-        for (String nonText : List.of("logo.png", "custom.dat", "Makefile", "trailingdot.")) {
-            assertFalse(RepoMapPackerService.hasKnownTextExtension(Path.of(nonText)));
-        }
-        assertFalse(RepoMapPackerService.hasKnownTextExtension(null));
-
-        Files.write(tempDir.resolve("fastpath.toml"), new byte[]{'a', 0, 'b'});
-        Files.writeString(tempDir.resolve("test.txt"), "Hello Text");
-        Files.writeString(tempDir.resolve("readme.custom"), "Plain text with unknown extension");
-        Files.write(tempDir.resolve("custom.dat"), new byte[]{0, 1, 2, 3});
-        when(grepService.listFiles(null)).thenReturn(
-                List.of("fastpath.toml", "test.txt", "readme.custom", "custom.dat", "assets/icon.png", "dist/app.jar"));
-
-        EditorResult result = service.generateRepoMap();
-        assertTrue(result.success());
-        SwingTestUtils.assertContainsAll(result.content(), "fastpath.toml", "test.txt", "readme.custom");
-        SwingTestUtils.assertContainsNone(result.content(), "custom.dat", "icon.png", "app.jar");
-    }
-
-    @Test
     void testConcurrentInvalidationDuringGenerationDoesNotCacheStaleMap() throws IOException {
         Path testFile = Files.writeString(tempDir.resolve("Versioned.java"), "public class Version1 {}\n");
         service.setCtagsRunner(cmd -> new ProcessResult(0, ctagsLine("Versioned", testFile.toString(), 1), "", false));

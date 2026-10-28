@@ -19,12 +19,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeroturnaround.exec.ProcessExecutor;
-import org.zeroturnaround.exec.ProcessResult;
 import org.zeroturnaround.exec.StartedProcess;
 import org.zeroturnaround.exec.listener.ProcessListener;
 import org.zeroturnaround.exec.stream.ExecuteStreamHandler;
 
 public final class ProcessRunner {
+
     private static final Logger log = LoggerFactory.getLogger(ProcessRunner.class);
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
     static final int MAX_OUTPUT_CHARS = 2 * 1024 * 1024;
@@ -36,6 +36,7 @@ public final class ProcessRunner {
     }
 
     public record ProcessResult(int exitCode, String output, String errorOutput, boolean timedOut) {
+
     }
 
     public static ProcessResult run(List<String> command, Path workingDir, boolean redirectErrorStream)
@@ -52,6 +53,7 @@ public final class ProcessRunner {
         return run(command, workingDir, env, timeout, true);
     }
 
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout,
             boolean redirectErrorStream) throws IOException {
         StringBuilder stdoutBuffer = new StringBuilder();
@@ -112,7 +114,9 @@ public final class ProcessRunner {
         }
     }
 
+    @SuppressWarnings("PMD.AvoidStringBufferField")
     private static final class BoundedExecuteStreamHandler implements ExecuteStreamHandler {
+
         private final StringBuilder stdoutBuffer;
         private final StringBuilder stderrBuffer;
         private final boolean redirectErrorStream;
@@ -208,8 +212,9 @@ public final class ProcessRunner {
     }
 
     public static void destroyProcessTree(Process process) {
-        if (process == null)
+        if (process == null) {
             return;
+        }
         try {
             process.descendants().forEach(handle -> {
                 try {

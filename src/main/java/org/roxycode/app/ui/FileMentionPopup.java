@@ -74,10 +74,6 @@ public final class FileMentionPopup {
             .comparing(FileCandidate::fileNameLower).thenComparingInt(c -> c.fileName().length())
             .thenComparing(PATH_TIE_BREAKER);
 
-    private static final Comparator<FileCandidate> TIER_TIE_BREAKER = Comparator
-            .comparingInt((FileCandidate c) -> c.fileName().length()).thenComparing(FileCandidate::fileNameLower)
-            .thenComparing(PATH_TIE_BREAKER);
-
     public record FileCandidate(String relativePath, String fileName, String parentDir, String fileNameLower,
             String pathLower) {
 
