@@ -10,6 +10,7 @@ import org.springframework.core.annotation.AnnotationUtils;
 
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class LLMDocGenerator {
+
     private static final String DOC_END = " */\n";
     private static final String DOC_LINE_START = " * ";
     private static final String FENCE_START = String.valueOf((char) 96).repeat(3) + "typescript\n";
@@ -27,12 +28,14 @@ public class LLMDocGenerator {
         Set<Class<?>> extraTypes = new LinkedHashSet<>();
 
         for (Object service : services) {
-            if (service == null)
+            if (service == null) {
                 continue;
+            }
             Class<?> clazz = AopUtils.getTargetClass(service);
             AgentService agentService = AnnotationUtils.findAnnotation(clazz, AgentService.class);
-            if (agentService == null)
+            if (agentService == null) {
                 continue;
+            }
 
             AgentDoc agentDoc = AnnotationUtils.findAnnotation(clazz, AgentDoc.class);
             if (agentDoc != null) {
@@ -57,8 +60,9 @@ public class LLMDocGenerator {
                 generateTypeSchema(type, sb, discovered);
                 sb.append("\n");
                 for (Class<?> newType : discovered) {
-                    if (visited.add(newType))
+                    if (visited.add(newType)) {
                         queue.add(newType);
+                    }
                 }
             }
         }
@@ -73,11 +77,13 @@ public class LLMDocGenerator {
 
         for (Method m : methods) {
             if (m.getDeclaringClass() == Object.class || m.isBridge() || m.isSynthetic()
-                    || !Modifier.isPublic(m.getModifiers()))
+                    || !Modifier.isPublic(m.getModifiers())) {
                 continue;
+            }
             AgentDoc doc = AnnotationUtils.findAnnotation(m, AgentDoc.class);
-            if (doc == null)
+            if (doc == null) {
                 continue;
+            }
 
             sb.append("    /**\n     * ").append(doc.value()).append("\n");
             Parameter[] params = m.getParameters();
@@ -93,8 +99,9 @@ public class LLMDocGenerator {
             sb.append("     */\n    ").append(m.getName()).append("(");
 
             for (int i = 0; i < params.length; i++) {
-                if (i > 0)
+                if (i > 0) {
                     sb.append(", ");
+                }
                 sb.append(params[i].getName()).append(": ").append(getTypeName(params[i].getType(), extraTypes));
             }
             sb.append("): ").append(getTypeName(m.getReturnType(), extraTypes)).append(";\n\n");
@@ -103,16 +110,21 @@ public class LLMDocGenerator {
     }
 
     private String getGenericTypeName(Type genericType, Set<Class<?>> extraTypes) {
+        if (genericType == null) {
+            throw new IllegalArgumentException("Type must not be null");
+        }
         if (genericType instanceof ParameterizedType pt) {
             Type raw = pt.getRawType();
             String rawName = raw instanceof Class<?> rawClass ? getTypeName(rawClass, extraTypes) : raw.getTypeName();
             Type[] typeArgs = pt.getActualTypeArguments();
-            if (typeArgs.length == 0)
+            if (typeArgs.length == 0) {
                 return rawName;
+            }
             StringBuilder sb = new StringBuilder(rawName).append("<");
             for (int i = 0; i < typeArgs.length; i++) {
-                if (i > 0)
+                if (i > 0) {
                     sb.append(", ");
+                }
                 sb.append(getGenericTypeArgumentName(typeArgs[i], extraTypes));
             }
             return sb.append(">").toString();
@@ -128,8 +140,9 @@ public class LLMDocGenerator {
 
     private String getGenericTypeArgumentName(Type argType, Set<Class<?>> extraTypes) {
         if (argType instanceof Class<?> clazz) {
-            if (clazz.getName().startsWith("org.roxycode.app"))
+            if (clazz.getName().startsWith("org.roxycode.app")) {
                 extraTypes.add(clazz);
+            }
             return clazz.getSimpleName();
         }
         if (argType instanceof WildcardType wt) {
@@ -142,19 +155,25 @@ public class LLMDocGenerator {
     }
 
     private String getTypeName(Class<?> type, Set<Class<?>> extraTypes) {
-        if (type.isArray())
+        if (type.isArray()) {
             return getTypeName(type.getComponentType(), extraTypes) + "[]";
-        if (type == void.class || type == Void.class)
+        }
+        if (type == void.class || type == Void.class) {
             return "void";
-        if (type == String.class)
+        }
+        if (type == String.class) {
             return "string";
-        if (type == boolean.class || type == Boolean.class)
+        }
+        if (type == boolean.class || type == Boolean.class) {
             return "boolean";
+        }
         if (Number.class.isAssignableFrom(type) || type == int.class || type == long.class || type == double.class
-                || type == float.class)
+                || type == float.class) {
             return "number";
-        if (type.getName().startsWith("org.roxycode.app"))
+        }
+        if (type.getName().startsWith("org.roxycode.app")) {
             extraTypes.add(type);
+        }
         return type.getSimpleName();
     }
 
@@ -163,8 +182,9 @@ public class LLMDocGenerator {
             sb.append("enum ").append(type.getSimpleName()).append(" {\n    ");
             Object[] constants = type.getEnumConstants();
             for (int i = 0; i < constants.length; i++) {
-                if (i > 0)
+                if (i > 0) {
                     sb.append(", ");
+                }
                 sb.append(constants[i]);
             }
             sb.append("\n}\n");
