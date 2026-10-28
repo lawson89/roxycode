@@ -369,6 +369,18 @@ public final class FileMentionPopup {
             return;
         }
 
+        updateCandidateListModel(matches);
+        popupActive = true;
+
+        updatePopupPosition(token.startOffset());
+        SwingUtilities.invokeLater(() -> {
+            if (popupActive && activeToken != null) {
+                updatePopupPosition(activeToken.startOffset());
+            }
+        });
+    }
+
+    private void updateCandidateListModel(List<FileCandidate> matches) {
         FileCandidate previousSelection = candidateList.getSelectedValue();
         listModel.clear();
         int selectedIndex = 0;
@@ -381,14 +393,6 @@ public final class FileMentionPopup {
         }
         candidateList.setSelectedIndex(selectedIndex);
         candidateList.ensureIndexIsVisible(selectedIndex);
-        popupActive = true;
-
-        updatePopupPosition(token.startOffset());
-        SwingUtilities.invokeLater(() -> {
-            if (popupActive && activeToken != null) {
-                updatePopupPosition(activeToken.startOffset());
-            }
-        });
     }
 
     void updatePopupPosition(int atTokenStartOffset) {
@@ -398,7 +402,7 @@ public final class FileMentionPopup {
         candidateList.setVisibleRowCount(Math.min(MAX_VISIBLE_ROWS, Math.max(1, listModel.size())));
         popupScrollPane.setPreferredSize(null);
         Dimension listPref = popupScrollPane.getPreferredSize();
-        int availableWidth = resolveAvailableWidth();
+        int availableWidth = resolveAvailableBounds().width;
         int targetWidth = Math.max(MIN_POPUP_WIDTH, Math.min(MAX_POPUP_WIDTH, listPref.width + 24));
         if (availableWidth > 0) {
             targetWidth = Math.min(targetWidth, availableWidth);
@@ -417,15 +421,15 @@ public final class FileMentionPopup {
         }
     }
 
-    private int resolveAvailableWidth() {
+    private Rectangle resolveAvailableBounds() {
         Rectangle visibleRect = inputArea.getVisibleRect();
         if (visibleRect != null && visibleRect.width > 0) {
-            return visibleRect.width;
+            return visibleRect;
         }
-        if (inputArea.getWidth() > 0) {
-            return inputArea.getWidth();
-        }
-        return (inputScrollPane != null && inputScrollPane.getWidth() > 0) ? inputScrollPane.getWidth() : 0;
+        int width = inputArea.getWidth() > 0
+                ? inputArea.getWidth()
+                : (inputScrollPane != null ? Math.max(0, inputScrollPane.getWidth()) : 0);
+        return new Rectangle(0, 0, width, 0);
     }
 
     Point computePopupLocation(int atTokenStartOffset, int popupWidth, int popupHeight) {
@@ -437,13 +441,9 @@ public final class FileMentionPopup {
                 if (rect != null && (rect.getWidth() > 0 || rect.getHeight() > 0 || inputArea.getWidth() > 0)) {
                     int x = (int) Math.round(rect.getX());
                     int y = (int) Math.round(rect.getY()) - popupHeight - POPUP_VERTICAL_GAP;
-                    Rectangle visibleRect = inputArea.getVisibleRect();
-                    int availWidth = resolveAvailableWidth();
-                    if (availWidth > 0) {
-                        boolean hasVis = visibleRect != null && visibleRect.width > 0;
-                        int minX = hasVis ? visibleRect.x : 0;
-                        int rightEdge = hasVis ? visibleRect.x + visibleRect.width : availWidth;
-                        x = Math.max(minX, Math.min(x, Math.max(minX, rightEdge - popupWidth)));
+                    Rectangle bounds = resolveAvailableBounds();
+                    if (bounds.width > 0) {
+                        x = Math.clamp(x, bounds.x, Math.max(bounds.x, bounds.x + bounds.width - popupWidth));
                     } else {
                         x = Math.max(0, x);
                     }

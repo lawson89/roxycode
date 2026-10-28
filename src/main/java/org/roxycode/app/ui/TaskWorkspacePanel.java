@@ -34,7 +34,7 @@ import org.springframework.stereotype.Component;
 public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
-    static final String PHASE_HEADER_TEXT = "CURRENT PHASE";
+    static final String PHASE_HEADER_TEXT = "FEATURE MODE. PHASE";
     static final String PAST_PLANS_TAB_TITLE = "Past Plans";
     static final int MAX_PLAN_TITLE_LENGTH = 40;
 
