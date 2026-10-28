@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ui.SwingTestUtils;
 
@@ -149,5 +150,71 @@ class ImplementationPlanTest {
         assertEquals("", ImplementationPlan.escapeFrontmatterValue(null));
         assertEquals("Quote " + (char) 92 + '"' + " and newline",
                 ImplementationPlan.escapeFrontmatterValue("Quote " + '"' + "\nand\r\nnewline"));
+    }
+
+    @Test
+    void testStepNormalizationAndVerificationGateClassification() {
+        assertEquals("", ImplementationPlan.normalizeStepDescription(null));
+        assertEquals("", ImplementationPlan.normalizeStepDescription("   ..!:;  "));
+        assertEquals("code compiles successfully",
+                ImplementationPlan.normalizeStepDescription("  Code Compiles Successfully.!;:  "));
+
+        assertTrue(ImplementationPlan.isCompileStep("Code compiles successfully"));
+        assertTrue(ImplementationPlan.isCompileStep("  CODE COMPILES SUCCESSFULLY.! "));
+        assertFalse(ImplementationPlan.isCompileStep("Pre-compile regex patterns"));
+
+        assertTrue(ImplementationPlan.isUnitTestStep("Unit tests pass"));
+        assertTrue(ImplementationPlan.isUnitTestStep("unit tests pass:"));
+        assertFalse(ImplementationPlan.isUnitTestStep("Add unit tests for service"));
+
+        assertTrue(ImplementationPlan.isCodeReviewStep("Automated code review passes"));
+        assertTrue(ImplementationPlan.isCodeReviewStep("Automated Code Review Passes;"));
+        assertFalse(ImplementationPlan.isCodeReviewStep("Update code review prompt"));
+
+        assertTrue(ImplementationPlan.isMandatoryVerificationStep(ImplementationPlan.STEP_COMPILE));
+        assertTrue(ImplementationPlan.isMandatoryVerificationStep(ImplementationPlan.STEP_UNIT_TESTS));
+        assertTrue(ImplementationPlan.isMandatoryVerificationStep(ImplementationPlan.STEP_CODE_REVIEW));
+        assertFalse(ImplementationPlan.isMandatoryVerificationStep("Implement feature"));
+    }
+
+    @Test
+    void testWithNormalizedStepsFromCollectIncompleteAndFormatRemaining() {
+        ImplementationPlan prev = createPlan(List.of("R1"),
+                List.of(new ImplementationPlan.TechStep("Step 1", true),
+                        new ImplementationPlan.TechStep("Step 2", false),
+                        new ImplementationPlan.TechStep(ImplementationPlan.STEP_COMPILE, true)),
+                List.of(new ImplementationPlan.LogEntry("t0", "u0", "prev log")));
+
+        assertEquals(Set.of("step 1"), prev.collectCompletedNonVerificationSteps());
+
+        ImplementationPlan nextRaw = createPlan(List.of("R1"),
+                List.of(new ImplementationPlan.TechStep("Step 1.", false),
+                        new ImplementationPlan.TechStep("Step 2a", false)),
+                List.of());
+
+        ImplementationPlan normalized = nextRaw.withNormalizedStepsFrom(prev);
+        assertEquals(5, normalized.technicalSteps().size());
+        assertTrue(normalized.technicalSteps().get(0).completed());
+        assertFalse(normalized.technicalSteps().get(1).completed());
+        assertEquals(ImplementationPlan.STEP_COMPILE, normalized.technicalSteps().get(2).description());
+        assertFalse(normalized.technicalSteps().get(2).completed());
+        assertEquals(ImplementationPlan.STEP_UNIT_TESTS, normalized.technicalSteps().get(3).description());
+        assertEquals(ImplementationPlan.STEP_CODE_REVIEW, normalized.technicalSteps().get(4).description());
+        assertEquals(1, normalized.handoffLog().size());
+
+        assertEquals(List.of("1: Step 2a", "2: Code compiles successfully", "3: Unit tests pass"),
+                normalized.collectIncompleteSteps(true));
+        assertEquals(List.of("1: Step 2a", "2: Code compiles successfully", "3: Unit tests pass",
+                "4: Automated code review passes"), normalized.collectIncompleteSteps(false));
+        assertEquals(
+                "Remaining incomplete steps: [1: Step 2a, 2: Code compiles successfully, 3: Unit tests pass, 4: Automated code review passes]",
+                normalized.formatRemainingIncompleteSteps());
+
+        ImplementationPlan allDone = normalized
+                .withTechnicalSteps(List.of(new ImplementationPlan.TechStep("Step 1", true),
+                        new ImplementationPlan.TechStep(ImplementationPlan.STEP_CODE_REVIEW, true)));
+        assertTrue(allDone.collectIncompleteSteps(false).isEmpty());
+        assertEquals("Remaining incomplete steps: none (all steps completed).",
+                allDone.formatRemainingIncompleteSteps());
     }
 }

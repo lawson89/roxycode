@@ -1,13 +1,20 @@
 package org.roxycode.app.model;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
         List<LogEntry> handoffLog) {
 
     public static final String NO_FILES_CHANGED = "No files changed";
+    public static final String STEP_COMPILE = "Code compiles successfully";
+    public static final String STEP_UNIT_TESTS = "Unit tests pass";
+    public static final String STEP_CODE_REVIEW = "Automated code review passes";
     private static final String CODE_FENCE = "```";
 
     public record TechStep(String description, boolean completed) {
@@ -29,6 +36,105 @@ public record ImplementationPlan(String title, String goal, List<String> require
         requirements = requirements != null ? List.copyOf(requirements) : List.of();
         technicalSteps = technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
         handoffLog = handoffLog != null ? List.copyOf(handoffLog) : List.of();
+    }
+
+    public static String normalizeStepDescription(String description) {
+        if (description == null) {
+            return "";
+        }
+        String trimmed = description.trim();
+        int end = trimmed.length();
+        while (end > 0) {
+            char c = trimmed.charAt(end - 1);
+            if (c == '.' || c == '!' || c == ':' || c == ';' || Character.isWhitespace(c)) {
+                end--;
+            } else {
+                break;
+            }
+        }
+        return trimmed.substring(0, end).toLowerCase(Locale.ROOT);
+    }
+
+    public static boolean isCompileStep(String description) {
+        return normalizeStepDescription(description).equals(STEP_COMPILE.toLowerCase(Locale.ROOT));
+    }
+
+    public static boolean isUnitTestStep(String description) {
+        return normalizeStepDescription(description).equals(STEP_UNIT_TESTS.toLowerCase(Locale.ROOT));
+    }
+
+    public static boolean isCodeReviewStep(String description) {
+        return normalizeStepDescription(description).equals(STEP_CODE_REVIEW.toLowerCase(Locale.ROOT));
+    }
+
+    public static boolean isMandatoryVerificationStep(String description) {
+        return isCompileStep(description) || isUnitTestStep(description) || isCodeReviewStep(description);
+    }
+
+    public Set<String> collectCompletedNonVerificationSteps() {
+        if (technicalSteps.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> completed = new HashSet<>();
+        for (TechStep step : technicalSteps) {
+            if (step.completed() && !isMandatoryVerificationStep(step.description())) {
+                completed.add(normalizeStepDescription(step.description()));
+            }
+        }
+        return Collections.unmodifiableSet(completed);
+    }
+
+    public ImplementationPlan withNormalizedStepsFrom(ImplementationPlan previousPlan) {
+        Set<String> previouslyCompletedSteps = previousPlan != null
+                ? previousPlan.collectCompletedNonVerificationSteps()
+                : Set.of();
+        List<LogEntry> preservedLog = (handoffLog.isEmpty() && previousPlan != null)
+                ? previousPlan.handoffLog()
+                : handoffLog;
+
+        List<TechStep> steps = new ArrayList<>();
+        boolean hasCompile = false;
+        boolean hasTests = false;
+        boolean hasReview = false;
+        for (TechStep s : technicalSteps) {
+            String desc = s.description();
+            boolean preservedCompleted = s.completed() || (!isMandatoryVerificationStep(desc)
+                    && previouslyCompletedSteps.contains(normalizeStepDescription(desc)));
+            steps.add(new TechStep(desc, preservedCompleted));
+            hasCompile |= isCompileStep(desc);
+            hasTests |= isUnitTestStep(desc);
+            hasReview |= isCodeReviewStep(desc);
+        }
+
+        if (!hasCompile) {
+            steps.add(new TechStep(STEP_COMPILE, false));
+        }
+        if (!hasTests) {
+            steps.add(new TechStep(STEP_UNIT_TESTS, false));
+        }
+        if (!hasReview) {
+            steps.add(new TechStep(STEP_CODE_REVIEW, false));
+        }
+
+        return withTechnicalSteps(steps).withHandoffLog(preservedLog);
+    }
+
+    public List<String> collectIncompleteSteps(boolean excludeCodeReviewStep) {
+        List<String> incomplete = new ArrayList<>();
+        for (int i = 0; i < technicalSteps.size(); i++) {
+            TechStep step = technicalSteps.get(i);
+            if (!step.completed() && (!excludeCodeReviewStep || !isCodeReviewStep(step.description()))) {
+                incomplete.add(i + ": " + step.description());
+            }
+        }
+        return incomplete;
+    }
+
+    public String formatRemainingIncompleteSteps() {
+        List<String> remaining = collectIncompleteSteps(false);
+        return remaining.isEmpty()
+                ? "Remaining incomplete steps: none (all steps completed)."
+                : "Remaining incomplete steps: [" + String.join(", ", remaining) + "]";
     }
 
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
