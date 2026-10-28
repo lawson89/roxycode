@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.PromptService;
@@ -32,6 +33,8 @@ class CodebaseCachePanelTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(packerService.forceRegenerateRepoMap())
+                .thenReturn(new EditorResult(true, "# Initial Repo Map", null));
         lenient().when(metaService.loadMeta()).thenReturn(Optional.empty());
         lenient().when(metaService.loadRepoCache()).thenReturn(Optional.empty());
         panel = new CodebaseCachePanel(packerService, metaService, promptService);
@@ -44,18 +47,20 @@ class CodebaseCachePanelTest {
 
     @Test
     void testUpdateImplicitCacheButtonCallsForceRegenerateRepoMap() {
-        SwingTestUtils.awaitCondition(() -> !"Status: Unknown".equals(panel.getStatusLabel().getText()));
+        JButton packButton = SwingTestUtils.findButton(panel, "Update Implicit Cache");
+        assertNotNull(packButton);
+        SwingTestUtils.awaitCondition(() -> packButton.isEnabled()
+                && "Status: No implicit cache found.".equals(panel.getStatusLabel().getText()));
+        verify(packerService, times(1)).forceRegenerateRepoMap();
 
         when(packerService.forceRegenerateRepoMap()).thenReturn(new EditorResult(true, "# Forced Repo Map", null));
         when(metaService.loadRepoCache()).thenReturn(Optional.of("# Forced Repo Map"));
 
-        JButton packButton = SwingTestUtils.findButton(panel, "Update Implicit Cache");
-        assertNotNull(packButton);
         SwingTestUtils.clickOnEdt(packButton);
 
         SwingTestUtils.awaitCondition(
                 () -> "# Forced Repo Map".equals(panel.getRepoMapArea().getText()) && packButton.isEnabled());
-        verify(packerService).forceRegenerateRepoMap();
+        verify(packerService, times(2)).forceRegenerateRepoMap();
         assertEquals("# Forced Repo Map", panel.getRepoMapArea().getText());
     }
 
@@ -82,8 +87,12 @@ class CodebaseCachePanelTest {
     }
 
     @Test
-    void testRefreshStatusRunsAsyncAndUpdatesAreasAndTruncatesLargeContent() {
-        SwingTestUtils.awaitCondition(() -> !"Status: Unknown".equals(panel.getStatusLabel().getText()));
+    void testRefreshStatusAndRegenerationOnProjectAndContextChanges() {
+        JButton packButton = SwingTestUtils.findButton(panel, "Update Implicit Cache");
+        assertNotNull(packButton);
+        SwingTestUtils.awaitCondition(() -> packButton.isEnabled()
+                && "Status: No implicit cache found.".equals(panel.getStatusLabel().getText()));
+        verify(packerService, times(1)).forceRegenerateRepoMap();
 
         ProjectCacheMeta meta = new ProjectCacheMeta("roxycode", LocalDateTime.of(2026, 1, 1, 12, 0), 500L);
         when(metaService.loadMeta()).thenReturn(Optional.of(meta));
@@ -109,7 +118,23 @@ class CodebaseCachePanelTest {
         when(metaService.loadRepoCache()).thenReturn(Optional.of("new project repo map"));
         assertFalse(SwingUtilities.isEventDispatchThread());
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp")));
-        SwingTestUtils.awaitCondition(() -> "new project repo map".equals(panel.getRepoMapArea().getText()));
+        SwingTestUtils.awaitCondition(
+                () -> "new project repo map".equals(panel.getRepoMapArea().getText()) && packButton.isEnabled());
+        verify(packerService, times(2)).forceRegenerateRepoMap();
+
+        when(promptService.getStableContext()).thenReturn("updated global context prompt");
+        panel.onContextChanged(new ContextChangedEvent(true));
+        SwingTestUtils
+                .awaitCondition(() -> "updated global context prompt".equals(panel.getStableContextArea().getText())
+                        && packButton.isEnabled());
+        verify(packerService, times(3)).forceRegenerateRepoMap();
+
+        when(promptService.getStableContext()).thenReturn("updated project context prompt");
+        panel.onContextChanged(new ContextChangedEvent(false));
+        SwingTestUtils
+                .awaitCondition(() -> "updated project context prompt".equals(panel.getStableContextArea().getText())
+                        && packButton.isEnabled());
+        verify(packerService, times(4)).forceRegenerateRepoMap();
 
         when(metaService.loadMeta()).thenReturn(Optional.empty());
         when(metaService.loadRepoCache()).thenReturn(Optional.of("local only repo map"));

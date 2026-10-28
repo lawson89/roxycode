@@ -23,11 +23,13 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -74,11 +76,12 @@ public class PromptService {
     private final ProjectAnalysisService projectAnalysisService;
     private final RepoMapPackerService repoMapPackerService;
     private final MemoryService memoryService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PromptService(ProjectService projectService, SettingsService settingsService, PlanService planService,
             JexlServiceRegistry jexlServiceRegistry, GitService gitService,
             ProjectAnalysisService projectAnalysisService, RepoMapPackerService repoMapPackerService,
-            MemoryService memoryService) {
+            MemoryService memoryService, ApplicationEventPublisher eventPublisher) {
         this.projectService = projectService;
         this.settingsService = settingsService;
         this.planService = planService;
@@ -87,6 +90,7 @@ public class PromptService {
         this.projectAnalysisService = projectAnalysisService;
         this.repoMapPackerService = repoMapPackerService;
         this.memoryService = memoryService;
+        this.eventPublisher = eventPublisher;
     }
 
     public String getStableContext() {
@@ -226,6 +230,9 @@ public class PromptService {
         if (settings != null) {
             settings.setGlobalContextFolders(normalizeFolderList(folders));
             settingsService.saveSettings();
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new ContextChangedEvent(true));
+            }
         }
     }
 
@@ -256,6 +263,9 @@ public class PromptService {
             PathUtils.createParentDirectories(configFile);
             AiConfig.SHARED_TOML_MAPPER.writeValue(configFile.toFile(),
                     new ProjectContextConfig(normalizeFolderList(folders)));
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new ContextChangedEvent(false));
+            }
         } catch (IOException e) {
             log.error("Failed to save project context config {}: {}", configFile, e.getMessage());
             throw new UncheckedIOException("Failed to save project context config", e);

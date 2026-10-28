@@ -2,8 +2,10 @@ package org.roxycode.app.model;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.commons.lang3.StringUtils;
 
 public class AppSettings {
+
     public static final String DEFAULT_THEME = "FlatLaf Light";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 
@@ -39,6 +41,9 @@ public class AppSettings {
     }
 
     public String getTheme() {
+        if (StringUtils.isBlank(theme)) {
+            return DEFAULT_THEME;
+        }
         return theme;
     }
 
@@ -63,6 +68,9 @@ public class AppSettings {
     }
 
     public String getGeminiModel() {
+        if (StringUtils.isBlank(geminiModel)) {
+            return DEFAULT_GEMINI_MODEL;
+        }
         return geminiModel;
     }
 

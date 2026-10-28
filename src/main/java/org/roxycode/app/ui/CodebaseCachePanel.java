@@ -12,6 +12,7 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.PromptService;
@@ -53,12 +54,17 @@ public final class CodebaseCachePanel extends JPanel {
         this.metaService = metaService;
         this.promptService = promptService;
         initComponents();
-        refreshStatus();
+        runPack();
     }
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        Edt.run(this::refreshStatus);
+        Edt.run(this::runPack);
+    }
+
+    @EventListener
+    public void onContextChanged(ContextChangedEvent event) {
+        Edt.run(this::runPack);
     }
 
     static String truncateForDisplay(String text) {
@@ -240,11 +246,13 @@ public final class CodebaseCachePanel extends JPanel {
             protected void done() {
                 try {
                     var result = get();
-                    if (result.success()) {
+                    if (result != null && result.success()) {
                         statusLabel.setText("Repo Map updated successfully.");
                         refreshStatus();
                     } else {
-                        statusLabel.setText("Failed: " + result.errorHint());
+                        String hint = result != null ? result.errorHint() : "Unknown error";
+                        statusLabel.setText("Failed: " + hint);
+                        refreshStatus();
                     }
                 } catch (Exception e) {
                     log.error("Repo map generation failed", e);

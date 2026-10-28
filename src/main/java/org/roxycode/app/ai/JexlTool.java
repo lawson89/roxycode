@@ -7,6 +7,7 @@ import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
+import org.jspecify.annotations.Nullable;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
@@ -15,7 +16,6 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component

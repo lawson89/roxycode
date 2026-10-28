@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -41,8 +40,6 @@ public class RepoMapPackerService {
     private static final int SINGLE_FILE_BATCH_SIZE = 1;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
     private static final char LF = '\n';
-    private static final char SLASH = '/';
-    private static final char BACKSLASH = '\\';
 
     static final Set<String> SOURCE_EXTENSIONS = Set
             .of("java,py,ts,tsx,js,jsx,go,rs,c,cpp,cc,cxx,h,hpp,cs,rb,php,kt,kts,swift,scala".split(","));
@@ -78,7 +75,6 @@ public class RepoMapPackerService {
 
     private String cachedMap = null;
     private long cachedGeneration = 0;
-    private boolean diskCacheEligible = true;
 
     public RepoMapPackerService(ProjectService projectService, ObjectMapper objectMapper, GrepService grepService,
             ProjectCacheMetaService metaService) {
@@ -94,7 +90,7 @@ public class RepoMapPackerService {
 
     @EventListener
     public void handleProjectChanged(ProjectChangedEvent event) {
-        invalidateForProjectChange();
+        invalidateCache();
         log.debug("Repo map invalidated due to project change.");
     }
 
@@ -110,7 +106,6 @@ public class RepoMapPackerService {
             generation.incrementAndGet();
             cachedMap = null;
             cachedGeneration = 0;
-            diskCacheEligible = false;
             skeletonCache.invalidateAll();
         }
         metaService.deleteRepoCache();
@@ -122,20 +117,10 @@ public class RepoMapPackerService {
     }
 
     @SuppressWarnings("PMD.NullAssignment")
-    private synchronized void invalidateForProjectChange() {
-        generation.incrementAndGet();
-        cachedMap = null;
-        cachedGeneration = 0;
-        diskCacheEligible = true;
-        skeletonCache.invalidateAll();
-    }
-
-    @SuppressWarnings("PMD.NullAssignment")
     private synchronized void invalidateForFileChange(String changedRelativePath) {
         generation.incrementAndGet();
         cachedMap = null;
         cachedGeneration = 0;
-        diskCacheEligible = false;
         if (changedRelativePath != null && !changedRelativePath.isBlank()) {
             Path root = projectService.getCurrentProjectRoot();
             if (root != null) {
@@ -152,28 +137,9 @@ public class RepoMapPackerService {
         }
 
         long startGeneration = generation.get();
-        boolean checkDiskCache = false;
         synchronized (this) {
             if (cachedMap != null && cachedGeneration == startGeneration) {
                 return new EditorResult(true, cachedMap, null);
-            }
-            if (diskCacheEligible) {
-                checkDiskCache = true;
-                diskCacheEligible = false;
-            }
-        }
-
-        if (checkDiskCache) {
-            Optional<String> persisted = metaService.loadRepoCache();
-            if (persisted != null && persisted.isPresent() && !persisted.get().isBlank()) {
-                String loaded = persisted.get();
-                synchronized (this) {
-                    if (generation.get() == startGeneration && root.equals(projectService.getCurrentProjectRoot())) {
-                        this.cachedMap = loaded;
-                        this.cachedGeneration = startGeneration;
-                    }
-                }
-                return new EditorResult(true, loaded, null);
             }
         }
 

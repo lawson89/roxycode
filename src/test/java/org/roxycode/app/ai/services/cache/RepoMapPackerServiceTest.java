@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.ui.SwingTestUtils;
@@ -127,33 +128,40 @@ class RepoMapPackerServiceTest {
     }
 
     @Test
-    void testLoadsPersistedRepoCacheOnStartupAndInvalidatesOnFileChanged() throws IOException {
-        when(metaService.loadRepoCache()).thenReturn(Optional.of("# Persisted Repo Map"));
-
-        EditorResult firstResult = service.generateRepoMap();
-        assertTrue(firstResult.success());
-        assertEquals("# Persisted Repo Map", firstResult.content());
-        verify(grepService, never()).listFiles(null);
-
+    void testRegeneratesOnStartupProjectChangedAndFileChanged() throws IOException {
         Path testFile = Files.writeString(tempDir.resolve("Fresh.java"), "public class Fresh {}\n");
         when(grepService.listFiles(null)).thenReturn(List.of("Fresh.java"));
         service.setCtagsRunner(cmd -> new ProcessResult(0, ctagsLine("Fresh", testFile.toString(), 1), "", false));
 
-        service.handleFileChanged(new FileChangedEvent("Fresh.java"));
-        EditorResult secondResult = service.generateRepoMap();
-        assertTrue(secondResult.success());
-        assertTrue(secondResult.content().contains("Fresh.java\n  1: public class Fresh {}"));
+        EditorResult firstResult = service.generateRepoMap();
+        assertTrue(firstResult.success());
+        assertTrue(firstResult.content().contains("Fresh.java\n  1: public class Fresh {}"));
         verify(grepService, times(1)).listFiles(null);
 
         Files.writeString(testFile, "public class FreshUpdated {}\n");
         assertTrue(service.generateRepoMap().content().contains("public class Fresh {}"));
         verify(grepService, times(1)).listFiles(null);
 
+        service.handleFileChanged(new FileChangedEvent("Fresh.java"));
+        EditorResult secondResult = service.generateRepoMap();
+        assertTrue(secondResult.success());
+        assertTrue(secondResult.content().contains("Fresh.java\n  1: public class FreshUpdated {}"));
+        verify(grepService, times(2)).listFiles(null);
+
+        Files.writeString(testFile, "public class FreshAfterProjectChange {}\n");
+        service.handleProjectChanged(new ProjectChangedEvent(tempDir));
+        verify(metaService, times(1)).deleteRepoCache();
+        EditorResult projectChangeResult = service.generateRepoMap();
+        assertTrue(projectChangeResult.success());
+        assertTrue(projectChangeResult.content().contains("Fresh.java\n  1: public class FreshAfterProjectChange {}"));
+        verify(grepService, times(3)).listFiles(null);
+
+        Files.writeString(testFile, "public class FreshForced {}\n");
         EditorResult forcedResult = service.forceRegenerateRepoMap();
         assertTrue(forcedResult.success());
-        assertTrue(forcedResult.content().contains("Fresh.java\n  1: public class FreshUpdated {}"));
-        verify(metaService, times(1)).deleteRepoCache();
-        verify(grepService, times(2)).listFiles(null);
+        assertTrue(forcedResult.content().contains("Fresh.java\n  1: public class FreshForced {}"));
+        verify(metaService, times(2)).deleteRepoCache();
+        verify(grepService, times(4)).listFiles(null);
     }
 
     @Test

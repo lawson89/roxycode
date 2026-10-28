@@ -20,10 +20,12 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.PromptService.ContextFileItem;
 import org.roxycode.app.ui.SwingTestUtils;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class PromptServiceTest {
@@ -42,6 +44,8 @@ class PromptServiceTest {
     private ProjectAnalysisService projectAnalysisService;
     @Mock
     private RepoMapPackerService repoMapPackerService;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private PromptService promptService;
 
@@ -51,7 +55,7 @@ class PromptServiceTest {
     @BeforeEach
     void setUp() {
         promptService = new PromptService(projectService, settingsService, planService, jexlServiceRegistry, gitService,
-                projectAnalysisService, repoMapPackerService, null);
+                projectAnalysisService, repoMapPackerService, null, eventPublisher);
     }
 
     private static void assertContainsNone(String text, String... forbidden) {
@@ -134,6 +138,7 @@ class PromptServiceTest {
 
         promptService.setGlobalContextFolders(List.of("  " + globalDir + "  ", globalDir.toString()));
         verify(settingsService).saveSettings();
+        verify(eventPublisher).publishEvent(new ContextChangedEvent(true));
         assertEquals(List.of(globalDir.toString()), promptService.getGlobalContextFolders());
 
         List<ContextFileItem> globalFiles = promptService.listGlobalContextFiles();
@@ -150,6 +155,7 @@ class PromptServiceTest {
                 "Subdir ignored");
 
         promptService.setProjectContextFolders(List.of("docs", "docs"));
+        verify(eventPublisher).publishEvent(new ContextChangedEvent(false));
         assertEquals(List.of("docs"), promptService.getProjectContextFolders());
 
         List<ContextFileItem> projectFiles = promptService.listProjectContextFiles();
@@ -247,7 +253,8 @@ class PromptServiceTest {
     void testAgentMemoryContextInjectionAndEmptyState() {
         MemoryService memoryService = mock(MemoryService.class);
         PromptService psWithMemory = new PromptService(projectService, settingsService, planService,
-                jexlServiceRegistry, gitService, projectAnalysisService, repoMapPackerService, memoryService);
+                jexlServiceRegistry, gitService, projectAnalysisService, repoMapPackerService, memoryService,
+                eventPublisher);
 
         when(memoryService.readGlobalMemory()).thenReturn("");
         when(memoryService.listGlobalNotes()).thenReturn(List.of());
