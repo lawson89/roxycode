@@ -6,6 +6,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +20,7 @@ import org.roxycode.app.service.ProjectService;
 public class FileReadService {
 
     private static final String DOC_FILE_PATH = "The file path relative to the project root";
-    private static final String DOC_FILE_PATHS = "List of file paths relative to the project root";
+    private static final String DOC_FILE_PATHS = "Array of file paths relative to the project root";
     private static final String ERROR_PREFIX = "Error: ";
     static final int BINARY_SNIFF_BYTES = 8000;
     static final int MAX_BATCH_FILES = 25;
@@ -61,13 +62,21 @@ public class FileReadService {
         return Files.readString(path);
     }
 
-    @AgentDoc(value = "Reads multiple files in a single batch call, returning a map of relativePath to file content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFiles(['pom.xml', 'src/main/java/Main.java', ...])")
-    public Map<String, String> readFiles(@AgentDoc(DOC_FILE_PATHS) List<String> relativePaths) {
+    @AgentDoc(value = "Reads multiple files in a single batch call, returning a map of relativePath to file content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFiles(['pom.xml', 'src/main/java/Main.java'])")
+    public Map<String, String> readFiles(@AgentDoc(DOC_FILE_PATHS) String... relativePaths) {
+        return readBatch(relativePaths == null ? List.of() : Arrays.asList(relativePaths), false);
+    }
+
+    public Map<String, String> readFiles(List<String> relativePaths) {
         return readBatch(relativePaths, false);
     }
 
-    @AgentDoc(value = "Reads multiple files with 1-based line numbers ('<line>: <content>') in a single batch call, returning a map of relativePath to numbered content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFilesNumbered(['src/main/java/Main.java', 'src/main/java/App.java', ...])")
-    public Map<String, String> readFilesNumbered(@AgentDoc(DOC_FILE_PATHS) List<String> relativePaths) {
+    @AgentDoc(value = "Reads multiple files with 1-based line numbers ('<line>: <content>') in a single batch call, returning a map of relativePath to numbered content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFilesNumbered(['src/main/java/Main.java', 'src/main/java/App.java'])")
+    public Map<String, String> readFilesNumbered(@AgentDoc(DOC_FILE_PATHS) String... relativePaths) {
+        return readBatch(relativePaths == null ? List.of() : Arrays.asList(relativePaths), true);
+    }
+
+    public Map<String, String> readFilesNumbered(List<String> relativePaths) {
         return readBatch(relativePaths, true);
     }
 

@@ -11,6 +11,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -20,11 +22,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.BuildResult;
 import org.roxycode.app.ai.services.EditorResult;
+import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.context.ApplicationEventPublisher;
@@ -364,5 +369,23 @@ public class JexlToolTest {
         } finally {
             Thread.interrupted();
         }
+    }
+
+    @Test
+    public void testExecuteJexlFileReadServiceWithArrayLiterals(@TempDir Path tempDir) throws Exception {
+        Files.writeString(tempDir.resolve("a.txt"), "alpha");
+        Files.writeString(tempDir.resolve("b.txt"), "beta");
+        ProjectService projectService = mock(ProjectService.class);
+        when(projectService.resolvePath("a.txt")).thenReturn(tempDir.resolve("a.txt"));
+        when(projectService.resolvePath("b.txt")).thenReturn(tempDir.resolve("b.txt"));
+
+        JexlTool tool = createTool(new FileReadService(projectService));
+        JsonNode plainNode = evalJson(tool, "fileReadService.readFiles(['a.txt', 'b.txt'])");
+        assertEquals("alpha", plainNode.get("a.txt").asText());
+        assertEquals("beta", plainNode.get("b.txt").asText());
+
+        JsonNode numberedNode = evalJson(tool, "fileReadService.readFilesNumbered(['a.txt', 'b.txt'])");
+        assertEquals("1: alpha", numberedNode.get("a.txt").asText());
+        assertEquals("1: beta", numberedNode.get("b.txt").asText());
     }
 }

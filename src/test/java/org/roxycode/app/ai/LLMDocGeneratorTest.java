@@ -33,7 +33,7 @@ class LLMDocGeneratorTest {
         return Stream.of(serviceCase(FileReadService.class, frs,
                 "readLines(relativePath: string, startLine: number, endLine: number): string;",
                 "readFileNumbered(relativePath: string): string;", "getLineCount(relativePath: string): number;",
-                "readFiles(relativePaths: List): Map;", "readFilesNumbered(relativePaths: List): Map;"),
+                "readFiles(relativePaths: string[]): Map;", "readFilesNumbered(relativePaths: string[]): Map;"),
                 serviceCase(FileEditorService.class, new FileEditorService(ps, null),
                         "moveFile(sourcePath: string, targetPath: string): EditorResult;",
                         "copyFile(sourcePath: string, targetPath: string): EditorResult;",

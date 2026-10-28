@@ -96,13 +96,13 @@ When accumulating results dynamically, do not initialize empty collections with 
 ### JEXL Batching & Literal Syntax Rules
 
 1. **Prefer Built-in Batch Helpers for Multi-File Reads and Search-and-Read**:
-   Instead of writing manual loops or multi-key maps to read several files, use the one-liner batch helpers on `fileReadService` and `grepService` (remembering to use the `[..., ...]` list literal syntax for `List<String>` parameters):
+   Instead of writing manual loops or multi-key maps to read several files, use the one-liner batch helpers on `fileReadService` and `grepService`:
    ```javascript
    // Read multiple files in one call (returns Map<String, String>, resilient to missing/binary files)
-   fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.java', ...]);
+   fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.java']);
 
    // Read multiple files with 1-based line numbers in one call
-   fileReadService.readFilesNumbered(['src/main/java/App.java', 'src/main/java/Config.java', ...]);
+   fileReadService.readFilesNumbered(['src/main/java/App.java', 'src/main/java/Config.java']);
 
    // Find matching file paths and immediately read their contents in one call
    grepService.readMatchingFiles('class AuthService', 'src', '*.java');
@@ -115,7 +115,7 @@ When accumulating results dynamically, do not initialize empty collections with 
    When returning multiple heterogeneous results in `executeJexl`, ALWAYS wrap `"key": value` pairs in `{ ... }`:
    ```javascript
    {
-     "files": fileReadService.readFiles(['path/to/FileA.java', 'path/to/FileB.java', ...]),
+     "files": fileReadService.readFiles(['path/to/FileA.java', 'path/to/FileB.java']),
      "matches": grepService.findMatchingFiles('TODO', 'src', '*.java')
    }
    ```

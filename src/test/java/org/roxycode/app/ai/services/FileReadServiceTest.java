@@ -71,7 +71,11 @@ public class FileReadServiceTest {
     @Test
     void testReadFilesAndReadFilesNumberedWithPartialErrors() throws IOException {
         String nl = String.valueOf((char) 10);
-        assertTrue(fileReadService.readFiles(null).isEmpty());
+        assertTrue(fileReadService.readFiles((List<String>) null).isEmpty());
+        assertTrue(fileReadService.readFiles((String[]) null).isEmpty());
+        assertTrue(fileReadService.readFiles(new String[0]).isEmpty());
+        assertTrue(fileReadService.readFilesNumbered((String[]) null).isEmpty());
+        assertTrue(fileReadService.readFilesNumbered(new String[0]).isEmpty());
         assertTrue(fileReadService.readFiles(List.of()).isEmpty());
 
         Files.writeString(tempDir.resolve("a.txt"), "alpha" + nl + "beta");
@@ -104,6 +108,12 @@ public class FileReadServiceTest {
         assertEquals("1: alpha" + nl + "2: beta", numbered.get("a.txt"));
         assertTrue(numbered.get("missing.txt").startsWith("Error: File does not exist:"));
         assertEquals("1: gamma", numbered.get("b.txt"));
+
+        Map<String, String> arrayPlain = fileReadService.readFiles("a.txt", "b.txt");
+        assertEquals(Map.of("a.txt", "alpha" + nl + "beta", "b.txt", "gamma"), arrayPlain);
+
+        Map<String, String> arrayNumbered = fileReadService.readFilesNumbered("a.txt", "b.txt");
+        assertEquals(Map.of("a.txt", "1: alpha" + nl + "2: beta", "b.txt", "1: gamma"), arrayNumbered);
     }
 
     @Test

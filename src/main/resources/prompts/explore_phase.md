@@ -20,15 +20,15 @@ Find files matching a pattern and read their contents (or list matching file pat
 // Read contents of all matching files (up to 10 files) as a Map<String, String>
 grepService.readMatchingFiles('class AuthService', 'src', '*.java');
 
-// Or list matching file paths first and selectively read numbered lines
-var paths = grepService.findMatchingFiles('@AgentService', 'src', '*.java');
-fileReadService.readFilesNumbered(paths);
+// Or list matching file paths via RipGrep (-l)
+grepService.findMatchingFiles('@AgentService', 'src', '*.java');
 ```
 
 ### Pattern: Multi-File Inspection (One-Liner)
-Read multiple files (plain or line-numbered) in a single resilient batch call using a `List` literal `[..., ...]`:
+Read multiple files (plain or line-numbered) in a single resilient batch call using an array literal `[...]`:
 ```javascript
-fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.java', ...]);
+fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.java']);
+fileReadService.readFilesNumbered(['src/main/java/App.java', 'src/main/java/Config.java']);
 ```
 
 ### CRITICAL INSTRUCTION: Batch Reading
