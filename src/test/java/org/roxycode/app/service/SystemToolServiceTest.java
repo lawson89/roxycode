@@ -65,8 +65,47 @@ class SystemToolServiceTest {
             assertFalse(tool.description().isBlank());
             assertFalse(tool.license().isBlank());
             assertTrue(tool.websiteUrl().startsWith("https://"));
+            assertEquals(!SystemTool.TOOL_DOCKER.equals(tool.name()), tool.required());
         }
+        assertTrue(SystemTool.defaultRequiredFor(SystemTool.TOOL_RIPGREP));
+        assertTrue(SystemTool.defaultRequiredFor(SystemTool.TOOL_GIT));
+        assertTrue(SystemTool.defaultRequiredFor(SystemTool.TOOL_CTAGS));
+        assertFalse(SystemTool.defaultRequiredFor(SystemTool.TOOL_DOCKER));
+        assertFalse(SystemTool.defaultRequiredFor("CustomTool"));
         assertEquals(service.checkDockerAvailable(), service.isDockerAvailable().get());
+    }
+
+    @Test
+    void testAreAllRequiredToolsDetectedAndCheckRequiredToolsAvailable() {
+        assertFalse(SystemToolService.areAllRequiredToolsDetected(null));
+        assertFalse(SystemToolService.areAllRequiredToolsDetected(List.of()));
+
+        List<SystemTool> allRequiredDetectedDockerMissing = List.of(
+                SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "2.43.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_CTAGS, "5.9.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_DOCKER, "Not found", SystemToolService.STATUS_MISSING));
+        assertTrue(SystemToolService.areAllRequiredToolsDetected(allRequiredDetectedDockerMissing));
+
+        List<SystemTool> ctagsMissing = List.of(
+                SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "2.43.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_CTAGS, "Not found", SystemToolService.STATUS_MISSING),
+                SystemTool.ofKnownTool(SystemTool.TOOL_DOCKER, "28.0.0", SystemToolService.STATUS_DETECTED));
+        assertFalse(SystemToolService.areAllRequiredToolsDetected(ctagsMissing));
+
+        List<SystemTool> incompleteList = List.of(
+                SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "2.43.0", SystemToolService.STATUS_DETECTED));
+        assertFalse(SystemToolService.areAllRequiredToolsDetected(incompleteList));
+
+        SystemToolService service = new SystemToolService(null, null, null);
+        service.setToolProber(() -> allRequiredDetectedDockerMissing);
+        assertTrue(service.checkRequiredToolsAvailable());
+
+        service.setToolProber(() -> ctagsMissing);
+        service.refreshTools().join();
+        assertFalse(service.checkRequiredToolsAvailable());
     }
 
     @Test

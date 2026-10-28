@@ -1,13 +1,20 @@
 package org.roxycode.app.ui;
 
 import java.awt.CardLayout;
+import java.awt.GraphicsEnvironment;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,10 +33,12 @@ public final class MainFrame extends JFrame {
     static final String TASK_VIEW = "TASK_VIEW";
     private static final String CACHE_VIEW = "CACHE";
     private static final String API_VIEW = "API";
-    private static final String TOOLS_VIEW = "TOOLS";
+    static final String TOOLS_VIEW = "TOOLS";
     private static final String SETTINGS_VIEW = "SETTINGS";
     private static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
+    static final String MISSING_REQUIRED_TOOLS_TITLE = "Required System Tools Missing";
+    static final String MISSING_REQUIRED_TOOLS_MESSAGE = "RoxyCode requires Ripgrep, Git, and Universal Ctags to function properly. Please review the System Tools page to install or configure any missing required tools.";
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
@@ -40,6 +49,11 @@ public final class MainFrame extends JFrame {
     private final HeaderPanel header;
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
+    private SidebarPanel sidebar;
+    private String currentCard = QA_VIEW;
+    private String lastMissingToolsMessage;
+    private boolean pendingMissingToolsAlert;
+    private transient Consumer<String> missingToolsDialogPresenter;
 
     public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
             HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
@@ -57,6 +71,7 @@ public final class MainFrame extends JFrame {
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 contextManagerPanel);
+        checkRequiredSystemToolsOnStartup(systemToolsPanel);
     }
 
     @EventListener
@@ -87,8 +102,13 @@ public final class MainFrame extends JFrame {
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowOpened(java.awt.event.WindowEvent e) {
-                if (qaWorkspacePanel != null)
+                if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null) {
                     qaWorkspacePanel.focusChatInput();
+                }
+                if (pendingMissingToolsAlert) {
+                    pendingMissingToolsAlert = false;
+                    Edt.run(() -> showMissingToolsOptionPane(MISSING_REQUIRED_TOOLS_MESSAGE));
+                }
             }
         });
 
@@ -106,7 +126,7 @@ public final class MainFrame extends JFrame {
             ContextManagerPanel contextManagerPanel) {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
-        SidebarPanel sidebar = new SidebarPanel(this::showCard);
+        sidebar = new SidebarPanel(this::showCard);
         qaWorkspacePanel.bindSidebar(sidebar);
         taskWorkspacePanel.bindSidebar(sidebar);
 
@@ -130,13 +150,69 @@ public final class MainFrame extends JFrame {
         showCard(QA_VIEW);
     }
 
+    private void checkRequiredSystemToolsOnStartup(SystemToolsPanel systemToolsPanel) {
+        if (systemToolsPanel == null)
+            return;
+        CompletableFuture<List<SystemTool>> future = systemToolsPanel.getInitialToolsFuture();
+        if (future == null)
+            return;
+        future.whenComplete((tools, ex) -> {
+            if (ex == null && tools != null) {
+                Edt.run(() -> handleStartupToolsCheck(tools));
+            }
+        });
+    }
+
+    void handleStartupToolsCheck(List<SystemTool> tools) {
+        if (tools == null || tools.isEmpty() || SystemToolService.areAllRequiredToolsDetected(tools)) {
+            return;
+        }
+        showCard(TOOLS_VIEW);
+        lastMissingToolsMessage = MISSING_REQUIRED_TOOLS_MESSAGE;
+        if (missingToolsDialogPresenter != null) {
+            missingToolsDialogPresenter.accept(MISSING_REQUIRED_TOOLS_MESSAGE);
+        } else if (!GraphicsEnvironment.isHeadless()) {
+            if (isShowing()) {
+                showMissingToolsOptionPane(MISSING_REQUIRED_TOOLS_MESSAGE);
+            } else {
+                pendingMissingToolsAlert = true;
+            }
+        }
+    }
+
+    private void showMissingToolsOptionPane(String message) {
+        if (!GraphicsEnvironment.isHeadless()) {
+            JOptionPane.showMessageDialog(this, message, MISSING_REQUIRED_TOOLS_TITLE, JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
     void showCard(String cardName) {
+        this.currentCard = cardName;
+        if (sidebar != null) {
+            sidebar.selectCard(cardName);
+        }
         cardLayout.show(contentArea, cardName);
         if (QA_VIEW.equals(cardName) && qaWorkspacePanel != null) {
             qaWorkspacePanel.focusChatInput();
         } else if (TASK_VIEW.equals(cardName) && taskWorkspacePanel != null) {
             taskWorkspacePanel.onViewShown();
         }
+    }
+
+    void setMissingToolsDialogPresenter(Consumer<String> presenter) {
+        this.missingToolsDialogPresenter = presenter;
+    }
+
+    String getLastMissingToolsMessage() {
+        return lastMissingToolsMessage;
+    }
+
+    String getCurrentCard() {
+        return currentCard;
+    }
+
+    SidebarPanel getSidebar() {
+        return sidebar;
     }
 
     HeaderPanel getHeader() {

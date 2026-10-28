@@ -219,6 +219,31 @@ public class SystemToolService {
         return STATUS_DETECTED.equals(detectDockerTool().status());
     }
 
+    public boolean checkRequiredToolsAvailable() {
+        List<SystemTool> tools;
+        synchronized (this) {
+            tools = hasCachedTools() ? cachedTools : null;
+        }
+        if (tools == null) {
+            tools = detectTools().join();
+        }
+        return areAllRequiredToolsDetected(tools);
+    }
+
+    public static boolean areAllRequiredToolsDetected(List<SystemTool> tools) {
+        if (tools == null || tools.isEmpty()) {
+            return false;
+        }
+        for (String requiredName : SystemTool.REQUIRED_TOOL_NAMES) {
+            boolean foundDetected = tools.stream()
+                    .anyMatch(t -> t != null && requiredName.equals(t.name()) && STATUS_DETECTED.equals(t.status()));
+            if (!foundDetected) {
+                return false;
+            }
+        }
+        return tools.stream().filter(t -> t != null && t.required()).allMatch(t -> STATUS_DETECTED.equals(t.status()));
+    }
+
     static boolean isDockerDetected(List<SystemTool> tools) {
         return tools != null
                 && tools.stream().anyMatch(t -> DOCKER.equals(t.name()) && STATUS_DETECTED.equals(t.status()));

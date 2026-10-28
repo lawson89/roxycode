@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.awt.Container;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -19,10 +20,11 @@ import org.roxycode.app.ui.SystemToolsPanel.ToolCard;
 
 public class SystemToolsPanelTest {
 
-    private static void assertCardState(ToolCard card, String name, String status, Codicons statusIcon,
-            Codicons nameIcon) {
+    private static void assertCardState(ToolCard card, String name, String status, String expectedRequirementText,
+            Codicons statusIcon, Codicons nameIcon) {
         assertEquals(name, card.getNameLabel().getText());
         assertEquals(status, card.getStatusBadge().getText());
+        assertEquals(expectedRequirementText, card.getRequirementBadge().getText());
         assertEquals(statusIcon, assertInstanceOf(FontIcon.class, card.getStatusBadge().getIcon()).getIkon());
         assertEquals(nameIcon, assertInstanceOf(FontIcon.class, card.getNameLabel().getIcon()).getIkon());
     }
@@ -42,6 +44,7 @@ public class SystemToolsPanelTest {
         assertEquals(1, panel.getToolCards().size());
         ToolCard card = panel.getToolCards().get(0);
         assertEquals("Ripgrep", card.getNameLabel().getText());
+        assertEquals("Required", card.getRequirementBadge().getText());
         assertEquals("ripgrep 14.1.0", card.getVersionBadge().getText());
         assertEquals("Detected", card.getStatusBadge().getText());
         assertEquals("Fast search", card.getDescriptionArea().getText());
@@ -83,6 +86,7 @@ public class SystemToolsPanelTest {
         assertEquals(1, panel.getToolCards().size());
         ToolCard card = panel.getToolCards().get(0);
         assertEquals("Test Tool", card.getNameLabel().getText());
+        assertEquals("Optional", card.getRequirementBadge().getText());
         assertEquals("1.0", card.getVersionBadge().getText());
         assertEquals("Detected", card.getStatusBadge().getText());
         assertEquals("Description", card.getDescriptionArea().getText());
@@ -106,9 +110,11 @@ public class SystemToolsPanelTest {
         SwingTestUtils.flushEdt();
 
         assertEquals(3, panel.getToolCards().size());
-        assertCardState(panel.getToolCards().get(0), "Git", "Detected", Codicons.CHECK, Codicons.SOURCE_CONTROL);
-        assertCardState(panel.getToolCards().get(1), "Docker", "Error", Codicons.WARNING, Codicons.SERVER_ENVIRONMENT);
-        assertCardState(panel.getToolCards().get(2), "Universal Ctags", "Missing", Codicons.ERROR,
+        assertCardState(panel.getToolCards().get(0), "Git", "Detected", "Required", Codicons.CHECK,
+                Codicons.SOURCE_CONTROL);
+        assertCardState(panel.getToolCards().get(1), "Docker", "Error", "Optional", Codicons.WARNING,
+                Codicons.SERVER_ENVIRONMENT);
+        assertCardState(panel.getToolCards().get(2), "Universal Ctags", "Missing", "Required", Codicons.ERROR,
                 Codicons.SYMBOL_CLASS);
     }
 
@@ -143,23 +149,9 @@ public class SystemToolsPanelTest {
     }
 
     @Test
-    public void testRoxyCodeInitializeSystemToolsDuringSplashScreen() {
-        SystemToolService service = mock(SystemToolService.class);
-        when(service.hasCachedTools()).thenReturn(false);
-        when(service.detectTools()).thenReturn(
-                CompletableFuture.completedFuture(List.of(new SystemTool("Git", "2.43.0", "Detected", "VCS"))));
-
-        SplashScreenWindow splash = mock(SplashScreenWindow.class);
-        RoxyCode.initializeSystemTools(service, splash);
-        SwingTestUtils.flushEdt();
-        verify(splash, times(1)).setStatus("Checking system tools...");
-        verify(service, times(1)).detectTools();
-
-        when(service.hasCachedTools()).thenReturn(true);
-        RoxyCode.initializeSystemTools(service, splash);
-        SwingTestUtils.flushEdt();
-        verify(splash, times(1)).setStatus("Checking system tools...");
-        verify(service, times(1)).detectTools();
+    public void testRoxyCodeDoesNotExposeSplashSystemToolsInitializer() {
+        assertFalse(Arrays.stream(RoxyCode.class.getDeclaredMethods())
+                .anyMatch(m -> "initializeSystemTools".equals(m.getName())));
     }
 
     @Test

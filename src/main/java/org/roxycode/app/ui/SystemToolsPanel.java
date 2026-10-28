@@ -45,6 +45,8 @@ public final class SystemToolsPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(SystemToolsPanel.class);
     static final String SUBTITLE_TEXT = "External CLI utilities and runtimes used by RoxyCode for search, version control, symbol indexing, and isolated builds.";
+    static final String REQUIRED_BADGE_TEXT = "Required";
+    static final String OPTIONAL_BADGE_TEXT = "Optional";
     private static final String MIG_COL_GROW_FILL = "[0:0, grow, fill]";
     private static final String MIG_GROWX_WMIN_ZERO = "growx, wmin 0";
 
@@ -57,6 +59,8 @@ public final class SystemToolsPanel extends JPanel {
     private final JScrollPane scrollPane;
     private final List<ToolCard> toolCards = new ArrayList<>();
     private transient Consumer<URI> browserLauncher = SystemToolsPanel::browseWithDesktop;
+    private transient volatile CompletableFuture<List<SystemTool>> initialToolsFuture = CompletableFuture
+            .completedFuture(List.of());
 
     public SystemToolsPanel(SystemToolService toolService) {
         this.toolService = toolService;
@@ -107,12 +111,17 @@ public final class SystemToolsPanel extends JPanel {
         CompletableFuture<List<SystemTool>> future = toolService.detectTools();
         if (future == null)
             return;
+        this.initialToolsFuture = future;
         if (future.isDone() && !future.isCompletedExceptionally()) {
             List<SystemTool> immediate = future.join();
             Edt.run(() -> populateCards(immediate));
             return;
         }
         runAsyncToolLoad(future);
+    }
+
+    CompletableFuture<List<SystemTool>> getInitialToolsFuture() {
+        return initialToolsFuture;
     }
 
     public CompletableFuture<List<SystemTool>> refreshTools() {
@@ -283,6 +292,7 @@ public final class SystemToolsPanel extends JPanel {
 
         private final transient SystemTool tool;
         private final JLabel nameLabel;
+        private final JLabel requirementBadge;
         private final JLabel statusBadge;
         private final JTextArea descriptionArea;
         private final JLabel versionBadge;
@@ -294,13 +304,16 @@ public final class SystemToolsPanel extends JPanel {
             setLayout(new MigLayout("fillx, wrap 1, insets 14 16 14 16, gapy 8", MIG_COL_GROW_FILL, ""));
             setOpaque(true);
 
-            JPanel headerRow = new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow][right]", "[center]"));
+            JPanel headerRow = new JPanel(new MigLayout("fillx, insets 0, gapx 8", "[][0:0, grow][right]", "[center]"));
             headerRow.setOpaque(false);
 
             nameLabel = new JLabel(tool.name());
             nameLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
             nameLabel.setIconTextGap(8);
             headerRow.add(nameLabel, "left, wmin 0");
+
+            requirementBadge = new JLabel(tool.required() ? REQUIRED_BADGE_TEXT : OPTIONAL_BADGE_TEXT);
+            headerRow.add(requirementBadge, "left");
 
             statusBadge = new JLabel(tool.status());
             statusBadge.setHorizontalTextPosition(SwingConstants.RIGHT);
@@ -375,6 +388,10 @@ public final class SystemToolsPanel extends JPanel {
             applyStatusBadgeStyle();
 
             String pillBg = dark ? "lighten($Panel.background, 7%)" : "darken($Panel.background, 5%)";
+            requirementBadge.putClientProperty(FlatClientProperties.STYLE,
+                    "font: -1; arc: 999; border: 2,8,2,8," + borderHex + ",1,999; background: " + pillBg);
+            requirementBadge.setForeground(mutedColor);
+
             versionBadge.putClientProperty(FlatClientProperties.STYLE,
                     "font: $monospaced.font -1; arc: 8; border: 3,8,3,8," + borderHex + ",1,8; background: " + pillBg);
             versionBadge.setForeground(fgColor);
@@ -425,6 +442,10 @@ public final class SystemToolsPanel extends JPanel {
 
         JLabel getNameLabel() {
             return nameLabel;
+        }
+
+        JLabel getRequirementBadge() {
+            return requirementBadge;
         }
 
         JLabel getStatusBadge() {

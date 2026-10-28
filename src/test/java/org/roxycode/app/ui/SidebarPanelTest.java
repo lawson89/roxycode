@@ -87,10 +87,12 @@ class SidebarPanelTest {
         JButton qaBtn = SwingTestUtils.findButton(sidebar, "Codebase Q&A");
         JButton taskBtn = SwingTestUtils.findButton(sidebar, "Feature Request");
         JButton contextBtn = SwingTestUtils.findButton(sidebar, "Context");
+        JButton toolsBtn = SwingTestUtils.findButton(sidebar, "System Tools");
 
         assertNotNull(qaBtn);
         assertNotNull(taskBtn);
         assertNotNull(contextBtn);
+        assertNotNull(toolsBtn);
         assertEquals(Codicons.GIT_PULL_REQUEST, assertInstanceOf(FontIcon.class, taskBtn.getIcon()).getIkon());
         assertTrue(qaBtn.isSelected());
         assertFalse(taskBtn.isSelected());
@@ -101,6 +103,15 @@ class SidebarPanelTest {
         verify(navAction).accept("TASK_VIEW");
         contextBtn.doClick();
         verify(navAction).accept("CONTEXT_MGR");
+
+        sidebar.selectCard("TOOLS");
+        assertTrue(toolsBtn.isSelected());
+        assertFalse(contextBtn.isSelected());
+        assertFalse(qaBtn.isSelected());
+
+        sidebar.selectCard("QA_VIEW");
+        assertTrue(qaBtn.isSelected());
+        assertFalse(toolsBtn.isSelected());
     }
 
     @Test

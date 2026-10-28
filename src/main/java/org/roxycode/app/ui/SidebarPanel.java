@@ -3,7 +3,9 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Font;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -17,6 +19,7 @@ public final class SidebarPanel extends JPanel {
     static final int LOGO_SIZE = 88;
     private final Consumer<String> navigationAction;
     private final List<NavButton> navButtons = new ArrayList<>();
+    private final Map<String, NavButton> cardButtons = new LinkedHashMap<>();
     private NavButton qaBtn;
     private NavButton taskBtn;
 
@@ -72,6 +75,13 @@ public final class SidebarPanel extends JPanel {
         return brandingPanel;
     }
 
+    public void selectCard(String cardName) {
+        NavButton btn = cardButtons.get(cardName);
+        if (btn != null) {
+            updateSelection(btn);
+        }
+    }
+
     public void setQaBusy(boolean busy) {
         if (qaBtn != null)
             qaBtn.setBusy(busy);
@@ -118,6 +128,7 @@ public final class SidebarPanel extends JPanel {
             navigationAction.accept(cardName);
         });
         navButtons.add(btn);
+        cardButtons.put(cardName, btn);
         return btn;
     }
 }

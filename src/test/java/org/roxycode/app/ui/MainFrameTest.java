@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import net.miginfocom.swing.MigLayout;
@@ -22,6 +24,7 @@ import org.roxycode.app.ai.services.*;
 import org.roxycode.app.ai.services.cache.*;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.*;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -40,7 +43,11 @@ class MainFrameTest {
 
         AiService aiService = mock(AiService.class);
         SystemToolService toolService = mock(SystemToolService.class);
-        when(toolService.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of()));
+        when(toolService.detectTools()).thenReturn(CompletableFuture.completedFuture(List.of(
+                SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "2.43.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_CTAGS, "5.9.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_DOCKER, "Not found", SystemToolService.STATUS_MISSING))));
         GitService gitService = mock(GitService.class);
         EnvironmentService envService = mock(EnvironmentService.class);
         JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
@@ -67,9 +74,12 @@ class MainFrameTest {
                 new SettingsPanel(settingsService),
                 new BuildConfigPanel(mock(GenericBuildToolService.class), settingsService, toolService),
                 new ContextManagerPanel(promptService));
+        SwingTestUtils.flushEdt();
 
         assertEquals(1, MainFrame.class.getDeclaredConstructors().length);
         assertEquals("RoxyCode - [OldProject]", mainFrame.getTitle());
+        assertEquals(MainFrame.QA_VIEW, mainFrame.getCurrentCard());
+        assertNull(mainFrame.getLastMissingToolsMessage());
 
         MigLayout rootLayout = assertInstanceOf(MigLayout.class, mainFrame.getContentPane().getLayout());
         assertEquals("[210!, fill]0[fill, grow]", rootLayout.getColumnConstraints());
@@ -127,6 +137,75 @@ class MainFrameTest {
             verify(planService).resetWorkflow();
             verify(chatMemory).clear(ChatModel.QA_CONVERSATION_ID);
             verify(chatMemory).clear(ChatModel.TASK_CONVERSATION_ID);
+        } finally {
+            SwingTestUtils.runOnEdt(mainFrame::dispose);
+        }
+    }
+
+    @Test
+    void testMissingRequiredToolOnStartupSwitchesToSystemToolsViewAndShowsAlert() throws Exception {
+        Assumptions.assumeFalse(GraphicsEnvironment.isHeadless(), "Skipping JFrame test in headless environment");
+        SettingsService settingsService = mock(SettingsService.class);
+        when(settingsService.getSettings()).thenReturn(new AppSettings());
+        ProjectService projectService = mock(ProjectService.class);
+        when(projectService.getProjectName()).thenReturn("TestProject");
+
+        PlanService planService = mock(PlanService.class);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+
+        AiService aiService = mock(AiService.class);
+        SystemToolService toolService = mock(SystemToolService.class);
+        CompletableFuture<List<SystemTool>> pendingToolsFuture = new CompletableFuture<>();
+        when(toolService.detectTools()).thenReturn(pendingToolsFuture);
+        GitService gitService = mock(GitService.class);
+        EnvironmentService envService = mock(EnvironmentService.class);
+        JexlServiceRegistry jexlServiceRegistry = mock(JexlServiceRegistry.class);
+        when(jexlServiceRegistry.getDocumentation(any())).thenReturn("");
+        ApplicationEventPublisher pub = mock(ApplicationEventPublisher.class);
+        PromptService promptService = mock(PromptService.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+
+        ExploreChatPanel exploreChatPanel = new ExploreChatPanel(aiService, planService, pub, chatMemory,
+                settingsService, null, null, envService);
+        FeatureChatPanel featureChatPanel = new FeatureChatPanel(aiService, planService, pub, chatMemory,
+                settingsService, null);
+
+        HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
+        QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel, null);
+        TaskWorkspacePanel taskWorkspacePanel = new TaskWorkspacePanel(featureChatPanel, planService,
+                new PlanPanel(planService, gitService), null);
+
+        MainFrame mainFrame = new MainFrame(settingsService, projectService, chatMemory, headerPanel,
+                new StatusPanel(envService), qaWorkspacePanel, taskWorkspacePanel,
+                new CodebaseCachePanel(mock(RepoMapPackerService.class), mock(ProjectCacheMetaService.class),
+                        promptService),
+                new JexlApiPanel(jexlServiceRegistry), new SystemToolsPanel(toolService),
+                new SettingsPanel(settingsService),
+                new BuildConfigPanel(mock(GenericBuildToolService.class), settingsService, toolService),
+                new ContextManagerPanel(promptService));
+
+        AtomicReference<String> dialogMessage = new AtomicReference<>();
+        mainFrame.setMissingToolsDialogPresenter(dialogMessage::set);
+
+        try {
+            assertEquals(MainFrame.QA_VIEW, mainFrame.getCurrentCard());
+            pendingToolsFuture.complete(List.of(
+                    SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
+                    SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "2.43.0", SystemToolService.STATUS_DETECTED),
+                    SystemTool.ofKnownTool(SystemTool.TOOL_CTAGS, "Not found", SystemToolService.STATUS_MISSING),
+                    SystemTool.ofKnownTool(SystemTool.TOOL_DOCKER, "28.0.0", SystemToolService.STATUS_DETECTED)));
+            SwingTestUtils.flushEdt();
+
+            assertEquals(MainFrame.TOOLS_VIEW, mainFrame.getCurrentCard());
+            assertEquals(MainFrame.MISSING_REQUIRED_TOOLS_MESSAGE, dialogMessage.get());
+            assertEquals(MainFrame.MISSING_REQUIRED_TOOLS_MESSAGE, mainFrame.getLastMissingToolsMessage());
+
+            JButton toolsBtn = SwingTestUtils.findButton(mainFrame.getSidebar(), "System Tools");
+            JButton qaBtn = SwingTestUtils.findButton(mainFrame.getSidebar(), "Codebase Q&A");
+            assertNotNull(toolsBtn);
+            assertNotNull(qaBtn);
+            assertTrue(toolsBtn.isSelected());
+            assertFalse(qaBtn.isSelected());
         } finally {
             SwingTestUtils.runOnEdt(mainFrame::dispose);
         }
