@@ -1,6 +1,7 @@
 package org.roxycode.app.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -13,6 +14,7 @@ public class AppSettingsTest {
         AppSettings settings = new AppSettings();
         assertEquals("FlatLaf Light", settings.getTheme());
         assertEquals("gemini-3.5-flash", settings.getGeminiModel());
+        assertFalse(settings.isLogToolCalls());
         assertTrue(settings.getGlobalContextFolders().isEmpty());
     }
 
@@ -30,6 +32,14 @@ public class AppSettingsTest {
         assertEquals(50, settings.getMaxChatMemoryMessages());
         settings.setMaxChatMemoryMessages(100);
         assertEquals(100, settings.getMaxChatMemoryMessages());
+    }
+
+    @Test
+    void testLogToolCalls() {
+        AppSettings settings = new AppSettings();
+        assertFalse(settings.isLogToolCalls());
+        settings.setLogToolCalls(true);
+        assertTrue(settings.isLogToolCalls());
     }
 
     @Test
@@ -51,6 +61,7 @@ public class AppSettingsTest {
         original.setGeminiModel("gemini-3.5-pro");
         original.setMaxAgentToolTurns(12);
         original.setMaxChatMemoryMessages(80);
+        original.setLogToolCalls(true);
         original.setGlobalContextFolders(List.of("/context/one", "/context/two"));
 
         AppSettings copy = original.copy();
@@ -60,11 +71,14 @@ public class AppSettingsTest {
         assertEquals("gemini-3.5-pro", copy.getGeminiModel());
         assertEquals(12, copy.getMaxAgentToolTurns());
         assertEquals(80, copy.getMaxChatMemoryMessages());
+        assertTrue(copy.isLogToolCalls());
         assertEquals(List.of("/context/one", "/context/two"), copy.getGlobalContextFolders());
 
         original.setTheme("FlatLaf Light");
+        original.setLogToolCalls(false);
         original.setGlobalContextFolders(List.of("/context/mutated"));
         assertEquals("FlatLaf Dark", copy.getTheme());
+        assertTrue(copy.isLogToolCalls());
         assertEquals(List.of("/context/one", "/context/two"), copy.getGlobalContextFolders());
     }
 }

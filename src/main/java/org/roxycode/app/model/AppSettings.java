@@ -13,6 +13,7 @@ public class AppSettings {
     private String geminiModel = DEFAULT_GEMINI_MODEL;
     private int maxAgentToolTurns = 5;
     private int maxChatMemoryMessages = 50;
+    private boolean logToolCalls = false;
     private List<String> globalContextFolders = new ArrayList<>();
 
     public AppSettings() {
@@ -26,6 +27,7 @@ public class AppSettings {
             this.geminiModel = other.geminiModel;
             this.maxAgentToolTurns = other.maxAgentToolTurns;
             this.maxChatMemoryMessages = other.maxChatMemoryMessages;
+            this.logToolCalls = other.logToolCalls;
             this.globalContextFolders = other.globalContextFolders == null
                     ? new ArrayList<>()
                     : new ArrayList<>(other.globalContextFolders);
@@ -82,6 +84,14 @@ public class AppSettings {
 
     public void setMaxChatMemoryMessages(int maxChatMemoryMessages) {
         this.maxChatMemoryMessages = maxChatMemoryMessages;
+    }
+
+    public boolean isLogToolCalls() {
+        return logToolCalls;
+    }
+
+    public void setLogToolCalls(boolean logToolCalls) {
+        this.logToolCalls = logToolCalls;
     }
 
     public List<String> getGlobalContextFolders() {

@@ -38,14 +38,17 @@ class SettingsPanelTest {
     void testSaveLiveSettingsShowsAppliedAndPreservesRestartLegendAfterTimer() {
         assertEquals(SettingsPanel.RESTART_LEGEND_TEXT, settingsPanel.getLegendLabel().getText());
         assertEquals("", settingsPanel.getStatusLabel().getText());
+        assertFalse(settingsPanel.getLogToolCallsCheckBox().isSelected());
 
         settingsPanel.getMaxAgentToolTurnsSpinner().setValue(12);
+        settingsPanel.getLogToolCallsCheckBox().setSelected(true);
         JButton saveButton = SwingTestUtils.findButton(settingsPanel, "Save Settings");
         assertNotNull(saveButton);
         saveButton.doClick();
 
         verify(settingsService, times(1)).saveSettings();
         assertEquals(12, settings.getMaxAgentToolTurns());
+        assertTrue(settings.isLogToolCalls());
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
 
         for (ActionListener listener : settingsPanel.getStatusTimer().getActionListeners()) {

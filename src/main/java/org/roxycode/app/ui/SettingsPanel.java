@@ -44,6 +44,7 @@ public final class SettingsPanel extends JPanel {
     private final JSpinner maxMessagesSpinner;
     private final JPasswordField geminiApiKeyField;
     private final JSpinner maxAgentToolTurnsSpinner;
+    private final JCheckBox logToolCallsCheckBox;
     private final JButton saveButton;
     private final JLabel legendLabel;
     private final JLabel statusLabel;
@@ -85,6 +86,11 @@ public final class SettingsPanel extends JPanel {
         maxMessagesSpinner = new JSpinner(
                 new SpinnerNumberModel(settingsService.getSettings().getMaxChatMemoryMessages(), 1, 500, 5));
         add(maxMessagesSpinner, MIG_WRAP);
+
+        add(new JLabel("Log Tool Calls & Results:"));
+        logToolCallsCheckBox = new JCheckBox("Write tool calls and results to ~/.roxycode/logs/toolcalls.log");
+        logToolCallsCheckBox.setSelected(settingsService.getSettings().isLogToolCalls());
+        add(logToolCallsCheckBox, MIG_WRAP);
 
         legendLabel = new JLabel(RESTART_LEGEND_TEXT);
         legendLabel.setFont(legendLabel.getFont().deriveFont(Font.ITALIC, 11f));
@@ -160,6 +166,7 @@ public final class SettingsPanel extends JPanel {
             settings.setGeminiModel(selectedModel.apiName());
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
+        settings.setLogToolCalls(logToolCallsCheckBox.isSelected());
         settingsService.saveSettings();
 
         statusLabel.setText(restartRequiredChanged ? SAVED_RESTART_REQUIRED_TEXT : SAVED_APPLIED_TEXT);
@@ -188,6 +195,10 @@ public final class SettingsPanel extends JPanel {
 
     JComboBox<String> getThemeCombo() {
         return themeCombo;
+    }
+
+    JCheckBox getLogToolCallsCheckBox() {
+        return logToolCallsCheckBox;
     }
 
     public static boolean isDarkTheme(String themeName) {
