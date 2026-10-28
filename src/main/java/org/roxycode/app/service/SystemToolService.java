@@ -146,41 +146,31 @@ public class SystemToolService {
     }
 
     public synchronized boolean hasCachedTools() {
-        if (cachedTools != null && !cachedTools.isEmpty())
-            return true;
-        if (SwingUtilities.isEventDispatchThread())
-            return false;
-        return !loadDiskCacheIntoMemory().isEmpty();
-    }
-
-    private synchronized List<SystemTool> loadDiskCacheIntoMemory() {
-        if (cachedTools != null && !cachedTools.isEmpty()) {
-            return List.copyOf(cachedTools);
-        }
-        List<SystemTool> loaded = loadFromDisk();
-        if (loaded != null && !loaded.isEmpty()) {
-            cachedTools = List.copyOf(loaded);
-            return cachedTools;
-        }
-        return List.of();
+        return !getCachedTools().isEmpty();
     }
 
     public synchronized List<SystemTool> getCachedTools() {
-        return hasCachedTools() ? List.copyOf(cachedTools) : List.of();
+        if (cachedTools != null && !cachedTools.isEmpty()) {
+            return cachedTools;
+        }
+        if (SwingUtilities.isEventDispatchThread()) {
+            return List.of();
+        }
+        List<SystemTool> loaded = loadFromDisk();
+        if (!loaded.isEmpty()) {
+            cachedTools = loaded;
+        }
+        return loaded;
     }
 
     public CompletableFuture<List<SystemTool>> detectTools() {
         synchronized (this) {
             if (cachedTools != null && !cachedTools.isEmpty()) {
-                return CompletableFuture.completedFuture(List.copyOf(cachedTools));
+                return CompletableFuture.completedFuture(cachedTools);
             }
         }
-        if (SwingUtilities.isEventDispatchThread()) {
-            return CompletableFuture.supplyAsync(this::loadDiskCacheIntoMemory).thenCompose(
-                    diskTools -> !diskTools.isEmpty() ? CompletableFuture.completedFuture(diskTools) : refreshTools());
-        }
-        List<SystemTool> diskTools = loadDiskCacheIntoMemory();
-        return !diskTools.isEmpty() ? CompletableFuture.completedFuture(diskTools) : refreshTools();
+        return CompletableFuture.supplyAsync(this::getCachedTools)
+                .thenCompose(tools -> !tools.isEmpty() ? CompletableFuture.completedFuture(tools) : refreshTools());
     }
 
     @SuppressWarnings("PMD.CompareObjectsWithEquals")
@@ -205,11 +195,6 @@ public class SystemToolService {
     }
 
     public CompletableFuture<Boolean> isDockerAvailable() {
-        synchronized (this) {
-            if (cachedTools != null && !cachedTools.isEmpty()) {
-                return CompletableFuture.completedFuture(isDockerDetected(cachedTools));
-            }
-        }
         return detectTools().thenApply(SystemToolService::isDockerDetected);
     }
 
@@ -218,23 +203,13 @@ public class SystemToolService {
     }
 
     public boolean checkDockerAvailable() {
-        synchronized (this) {
-            if (hasCachedTools()) {
-                return isDockerDetected(cachedTools);
-            }
-        }
-        return STATUS_DETECTED.equals(detectDockerTool().status());
+        List<SystemTool> tools = getCachedTools();
+        return !tools.isEmpty() ? isDockerDetected(tools) : STATUS_DETECTED.equals(detectDockerTool().status());
     }
 
     public boolean checkRequiredToolsAvailable() {
-        List<SystemTool> tools;
-        synchronized (this) {
-            tools = hasCachedTools() ? cachedTools : null;
-        }
-        if (tools == null) {
-            tools = detectTools().join();
-        }
-        return areAllRequiredToolsDetected(tools);
+        List<SystemTool> tools = getCachedTools();
+        return areAllRequiredToolsDetected(!tools.isEmpty() ? tools : detectTools().join());
     }
 
     public static boolean areAllRequiredToolsDetected(List<SystemTool> tools) {

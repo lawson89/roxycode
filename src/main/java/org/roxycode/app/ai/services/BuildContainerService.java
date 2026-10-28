@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -30,7 +31,9 @@ public class BuildContainerService {
 
     static final String DEFAULT_CONTAINER_IMAGE = "ubuntu:24.04";
     static final String DEFAULT_CONTAINER_WORKDIR = "/workspace";
+    static final String DEFAULT_CONTAINER_HOME = "/tmp";
     static final String CONTAINER_NAME_PREFIX = "roxycode-build-";
+    private static final String ENV_HOME = "HOME";
     static final String LABEL_APP = "app";
     static final String LABEL_APP_VALUE = "roxycode";
     static final String LABEL_PROJECT = "roxycode.project";
@@ -191,15 +194,46 @@ public class BuildContainerService {
         return CONTAINER_NAME_PREFIX + ProjectService.sanitizeProjectName(projectRoot) + "-" + uniqueSuffix;
     }
 
+    static Optional<String> resolveHostUserSpec(Path projectRoot) {
+        if (projectRoot == null) {
+            return Optional.empty();
+        }
+        try {
+            Path target = projectRoot.toAbsolutePath().normalize();
+            while (target != null && !Files.exists(target)) {
+                target = target.getParent();
+            }
+            if (target == null) {
+                return Optional.empty();
+            }
+            Object uid = Files.getAttribute(target, "unix:uid");
+            Object gid = Files.getAttribute(target, "unix:gid");
+            if (uid instanceof Number && gid instanceof Number) {
+                return Optional.of(uid + ":" + gid);
+            }
+        } catch (Exception e) {
+            log.debug("Unix uid/gid attributes unavailable for {}: {}", projectRoot, e.getMessage());
+        }
+        return Optional.empty();
+    }
+
     static GenericContainer<?> createConfiguredContainer(ContainerSessionKey key) {
         String containerName = buildContainerName(key.projectRoot());
-        Consumer<CreateContainerCmd> nameModifier = cmd -> cmd.withName(containerName);
+        Optional<String> hostUserSpec = resolveHostUserSpec(key.projectRoot());
+        Consumer<CreateContainerCmd> cmdModifier = cmd -> {
+            cmd.withName(containerName);
+            hostUserSpec.ifPresent(cmd::withUser);
+        };
+        Map<String, String> containerEnv = new LinkedHashMap<>();
+        containerEnv.put(ENV_HOME, DEFAULT_CONTAINER_HOME);
+        if (key.env() != null) {
+            containerEnv.putAll(key.env());
+        }
         return new GenericContainer<>(DockerImageName.parse(key.image()))
                 .withFileSystemBind(key.projectRoot().toAbsolutePath().toString(), key.workdir(), BindMode.READ_WRITE)
-                .withWorkingDirectory(key.workdir()).withEnv(key.env()).withLabel(LABEL_APP, LABEL_APP_VALUE)
+                .withWorkingDirectory(key.workdir()).withEnv(containerEnv).withLabel(LABEL_APP, LABEL_APP_VALUE)
                 .withLabel(LABEL_PROJECT, ProjectService.sanitizeProjectName(key.projectRoot()))
-                .withCreateContainerCmdModifier(nameModifier)
-                .withCommand("sh", "-c", "while true; do sleep 3600; done");
+                .withCreateContainerCmdModifier(cmdModifier).withCommand("sh", "-c", "while true; do sleep 3600; done");
     }
 
     private static ContainerSession createContainerSession(ContainerSessionKey key) {

@@ -10,7 +10,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.TokenUtils;
@@ -54,36 +53,31 @@ public class ProjectCacheMetaServiceTest {
     }
 
     @Test
-    public void testInMemoryCacheAndInvalidationOnProjectChange() {
+    public void testStatelessLoadMetaReflectsActiveProjectAndDiskChanges() throws IOException {
         ProjectCacheMetaService service = new ProjectCacheMetaService(projectService);
         assertTrue(service.loadMeta().isEmpty());
-        assertTrue(service.loadMeta().isEmpty());
-        verify(projectService, times(1)).resolveProjectDataPath("tmp/repo_cache.txt");
 
         String content = "Cached repository map content";
         service.saveRepoCache(content);
-        clearInvocations(projectService);
 
-        Optional<ProjectCacheMeta> cached1 = service.loadMeta();
-        Optional<ProjectCacheMeta> cached2 = service.loadMeta();
-        assertTrue(cached1.isPresent());
-        assertEquals("TestProject", cached1.get().projectName());
-        assertSame(cached1.get(), cached2.get());
-        verify(projectService, never()).resolveProjectDataPath("tmp/repo_cache.txt");
+        Optional<ProjectCacheMeta> loaded = service.loadMeta();
+        assertTrue(loaded.isPresent());
+        assertEquals("TestProject", loaded.get().projectName());
+        assertEquals(TokenUtils.estimateTokens(content), loaded.get().estimatedTokens());
 
-        service.onProjectChanged(new ProjectChangedEvent(projectRoot));
+        String updatedContent = "Updated repository map content with more tokens for testing";
+        Files.writeString(projectDataDir.resolve("tmp/repo_cache.txt"), updatedContent);
         Optional<ProjectCacheMeta> reloaded = service.loadMeta();
         assertTrue(reloaded.isPresent());
-        assertEquals("TestProject", reloaded.get().projectName());
-        assertEquals(TokenUtils.estimateTokens(content), reloaded.get().estimatedTokens());
-        verify(projectService, times(1)).resolveProjectDataPath("tmp/repo_cache.txt");
+        assertEquals(TokenUtils.estimateTokens(updatedContent), reloaded.get().estimatedTokens());
 
-        service.loadMeta();
-        verify(projectService, times(1)).resolveProjectDataPath("tmp/repo_cache.txt");
+        when(projectService.hasActiveProject()).thenReturn(false);
+        assertTrue(service.loadMeta().isEmpty());
+        assertTrue(service.loadRepoCache().isEmpty());
     }
 
     @Test
-    public void testDeleteRepoCacheRemovesDiskFileAndClearsInMemoryCache() {
+    public void testDeleteRepoCacheRemovesDiskFile() {
         ProjectCacheMetaService service = new ProjectCacheMetaService(projectService);
         service.saveRepoCache("Cached content to be deleted");
         Path cacheFile = projectDataDir.resolve("tmp/repo_cache.txt");

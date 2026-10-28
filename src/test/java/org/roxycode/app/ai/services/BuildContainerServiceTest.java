@@ -53,13 +53,23 @@ class BuildContainerServiceTest {
     }
 
     @Test
-    void testCreateConfiguredContainerSetsIdentifiableNameAndLabels() {
+    void testResolveHostUserSpec() {
+        assertTrue(BuildContainerService.resolveHostUserSpec(null).isEmpty());
+        var existingSpec = BuildContainerService.resolveHostUserSpec(tempDir);
+        var nonExistentChildSpec = BuildContainerService.resolveHostUserSpec(tempDir.resolve("nonexistent/child"));
+        assertEquals(existingSpec, nonExistentChildSpec);
+        existingSpec.ifPresent(spec -> assertTrue(spec.matches("^[0-9]+:[0-9]+$")));
+    }
+
+    @Test
+    void testCreateConfiguredContainerSetsIdentifiableNameLabelsUserAndHomeEnv() {
         ContainerSessionKey key = new ContainerSessionKey(tempDir.resolve("Roxy_Test_App"), "eclipse-temurin:25-jdk",
                 "/workspace", Map.of("ROXY_CODE", "true"));
 
         GenericContainer<?> container = BuildContainerService.createConfiguredContainer(key);
         assertEquals("/workspace", container.getWorkingDirectory());
         assertEquals("true", container.getEnvMap().get("ROXY_CODE"));
+        assertEquals("/tmp", container.getEnvMap().get("HOME"));
         assertEquals("roxycode", container.getLabels().get("app"));
         assertEquals("roxy-test-app", container.getLabels().get("roxycode.project"));
         assertFalse(container.getCreateContainerCmdModifiers().isEmpty());
@@ -70,6 +80,18 @@ class BuildContainerServiceTest {
         ArgumentCaptor<String> nameCaptor = ArgumentCaptor.forClass(String.class);
         verify(mockCmd).withName(nameCaptor.capture());
         assertTrue(nameCaptor.getValue().matches("^roxycode-build-roxy-test-app-[a-f0-9]{8}$"));
+
+        var expectedUserSpec = BuildContainerService.resolveHostUserSpec(tempDir);
+        if (expectedUserSpec.isPresent()) {
+            verify(mockCmd).withUser(expectedUserSpec.get());
+        } else {
+            verify(mockCmd, never()).withUser(anyString());
+        }
+
+        ContainerSessionKey customHomeKey = new ContainerSessionKey(tempDir, "eclipse-temurin:25-jdk", "/workspace",
+                Map.of("HOME", "/custom/home"));
+        GenericContainer<?> customHomeContainer = BuildContainerService.createConfiguredContainer(customHomeKey);
+        assertEquals("/custom/home", customHomeContainer.getEnvMap().get("HOME"));
     }
 
     @Test

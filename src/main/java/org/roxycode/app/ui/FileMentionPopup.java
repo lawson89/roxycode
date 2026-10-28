@@ -16,12 +16,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import com.github.benmanes.caffeine.cache.AsyncCache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import org.apache.commons.lang3.StringUtils;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JLabel;
@@ -78,20 +76,13 @@ public final class FileMentionPopup {
             String pathLower) {
 
         public static FileCandidate fromPath(String rawPath) {
-            if (rawPath == null) {
-                return new FileCandidate("", "", "", "", "");
-            }
-            String normalized = FilenameUtils.separatorsToUnix(rawPath.trim());
-            while (normalized.startsWith("./")) {
-                normalized = normalized.substring(2);
-            }
-            while (normalized.startsWith("/")) {
-                normalized = normalized.substring(1);
-            }
+            String normalized = StringUtils.stripStart(
+                    StringUtils.removeStart(FilenameUtils.separatorsToUnix(StringUtils.trimToEmpty(rawPath)), "./"),
+                    "/");
             String fileName = PathUtils.getFileName(normalized);
-            String parentDir = FilenameUtils.getPathNoEndSeparator(normalized);
-            return new FileCandidate(normalized, fileName, parentDir != null ? parentDir : "",
-                    fileName.toLowerCase(Locale.ROOT), normalized.toLowerCase(Locale.ROOT));
+            String parentDir = StringUtils.defaultString(FilenameUtils.getPathNoEndSeparator(normalized));
+            return new FileCandidate(normalized, fileName, parentDir, fileName.toLowerCase(Locale.ROOT),
+                    normalized.toLowerCase(Locale.ROOT));
         }
     }
 
@@ -108,13 +99,11 @@ public final class FileMentionPopup {
     private final JList<FileCandidate> candidateList;
     private final JScrollPane popupScrollPane;
 
-    private static final String CANDIDATES_CACHE_KEY = "candidates";
-
     private volatile GrepService grepService;
     private volatile Executor backgroundExecutor = ForkJoinPool.commonPool();
     private volatile List<FileCandidate> cachedCandidates = List.of();
-    private final AsyncCache<String, List<FileCandidate>> candidateCache = Caffeine.newBuilder()
-            .expireAfterWrite(Duration.ofMillis(STALE_CACHE_TTL_MS)).maximumSize(1).buildAsync();
+    private volatile long cacheTimestampMs;
+    private CompletableFuture<List<FileCandidate>> inFlightRefresh;
 
     private boolean popupActive = false;
     private boolean updatingInputText = false;
@@ -287,13 +276,15 @@ public final class FileMentionPopup {
                 || (index + 1 < fileName.length() && Character.isLowerCase(fileName.charAt(index + 1))));
     }
 
-    public void setGrepService(GrepService grepService) {
+    @SuppressWarnings("PMD.NullAssignment")
+    public synchronized void setGrepService(GrepService grepService) {
         this.grepService = grepService;
         if (grepService != null) {
             refreshIndexAsync(true);
         } else {
             cachedCandidates = List.of();
-            candidateCache.synchronous().invalidateAll();
+            cacheTimestampMs = 0L;
+            inFlightRefresh = null;
         }
     }
 
@@ -306,7 +297,6 @@ public final class FileMentionPopup {
     }
 
     public void invalidateCache() {
-        candidateCache.synchronous().invalidateAll();
         refreshIndexAsync(true);
     }
 
@@ -314,33 +304,47 @@ public final class FileMentionPopup {
         return refreshIndexAsync(true);
     }
 
-    CompletableFuture<List<FileCandidate>> refreshIndexAsync(boolean force) {
+    @SuppressWarnings({"PMD.CompareObjectsWithEquals", "PMD.NullAssignment"})
+    synchronized CompletableFuture<List<FileCandidate>> refreshIndexAsync(boolean force) {
         GrepService service = this.grepService;
         if (service == null) {
             return CompletableFuture.completedFuture(cachedCandidates);
         }
-        if (force) {
-            candidateCache.synchronous().invalidate(CANDIDATES_CACHE_KEY);
+        if (!force && cacheTimestampMs > 0 && System.currentTimeMillis() - cacheTimestampMs < STALE_CACHE_TTL_MS) {
+            return CompletableFuture.completedFuture(cachedCandidates);
         }
-        return candidateCache.get(CANDIDATES_CACHE_KEY, (key, exec) -> CompletableFuture.supplyAsync(() -> {
+        if (!force && inFlightRefresh != null && !inFlightRefresh.isDone()) {
+            return inFlightRefresh;
+        }
+        CompletableFuture<List<FileCandidate>> future = CompletableFuture.supplyAsync(() -> {
             List<String> rawFiles = service.listFiles();
             if (rawFiles == null || rawFiles.isEmpty()) {
                 return List.<FileCandidate>of();
             }
-            return rawFiles.stream().filter(r -> r != null && !r.isBlank()).map(FileCandidate::fromPath)
+            return rawFiles.stream().filter(StringUtils::isNotBlank).map(FileCandidate::fromPath)
                     .sorted(DEFAULT_CANDIDATE_COMPARATOR).toList();
         }, backgroundExecutor).exceptionally(ex -> {
             log.debug("Failed to refresh file mention index", ex);
             return cachedCandidates;
         }).thenApply(candidates -> {
             this.cachedCandidates = candidates;
+            this.cacheTimestampMs = System.currentTimeMillis();
             Edt.run(() -> {
                 if (activeToken != null) {
                     evaluateCurrentInput();
                 }
             });
             return candidates;
-        }));
+        });
+        inFlightRefresh = future;
+        future.whenComplete((res, ex) -> {
+            synchronized (this) {
+                if (inFlightRefresh == future) {
+                    inFlightRefresh = null;
+                }
+            }
+        });
+        return future;
     }
 
     void evaluateCurrentInput() {
@@ -355,9 +359,7 @@ public final class FileMentionPopup {
         }
         this.activeToken = token;
 
-        if (candidateCache.getIfPresent(CANDIDATES_CACHE_KEY) == null) {
-            refreshIndexAsync(false);
-        }
+        refreshIndexAsync(false);
 
         List<FileCandidate> matches = rankCandidates(cachedCandidates, token.query());
         if (matches.isEmpty()) {
