@@ -106,7 +106,6 @@ class AiServiceTest {
         lenient().when(requestSpec.options(any())).thenReturn(requestSpec);
         lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
         lenient().when(requestSpec.tools(any(Object[].class))).thenReturn(requestSpec);
-        lenient().when(requestSpec.toolCallbacks(any(ToolCallback[].class))).thenReturn(requestSpec);
         lenient().when(requestSpec.call()).thenReturn(responseSpec);
         lenient().when(chatClientBuilder.defaultAdvisors(any(Advisor[].class))).thenReturn(chatClientBuilder);
         lenient().when(chatClientBuilder.build()).thenReturn(chatClient);
@@ -185,7 +184,7 @@ class AiServiceTest {
         verify(promptService).buildSystemPrompt(WorkflowPhase.CODE, null);
         verify(requestSpec).options(any());
         verify(requestSpec).tools(jexlTool);
-        verify(requestSpec).toolCallbacks(mockCallback);
+        verify(requestSpec).tools(mockCallback);
         verify(requestSpec).toolContext(argThat(ctx -> "default".equals(ctx.get(TurnToolContext.CONVERSATION_ID_KEY))
                 && WorkflowPhase.CODE == ctx.get(TurnToolContext.PHASE_KEY)
                 && ctx.get(TurnToolContext.TURN_COUNTER_KEY) instanceof AtomicInteger));
@@ -196,7 +195,7 @@ class AiServiceTest {
         stubChatResponse(WorkflowPhase.EXPLORE, "EXPLORE SYSTEM PROMPT", "Explore Response", "STOP", null);
         assertEquals("Explore Response", aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null));
         verify(requestSpec).tools(jexlTool);
-        verify(requestSpec, never()).toolCallbacks(any(ToolCallback[].class));
+        verify(requestSpec).tools(any(Object[].class));
         verify(planService, never()).getToolCallbacksForPhase(any());
     }
 
@@ -214,7 +213,7 @@ class AiServiceTest {
                 aiService.chat("custom-conv", WorkflowPhase.REVIEW, "Hello", "Extra instructions", null));
         verify(requestSpec).system("REVIEW SYSTEM PROMPT");
         verify(requestSpec).tools(jexlTool);
-        verify(requestSpec).toolCallbacks(reviewCallback);
+        verify(requestSpec).tools(reviewCallback);
 
         ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorCaptor = ArgumentCaptor.forClass(Consumer.class);
         verify(requestSpec).advisors(advisorCaptor.capture());

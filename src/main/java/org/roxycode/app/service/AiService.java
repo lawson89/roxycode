@@ -337,7 +337,7 @@ public class AiService {
                 }).options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()));
         promptSpec.tools(jexlTool);
         if (currentPhase != WorkflowPhase.EXPLORE) {
-            promptSpec.toolCallbacks(planService.getToolCallbacksForPhase(currentPhase));
+            promptSpec.tools((Object[]) planService.getToolCallbacksForPhase(currentPhase));
         }
         return promptSpec.toolContext(turnContext.toMap());
     }
