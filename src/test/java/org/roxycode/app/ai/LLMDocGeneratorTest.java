@@ -16,6 +16,7 @@ import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.SymbolService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.ui.SwingTestUtils;
 import org.springframework.aop.framework.ProxyFactory;
@@ -50,7 +51,14 @@ class LLMDocGeneratorTest {
                         "getBlame(relativePath: string, startLine: number, endLine: number): string;"),
                 serviceCase(GenericBuildToolService.class, new GenericBuildToolService(ps, null, null),
                         "buildAndTest(): BuildResult;", "compile(): BuildResult;",
-                        "runSingleTest(testName: string): BuildResult;", "runTests(): BuildResult;"));
+                        "runSingleTest(testName: string): BuildResult;", "runTests(): BuildResult;"),
+                serviceCase(SymbolService.class,
+                        new SymbolService(ps, frs, new GrepService(ps, frs), AiConfig.SHARED_OBJECT_MAPPER),
+                        "getFileOutline(relativePath: string): List<SymbolInfo>;",
+                        "readSymbol(relativePath: string, symbolName: string): string;",
+                        "readSymbols(relativePath: string, symbolNames: string[]): Map;",
+                        "findSymbol(symbolName: string): List<SymbolInfo>;", "interface SymbolInfo {",
+                        "startLine: number;", "endLine: number;", "signature: string;"));
     }
 
     @ParameterizedTest

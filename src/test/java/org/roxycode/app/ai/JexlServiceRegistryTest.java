@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.FileEditorService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.SymbolService;
 
 class JexlServiceRegistryTest {
 
@@ -86,6 +87,22 @@ class JexlServiceRegistryTest {
                     "MemoryService should be exposed in " + phase);
             assertTrue(registry.getDocumentation(phase).contains("memoryService"),
                     "JEXL docs should include memoryService in " + phase);
+        }
+    }
+
+    @Test
+    void testSymbolServiceAvailableInAllPhases() {
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        SymbolService symbolService = mock(SymbolService.class);
+        registry.register(symbolService);
+
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            assertTrue(registry.getServices(phase).containsValue(symbolService),
+                    "SymbolService should be exposed in " + phase);
+            assertTrue(registry.getDocumentation(phase).contains("symbolService"),
+                    "JEXL docs should include symbolService in " + phase);
+            assertTrue(registry.getDocumentation(phase).contains("interface SymbolInfo {"),
+                    "JEXL docs should include SymbolInfo supporting type in " + phase);
         }
     }
 

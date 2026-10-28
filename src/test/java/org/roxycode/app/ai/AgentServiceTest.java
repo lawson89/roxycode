@@ -15,8 +15,11 @@ import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.ai.services.SymbolService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.service.ProjectService;
@@ -36,7 +39,8 @@ import org.springframework.stereotype.Service;
 class AgentServiceTest {
 
     private static final List<Class<?>> AGENT_SERVICES = List.of(GenericBuildToolService.class, GitService.class,
-            GrepService.class, FileReadService.class, FileEditorService.class, MemoryService.class);
+            GrepService.class, FileReadService.class, FileEditorService.class, MemoryService.class,
+            SymbolService.class);
 
     private static final Set<Class<?>> ALLOWED_JS_PARAM_TYPES = Set.of(String.class, String[].class, int.class,
             Integer.class, long.class, Long.class, double.class, Double.class, boolean.class, Boolean.class);
@@ -91,7 +95,7 @@ class AgentServiceTest {
     void testSingleConstructorBeansDoNotHaveRedundantAutowired() {
         for (Class<?> clazz : List.of(GenericBuildToolService.class, ProjectCacheMetaService.class,
                 FileEditorService.class, FileReadService.class, GrepService.class, GitService.class,
-                MemoryService.class, PlanService.class, ProjectService.class, PromptService.class,
+                MemoryService.class, SymbolService.class, PlanService.class, ProjectService.class, PromptService.class,
                 SettingsService.class, JexlTool.class, ContextManagerPanel.class, ChatPanel.class, ChatController.class,
                 MainFrame.class, ExploreChatPanel.class, FeatureChatPanel.class, QaWorkspacePanel.class,
                 TaskWorkspacePanel.class)) {
@@ -117,18 +121,29 @@ class AgentServiceTest {
                 }
                 Class<?> returnType = method.getReturnType();
                 if (returnType.isRecord()) {
-                    for (RecordComponent comp : returnType.getRecordComponents()) {
-                        String compName = comp.getName();
-                        String cap = Character.toUpperCase(compName.charAt(0)) + compName.substring(1);
-                        String getterName = (comp.getType() == boolean.class ? "is" : "get") + cap;
-                        Method getter = assertDoesNotThrow(() -> returnType.getMethod(getterName),
-                                returnType.getSimpleName() + " must expose public JavaBean getter " + getterName
-                                        + "() so JS property access (obj." + compName + ") works in JEXL");
-                        assertTrue(Modifier.isPublic(getter.getModifiers()));
-                        assertEquals(comp.getType(), getter.getReturnType());
+                    assertRecordExposesJavaBeanGetters(returnType);
+                }
+                if (method.getGenericReturnType() instanceof ParameterizedType pt) {
+                    for (Type typeArg : pt.getActualTypeArguments()) {
+                        if (typeArg instanceof Class<?> typeArgClass && typeArgClass.isRecord()) {
+                            assertRecordExposesJavaBeanGetters(typeArgClass);
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private static void assertRecordExposesJavaBeanGetters(Class<?> recordType) {
+        for (RecordComponent comp : recordType.getRecordComponents()) {
+            String compName = comp.getName();
+            String cap = Character.toUpperCase(compName.charAt(0)) + compName.substring(1);
+            String getterName = (comp.getType() == boolean.class ? "is" : "get") + cap;
+            Method getter = assertDoesNotThrow(() -> recordType.getMethod(getterName),
+                    recordType.getSimpleName() + " must expose public JavaBean getter " + getterName
+                            + "() so JS property access (obj." + compName + ") works in JEXL");
+            assertTrue(Modifier.isPublic(getter.getModifiers()));
+            assertEquals(comp.getType(), getter.getReturnType());
         }
     }
 }

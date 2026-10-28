@@ -102,11 +102,23 @@ public class LLMDocGenerator {
                 if (i > 0) {
                     sb.append(", ");
                 }
-                sb.append(params[i].getName()).append(": ").append(getTypeName(params[i].getType(), extraTypes));
+                sb.append(params[i].getName()).append(": ")
+                        .append(getMethodTypeName(params[i].getType(), params[i].getParameterizedType(), extraTypes));
             }
-            sb.append("): ").append(getTypeName(m.getReturnType(), extraTypes)).append(";\n\n");
+            sb.append("): ").append(getMethodTypeName(m.getReturnType(), m.getGenericReturnType(), extraTypes))
+                    .append(";\n\n");
         }
         sb.append("}\n");
+    }
+
+    private String getMethodTypeName(Class<?> rawType, Type genericType, Set<Class<?>> extraTypes) {
+        Set<Class<?>> genericExtraTypes = new LinkedHashSet<>();
+        String genericName = getGenericTypeName(genericType != null ? genericType : rawType, genericExtraTypes);
+        if (!genericExtraTypes.isEmpty()) {
+            extraTypes.addAll(genericExtraTypes);
+            return genericName;
+        }
+        return getTypeName(rawType, extraTypes);
     }
 
     private String getGenericTypeName(Type genericType, Set<Class<?>> extraTypes) {

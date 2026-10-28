@@ -30,6 +30,7 @@ public class JexlDocumentationTest {
         assertTrue(content.contains("grepService"));
         assertTrue(content.contains("grepService.findMatchingFiles("));
         assertTrue(content.contains("grepService.readMatchingFiles("));
+        assertTrue(content.contains("symbolService"));
         assertTrue(content.contains("memoryService"));
         assertTrue(content.contains("result.success"));
         assertTrue(content.contains("build.errors"));
