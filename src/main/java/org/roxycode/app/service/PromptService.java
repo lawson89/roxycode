@@ -103,37 +103,43 @@ public class PromptService {
             return "";
         }
         StringBuilder sb = new StringBuilder();
+        appendGlobalAgentMemorySection(sb);
+        appendProjectAgentMemorySection(sb);
+        return sb.toString();
+    }
+
+    private void appendGlobalAgentMemorySection(StringBuilder sb) {
         String globalMemory = MemoryService.capPinnedMemoryForPrompt(memoryService.readGlobalMemory());
         List<String> globalNotes = Objects.requireNonNullElse(memoryService.listGlobalNotes(), List.of());
-
-        if (!globalMemory.isBlank() || !globalNotes.isEmpty()) {
-            sb.append(HEADER_GLOBAL_AGENT_MEMORY);
-            boolean hasContent = appendMemoryBlock(sb, globalMemory);
-            appendCatalog(sb, "Available Global Notes", globalNotes, 0, hasContent);
-            if (!globalNotes.isEmpty()) {
-                sb.append("Use memoryService.readGlobalNote(slug) or memoryService.search(pattern) to inspect.\n");
-            }
+        if (globalMemory.isBlank() && globalNotes.isEmpty()) {
+            return;
         }
+        sb.append(HEADER_GLOBAL_AGENT_MEMORY);
+        boolean hasContent = appendMemoryBlock(sb, globalMemory);
+        appendCatalog(sb, "Available Global Notes", globalNotes, 0, hasContent);
+        if (!globalNotes.isEmpty()) {
+            sb.append("Use memoryService.readGlobalNote(slug) or memoryService.search(pattern) to inspect.\n");
+        }
+    }
 
+    private void appendProjectAgentMemorySection(StringBuilder sb) {
         String projectMemory = MemoryService.capPinnedMemoryForPrompt(memoryService.readProjectMemory());
         List<String> projectNotes = Objects.requireNonNullElse(memoryService.listProjectNotes(), List.of());
         List<String> archivedPlans = Objects.requireNonNullElse(memoryService.listArchivedPlans(), List.of());
         List<String> archivedTopics = Objects.requireNonNullElse(memoryService.listArchivedTopics(), List.of());
         boolean hasCatalogs = !projectNotes.isEmpty() || !archivedPlans.isEmpty() || !archivedTopics.isEmpty();
-
-        if (!projectMemory.isBlank() || hasCatalogs) {
-            sb.append(HEADER_PROJECT_AGENT_MEMORY);
-            boolean hasContent = appendMemoryBlock(sb, projectMemory);
-            hasContent = appendCatalog(sb, "Available Project Notes", projectNotes, 0, hasContent);
-            hasContent = appendCatalog(sb, "Recent Archived Plans", archivedPlans, MAX_RECENT_ARCHIVED_PLANS,
-                    hasContent);
-            appendCatalog(sb, "Recent Archived Topics", archivedTopics, MAX_RECENT_ARCHIVED_PLANS, hasContent);
-            if (hasCatalogs) {
-                sb.append(
-                        "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), memoryService.readArchivedTopic(filename), or memoryService.search(pattern) to inspect.\n");
-            }
+        if (projectMemory.isBlank() && !hasCatalogs) {
+            return;
         }
-        return sb.toString();
+        sb.append(HEADER_PROJECT_AGENT_MEMORY);
+        boolean hasContent = appendMemoryBlock(sb, projectMemory);
+        hasContent = appendCatalog(sb, "Available Project Notes", projectNotes, 0, hasContent);
+        hasContent = appendCatalog(sb, "Recent Archived Plans", archivedPlans, MAX_RECENT_ARCHIVED_PLANS, hasContent);
+        appendCatalog(sb, "Recent Archived Topics", archivedTopics, MAX_RECENT_ARCHIVED_PLANS, hasContent);
+        if (hasCatalogs) {
+            sb.append(
+                    "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), memoryService.readArchivedTopic(filename), or memoryService.search(pattern) to inspect.\n");
+        }
     }
 
     private static boolean appendMemoryBlock(StringBuilder sb, String memory) {
@@ -237,7 +243,7 @@ public class PromptService {
     }
 
     public List<String> getProjectContextFolders() {
-        if (projectService == null || !projectService.hasActiveProject()) {
+        if (!hasActiveProject()) {
             return List.of();
         }
         Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
@@ -255,7 +261,7 @@ public class PromptService {
     }
 
     public void setProjectContextFolders(List<String> folders) {
-        if (projectService == null || !projectService.hasActiveProject()) {
+        if (!hasActiveProject()) {
             throw new IllegalStateException("No active project");
         }
         Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
@@ -277,9 +283,7 @@ public class PromptService {
     }
 
     public List<ContextFileItem> listProjectContextFiles() {
-        return projectService != null && projectService.hasActiveProject()
-                ? listContextFilesInFolders(getProjectContextFolders(), true)
-                : List.of();
+        return hasActiveProject() ? listContextFilesInFolders(getProjectContextFolders(), true) : List.of();
     }
 
     List<ContextFileItem> listContextFilesInFolders(List<String> folders, boolean resolveRelativeToProject) {
@@ -316,6 +320,10 @@ public class PromptService {
     }
 
     public String readContextFile(Path filePath) {
+        return readContextFile(filePath, true);
+    }
+
+    private String readContextFile(Path filePath, boolean requireConfiguredFolder) {
         if (filePath == null) {
             throw new IllegalArgumentException("Context file path must not be null");
         }
@@ -326,7 +334,7 @@ public class PromptService {
         if (normalized.getFileName().toString().startsWith(".")) {
             throw new IllegalArgumentException("Hidden files are not allowed as context: " + filePath);
         }
-        if (!isInsideConfiguredContextFolder(normalized)) {
+        if (requireConfiguredFolder && !isInsideConfiguredContextFolder(normalized)) {
             throw new IllegalArgumentException("File is not in a configured context folder: " + filePath);
         }
         try {
@@ -355,8 +363,8 @@ public class PromptService {
         StringBuilder sb = new StringBuilder();
         for (ContextFileItem item : files) {
             try {
-                String content = readValidatedContextFile(item.filePath());
-                if (content != null && !content.isBlank()) {
+                String content = readContextFile(item.filePath(), false);
+                if (!content.isBlank()) {
                     sb.append("\n\n## ").append(headerTitle).append(": ").append(item.fileName()).append("\n")
                             .append(content);
                 }
@@ -367,35 +375,39 @@ public class PromptService {
         return sb.toString();
     }
 
-    private static String readValidatedContextFile(Path normalizedFile) throws IOException {
-        return Files.readString(normalizedFile, StandardCharsets.UTF_8);
-    }
-
     private boolean isInsideConfiguredContextFolder(Path normalizedFile) {
         Path parent = normalizedFile.getParent();
-        if (parent == null) {
-            return false;
-        }
-        return matchesFolder(parent, getGlobalContextFolders(), false) || (projectService != null
-                && projectService.hasActiveProject() && matchesFolder(parent, getProjectContextFolders(), true));
+        return parent != null && (matchesFolder(parent, getGlobalContextFolders(), false)
+                || (hasActiveProject() && matchesFolder(parent, getProjectContextFolders(), true)));
     }
 
     private boolean matchesFolder(Path parent, List<String> folders, boolean relativeToProject) {
-        return folders.stream().anyMatch(f -> parent.equals(resolveFolderPath(f, relativeToProject)));
+        for (String folder : folders) {
+            if (parent.equals(resolveFolderPath(folder, relativeToProject))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Path resolveFolderPath(String folderStr, boolean resolveRelativeToProject) {
         try {
             Path path = Path.of(folderStr);
-            if (!path.isAbsolute() && resolveRelativeToProject && projectService != null
-                    && projectService.hasActiveProject() && projectService.getCurrentProjectRoot() != null) {
-                return projectService.getCurrentProjectRoot().resolve(path).toAbsolutePath().normalize();
+            if (!path.isAbsolute() && resolveRelativeToProject && hasActiveProject()) {
+                Path projectRoot = projectService.getCurrentProjectRoot();
+                if (projectRoot != null) {
+                    path = projectRoot.resolve(path);
+                }
             }
             return path.toAbsolutePath().normalize();
         } catch (InvalidPathException e) {
             log.warn("Invalid context folder path '{}': {}", folderStr, e.getMessage());
             return null;
         }
+    }
+
+    private boolean hasActiveProject() {
+        return projectService != null && projectService.hasActiveProject();
     }
 
     private static boolean isNonBinaryFile(Path path) {
