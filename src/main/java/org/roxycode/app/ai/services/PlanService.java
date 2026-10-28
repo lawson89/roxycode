@@ -4,14 +4,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -42,8 +39,6 @@ public class PlanService {
     private static final Logger log = LoggerFactory.getLogger(PlanService.class);
     static final String ARCHIVE_PLANS_SUBDIR = "archive/plans";
     static final int MAX_PLAN_SLUG_LENGTH = 40;
-    private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss",
-            Locale.ROOT);
 
     public static final String APPROVAL_PLAN_TO_CODE = "Approve Plan and proceed to Code";
     public static final String APPROVAL_REVIEW_TO_PLAN = "Approve Feature Request as complete";
@@ -422,14 +417,7 @@ public class PlanService {
     }
 
     static String formatArchiveTimestamp(String isoTimestamp) {
-        if (isoTimestamp != null && !isoTimestamp.isBlank()) {
-            try {
-                return OffsetDateTime.parse(isoTimestamp).format(ARCHIVE_TIMESTAMP_FORMATTER);
-            } catch (DateTimeParseException ignored) {
-                // Fall back to current time
-            }
-        }
-        return OffsetDateTime.now().format(ARCHIVE_TIMESTAMP_FORMATTER);
+        return PathUtils.formatArchiveTimestamp(isoTimestamp);
     }
 
     static String sanitizePlanTitle(String title) {

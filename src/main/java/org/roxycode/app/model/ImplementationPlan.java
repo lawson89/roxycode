@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.roxycode.app.util.FrontmatterUtils;
 
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
@@ -261,9 +262,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public static String escapeFrontmatterValue(String value) {
-        if (value == null)
-            return "";
-        return value.replace("\"", "\\\"").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
+        return FrontmatterUtils.escapeFrontmatterValue(value);
     }
 
     private static String escapeMarkdownTableCell(String value) {

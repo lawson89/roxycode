@@ -3,6 +3,9 @@ package org.roxycode.app.util;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -10,6 +13,8 @@ import org.apache.commons.lang3.StringUtils;
 public final class PathUtils {
 
     private static final String MD_EXTENSION = ".md";
+    private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss",
+            Locale.ROOT);
 
     public record ArchiveFileTarget(String id, Path file) {
     }
@@ -48,6 +53,17 @@ public final class PathUtils {
             sanitized = sanitized.substring(0, maxLength).replaceAll("-+$", "");
         }
         return sanitized.isEmpty() ? fallback : sanitized;
+    }
+
+    public static String formatArchiveTimestamp(String isoTimestamp) {
+        if (isoTimestamp != null && !isoTimestamp.isBlank()) {
+            try {
+                return OffsetDateTime.parse(isoTimestamp).format(ARCHIVE_TIMESTAMP_FORMATTER);
+            } catch (DateTimeParseException ignored) {
+                // Fall back to current time
+            }
+        }
+        return OffsetDateTime.now().format(ARCHIVE_TIMESTAMP_FORMATTER);
     }
 
     public static ArchiveFileTarget resolveUniqueArchiveFile(Path archiveDir, String baseId) {

@@ -1,6 +1,5 @@
 package org.roxycode.app.ai.services;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -13,22 +12,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
-import com.vladsch.flexmark.ext.yaml.front.matter.AbstractYamlFrontMatterVisitor;
-import com.vladsch.flexmark.ext.yaml.front.matter.YamlFrontMatterExtension;
-import com.vladsch.flexmark.parser.Parser;
-import com.vladsch.flexmark.util.ast.Node;
-import com.vladsch.flexmark.util.data.MutableDataSet;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
+import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,12 +46,9 @@ public class MemoryService {
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
     private static final String MD_EXTENSION = ".md";
-    private static final String FRONTMATTER_DELIMITER = "---";
-    private static final int MAX_FRONTMATTER_LINES = 50;
-    private static final char DQUOTE = 34;
-    private static final char SQUOTE = 39;
-    private static final Parser FRONTMATTER_PARSER = Parser
-            .builder(new MutableDataSet().set(Parser.EXTENSIONS, List.of(YamlFrontMatterExtension.create()))).build();
+
+    private record PrefixLabel(String prefix, String label) {
+    }
 
     private final SettingsService settingsService;
     private final ProjectService projectService;
@@ -94,14 +84,14 @@ public class MemoryService {
     public EditorResult saveGlobalNote(@AgentDoc("The note slug (lowercase alphanumeric and hyphens)") String slug,
             @AgentDoc("The note title") String title, @AgentDoc("Comma-separated tags") String tags,
             @AgentDoc("The Markdown note body content") String content) {
-        return saveScopedNote(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, SCOPE_GLOBAL, slug, title, tags, content);
+        return saveNote(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, SCOPE_GLOBAL, slug, title, tags, content);
     }
 
     @AgentDoc(value = "Saves or overwrites a project topic note with structured frontmatter in <projectDataDir>/memory/notes/<slug>.md.", examples = "memoryService.saveProjectNote('swing-html-tables', 'Swing HTML 3.2 Table Layout Rules', 'ui, swing, html', 'Use HTML tables for layout.')")
     public EditorResult saveProjectNote(@AgentDoc("The note slug (lowercase alphanumeric and hyphens)") String slug,
             @AgentDoc("The note title") String title, @AgentDoc("Comma-separated tags") String tags,
             @AgentDoc("The Markdown note body content") String content) {
-        return saveScopedNote(getProjectMemoryDir(), NO_ACTIVE_PROJECT, SCOPE_PROJECT, slug, title, tags, content);
+        return saveNote(getProjectMemoryDir(), NO_ACTIVE_PROJECT, SCOPE_PROJECT, slug, title, tags, content);
     }
 
     @AgentDoc(value = "Reads a global topic note from ~/.roxycode/memory/notes/<slug>.md.", examples = "memoryService.readGlobalNote('coding-style')")
@@ -126,14 +116,12 @@ public class MemoryService {
 
     @AgentDoc(value = "Returns a list of formatted summary lines for each global note in ~/.roxycode/memory/notes/*.md.", examples = "memoryService.listGlobalNotes()")
     public List<String> listGlobalNotes() {
-        Path globalDir = getGlobalMemoryDir();
-        return globalDir != null ? listNotesInDir(globalDir.resolve(NOTES_SUBDIR)) : List.of();
+        return listNotes(getGlobalMemoryDir());
     }
 
     @AgentDoc(value = "Returns a list of formatted summary lines for each project note in <projectDataDir>/memory/notes/*.md.", examples = "memoryService.listProjectNotes()")
     public List<String> listProjectNotes() {
-        Path projectDir = getProjectMemoryDir();
-        return projectDir != null ? listNotesInDir(projectDir.resolve(NOTES_SUBDIR)) : List.of();
+        return listNotes(getProjectMemoryDir());
     }
 
     @AgentDoc(value = "Lists archived completed implementation plans from <projectDataDir>/archive/plans/*.md (most recent first).", examples = "memoryService.listArchivedPlans()")
@@ -166,21 +154,9 @@ public class MemoryService {
                 : writeMarkdownFile(dir.resolve(MEMORY_INDEX_FILE), content != null ? content : "", successMsg);
     }
 
-    private EditorResult saveScopedNote(Path dir, String missingMsg, String scope, String slug, String title,
-            String tags, String content) {
-        return dir == null ? new EditorResult(false, "", missingMsg) : saveNote(dir, scope, slug, title, tags, content);
-    }
-
     private static String readNote(Path dir, String slug) {
         String sanitized = sanitizeSlug(slug);
         return dir != null ? readFileIfExists(dir.resolve(NOTES_SUBDIR).resolve(sanitized + MD_EXTENSION)) : "";
-    }
-
-    private EditorResult deleteNote(Path dir, String missingMsg, String slug) {
-        String sanitized = sanitizeSlug(slug);
-        return dir == null
-                ? new EditorResult(false, "", missingMsg)
-                : deleteNoteFile(dir.resolve(NOTES_SUBDIR).resolve(sanitized + MD_EXTENSION), sanitized);
     }
 
     private String readArchivedFile(Path archiveDir, String filename, String label) {
@@ -208,7 +184,7 @@ public class MemoryService {
             Files.createDirectories(archiveDir);
             String resolvedTitle = firstNonBlank(title, AiService.DEFAULT_TOPIC_TITLE);
             String slug = PathUtils.sanitizeSlug(resolvedTitle, PlanService.MAX_PLAN_SLUG_LENGTH, "topic");
-            String baseId = PlanService.formatArchiveTimestamp(isoTimestamp) + "-" + slug;
+            String baseId = PathUtils.formatArchiveTimestamp(isoTimestamp) + "-" + slug;
             PathUtils.ArchiveFileTarget archiveTarget = PathUtils.resolveUniqueArchiveFile(archiveDir, baseId);
             Path projectRoot = projectService.getCurrentProjectRoot();
             String projectPath = projectRoot != null ? projectRoot.toAbsolutePath().normalize().toString() : "";
@@ -231,12 +207,12 @@ public class MemoryService {
                     # Topic: %s
 
                     ## Conversation Transcript
-                    """.formatted(ImplementationPlan.escapeFrontmatterValue(archiveTarget.id()),
-                    ImplementationPlan.escapeFrontmatterValue(projectService.getProjectName()),
-                    ImplementationPlan.escapeFrontmatterValue(projectPath),
-                    ImplementationPlan.escapeFrontmatterValue(resolvedTitle),
-                    ImplementationPlan.escapeFrontmatterValue(resolvedUser),
-                    ImplementationPlan.escapeFrontmatterValue(resolvedTimestamp), entries.size(), resolvedTitle));
+                    """.formatted(FrontmatterUtils.escapeFrontmatterValue(archiveTarget.id()),
+                    FrontmatterUtils.escapeFrontmatterValue(projectService.getProjectName()),
+                    FrontmatterUtils.escapeFrontmatterValue(projectPath),
+                    FrontmatterUtils.escapeFrontmatterValue(resolvedTitle),
+                    FrontmatterUtils.escapeFrontmatterValue(resolvedUser),
+                    FrontmatterUtils.escapeFrontmatterValue(resolvedTimestamp), entries.size(), resolvedTitle));
 
             for (ChatTranscriptEntry entry : entries) {
                 md.append("\n### ").append("user".equalsIgnoreCase(entry.role()) ? "User" : "Roxy");
@@ -278,31 +254,15 @@ public class MemoryService {
     }
 
     public static String stripFrontmatter(String rawMarkdown) {
-        if (rawMarkdown == null || rawMarkdown.isEmpty()) {
-            return "";
-        }
-        List<String> lines = rawMarkdown.lines().toList();
-        int endLine = findFrontmatterEndLine(lines);
-        if (endLine <= 0) {
-            return rawMarkdown;
-        }
-        int startIdx = endLine;
-        while (startIdx < lines.size() && lines.get(startIdx).isBlank()) {
-            startIdx++;
-        }
-        return startIdx >= lines.size() ? "" : String.join("\n", lines.subList(startIdx, lines.size()));
+        return FrontmatterUtils.stripFrontmatter(rawMarkdown);
     }
 
-    private static int findFrontmatterEndLine(List<String> lines) {
-        if (lines == null || lines.isEmpty() || !FRONTMATTER_DELIMITER.equals(lines.get(0).trim())) {
-            return 0;
-        }
-        for (int i = 1; i < lines.size(); i++) {
-            if (FRONTMATTER_DELIMITER.equals(lines.get(i).trim())) {
-                return i + 1;
-            }
-        }
-        return 0;
+    static int findFrontmatterEndLine(Path file) {
+        return FrontmatterUtils.findFrontmatterEndLine(file);
+    }
+
+    static Map<String, String> parseFrontmatter(Path file) {
+        return FrontmatterUtils.parseFrontmatter(file);
     }
 
     private List<ArchiveEntrySummary> listArchivedEntrySummaries(Path archiveDir, String defaultType) {
@@ -439,38 +399,8 @@ public class MemoryService {
             }
         }
         String text = rel.substring(secondColon + 1).trim();
-        if (!text.isEmpty() && !FRONTMATTER_DELIMITER.equals(text)) {
+        if (!text.isEmpty() && !FrontmatterUtils.FRONTMATTER_DELIMITER.equals(text)) {
             snippetsByFilename.put(filename, text);
-        }
-    }
-
-    static int findFrontmatterEndLine(Path file) {
-        return findFrontmatterEndLine(readFrontmatterLines(file));
-    }
-
-    private static List<String> readFrontmatterLines(Path file) {
-        if (file == null || !Files.isRegularFile(file)) {
-            return List.of();
-        }
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            String firstLine = reader.readLine();
-            if (firstLine == null || !FRONTMATTER_DELIMITER.equals(firstLine.trim())) {
-                return List.of();
-            }
-            List<String> lines = new ArrayList<>();
-            lines.add(firstLine.trim());
-            String line = reader.readLine();
-            while (lines.size() <= MAX_FRONTMATTER_LINES && line != null) {
-                lines.add(line);
-                if (FRONTMATTER_DELIMITER.equals(line.trim())) {
-                    break;
-                }
-                line = reader.readLine();
-            }
-            return lines;
-        } catch (IOException e) {
-            log.debug("Failed to read frontmatter lines from {}: {}", file, e.getMessage());
-            return List.of();
         }
     }
 
@@ -540,10 +470,10 @@ public class MemoryService {
         if (rawOutput == null || rawOutput.isEmpty()) {
             return "";
         }
-        String globalPrefix = toSlashPrefix(globalDir);
-        String projectPrefix = toSlashPrefix(projectDir);
-        String archivePrefix = toSlashPrefix(archiveDir);
-        String archiveTopicsPrefix = toSlashPrefix(archiveTopicsDir);
+        List<PrefixLabel> prefixLabels = List.of(new PrefixLabel(toSlashPrefix(globalDir), "[GLOBAL] "),
+                new PrefixLabel(toSlashPrefix(projectDir), "[PROJECT] "),
+                new PrefixLabel(toSlashPrefix(archiveDir), "[ARCHIVE] plans/"),
+                new PrefixLabel(toSlashPrefix(archiveTopicsDir), "[ARCHIVE] topics/"));
 
         List<String> lines = rawOutput.lines().toList();
         StringBuilder sb = new StringBuilder();
@@ -552,16 +482,16 @@ public class MemoryService {
                 sb.append('\n');
             }
             String line = lines.get(i);
-            String slashLine = line.replace('\\', '/');
-            if (startsWithSlashPrefix(slashLine, globalPrefix)) {
-                sb.append("[GLOBAL] ").append(slashLine.substring(globalPrefix.length()));
-            } else if (startsWithSlashPrefix(slashLine, projectPrefix)) {
-                sb.append("[PROJECT] ").append(slashLine.substring(projectPrefix.length()));
-            } else if (startsWithSlashPrefix(slashLine, archivePrefix)) {
-                sb.append("[ARCHIVE] plans/").append(slashLine.substring(archivePrefix.length()));
-            } else if (startsWithSlashPrefix(slashLine, archiveTopicsPrefix)) {
-                sb.append("[ARCHIVE] topics/").append(slashLine.substring(archiveTopicsPrefix.length()));
-            } else {
+            String slashLine = line.replace((char) 92, '/');
+            boolean replaced = false;
+            for (PrefixLabel pl : prefixLabels) {
+                if (startsWithSlashPrefix(slashLine, pl.prefix())) {
+                    sb.append(pl.label()).append(slashLine.substring(pl.prefix().length()));
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
                 sb.append(line);
             }
         }
@@ -585,7 +515,7 @@ public class MemoryService {
         if (dir == null) {
             return "";
         }
-        String normalized = dir.toAbsolutePath().normalize().toString().replace('\\', '/');
+        String normalized = dir.toAbsolutePath().normalize().toString().replace((char) 92, '/');
         return normalized.endsWith("/") ? normalized : normalized + "/";
     }
 
@@ -642,9 +572,12 @@ public class MemoryService {
                 : result;
     }
 
-    private EditorResult saveNote(Path memoryRoot, String scope, String rawSlug, String title, String tags,
-            String content) {
+    private EditorResult saveNote(Path memoryRoot, String missingMsg, String scope, String rawSlug, String title,
+            String tags, String content) {
         String sanitizedSlug = sanitizeSlug(rawSlug);
+        if (memoryRoot == null) {
+            return new EditorResult(false, "", missingMsg);
+        }
         String resolvedTitle = firstNonBlank(title, sanitizedSlug);
         String resolvedTags = tags != null ? tags.trim() : "";
         String body = content != null ? content.stripLeading() : "";
@@ -659,11 +592,10 @@ public class MemoryService {
                 updatedAt: "%s"
                 ---
 
-                """.formatted(ImplementationPlan.escapeFrontmatterValue(sanitizedSlug),
-                ImplementationPlan.escapeFrontmatterValue(scope),
-                ImplementationPlan.escapeFrontmatterValue(resolvedTitle),
-                ImplementationPlan.escapeFrontmatterValue(resolvedTags),
-                ImplementationPlan.escapeFrontmatterValue(Instant.now().toString())));
+                """.formatted(FrontmatterUtils.escapeFrontmatterValue(sanitizedSlug),
+                FrontmatterUtils.escapeFrontmatterValue(scope), FrontmatterUtils.escapeFrontmatterValue(resolvedTitle),
+                FrontmatterUtils.escapeFrontmatterValue(resolvedTags),
+                FrontmatterUtils.escapeFrontmatterValue(Instant.now().toString())));
 
         if (!body.startsWith("# ") && !body.startsWith("#\t")) {
             md.append("# ").append(resolvedTitle).append("\n\n");
@@ -678,7 +610,12 @@ public class MemoryService {
                 "Saved " + scope + " note: notes/" + sanitizedSlug + MD_EXTENSION);
     }
 
-    private EditorResult deleteNoteFile(Path notePath, String sanitizedSlug) {
+    private EditorResult deleteNote(Path dir, String missingMsg, String slug) {
+        String sanitizedSlug = sanitizeSlug(slug);
+        if (dir == null) {
+            return new EditorResult(false, "", missingMsg);
+        }
+        Path notePath = dir.resolve(NOTES_SUBDIR).resolve(sanitizedSlug + MD_EXTENSION);
         try {
             if (!Files.exists(notePath)) {
                 return new EditorResult(false, "", "Note does not exist: notes/" + sanitizedSlug + MD_EXTENSION);
@@ -691,7 +628,8 @@ public class MemoryService {
         }
     }
 
-    private List<String> listNotesInDir(Path notesDir) {
+    private List<String> listNotes(Path memoryRoot) {
+        Path notesDir = memoryRoot != null ? memoryRoot.resolve(NOTES_SUBDIR) : null;
         if (notesDir == null || !Files.isDirectory(notesDir)) {
             return List.of();
         }
@@ -711,38 +649,6 @@ public class MemoryService {
             log.warn("Failed to list notes in {}: {}", notesDir, e.getMessage());
             return List.of();
         }
-    }
-
-    static Map<String, String> parseFrontmatter(Path file) {
-        Map<String, String> map = new LinkedHashMap<>();
-        List<String> lines = readFrontmatterLines(file);
-        if (lines.isEmpty()) {
-            return map;
-        }
-        String yamlBlock = String.join("\n", lines)
-                + (findFrontmatterEndLine(lines) > 0 ? "\n" : "\n" + FRONTMATTER_DELIMITER + "\n");
-        Node doc = FRONTMATTER_PARSER.parse(yamlBlock);
-        AbstractYamlFrontMatterVisitor visitor = new AbstractYamlFrontMatterVisitor();
-        visitor.visit(doc);
-        for (Map.Entry<String, List<String>> entry : visitor.getData().entrySet()) {
-            List<String> values = entry.getValue();
-            String rawVal = (values == null || values.isEmpty()) ? "" : String.join(", ", values).trim();
-            map.put(entry.getKey().trim(), normalizeFrontmatterValue(rawVal));
-        }
-        return map;
-    }
-
-    private static String normalizeFrontmatterValue(String val) {
-        if (val == null || val.length() < 2) {
-            return val != null ? val : "";
-        }
-        if (val.charAt(0) == DQUOTE && val.charAt(val.length() - 1) == DQUOTE) {
-            return StringEscapeUtils.unescapeJava(val.substring(1, val.length() - 1));
-        }
-        if (val.charAt(0) == SQUOTE && val.charAt(val.length() - 1) == SQUOTE) {
-            return val.substring(1, val.length() - 1);
-        }
-        return val;
     }
 
     private static EditorResult writeMarkdownFile(Path path, String content, String successMessage) {

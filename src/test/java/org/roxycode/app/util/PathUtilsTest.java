@@ -65,4 +65,11 @@ class PathUtilsTest {
         assertEquals("", PathUtils.getLowerExtension(".gitignore", false));
         assertEquals("gitignore", PathUtils.getLowerExtension(".gitignore", true));
     }
+
+    @Test
+    void testFormatArchiveTimestampParsesIsoAndFallsBackWhenInvalid() {
+        assertEquals("20250514-153000", PathUtils.formatArchiveTimestamp("2025-05-14T15:30:00Z"));
+        assertTrue(PathUtils.formatArchiveTimestamp(null).matches("[0-9]{8}-[0-9]{6}"));
+        assertTrue(PathUtils.formatArchiveTimestamp("not-a-timestamp").matches("[0-9]{8}-[0-9]{6}"));
+    }
 }
