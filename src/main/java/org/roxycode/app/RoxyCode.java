@@ -63,7 +63,6 @@ public class RoxyCode {
         try {
             context = new SpringApplicationBuilder(RoxyCode.class).headless(false)
                     .initializers(createSettingsInitializer(initialSettings)).run(args);
-            Runtime.getRuntime().addShutdownHook(new Thread(context::close));
         } catch (RuntimeException e) {
             disposeSplash(splashRef.get());
             throw e;
@@ -72,8 +71,9 @@ public class RoxyCode {
         Edt.run(() -> {
             SplashScreenWindow splash = splashRef.get();
             try {
-                if (splash != null)
+                if (splash != null) {
                     splash.setStatus("Building workspace UI...");
+                }
                 context.getBean(MainFrame.class).setVisible(true);
             } finally {
                 disposeSplash(splash);
@@ -86,18 +86,23 @@ public class RoxyCode {
         return applicationContext -> {
             ConfigurableEnvironment env = applicationContext.getEnvironment();
             Map<String, Object> props = new HashMap<>();
-            if (settings != null && settings.getGeminiApiKey() != null && !settings.getGeminiApiKey().isEmpty()) {
-                props.put(PROP_GEMINI_API_KEY, settings.getGeminiApiKey());
+            if (settings != null) {
+                if (StringUtils.isNotBlank(settings.getGeminiApiKey())) {
+                    props.put(PROP_GEMINI_API_KEY, settings.getGeminiApiKey());
+                }
+                String model = DEFAULT_GEMINI_MODEL;
+                if (StringUtils.isNotBlank(settings.getGeminiModel())) {
+                    model = settings.getGeminiModel();
+                }
+                props.put(PROP_GEMINI_MODEL, model);
             }
-            String model = (settings != null && settings.getGeminiModel() != null
-                    && !settings.getGeminiModel().isEmpty()) ? settings.getGeminiModel() : DEFAULT_GEMINI_MODEL;
-            props.put(PROP_GEMINI_MODEL, model);
             env.getPropertySources().addFirst(new MapPropertySource(SETTINGS_PROPERTY_SOURCE, props));
         };
     }
 
     private static void disposeSplash(SplashScreenWindow splash) {
-        if (splash != null)
+        if (splash != null) {
             Edt.run(splash::dispose);
+        }
     }
 }
