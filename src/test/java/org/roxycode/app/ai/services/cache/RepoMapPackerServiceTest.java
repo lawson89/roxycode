@@ -233,4 +233,118 @@ class RepoMapPackerServiceTest {
         assertEquals(secondResult.content(), thirdResult.content());
         verify(grepService, times(2)).listFiles(null);
     }
+
+    @Test
+    void testMultiLineMethodSignaturesAndInlineAnnotationStripping() throws IOException {
+        Path planServiceFile = Files.writeString(tempDir.resolve("PlanServiceSample.java"), """
+                package demo;
+                import java.util.List;
+                public class PlanServiceSample {
+                    public synchronized String submitPlan(
+                            @ToolParam(description = "The concise title (max 50 chars).") String title,
+                            @ToolParam(description = "The high-level goal.") String goal,
+                            @ToolParam(description = "List of requirements.") List<String> requirements,
+                            @ToolParam(description = "List of technical steps.") List<String> technicalSteps) {
+                        return title;
+                    }
+                    public String readLines(@AgentDoc(DOC_FILE_PATH) String relativePath,
+                            @AgentDoc("The 1-based start line number (inclusive)") int startLine,
+                            @AgentDoc("The 1-based end line number (inclusive)") int endLine)
+                            throws IOException {
+                        return relativePath;
+                    }
+                }
+                """);
+
+        when(grepService.listFiles(null)).thenReturn(List.of("PlanServiceSample.java"));
+        service.setCtagsRunner(cmd -> new ProcessResult(0,
+                ctagsLineWithKind("PlanServiceSample", planServiceFile.toString(), 3, "class")
+                        + ctagsLineWithKind("submitPlan", planServiceFile.toString(), 4, "method")
+                        + ctagsLineWithKind("title", planServiceFile.toString(), 5, "local")
+                        + ctagsLineWithKind("goal", planServiceFile.toString(), 6, "local")
+                        + ctagsLineWithKind("readLines", planServiceFile.toString(), 11, "method"),
+                "", false));
+
+        EditorResult result = service.generateRepoMap();
+        assertTrue(result.success());
+        assertEquals(
+                """
+                        # Repo Map Snapshot
+                        PlanServiceSample.java
+                          3: public class PlanServiceSample {
+                          4: public synchronized String submitPlan(String title, String goal, List<String> requirements, List<String> technicalSteps) {
+                          11: public String readLines(String relativePath, int startLine, int endLine) throws IOException {
+                        """,
+                result.content());
+    }
+
+    @Test
+    void testMultiLineRecordHeadersAndSingleLineDeclarations() throws IOException {
+        Path recordFile = Files.writeString(tempDir.resolve("ImplementationPlanSample.java"), """
+                package demo;
+                import java.util.List;
+                public record ImplementationPlanSample(
+                        String title,
+                        String goal,
+                        List<String> requirements,
+                        boolean userApproved) {
+                    public static final String STEP_COMPILE = "Code compiles successfully";
+                    public String summary() { return title + ": " + goal; }
+                }
+                """);
+
+        when(grepService.listFiles(null)).thenReturn(List.of("ImplementationPlanSample.java"));
+        service.setCtagsRunner(cmd -> new ProcessResult(0,
+                ctagsLineWithKind("ImplementationPlanSample", recordFile.toString(), 3, "record")
+                        + ctagsLineWithKind("title", recordFile.toString(), 4, "field")
+                        + ctagsLineWithKind("STEP_COMPILE", recordFile.toString(), 8, "field")
+                        + ctagsLineWithKind("summary", recordFile.toString(), 9, "method"),
+                "", false));
+
+        EditorResult result = service.generateRepoMap();
+        assertTrue(result.success());
+        assertEquals(
+                """
+                        # Repo Map Snapshot
+                        ImplementationPlanSample.java
+                          3: public record ImplementationPlanSample(String title, String goal, List<String> requirements, boolean userApproved) {
+                          8: public static final String STEP_COMPILE = "Code compiles successfully";
+                          9: public String summary() { return title + ": " + goal; }
+                        """,
+                result.content());
+    }
+
+    @Test
+    void testCollapseSignatureGuardrailCapsForContinuationLinesAndMaxChars() {
+        List<String> unclosedManyLines = List.of("public void methodWithManyContinuationLines(",
+                "        String param1,", "        String param2,", "        String param3,", "        String param4,",
+                "        String param5,", "        String param6,", "        String param7,", "        String param8,",
+                "        String param9BeyondCap,", "        String param10BeyondCap) {");
+
+        RepoMapPackerService.CollapsedSignature collapsedLinesCap = RepoMapPackerService
+                .collapseSignatureWithEndLine(unclosedManyLines, 0);
+        assertEquals(RepoMapPackerService.MAX_SIGNATURE_CONTINUATION_LINES, collapsedLinesCap.endLineIndex());
+        assertTrue(collapsedLinesCap.text().contains("String param8,"));
+        assertFalse(collapsedLinesCap.text().contains("param9BeyondCap"));
+        assertFalse(collapsedLinesCap.text().contains("param10BeyondCap"));
+
+        List<String> hugeDeclaration = List.of(
+                "public Map<String, List<Map<String, Object>>> veryLongMethodDeclarationName(",
+                "        String firstExtremelyDescriptiveParameterName,",
+                "        String secondExtremelyDescriptiveParameterName,",
+                "        String thirdExtremelyDescriptiveParameterName,",
+                "        String fourthExtremelyDescriptiveParameterName,",
+                "        String fifthExtremelyDescriptiveParameterName) {");
+
+        String collapsedHuge = RepoMapPackerService.collapseSignature(hugeDeclaration, 0);
+        assertEquals(RepoMapPackerService.MAX_SIGNATURE_CHARS, collapsedHuge.length());
+        assertTrue(collapsedHuge
+                .startsWith("public Map<String, List<Map<String, Object>>> veryLongMethodDeclarationName("));
+        assertTrue(collapsedHuge.endsWith("..."));
+        assertFalse(collapsedHuge.contains("fifthExtremelyDescriptiveParameterName"));
+
+        assertEquals("", RepoMapPackerService.collapseSignature(null, 0));
+        assertEquals("", RepoMapPackerService.collapseSignature(List.of("public class A {}"), -1));
+        assertEquals("", RepoMapPackerService.collapseSignature(List.of("public class A {}"), 5));
+    }
 }
