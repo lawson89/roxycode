@@ -20,8 +20,7 @@ public final class ChatModel {
     public static final String TASK_SESSION_PREFIX = "task";
     public static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
     public static final String QA_CONVERSATION_ID = QA_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
-    public static final String TASK_CONVERSATION_ID =
-            TASK_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
+    public static final String TASK_CONVERSATION_ID = TASK_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
 
     private final String sessionPrefix;
     private final String conversationId;
@@ -92,9 +91,7 @@ public final class ChatModel {
         if (img instanceof BufferedImage buffered) {
             bimage = buffered;
         } else {
-            bimage =
-                    new BufferedImage(
-                            img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+            bimage = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
             Graphics2D bGr = bimage.createGraphics();
             bGr.drawImage(img, 0, 0, null);
             bGr.dispose();
@@ -138,7 +135,8 @@ public final class ChatModel {
     }
 
     public static List<byte[]> encodeImagesToPngBytes(List<BufferedImage> images) {
-        if (images == null || images.isEmpty()) return List.of();
+        if (images == null || images.isEmpty())
+            return List.of();
         List<byte[]> imageBytes = new ArrayList<>(images.size());
         for (BufferedImage bimg : images) {
             try {
@@ -154,17 +152,11 @@ public final class ChatModel {
 
     public String formatTurnStatus(AppSettings settings, ImplementationPlan plan) {
         StringBuilder sb = new StringBuilder("Turns: ").append(currentTurn);
-        if (settings != null) sb.append(" / ").append(settings.getMaxAgentToolTurns());
+        if (settings != null)
+            sb.append(" / ").append(settings.getMaxAgentToolTurns());
         if (taskMode && plan != null && !plan.technicalSteps().isEmpty()) {
-            long completed =
-                    plan.technicalSteps().stream()
-                            .filter(ImplementationPlan.TechStep::completed)
-                            .count();
-            sb.append(" | Plan: ")
-                    .append(completed)
-                    .append("/")
-                    .append(plan.technicalSteps().size())
-                    .append(" steps");
+            long completed = plan.technicalSteps().stream().filter(ImplementationPlan.TechStep::completed).count();
+            sb.append(" | Plan: ").append(completed).append("/").append(plan.technicalSteps().size()).append(" steps");
         }
         return sb.toString();
     }

@@ -34,8 +34,7 @@ class MarkdownPaneTest {
         assertFalse(initialHtml.contains("copy:0"));
         assertEquals(-1, pane.getCopiedMessageIndex());
 
-        pane.fireHyperlinkUpdate(
-                new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "copy:1"));
+        pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "copy:1"));
         assertEquals(aiMarkdown, pane.getLastCopiedMarkdown());
         assertEquals(1, pane.getCopiedMessageIndex());
         assertTrue(pane.getText().contains("Copied!"));
@@ -62,15 +61,8 @@ class MarkdownPaneTest {
 
         String html = pane.getText();
         assertFalse(html.contains("welcome-card"));
-        assertContainsAll(
-                html,
-                "First user question",
-                "fileReadService.readFile",
-                "First AI answer",
-                "Second user question",
-                "Second AI answer",
-                "copy-cell-2",
-                "copy-cell-4");
+        assertContainsAll(html, "First user question", "fileReadService.readFile", "First AI answer",
+                "Second user question", "Second AI answer", "copy-cell-2", "copy-cell-4");
     }
 
     @Test
@@ -132,14 +124,7 @@ class MarkdownPaneTest {
     void testMarkdownTableDecoratedWhileChatCardStructuralTablesPreserved() {
         MarkdownPane pane = new MarkdownPane();
         pane.appendMessage("ai", "| Col A | Col B |\n|---|---|\n| 1 | 2 |\n");
-        assertContainsAll(
-                pane.getText(),
-                "md-table",
-                "cellpadding",
-                "cellspacing",
-                "md-th",
-                "md-td",
-                "ai-entry",
+        assertContainsAll(pane.getText(), "md-table", "cellpadding", "cellspacing", "md-th", "md-td", "ai-entry",
                 "ai-accent");
     }
 

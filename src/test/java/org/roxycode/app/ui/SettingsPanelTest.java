@@ -25,7 +25,8 @@ import org.springframework.core.env.ConfigurableEnvironment;
 @ExtendWith(MockitoExtension.class)
 class SettingsPanelTest {
 
-    @Mock private SettingsService settingsService;
+    @Mock
+    private SettingsService settingsService;
     private SettingsPanel settingsPanel;
     private AppSettings settings;
 
@@ -33,8 +34,7 @@ class SettingsPanelTest {
     void setUp() {
         settings = new AppSettings();
         lenient().when(settingsService.getSettings()).thenReturn(settings);
-        lenient()
-                .when(settingsService.getAvailableModels())
+        lenient().when(settingsService.getAvailableModels())
                 .thenReturn(new SettingsService(null, null).getAvailableModels());
         settingsPanel = new SettingsPanel(settingsService);
     }
@@ -64,8 +64,7 @@ class SettingsPanelTest {
     void testThemeSelectionUpdatesSettingsButDoesNotSave() {
         try {
             @SuppressWarnings("unchecked")
-            JComboBox<String> themeCombo =
-                    SwingTestUtils.findComponent(settingsPanel, JComboBox.class);
+            JComboBox<String> themeCombo = SwingTestUtils.findComponent(settingsPanel, JComboBox.class);
             assertNotNull(themeCombo);
 
             themeCombo.setSelectedItem("FlatLaf Dark");
@@ -83,38 +82,36 @@ class SettingsPanelTest {
 
     @Test
     void testApplyThemeOffEdtWithIndeterminateProgressBarDoesNotLogSevereError() {
-        Assumptions.assumeFalse(
-                GraphicsEnvironment.isHeadless(), "Skipping JDialog test in headless environment");
+        Assumptions.assumeFalse(GraphicsEnvironment.isHeadless(), "Skipping JDialog test in headless environment");
         Logger flatLafLogger = Logger.getLogger("com.formdev.flatlaf");
         List<LogRecord> severeRecords = new CopyOnWriteArrayList<>();
-        Handler handler =
-                new Handler() {
-                    @Override
-                    public void publish(LogRecord record) {
-                        if (record != null
-                                && record.getLevel().intValue() >= Level.SEVERE.intValue()) {
-                            severeRecords.add(record);
-                        }
-                    }
+        Handler handler = new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                if (record != null && record.getLevel().intValue() >= Level.SEVERE.intValue()) {
+                    severeRecords.add(record);
+                }
+            }
 
-                    @Override
-                    public void flush() {}
+            @Override
+            public void flush() {
+            }
 
-                    @Override
-                    public void close() {}
-                };
+            @Override
+            public void close() {
+            }
+        };
 
         flatLafLogger.addHandler(handler);
         final JDialog[] dialogHolder = new JDialog[1];
         try {
-            SwingTestUtils.runOnEdt(
-                    () -> {
-                        JDialog dialog = new JDialog();
-                        JProgressBar progressBar = new JProgressBar();
-                        progressBar.setIndeterminate(true);
-                        dialog.add(progressBar);
-                        dialogHolder[0] = dialog;
-                    });
+            SwingTestUtils.runOnEdt(() -> {
+                JDialog dialog = new JDialog();
+                JProgressBar progressBar = new JProgressBar();
+                progressBar.setIndeterminate(true);
+                dialog.add(progressBar);
+                dialogHolder[0] = dialog;
+            });
 
             assertFalse(SwingUtilities.isEventDispatchThread());
             SettingsPanel.applyTheme("FlatLaf Dark");
@@ -123,13 +120,13 @@ class SettingsPanelTest {
         } finally {
             flatLafLogger.removeHandler(handler);
             if (dialogHolder[0] != null) {
-                SwingTestUtils.runOnEdt(
-                        () -> {
-                            for (Component c : dialogHolder[0].getContentPane().getComponents()) {
-                                if (c instanceof JProgressBar pb) pb.setIndeterminate(false);
-                            }
-                            dialogHolder[0].dispose();
-                        });
+                SwingTestUtils.runOnEdt(() -> {
+                    for (Component c : dialogHolder[0].getContentPane().getComponents()) {
+                        if (c instanceof JProgressBar pb)
+                            pb.setIndeterminate(false);
+                    }
+                    dialogHolder[0].dispose();
+                });
             }
             SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
         }
@@ -137,8 +134,7 @@ class SettingsPanelTest {
 
     @Test
     void testRestartRequiredSettingsShowRestartWarningOnSave() {
-        JPasswordField apiKeyField =
-                SwingTestUtils.findComponent(settingsPanel, JPasswordField.class);
+        JPasswordField apiKeyField = SwingTestUtils.findComponent(settingsPanel, JPasswordField.class);
         assertNotNull(apiKeyField);
         apiKeyField.setText("new-secret-key");
 
@@ -146,9 +142,7 @@ class SettingsPanelTest {
         saveButton.doClick();
 
         assertEquals("new-secret-key", settings.getGeminiApiKey());
-        assertEquals(
-                SettingsPanel.SAVED_RESTART_REQUIRED_TEXT,
-                settingsPanel.getStatusLabel().getText());
+        assertEquals(SettingsPanel.SAVED_RESTART_REQUIRED_TEXT, settingsPanel.getStatusLabel().getText());
         verify(settingsService, times(1)).saveSettings();
 
         saveButton.doClick();
@@ -157,9 +151,7 @@ class SettingsPanelTest {
         settingsPanel.getMaxMessagesSpinner().setValue(120);
         saveButton.doClick();
         assertEquals(120, settings.getMaxChatMemoryMessages());
-        assertEquals(
-                SettingsPanel.SAVED_RESTART_REQUIRED_TEXT,
-                settingsPanel.getStatusLabel().getText());
+        assertEquals(SettingsPanel.SAVED_RESTART_REQUIRED_TEXT, settingsPanel.getStatusLabel().getText());
     }
 
     @Test
@@ -172,9 +164,7 @@ class SettingsPanelTest {
             RoxyCode.createSettingsInitializer(customSettings).initialize(ctx);
             ConfigurableEnvironment env = ctx.getEnvironment();
             assertEquals("custom-api-key-999", env.getProperty("spring.ai.google.genai.api-key"));
-            assertEquals(
-                    "gemini-3.8-flash",
-                    env.getProperty("spring.ai.google.genai.chat.options.model"));
+            assertEquals("gemini-3.8-flash", env.getProperty("spring.ai.google.genai.chat.options.model"));
         }
 
         AppSettings emptySettings = new AppSettings();
@@ -184,13 +174,9 @@ class SettingsPanelTest {
         try (GenericApplicationContext ctx = new GenericApplicationContext()) {
             RoxyCode.createSettingsInitializer(emptySettings).initialize(ctx);
             ConfigurableEnvironment env = ctx.getEnvironment();
-            assertNull(
-                    env.getPropertySources()
-                            .get("roxycodeSettingsProperties")
-                            .getProperty("spring.ai.google.genai.api-key"));
-            assertEquals(
-                    "gemini-3.5-flash",
-                    env.getProperty("spring.ai.google.genai.chat.options.model"));
+            assertNull(env.getPropertySources().get("roxycodeSettingsProperties")
+                    .getProperty("spring.ai.google.genai.api-key"));
+            assertEquals("gemini-3.5-flash", env.getProperty("spring.ai.google.genai.chat.options.model"));
         }
     }
 

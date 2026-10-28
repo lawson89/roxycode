@@ -21,11 +21,9 @@ public final class StatusPanel extends JPanel {
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
-        JLabel osLabel =
-                new JLabel(envService.getOsName(), envService.getOsIcon(), SwingConstants.LEFT);
+        JLabel osLabel = new JLabel(envService.getOsName(), envService.getOsIcon(), SwingConstants.LEFT);
         osLabel.setFont(osLabel.getFont().deriveFont(11f));
-        osLabel.setToolTipText(
-                envService.getOsVersion() + " | User: " + envService.getCurrentUser());
+        osLabel.setToolTipText(envService.getOsVersion() + " | User: " + envService.getCurrentUser());
 
         JLabel javaLabel = new JLabel("Java " + envService.getJavaVersion());
         javaLabel.setFont(osLabel.getFont());
@@ -44,12 +42,14 @@ public final class StatusPanel extends JPanel {
     @Override
     public void addNotify() {
         super.addNotify();
-        if (statsTimer != null && !statsTimer.isRunning()) statsTimer.start();
+        if (statsTimer != null && !statsTimer.isRunning())
+            statsTimer.start();
     }
 
     @Override
     public void removeNotify() {
-        if (statsTimer != null) statsTimer.stop();
+        if (statsTimer != null)
+            statsTimer.stop();
         super.removeNotify();
     }
 
@@ -68,11 +68,6 @@ public final class StatusPanel extends JPanel {
     }
 
     void updateStats() {
-        memLabel.setText(
-                "Mem: "
-                        + envService.getMemoryUsageMb()
-                        + "/"
-                        + envService.getTotalMemoryMb()
-                        + "MB");
+        memLabel.setText("Mem: " + envService.getMemoryUsageMb() + "/" + envService.getTotalMemoryMb() + "MB");
     }
 }

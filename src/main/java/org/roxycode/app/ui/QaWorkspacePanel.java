@@ -38,8 +38,7 @@ public final class QaWorkspacePanel extends JPanel {
     public QaWorkspacePanel(ExploreChatPanel exploreChatPanel, MemoryService memoryService) {
         super(new BorderLayout());
 
-        qaHeaderBar =
-                new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
+        qaHeaderBar = new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
         qaHeaderBar.setOpaque(false);
 
         mentorBanner = new JPanel(new MigLayout("insets 0, gapx 6", "[][]", LAYOUT_CENTER));
@@ -54,35 +53,32 @@ public final class QaWorkspacePanel extends JPanel {
         qaHeaderBar.add(mentorBanner, "right, center");
 
         this.qaTabs = new JTabbedPane();
-        qaTabs.putClientProperty(
-                FlatClientProperties.TABBED_PANE_TAB_TYPE,
+        qaTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE,
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
         qaTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, qaHeaderBar);
         this.qaChatPanel = exploreChatPanel;
         this.pastTopicsPanel = new ArchiveBrowserPanel(memoryService, ArchiveMode.TOPICS);
         qaTabs.addTab("Chat", qaChatPanel);
         qaTabs.addTab(PAST_TOPICS_TAB_TITLE, pastTopicsPanel);
-        qaTabs.addChangeListener(
-                e -> {
-                    if (qaChatPanel != null && qaChatPanel.equals(qaTabs.getSelectedComponent())) {
-                        SwingUtilities.invokeLater(qaChatPanel::focusInput);
-                    } else if (pastTopicsPanel.equals(qaTabs.getSelectedComponent())) {
-                        pastTopicsPanel.refresh();
-                    }
-                });
+        qaTabs.addChangeListener(e -> {
+            if (qaChatPanel != null && qaChatPanel.equals(qaTabs.getSelectedComponent())) {
+                SwingUtilities.invokeLater(qaChatPanel::focusInput);
+            } else if (pastTopicsPanel.equals(qaTabs.getSelectedComponent())) {
+                pastTopicsPanel.refresh();
+            }
+        });
         add(qaTabs, BorderLayout.CENTER);
     }
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        if (pastTopicsPanel != null) pastTopicsPanel.refresh();
+        if (pastTopicsPanel != null)
+            pastTopicsPanel.refresh();
     }
 
     @EventListener
     public void onArchiveUpdated(ArchiveUpdatedEvent event) {
-        if (pastTopicsPanel != null
-                && event != null
-                && ArchiveUpdatedEvent.TYPE_TOPIC.equals(event.type())) {
+        if (pastTopicsPanel != null && event != null && ArchiveUpdatedEvent.TYPE_TOPIC.equals(event.type())) {
             pastTopicsPanel.refresh();
         }
     }
@@ -90,7 +86,8 @@ public final class QaWorkspacePanel extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (mentorBanner != null) applyBannerStyling();
+        if (mentorBanner != null)
+            applyBannerStyling();
     }
 
     void applyBannerStyling() {

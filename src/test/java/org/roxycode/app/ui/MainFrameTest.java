@@ -29,8 +29,7 @@ import org.springframework.context.ApplicationEventPublisher;
 class MainFrameTest {
     @Test
     void testProjectChangedEventClearsQaAndTaskConversationsAndUpdatesTitle() throws Exception {
-        Assumptions.assumeFalse(
-                GraphicsEnvironment.isHeadless(), "Skipping JFrame test in headless environment");
+        Assumptions.assumeFalse(GraphicsEnvironment.isHeadless(), "Skipping JFrame test in headless environment");
         SettingsService settingsService = mock(SettingsService.class);
         when(settingsService.getSettings()).thenReturn(new AppSettings());
         ProjectService projectService = mock(ProjectService.class);
@@ -50,54 +49,29 @@ class MainFrameTest {
         PromptService promptService = mock(PromptService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        ExploreChatPanel exploreChatPanel =
-                new ExploreChatPanel(
-                        aiService,
-                        planService,
-                        pub,
-                        chatMemory,
-                        settingsService,
-                        null,
-                        null,
-                        envService);
-        FeatureChatPanel featureChatPanel =
-                new FeatureChatPanel(
-                        aiService, planService, pub, chatMemory, settingsService, null);
+        ExploreChatPanel exploreChatPanel = new ExploreChatPanel(aiService, planService, pub, chatMemory,
+                settingsService, null, null, envService);
+        FeatureChatPanel featureChatPanel = new FeatureChatPanel(aiService, planService, pub, chatMemory,
+                settingsService, null);
 
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
         QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(exploreChatPanel, null);
-        TaskWorkspacePanel taskWorkspacePanel =
-                new TaskWorkspacePanel(
-                        featureChatPanel,
-                        planService,
-                        new PlanPanel(planService, gitService),
-                        null);
+        TaskWorkspacePanel taskWorkspacePanel = new TaskWorkspacePanel(featureChatPanel, planService,
+                new PlanPanel(planService, gitService), null);
 
-        MainFrame mainFrame =
-                new MainFrame(
-                        settingsService,
-                        projectService,
-                        chatMemory,
-                        headerPanel,
-                        new StatusPanel(envService),
-                        qaWorkspacePanel,
-                        taskWorkspacePanel,
-                        new CodebaseCachePanel(
-                                mock(RepoMapPackerService.class),
-                                mock(ProjectCacheMetaService.class),
-                                promptService),
-                        new JexlApiPanel(jexlServiceRegistry),
-                        new SystemToolsPanel(toolService),
-                        new SettingsPanel(settingsService),
-                        new BuildConfigPanel(
-                                mock(GenericBuildToolService.class), settingsService, toolService),
-                        new ContextManagerPanel(promptService));
+        MainFrame mainFrame = new MainFrame(settingsService, projectService, chatMemory, headerPanel,
+                new StatusPanel(envService), qaWorkspacePanel, taskWorkspacePanel,
+                new CodebaseCachePanel(mock(RepoMapPackerService.class), mock(ProjectCacheMetaService.class),
+                        promptService),
+                new JexlApiPanel(jexlServiceRegistry), new SystemToolsPanel(toolService),
+                new SettingsPanel(settingsService),
+                new BuildConfigPanel(mock(GenericBuildToolService.class), settingsService, toolService),
+                new ContextManagerPanel(promptService));
 
         assertEquals(1, MainFrame.class.getDeclaredConstructors().length);
         assertEquals("RoxyCode - [OldProject]", mainFrame.getTitle());
 
-        MigLayout rootLayout =
-                assertInstanceOf(MigLayout.class, mainFrame.getContentPane().getLayout());
+        MigLayout rootLayout = assertInstanceOf(MigLayout.class, mainFrame.getContentPane().getLayout());
         assertEquals("[210!, fill]0[fill, grow]", rootLayout.getColumnConstraints());
         Component sidebarComp = mainFrame.getContentPane().getComponent(0);
         assertInstanceOf(SidebarPanel.class, sidebarComp);
@@ -123,13 +97,11 @@ class MainFrameTest {
 
         CountDownLatch turnStarted = new CountDownLatch(2);
         CountDownLatch blockTurn = new CountDownLatch(1);
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenAnswer(
-                        inv -> {
-                            turnStarted.countDown();
-                            blockTurn.await();
-                            return "Done";
-                        });
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            turnStarted.countDown();
+            blockTurn.await();
+            return "Done";
+        });
 
         exploreChatPanel.getController().triggerTurn("QA in progress");
         featureChatPanel.getController().triggerTurn("Task in progress");
@@ -137,12 +109,8 @@ class MainFrameTest {
         assertTrue(exploreChatPanel.getController().isTurnActive());
         assertTrue(featureChatPanel.getController().isTurnActive());
 
-        exploreChatPanel
-                .getModel()
-                .addPendingImage(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB));
-        featureChatPanel
-                .getModel()
-                .addPendingImage(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB));
+        exploreChatPanel.getModel().addPendingImage(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB));
+        featureChatPanel.getModel().addPendingImage(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB));
 
         when(projectService.getProjectName()).thenReturn("NewProject");
         assertFalse(SwingUtilities.isEventDispatchThread());

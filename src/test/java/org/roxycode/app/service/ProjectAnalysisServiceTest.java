@@ -20,21 +20,21 @@ import org.roxycode.app.events.ProjectChangedEvent;
 @ExtendWith(MockitoExtension.class)
 class ProjectAnalysisServiceTest {
 
-    @Mock private GrepService grepService;
-    @InjectMocks private ProjectAnalysisService projectAnalysisService;
+    @Mock
+    private GrepService grepService;
+    @InjectMocks
+    private ProjectAnalysisService projectAnalysisService;
 
     @Test
     void testGetDominantLanguageJava() {
         when(grepService.listFiles(null))
-                .thenReturn(
-                        Arrays.asList("src/Main.java", "src/Util.java", "README.md", "pom.xml"));
+                .thenReturn(Arrays.asList("src/Main.java", "src/Util.java", "README.md", "pom.xml"));
         assertEquals("Java", projectAnalysisService.getDominantLanguage());
     }
 
     @Test
     void testGetDominantLanguagePython() {
-        when(grepService.listFiles(null))
-                .thenReturn(Arrays.asList("app.py", "utils.py", "requirements.txt"));
+        when(grepService.listFiles(null)).thenReturn(Arrays.asList("app.py", "utils.py", "requirements.txt"));
         assertEquals("Python", projectAnalysisService.getDominantLanguage());
     }
 
@@ -58,23 +58,14 @@ class ProjectAnalysisServiceTest {
 
     @Test
     void testGetDominantLanguageHiddenFiles() {
-        when(grepService.listFiles(null))
-                .thenReturn(
-                        Arrays.asList(
-                                ".gitignore",
-                                "dir/.env",
-                                "dir/trailingdot.",
-                                "Makefile",
-                                "   ",
-                                "script.sh"));
+        when(grepService.listFiles(null)).thenReturn(
+                Arrays.asList(".gitignore", "dir/.env", "dir/trailingdot.", "Makefile", "   ", "script.sh"));
         assertEquals("Shell", projectAnalysisService.getDominantLanguage());
     }
 
     @Test
     void testDominantLanguageCachedAndInvalidatedOnProjectChangedEvent() {
-        when(grepService.listFiles(null))
-                .thenReturn(List.of("src/Main.java"))
-                .thenReturn(List.of("app.py"));
+        when(grepService.listFiles(null)).thenReturn(List.of("src/Main.java")).thenReturn(List.of("app.py"));
         assertEquals("Java", projectAnalysisService.getDominantLanguage());
         assertEquals("Java", projectAnalysisService.getDominantLanguage());
         verify(grepService, times(1)).listFiles(null);

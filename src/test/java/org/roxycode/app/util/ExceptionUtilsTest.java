@@ -27,25 +27,17 @@ class ExceptionUtilsTest {
     void testIsCancellationAndRethrowIfCancelled() {
         assertFalse(ExceptionUtils.isCancellation(new IOException("regular io error")));
         assertDoesNotThrow(
-                () ->
-                        ExceptionUtils.rethrowIfCancelled(
-                                new IOException("regular io error"), "Should not throw"));
+                () -> ExceptionUtils.rethrowIfCancelled(new IOException("regular io error"), "Should not throw"));
 
-        RuntimeException wrappedInterrupt =
-                new RuntimeException(new InterruptedException("sleep interrupted"));
+        RuntimeException wrappedInterrupt = new RuntimeException(new InterruptedException("sleep interrupted"));
         assertTrue(ExceptionUtils.isCancellation(wrappedInterrupt));
 
         try {
-            CancellationException thrown =
-                    assertThrows(
-                            CancellationException.class,
-                            () ->
-                                    ExceptionUtils.rethrowIfCancelled(
-                                            new ClosedByInterruptException(), "Channel cancelled"));
+            CancellationException thrown = assertThrows(CancellationException.class,
+                    () -> ExceptionUtils.rethrowIfCancelled(new ClosedByInterruptException(), "Channel cancelled"));
             assertEquals("Channel cancelled", thrown.getMessage());
             assertInstanceOf(ClosedByInterruptException.class, thrown.getCause());
-            assertTrue(
-                    Thread.currentThread().isInterrupted(),
+            assertTrue(Thread.currentThread().isInterrupted(),
                     "Interrupt flag should be restored by rethrowIfCancelled");
         } finally {
             Thread.interrupted();
@@ -58,10 +50,8 @@ class ExceptionUtilsTest {
 
         Thread.currentThread().interrupt();
         try {
-            CancellationException ex =
-                    assertThrows(
-                            CancellationException.class,
-                            () -> ExceptionUtils.checkInterrupted("Thread was interrupted"));
+            CancellationException ex = assertThrows(CancellationException.class,
+                    () -> ExceptionUtils.checkInterrupted("Thread was interrupted"));
             assertEquals("Thread was interrupted", ex.getMessage());
             assertTrue(Thread.currentThread().isInterrupted());
         } finally {

@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.swing.SwingUtilities;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
@@ -36,7 +36,7 @@ public class RoxyCode {
         AppSettings settings = null;
         try {
             settings = SettingsService.loadFromDisk();
-            if (settings.getTheme() != null && !settings.getTheme().isBlank()) {
+            if (StringUtils.isNotBlank(settings.getTheme())) {
                 theme = settings.getTheme();
             }
         } catch (Exception e) {
@@ -49,13 +49,12 @@ public class RoxyCode {
 
         if (!GraphicsEnvironment.isHeadless()) {
             try {
-                SwingUtilities.invokeAndWait(
-                        () -> {
-                            SettingsPanel.applyTheme(initialTheme);
-                            SplashScreenWindow splash = new SplashScreenWindow();
-                            splash.setVisible(true);
-                            splashRef.set(splash);
-                        });
+                Edt.runAndWait(() -> {
+                    SettingsPanel.applyTheme(initialTheme);
+                    SplashScreenWindow splash = new SplashScreenWindow();
+                    splash.setVisible(true);
+                    splashRef.set(splash);
+                });
             } catch (Exception e) {
                 log.warn("Failed to initialize splash screen: {}", e.getMessage());
             }
@@ -64,11 +63,8 @@ public class RoxyCode {
         @SuppressWarnings("PMD.CloseResource")
         ConfigurableApplicationContext context;
         try {
-            context =
-                    new SpringApplicationBuilder(RoxyCode.class)
-                            .headless(false)
-                            .initializers(createSettingsInitializer(initialSettings))
-                            .run(args);
+            context = new SpringApplicationBuilder(RoxyCode.class).headless(false)
+                    .initializers(createSettingsInitializer(initialSettings)).run(args);
             Runtime.getRuntime().addShutdownHook(new Thread(context::close));
         } catch (RuntimeException e) {
             disposeSplash(splashRef.get());
@@ -81,49 +77,45 @@ public class RoxyCode {
             log.warn("Failed to initialize system tools during startup: {}", e.getMessage());
         }
 
-        SwingUtilities.invokeLater(
-                () -> {
-                    SplashScreenWindow splash = splashRef.get();
-                    try {
-                        if (splash != null) splash.setStatus("Building workspace UI...");
-                        context.getBean(MainFrame.class).setVisible(true);
-                    } finally {
-                        disposeSplash(splash);
-                    }
-                });
+        Edt.run(() -> {
+            SplashScreenWindow splash = splashRef.get();
+            try {
+                if (splash != null)
+                    splash.setStatus("Building workspace UI...");
+                context.getBean(MainFrame.class).setVisible(true);
+            } finally {
+                disposeSplash(splash);
+            }
+        });
     }
 
-    public static void initializeSystemTools(
-            SystemToolService systemToolService, SplashScreenWindow splash) {
-        if (systemToolService == null || systemToolService.hasCachedTools()) return;
-        if (splash != null) Edt.run(() -> splash.setStatus("Checking system tools..."));
+    public static void initializeSystemTools(SystemToolService systemToolService, SplashScreenWindow splash) {
+        if (systemToolService == null || systemToolService.hasCachedTools())
+            return;
+        if (splash != null)
+            Edt.run(() -> splash.setStatus("Checking system tools..."));
         CompletableFuture<?> future = systemToolService.detectTools();
-        if (future != null) future.join();
+        if (future != null)
+            future.join();
     }
 
-    public static ApplicationContextInitializer<ConfigurableApplicationContext>
-            createSettingsInitializer(AppSettings settings) {
+    public static ApplicationContextInitializer<ConfigurableApplicationContext> createSettingsInitializer(
+            AppSettings settings) {
         return applicationContext -> {
             ConfigurableEnvironment env = applicationContext.getEnvironment();
             Map<String, Object> props = new HashMap<>();
-            if (settings != null
-                    && settings.getGeminiApiKey() != null
-                    && !settings.getGeminiApiKey().isEmpty()) {
+            if (settings != null && settings.getGeminiApiKey() != null && !settings.getGeminiApiKey().isEmpty()) {
                 props.put(PROP_GEMINI_API_KEY, settings.getGeminiApiKey());
             }
-            String model =
-                    (settings != null
-                                    && settings.getGeminiModel() != null
-                                    && !settings.getGeminiModel().isEmpty())
-                            ? settings.getGeminiModel()
-                            : DEFAULT_GEMINI_MODEL;
+            String model = (settings != null && settings.getGeminiModel() != null
+                    && !settings.getGeminiModel().isEmpty()) ? settings.getGeminiModel() : DEFAULT_GEMINI_MODEL;
             props.put(PROP_GEMINI_MODEL, model);
-            env.getPropertySources()
-                    .addFirst(new MapPropertySource(SETTINGS_PROPERTY_SOURCE, props));
+            env.getPropertySources().addFirst(new MapPropertySource(SETTINGS_PROPERTY_SOURCE, props));
         };
     }
 
     private static void disposeSplash(SplashScreenWindow splash) {
-        if (splash != null) Edt.run(splash::dispose);
+        if (splash != null)
+            Edt.run(splash::dispose);
     }
 }

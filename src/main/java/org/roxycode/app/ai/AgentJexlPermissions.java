@@ -23,8 +23,10 @@ public final class AgentJexlPermissions extends JexlPermissions.Delegate {
 
     @Override
     public boolean allow(Class<?> clazz, Method method) {
-        if (clazz == null || method == null) return false;
-        if (method.getDeclaringClass() == Object.class) return super.allow(clazz, method);
+        if (clazz == null || method == null)
+            return false;
+        if (method.getDeclaringClass() == Object.class)
+            return super.allow(clazz, method);
         if (isAgentServiceClass(clazz) || isAgentServiceClass(method.getDeclaringClass())) {
             return hasAgentDoc(method) && super.allow(clazz, method);
         }

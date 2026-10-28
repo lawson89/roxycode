@@ -17,7 +17,8 @@ import org.roxycode.app.ui.SwingTestUtils;
 
 class GitServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private ProjectService createActiveProjectService() {
         ProjectService projectService = mock(ProjectService.class);
@@ -50,14 +51,8 @@ class GitServiceTest {
     void testNotAGitRepository() {
         GitService gitService = new GitService(createActiveProjectService());
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
-            runnerMock
-                    .when(() -> ProcessRunner.run(anyList(), any(), anyMap()))
-                    .thenReturn(
-                            new ProcessResult(
-                                    128,
-                                    "fatal: not a git repository (or any of the parent directories): .git\n",
-                                    "",
-                                    false));
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyMap())).thenReturn(new ProcessResult(128,
+                    "fatal: not a git repository (or any of the parent directories): .git\n", "", false));
             assertEquals("Not a git repository", gitService.getStatus());
         }
     }
@@ -81,70 +76,36 @@ class GitServiceTest {
     @Test
     void testGetDiffIncludesUnstagedStagedAndUntrackedFiles() throws IOException {
         GitService gitService = new GitService(createActiveProjectService());
-        Files.writeString(
-                Files.createDirectories(tempDir.resolve("src")).resolve("NewFeature.java"),
+        Files.writeString(Files.createDirectories(tempDir.resolve("src")).resolve("NewFeature.java"),
                 "package src;\npublic class NewFeature {}\n");
 
-        String headDiffOut =
-                String.join(
-                        "\n",
-                        "diff --git a/Tracked.java b/Tracked.java",
-                        "--- a/Tracked.java",
-                        "+++ b/Tracked.java",
-                        "@@ -1,2 +1,2 @@",
-                        "+line 1 staged",
-                        "+line 2 unstaged");
-        String statusOut =
-                String.join(
-                        "\n",
-                        "MM Tracked.java",
-                        "R  OldName.java -> Renamed.java",
-                        "?? src/NewFeature.java");
+        String headDiffOut = String.join("\n", "diff --git a/Tracked.java b/Tracked.java", "--- a/Tracked.java",
+                "+++ b/Tracked.java", "@@ -1,2 +1,2 @@", "+line 1 staged", "+line 2 unstaged");
+        String statusOut = String.join("\n", "MM Tracked.java", "R  OldName.java -> Renamed.java",
+                "?? src/NewFeature.java");
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             stubGit(runner, 0, headDiffOut, "git", "diff", "HEAD");
-            stubGit(
-                    runner,
-                    0,
-                    "src/NewFeature.java",
-                    "git",
-                    "ls-files",
-                    "--others",
-                    "--exclude-standard");
+            stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard");
             stubGit(runner, 0, "", "git", "diff", "HEAD", "--", "src/NewFeature.java");
-            stubGit(
-                    runner,
-                    0,
-                    "src/NewFeature.java",
-                    "git",
-                    "ls-files",
-                    "--others",
-                    "--exclude-standard",
-                    "--",
+            stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard", "--",
                     "src/NewFeature.java");
             stubGit(runner, 0, statusOut, "git", "status", "--porcelain", "-uall");
 
-            SwingTestUtils.assertContainsAll(
-                    gitService.getDiff(),
-                    "+line 1 staged",
-                    "+line 2 unstaged",
-                    "diff --git a/src/NewFeature.java b/src/NewFeature.java",
-                    "+++ b/src/NewFeature.java",
-                    "@@ -0,0 +1,2 @@",
-                    "+public class NewFeature {}");
+            SwingTestUtils.assertContainsAll(gitService.getDiff(), "+line 1 staged", "+line 2 unstaged",
+                    "diff --git a/src/NewFeature.java b/src/NewFeature.java", "+++ b/src/NewFeature.java",
+                    "@@ -0,0 +1,2 @@", "+public class NewFeature {}");
 
             String untrackedOnlyDiff = gitService.getDiff("src/NewFeature.java");
-            SwingTestUtils.assertContainsAll(
-                    untrackedOnlyDiff, "+++ b/src/NewFeature.java", "+public class NewFeature {}");
+            SwingTestUtils.assertContainsAll(untrackedOnlyDiff, "+++ b/src/NewFeature.java",
+                    "+public class NewFeature {}");
             assertFalse(untrackedOnlyDiff.contains("Tracked.java"));
 
             String headDiff = gitService.getDiffHead();
             SwingTestUtils.assertContainsAll(headDiff, "+line 1 staged", "+line 2 unstaged");
             assertFalse(headDiff.contains("NewFeature.java"));
 
-            assertEquals(
-                    List.of("Tracked.java", "Renamed.java", "src/NewFeature.java"),
-                    gitService.getChangedFiles());
+            assertEquals(List.of("Tracked.java", "Renamed.java", "src/NewFeature.java"), gitService.getChangedFiles());
         }
     }
 
@@ -153,29 +114,13 @@ class GitServiceTest {
         GitService gitService = new GitService(createActiveProjectService());
         char dq = (char) 34;
         char bs = (char) 92;
-        String statusOut =
-                String.join(
-                        "\n",
-                        " M FirstUnstaged.java",
-                        "?? "
-                                + dq
-                                + "dir with spaces/quote"
-                                + bs
-                                + dq
-                                + "file"
-                                + bs
-                                + bs
-                                + "name.txt"
-                                + dq,
-                        "R  " + dq + "old name.txt" + dq + " -> " + dq + "new name.txt" + dq);
+        String statusOut = String.join("\n", " M FirstUnstaged.java",
+                "?? " + dq + "dir with spaces/quote" + bs + dq + "file" + bs + bs + "name.txt" + dq,
+                "R  " + dq + "old name.txt" + dq + " -> " + dq + "new name.txt" + dq);
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             stubGit(runner, 0, statusOut + "\n", "git", "status", "--porcelain", "-uall");
-            assertEquals(
-                    List.of(
-                            "FirstUnstaged.java",
-                            "dir with spaces/quote" + dq + "file/name.txt",
-                            "new name.txt"),
+            assertEquals(List.of("FirstUnstaged.java", "dir with spaces/quote" + dq + "file/name.txt", "new name.txt"),
                     gitService.getChangedFiles());
         }
     }
@@ -188,8 +133,7 @@ class GitServiceTest {
             stubGit(runner, 0, "+staged line", "git", "diff", "--cached");
             stubGit(runner, 0, "+unstaged line", "git", "diff");
 
-            SwingTestUtils.assertContainsAll(
-                    gitService.getDiffHead(), "+staged line", "+unstaged line");
+            SwingTestUtils.assertContainsAll(gitService.getDiffHead(), "+staged line", "+unstaged line");
         }
     }
 
@@ -197,25 +141,15 @@ class GitServiceTest {
     void testGetBlameAndValidation() {
         GitService gitService = new GitService(createActiveProjectService());
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            stubGit(
-                    runner,
-                    0,
-                    "abcd1234 (Roxy Test 2025-01-01 1) line 1\nabcd1234 (Roxy Test 2025-01-01 2) line 2",
-                    "git",
-                    "blame",
-                    "-L",
-                    "1,2",
-                    "--",
-                    "Tracked.java");
-            SwingTestUtils.assertContainsAll(
-                    gitService.getBlame("Tracked.java", 1, 2), "line 1", "line 2", "Roxy Test");
+            stubGit(runner, 0, "abcd1234 (Roxy Test 2025-01-01 1) line 1\nabcd1234 (Roxy Test 2025-01-01 2) line 2",
+                    "git", "blame", "-L", "1,2", "--", "Tracked.java");
+            SwingTestUtils.assertContainsAll(gitService.getBlame("Tracked.java", 1, 2), "line 1", "line 2",
+                    "Roxy Test");
         }
 
         assertThrows(IllegalArgumentException.class, () -> gitService.getBlame("", 1, 2));
-        assertThrows(
-                IllegalArgumentException.class, () -> gitService.getBlame("Tracked.java", 0, 2));
-        assertThrows(
-                IllegalArgumentException.class, () -> gitService.getBlame("Tracked.java", 3, 2));
+        assertThrows(IllegalArgumentException.class, () -> gitService.getBlame("Tracked.java", 0, 2));
+        assertThrows(IllegalArgumentException.class, () -> gitService.getBlame("Tracked.java", 3, 2));
         assertThrows(SecurityException.class, () -> gitService.getBlame("../outside.txt", 1, 2));
     }
 }

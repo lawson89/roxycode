@@ -28,30 +28,30 @@ import org.roxycode.app.ui.SwingTestUtils;
 @ExtendWith(MockitoExtension.class)
 class PromptServiceTest {
 
-    @Mock private ProjectService projectService;
-    @Mock private SettingsService settingsService;
-    @Mock private PlanService planService;
-    @Mock private JexlServiceRegistry jexlServiceRegistry;
-    @Mock private GitService gitService;
-    @Mock private ProjectAnalysisService projectAnalysisService;
-    @Mock private RepoMapPackerService repoMapPackerService;
+    @Mock
+    private ProjectService projectService;
+    @Mock
+    private SettingsService settingsService;
+    @Mock
+    private PlanService planService;
+    @Mock
+    private JexlServiceRegistry jexlServiceRegistry;
+    @Mock
+    private GitService gitService;
+    @Mock
+    private ProjectAnalysisService projectAnalysisService;
+    @Mock
+    private RepoMapPackerService repoMapPackerService;
 
     private PromptService promptService;
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     @BeforeEach
     void setUp() {
-        promptService =
-                new PromptService(
-                        projectService,
-                        settingsService,
-                        planService,
-                        jexlServiceRegistry,
-                        gitService,
-                        projectAnalysisService,
-                        repoMapPackerService,
-                        null);
+        promptService = new PromptService(projectService, settingsService, planService, jexlServiceRegistry, gitService,
+                projectAnalysisService, repoMapPackerService, null);
     }
 
     private static void assertContainsNone(String text, String... forbidden) {
@@ -62,36 +62,17 @@ class PromptServiceTest {
 
     @Test
     void testLoadCoreWorkflowPrompt() {
-        SwingTestUtils.assertContainsAll(
-                promptService.getStableContext(), "RoxyCode Workflow Protocol");
+        SwingTestUtils.assertContainsAll(promptService.getStableContext(), "RoxyCode Workflow Protocol");
     }
 
     @Test
     void testCoreWorkflowPromptReflectsRoxyCodePhasesAndServices() {
         String prompt = promptService.getStableContext();
-        SwingTestUtils.assertContainsAll(
-                prompt,
-                "EXPLORE (Technical Mentor)",
-                "PLAN (Lead Architect)",
-                "CODE (Senior Developer)",
-                "REVIEW (Code Reviewer)",
-                "requestDevelopment",
-                "requestReview",
-                "requestFixes",
-                "requestCompletion",
-                "buildToolService",
-                "fileEditorService",
-                "fileReadService",
-                "grepService",
-                "gitService",
-                "memoryService",
-                "planService");
-        assertContainsNone(
-                prompt,
-                "textEditorService",
-                "createPlan(",
-                "completeStep(",
-                "validateReadyForApproval");
+        SwingTestUtils.assertContainsAll(prompt, "EXPLORE (Technical Mentor)", "PLAN (Lead Architect)",
+                "CODE (Senior Developer)", "REVIEW (Code Reviewer)", "requestDevelopment", "requestReview",
+                "requestFixes", "requestCompletion", "buildToolService", "fileEditorService", "fileReadService",
+                "grepService", "gitService", "memoryService", "planService");
+        assertContainsNone(prompt, "textEditorService", "createPlan(", "completeStep(", "validateReadyForApproval");
     }
 
     @Test
@@ -111,25 +92,14 @@ class PromptServiceTest {
     @Test
     void testLoadPlanPrompt() {
         String prompt = promptService.loadPhasePrompt(WorkflowPhase.PLAN);
-        SwingTestUtils.assertContainsAll(
-                prompt,
-                "ANALYST",
-                "PLANNING",
-                "Requirements Gathering & Clarification",
-                "planService",
-                "buildToolService");
-        assertContainsNone(
-                prompt,
-                "createPlan",
-                "addRequirement",
-                "addConstraint",
-                "validateReadyForApproval");
+        SwingTestUtils.assertContainsAll(prompt, "ANALYST", "PLANNING", "Requirements Gathering & Clarification",
+                "planService", "buildToolService");
+        assertContainsNone(prompt, "createPlan", "addRequirement", "addConstraint", "validateReadyForApproval");
     }
 
     @Test
     void testLoadCodePrompt() {
-        SwingTestUtils.assertContainsAll(
-                promptService.loadPhasePrompt(WorkflowPhase.CODE), "CODER", "ACTING");
+        SwingTestUtils.assertContainsAll(promptService.loadPhasePrompt(WorkflowPhase.CODE), "CODER", "ACTING");
     }
 
     @Test
@@ -158,13 +128,11 @@ class PromptServiceTest {
         Files.writeString(globalDir.resolve("b_global.txt"), "Global B text");
         Files.writeString(globalDir.resolve("a_global.md"), "Global A markdown");
         Files.writeString(globalDir.resolve(".hidden.md"), "Hidden file");
-        Files.write(globalDir.resolve("binary.bin"), new byte[] {0x01, 0x00, 0x02});
-        Files.writeString(
-                Files.createDirectories(globalDir.resolve("nested")).resolve("sub.md"),
+        Files.write(globalDir.resolve("binary.bin"), new byte[]{0x01, 0x00, 0x02});
+        Files.writeString(Files.createDirectories(globalDir.resolve("nested")).resolve("sub.md"),
                 "Nested should be ignored");
 
-        promptService.setGlobalContextFolders(
-                List.of("  " + globalDir + "  ", globalDir.toString()));
+        promptService.setGlobalContextFolders(List.of("  " + globalDir + "  ", globalDir.toString()));
         verify(settingsService).saveSettings();
         assertEquals(List.of(globalDir.toString()), promptService.getGlobalContextFolders());
 
@@ -172,15 +140,13 @@ class PromptServiceTest {
         assertEquals(2, globalFiles.size());
         assertEquals("a_global.md", globalFiles.get(0).fileName());
         assertEquals("b_global.txt", globalFiles.get(1).fileName());
-        assertEquals(
-                "Global A markdown", promptService.readContextFile(globalFiles.get(0).filePath()));
+        assertEquals("Global A markdown", promptService.readContextFile(globalFiles.get(0).filePath()));
 
         Path projDocsDir = Files.createDirectories(projectRoot.resolve("docs"));
         Files.writeString(projDocsDir.resolve("z_spec.json"), "{spec: true}");
         Files.writeString(projDocsDir.resolve("a_architecture.md"), "Architecture guidelines");
-        Files.write(projDocsDir.resolve("image.png"), new byte[] {(byte) 0x89, 0x50, 0x00, 0x47});
-        Files.writeString(
-                Files.createDirectories(projDocsDir.resolve("subdir")).resolve("ignored.md"),
+        Files.write(projDocsDir.resolve("image.png"), new byte[]{(byte) 0x89, 0x50, 0x00, 0x47});
+        Files.writeString(Files.createDirectories(projDocsDir.resolve("subdir")).resolve("ignored.md"),
                 "Subdir ignored");
 
         promptService.setProjectContextFolders(List.of("docs", "docs"));
@@ -190,37 +156,24 @@ class PromptServiceTest {
         assertEquals(2, projectFiles.size());
         assertEquals("a_architecture.md", projectFiles.get(0).fileName());
         assertEquals("z_spec.json", projectFiles.get(1).fileName());
-        assertEquals(
-                "Architecture guidelines",
-                promptService.readContextFile(projectFiles.get(0).filePath()));
+        assertEquals("Architecture guidelines", promptService.readContextFile(projectFiles.get(0).filePath()));
 
         String globalContext = promptService.loadGlobalContext();
-        SwingTestUtils.assertContainsAll(
-                globalContext,
-                "## Global Context: a_global.md\nGlobal A markdown",
+        SwingTestUtils.assertContainsAll(globalContext, "## Global Context: a_global.md\nGlobal A markdown",
                 "## Global Context: b_global.txt\nGlobal B text");
         assertContainsNone(globalContext, "Hidden file", "Nested should be ignored");
 
         String projectContext = promptService.loadProjectContext();
-        SwingTestUtils.assertContainsAll(
-                projectContext,
+        SwingTestUtils.assertContainsAll(projectContext,
                 "## Project Context: a_architecture.md\nArchitecture guidelines",
                 "## Project Context: z_spec.json\n{spec: true}");
         assertContainsNone(projectContext, "Subdir ignored");
-        assertTrue(
-                projectContext.indexOf("a_architecture.md")
-                        < projectContext.indexOf("z_spec.json"));
+        assertTrue(projectContext.indexOf("a_architecture.md") < projectContext.indexOf("z_spec.json"));
 
         Path outsideFile = Files.writeString(tempDir.resolve("outside.md"), "Outside");
-        for (Path invalid :
-                new Path[] {
-                    outsideFile,
-                    globalDir.resolve(".hidden.md"),
-                    globalDir.resolve("binary.bin"),
-                    null
-                }) {
-            assertThrows(
-                    IllegalArgumentException.class, () -> promptService.readContextFile(invalid));
+        for (Path invalid : new Path[]{outsideFile, globalDir.resolve(".hidden.md"), globalDir.resolve("binary.bin"),
+                null}) {
+            assertThrows(IllegalArgumentException.class, () -> promptService.readContextFile(invalid));
         }
     }
 
@@ -255,33 +208,19 @@ class PromptServiceTest {
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
         when(gitService.getStatus()).thenReturn("M file.java");
         when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
-        when(repoMapPackerService.generateRepoMap())
-                .thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
+        when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
 
         String stable = promptService.getStableContext();
-        SwingTestUtils.assertContainsAll(
-                stable,
-                "RoxyCode Workflow Protocol",
-                "## JEXL CONTEXT",
-                "## Global Context: global.md\nGLOBAL RULES",
-                "## Project Context: rules.md\nCUSTOM RULES");
+        SwingTestUtils.assertContainsAll(stable, "RoxyCode Workflow Protocol", "## JEXL CONTEXT",
+                "## Global Context: global.md\nGLOBAL RULES", "## Project Context: rules.md\nCUSTOM RULES");
 
         String session = promptService.getSessionContext();
-        SwingTestUtils.assertContainsAll(
-                session,
-                "DOMINANT LANGUAGE: Java",
-                "CURRENT PHASE: CODE",
-                "Senior Developer",
-                "JEXL DOCS",
-                "M file.java");
+        SwingTestUtils.assertContainsAll(session, "DOMINANT LANGUAGE: Java", "CURRENT PHASE: CODE", "Senior Developer",
+                "JEXL DOCS", "M file.java");
         assertContainsNone(session, "## CURRENT PLAN PROGRESS");
 
-        SwingTestUtils.assertContainsAll(
-                promptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS"),
-                stable,
-                "REPO MAP CONTENT",
-                session,
-                "EXTRA INSTRUCTIONS");
+        SwingTestUtils.assertContainsAll(promptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS"),
+                stable, "REPO MAP CONTENT", session, "EXTRA INSTRUCTIONS");
     }
 
     @Test
@@ -290,44 +229,23 @@ class PromptServiceTest {
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
         when(gitService.getStatus()).thenReturn("");
 
-        ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Test Plan",
-                        "Goal",
-                        List.of("Req 1"),
-                        List.of(
-                                new ImplementationPlan.TechStep("Update prompts", true),
-                                new ImplementationPlan.TechStep("Update PlanService", false),
-                                new ImplementationPlan.TechStep("Update PromptService", false)),
-                        true,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null);
+        ImplementationPlan plan = new ImplementationPlan("Test Plan", "Goal", List.of("Req 1"),
+                List.of(new ImplementationPlan.TechStep("Update prompts", true),
+                        new ImplementationPlan.TechStep("Update PlanService", false),
+                        new ImplementationPlan.TechStep("Update PromptService", false)),
+                true, null, null, null, null, null);
         when(planService.getCurrentPlan()).thenReturn(plan);
 
-        SwingTestUtils.assertContainsAll(
-                promptService.getSessionContext(WorkflowPhase.CODE),
-                "## CURRENT PLAN PROGRESS",
-                "- [x] 0. Update prompts",
-                "- [ ] 1. Update PlanService",
+        SwingTestUtils.assertContainsAll(promptService.getSessionContext(WorkflowPhase.CODE),
+                "## CURRENT PLAN PROGRESS", "- [x] 0. Update prompts", "- [ ] 1. Update PlanService",
                 "- [ ] 2. Update PromptService");
     }
 
     @Test
     void testAgentMemoryContextInjectionAndEmptyState() {
         MemoryService memoryService = mock(MemoryService.class);
-        PromptService psWithMemory =
-                new PromptService(
-                        projectService,
-                        settingsService,
-                        planService,
-                        jexlServiceRegistry,
-                        gitService,
-                        projectAnalysisService,
-                        repoMapPackerService,
-                        memoryService);
+        PromptService psWithMemory = new PromptService(projectService, settingsService, planService,
+                jexlServiceRegistry, gitService, projectAnalysisService, repoMapPackerService, memoryService);
 
         when(memoryService.readGlobalMemory()).thenReturn("");
         when(memoryService.listGlobalNotes()).thenReturn(List.of());
@@ -336,9 +254,7 @@ class PromptServiceTest {
         when(memoryService.listArchivedPlans()).thenReturn(List.of());
 
         assertEquals("", psWithMemory.loadAgentMemoryContext());
-        assertContainsNone(
-                psWithMemory.getStableContext(),
-                "## GLOBAL AGENT MEMORY",
+        assertContainsNone(psWithMemory.getStableContext(), "## GLOBAL AGENT MEMORY",
                 "## PROJECT AGENT MEMORY & ARCHIVE");
 
         when(memoryService.readGlobalMemory()).thenReturn("# Global Prefs\n- Use Java 21");
@@ -346,44 +262,18 @@ class PromptServiceTest {
                 .thenReturn(List.of("style.md - 'Style Guide' [java] (2025-05-14T00:00:00Z)"));
         when(memoryService.readProjectMemory()).thenReturn("# Project Rules\n- Use MigLayout");
         when(memoryService.listProjectNotes())
-                .thenReturn(
-                        List.of(
-                                "swing-tables.md - 'Swing Tables' [ui, swing] (2025-05-14T00:00:00Z)"));
-        when(memoryService.listArchivedPlans())
-                .thenReturn(
-                        List.of(
-                                "p6.md: Plan 6",
-                                "p5.md: Plan 5",
-                                "p4.md: Plan 4",
-                                "p3.md: Plan 3",
-                                "p2.md: Plan 2",
-                                "p1.md: Plan 1"));
-        when(memoryService.listArchivedTopics())
-                .thenReturn(
-                        List.of(
-                                "t6.md: Topic 6",
-                                "t5.md: Topic 5",
-                                "t4.md: Topic 4",
-                                "t3.md: Topic 3",
-                                "t2.md: Topic 2",
-                                "t1.md: Topic 1"));
+                .thenReturn(List.of("swing-tables.md - 'Swing Tables' [ui, swing] (2025-05-14T00:00:00Z)"));
+        when(memoryService.listArchivedPlans()).thenReturn(List.of("p6.md: Plan 6", "p5.md: Plan 5", "p4.md: Plan 4",
+                "p3.md: Plan 3", "p2.md: Plan 2", "p1.md: Plan 1"));
+        when(memoryService.listArchivedTopics()).thenReturn(List.of("t6.md: Topic 6", "t5.md: Topic 5",
+                "t4.md: Topic 4", "t3.md: Topic 3", "t2.md: Topic 2", "t1.md: Topic 1"));
 
         String stable = psWithMemory.getStableContext();
-        SwingTestUtils.assertContainsAll(
-                stable,
-                "## GLOBAL AGENT MEMORY",
-                "# Global Prefs\n- Use Java 21",
-                "style.md",
+        SwingTestUtils.assertContainsAll(stable, "## GLOBAL AGENT MEMORY", "# Global Prefs\n- Use Java 21", "style.md",
                 "Use memoryService.readGlobalNote(slug) or memoryService.search(pattern) to inspect.",
-                "## PROJECT AGENT MEMORY & ARCHIVE",
-                "# Project Rules\n- Use MigLayout",
-                "swing-tables.md",
-                "### Recent Archived Plans",
-                "- p6.md: Plan 6",
-                "- p2.md: Plan 2",
-                "### Recent Archived Topics",
-                "- t6.md: Topic 6",
-                "- t2.md: Topic 2",
+                "## PROJECT AGENT MEMORY & ARCHIVE", "# Project Rules\n- Use MigLayout", "swing-tables.md",
+                "### Recent Archived Plans", "- p6.md: Plan 6", "- p2.md: Plan 2", "### Recent Archived Topics",
+                "- t6.md: Topic 6", "- t2.md: Topic 2",
                 "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), memoryService.readArchivedTopic(filename), or memoryService.search(pattern) to inspect.");
         assertContainsNone(stable, "- p1.md: Plan 1", "- t1.md: Topic 1");
     }

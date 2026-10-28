@@ -50,18 +50,15 @@ class AiMemoryConfigTest {
         try (ExecutorService executor = Executors.newFixedThreadPool(numThreads)) {
             for (int i = 0; i < numThreads; i++) {
                 final int threadId = i;
-                executor.submit(
-                        () -> {
-                            try {
-                                for (int j = 0; j < 100; j++) {
-                                    memory.add(
-                                            conversationId,
-                                            List.of(new UserMessage("Msg " + threadId + "-" + j)));
-                                }
-                            } finally {
-                                latch.countDown();
-                            }
-                        });
+                executor.submit(() -> {
+                    try {
+                        for (int j = 0; j < 100; j++) {
+                            memory.add(conversationId, List.of(new UserMessage("Msg " + threadId + "-" + j)));
+                        }
+                    } finally {
+                        latch.countDown();
+                    }
+                });
             }
             latch.await(5, TimeUnit.SECONDS);
         }

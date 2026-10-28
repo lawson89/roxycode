@@ -41,25 +41,16 @@ abstract class ChatTestFixture {
     }
 
     protected ChatPanel createChatPanel() {
-        return new ChatPanel(
-                aiService, planService, publisher, chatMemory, "test", null, true, null, null);
+        return new ChatPanel(aiService, planService, publisher, chatMemory, "test", null, true, null, null);
     }
 
     protected FeatureChatPanel createFeatureChatPanel(Executor executor) {
-        return new FeatureChatPanel(
-                aiService, planService, publisher, chatMemory, settingsService, executor);
+        return new FeatureChatPanel(aiService, planService, publisher, chatMemory, settingsService, executor);
     }
 
     protected ExploreChatPanel createExploreChatPanel(Executor executor) {
-        return new ExploreChatPanel(
-                aiService,
-                planService,
-                publisher,
-                chatMemory,
-                settingsService,
-                executor,
-                memoryService,
-                environmentService);
+        return new ExploreChatPanel(aiService, planService, publisher, chatMemory, settingsService, executor,
+                memoryService, environmentService);
     }
 
     protected static void flushEdt() {
@@ -70,22 +61,13 @@ abstract class ChatTestFixture {
         SwingTestUtils.runOnEdt(() -> panel.getController().sendMessage(text));
     }
 
-    protected static WorkflowTransitionEvent transitionEvent(
-            WorkflowPhase from, WorkflowPhase to, String reason, boolean autonomous) {
+    protected static WorkflowTransitionEvent transitionEvent(WorkflowPhase from, WorkflowPhase to, String reason,
+            boolean autonomous) {
         return new WorkflowTransitionEvent(from, to, reason, autonomous);
     }
 
     protected static ImplementationPlan samplePlan(ImplementationPlan.TechStep... steps) {
-        return new ImplementationPlan(
-                "Feature X",
-                "Build Feature X",
-                List.of("Req 1"),
-                List.of(steps),
-                true,
-                null,
-                null,
-                null,
-                null,
-                List.of());
+        return new ImplementationPlan("Feature X", "Build Feature X", List.of("Req 1"), List.of(steps), true, null,
+                null, null, null, List.of());
     }
 }

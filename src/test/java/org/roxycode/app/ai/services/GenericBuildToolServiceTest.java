@@ -28,7 +28,8 @@ import org.roxycode.app.service.SystemToolService;
 
 class GenericBuildToolServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private Path projectRoot;
     private Path projectDataDir;
@@ -44,14 +45,11 @@ class GenericBuildToolServiceTest {
         projectService = mock(ProjectService.class);
         systemToolService = mock(SystemToolService.class);
         buildContainerService = new BuildContainerService(systemToolService);
-        buildToolService =
-                new GenericBuildToolService(
-                        projectService, new TomlMapper(), buildContainerService);
+        buildToolService = new GenericBuildToolService(projectService, new TomlMapper(), buildContainerService);
 
         lenient().when(projectService.hasActiveProject()).thenReturn(true);
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
-        lenient()
-                .when(projectService.resolveProjectDataPath(anyString()))
+        lenient().when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
     }
 
@@ -61,17 +59,17 @@ class GenericBuildToolServiceTest {
     }
 
     private void stubDockerAvailable(boolean available) {
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(available));
+        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(available));
     }
 
-    private static ContainerSession createMockSession(
-            int exitCode, String stdout, List<String[]> captured, Runnable onClose) {
+    private static ContainerSession createMockSession(int exitCode, String stdout, List<String[]> captured,
+            Runnable onClose) {
         AtomicBoolean closed = new AtomicBoolean(false);
         return new ContainerSession() {
             @Override
             public ContainerExecResult execInContainer(String... command) {
-                if (captured != null) captured.add(command);
+                if (captured != null)
+                    captured.add(command);
                 return new ContainerExecResult(exitCode, stdout, "");
             }
 
@@ -83,7 +81,8 @@ class GenericBuildToolServiceTest {
             @Override
             public void close() {
                 closed.set(true);
-                if (onClose != null) onClose.run();
+                if (onClose != null)
+                    onClose.run();
             }
         };
     }
@@ -108,8 +107,7 @@ class GenericBuildToolServiceTest {
         Path configPath = projectDataDir.resolve("build.toml");
         assertTrue(Files.exists(configPath));
         assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
-        assertContainsAll(
-                Files.readString(configPath), "compile", "[container]", "eclipse-temurin:25-jdk");
+        assertContainsAll(Files.readString(configPath), "compile", "[container]", "eclipse-temurin:25-jdk");
     }
 
     @Test
@@ -120,8 +118,7 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testRegexParsing() throws IOException {
-        writeBuildToml(
-                """
+        writeBuildToml("""
                 [build]
                 compile = 'echo [ERROR] Compilation failed'
                 [test]
@@ -146,15 +143,9 @@ class GenericBuildToolServiceTest {
     void testContainerExecutionRegexParsing() throws IOException {
         stubDockerAvailable(true);
         buildContainerService.setContainerSessionFactory(
-                key ->
-                        createMockSession(
-                                1,
-                                "[ERROR] Container compile failure\nFAIL: ContainerTest#fail",
-                                null,
-                                null));
+                key -> createMockSession(1, "[ERROR] Container compile failure\nFAIL: ContainerTest#fail", null, null));
 
-        writeBuildToml(
-                """
+        writeBuildToml("""
                 [test]
                 run_all = './mvnw test'
                 [parse]
@@ -195,11 +186,9 @@ class GenericBuildToolServiceTest {
     @Test
     void testContainerEnabledFailsBuildWhenTestcontainersSessionThrows() throws IOException {
         stubDockerAvailable(true);
-        buildContainerService.setContainerSessionFactory(
-                key -> {
-                    throw new IllegalStateException(
-                            "client version 1.32 is too old. Minimum supported API version is 1.44");
-                });
+        buildContainerService.setContainerSessionFactory(key -> {
+            throw new IllegalStateException("client version 1.32 is too old. Minimum supported API version is 1.44");
+        });
         writeBuildToml(
                 "[build]\ncompile = './mvnw compile'\n[container]\nenabled = true\nimage = 'eclipse-temurin:25-jdk'\nworkdir = '/workspace'\n");
 
@@ -207,12 +196,8 @@ class GenericBuildToolServiceTest {
         assertFalse(result.isSuccess());
         assertEquals(-1, result.getExitCode());
         assertTrue(result.getOutput().contains("client version 1.32 is too old"));
-        assertTrue(
-                result.getErrors().stream()
-                        .anyMatch(
-                                err ->
-                                        err.contains(
-                                                "Container execution failed: client version 1.32 is too old")));
+        assertTrue(result.getErrors().stream()
+                .anyMatch(err -> err.contains("Container execution failed: client version 1.32 is too old")));
     }
 
     @Test
@@ -223,20 +208,14 @@ class GenericBuildToolServiceTest {
         List<String[]> executedCommands = new ArrayList<>();
         List<ContainerSessionKey> sessionKeys = new ArrayList<>();
 
-        buildContainerService.setContainerSessionFactory(
-                key -> {
-                    sessionsCreated.incrementAndGet();
-                    sessionKeys.add(key);
-                    sessionClosed.set(false);
-                    return createMockSession(
-                            0,
-                            "Container build OK",
-                            executedCommands,
-                            () -> sessionClosed.set(true));
-                });
+        buildContainerService.setContainerSessionFactory(key -> {
+            sessionsCreated.incrementAndGet();
+            sessionKeys.add(key);
+            sessionClosed.set(false);
+            return createMockSession(0, "Container build OK", executedCommands, () -> sessionClosed.set(true));
+        });
 
-        String toml =
-                """
+        String toml = """
                 [build]
                 compile = './mvnw compile'
                 [test]
@@ -257,11 +236,11 @@ class GenericBuildToolServiceTest {
         assertEquals("eclipse-temurin:25-jdk", sessionKeys.get(0).image());
         assertEquals("/workspace", sessionKeys.get(0).workdir());
         assertEquals("true", sessionKeys.get(0).env().get("ROXY_CODE"));
-        assertArrayEquals(new String[] {"sh", "-c", "./mvnw compile"}, executedCommands.get(0));
+        assertArrayEquals(new String[]{"sh", "-c", "./mvnw compile"}, executedCommands.get(0));
 
         assertTrue(buildToolService.runTests().isSuccess());
         assertEquals(1, sessionsCreated.get());
-        assertArrayEquals(new String[] {"sh", "-c", "./mvnw test"}, executedCommands.get(1));
+        assertArrayEquals(new String[]{"sh", "-c", "./mvnw test"}, executedCommands.get(1));
 
         buildToolService.saveConfigContent(toml);
         assertTrue(sessionClosed.get());
@@ -276,25 +255,17 @@ class GenericBuildToolServiceTest {
         buildToolService.compile();
         assertFalse(sessionClosed.get());
         AtomicBoolean stoppedOnEdt = new AtomicBoolean(true);
-        buildContainerService.setContainerSessionFactory(
-                key ->
-                        createMockSession(
-                                0,
-                                "OK",
-                                null,
-                                () -> {
-                                    stoppedOnEdt.set(SwingUtilities.isEventDispatchThread());
-                                    sessionClosed.set(true);
-                                }));
+        buildContainerService.setContainerSessionFactory(key -> createMockSession(0, "OK", null, () -> {
+            stoppedOnEdt.set(SwingUtilities.isEventDispatchThread());
+            sessionClosed.set(true);
+        }));
         buildToolService.stopActiveContainer();
         sessionClosed.set(false);
         buildToolService.compile();
 
         try {
-            SwingUtilities.invokeAndWait(
-                    () ->
-                            buildToolService.handleProjectChanged(
-                                    new ProjectChangedEvent(projectRoot)));
+            SwingUtilities
+                    .invokeAndWait(() -> buildToolService.handleProjectChanged(new ProjectChangedEvent(projectRoot)));
             for (int i = 0; i < 50 && !sessionClosed.get(); i++) {
                 Thread.sleep(20);
             }
@@ -306,8 +277,7 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testGetConfigContentAndCompileFallbackWhenEnsureConfigCannotWriteToDisk()
-            throws IOException {
+    void testGetConfigContentAndCompileFallbackWhenEnsureConfigCannotWriteToDisk() throws IOException {
         Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
         Files.createDirectories(projectDataDir.getParent());
         Files.writeString(projectDataDir, "not a directory");
@@ -318,8 +288,7 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testMalformedTomlValuesHandledWithoutClassCastException() throws IOException {
-        writeBuildToml(
-                """
+        writeBuildToml("""
                 unknown_top_level = "ignored"
                 [build]
                 compile = 'echo hi'

@@ -26,7 +26,8 @@ import org.testcontainers.containers.GenericContainer;
 
 class BuildContainerServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private SystemToolService systemToolService;
     private BuildContainerService buildContainerService;
@@ -53,12 +54,8 @@ class BuildContainerServiceTest {
 
     @Test
     void testCreateConfiguredContainerSetsIdentifiableNameAndLabels() {
-        ContainerSessionKey key =
-                new ContainerSessionKey(
-                        tempDir.resolve("Roxy_Test_App"),
-                        "eclipse-temurin:25-jdk",
-                        "/workspace",
-                        Map.of("ROXY_CODE", "true"));
+        ContainerSessionKey key = new ContainerSessionKey(tempDir.resolve("Roxy_Test_App"), "eclipse-temurin:25-jdk",
+                "/workspace", Map.of("ROXY_CODE", "true"));
 
         GenericContainer<?> container = BuildContainerService.createConfiguredContainer(key);
         assertEquals("/workspace", container.getWorkingDirectory());
@@ -77,17 +74,15 @@ class BuildContainerServiceTest {
 
     @Test
     void testParseContainerConfigDefaultsAndCustomValues() {
-        for (ContainerConfig cfg :
-                new ContainerConfig[] {null, new ContainerConfig(false, "  ", "")}) {
+        for (ContainerConfig cfg : new ContainerConfig[]{null, new ContainerConfig(false, "  ", "")}) {
             ContainerConfig parsed = buildContainerService.parseContainerConfig(cfg);
             assertFalse(parsed.enabled());
             assertEquals("ubuntu:24.04", parsed.image());
             assertEquals("/workspace", parsed.workdir());
         }
 
-        ContainerConfig custom =
-                buildContainerService.parseContainerConfig(
-                        new ContainerConfig(true, "eclipse-temurin:25-jdk", "/app"));
+        ContainerConfig custom = buildContainerService
+                .parseContainerConfig(new ContainerConfig(true, "eclipse-temurin:25-jdk", "/app"));
         assertTrue(custom.enabled());
         assertEquals("eclipse-temurin:25-jdk", custom.image());
         assertEquals("/app", custom.workdir());
@@ -95,12 +90,10 @@ class BuildContainerServiceTest {
 
     @Test
     void testIsDockerAvailableDelegatesToSystemToolService() {
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(true));
+        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(true));
         assertTrue(buildContainerService.isDockerAvailable());
 
-        when(systemToolService.isDockerAvailable())
-                .thenReturn(CompletableFuture.completedFuture(false));
+        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
         assertFalse(buildContainerService.isDockerAvailable());
     }
 
@@ -110,33 +103,31 @@ class BuildContainerServiceTest {
         AtomicBoolean sessionClosed = new AtomicBoolean(false);
         List<String[]> commands = new ArrayList<>();
 
-        buildContainerService.setContainerSessionFactory(
-                key -> {
-                    sessionsCreated.incrementAndGet();
-                    sessionClosed.set(false);
-                    return new ContainerSession() {
-                        @Override
-                        public ContainerExecResult execInContainer(String... command) {
-                            commands.add(command);
-                            return new ContainerExecResult(0, "out", "err");
-                        }
+        buildContainerService.setContainerSessionFactory(key -> {
+            sessionsCreated.incrementAndGet();
+            sessionClosed.set(false);
+            return new ContainerSession() {
+                @Override
+                public ContainerExecResult execInContainer(String... command) {
+                    commands.add(command);
+                    return new ContainerExecResult(0, "out", "err");
+                }
 
-                        @Override
-                        public boolean isRunning() {
-                            return !sessionClosed.get();
-                        }
+                @Override
+                public boolean isRunning() {
+                    return !sessionClosed.get();
+                }
 
-                        @Override
-                        public void close() {
-                            sessionClosed.set(true);
-                        }
-                    };
-                });
+                @Override
+                public void close() {
+                    sessionClosed.set(true);
+                }
+            };
+        });
 
         ContainerConfig config = new ContainerConfig(true, "eclipse-temurin:25-jdk", "/workspace");
-        ContainerExecResult res1 =
-                buildContainerService.executeCommand(
-                        tempDir, config, Map.of("A", "1"), "./mvnw compile");
+        ContainerExecResult res1 = buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"),
+                "./mvnw compile");
         assertEquals(0, res1.exitCode());
         assertEquals("out\nerr", res1.combinedOutput());
 
@@ -153,48 +144,32 @@ class BuildContainerServiceTest {
 
     @Test
     void testExecuteCommandPropagatesTestcontainersFailureWithoutFallback() {
-        buildContainerService.setContainerSessionFactory(
-                key -> {
-                    throw new IllegalStateException(
-                            "client version 1.32 is too old. Minimum supported API version is 1.44");
-                });
+        buildContainerService.setContainerSessionFactory(key -> {
+            throw new IllegalStateException("client version 1.32 is too old. Minimum supported API version is 1.44");
+        });
 
         ContainerConfig config = new ContainerConfig(true, "eclipse-temurin:25-jdk", "/workspace");
-        assertTrue(
-                assertThrows(
-                                IllegalStateException.class,
-                                () ->
-                                        buildContainerService.executeCommand(
-                                                tempDir, config, Map.of(), "./mvnw compile"))
-                        .getMessage()
-                        .contains("client version 1.32 is too old"));
+        assertTrue(assertThrows(IllegalStateException.class,
+                () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw compile")).getMessage()
+                .contains("client version 1.32 is too old"));
     }
 
     @Test
     void testIsAndUpdateContainerEnabledInToml() {
-        for (String invalid :
-                new String[] {
-                    null, "", "   ", "[container\nenabled = true\n", "invalid = = toml"
-                }) {
+        for (String invalid : new String[]{null, "", "   ", "[container\nenabled = true\n", "invalid = = toml"}) {
             assertFalse(BuildContainerService.isContainerEnabledInToml(invalid));
         }
-        String tomlWithDisabled =
-                "[build]\ncompile = './mvnw compile'\n\n[container]\nenabled = false # inline comment\nimage = 'eclipse-temurin:25-jdk'\n";
+        String tomlWithDisabled = "[build]\ncompile = './mvnw compile'\n\n[container]\nenabled = false # inline comment\nimage = 'eclipse-temurin:25-jdk'\n";
 
-        String enabledToml =
-                BuildContainerService.updateContainerEnabledInToml(tomlWithDisabled, true);
+        String enabledToml = BuildContainerService.updateContainerEnabledInToml(tomlWithDisabled, true);
         assertTrue(BuildContainerService.isContainerEnabledInToml(enabledToml));
         assertTrue(enabledToml.contains("enabled = true # inline comment"));
-        assertFalse(
-                BuildContainerService.isContainerEnabledInToml(
-                        BuildContainerService.updateContainerEnabledInToml(enabledToml, false)));
+        assertFalse(BuildContainerService
+                .isContainerEnabledInToml(BuildContainerService.updateContainerEnabledInToml(enabledToml, false)));
 
-        String appended =
-                BuildContainerService.updateContainerEnabledInToml(
-                        "[build]\ncompile = './mvnw compile'\n", true);
-        SwingTestUtils.assertContainsAll(
-                appended,
-                "[container]",
+        String appended = BuildContainerService.updateContainerEnabledInToml("[build]\ncompile = './mvnw compile'\n",
+                true);
+        SwingTestUtils.assertContainsAll(appended, "[container]",
                 "image = '" + BuildContainerService.DEFAULT_CONTAINER_IMAGE + "'",
                 "workdir = '" + BuildContainerService.DEFAULT_CONTAINER_WORKDIR + "'");
         assertTrue(BuildContainerService.isContainerEnabledInToml(appended));

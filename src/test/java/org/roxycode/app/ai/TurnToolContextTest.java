@@ -25,8 +25,7 @@ class TurnToolContextTest {
 
         AtomicInteger counter = new AtomicInteger(3);
         StringBuilder accumulator = new StringBuilder("existing");
-        TurnToolContext ctx =
-                new TurnToolContext("task:default", WorkflowPhase.CODE, counter, accumulator);
+        TurnToolContext ctx = new TurnToolContext("task:default", WorkflowPhase.CODE, counter, accumulator);
         Map<String, Object> map = ctx.toMap();
 
         TurnToolContext restored = TurnToolContext.fromToolContext(new ToolContext(map));
@@ -39,17 +38,10 @@ class TurnToolContextTest {
 
     @Test
     void testFromPromptAndStringPhaseFallback() {
-        Prompt prompt =
-                new Prompt(
-                        new UserMessage("hi"),
-                        ToolCallingChatOptions.builder()
-                                .toolContext(
-                                        Map.of(
-                                                TurnToolContext.CONVERSATION_ID_KEY,
-                                                "qa:1",
-                                                TurnToolContext.PHASE_KEY,
-                                                "REVIEW"))
-                                .build());
+        Prompt prompt = new Prompt(new UserMessage("hi"),
+                ToolCallingChatOptions.builder().toolContext(
+                        Map.of(TurnToolContext.CONVERSATION_ID_KEY, "qa:1", TurnToolContext.PHASE_KEY, "REVIEW"))
+                        .build());
 
         TurnToolContext fromPrompt = TurnToolContext.fromPrompt(prompt, WorkflowPhase.PLAN);
         assertEquals("qa:1", fromPrompt.conversationId());

@@ -9,8 +9,7 @@ public class GeminiModelsTest {
 
     @Test
     public void testTomlParsing() throws Exception {
-        String toml =
-                """
+        String toml = """
                 [[models]]
                 apiName = "test-id"
                 name = "Test Name"

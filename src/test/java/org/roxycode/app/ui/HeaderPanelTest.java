@@ -22,7 +22,8 @@ import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 
 class HeaderPanelTest {
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private SettingsService createSettingsService() {
         SettingsService ss = new SettingsService(null, null);
@@ -53,27 +54,19 @@ class HeaderPanelTest {
 
         AppSettings updatedSettings = ss.getSettings();
         updatedSettings.setGeminiModel("gemini-4-argon");
-        SwingTestUtils.runOnEdt(
-                () -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
+        SwingTestUtils.runOnEdt(() -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
 
-        JLabel projectLabel =
-                SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "updated-proj".equals(c.getText()));
+        JLabel projectLabel = SwingTestUtils.findComponent(header, JLabel.class,
+                c -> "updated-proj".equals(c.getText()));
         assertNotNull(projectLabel);
-        assertEquals(
-                Codicons.REPO, assertInstanceOf(FontIcon.class, projectLabel.getIcon()).getIkon());
+        assertEquals(Codicons.REPO, assertInstanceOf(FontIcon.class, projectLabel.getIcon()).getIkon());
 
-        JLabel modelLabel =
-                SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "gemini-4-argon".equals(c.getText()));
+        JLabel modelLabel = SwingTestUtils.findComponent(header, JLabel.class,
+                c -> "gemini-4-argon".equals(c.getText()));
         assertNotNull(modelLabel);
-        assertEquals(
-                Codicons.HUBOT, assertInstanceOf(FontIcon.class, modelLabel.getIcon()).getIkon());
+        assertEquals(Codicons.HUBOT, assertInstanceOf(FontIcon.class, modelLabel.getIcon()).getIkon());
         String modelStyle = (String) modelLabel.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(
-                modelStyle != null
-                        && modelStyle.contains("arc: 10")
-                        && modelStyle.contains("border: 3,8,3,8"));
+        assertTrue(modelStyle != null && modelStyle.contains("arc: 10") && modelStyle.contains("border: 3,8,3,8"));
     }
 
     @Test
@@ -87,22 +80,16 @@ class HeaderPanelTest {
         AppSettings updatedSettings = ss.getSettings();
         updatedSettings.setGeminiModel("gemini-off-edt");
 
-        Thread backgroundThread =
-                new Thread(
-                        () -> {
-                            header.onProjectChanged(new ProjectChangedEvent(newRoot));
-                            header.onSettingsChanged(new SettingsChangedEvent(updatedSettings));
-                        });
+        Thread backgroundThread = new Thread(() -> {
+            header.onProjectChanged(new ProjectChangedEvent(newRoot));
+            header.onSettingsChanged(new SettingsChangedEvent(updatedSettings));
+        });
         backgroundThread.start();
         backgroundThread.join(5000);
         SwingTestUtils.flushEdt();
 
-        assertNotNull(
-                SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "off-edt-proj".equals(c.getText())));
-        assertNotNull(
-                SwingTestUtils.findComponent(
-                        header, JLabel.class, c -> "gemini-off-edt".equals(c.getText())));
+        assertNotNull(SwingTestUtils.findComponent(header, JLabel.class, c -> "off-edt-proj".equals(c.getText())));
+        assertNotNull(SwingTestUtils.findComponent(header, JLabel.class, c -> "gemini-off-edt".equals(c.getText())));
     }
 
     @Test
@@ -113,18 +100,12 @@ class HeaderPanelTest {
 
         HeaderPanel header = new HeaderPanel(new ProjectService(ss, null), gitService, ss);
         SwingTestUtils.awaitWorker(header.updateBranchLabel());
-        SwingTestUtils.awaitCondition(
-                () -> "feature/async-branch".equals(header.getBranchLabel().getText()));
+        SwingTestUtils.awaitCondition(() -> "feature/async-branch".equals(header.getBranchLabel().getText()));
         assertTrue(header.getBranchLabel().isVisible());
-        assertEquals(
-                Codicons.SOURCE_CONTROL,
+        assertEquals(Codicons.SOURCE_CONTROL,
                 assertInstanceOf(FontIcon.class, header.getBranchLabel().getIcon()).getIkon());
-        String branchStyle =
-                (String) header.getBranchLabel().getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(
-                branchStyle != null
-                        && branchStyle.contains("arc: 10")
-                        && branchStyle.contains("border: 3,8,3,8"));
+        String branchStyle = (String) header.getBranchLabel().getClientProperty(FlatClientProperties.STYLE);
+        assertTrue(branchStyle != null && branchStyle.contains("arc: 10") && branchStyle.contains("border: 3,8,3,8"));
 
         header.updateUI();
         assertNotNull(header.getBranchLabel().getIcon());
@@ -140,18 +121,14 @@ class HeaderPanelTest {
     @Test
     void testChangeProjectButtonIsPresentAndStyled() {
         HeaderPanel header = createHeader();
-        JButton openButton =
-                SwingTestUtils.findComponent(
-                        header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
+        JButton openButton = SwingTestUtils.findComponent(header, JButton.class,
+                c -> "Open Project".equals(c.getToolTipText()));
         assertSame(header.getChangeProjectButton(), openButton);
         assertEquals(HeaderPanel.CHANGE_PROJECT_TEXT, openButton.getText());
         assertEquals(Cursor.HAND_CURSOR, openButton.getCursor().getType());
-        assertEquals(
-                Codicons.FOLDER_OPENED,
-                assertInstanceOf(FontIcon.class, openButton.getIcon()).getIkon());
+        assertEquals(Codicons.FOLDER_OPENED, assertInstanceOf(FontIcon.class, openButton.getIcon()).getIkon());
         String style = (String) openButton.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(
-                style != null && style.contains("arc: 10") && style.contains("hoverBackground:"));
+        assertTrue(style != null && style.contains("arc: 10") && style.contains("hoverBackground:"));
     }
 
     @Test
@@ -159,11 +136,8 @@ class HeaderPanelTest {
         SettingsService ss = spy(createSettingsService());
         HeaderPanel header = new HeaderPanel(new ProjectService(ss, null), createGitService(), ss);
 
-        JButton themeButton =
-                SwingTestUtils.findComponent(
-                        header,
-                        JButton.class,
-                        c -> "Toggle Light/Dark Theme".equals(c.getToolTipText()));
+        JButton themeButton = SwingTestUtils.findComponent(header, JButton.class,
+                c -> "Toggle Light/Dark Theme".equals(c.getToolTipText()));
         assertNotNull(themeButton);
         assertEquals("FlatLaf Light", ss.getSettings().getTheme());
 
@@ -175,7 +149,7 @@ class HeaderPanelTest {
         assertEquals("FlatLaf Light", ss.getSettings().getTheme());
         verify(ss, times(2)).saveSettings();
 
-        for (String darkTheme : new String[] {"Darcula", "macOS Dark"}) {
+        for (String darkTheme : new String[]{"Darcula", "macOS Dark"}) {
             ss.getSettings().setTheme(darkTheme);
             SettingsPanel.applyTheme(darkTheme);
             themeButton.doClick();
@@ -191,9 +165,8 @@ class HeaderPanelTest {
         header.updateUI();
         assertEquals(new Insets(0, 0, 1, 0), header.getBorder().getBorderInsets(header));
 
-        JButton openButton =
-                SwingTestUtils.findComponent(
-                        header, JButton.class, c -> "Open Project".equals(c.getToolTipText()));
+        JButton openButton = SwingTestUtils.findComponent(header, JButton.class,
+                c -> "Open Project".equals(c.getToolTipText()));
         assertEquals(3, openButton.getParent().getComponentCount());
     }
 
@@ -203,16 +176,12 @@ class HeaderPanelTest {
         ProjectService ps = spy(new ProjectService(ss, null));
         HeaderPanel header = new HeaderPanel(ps, createGitService(), ss);
         AtomicBoolean calledOnEdt = new AtomicBoolean(true);
-        doAnswer(
-                        inv -> {
-                            calledOnEdt.set(SwingUtilities.isEventDispatchThread());
-                            return inv.callRealMethod();
-                        })
-                .when(ps)
-                .setCurrentProjectRoot(any());
+        doAnswer(inv -> {
+            calledOnEdt.set(SwingUtilities.isEventDispatchThread());
+            return inv.callRealMethod();
+        }).when(ps).setCurrentProjectRoot(any());
         Path chosen = tempDir.resolve("chosen-project");
-        SwingTestUtils.awaitWorker(
-                SwingTestUtils.callOnEdt(() -> header.switchProjectAsync(chosen)));
+        SwingTestUtils.awaitWorker(SwingTestUtils.callOnEdt(() -> header.switchProjectAsync(chosen)));
         assertFalse(calledOnEdt.get());
     }
 }

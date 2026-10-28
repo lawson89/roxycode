@@ -27,28 +27,20 @@ public final class SplashScreenWindow extends JWindow {
 
     private void initComponents() {
         logoImage = RoundedImagePanel.loadClasspathImage(LOGO_RESOURCE_PATH);
-        JPanel rootPanel =
-                new JPanel(
-                        new MigLayout(
-                                "fill, insets 24 32 24 32, wrap 1",
-                                "[grow, center]",
-                                "[]12[]4[]16[]8[]"));
-        rootPanel.setBorder(
-                BorderFactory.createLineBorder(
-                        SwingHtmlUtils.getUiColor(new Color(80, 80, 80), "Component.borderColor"),
-                        1));
+        JPanel rootPanel = new JPanel(
+                new MigLayout("fill, insets 24 32 24 32, wrap 1", "[grow, center]", "[]12[]4[]16[]8[]"));
+        rootPanel.setBorder(BorderFactory
+                .createLineBorder(SwingHtmlUtils.getUiColor(new Color(80, 80, 80), "Component.borderColor"), 1));
 
         JLabel titleLabel = new JLabel("RoxyCode");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 20f));
 
         JLabel subtitleLabel = new JLabel("AI Coding Harness");
         subtitleLabel.setFont(subtitleLabel.getFont().deriveFont(Font.PLAIN, 12f));
-        subtitleLabel.putClientProperty(
-                FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
+        subtitleLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
 
         statusLabel.setFont(statusLabel.getFont().deriveFont(Font.PLAIN, 11f));
-        statusLabel.putClientProperty(
-                FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
+        statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
         progressBar.setIndeterminate(true);
 
         rootPanel.add(new RoundedImagePanel(logoImage, 80, 22), "w 80!, h 80!, center");

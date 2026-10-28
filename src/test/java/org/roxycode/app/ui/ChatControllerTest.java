@@ -24,8 +24,7 @@ class ChatControllerTest extends ChatTestFixture {
     void testRejectPhaseNotifiesWorkflowAndTriggersTurn() {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenReturn("Let's revise the plan.");
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Let's revise the plan.");
 
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
         assertSame(directExecutor, panel.getController().getTurnExecutor());
@@ -34,12 +33,8 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
 
         verify(planService).rejectTransition();
-        verify(aiService)
-                .chat(
-                        eq("task:default"),
-                        eq(WorkflowPhase.PLAN),
-                        contains("I have rejected the transition to Code"),
-                        any());
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN),
+                contains("I have rejected the transition to Code"), any());
         assertEquals(0L, panel.getController().getActiveTurnId());
         assertTrue(panel.getOutputArea().getText().contains("Transition to"));
     }
@@ -62,10 +57,8 @@ class ChatControllerTest extends ChatTestFixture {
     void testOnToolExecutionRendersSuccessAndErrorStatus() {
         FeatureChatPanel panel = createFeatureChatPanel(null);
         panel.onToolExecution(new ToolExecutionEvent("task:default", "1 + 1", 2, true, null));
-        panel.onToolExecution(
-                new ToolExecutionEvent("task:default", "if (", null, false, "Syntax Error: <bad>"));
-        panel.onToolExecution(
-                new ToolExecutionEvent("qa:default", "ignoredCall()", null, true, null));
+        panel.onToolExecution(new ToolExecutionEvent("task:default", "if (", null, false, "Syntax Error: <bad>"));
+        panel.onToolExecution(new ToolExecutionEvent("qa:default", "ignoredCall()", null, true, null));
         flushEdt();
 
         String html = panel.getOutputArea().getText();
@@ -102,21 +95,12 @@ class ChatControllerTest extends ChatTestFixture {
 
     @Test
     void testFallbackDefaultExecutorOwnedAndClosedOnRemoveNotify() {
-        ChatPanel panel =
-                new ChatPanel(
-                        aiService,
-                        planService,
-                        publisher,
-                        chatMemory,
-                        ChatModel.QA_SESSION_PREFIX,
-                        WorkflowPhase.EXPLORE,
-                        false,
-                        null,
-                        null);
+        ChatPanel panel = new ChatPanel(aiService, planService, publisher, chatMemory, ChatModel.QA_SESSION_PREFIX,
+                WorkflowPhase.EXPLORE, false, null, null);
 
         assertTrue(panel.getController().ownsTurnExecutor());
-        ExecutorService fallbackExecutor =
-                assertInstanceOf(ExecutorService.class, panel.getController().getTurnExecutor());
+        ExecutorService fallbackExecutor = assertInstanceOf(ExecutorService.class,
+                panel.getController().getTurnExecutor());
         assertFalse(fallbackExecutor.isShutdown());
 
         panel.removeNotify();
@@ -132,10 +116,7 @@ class ChatControllerTest extends ChatTestFixture {
         panel.getController().sendMessage("   ");
 
         assertTrue(panel.getModel().hasPendingImages());
-        assertTrue(
-                panel.getOutputArea()
-                        .getText()
-                        .contains(ChatController.IMAGE_REQUIRES_TEXT_MESSAGE));
+        assertTrue(panel.getOutputArea().getText().contains(ChatController.IMAGE_REQUIRES_TEXT_MESSAGE));
         verifyNoInteractions(publisher, aiService);
     }
 
@@ -156,33 +137,21 @@ class ChatControllerTest extends ChatTestFixture {
 
         clearInvocations(aiService);
         AtomicInteger callCount = new AtomicInteger(0);
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenAnswer(
-                        inv -> {
-                            if (callCount.incrementAndGet() == 1) {
-                                panel.onAgentTurn(
-                                        new AgentTurnEvent("task:default", "Roxy", 1, "CODE"));
-                                throw new RuntimeException("Failed to generate content");
-                            }
-                            return "Recovered and completed.";
-                        });
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            if (callCount.incrementAndGet() == 1) {
+                panel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 1, "CODE"));
+                throw new RuntimeException("Failed to generate content");
+            }
+            return "Recovered and completed.";
+        });
 
         sendOnEdt(panel, "Implement step");
         assertEquals(2, callCount.get());
-        verify(aiService)
-                .chat(eq("task:default"), eq(WorkflowPhase.CODE), eq("Implement step"), any());
-        verify(aiService)
-                .chat(
-                        eq("task:default"),
-                        eq(WorkflowPhase.CODE),
-                        eq(ChatController.AUTO_NUDGE_PROMPT),
-                        any());
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), eq("Implement step"), any());
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), eq(ChatController.AUTO_NUDGE_PROMPT), any());
         assertEquals(1, panel.getController().getConsecutiveAutoNudges());
-        assertContainsAll(
-                panel.getOutputArea().getText(),
-                "Error: Failed to generate content",
-                "Auto-nudging Roxy to continue (1/2)...",
-                "Recovered and completed.");
+        assertContainsAll(panel.getOutputArea().getText(), "Error: Failed to generate content",
+                "Auto-nudging Roxy to continue (1/2)...", "Recovered and completed.");
         assertFalse(panel.getModel().isLoading());
     }
 
@@ -192,42 +161,29 @@ class ChatControllerTest extends ChatTestFixture {
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
 
         AtomicInteger callCount = new AtomicInteger(0);
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenAnswer(
-                        inv ->
-                                callCount.incrementAndGet() == 2
-                                        ? "Partial output\n\n---\n> ⚠️ **Response Truncated (finishReason: MAX_TOKENS)**: The response was cut off."
-                                        : "Autonomous execution stopped: Maximum tool turns (5) exceeded.");
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> callCount.incrementAndGet() == 2
+                ? "Partial output\n\n---\n> ⚠️ **Response Truncated (finishReason: MAX_TOKENS)**: The response was cut off."
+                : "Autonomous execution stopped: Maximum tool turns (5) exceeded.");
 
         sendOnEdt(panel, "Run long task");
         assertEquals(3, callCount.get());
-        assertEquals(
-                ChatController.MAX_AUTO_NUDGES, panel.getController().getConsecutiveAutoNudges());
+        assertEquals(ChatController.MAX_AUTO_NUDGES, panel.getController().getConsecutiveAutoNudges());
         String html = panel.getOutputArea().getText();
-        assertContainsAll(
-                html,
-                "Auto-nudging Roxy to continue (1/2)...",
-                "Auto-nudging Roxy to continue (2/2)...");
+        assertContainsAll(html, "Auto-nudging Roxy to continue (1/2)...", "Auto-nudging Roxy to continue (2/2)...");
         assertFalse(html.contains("Auto-nudging Roxy to continue (3/2)..."));
         assertFalse(panel.getModel().isLoading());
 
         AtomicInteger secondBatchCalls = new AtomicInteger(0);
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenAnswer(
-                        inv -> {
-                            if (secondBatchCalls.incrementAndGet() == 1) {
-                                panel.onAgentTurn(
-                                        new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
-                                return "⚠️ **Empty Response Returned (finishReason: STOP)** Roxy completed the turn without generating a visible text message.";
-                            }
-                            return "Final summary after empty response nudge.";
-                        });
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            if (secondBatchCalls.incrementAndGet() == 1) {
+                panel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
+                return "⚠️ **Empty Response Returned (finishReason: STOP)** Roxy completed the turn without generating a visible text message.";
+            }
+            return "Final summary after empty response nudge.";
+        });
 
         sendOnEdt(panel, "Next user message");
-        assertTrue(
-                panel.getOutputArea()
-                        .getText()
-                        .contains("Final summary after empty response nudge."));
+        assertTrue(panel.getOutputArea().getText().contains("Final summary after empty response nudge."));
     }
 
     @Test
@@ -236,13 +192,10 @@ class ChatControllerTest extends ChatTestFixture {
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
         panel.getController().setErrorNudgeDelayMs(5000);
 
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenAnswer(
-                        inv -> {
-                            panel.onAgentTurn(
-                                    new AgentTurnEvent("task:default", "Roxy", 1, "CODE"));
-                            throw new RuntimeException("Failed to generate content");
-                        });
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            panel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 1, "CODE"));
+            throw new RuntimeException("Failed to generate content");
+        });
 
         sendOnEdt(panel, "Start work");
         assertEquals(1, panel.getController().getConsecutiveAutoNudges());
@@ -278,36 +231,24 @@ class ChatControllerTest extends ChatTestFixture {
         clearInvocations(chatMemory, aiService, memoryService);
         when(environmentService.getCurrentUser()).thenReturn("DevUser");
         when(aiService.generateTopicTitle(anyString())).thenReturn("RipGrep Search Architecture");
-        when(memoryService.archiveTopicConversation(
-                        eq("RipGrep Search Architecture"), eq("DevUser"), anyString(), anyList()))
-                .thenReturn("20250514-153000-ripgrep-search-architecture.md");
+        when(memoryService.archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
+                anyList())).thenReturn("20250514-153000-ripgrep-search-architecture.md");
 
-        SwingTestUtils.runOnEdt(
-                () -> {
-                    panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
-                    panel.appendMessage("ai", "It searches global, project, and archive dirs.");
-                    panel.getController().performResetSession();
-                });
+        SwingTestUtils.runOnEdt(() -> {
+            panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
+            panel.appendMessage("ai", "It searches global, project, and archive dirs.");
+            panel.getController().performResetSession();
+        });
         flushEdt();
 
         verify(chatMemory).clear("qa:default");
         verify(aiService).generateTopicTitle(contains("How does RipGrep search work"));
-        verify(memoryService)
-                .archiveTopicConversation(
-                        eq("RipGrep Search Architecture"),
-                        eq("DevUser"),
-                        anyString(),
-                        argThat(list -> list.size() == 2));
-        assertContainsAll(
-                panel.getOutputArea().getText(),
-                "Archived previous topic as",
-                "RipGrep Search Architecture",
+        verify(memoryService).archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
+                argThat(list -> list.size() == 2));
+        assertContainsAll(panel.getOutputArea().getText(), "Archived previous topic as", "RipGrep Search Architecture",
                 "20250514-153000-ripgrep-search-architecture.md");
-        verify(publisher)
-                .publishEvent(
-                        new ArchiveUpdatedEvent(
-                                ArchiveUpdatedEvent.TYPE_TOPIC,
-                                "20250514-153000-ripgrep-search-architecture.md"));
+        verify(publisher).publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC,
+                "20250514-153000-ripgrep-search-architecture.md"));
     }
 
     @Test
@@ -318,23 +259,18 @@ class ChatControllerTest extends ChatTestFixture {
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
-        doAnswer(
-                        inv -> {
-                            approveOnEdt.set(SwingUtilities.isEventDispatchThread());
-                            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
-                            when(planService.getPendingPhase()).thenReturn(null);
-                            return null;
-                        })
-                .when(planService)
-                .approveTransition();
+        doAnswer(inv -> {
+            approveOnEdt.set(SwingUtilities.isEventDispatchThread());
+            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+            when(planService.getPendingPhase()).thenReturn(null);
+            return null;
+        }).when(planService).approveTransition();
 
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenAnswer(
-                        inv -> {
-                            chatOnEdt.set(SwingUtilities.isEventDispatchThread());
-                            capturedImages.set(inv.getArgument(3));
-                            return "Proceeding in CODE";
-                        });
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            chatOnEdt.set(SwingUtilities.isEventDispatchThread());
+            capturedImages.set(inv.getArgument(3));
+            return "Proceeding in CODE";
+        });
 
         FeatureChatPanel panel = createFeatureChatPanel(null);
         panel.getModel().addPendingImage(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));

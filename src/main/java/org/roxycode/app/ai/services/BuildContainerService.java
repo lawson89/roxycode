@@ -35,26 +35,26 @@ public class BuildContainerService {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ContainerConfig(boolean enabled, String image, String workdir) {
-        public static final ContainerConfig DEFAULT =
-                new ContainerConfig(false, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
+        public static final ContainerConfig DEFAULT = new ContainerConfig(false, DEFAULT_CONTAINER_IMAGE,
+                DEFAULT_CONTAINER_WORKDIR);
 
         public ContainerConfig {
             image = StringUtils.defaultIfBlank(StringUtils.trim(image), DEFAULT_CONTAINER_IMAGE);
-            workdir =
-                    StringUtils.defaultIfBlank(
-                            StringUtils.trim(workdir), DEFAULT_CONTAINER_WORKDIR);
+            workdir = StringUtils.defaultIfBlank(StringUtils.trim(workdir), DEFAULT_CONTAINER_WORKDIR);
         }
     }
 
-    public record ContainerSessionKey(
-            Path projectRoot, String image, String workdir, Map<String, String> env) {}
+    public record ContainerSessionKey(Path projectRoot, String image, String workdir, Map<String, String> env) {
+    }
 
     public record ContainerExecResult(int exitCode, String stdout, String stderr) {
         public String combinedOutput() {
             StringBuilder sb = new StringBuilder();
-            if (StringUtils.isNotEmpty(stdout)) sb.append(stdout);
+            if (StringUtils.isNotEmpty(stdout))
+                sb.append(stdout);
             if (StringUtils.isNotEmpty(stderr)) {
-                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n') sb.append('\n');
+                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n')
+                    sb.append('\n');
                 sb.append(stderr);
             }
             return sb.toString();
@@ -76,8 +76,7 @@ public class BuildContainerService {
     }
 
     private final SystemToolService systemToolService;
-    private ContainerSessionFactory containerSessionFactory =
-            BuildContainerService::createContainerSession;
+    private ContainerSessionFactory containerSessionFactory = BuildContainerService::createContainerSession;
     private ContainerSession activeSession;
     private ContainerSessionKey activeSessionKey;
 
@@ -104,34 +103,24 @@ public class BuildContainerService {
     }
 
     public boolean isDockerAvailable() {
-        if (systemToolService == null) return false;
+        if (systemToolService == null)
+            return false;
         CompletableFuture<Boolean> future = systemToolService.isDockerAvailable();
-        return future != null
-                ? Boolean.TRUE.equals(future.join())
-                : systemToolService.checkDockerAvailable();
+        return future != null ? Boolean.TRUE.equals(future.join()) : systemToolService.checkDockerAvailable();
     }
 
     public ContainerConfig parseContainerConfig(ContainerConfig config) {
         return config != null ? config : ContainerConfig.DEFAULT;
     }
 
-    public ContainerExecResult executeCommand(
-            Path projectRoot,
-            ContainerConfig containerConfig,
-            Map<String, String> env,
-            String command)
-            throws Exception {
-        ContainerSessionKey sessionKey =
-                new ContainerSessionKey(
-                        projectRoot.toAbsolutePath().normalize(),
-                        containerConfig.image(),
-                        containerConfig.workdir(),
-                        Map.copyOf(env));
+    public ContainerExecResult executeCommand(Path projectRoot, ContainerConfig containerConfig,
+            Map<String, String> env, String command) throws Exception {
+        ContainerSessionKey sessionKey = new ContainerSessionKey(projectRoot.toAbsolutePath().normalize(),
+                containerConfig.image(), containerConfig.workdir(), Map.copyOf(env));
         return getOrCreateContainerSession(sessionKey).execInContainer("sh", "-c", command);
     }
 
-    synchronized ContainerSession getOrCreateContainerSession(ContainerSessionKey key)
-            throws Exception {
+    synchronized ContainerSession getOrCreateContainerSession(ContainerSessionKey key) throws Exception {
         if (activeSession != null && key.equals(activeSessionKey) && activeSession.isRunning()) {
             return activeSession;
         }
@@ -142,11 +131,10 @@ public class BuildContainerService {
     }
 
     public static boolean isContainerEnabledInToml(String toml) {
-        if (StringUtils.isBlank(toml)) return false;
+        if (StringUtils.isBlank(toml))
+            return false;
         try {
-            var parsed =
-                    AiConfig.SHARED_TOML_MAPPER.readValue(
-                            toml, GenericBuildToolService.BuildConfig.class);
+            var parsed = AiConfig.SHARED_TOML_MAPPER.readValue(toml, GenericBuildToolService.BuildConfig.class);
             return parsed != null && parsed.container().enabled();
         } catch (Exception e) {
             log.debug("Failed to parse TOML when checking container.enabled flag", e);
@@ -186,9 +174,8 @@ public class BuildContainerService {
         }
 
         if (!foundContainerSection) {
-            String section =
-                    "[container]\nenabled = %s\nimage = '%s'\nworkdir = '%s'\n"
-                            .formatted(enabled, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
+            String section = "[container]\nenabled = %s\nimage = '%s'\nworkdir = '%s'\n".formatted(enabled,
+                    DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
             return safeToml.isEmpty() ? section : safeToml.stripTrailing() + "\n\n" + section;
         }
         if (!updatedEnabledLine && containerSectionIndex >= 0) {
@@ -198,29 +185,20 @@ public class BuildContainerService {
     }
 
     private static boolean isEnabledAssignment(String trimmed) {
-        return trimmed.startsWith("enabled")
-                && trimmed.substring("enabled".length()).trim().startsWith("=");
+        return trimmed.startsWith("enabled") && trimmed.substring("enabled".length()).trim().startsWith("=");
     }
 
     static String buildContainerName(Path projectRoot) {
         String uniqueSuffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-        return CONTAINER_NAME_PREFIX
-                + ProjectService.sanitizeProjectName(projectRoot)
-                + "-"
-                + uniqueSuffix;
+        return CONTAINER_NAME_PREFIX + ProjectService.sanitizeProjectName(projectRoot) + "-" + uniqueSuffix;
     }
 
     static GenericContainer<?> createConfiguredContainer(ContainerSessionKey key) {
         String containerName = buildContainerName(key.projectRoot());
         Consumer<CreateContainerCmd> nameModifier = cmd -> cmd.withName(containerName);
         return new GenericContainer<>(DockerImageName.parse(key.image()))
-                .withFileSystemBind(
-                        key.projectRoot().toAbsolutePath().toString(),
-                        key.workdir(),
-                        BindMode.READ_WRITE)
-                .withWorkingDirectory(key.workdir())
-                .withEnv(key.env())
-                .withLabel(LABEL_APP, LABEL_APP_VALUE)
+                .withFileSystemBind(key.projectRoot().toAbsolutePath().toString(), key.workdir(), BindMode.READ_WRITE)
+                .withWorkingDirectory(key.workdir()).withEnv(key.env()).withLabel(LABEL_APP, LABEL_APP_VALUE)
                 .withLabel(LABEL_PROJECT, ProjectService.sanitizeProjectName(key.projectRoot()))
                 .withCreateContainerCmdModifier(nameModifier)
                 .withCommand("sh", "-c", "while true; do sleep 3600; done");

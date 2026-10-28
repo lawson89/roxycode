@@ -11,10 +11,9 @@ public class JexlServiceRegistry {
     private final Map<String, String> docCache = new ConcurrentHashMap<>();
 
     public synchronized void register(Object service) {
-        if (service == null) return;
-        AgentService ann =
-                AnnotationUtils.findAnnotation(
-                        AopUtils.getTargetClass(service), AgentService.class);
+        if (service == null)
+            return;
+        AgentService ann = AnnotationUtils.findAnnotation(AopUtils.getTargetClass(service), AgentService.class);
         if (ann != null) {
             services.put(ann.value(), service);
             docCache.clear();
@@ -25,9 +24,7 @@ public class JexlServiceRegistry {
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : services.entrySet()) {
             Object service = entry.getValue();
-            AgentService ann =
-                    AnnotationUtils.findAnnotation(
-                            AopUtils.getTargetClass(service), AgentService.class);
+            AgentService ann = AnnotationUtils.findAnnotation(AopUtils.getTargetClass(service), AgentService.class);
             if (ann != null && ann.phases().length > 0) {
                 List<String> phaseList = Arrays.asList(ann.phases());
                 if (phase == null || phaseList.contains("*") || phaseList.contains(phase.name())) {
@@ -40,10 +37,7 @@ public class JexlServiceRegistry {
 
     public String getDocumentation(WorkflowPhase currentPhase) {
         String cacheKey = currentPhase != null ? currentPhase.name() : "NULL_PHASE";
-        return docCache.computeIfAbsent(
-                cacheKey,
-                key ->
-                        docGenerator.generateDoc(
-                                new ArrayList<>(getServices(currentPhase).values())));
+        return docCache.computeIfAbsent(cacheKey,
+                key -> docGenerator.generateDoc(new ArrayList<>(getServices(currentPhase).values())));
     }
 }

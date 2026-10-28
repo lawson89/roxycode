@@ -10,18 +10,17 @@ import org.roxycode.app.ai.services.MemoryService;
 
 class JexlServiceRegistryTest {
 
-    @AgentService(
-            value = "service1",
-            phases = {"CODE"})
-    static class Service1 {}
+    @AgentService(value = "service1", phases = {"CODE"})
+    static class Service1 {
+    }
 
-    @AgentService(
-            value = "service2",
-            phases = {"*"})
-    static class Service2 {}
+    @AgentService(value = "service2", phases = {"*"})
+    static class Service2 {
+    }
 
     @AgentService("emptyPhasesService")
-    static class EmptyPhasesService {}
+    static class EmptyPhasesService {
+    }
 
     @Test
     void testCaching() {
@@ -47,8 +46,7 @@ class JexlServiceRegistryTest {
         registry.register(emptyService);
 
         for (WorkflowPhase phase : WorkflowPhase.values()) {
-            assertFalse(
-                    registry.getServices(phase).containsValue(emptyService),
+            assertFalse(registry.getServices(phase).containsValue(emptyService),
                     "Service with empty phases array should not be exposed in " + phase);
         }
         assertFalse(registry.getServices(null).containsValue(emptyService));
@@ -84,11 +82,9 @@ class JexlServiceRegistryTest {
         registry.register(memoryService);
 
         for (WorkflowPhase phase : WorkflowPhase.values()) {
-            assertTrue(
-                    registry.getServices(phase).containsValue(memoryService),
+            assertTrue(registry.getServices(phase).containsValue(memoryService),
                     "MemoryService should be exposed in " + phase);
-            assertTrue(
-                    registry.getDocumentation(phase).contains("memoryService"),
+            assertTrue(registry.getDocumentation(phase).contains("memoryService"),
                     "JEXL docs should include memoryService in " + phase);
         }
     }
@@ -97,9 +93,7 @@ class JexlServiceRegistryTest {
         String runAction();
     }
 
-    @AgentService(
-            value = "contractService",
-            phases = {"CODE"})
+    @AgentService(value = "contractService", phases = {"CODE"})
     public static class ContractServiceImpl implements ServiceContract {
         @Override
         @AgentDoc("Runs an action")
@@ -111,8 +105,8 @@ class JexlServiceRegistryTest {
     @Test
     void testRegisterAndGetServicesUnwrapsJdkAndCglibProxiesAndSubclasses() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
-        org.springframework.aop.framework.ProxyFactory jdkFactory =
-                new org.springframework.aop.framework.ProxyFactory(new ContractServiceImpl());
+        org.springframework.aop.framework.ProxyFactory jdkFactory = new org.springframework.aop.framework.ProxyFactory(
+                new ContractServiceImpl());
         jdkFactory.setInterfaces(ServiceContract.class);
         Object jdkProxy = jdkFactory.getProxy();
 

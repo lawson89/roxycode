@@ -9,9 +9,11 @@ public final class PathUtils {
 
     private static final String MD_EXTENSION = ".md";
 
-    public record ArchiveFileTarget(String id, Path file) {}
+    public record ArchiveFileTarget(String id, Path file) {
+    }
 
-    private PathUtils() {}
+    private PathUtils() {
+    }
 
     public static void createParentDirectories(Path filePath) throws IOException {
         if (filePath != null && filePath.getParent() != null) {

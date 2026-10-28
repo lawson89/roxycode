@@ -30,10 +30,14 @@ import org.springframework.context.ApplicationEventPublisher;
 @ExtendWith(MockitoExtension.class)
 class ReturnDirectToolCallingManagerTest {
 
-    @Mock private ToolCallingManager delegate;
-    @Mock private SettingsService settingsService;
-    @Mock private PlanService planService;
-    @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private ToolCallingManager delegate;
+    @Mock
+    private SettingsService settingsService;
+    @Mock
+    private PlanService planService;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private AppSettings settings;
     private ReturnDirectToolCallingManager manager;
@@ -42,32 +46,20 @@ class ReturnDirectToolCallingManagerTest {
     void setUp() {
         settings = new AppSettings();
         lenient().when(settingsService.getSettings()).thenReturn(settings);
-        manager =
-                new ReturnDirectToolCallingManager(
-                        delegate, settingsService, planService, eventPublisher);
+        manager = new ReturnDirectToolCallingManager(delegate, settingsService, planService, eventPublisher);
     }
 
     private static Prompt buildPrompt(String userText, TurnToolContext ctx) {
-        return new Prompt(
-                List.of(new UserMessage(userText)),
+        return new Prompt(List.of(new UserMessage(userText)),
                 ToolCallingChatOptions.builder().toolContext(ctx.toMap()).build());
     }
 
-    private static ToolExecutionResult buildDelegatedResult(
-            String userText,
-            AssistantMessage assistantMsg,
-            boolean returnDirect,
-            ToolResponseMessage.ToolResponse... responses) {
+    private static ToolExecutionResult buildDelegatedResult(String userText, AssistantMessage assistantMsg,
+            boolean returnDirect, ToolResponseMessage.ToolResponse... responses) {
         return ToolExecutionResult.builder()
-                .conversationHistory(
-                        List.of(
-                                new UserMessage(userText),
-                                assistantMsg,
-                                ToolResponseMessage.builder()
-                                        .responses(List.of(responses))
-                                        .build()))
-                .returnDirect(returnDirect)
-                .build();
+                .conversationHistory(List.of(new UserMessage(userText), assistantMsg,
+                        ToolResponseMessage.builder().responses(List.of(responses)).build()))
+                .returnDirect(returnDirect).build();
     }
 
     @Test
@@ -83,30 +75,14 @@ class ReturnDirectToolCallingManagerTest {
     void testExecuteToolCallsEnforcesMaxTurnsAndPublishesEvents() {
         settings.setMaxAgentToolTurns(1);
         AtomicInteger turnCounter = new AtomicInteger(0);
-        Prompt prompt =
-                buildPrompt(
-                        "Hi", new TurnToolContext("conv-1", WorkflowPhase.CODE, turnCounter, null));
-        AssistantMessage assistantMsg =
-                AssistantMessage.builder()
-                        .content("")
-                        .toolCalls(
-                                List.of(
-                                        new AssistantMessage.ToolCall(
-                                                "call-1",
-                                                "function",
-                                                "executeJexl",
-                                                """
-                        {"script":"1"}""")))
-                        .build();
+        Prompt prompt = buildPrompt("Hi", new TurnToolContext("conv-1", WorkflowPhase.CODE, turnCounter, null));
+        AssistantMessage assistantMsg = AssistantMessage.builder().content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("call-1", "function", "executeJexl", """
+                        {"script":"1"}"""))).build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
-        doReturn(
-                        buildDelegatedResult(
-                                "Hi",
-                                assistantMsg,
-                                false,
-                                new ToolResponseMessage.ToolResponse("call-1", "executeJexl", "1")))
-                .when(delegate)
+        doReturn(buildDelegatedResult("Hi", assistantMsg, false,
+                new ToolResponseMessage.ToolResponse("call-1", "executeJexl", "1"))).when(delegate)
                 .executeToolCalls(prompt, chatResponse);
 
         ToolExecutionResult r1 = manager.executeToolCalls(prompt, chatResponse);
@@ -116,152 +92,66 @@ class ReturnDirectToolCallingManagerTest {
 
         ToolExecutionResult r2 = manager.executeToolCalls(prompt, chatResponse);
         assertTrue(r2.returnDirect());
-        ToolResponseMessage stopMsg =
-                assertInstanceOf(
-                        ToolResponseMessage.class,
-                        r2.conversationHistory().get(r2.conversationHistory().size() - 1));
-        assertEquals(
-                "Autonomous execution stopped: Maximum tool turns (1) exceeded.",
+        ToolResponseMessage stopMsg = assertInstanceOf(ToolResponseMessage.class,
+                r2.conversationHistory().get(r2.conversationHistory().size() - 1));
+        assertEquals("Autonomous execution stopped: Maximum tool turns (1) exceeded.",
                 stopMsg.getResponses().get(0).responseData());
     }
 
     @Test
     void testExecuteToolCallsSuppressesReturnDirectAndLogsPlanToolFailure() {
-        Prompt prompt =
-                buildPrompt(
-                        "Transition",
-                        new TurnToolContext(
-                                "task:default", WorkflowPhase.PLAN, new AtomicInteger(0), null));
-        AssistantMessage assistantMsg =
-                AssistantMessage.builder()
-                        .content("")
-                        .toolCalls(
-                                List.of(
-                                        new AssistantMessage.ToolCall(
-                                                "call-1",
-                                                "function",
-                                                "requestDevelopment",
-                                                """
-                        {"reason":"Ready"}""")))
-                        .build();
+        Prompt prompt = buildPrompt("Transition",
+                new TurnToolContext("task:default", WorkflowPhase.PLAN, new AtomicInteger(0), null));
+        AssistantMessage assistantMsg = AssistantMessage.builder().content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("call-1", "function", "requestDevelopment", """
+                        {"reason":"Ready"}"""))).build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
-        doReturn(
-                        buildDelegatedResult(
-                                "Transition",
-                                assistantMsg,
-                                true,
-                                new ToolResponseMessage.ToolResponse(
-                                        "call-1",
-                                        "requestDevelopment",
-                                        """
-                        {"error":"Plan missing"}""")))
-                .when(delegate)
-                .executeToolCalls(prompt, chatResponse);
+        doReturn(buildDelegatedResult("Transition", assistantMsg, true,
+                new ToolResponseMessage.ToolResponse("call-1", "requestDevelopment", """
+                        {"error":"Plan missing"}"""))).when(delegate).executeToolCalls(prompt, chatResponse);
 
         ToolExecutionResult result = manager.executeToolCalls(prompt, chatResponse);
         assertFalse(result.returnDirect());
-        verify(eventPublisher)
-                .publishEvent(
-                        new ToolExecutionEvent(
-                                "task:default",
-                                """
-                planService.requestDevelopment({"reason":"Ready"})""",
-                                null,
-                                false,
-                                "Plan missing"));
+        verify(eventPublisher).publishEvent(new ToolExecutionEvent("task:default", """
+                planService.requestDevelopment({"reason":"Ready"})""", null, false, "Plan missing"));
     }
 
     @Test
     void testParallelToolCallsWithEmptyIdsLogMatchingArgumentsPerTool() {
-        Prompt prompt =
-                buildPrompt(
-                        "Complete and review",
-                        new TurnToolContext(
-                                "task:default", WorkflowPhase.CODE, new AtomicInteger(0), null));
-        AssistantMessage assistantMsg =
-                AssistantMessage.builder()
-                        .content("")
-                        .toolCalls(
-                                List.of(
-                                        new AssistantMessage.ToolCall(
-                                                "",
-                                                "function",
-                                                "markStepsCompleted",
-                                                """
-                                {"indices":[3,4]}"""),
-                                        new AssistantMessage.ToolCall(
-                                                "",
-                                                "function",
-                                                "requestReview",
-                                                """
-                                {"reason":"All steps verified"}""")))
-                        .build();
+        Prompt prompt = buildPrompt("Complete and review",
+                new TurnToolContext("task:default", WorkflowPhase.CODE, new AtomicInteger(0), null));
+        AssistantMessage assistantMsg = AssistantMessage.builder().content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("", "function", "markStepsCompleted", """
+                        {"indices":[3,4]}"""), new AssistantMessage.ToolCall("", "function", "requestReview", """
+                        {"reason":"All steps verified"}"""))).build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
-        doReturn(
-                        buildDelegatedResult(
-                                "Complete and review",
-                                assistantMsg,
-                                true,
-                                new ToolResponseMessage.ToolResponse(
-                                        "", "markStepsCompleted", "null"),
-                                new ToolResponseMessage.ToolResponse(
-                                        "", "requestReview", '"' + "Transitioned to REVIEW" + '"')))
-                .when(delegate)
-                .executeToolCalls(prompt, chatResponse);
+        doReturn(buildDelegatedResult("Complete and review", assistantMsg, true,
+                new ToolResponseMessage.ToolResponse("", "markStepsCompleted", "null"),
+                new ToolResponseMessage.ToolResponse("", "requestReview", '"' + "Transitioned to REVIEW" + '"')))
+                .when(delegate).executeToolCalls(prompt, chatResponse);
 
         ToolExecutionResult result = manager.executeToolCalls(prompt, chatResponse);
         assertTrue(result.returnDirect());
-        verify(eventPublisher)
-                .publishEvent(
-                        new ToolExecutionEvent(
-                                "task:default",
-                                """
-                planService.markStepsCompleted({"indices":[3,4]})""",
-                                "null",
-                                true,
-                                null));
-        verify(eventPublisher)
-                .publishEvent(
-                        new ToolExecutionEvent(
-                                "task:default",
-                                """
-                planService.requestReview({"reason":"All steps verified"})""",
-                                "Transitioned to REVIEW",
-                                true,
-                                null));
+        verify(eventPublisher).publishEvent(new ToolExecutionEvent("task:default", """
+                planService.markStepsCompleted({"indices":[3,4]})""", "null", true, null));
+        verify(eventPublisher).publishEvent(new ToolExecutionEvent("task:default", """
+                planService.requestReview({"reason":"All steps verified"})""", "Transitioned to REVIEW", true, null));
     }
 
     @Test
     void testExecuteToolCallsAccumulatesAssistantText() {
         settings.setMaxAgentToolTurns(5);
         StringBuilder accumulator = new StringBuilder();
-        Prompt prompt =
-                buildPrompt(
-                        "Hi",
-                        new TurnToolContext(
-                                "conv-accum",
-                                WorkflowPhase.EXPLORE,
-                                new AtomicInteger(0),
-                                accumulator));
-        AssistantMessage assistantMsg =
-                AssistantMessage.builder()
-                        .content("Initial thoughts.")
-                        .toolCalls(
-                                List.of(
-                                        new AssistantMessage.ToolCall(
-                                                "c1", "function", "executeJexl", "{}")))
-                        .build();
+        Prompt prompt = buildPrompt("Hi",
+                new TurnToolContext("conv-accum", WorkflowPhase.EXPLORE, new AtomicInteger(0), accumulator));
+        AssistantMessage assistantMsg = AssistantMessage.builder().content("Initial thoughts.")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("c1", "function", "executeJexl", "{}"))).build();
         ChatResponse chatResponse = new ChatResponse(List.of(new Generation(assistantMsg)));
 
-        doReturn(
-                        ToolExecutionResult.builder()
-                                .conversationHistory(List.of(new UserMessage("Hi"), assistantMsg))
-                                .returnDirect(false)
-                                .build())
-                .when(delegate)
-                .executeToolCalls(prompt, chatResponse);
+        doReturn(ToolExecutionResult.builder().conversationHistory(List.of(new UserMessage("Hi"), assistantMsg))
+                .returnDirect(false).build()).when(delegate).executeToolCalls(prompt, chatResponse);
 
         manager.executeToolCalls(prompt, chatResponse);
         assertEquals("Initial thoughts.\n\n", accumulator.toString());

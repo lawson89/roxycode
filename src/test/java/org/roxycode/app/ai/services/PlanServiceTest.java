@@ -37,8 +37,10 @@ import org.springframework.stereotype.Service;
 @ExtendWith(MockitoExtension.class)
 class PlanServiceTest {
 
-    @Mock private EnvironmentService envService;
-    @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private EnvironmentService envService;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
     private PlanService service;
 
     @BeforeEach
@@ -54,19 +56,9 @@ class PlanServiceTest {
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
     }
 
-    private static ImplementationPlan createPlan(
-            List<ImplementationPlan.TechStep> steps, boolean approved) {
-        return new ImplementationPlan(
-                "Title",
-                "Goal",
-                List.of("Req 1"),
-                steps,
-                approved,
-                approved ? "now" : null,
-                approved ? "user" : null,
-                null,
-                null,
-                List.of());
+    private static ImplementationPlan createPlan(List<ImplementationPlan.TechStep> steps, boolean approved) {
+        return new ImplementationPlan("Title", "Goal", List.of("Req 1"), steps, approved, approved ? "now" : null,
+                approved ? "user" : null, null, null, List.of());
     }
 
     private static void assertIllegalState(Executable action, String... expectedSubstrings) {
@@ -75,33 +67,27 @@ class PlanServiceTest {
     }
 
     private static void assertIllegalStates(Executable... actions) {
-        for (Executable action : actions) assertThrows(IllegalStateException.class, action);
+        for (Executable action : actions)
+            assertThrows(IllegalStateException.class, action);
     }
 
     private static void assertBadArgs(Executable... actions) {
-        for (Executable action : actions) assertThrows(IllegalArgumentException.class, action);
+        for (Executable action : actions)
+            assertThrows(IllegalArgumentException.class, action);
     }
 
     @Test
     void testSubmitPlanAndNotifyListeners() {
         AtomicInteger notifications = new AtomicInteger(0);
-        doAnswer(
-                        inv -> {
-                            if (inv.getArgument(0) instanceof PlanUpdatedEvent) {
-                                notifications.incrementAndGet();
-                            }
-                            return null;
-                        })
-                .when(eventPublisher)
-                .publishEvent(any(Object.class));
+        doAnswer(inv -> {
+            if (inv.getArgument(0) instanceof PlanUpdatedEvent) {
+                notifications.incrementAndGet();
+            }
+            return null;
+        }).when(eventPublisher).publishEvent(any(Object.class));
 
-        String res =
-                service.submitPlan(
-                        createPlan(
-                                List.of(new ImplementationPlan.TechStep("Step 1", false)), false));
-        assertEquals(
-                "Implementation plan submitted successfully with mandatory verification checklist items.",
-                res);
+        String res = service.submitPlan(createPlan(List.of(new ImplementationPlan.TechStep("Step 1", false)), false));
+        assertEquals("Implementation plan submitted successfully with mandatory verification checklist items.", res);
         assertEquals("Title", service.getCurrentPlan().title());
         assertEquals(4, service.getCurrentPlan().technicalSteps().size());
         assertEquals(1, notifications.get());
@@ -135,65 +121,44 @@ class PlanServiceTest {
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
         assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
 
-        assertContainsAll(
-                service.markStepsCompleted(List.of(0, 1)),
-                "Marked steps [0, 1] completed.",
+        assertContainsAll(service.markStepsCompleted(List.of(0, 1)), "Marked steps [0, 1] completed.",
                 "Remaining incomplete steps: [2: Code compiles successfully, 3: Unit tests pass, 4: Automated code review passes]");
         assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
         assertTrue(service.getCurrentPlan().technicalSteps().get(1).completed());
 
-        assertContainsAll(
-                service.markStepCompleted(2),
-                "Marked steps [2] completed.",
+        assertContainsAll(service.markStepCompleted(2), "Marked steps [2] completed.",
                 "Remaining incomplete steps: [3: Unit tests pass, 4: Automated code review passes]");
 
-        assertContainsAll(
-                service.markStepsIncomplete(List.of(0, 1)),
-                "Marked steps [0, 1] incomplete.",
-                "0: Step 1",
+        assertContainsAll(service.markStepsIncomplete(List.of(0, 1)), "Marked steps [0, 1] incomplete.", "0: Step 1",
                 "1: Step 2");
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
         assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
 
-        assertTrue(
-                service.markStepsCompleted(List.of(0, 1, 2, 3, 4))
-                        .contains("Remaining incomplete steps: none (all steps completed)."));
+        assertTrue(service.markStepsCompleted(List.of(0, 1, 2, 3, 4))
+                .contains("Remaining incomplete steps: none (all steps completed)."));
     }
 
     @Test
     void testStepIndexBoundsAndNullPlanValidation() {
         setupCodePhase();
-        assertTrue(
-                assertThrows(IllegalArgumentException.class, () -> service.markStepCompleted(-1))
-                        .getMessage()
-                        .contains("Valid 0-based indices are 0..4"));
-        assertTrue(
-                assertThrows(
-                                IllegalArgumentException.class,
-                                () -> service.markStepsCompleted(List.of(0, 5)))
-                        .getMessage()
-                        .contains("Invalid step index 5"));
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> service.markStepCompleted(-1)).getMessage()
+                .contains("Valid 0-based indices are 0..4"));
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> service.markStepsCompleted(List.of(0, 5)))
+                .getMessage().contains("Invalid step index 5"));
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
 
-        assertBadArgs(
-                () -> service.markStepsCompleted(List.of()),
-                () -> service.markStepsCompleted(Arrays.asList(0, null)),
-                () -> service.addHandoffLogEntry("   "));
-        assertEquals(
-                "Handoff log entry added.",
-                service.addHandoffLogEntry("Completed initial refactoring"));
+        assertBadArgs(() -> service.markStepsCompleted(List.of()),
+                () -> service.markStepsCompleted(Arrays.asList(0, null)), () -> service.addHandoffLogEntry("   "));
+        assertEquals("Handoff log entry added.", service.addHandoffLogEntry("Completed initial refactoring"));
 
         service.clearPlan();
-        assertIllegalStates(
-                () -> service.markStepCompleted(0), () -> service.addHandoffLogEntry("entry"));
+        assertIllegalStates(() -> service.markStepCompleted(0), () -> service.addHandoffLogEntry("entry"));
     }
 
     @Test
     void testAddAndUpdateTechnicalStepsInPlanAndCodePhases() {
         service.submitPlan("T", "G", List.of(), List.of("Step 1"));
-        assertTrue(
-                service.addTechnicalStep("Step 2")
-                        .contains("Added technical step at index 1: 'Step 2'"));
+        assertTrue(service.addTechnicalStep("Step 2").contains("Added technical step at index 1: 'Step 2'"));
         var steps = service.getCurrentPlan().technicalSteps();
         assertEquals(5, steps.size());
         assertEquals("Step 1", steps.get(0).description());
@@ -205,22 +170,16 @@ class PlanServiceTest {
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
 
         service.markStepCompleted(0);
-        assertTrue(
-                service.updateTechnicalStep(0, "Step 1 (refined)")
-                        .contains("Updated technical step 0 to 'Step 1 (refined)'"));
-        assertEquals(
-                "Step 1 (refined)", service.getCurrentPlan().technicalSteps().get(0).description());
+        assertTrue(service.updateTechnicalStep(0, "Step 1 (refined)")
+                .contains("Updated technical step 0 to 'Step 1 (refined)'"));
+        assertEquals("Step 1 (refined)", service.getCurrentPlan().technicalSteps().get(0).description());
         assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
 
-        assertTrue(
-                service.addTechnicalStep("Step 3")
-                        .contains("Added technical step at index 2: 'Step 3'"));
+        assertTrue(service.addTechnicalStep("Step 3").contains("Added technical step at index 2: 'Step 3'"));
         assertEquals(6, service.getCurrentPlan().technicalSteps().size());
         assertEquals("Step 3", service.getCurrentPlan().technicalSteps().get(2).description());
 
-        assertBadArgs(
-                () -> service.addTechnicalStep("  "),
-                () -> service.updateTechnicalStep(0, ""),
+        assertBadArgs(() -> service.addTechnicalStep("  "), () -> service.updateTechnicalStep(0, ""),
                 () -> service.updateTechnicalStep(99, "Valid"));
     }
 
@@ -250,22 +209,16 @@ class PlanServiceTest {
     @Test
     void testPhaseManagementAndSemanticWorkflowMethods() {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        assertIllegalState(
-                () -> service.requestDevelopment("Reason"), "Implementation Plan is missing");
+        assertIllegalState(() -> service.requestDevelopment("Reason"), "Implementation Plan is missing");
 
         service.submitPlan("T", "G", List.of("R1"), List.of("S1"));
-        assertContainsAll(
-                service.requestDevelopment("Ready to build"),
-                "PLAN SUMMARY:",
+        assertContainsAll(service.requestDevelopment("Ready to build"), "PLAN SUMMARY:",
                 "Transition Request: Approve Plan and proceed to Code");
-        assertEquals(
-                "Approve Plan and proceed to Code",
+        assertEquals("Approve Plan and proceed to Code",
                 PlanService.formatApprovalLabel(WorkflowPhase.PLAN, WorkflowPhase.CODE));
-        assertEquals(
-                "Approve Feature Request as complete",
+        assertEquals("Approve Feature Request as complete",
                 PlanService.formatApprovalLabel(WorkflowPhase.REVIEW, WorkflowPhase.PLAN));
-        assertEquals(
-                "Approve Plan Revision and return to Plan",
+        assertEquals("Approve Plan Revision and return to Plan",
                 PlanService.formatApprovalLabel(WorkflowPhase.CODE, WorkflowPhase.PLAN));
         assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
 
@@ -276,10 +229,7 @@ class PlanServiceTest {
         assertTrue(service.getCurrentPlan().userApproved());
         assertEquals("testuser", service.getCurrentPlan().approvedBy());
 
-        assertIllegalState(
-                () -> service.requestReview("Feature implemented"),
-                "0: S1",
-                "1: Code compiles successfully",
+        assertIllegalState(() -> service.requestReview("Feature implemented"), "0: S1", "1: Code compiles successfully",
                 "2: Unit tests pass");
 
         service.markStepsCompleted(List.of(0, 1, 2));
@@ -292,25 +242,21 @@ class PlanServiceTest {
         service.requestReview("Fixed");
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
-        assertIllegalState(
-                () -> service.requestCompletion("All verified"), "3: Automated code review passes");
+        assertIllegalState(() -> service.requestCompletion("All verified"), "3: Automated code review passes");
 
         service.markStepCompleted(3);
-        assertTrue(
-                service.requestCompletion("All verified")
-                        .contains("Transition Request: Approve Feature Request as complete"));
+        assertTrue(service.requestCompletion("All verified")
+                .contains("Transition Request: Approve Feature Request as complete"));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
     }
 
     @Test
     void testRequestPlanRevisionAndCodeToPlanPreservesPlan() {
         setupCodePhase();
-        service.setCurrentPlan(
-                createPlan(List.of(new ImplementationPlan.TechStep("Done step", true)), true));
+        service.setCurrentPlan(createPlan(List.of(new ImplementationPlan.TechStep("Done step", true)), true));
 
         String response = service.requestPlanRevision("Need architecture revision");
-        assertTrue(
-                response.contains("Transition Request: Approve Plan Revision and return to Plan"));
+        assertTrue(response.contains("Transition Request: Approve Plan Revision and return to Plan"));
         assertFalse(response.contains("Autonomous transition"));
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
@@ -329,20 +275,16 @@ class PlanServiceTest {
         assertTrue(service.requestReview("Checking quality").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
-        assertIllegalState(
-                () -> service.requestCompletion("Finalizing"), "4: Automated code review passes");
+        assertIllegalState(() -> service.requestCompletion("Finalizing"), "4: Automated code review passes");
 
         service.markStepCompleted(4);
         List<ImplementationPlan> updates = new ArrayList<>();
-        doAnswer(
-                        inv -> {
-                            if (inv.getArgument(0) instanceof PlanUpdatedEvent pue) {
-                                updates.add(pue.plan());
-                            }
-                            return null;
-                        })
-                .when(eventPublisher)
-                .publishEvent(any(Object.class));
+        doAnswer(inv -> {
+            if (inv.getArgument(0) instanceof PlanUpdatedEvent pue) {
+                updates.add(pue.plan());
+            }
+            return null;
+        }).when(eventPublisher).publishEvent(any(Object.class));
 
         assertTrue(service.requestCompletion("Finalizing").contains("Transition Request"));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
@@ -351,17 +293,11 @@ class PlanServiceTest {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         assertNull(service.getCurrentPlan());
         assertTrue(
-                updates.stream()
-                        .anyMatch(
-                                p ->
-                                        p != null
-                                                && "user".equals(p.completedBy())
-                                                && p.completedOn() != null));
+                updates.stream().anyMatch(p -> p != null && "user".equals(p.completedBy()) && p.completedOn() != null));
     }
 
     @Test
-    void testReviewToPlanArchivesCompletedPlanWithHitlMetadataAndFrontmatter(@TempDir Path tempDir)
-            throws Exception {
+    void testReviewToPlanArchivesCompletedPlanWithHitlMetadataAndFrontmatter(@TempDir Path tempDir) throws Exception {
         ProjectService projectService = mock(ProjectService.class);
         GitService gitService = mock(GitService.class);
         Path projectRoot = tempDir.resolve("my-project");
@@ -373,13 +309,9 @@ class PlanServiceTest {
         when(projectService.resolveProjectDataPath("archive/plans")).thenReturn(archiveDir);
         when(gitService.getStatus()).thenReturn(" M src/Main.java\n");
 
-        PlanService archivingService =
-                new PlanService(envService, eventPublisher, projectService, gitService);
-        archivingService.submitPlan(
-                "Archive Feature Plan!",
-                "Persist completed plans",
-                List.of("Include frontmatter", "Include approvals"),
-                List.of("Implement archiving"));
+        PlanService archivingService = new PlanService(envService, eventPublisher, projectService, gitService);
+        archivingService.submitPlan("Archive Feature Plan!", "Persist completed plans",
+                List.of("Include frontmatter", "Include approvals"), List.of("Implement archiving"));
 
         when(envService.getCurrentUser()).thenReturn("alice");
         archivingService.requestDevelopment("Ready for code");
@@ -411,41 +343,21 @@ class PlanServiceTest {
 
         String content = Files.readString(archivedFile);
         assertTrue(content.startsWith("---\n"));
-        assertContainsAll(
-                content,
-                "project: ",
-                "my-project",
-                "projectPath: ",
-                projectRoot.toAbsolutePath().normalize().toString(),
-                "title: ",
-                "Archive Feature Plan!",
-                "userApproved: true\n",
-                "approvedBy: ",
-                "alice",
-                "completedBy: ",
-                "bob",
-                "# Implementation Plan: Archive Feature Plan!",
-                "## Approvals",
-                "- **Move to Code:** Approved by alice on ",
-                "- **Final Acceptance:** Accepted by bob on ",
-                "## Handoff Log",
-                "REVIEW -> PLAN (User Approved): All checks passed",
-                "## Changes",
-                "M src/Main.java");
-        verify(eventPublisher)
-                .publishEvent(
-                        argThat(
-                                (Object ev) ->
-                                        ev instanceof ArchiveUpdatedEvent aue
-                                                && fileName.equals(aue.filename())));
+        assertContainsAll(content, "project: ", "my-project", "projectPath: ",
+                projectRoot.toAbsolutePath().normalize().toString(), "title: ", "Archive Feature Plan!",
+                "userApproved: true\n", "approvedBy: ", "alice", "completedBy: ", "bob",
+                "# Implementation Plan: Archive Feature Plan!", "## Approvals",
+                "- **Move to Code:** Approved by alice on ", "- **Final Acceptance:** Accepted by bob on ",
+                "## Handoff Log", "REVIEW -> PLAN (User Approved): All checks passed", "## Changes", "M src/Main.java");
+        verify(eventPublisher).publishEvent(
+                argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent aue && fileName.equals(aue.filename())));
     }
 
     @Test
     void testAutonomousReviewTransitionAndUnapprovedPlanGuard() {
         setupCodePhase();
         service.setCurrentPlan(createPlan(List.of(), false));
-        assertIllegalState(
-                () -> service.requestReview("Checking quality"),
+        assertIllegalState(() -> service.requestReview("Checking quality"),
                 "An approved Implementation Plan is required");
 
         service.approvePlan("user", "now");
@@ -454,19 +366,14 @@ class PlanServiceTest {
         assertTrue(service.requestReview("Checking quality").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
         verify(eventPublisher)
-                .publishEvent(
-                        argThat(
-                                (Object ev) ->
-                                        ev instanceof WorkflowTransitionEvent wte
-                                                && wte.autonomous()));
+                .publishEvent(argThat((Object ev) -> ev instanceof WorkflowTransitionEvent wte && wte.autonomous()));
         assertEquals(initialLogSize + 1, service.getCurrentPlan().handoffLog().size());
     }
 
     @Test
     void testExploreDecoupling() {
         setupCodePhase();
-        assertIllegalState(
-                () -> service.routeToPhase(WorkflowPhase.EXPLORE, "Jump"),
+        assertIllegalState(() -> service.routeToPhase(WorkflowPhase.EXPLORE, "Jump"),
                 "Error: Cannot jump from CODE to EXPLORE");
 
         assertTrue(service.getVisitedPhases().contains(WorkflowPhase.CODE));
@@ -478,15 +385,10 @@ class PlanServiceTest {
     @Test
     void testPhaseRestrictionsEnforced() {
         service.submitPlan("T", "G", List.of(), List.of("S1"));
-        assertIllegalStates(
-                () -> service.markStepCompleted(0),
-                () -> service.markStepsCompleted(List.of(0)),
-                () -> service.markStepIncomplete(0),
-                () -> service.markStepsIncomplete(List.of(0)),
-                () -> service.requestReview("done"),
-                () -> service.requestFixes("fix"),
-                () -> service.requestCompletion("complete"),
-                () -> service.requestPlanRevision("revise"));
+        assertIllegalStates(() -> service.markStepCompleted(0), () -> service.markStepsCompleted(List.of(0)),
+                () -> service.markStepIncomplete(0), () -> service.markStepsIncomplete(List.of(0)),
+                () -> service.requestReview("done"), () -> service.requestFixes("fix"),
+                () -> service.requestCompletion("complete"), () -> service.requestPlanRevision("revise"));
 
         service.requestDevelopment("Ready");
         service.approveTransition();
@@ -494,22 +396,17 @@ class PlanServiceTest {
 
         assertDoesNotThrow(() -> service.markStepsCompleted(List.of(0, 1, 2)));
         assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
-        assertIllegalStates(
-                () -> service.submitPlan("T2", "G2", List.of(), List.of()),
-                () -> service.requestDevelopment("dev"),
-                () -> service.requestFixes("fix"),
+        assertIllegalStates(() -> service.submitPlan("T2", "G2", List.of(), List.of()),
+                () -> service.requestDevelopment("dev"), () -> service.requestFixes("fix"),
                 () -> service.requestCompletion("complete"));
 
         service.requestReview("Ready for review");
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
 
         assertDoesNotThrow(() -> service.markStepCompleted(3));
-        assertIllegalStates(
-                () -> service.submitPlan("T3", "G3", List.of(), List.of()),
-                () -> service.addTechnicalStep("extra"),
-                () -> service.updateTechnicalStep(0, "updated"),
-                () -> service.requestDevelopment("dev"),
-                () -> service.requestReview("review"),
+        assertIllegalStates(() -> service.submitPlan("T3", "G3", List.of(), List.of()),
+                () -> service.addTechnicalStep("extra"), () -> service.updateTechnicalStep(0, "updated"),
+                () -> service.requestDevelopment("dev"), () -> service.requestReview("review"),
                 () -> service.requestPlanRevision("revise"));
     }
 
@@ -523,36 +420,26 @@ class PlanServiceTest {
         assertTrue(registry.getServices(WorkflowPhase.PLAN).isEmpty());
 
         JexlTool jexlTool = new JexlTool(registry, null, null);
-        assertTrue(
-                jexlTool.executeJexl("planService.submitPlan('T', 'G', [], [])").contains("error"));
+        assertTrue(jexlTool.executeJexl("planService.submitPlan('T', 'G', [], [])").contains("error"));
 
-        Tool submitTool =
-                PlanService.class
-                        .getMethod("submitPlan", String.class, String.class, List.class, List.class)
-                        .getAnnotation(Tool.class);
+        Tool submitTool = PlanService.class.getMethod("submitPlan", String.class, String.class, List.class, List.class)
+                .getAnnotation(Tool.class);
         assertNotNull(submitTool);
         assertFalse(submitTool.returnDirect());
 
-        for (Method m :
-                List.of(
-                        PlanService.class.getMethod("markStepCompleted", int.class),
-                        PlanService.class.getMethod("markStepsCompleted", List.class),
-                        PlanService.class.getMethod("markStepIncomplete", int.class),
-                        PlanService.class.getMethod("markStepsIncomplete", List.class),
-                        PlanService.class.getMethod("addTechnicalStep", String.class),
-                        PlanService.class.getMethod("updateTechnicalStep", int.class, String.class),
-                        PlanService.class.getMethod("addHandoffLogEntry", String.class))) {
+        for (Method m : List.of(PlanService.class.getMethod("markStepCompleted", int.class),
+                PlanService.class.getMethod("markStepsCompleted", List.class),
+                PlanService.class.getMethod("markStepIncomplete", int.class),
+                PlanService.class.getMethod("markStepsIncomplete", List.class),
+                PlanService.class.getMethod("addTechnicalStep", String.class),
+                PlanService.class.getMethod("updateTechnicalStep", int.class, String.class),
+                PlanService.class.getMethod("addHandoffLogEntry", String.class))) {
             assertFalse(m.getAnnotation(Tool.class).returnDirect());
             assertEquals(String.class, m.getReturnType());
         }
 
-        for (String name :
-                List.of(
-                        "requestDevelopment",
-                        "requestReview",
-                        "requestFixes",
-                        "requestCompletion",
-                        "requestPlanRevision")) {
+        for (String name : List.of("requestDevelopment", "requestReview", "requestFixes", "requestCompletion",
+                "requestPlanRevision")) {
             Method m = PlanService.class.getMethod(name, String.class);
             assertTrue(m.getAnnotation(Tool.class).returnDirect());
             assertEquals(String.class, m.getReturnType());

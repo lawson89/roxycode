@@ -21,7 +21,8 @@ import org.roxycode.app.model.AppSettings;
 
 class SettingsServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     @Test
     void testSaveAndLoadSettings() {
@@ -39,13 +40,10 @@ class SettingsServiceTest {
         service2.setSettingsPathOverride(settingsFile);
         assertEquals("Darcula", service2.getSettings().getTheme());
         assertEquals("test-api-key", service2.getSettings().getGeminiApiKey());
-        assertEquals(
-                List.of("/tmp/global-a", "/tmp/global-b"),
-                service2.getSettings().getGlobalContextFolders());
+        assertEquals(List.of("/tmp/global-a", "/tmp/global-b"), service2.getSettings().getGlobalContextFolders());
         assertTrue(Files.exists(settingsFile));
 
-        AppSettings staticLoaded =
-                SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
+        AppSettings staticLoaded = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
         assertEquals("Darcula", staticLoaded.getTheme());
         assertEquals("test-api-key", staticLoaded.getGeminiApiKey());
     }
@@ -68,9 +66,8 @@ class SettingsServiceTest {
         assertNotNull(defaultPath);
         assertTrue(defaultPath.endsWith(Path.of(".roxycode", "settings.toml")));
 
-        AppSettings fromMissing =
-                SettingsService.loadFromDisk(
-                        tempDir.resolve("missing.toml"), AiConfig.SHARED_TOML_MAPPER);
+        AppSettings fromMissing = SettingsService.loadFromDisk(tempDir.resolve("missing.toml"),
+                AiConfig.SHARED_TOML_MAPPER);
         assertEquals("FlatLaf Light", fromMissing.getTheme());
 
         Path corruptFile = Files.writeString(tempDir.resolve("corrupt.toml"), "invalid = [toml");
@@ -81,19 +78,14 @@ class SettingsServiceTest {
     @Test
     void testSettingsListener() {
         AtomicBoolean listenerCalled = new AtomicBoolean(false);
-        SettingsService service =
-                new SettingsService(
-                        null,
-                        event -> {
-                            if (event instanceof SettingsChangedEvent) {
-                                listenerCalled.set(true);
-                            }
-                        });
+        SettingsService service = new SettingsService(null, event -> {
+            if (event instanceof SettingsChangedEvent) {
+                listenerCalled.set(true);
+            }
+        });
         service.setSettingsPathOverride(tempDir.resolve("test_listener.toml"));
         service.saveSettings();
-        assertTrue(
-                listenerCalled.get(),
-                "SettingsChangedEvent should be published when settings are saved");
+        assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
     }
 
     @Test
@@ -103,8 +95,7 @@ class SettingsServiceTest {
         assertNotNull(models);
         assertFalse(models.isEmpty(), "Available models from /models.toml should not be empty");
         assertTrue(models.stream().anyMatch(m -> "gemini-3.5-flash".equals(m.apiName())));
-        assertSame(
-                models, service.getAvailableModels(), "Repeated calls should return cached list");
+        assertSame(models, service.getAvailableModels(), "Repeated calls should return cached list");
 
         Path edtSettingsFile = tempDir.resolve("edt_settings.toml");
         service.setSettingsPathOverride(edtSettingsFile);
@@ -112,10 +103,8 @@ class SettingsServiceTest {
         javax.swing.SwingUtilities.invokeAndWait(service::saveSettings);
         service.getLastSaveFuture().get(5, TimeUnit.SECONDS);
         assertTrue(Files.exists(edtSettingsFile));
-        assertEquals(
-                "FlatLaf Dark",
-                SettingsService.loadFromDisk(edtSettingsFile, AiConfig.SHARED_TOML_MAPPER)
-                        .getTheme());
+        assertEquals("FlatLaf Dark",
+                SettingsService.loadFromDisk(edtSettingsFile, AiConfig.SHARED_TOML_MAPPER).getTheme());
     }
 
     @Test
@@ -129,13 +118,11 @@ class SettingsServiceTest {
         List<Future<AppSettings>> futures = new ArrayList<>();
         try (ExecutorService executor = Executors.newFixedThreadPool(threads)) {
             for (int i = 0; i < threads; i++) {
-                futures.add(
-                        executor.submit(
-                                () -> {
-                                    ready.countDown();
-                                    start.await();
-                                    return service.getSettings();
-                                }));
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    start.await();
+                    return service.getSettings();
+                }));
             }
             ready.await();
             start.countDown();

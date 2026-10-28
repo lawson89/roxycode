@@ -14,25 +14,19 @@ public class ChatHtmlTemplates {
                 : "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
     }
 
-    public static String renderChatEntry(
-            String role, String content, String timestamp, int messageIndex, boolean copied) {
+    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
+            boolean copied) {
         String safeRole = SwingHtmlUtils.escapeHtml(role != null ? role : "");
-        String indicator =
-                switch (role != null ? role : "") {
-                    case ROLE_AI -> "<span class='role-ai'>ROXY " + CAT_EARS + "</span>";
-                    case ROLE_USER -> "<span class='role-user'>USER</span>";
-                    case ROLE_SYSTEM -> "<span class='role-system'>SYSTEM</span>";
-                    default -> "&nbsp;";
-                };
-        String actionCell =
-                (ROLE_AI.equals(role) && messageIndex >= 0)
-                        ? "<td id='"
-                                + COPY_CELL_ID_PREFIX
-                                + messageIndex
-                                + "' align='right' valign='middle' nowrap='nowrap'>"
-                                + renderCopyActionHtml(messageIndex, copied)
-                                + "</td>"
-                        : "";
+        String indicator = switch (role != null ? role : "") {
+            case ROLE_AI -> "<span class='role-ai'>ROXY " + CAT_EARS + "</span>";
+            case ROLE_USER -> "<span class='role-user'>USER</span>";
+            case ROLE_SYSTEM -> "<span class='role-system'>SYSTEM</span>";
+            default -> "&nbsp;";
+        };
+        String actionCell = (ROLE_AI.equals(role) && messageIndex >= 0)
+                ? "<td id='" + COPY_CELL_ID_PREFIX + messageIndex + "' align='right' valign='middle' nowrap='nowrap'>"
+                        + renderCopyActionHtml(messageIndex, copied) + "</td>"
+                : "";
 
         return """
                 <table class="%s-entry" width="100%%" cellpadding="0" cellspacing="0" border="0">
@@ -53,24 +47,16 @@ public class ChatHtmlTemplates {
                     <tr><td height="8">&nbsp;</td></tr>
                 </table>
                 """
-                .formatted(
-                        safeRole,
-                        safeRole,
-                        indicator,
-                        SwingHtmlUtils.escapeHtml(timestamp != null ? timestamp : ""),
-                        actionCell,
-                        content != null ? content : "");
+                .formatted(safeRole, safeRole, indicator, SwingHtmlUtils.escapeHtml(timestamp != null ? timestamp : ""),
+                        actionCell, content != null ? content : "");
     }
 
     public static String renderToolLog(String output, boolean success, String error) {
-        String statusHtml =
-                success
-                        ? "<div class='tool-result'>&#10003; Executed successfully</div>"
-                        : "<div class='tool-error'>&#10007; Error: "
-                                + ((error == null || error.trim().isEmpty())
-                                        ? "Unknown error"
-                                        : SwingHtmlUtils.escapeHtml(error))
-                                + "</div>";
+        String statusHtml = success
+                ? "<div class='tool-result'>&#10003; Executed successfully</div>"
+                : "<div class='tool-error'>&#10007; Error: " + ((error == null || error.trim().isEmpty())
+                        ? "Unknown error"
+                        : SwingHtmlUtils.escapeHtml(error)) + "</div>";
         return """
                 <table class="tool-call" width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
@@ -84,8 +70,7 @@ public class ChatHtmlTemplates {
                 <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr><td height="8">&nbsp;</td></tr>
                 </table>
-                """
-                .formatted(output != null ? output : "", statusHtml);
+                """.formatted(output != null ? output : "", statusHtml);
     }
 
     public static String renderWelcomeCard() {

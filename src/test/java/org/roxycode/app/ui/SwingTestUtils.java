@@ -25,7 +25,8 @@ public final class SwingTestUtils {
         void run() throws Exception;
     }
 
-    private SwingTestUtils() {}
+    private SwingTestUtils() {
+    }
 
     public static void assertContainsAll(String actual, String... expectedSubstrings) {
         assertNotNull(actual, "Actual string must not be null");
@@ -42,7 +43,8 @@ public final class SwingTestUtils {
     }
 
     static void flushEdt() {
-        runOnEdt(() -> {});
+        runOnEdt(() -> {
+        });
     }
 
     private static void invokeUnchecked(ThrowingRunnable action) {
@@ -76,18 +78,18 @@ public final class SwingTestUtils {
 
     static <T> T awaitWorker(Future<T> worker) {
         AtomicReference<T> ref = new AtomicReference<>();
-        invokeUnchecked(
-                () -> {
-                    ref.set(worker != null ? worker.get() : null);
-                    flushEdt();
-                });
+        invokeUnchecked(() -> {
+            ref.set(worker != null ? worker.get() : null);
+            flushEdt();
+        });
         return ref.get();
     }
 
     static void awaitCondition(BooleanSupplier condition) {
         for (int i = 0; i < 50; i++) {
             flushEdt();
-            if (condition.getAsBoolean()) return;
+            if (condition.getAsBoolean())
+                return;
             try {
                 Thread.sleep(20);
             } catch (InterruptedException e) {
@@ -103,37 +105,37 @@ public final class SwingTestUtils {
 
     static void withDarkTheme(JComponent component, ThrowingRunnable assertions) {
         try {
-            runOnEdt(
-                    () -> {
-                        FlatDarkLaf.setup();
-                        if (component != null) SwingUtilities.updateComponentTreeUI(component);
-                    });
+            runOnEdt(() -> {
+                FlatDarkLaf.setup();
+                if (component != null)
+                    SwingUtilities.updateComponentTreeUI(component);
+            });
             invokeUnchecked(assertions);
         } finally {
-            runOnEdt(
-                    () -> {
-                        FlatLightLaf.setup();
-                        if (component != null) SwingUtilities.updateComponentTreeUI(component);
-                    });
+            runOnEdt(() -> {
+                FlatLightLaf.setup();
+                if (component != null)
+                    SwingUtilities.updateComponentTreeUI(component);
+            });
         }
     }
 
     static <E> Component renderListCell(JList<E> list, int index, boolean isSelected) {
-        return list.getCellRenderer()
-                .getListCellRendererComponent(
-                        list, list.getModel().getElementAt(index), index, isSelected, false);
+        return list.getCellRenderer().getListCellRendererComponent(list, list.getModel().getElementAt(index), index,
+                isSelected, false);
     }
 
-    static <T extends Component> T findComponent(
-            Container root, Class<T> type, Predicate<T> predicate) {
-        if (root == null) return null;
+    static <T extends Component> T findComponent(Container root, Class<T> type, Predicate<T> predicate) {
+        if (root == null)
+            return null;
         for (Component comp : root.getComponents()) {
             if (type.isInstance(comp) && predicate.test(type.cast(comp))) {
                 return type.cast(comp);
             }
             if (comp instanceof Container child) {
                 T found = findComponent(child, type, predicate);
-                if (found != null) return found;
+                if (found != null)
+                    return found;
             }
         }
         return null;
@@ -148,40 +150,32 @@ public final class SwingTestUtils {
     }
 
     static Element findElement(Element root, String tagName, Predicate<Element> predicate) {
-        if (root == null) return null;
+        if (root == null)
+            return null;
         if ((tagName == null || tagName.equalsIgnoreCase(root.getName())) && predicate.test(root)) {
             return root;
         }
         for (int i = 0; i < root.getElementCount(); i++) {
             Element found = findElement(root.getElement(i), tagName, predicate);
-            if (found != null) return found;
+            if (found != null)
+                return found;
         }
         return null;
     }
 
     static Element findTdByClass(Element root, String className) {
-        return findElement(
-                root,
-                "td",
-                elem ->
-                        className.equals(
-                                String.valueOf(
-                                        elem.getAttributes().getAttribute(HTML.Attribute.CLASS))));
+        return findElement(root, "td",
+                elem -> className.equals(String.valueOf(elem.getAttributes().getAttribute(HTML.Attribute.CLASS))));
     }
 
     static Element findTdWithText(Element root, String snippet) {
-        return findElement(
-                root,
-                "td",
-                elem -> {
-                    try {
-                        int start = elem.getStartOffset();
-                        return elem.getDocument()
-                                .getText(start, elem.getEndOffset() - start)
-                                .contains(snippet);
-                    } catch (Exception e) {
-                        return false;
-                    }
-                });
+        return findElement(root, "td", elem -> {
+            try {
+                int start = elem.getStartOffset();
+                return elem.getDocument().getText(start, elem.getEndOffset() - start).contains(snippet);
+            } catch (Exception e) {
+                return false;
+            }
+        });
     }
 }

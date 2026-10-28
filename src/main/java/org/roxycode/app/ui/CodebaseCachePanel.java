@@ -41,20 +41,13 @@ public final class CodebaseCachePanel extends JPanel {
     private final JTextArea stableContextArea = new JTextArea();
     private final JTextArea sessionContextArea = new JTextArea();
     private transient volatile SwingWorker<CacheStatusData, Void> activeRefreshWorker;
-    private static final DateTimeFormatter DATE_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    record CacheStatusData(
-            Optional<ProjectCacheMeta> meta,
-            Optional<String> packed,
-            long stableTokens,
-            Document repoMapDoc,
-            Document stableContextDoc,
-            Document sessionContextDoc) {}
+    record CacheStatusData(Optional<ProjectCacheMeta> meta, Optional<String> packed, long stableTokens,
+            Document repoMapDoc, Document stableContextDoc, Document sessionContextDoc) {
+    }
 
-    public CodebaseCachePanel(
-            RepoMapPackerService packerService,
-            ProjectCacheMetaService metaService,
+    public CodebaseCachePanel(RepoMapPackerService packerService, ProjectCacheMetaService metaService,
             PromptService promptService) {
         this.packerService = packerService;
         this.metaService = metaService;
@@ -69,13 +62,15 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     static String truncateForDisplay(String text) {
-        if (text == null) return "";
-        if (text.length() <= MAX_DISPLAY_CHARS) return text;
+        if (text == null)
+            return "";
+        if (text.length() <= MAX_DISPLAY_CHARS)
+            return text;
         return text.substring(0, MAX_DISPLAY_CHARS)
                 + """
 
 
-                ... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]"""
+                        ... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]"""
                         .formatted(text.length());
     }
 
@@ -145,52 +140,37 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     private JTextArea[] getTextAreas() {
-        return new JTextArea[] {repoMapArea, stableContextArea, sessionContextArea};
+        return new JTextArea[]{repoMapArea, stableContextArea, sessionContextArea};
     }
 
     SwingWorker<CacheStatusData, Void> refreshStatus() {
-        SwingWorker<CacheStatusData, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected CacheStatusData doInBackground() {
-                        Optional<ProjectCacheMeta> meta =
-                                metaService != null ? metaService.loadMeta() : Optional.empty();
-                        Optional<String> packed =
-                                metaService != null
-                                        ? metaService.loadRepoCache()
-                                        : Optional.empty();
-                        if (meta.isPresent()) {
-                            String stableContext = getStableContextString();
-                            return new CacheStatusData(
-                                    meta,
-                                    packed,
-                                    TokenUtils.estimateTokens(stableContext),
-                                    createDisplayDocument(
-                                            packed.orElse("Content not found on disk.")),
-                                    createDisplayDocument(stableContext),
-                                    createDisplayDocument(getSessionContextString()));
-                        }
-                        return new CacheStatusData(
-                                meta,
-                                packed,
-                                0,
-                                createDisplayDocument(
-                                        packed.orElse(
-                                                "Repo Map will appear here after generation.")),
-                                createDisplayDocument(""),
-                                createDisplayDocument(""));
-                    }
+        SwingWorker<CacheStatusData, Void> worker = new SwingWorker<>() {
+            @Override
+            protected CacheStatusData doInBackground() {
+                Optional<ProjectCacheMeta> meta = metaService != null ? metaService.loadMeta() : Optional.empty();
+                Optional<String> packed = metaService != null ? metaService.loadRepoCache() : Optional.empty();
+                if (meta.isPresent()) {
+                    String stableContext = getStableContextString();
+                    return new CacheStatusData(meta, packed, TokenUtils.estimateTokens(stableContext),
+                            createDisplayDocument(packed.orElse("Content not found on disk.")),
+                            createDisplayDocument(stableContext), createDisplayDocument(getSessionContextString()));
+                }
+                return new CacheStatusData(meta, packed, 0,
+                        createDisplayDocument(packed.orElse("Repo Map will appear here after generation.")),
+                        createDisplayDocument(""), createDisplayDocument(""));
+            }
 
-                    @Override
-                    protected void done() {
-                        if (isCancelled() || this != activeRefreshWorker) return;
-                        try {
-                            applyStatusDataOnEdt(this, get());
-                        } catch (Exception e) {
-                            log.error("Failed to refresh codebase cache status", e);
-                        }
-                    }
-                };
+            @Override
+            protected void done() {
+                if (isCancelled() || this != activeRefreshWorker)
+                    return;
+                try {
+                    applyStatusDataOnEdt(this, get());
+                } catch (Exception e) {
+                    log.error("Failed to refresh codebase cache status", e);
+                }
+            }
+        };
         activeRefreshWorker = worker;
         worker.execute();
         return worker;
@@ -201,26 +181,21 @@ public final class CodebaseCachePanel extends JPanel {
         area.setCaretPosition(0);
     }
 
-    private void applyStatusDataOnEdt(
-            SwingWorker<CacheStatusData, Void> worker, CacheStatusData data) {
-        if (!Objects.equals(worker, activeRefreshWorker)) return;
+    private void applyStatusDataOnEdt(SwingWorker<CacheStatusData, Void> worker, CacheStatusData data) {
+        if (!Objects.equals(worker, activeRefreshWorker))
+            return;
         setAreaDocument(repoMapArea, data.repoMapDoc());
         if (data.meta().isPresent()) {
             ProjectCacheMeta m = data.meta().get();
-            statusLabel.setText(
-                    String.format(
-                            "Status: Last updated on %s | Stable: %,d | Repo Map: %,d | Total: %,d",
-                            m.lastUpdated().format(DATE_FORMATTER),
-                            data.stableTokens(),
-                            m.estimatedTokens(),
-                            data.stableTokens() + m.estimatedTokens()));
+            statusLabel.setText(String.format("Status: Last updated on %s | Stable: %,d | Repo Map: %,d | Total: %,d",
+                    m.lastUpdated().format(DATE_FORMATTER), data.stableTokens(), m.estimatedTokens(),
+                    data.stableTokens() + m.estimatedTokens()));
             setAreaDocument(stableContextArea, data.stableContextDoc());
             setAreaDocument(sessionContextArea, data.sessionContextDoc());
         } else {
-            statusLabel.setText(
-                    data.packed().isPresent()
-                            ? "Status: Repo Map available locally."
-                            : "Status: No implicit cache found.");
+            statusLabel.setText(data.packed().isPresent()
+                    ? "Status: Repo Map available locally."
+                    : "Status: No implicit cache found.");
         }
     }
 
@@ -255,33 +230,32 @@ public final class CodebaseCachePanel extends JPanel {
         progressBar.setIndeterminate(true);
         statusLabel.setText("Generating Repo Map...");
 
-        SwingWorker<EditorResult, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected EditorResult doInBackground() {
-                        return packerService.forceRegenerateRepoMap();
-                    }
+        SwingWorker<EditorResult, Void> worker = new SwingWorker<>() {
+            @Override
+            protected EditorResult doInBackground() {
+                return packerService.forceRegenerateRepoMap();
+            }
 
-                    @Override
-                    protected void done() {
-                        try {
-                            var result = get();
-                            if (result.success()) {
-                                statusLabel.setText("Repo Map updated successfully.");
-                                refreshStatus();
-                            } else {
-                                statusLabel.setText("Failed: " + result.errorHint());
-                            }
-                        } catch (Exception e) {
-                            log.error("Repo map generation failed", e);
-                            statusLabel.setText("Failed: " + e.getMessage());
-                        } finally {
-                            packButton.setEnabled(true);
-                            progressBar.setIndeterminate(false);
-                            progressBar.setVisible(false);
-                        }
+            @Override
+            protected void done() {
+                try {
+                    var result = get();
+                    if (result.success()) {
+                        statusLabel.setText("Repo Map updated successfully.");
+                        refreshStatus();
+                    } else {
+                        statusLabel.setText("Failed: " + result.errorHint());
                     }
-                };
+                } catch (Exception e) {
+                    log.error("Repo map generation failed", e);
+                    statusLabel.setText("Failed: " + e.getMessage());
+                } finally {
+                    packButton.setEnabled(true);
+                    progressBar.setIndeterminate(false);
+                    progressBar.setVisible(false);
+                }
+            }
+        };
         worker.execute();
     }
 }

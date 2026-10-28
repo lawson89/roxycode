@@ -77,40 +77,35 @@ public class ChatPanelTest extends ChatTestFixture {
     }
 
     @Test
-    public void testStopButtonCancelsTurnAndBlocksLateAutonomousTransitionsAndEvents()
-            throws Exception {
+    public void testStopButtonCancelsTurnAndBlocksLateAutonomousTransitionsAndEvents() throws Exception {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         CountDownLatch callStarted = new CountDownLatch(1);
         CountDownLatch allowExit = new CountDownLatch(1);
         AtomicInteger chatCalls = new AtomicInteger(0);
 
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenAnswer(
-                        inv -> {
-                            chatCalls.incrementAndGet();
-                            callStarted.countDown();
-                            try {
-                                allowExit.await(5, TimeUnit.SECONDS);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                throw new CancellationException("Interrupted");
-                            }
-                            return "Late AI response";
-                        });
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            chatCalls.incrementAndGet();
+            callStarted.countDown();
+            try {
+                allowExit.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new CancellationException("Interrupted");
+            }
+            return "Late AI response";
+        });
 
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
         chatPanel.getInputArea().setText("Start coding");
         chatPanel.getSendButton().doClick();
         assertTrue(callStarted.await(5, TimeUnit.SECONDS));
 
-        chatPanel.onWorkflowTransition(
-                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop", true));
+        chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop", true));
         flushEdt();
         SwingTestUtils.clickOnEdt(chatPanel.getStopButton());
         chatPanel.onWorkflowTransition(
                 transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
-        chatPanel.onToolExecution(
-                new ToolExecutionEvent("task:default", "lateToolCall()", "ok", true, null));
+        chatPanel.onToolExecution(new ToolExecutionEvent("task:default", "lateToolCall()", "ok", true, null));
         chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 99, "CODE"));
 
         allowExit.countDown();
@@ -127,13 +122,11 @@ public class ChatPanelTest extends ChatTestFixture {
     @Test
     public void testAutonomousTransitionSuppressesTurnForPlan() throws Exception {
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
-        chatPanel.onWorkflowTransition(
-                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
+        chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
         Thread.sleep(300);
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
-        chatPanel.onWorkflowTransition(
-                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
+        chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
         Thread.sleep(600);
         verify(aiService, atLeastOnce()).chat(anyString(), any(), anyString(), any());
     }
@@ -142,17 +135,10 @@ public class ChatPanelTest extends ChatTestFixture {
     public void testTransitionRequestedDuringWorkerAppendsAfterAiResponse() throws Exception {
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-        when(aiService.chat(anyString(), any(), anyString(), any()))
-                .thenAnswer(
-                        inv -> {
-                            chatPanel.onWorkflowTransition(
-                                    transitionEvent(
-                                            WorkflowPhase.PLAN,
-                                            WorkflowPhase.CODE,
-                                            "Ready",
-                                            false));
-                            return "FINAL_PLAN_SUMMARY";
-                        });
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready", false));
+            return "FINAL_PLAN_SUMMARY";
+        });
 
         chatPanel.getInputArea().setText("Build feature");
         chatPanel.getSendButton().doClick();
@@ -165,18 +151,13 @@ public class ChatPanelTest extends ChatTestFixture {
         assertTrue(chatPanel.getInlineActionPanel().isVisible());
         assertEquals("Approve Plan and proceed to Code", chatPanel.getTransitionLabel().getText());
 
-        chatPanel.onWorkflowTransition(
-                transitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All done", false));
+        chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All done", false));
         flushEdt();
-        assertEquals(
-                "Approve Feature Request as complete", chatPanel.getTransitionLabel().getText());
+        assertEquals("Approve Feature Request as complete", chatPanel.getTransitionLabel().getText());
 
-        chatPanel.onWorkflowTransition(
-                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Need revision", false));
+        chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Need revision", false));
         flushEdt();
-        assertEquals(
-                "Approve Plan Revision and return to Plan",
-                chatPanel.getTransitionLabel().getText());
+        assertEquals("Approve Plan Revision and return to Plan", chatPanel.getTransitionLabel().getText());
     }
 
     @Test
@@ -187,8 +168,7 @@ public class ChatPanelTest extends ChatTestFixture {
         assertEquals(0, chatPanel.getInputArea().getCaretPosition());
 
         chatPanel.focusInput();
-        assertEquals(
-                "Existing text in input".length(), chatPanel.getInputArea().getCaretPosition());
+        assertEquals("Existing text in input".length(), chatPanel.getInputArea().getCaretPosition());
     }
 
     @Test
@@ -196,15 +176,11 @@ public class ChatPanelTest extends ChatTestFixture {
         ChatPanel chatPanel = createChatPanel();
         assertTrue(chatPanel.getOutputArea().getScrollableTracksViewportWidth());
 
-        JScrollPane scrollPane =
-                (JScrollPane)
-                        SwingUtilities.getAncestorOfClass(
-                                JScrollPane.class, chatPanel.getOutputArea());
+        JScrollPane scrollPane = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class,
+                chatPanel.getOutputArea());
         assertNotNull(scrollPane);
         assertSame(chatPanel.getOutputArea(), scrollPane.getViewport().getView());
-        assertEquals(
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER,
-                scrollPane.getHorizontalScrollBarPolicy());
+        assertEquals(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER, scrollPane.getHorizontalScrollBarPolicy());
         assertInstanceOf(MatteBorder.class, scrollPane.getBorder());
         assertEquals(new Insets(0, 0, 1, 0), scrollPane.getBorder().getBorderInsets(scrollPane));
 
@@ -212,8 +188,7 @@ public class ChatPanelTest extends ChatTestFixture {
         BorderLayout layout = assertInstanceOf(BorderLayout.class, outputWrapper.getLayout());
         assertNotNull(layout.getLayoutComponent(BorderLayout.SOUTH));
 
-        JSplitPane splitPane =
-                (JSplitPane) SwingUtilities.getAncestorOfClass(JSplitPane.class, scrollPane);
+        JSplitPane splitPane = (JSplitPane) SwingUtilities.getAncestorOfClass(JSplitPane.class, scrollPane);
         assertEquals(new Insets(0, 0, 0, 0), splitPane.getInsets());
         assertEquals(1.0, splitPane.getResizeWeight(), 0.001);
 
@@ -223,8 +198,7 @@ public class ChatPanelTest extends ChatTestFixture {
         assertTrue(inputSection.getPreferredSize().height >= buttonPanel.getPreferredSize().height);
         assertEquals(new Dimension(0, 85), inputSection.getMinimumSize());
         assertEquals(3, chatPanel.getInputArea().getRows());
-        assertEquals(
-                "Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)",
+        assertEquals("Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)",
                 chatPanel.getInputArea().getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
         assertEquals("Attach Image", chatPanel.getAttachImageButton().getToolTipText());
 
@@ -240,8 +214,7 @@ public class ChatPanelTest extends ChatTestFixture {
         assertEquals(WorkflowPhase.EXPLORE, qaChatPanel.getModel().getLockedPhase());
         assertFalse(qaChatPanel.getModel().isTaskMode());
         assertEquals("New Topic", qaChatPanel.getResetSessionButton().getText());
-        assertEquals(
-                ChatPanel.NEW_TOPIC_TOOLTIP, qaChatPanel.getResetSessionButton().getToolTipText());
+        assertEquals(ChatPanel.NEW_TOPIC_TOOLTIP, qaChatPanel.getResetSessionButton().getToolTipText());
 
         FeatureChatPanel featureChatPanel = createFeatureChatPanel(null);
         assertEquals("task", featureChatPanel.getModel().getSessionPrefix());
@@ -249,17 +222,12 @@ public class ChatPanelTest extends ChatTestFixture {
         assertTrue(featureChatPanel.getModel().isTaskMode());
         assertEquals("Reset Session", featureChatPanel.getResetSessionButton().getText());
 
-        assertFalse(
-                Arrays.stream(ExploreChatPanel.class.getDeclaredMethods())
-                        .anyMatch(m -> m.isAnnotationPresent(EventListener.class)));
-        for (var m :
-                List.of(
-                        FeatureChatPanel.class.getDeclaredMethod(
-                                "onWorkflowTransition", WorkflowTransitionEvent.class),
-                        FeatureChatPanel.class.getDeclaredMethod(
-                                "onPhaseChanged", PhaseChangedEvent.class),
-                        FeatureChatPanel.class.getDeclaredMethod(
-                                "onPlanUpdated", PlanUpdatedEvent.class))) {
+        assertFalse(Arrays.stream(ExploreChatPanel.class.getDeclaredMethods())
+                .anyMatch(m -> m.isAnnotationPresent(EventListener.class)));
+        for (var m : List.of(
+                FeatureChatPanel.class.getDeclaredMethod("onWorkflowTransition", WorkflowTransitionEvent.class),
+                FeatureChatPanel.class.getDeclaredMethod("onPhaseChanged", PhaseChangedEvent.class),
+                FeatureChatPanel.class.getDeclaredMethod("onPlanUpdated", PlanUpdatedEvent.class))) {
             assertTrue(m.isAnnotationPresent(EventListener.class));
         }
     }
@@ -271,25 +239,18 @@ public class ChatPanelTest extends ChatTestFixture {
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
-        doAnswer(
-                        inv -> {
-                            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-                            return null;
-                        })
-                .when(planService)
-                .approveTransition();
+        doAnswer(inv -> {
+            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+            return null;
+        }).when(planService).approveTransition();
 
         approveButton.setEnabled(true);
         approveButton.doClick();
         Thread.sleep(400);
         flushEdt();
 
-        verify(aiService, atLeastOnce())
-                .chat(
-                        eq("task:default"),
-                        eq(WorkflowPhase.PLAN),
-                        contains("I approve the transition to Plan"),
-                        any());
+        verify(aiService, atLeastOnce()).chat(eq("task:default"), eq(WorkflowPhase.PLAN),
+                contains("I approve the transition to Plan"), any());
         verify(chatMemory, never()).clear(anyString());
         assertFalse(chatPanel.getOutputArea().getText().contains("Task complete"));
 
@@ -350,22 +311,16 @@ public class ChatPanelTest extends ChatTestFixture {
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
         assertEquals("Turns: 0 / 5", chatPanel.getTurnLabel().getText());
 
-        ImplementationPlan plan =
-                samplePlan(
-                        new ImplementationPlan.TechStep("Step 0", true),
-                        new ImplementationPlan.TechStep("Step 1", false),
-                        new ImplementationPlan.TechStep("Step 2", false));
+        ImplementationPlan plan = samplePlan(new ImplementationPlan.TechStep("Step 0", true),
+                new ImplementationPlan.TechStep("Step 1", false), new ImplementationPlan.TechStep("Step 2", false));
         when(planService.getCurrentPlan()).thenReturn(plan);
 
         chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
         flushEdt();
         assertEquals("Turns: 2 / 5 | Plan: 1/3 steps", chatPanel.getTurnLabel().getText());
 
-        ImplementationPlan updatedPlan =
-                samplePlan(
-                        new ImplementationPlan.TechStep("Step 0", true),
-                        new ImplementationPlan.TechStep("Step 1", true),
-                        new ImplementationPlan.TechStep("Step 2", false));
+        ImplementationPlan updatedPlan = samplePlan(new ImplementationPlan.TechStep("Step 0", true),
+                new ImplementationPlan.TechStep("Step 1", true), new ImplementationPlan.TechStep("Step 2", false));
         when(planService.getCurrentPlan()).thenReturn(updatedPlan);
         chatPanel.onPlanUpdated(new PlanUpdatedEvent(updatedPlan));
         flushEdt();
@@ -373,8 +328,7 @@ public class ChatPanelTest extends ChatTestFixture {
     }
 
     @Test
-    public void testLoadImageAttachmentAsyncAndBilinearThumbnailCreation(@TempDir Path tempDir)
-            throws Exception {
+    public void testLoadImageAttachmentAsyncAndBilinearThumbnailCreation(@TempDir Path tempDir) throws Exception {
         ChatPanel chatPanel = createChatPanel();
         BufferedImage src = new BufferedImage(120, 80, BufferedImage.TYPE_INT_ARGB);
         BufferedImage thumb = ChatPanel.createThumbnail(src, ChatPanel.THUMBNAIL_SIZE);
@@ -384,8 +338,7 @@ public class ChatPanelTest extends ChatTestFixture {
         File imgFile = tempDir.resolve("sample.png").toFile();
         ImageIO.write(src, "png", imgFile);
 
-        BufferedImage loaded =
-                SwingTestUtils.awaitWorker(chatPanel.loadImageAttachmentAsync(imgFile));
+        BufferedImage loaded = SwingTestUtils.awaitWorker(chatPanel.loadImageAttachmentAsync(imgFile));
         assertNotNull(loaded);
         assertEquals(120, loaded.getWidth());
         assertTrue(chatPanel.getModel().hasPendingImages());
@@ -396,30 +349,25 @@ public class ChatPanelTest extends ChatTestFixture {
     public void testFileMentionAutocompleteKeyboardNavigationAndEnterInterception() {
         ChatPanel chatPanel = createChatPanel();
         GrepService grepService = mock(GrepService.class);
-        when(grepService.listFiles())
-                .thenReturn(
-                        List.of(
-                                "src/main/java/org/roxycode/app/ui/ChatPanel.java",
-                                "src/main/java/org/roxycode/app/ui/ChatController.java",
-                                "src/main/java/org/roxycode/app/ui/ChatModel.java"));
+        when(grepService.listFiles()).thenReturn(List.of("src/main/java/org/roxycode/app/ui/ChatPanel.java",
+                "src/main/java/org/roxycode/app/ui/ChatController.java",
+                "src/main/java/org/roxycode/app/ui/ChatModel.java"));
 
         FileMentionPopup mentionPopup = chatPanel.getFileMentionPopup();
         mentionPopup.setBackgroundExecutor(Runnable::run);
         chatPanel.setGrepService(grepService);
 
         JTextArea inputArea = chatPanel.getInputArea();
-        SwingTestUtils.runOnEdt(
-                () -> {
-                    inputArea.setText("Review @Chat");
-                    inputArea.setCaretPosition(inputArea.getText().length());
-                });
+        SwingTestUtils.runOnEdt(() -> {
+            inputArea.setText("Review @Chat");
+            inputArea.setCaretPosition(inputArea.getText().length());
+        });
         flushEdt();
 
         assertTrue(mentionPopup.isPopupVisible());
         assertEquals(3, mentionPopup.getListModel().size());
         assertEquals(0, mentionPopup.getCandidateList().getSelectedIndex());
-        assertEquals(
-                "src/main/java/org/roxycode/app/ui/ChatModel.java",
+        assertEquals("src/main/java/org/roxycode/app/ui/ChatModel.java",
                 mentionPopup.getListModel().get(0).relativePath());
 
         ActionMap am = inputArea.getActionMap();
@@ -431,8 +379,7 @@ public class ChatPanelTest extends ChatTestFixture {
 
         SwingTestUtils.runOnEdt(() -> downAction.actionPerformed(null));
         assertEquals(1, mentionPopup.getCandidateList().getSelectedIndex());
-        assertEquals(
-                "src/main/java/org/roxycode/app/ui/ChatPanel.java",
+        assertEquals("src/main/java/org/roxycode/app/ui/ChatPanel.java",
                 mentionPopup.getCandidateList().getSelectedValue().relativePath());
 
         SwingTestUtils.runOnEdt(() -> upAction.actionPerformed(null));
@@ -443,9 +390,7 @@ public class ChatPanelTest extends ChatTestFixture {
         SwingTestUtils.runOnEdt(() -> enterAction.actionPerformed(null));
         flushEdt();
         assertFalse(mentionPopup.isPopupVisible());
-        assertEquals(
-                "Review @src/main/java/org/roxycode/app/ui/ChatController.java ",
-                inputArea.getText());
+        assertEquals("Review @src/main/java/org/roxycode/app/ui/ChatController.java ", inputArea.getText());
         assertEquals(inputArea.getText().length(), inputArea.getCaretPosition());
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
@@ -456,10 +401,8 @@ public class ChatPanelTest extends ChatTestFixture {
         SwingTestUtils.runOnEdt(() -> tabAction.actionPerformed(null));
         flushEdt();
         assertFalse(mentionPopup.isPopupVisible());
-        assertEquals(
-                "Review @src/main/java/org/roxycode/app/ui/ChatController.java "
-                        + "@src/main/java/org/roxycode/app/ui/ChatModel.java ",
-                inputArea.getText());
+        assertEquals("Review @src/main/java/org/roxycode/app/ui/ChatController.java "
+                + "@src/main/java/org/roxycode/app/ui/ChatModel.java ", inputArea.getText());
 
         SwingTestUtils.runOnEdt(() -> inputArea.insert("@ChatP", inputArea.getCaretPosition()));
         flushEdt();

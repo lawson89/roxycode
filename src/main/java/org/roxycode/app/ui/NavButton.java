@@ -23,8 +23,7 @@ public final class NavButton extends JButton {
     static final String BUSY_TOOLTIP = "Agent is working in the background...";
     static final String WAITING_APPROVAL_TOOLTIP = "Waiting for your approval to continue";
 
-    private final transient HourglassAnimator hourglassAnimator =
-            new HourglassAnimator(this::repaint);
+    private final transient HourglassAnimator hourglassAnimator = new HourglassAnimator(this::repaint);
     private boolean busy;
     private boolean waitingApproval;
     private transient FontIcon statusIcon;
@@ -35,8 +34,7 @@ public final class NavButton extends JButton {
         setFocusPainted(false);
         setContentAreaFilled(false);
         updatePaddingBorder();
-        putClientProperty(
-                FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         putClientProperty("JButton.arc", ROW_ARC);
         setIconTextGap(10);
     }
@@ -109,21 +107,18 @@ public final class NavButton extends JButton {
     }
 
     private void updatePaddingBorder() {
-        int rightPadding =
-                statusIcon != null
-                        ? HORIZONTAL_PADDING + statusIcon.getIconWidth() + STATUS_ICON_GAP
-                        : HORIZONTAL_PADDING;
+        int rightPadding = statusIcon != null
+                ? HORIZONTAL_PADDING + statusIcon.getIconWidth() + STATUS_ICON_GAP
+                : HORIZONTAL_PADDING;
         setBorder(
-                BorderFactory.createEmptyBorder(
-                        VERTICAL_PADDING, HORIZONTAL_PADDING, VERTICAL_PADDING, rightPadding));
+                BorderFactory.createEmptyBorder(VERTICAL_PADDING, HORIZONTAL_PADDING, VERTICAL_PADDING, rightPadding));
     }
 
     @Override
     public void setSelected(boolean b) {
         super.setSelected(b);
         if (b) {
-            putClientProperty(
-                    FlatClientProperties.STYLE,
+            putClientProperty(FlatClientProperties.STYLE,
                     FlatLaf.isLafDark()
                             ? "background: $Component.accentColor; foreground: $Component.accentForeground"
                             : "background: #0d6efd; foreground: #ffffff");
@@ -157,17 +152,11 @@ public final class NavButton extends JButton {
         if (highlightWaiting && g instanceof Graphics2D) {
             Graphics2D g2 = (Graphics2D) g.create();
             try {
-                g2.setRenderingHint(
-                        RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(dark ? AMBER_TINT_DARK : AMBER_TINT_LIGHT);
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), ROW_ARC, ROW_ARC);
                 g2.setColor(amberAccent);
-                g2.fillRoundRect(
-                        0,
-                        2,
-                        ACCENT_PILL_WIDTH,
-                        Math.max(0, getHeight() - 4),
-                        ACCENT_PILL_WIDTH,
+                g2.fillRoundRect(0, 2, ACCENT_PILL_WIDTH, Math.max(0, getHeight() - 4), ACCENT_PILL_WIDTH,
                         ACCENT_PILL_WIDTH);
             } finally {
                 g2.dispose();
@@ -181,31 +170,26 @@ public final class NavButton extends JButton {
             int y = (getHeight() - statusIcon.getIconHeight()) / 2;
 
             if (isSelected()) {
-                if (getForeground() != null) statusIcon.setIconColor(getForeground());
+                if (getForeground() != null)
+                    statusIcon.setIconColor(getForeground());
             } else if (highlightWaiting) {
                 if (g instanceof Graphics2D) {
                     Graphics2D g2 = (Graphics2D) g.create();
                     try {
-                        g2.setRenderingHint(
-                                RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                         g2.setColor(amberAccent);
-                        g2.fillOval(
-                                x - (BADGE_SIZE - statusIcon.getIconWidth()) / 2,
-                                (getHeight() - BADGE_SIZE) / 2,
-                                BADGE_SIZE,
-                                BADGE_SIZE);
+                        g2.fillOval(x - (BADGE_SIZE - statusIcon.getIconWidth()) / 2, (getHeight() - BADGE_SIZE) / 2,
+                                BADGE_SIZE, BADGE_SIZE);
                     } finally {
                         g2.dispose();
                     }
                 }
                 statusIcon.setIconColor(Color.WHITE);
             } else {
-                Color color =
-                        SwingHtmlUtils.getUiColor(
-                                getForeground(),
-                                "Label.disabledForeground",
-                                "Component.accentColor");
-                if (color != null) statusIcon.setIconColor(color);
+                Color color = SwingHtmlUtils.getUiColor(getForeground(), "Label.disabledForeground",
+                        "Component.accentColor");
+                if (color != null)
+                    statusIcon.setIconColor(color);
             }
             statusIcon.paintIcon(this, g, x, y);
         }

@@ -29,17 +29,10 @@ public class JexlTool {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper mapper;
 
-    public JexlTool(
-            JexlServiceRegistry registry,
-            @Nullable ApplicationEventPublisher eventPublisher,
+    public JexlTool(JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher,
             @Nullable ObjectMapper objectMapper) {
-        this.jexl =
-                new JexlBuilder()
-                        .permissions(AgentJexlPermissions.INSTANCE)
-                        .strict(true)
-                        .silent(false)
-                        .safe(false)
-                        .create();
+        this.jexl = new JexlBuilder().permissions(AgentJexlPermissions.INSTANCE).strict(true).silent(false).safe(false)
+                .create();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
         this.mapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
@@ -49,11 +42,8 @@ public class JexlTool {
         return executeJexl(script, null);
     }
 
-    @Tool(
-            description =
-                    "Executes a Jexl script and returns the result as a string. Useful for workspace file, search, git, and build operations.")
-    public String executeJexl(
-            @ToolParam(description = "The Jexl script to execute.") String script,
+    @Tool(description = "Executes a Jexl script and returns the result as a string. Useful for workspace file, search, git, and build operations.")
+    public String executeJexl(@ToolParam(description = "The Jexl script to execute.") String script,
             ToolContext toolContext) {
         ExceptionUtils.checkInterrupted("Execution interrupted before start");
         TurnToolContext ctx = TurnToolContext.fromToolContext(toolContext);
@@ -66,8 +56,7 @@ public class JexlTool {
             jexlScript = jexl.createScript(script);
         } catch (Exception e) {
             log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
-            publishToolEvent(
-                    conversationId, script, null, false, "Syntax Error: " + e.getMessage());
+            publishToolEvent(conversationId, script, null, false, "Syntax Error: " + e.getMessage());
             return toJsonError("Syntax Error (Script not executed): " + e.getMessage());
         }
 
@@ -94,8 +83,10 @@ public class JexlTool {
     }
 
     private String serializeResult(@Nullable Object result) throws Exception {
-        if (result == null) return mapper.writeValueAsString(Map.of(RESULT_KEY, "null"));
-        if (result instanceof Map) return mapper.writeValueAsString(result);
+        if (result == null)
+            return mapper.writeValueAsString(Map.of(RESULT_KEY, "null"));
+        if (result instanceof Map)
+            return mapper.writeValueAsString(result);
         if (isScalarResult(result) || AgentJexlPermissions.isAgentServiceClass(result.getClass())) {
             return serializeStringResult(result.toString());
         }
@@ -107,24 +98,18 @@ public class JexlTool {
     }
 
     private static boolean isScalarResult(Object result) {
-        return result instanceof CharSequence
-                || result instanceof Number
-                || result instanceof Boolean
-                || result instanceof Character
-                || result instanceof Enum<?>;
+        return result instanceof CharSequence || result instanceof Number || result instanceof Boolean
+                || result instanceof Character || result instanceof Enum<?>;
     }
 
     private String serializeStringResult(String rawOutput) throws Exception {
-        String output =
-                rawOutput == null || rawOutput.trim().isEmpty() ? "<empty result>" : rawOutput;
+        String output = rawOutput == null || rawOutput.trim().isEmpty() ? "<empty result>" : rawOutput;
         return mapper.writeValueAsString(Map.of(RESULT_KEY, output));
     }
 
-    private void publishToolEvent(
-            String conversationId, String script, Object result, boolean success, String error) {
+    private void publishToolEvent(String conversationId, String script, Object result, boolean success, String error) {
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(
-                    new ToolExecutionEvent(conversationId, script, result, success, error));
+            eventPublisher.publishEvent(new ToolExecutionEvent(conversationId, script, result, success, error));
         }
     }
 

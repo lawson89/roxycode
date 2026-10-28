@@ -19,30 +19,19 @@ import org.roxycode.app.ui.SystemToolsPanel.ToolCard;
 
 public class SystemToolsPanelTest {
 
-    private static void assertCardState(
-            ToolCard card, String name, String status, Codicons statusIcon, Codicons nameIcon) {
+    private static void assertCardState(ToolCard card, String name, String status, Codicons statusIcon,
+            Codicons nameIcon) {
         assertEquals(name, card.getNameLabel().getText());
         assertEquals(status, card.getStatusBadge().getText());
-        assertEquals(
-                statusIcon,
-                assertInstanceOf(FontIcon.class, card.getStatusBadge().getIcon()).getIkon());
-        assertEquals(
-                nameIcon,
-                assertInstanceOf(FontIcon.class, card.getNameLabel().getIcon()).getIkon());
+        assertEquals(statusIcon, assertInstanceOf(FontIcon.class, card.getStatusBadge().getIcon()).getIkon());
+        assertEquals(nameIcon, assertInstanceOf(FontIcon.class, card.getNameLabel().getIcon()).getIkon());
     }
 
     @Test
     public void testSystemToolsPanelInstantiationWithCachedTools() {
         SystemToolService service = mock(SystemToolService.class);
-        when(service.detectTools())
-                .thenReturn(
-                        CompletableFuture.completedFuture(
-                                List.of(
-                                        new SystemTool(
-                                                "Ripgrep",
-                                                "ripgrep 14.1.0",
-                                                "Detected",
-                                                "Fast search"))));
+        when(service.detectTools()).thenReturn(CompletableFuture
+                .completedFuture(List.of(new SystemTool("Ripgrep", "ripgrep 14.1.0", "Detected", "Fast search"))));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
         SwingTestUtils.flushEdt();
@@ -58,9 +47,7 @@ public class SystemToolsPanelTest {
         assertEquals("Fast search", card.getDescriptionArea().getText());
         assertEquals("License: Unlicense / MIT", card.getLicenseBadge().getText());
         assertEquals("github.com/BurntSushi/ripgrep", card.getWebsiteLinkButton().getText());
-        assertEquals(
-                "https://github.com/BurntSushi/ripgrep",
-                card.getWebsiteLinkButton().getToolTipText());
+        assertEquals("https://github.com/BurntSushi/ripgrep", card.getWebsiteLinkButton().getToolTipText());
 
         verify(service, times(1)).detectTools();
         verify(service, never()).hasCachedTools();
@@ -86,15 +73,8 @@ public class SystemToolsPanelTest {
         assertTrue(panel.getProgressBar().isVisible());
         assertTrue(panel.getProgressBar().isIndeterminate());
 
-        pendingRefresh.complete(
-                List.of(
-                        new SystemTool(
-                                "Test Tool",
-                                "1.0",
-                                "Detected",
-                                "Description",
-                                "MIT",
-                                "https://example.com/tool/")));
+        pendingRefresh.complete(List
+                .of(new SystemTool("Test Tool", "1.0", "Detected", "Description", "MIT", "https://example.com/tool/")));
         SwingTestUtils.flushEdt();
 
         assertFalse(panel.getProgressBar().isVisible());
@@ -120,45 +100,23 @@ public class SystemToolsPanelTest {
         assertEquals(0, panel.getToolCards().size());
 
         panel.onSystemToolsUpdated(
-                new SystemToolsUpdatedEvent(
-                        List.of(
-                                SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"),
-                                SystemTool.ofKnownTool(
-                                        "Docker", "Client API version mismatch", "Error"),
-                                SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing")),
-                        false));
+                new SystemToolsUpdatedEvent(List.of(SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"),
+                        SystemTool.ofKnownTool("Docker", "Client API version mismatch", "Error"),
+                        SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing")), false));
         SwingTestUtils.flushEdt();
 
         assertEquals(3, panel.getToolCards().size());
-        assertCardState(
-                panel.getToolCards().get(0),
-                "Git",
-                "Detected",
-                Codicons.CHECK,
-                Codicons.SOURCE_CONTROL);
-        assertCardState(
-                panel.getToolCards().get(1),
-                "Docker",
-                "Error",
-                Codicons.WARNING,
-                Codicons.SERVER_ENVIRONMENT);
-        assertCardState(
-                panel.getToolCards().get(2),
-                "Universal Ctags",
-                "Missing",
-                Codicons.ERROR,
+        assertCardState(panel.getToolCards().get(0), "Git", "Detected", Codicons.CHECK, Codicons.SOURCE_CONTROL);
+        assertCardState(panel.getToolCards().get(1), "Docker", "Error", Codicons.WARNING, Codicons.SERVER_ENVIRONMENT);
+        assertCardState(panel.getToolCards().get(2), "Universal Ctags", "Missing", Codicons.ERROR,
                 Codicons.SYMBOL_CLASS);
     }
 
     @Test
     public void testWebsiteLinkClickInvokesBrowserLauncherAndUpdateUiRefreshesTheme() {
         SystemToolService service = mock(SystemToolService.class);
-        when(service.detectTools())
-                .thenReturn(
-                        CompletableFuture.completedFuture(
-                                List.of(
-                                        SystemTool.ofKnownTool(
-                                                "Java", "version 25.0.4", "Detected"))));
+        when(service.detectTools()).thenReturn(CompletableFuture
+                .completedFuture(List.of(SystemTool.ofKnownTool("Java", "version 25.0.4", "Detected"))));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
         SwingTestUtils.flushEdt();
@@ -171,18 +129,15 @@ public class SystemToolsPanelTest {
         SwingTestUtils.clickOnEdt(javaCard.getWebsiteLinkButton());
         assertEquals(URI.create("https://adoptium.net"), launchedUri.get());
 
-        panel.setBrowserLauncher(
-                uri -> {
-                    throw new UnsupportedOperationException("Headless test");
-                });
+        panel.setBrowserLauncher(uri -> {
+            throw new UnsupportedOperationException("Headless test");
+        });
         assertDoesNotThrow(() -> SwingTestUtils.clickOnEdt(javaCard.getWebsiteLinkButton()));
 
-        SwingTestUtils.withDarkTheme(
-                panel,
-                () -> {
-                    assertNotNull(javaCard.getNameLabel().getIcon());
-                    assertNotNull(javaCard.getStatusBadge().getIcon());
-                });
+        SwingTestUtils.withDarkTheme(panel, () -> {
+            assertNotNull(javaCard.getNameLabel().getIcon());
+            assertNotNull(javaCard.getStatusBadge().getIcon());
+        });
         assertNotNull(javaCard.getNameLabel().getIcon());
         assertNotNull(javaCard.getStatusBadge().getIcon());
     }
@@ -191,10 +146,8 @@ public class SystemToolsPanelTest {
     public void testRoxyCodeInitializeSystemToolsDuringSplashScreen() {
         SystemToolService service = mock(SystemToolService.class);
         when(service.hasCachedTools()).thenReturn(false);
-        when(service.detectTools())
-                .thenReturn(
-                        CompletableFuture.completedFuture(
-                                List.of(new SystemTool("Java", "25", "Detected", "Runtime"))));
+        when(service.detectTools()).thenReturn(
+                CompletableFuture.completedFuture(List.of(new SystemTool("Java", "25", "Detected", "Runtime"))));
 
         SplashScreenWindow splash = mock(SplashScreenWindow.class);
         RoxyCode.initializeSystemTools(service, splash);
@@ -212,34 +165,19 @@ public class SystemToolsPanelTest {
     @Test
     public void testCardsFitWithinConstrainedViewportWithoutHorizontalOverflow() {
         SystemToolService service = mock(SystemToolService.class);
-        when(service.detectTools())
-                .thenReturn(
-                        CompletableFuture.completedFuture(
-                                List.of(
-                                        SystemTool.ofKnownTool(
-                                                "Ripgrep", "ripgrep 14.1.0", "Detected"),
-                                        SystemTool.ofKnownTool(
-                                                "Git", "git version 2.43.0", "Detected"),
-                                        SystemTool.ofKnownTool(
-                                                "Universal Ctags",
-                                                "Universal Ctags 5.9.0",
-                                                "Detected"),
-                                        SystemTool.ofKnownTool(
-                                                "Java",
-                                                "version " + '"' + "25.0.4" + '"' + " LTS",
-                                                "Detected"),
-                                        SystemTool.ofKnownTool(
-                                                "Docker",
-                                                "Docker 29.1.3 (API 1.52)",
-                                                "Detected"))));
+        when(service.detectTools()).thenReturn(CompletableFuture
+                .completedFuture(List.of(SystemTool.ofKnownTool("Ripgrep", "ripgrep 14.1.0", "Detected"),
+                        SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"),
+                        SystemTool.ofKnownTool("Universal Ctags", "Universal Ctags 5.9.0", "Detected"),
+                        SystemTool.ofKnownTool("Java", "version " + '"' + "25.0.4" + '"' + " LTS", "Detected"),
+                        SystemTool.ofKnownTool("Docker", "Docker 29.1.3 (API 1.52)", "Detected"))));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
-        SwingTestUtils.runOnEdt(
-                () -> {
-                    panel.setSize(700, 600);
-                    layoutRecursively(panel);
-                    layoutRecursively(panel);
-                });
+        SwingTestUtils.runOnEdt(() -> {
+            panel.setSize(700, 600);
+            layoutRecursively(panel);
+            layoutRecursively(panel);
+        });
 
         int viewportWidth = panel.getCardsContainer().getParent().getWidth();
         assertTrue(viewportWidth > 0 && viewportWidth <= 700);
@@ -247,19 +185,18 @@ public class SystemToolsPanelTest {
 
         for (ToolCard card : panel.getToolCards()) {
             assertTrue(card.getWidth() > 0 && card.getWidth() <= viewportWidth);
-            assertTrue(
-                    card.getStatusBadge().getX() + card.getStatusBadge().getWidth()
-                            <= card.getStatusBadge().getParent().getWidth());
-            assertTrue(
-                    card.getWebsiteLinkButton().getX() + card.getWebsiteLinkButton().getWidth()
-                            <= card.getWebsiteLinkButton().getParent().getWidth());
+            assertTrue(card.getStatusBadge().getX() + card.getStatusBadge().getWidth() <= card.getStatusBadge()
+                    .getParent().getWidth());
+            assertTrue(card.getWebsiteLinkButton().getX() + card.getWebsiteLinkButton().getWidth() <= card
+                    .getWebsiteLinkButton().getParent().getWidth());
         }
     }
 
     private static void layoutRecursively(Container container) {
         container.doLayout();
         for (var child : container.getComponents()) {
-            if (child instanceof Container childContainer) layoutRecursively(childContainer);
+            if (child instanceof Container childContainer)
+                layoutRecursively(childContainer);
         }
     }
 }

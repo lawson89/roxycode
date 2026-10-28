@@ -30,25 +30,24 @@ import org.springframework.stereotype.Service;
 
 class AgentServiceTest {
 
-    @AgentService(
-            value = "testService",
-            phases = {"EXPLORE", "PLAN"})
-    private static class MockService {}
+    @AgentService(value = "testService", phases = {"EXPLORE", "PLAN"})
+    private static class MockService {
+    }
 
     @AgentService("defaultService")
-    private static class DefaultService {}
+    private static class DefaultService {
+    }
 
-    @AgentService(
-            value = "wildcardService",
-            phases = {"*"})
-    private static class WildcardService {}
+    @AgentService(value = "wildcardService", phases = {"*"})
+    private static class WildcardService {
+    }
 
     @Test
     void testAnnotationProperties() {
         AgentService annotation = MockService.class.getAnnotation(AgentService.class);
         assertNotNull(annotation);
         assertEquals("testService", annotation.value());
-        assertArrayEquals(new String[] {"EXPLORE", "PLAN"}, annotation.phases());
+        assertArrayEquals(new String[]{"EXPLORE", "PLAN"}, annotation.phases());
     }
 
     @Test
@@ -64,19 +63,13 @@ class AgentServiceTest {
         AgentService annotation = WildcardService.class.getAnnotation(AgentService.class);
         assertNotNull(annotation);
         assertEquals("wildcardService", annotation.value());
-        assertArrayEquals(new String[] {"*"}, annotation.phases());
+        assertArrayEquals(new String[]{"*"}, annotation.phases());
     }
 
     @Test
     void testAgentServicesDoNotHaveRedundantServiceAnnotation() {
-        for (Class<?> clazz :
-                List.of(
-                        GenericBuildToolService.class,
-                        GitService.class,
-                        GrepService.class,
-                        FileReadService.class,
-                        FileEditorService.class,
-                        MemoryService.class)) {
+        for (Class<?> clazz : List.of(GenericBuildToolService.class, GitService.class, GrepService.class,
+                FileReadService.class, FileEditorService.class, MemoryService.class)) {
             assertNotNull(clazz.getDeclaredAnnotation(AgentService.class));
             assertNull(clazz.getDeclaredAnnotation(Service.class));
         }
@@ -86,24 +79,11 @@ class AgentServiceTest {
 
     @Test
     void testSingleConstructorBeansDoNotHaveRedundantAutowired() {
-        for (Class<?> clazz :
-                List.of(
-                        GenericBuildToolService.class,
-                        ProjectCacheMetaService.class,
-                        FileEditorService.class,
-                        PlanService.class,
-                        ProjectService.class,
-                        PromptService.class,
-                        SettingsService.class,
-                        JexlTool.class,
-                        ContextManagerPanel.class,
-                        ChatPanel.class,
-                        ChatController.class,
-                        MainFrame.class,
-                        ExploreChatPanel.class,
-                        FeatureChatPanel.class,
-                        QaWorkspacePanel.class,
-                        TaskWorkspacePanel.class)) {
+        for (Class<?> clazz : List.of(GenericBuildToolService.class, ProjectCacheMetaService.class,
+                FileEditorService.class, PlanService.class, ProjectService.class, PromptService.class,
+                SettingsService.class, JexlTool.class, ContextManagerPanel.class, ChatPanel.class, ChatController.class,
+                MainFrame.class, ExploreChatPanel.class, FeatureChatPanel.class, QaWorkspacePanel.class,
+                TaskWorkspacePanel.class)) {
             Constructor<?>[] constructors = clazz.getDeclaredConstructors();
             assertEquals(1, constructors.length, clazz.getSimpleName() + " should have 1 ctor");
             assertNull(constructors[0].getDeclaredAnnotation(Autowired.class));

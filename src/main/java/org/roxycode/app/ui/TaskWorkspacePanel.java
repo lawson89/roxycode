@@ -50,10 +50,7 @@ public final class TaskWorkspacePanel extends JPanel {
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
     private SidebarPanel sidebar;
 
-    public TaskWorkspacePanel(
-            FeatureChatPanel taskChatPanel,
-            PlanService planService,
-            PlanPanel planPanel,
+    public TaskWorkspacePanel(FeatureChatPanel taskChatPanel, PlanService planService, PlanPanel planPanel,
             MemoryService memoryService) {
         super(new BorderLayout());
         this.planService = planService;
@@ -61,8 +58,7 @@ public final class TaskWorkspacePanel extends JPanel {
         this.taskChatPanel = taskChatPanel;
         this.pastPlansPanel = new ArchiveBrowserPanel(memoryService, ArchiveMode.PLANS);
 
-        topBar =
-                new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
+        topBar = new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
         topBar.setOpaque(false);
 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 2", "[]", LAYOUT_CENTER));
@@ -82,38 +78,33 @@ public final class TaskWorkspacePanel extends JPanel {
         updateActivePhase(planService.getCurrentPhase());
 
         this.taskTabs = new JTabbedPane();
-        taskTabs.putClientProperty(
-                FlatClientProperties.TABBED_PANE_TAB_TYPE,
+        taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE,
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
         taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, topBar);
         taskTabs.addTab("Chat", taskChatPanel);
         taskTabs.addTab("Plan", planPanel);
         taskTabs.addTab(PAST_PLANS_TAB_TITLE, pastPlansPanel);
-        taskTabs.addChangeListener(
-                e -> {
-                    if (taskChatPanel != null
-                            && taskChatPanel.equals(taskTabs.getSelectedComponent())) {
-                        SwingUtilities.invokeLater(taskChatPanel::focusInput);
-                    } else if (planPanel != null
-                            && planPanel.equals(taskTabs.getSelectedComponent())) {
-                        planPanel.refresh();
-                    } else if (pastPlansPanel.equals(taskTabs.getSelectedComponent())) {
-                        pastPlansPanel.refresh();
-                    }
-                });
+        taskTabs.addChangeListener(e -> {
+            if (taskChatPanel != null && taskChatPanel.equals(taskTabs.getSelectedComponent())) {
+                SwingUtilities.invokeLater(taskChatPanel::focusInput);
+            } else if (planPanel != null && planPanel.equals(taskTabs.getSelectedComponent())) {
+                planPanel.refresh();
+            } else if (pastPlansPanel.equals(taskTabs.getSelectedComponent())) {
+                pastPlansPanel.refresh();
+            }
+        });
         add(taskTabs, BorderLayout.CENTER);
     }
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        if (pastPlansPanel != null) pastPlansPanel.refresh();
+        if (pastPlansPanel != null)
+            pastPlansPanel.refresh();
     }
 
     @EventListener
     public void onArchiveUpdated(ArchiveUpdatedEvent event) {
-        if (pastPlansPanel != null
-                && event != null
-                && ArchiveUpdatedEvent.TYPE_PLAN.equals(event.type())) {
+        if (pastPlansPanel != null && event != null && ArchiveUpdatedEvent.TYPE_PLAN.equals(event.type())) {
             pastPlansPanel.refresh();
         }
     }
@@ -124,7 +115,8 @@ public final class TaskWorkspacePanel extends JPanel {
         if (planLabel != null) {
             applyPhaseTrackerStyling();
             applyPlanBadgeStyling();
-            if (planService != null) updateActivePhase(planService.getCurrentPhase());
+            if (planService != null)
+                updateActivePhase(planService.getCurrentPhase());
         }
     }
 
@@ -140,11 +132,8 @@ public final class TaskWorkspacePanel extends JPanel {
         Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.10);
         planLabel.setIcon(FontIcon.of(Codicons.PROJECT, 14, accent));
         planLabel.setForeground(accent);
-        planLabel.putClientProperty(
-                FlatClientProperties.STYLE,
-                "font: bold -2; background: "
-                        + SwingHtmlUtils.toHex(tintedBg)
-                        + "; arc: 10; border: 3,8,3,8");
+        planLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: bold -2; background: " + SwingHtmlUtils.toHex(tintedBg) + "; arc: 10; border: 3,8,3,8");
     }
 
     public void bindSidebar(SidebarPanel sidebar) {
@@ -154,16 +143,15 @@ public final class TaskWorkspacePanel extends JPanel {
 
     @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
-        Edt.run(
-                () -> {
-                    updateActivePhase(event.phase());
-                    if (sidebar != null) {
-                        sidebar.setTaskWaitingApproval(planService.getPendingPhase() != null);
-                    }
-                    if (event.phase() == WorkflowPhase.PLAN && pastPlansPanel != null) {
-                        pastPlansPanel.refresh();
-                    }
-                });
+        Edt.run(() -> {
+            updateActivePhase(event.phase());
+            if (sidebar != null) {
+                sidebar.setTaskWaitingApproval(planService.getPendingPhase() != null);
+            }
+            if (event.phase() == WorkflowPhase.PLAN && pastPlansPanel != null) {
+                pastPlansPanel.refresh();
+            }
+        });
     }
 
     @EventListener
@@ -179,7 +167,8 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     public void onViewShown() {
-        if (planPanel != null) planPanel.refresh();
+        if (planPanel != null)
+            planPanel.refresh();
         if (taskChatPanel != null) {
             taskTabs.setSelectedComponent(taskChatPanel);
             SwingUtilities.invokeLater(taskChatPanel::focusInput);
@@ -189,8 +178,7 @@ public final class TaskWorkspacePanel extends JPanel {
     static String formatPlanTitleDisplay(String rawTitle) {
         return StringUtils.isBlank(rawTitle)
                 ? ""
-                : StringUtils.abbreviate(
-                        rawTitle.trim().toUpperCase(Locale.ROOT), MAX_PLAN_TITLE_LENGTH);
+                : StringUtils.abbreviate(rawTitle.trim().toUpperCase(Locale.ROOT), MAX_PLAN_TITLE_LENGTH);
     }
 
     void updateActivePhase(WorkflowPhase currentPhase) {
@@ -207,8 +195,7 @@ public final class TaskWorkspacePanel extends JPanel {
         for (int i = 0; i < indicators.size(); i++) {
             WorkflowPhaseIndicator indicator = indicators.get(i);
             boolean isActive = indicator.getPhase() == currentPhase;
-            boolean isCompleted =
-                    visitedPhases != null && visitedPhases.contains(indicator.getPhase());
+            boolean isCompleted = visitedPhases != null && visitedPhases.contains(indicator.getPhase());
             indicator.setActive(isActive);
             indicator.setCompleted(isCompleted);
             if (i > 0) {
@@ -225,11 +212,9 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     private JLabel createConnectorIcon(boolean reached) {
-        Color color =
-                reached
-                        ? SwingHtmlUtils.getAccentColor()
-                        : SwingHtmlUtils.getUiColor(
-                                Color.GRAY, "Label.disabledForeground", "Component.borderColor");
+        Color color = reached
+                ? SwingHtmlUtils.getAccentColor()
+                : SwingHtmlUtils.getUiColor(Color.GRAY, "Label.disabledForeground", "Component.borderColor");
         return new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 12, color));
     }
 

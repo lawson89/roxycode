@@ -15,7 +15,8 @@ import org.roxycode.app.events.ProjectChangedEvent;
 
 class ProjectServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private SettingsService createSettingsService() {
         SettingsService s = new SettingsService(null, null);
@@ -37,8 +38,7 @@ class ProjectServiceTest {
         projectService.setCurrentProjectRoot(projectPath);
 
         ProjectService projectService2 = new ProjectService(settingsService, null);
-        assertEquals(
-                projectPath.toAbsolutePath().toString(),
+        assertEquals(projectPath.toAbsolutePath().toString(),
                 projectService2.getCurrentProjectRoot().toAbsolutePath().toString());
         assertEquals("my-project", projectService2.getProjectName());
     }
@@ -46,14 +46,11 @@ class ProjectServiceTest {
     @Test
     void testProjectListener() {
         AtomicReference<Path> notifiedPath = new AtomicReference<>();
-        ProjectService projectService =
-                new ProjectService(
-                        createSettingsService(),
-                        event -> {
-                            if (event instanceof ProjectChangedEvent pce) {
-                                notifiedPath.set(pce.projectRoot());
-                            }
-                        });
+        ProjectService projectService = new ProjectService(createSettingsService(), event -> {
+            if (event instanceof ProjectChangedEvent pce) {
+                notifiedPath.set(pce.projectRoot());
+            }
+        });
         Path projectPath = tempDir.resolve("new-project");
         projectService.setCurrentProjectRoot(projectPath);
         assertEquals(projectPath, notifiedPath.get());
@@ -68,46 +65,35 @@ class ProjectServiceTest {
         projectService.setCurrentProjectRoot(projectPath);
 
         assertEquals(projectPath.toAbsolutePath().normalize(), projectService.resolvePath(null));
-        assertEquals(
-                projectPath.resolve("sub/file.txt").toAbsolutePath().normalize(),
+        assertEquals(projectPath.resolve("sub/file.txt").toAbsolutePath().normalize(),
                 projectService.resolvePath("sub/file.txt"));
         assertEquals(".", projectService.resolveRelativePath(null));
         assertEquals(".", projectService.resolveRelativePath("   "));
         assertEquals("sub/file.txt", projectService.resolveRelativePath("sub/file.txt"));
         assertThrows(SecurityException.class, () -> projectService.resolvePath("../escape.txt"));
-        assertThrows(
-                SecurityException.class, () -> projectService.resolveRelativePath("../escape.txt"));
+        assertThrows(SecurityException.class, () -> projectService.resolveRelativePath("../escape.txt"));
     }
 
     @Test
     void testGetProjectDataDirAndResolveProjectDataPath() {
         ProjectService projectService = new ProjectService(createSettingsService(), null);
         assertThrows(IllegalStateException.class, projectService::getProjectDataDir);
-        assertThrows(
-                IllegalStateException.class,
-                () -> projectService.resolveProjectDataPath("build.toml"));
+        assertThrows(IllegalStateException.class, () -> projectService.resolveProjectDataPath("build.toml"));
 
-        projectService.setCurrentProjectRoot(
-                tempDir.resolve("workspaceA").resolve("My Cool Project!"));
+        projectService.setCurrentProjectRoot(tempDir.resolve("workspaceA").resolve("My Cool Project!"));
         Path dataDirA = projectService.getProjectDataDir();
         assertEquals(tempDir.resolve("projects"), dataDirA.getParent());
         assertTrue(dataDirA.getFileName().toString().matches("^my-cool-project-[0-9a-f]{8}$"));
 
-        projectService.setCurrentProjectRoot(
-                tempDir.resolve("workspaceB").resolve("My Cool Project!"));
+        projectService.setCurrentProjectRoot(tempDir.resolve("workspaceB").resolve("My Cool Project!"));
         Path dataDirB = projectService.getProjectDataDir();
         assertNotEquals(dataDirA, dataDirB);
         assertTrue(dataDirB.getFileName().toString().startsWith("my-cool-project-"));
 
         assertEquals(dataDirB, projectService.resolveProjectDataPath(null));
-        assertEquals(
-                dataDirB.resolve("build.toml"),
-                projectService.resolveProjectDataPath("build.toml"));
-        assertEquals(
-                dataDirB.resolve("context/rules.md"),
-                projectService.resolveProjectDataPath("context/rules.md"));
-        assertThrows(
-                SecurityException.class,
+        assertEquals(dataDirB.resolve("build.toml"), projectService.resolveProjectDataPath("build.toml"));
+        assertEquals(dataDirB.resolve("context/rules.md"), projectService.resolveProjectDataPath("context/rules.md"));
+        assertThrows(SecurityException.class,
                 () -> projectService.resolveProjectDataPath("../other-project/build.toml"));
     }
 
@@ -116,9 +102,7 @@ class ProjectServiceTest {
         assertNull(ProjectService.class.getAnnotation(AgentService.class));
         assertNull(ProjectService.class.getAnnotation(AgentDoc.class));
         for (Method method : ProjectService.class.getDeclaredMethods()) {
-            assertNull(
-                    method.getAnnotation(AgentDoc.class),
-                    "Method " + method.getName() + " must not have @AgentDoc");
+            assertNull(method.getAnnotation(AgentDoc.class), "Method " + method.getName() + " must not have @AgentDoc");
         }
     }
 }

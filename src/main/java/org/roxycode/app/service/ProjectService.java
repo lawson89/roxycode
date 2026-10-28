@@ -22,13 +22,12 @@ public class ProjectService {
     private final ApplicationEventPublisher eventPublisher;
     private volatile Path currentProjectRoot;
 
-    public ProjectService(
-            SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
+    public ProjectService(SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
-        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {};
+        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {
+        };
         String savedPath = settingsService.getSettings().getCurrentProjectPath();
-        this.currentProjectRoot =
-                (savedPath != null && !savedPath.isEmpty()) ? Paths.get(savedPath) : null;
+        this.currentProjectRoot = (savedPath != null && !savedPath.isEmpty()) ? Paths.get(savedPath) : null;
     }
 
     public Path getCurrentProjectRoot() {
@@ -51,23 +50,25 @@ public class ProjectService {
 
     public String getProjectName() {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null) return "No Project";
+        if (projectRoot == null)
+            return "No Project";
         Path fileName = projectRoot.getFileName();
         return fileName != null ? fileName.toString() : projectRoot.toString();
     }
 
     public Path resolvePath(String relativePath) {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null) throw new IllegalStateException("Project root is not set.");
+        if (projectRoot == null)
+            throw new IllegalStateException("Project root is not set.");
         return resolveWithinSandbox(projectRoot, relativePath);
     }
 
     public String resolveRelativePath(String relativePath) {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null) throw new IllegalStateException("Project root is not set.");
+        if (projectRoot == null)
+            throw new IllegalStateException("Project root is not set.");
         Path root = projectRoot.toAbsolutePath().normalize();
-        String target =
-                (relativePath == null || relativePath.isBlank()) ? "." : relativePath.trim();
+        String target = (relativePath == null || relativePath.isBlank()) ? "." : relativePath.trim();
         Path resolved = resolveWithinSandbox(root, target);
         String rel = root.relativize(resolved).toString().replace((char) 92, '/');
         return rel.isEmpty() ? "." : rel;
@@ -75,12 +76,13 @@ public class ProjectService {
 
     public Path getProjectDataDir() {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null) throw new IllegalStateException("Project root is not set.");
+        if (projectRoot == null)
+            throw new IllegalStateException("Project root is not set.");
         Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
-        String dirName =
-                sanitizeProjectName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
+        String dirName = sanitizeProjectName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
         Path roxyHome = settingsService.getRoxyHomeDir();
-        if (roxyHome == null) roxyHome = SettingsService.getDefaultRoxyHomeDir();
+        if (roxyHome == null)
+            roxyHome = SettingsService.getDefaultRoxyHomeDir();
         return roxyHome.toAbsolutePath().normalize().resolve(PROJECTS_SUBDIR).resolve(dirName);
     }
 
@@ -90,10 +92,7 @@ public class ProjectService {
 
     private static Path resolveWithinSandbox(Path sandboxRoot, String relativePath) {
         Path root = sandboxRoot.toAbsolutePath().normalize();
-        Path resolved =
-                root.resolve(relativePath != null ? relativePath : ".")
-                        .toAbsolutePath()
-                        .normalize();
+        Path resolved = root.resolve(relativePath != null ? relativePath : ".").toAbsolutePath().normalize();
         if (!resolved.startsWith(root)) {
             throw new SecurityException("Path traversal attempt detected: " + relativePath);
         }
@@ -102,15 +101,13 @@ public class ProjectService {
 
     public static String sanitizeProjectName(Path projectRoot) {
         Path fileName = projectRoot != null ? projectRoot.getFileName() : null;
-        return PathUtils.sanitizeSlug(
-                fileName != null ? fileName.toString() : "", MAX_PROJECT_NAME_LENGTH, "project");
+        return PathUtils.sanitizeSlug(fileName != null ? fileName.toString() : "", MAX_PROJECT_NAME_LENGTH, "project");
     }
 
     static String computeProjectHash(Path normalizedRoot) {
         try {
-            byte[] hashBytes =
-                    MessageDigest.getInstance("SHA-256")
-                            .digest(normalizedRoot.toString().getBytes(StandardCharsets.UTF_8));
+            byte[] hashBytes = MessageDigest.getInstance("SHA-256")
+                    .digest(normalizedRoot.toString().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hashBytes, 0, 4);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm not available", e);

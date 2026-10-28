@@ -27,8 +27,7 @@ public class EnvironmentService {
     }
 
     public long getMemoryUsageMb() {
-        return (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory())
-                / (1024 * 1024);
+        return (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1024 * 1024);
     }
 
     public long getTotalMemoryMb() {
@@ -36,10 +35,10 @@ public class EnvironmentService {
     }
 
     public FontIcon getOsIcon() {
-        FontIcon fontIcon =
-                FontIcon.of(SystemUtils.IS_OS_WINDOWS ? Codicons.WINDOW : Codicons.TERMINAL, 14);
+        FontIcon fontIcon = FontIcon.of(SystemUtils.IS_OS_WINDOWS ? Codicons.WINDOW : Codicons.TERMINAL, 14);
         Color color = UIManager.getColor("Label.foreground");
-        if (color != null) fontIcon.setIconColor(color);
+        if (color != null)
+            fontIcon.setIconColor(color);
         return fontIcon;
     }
 }

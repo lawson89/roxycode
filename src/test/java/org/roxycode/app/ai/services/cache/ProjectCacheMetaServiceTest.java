@@ -17,7 +17,8 @@ import org.roxycode.app.util.TokenUtils;
 
 public class ProjectCacheMetaServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private Path projectRoot;
     private Path projectDataDir;
@@ -31,8 +32,7 @@ public class ProjectCacheMetaServiceTest {
         lenient().when(projectService.hasActiveProject()).thenReturn(true);
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
         lenient().when(projectService.getProjectName()).thenReturn("TestProject");
-        lenient()
-                .when(projectService.resolveProjectDataPath(anyString()))
+        lenient().when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
     }
 

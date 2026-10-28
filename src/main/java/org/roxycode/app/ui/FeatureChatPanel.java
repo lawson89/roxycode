@@ -20,23 +20,11 @@ import org.springframework.stereotype.Component;
 public final class FeatureChatPanel extends ChatPanel {
     private static final long serialVersionUID = 1L;
 
-    public FeatureChatPanel(
-            AiService aiService,
-            PlanService planService,
-            ApplicationEventPublisher eventPublisher,
-            ChatMemory chatMemory,
-            SettingsService settingsService,
+    public FeatureChatPanel(AiService aiService, PlanService planService, ApplicationEventPublisher eventPublisher,
+            ChatMemory chatMemory, SettingsService settingsService,
             @Qualifier("chatTurnExecutor") Executor turnExecutor) {
-        super(
-                aiService,
-                planService,
-                eventPublisher,
-                chatMemory,
-                ChatModel.TASK_SESSION_PREFIX,
-                null,
-                true,
-                settingsService,
-                turnExecutor);
+        super(aiService, planService, eventPublisher, chatMemory, ChatModel.TASK_SESSION_PREFIX, null, true,
+                settingsService, turnExecutor);
     }
 
     @EventListener

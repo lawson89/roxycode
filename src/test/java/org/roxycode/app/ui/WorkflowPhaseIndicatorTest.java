@@ -55,10 +55,7 @@ class WorkflowPhaseIndicatorTest {
         assertEquals(Color.WHITE, label.getForeground());
         assertEquals("font: bold -1", label.getClientProperty(FlatClientProperties.STYLE));
         String activeStyle = (String) indicator.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(
-                activeStyle != null
-                        && activeStyle.startsWith("background: #")
-                        && !activeStyle.contains("arc:"));
+        assertTrue(activeStyle != null && activeStyle.startsWith("background: #") && !activeStyle.contains("arc:"));
 
         indicator.setActive(false);
         indicator.setCompleted(true);

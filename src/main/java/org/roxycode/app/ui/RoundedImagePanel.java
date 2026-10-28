@@ -41,7 +41,8 @@ final class RoundedImagePanel extends JPanel {
     static Image loadClasspathImage(String resourcePath) {
         try {
             URL url = RoundedImagePanel.class.getResource(resourcePath);
-            if (url != null) return ImageIO.read(url);
+            if (url != null)
+                return ImageIO.read(url);
         } catch (IOException e) {
             log.warn("Failed to load image resource {}: {}", resourcePath, e.getMessage());
         }
@@ -58,8 +59,7 @@ final class RoundedImagePanel extends JPanel {
 
     private static void applyQualityHints(Graphics2D g2) {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setRenderingHint(
-                RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
     }
 
@@ -68,7 +68,8 @@ final class RoundedImagePanel extends JPanel {
         super.paintComponent(g);
         int width = getWidth();
         int height = getHeight();
-        if (width <= 0 || height <= 0) return;
+        if (width <= 0 || height <= 0)
+            return;
 
         Graphics2D g2 = (Graphics2D) g.create();
         try {
@@ -76,15 +77,12 @@ final class RoundedImagePanel extends JPanel {
             if (image != null) {
                 g2.drawImage(getOrCreateRoundedBuffer(width, height), 0, 0, null);
             } else {
-                g2.setColor(
-                        SwingHtmlUtils.getUiColor(
-                                new Color(100, 100, 255), "Component.accentColor"));
+                g2.setColor(SwingHtmlUtils.getUiColor(new Color(100, 100, 255), "Component.accentColor"));
                 g2.fillRoundRect(INSET, INSET, width - (2 * INSET), height - (2 * INSET), arc, arc);
             }
             g2.setColor(SwingHtmlUtils.getUiColor(new Color(80, 80, 80), "Component.borderColor"));
             g2.setStroke(new BasicStroke(1.5f));
-            g2.drawRoundRect(
-                    INSET, INSET, width - (2 * INSET) - 1, height - (2 * INSET) - 1, arc, arc);
+            g2.drawRoundRect(INSET, INSET, width - (2 * INSET) - 1, height - (2 * INSET) - 1, arc, arc);
         } finally {
             g2.dispose();
         }
@@ -99,8 +97,7 @@ final class RoundedImagePanel extends JPanel {
         try {
             applyQualityHints(gBuffer);
             gBuffer.setColor(Color.BLACK);
-            gBuffer.fillRoundRect(
-                    INSET, INSET, width - (2 * INSET), height - (2 * INSET), arc, arc);
+            gBuffer.fillRoundRect(INSET, INSET, width - (2 * INSET), height - (2 * INSET), arc, arc);
             gBuffer.setComposite(AlphaComposite.SrcIn);
             gBuffer.drawImage(image, 0, 0, width, height, null);
         } finally {

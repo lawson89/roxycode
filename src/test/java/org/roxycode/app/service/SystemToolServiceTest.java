@@ -29,12 +29,10 @@ import org.testcontainers.dockerclient.DockerClientProviderStrategy;
 
 class SystemToolServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
-    private static SystemTool assertDockerTool(
-            DockerProbe probe,
-            boolean cliPresent,
-            String expectedStatus,
+    private static SystemTool assertDockerTool(DockerProbe probe, boolean cliPresent, String expectedStatus,
             boolean expectedAvailable) {
         SystemToolService service = new SystemToolService(probe, () -> cliPresent);
         SystemTool dockerTool = service.detectDockerTool();
@@ -52,13 +50,8 @@ class SystemToolServiceTest {
 
     @Test
     void testDetectToolsIncludesRichMetadataForAllCuratedTools() throws Exception {
-        SystemToolService service =
-                new SystemToolService(
-                        null,
-                        null,
-                        null,
-                        () -> new DockerVersionInfo("27.0.3", "1.46"),
-                        () -> true);
+        SystemToolService service = new SystemToolService(null, null, null,
+                () -> new DockerVersionInfo("27.0.3", "1.46"), () -> true);
         List<SystemTool> tools = service.detectTools().get();
 
         assertEquals(5, tools.size());
@@ -78,51 +71,27 @@ class SystemToolServiceTest {
 
     @Test
     void testParseVersionExtractsCleanFirstLineOnly() {
-        assertEquals(
-                "ripgrep 14.1.0",
-                SystemToolService.parseVersion(
-                        "ripgrep 14.1.0\nfeatures:-simd-accel,+pcre2\nsimd(compile):+SSE2,-SSSE3,-AVX2\n",
-                        "Ripgrep"));
-        assertEquals(
-                "Universal Ctags 5.9.0",
-                SystemToolService.parseVersion(
-                        "Universal Ctags 5.9.0, Copyright (C) 2015-2022 Universal Ctags Team\n",
-                        "Universal Ctags"));
+        assertEquals("ripgrep 14.1.0", SystemToolService.parseVersion(
+                "ripgrep 14.1.0\nfeatures:-simd-accel,+pcre2\nsimd(compile):+SSE2,-SSSE3,-AVX2\n", "Ripgrep"));
+        assertEquals("Universal Ctags 5.9.0", SystemToolService.parseVersion(
+                "Universal Ctags 5.9.0, Copyright (C) 2015-2022 Universal Ctags Team\n", "Universal Ctags"));
         String expectedJavaVer = "version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS";
-        assertEquals(
-                expectedJavaVer,
-                SystemToolService.parseVersion(
-                        "openjdk "
-                                + expectedJavaVer
-                                + "\nOpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)\n",
+        assertEquals(expectedJavaVer, SystemToolService.parseVersion(
+                "openjdk " + expectedJavaVer + "\nOpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)\n",
+                "Java"));
+        assertEquals("git version 2.43.0", SystemToolService.parseVersion("git version 2.43.0\n", "Git"));
+        assertEquals("ripgrep 14.1.0", SystemToolService
+                .parseVersion("ripgrep 14.1.0features:-simd-accel,+pcre2simd(compile):+SSE2", "Ripgrep"));
+        assertEquals("Universal Ctags 5.9.0", SystemToolService
+                .parseVersion("Universal Ctags 5.9.0, Copyright (C) 2015 Universal Ctags Team", "Universal Ctags"));
+        assertEquals(expectedJavaVer,
+                SystemToolService.parseVersion(expectedJavaVer
+                        + "OpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)OpenJDK 64-Bit Server VM",
                         "Java"));
-        assertEquals(
-                "git version 2.43.0",
-                SystemToolService.parseVersion("git version 2.43.0\n", "Git"));
-        assertEquals(
-                "ripgrep 14.1.0",
-                SystemToolService.parseVersion(
-                        "ripgrep 14.1.0features:-simd-accel,+pcre2simd(compile):+SSE2", "Ripgrep"));
-        assertEquals(
-                "Universal Ctags 5.9.0",
-                SystemToolService.parseVersion(
-                        "Universal Ctags 5.9.0, Copyright (C) 2015 Universal Ctags Team",
-                        "Universal Ctags"));
-        assertEquals(
-                expectedJavaVer,
-                SystemToolService.parseVersion(
-                        expectedJavaVer
-                                + "OpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)OpenJDK 64-Bit Server VM",
-                        "Java"));
-        assertTrue(
-                SystemToolService.parseVersion(
-                                        "version "
-                                                + '"'
-                                                + "25.0.4-custom-build-identifier-with-extra-suffixes-exceeding-fifty-chars"
-                                                + '"',
-                                        "Java")
-                                .length()
-                        <= 50);
+        assertTrue(SystemToolService
+                .parseVersion("version " + '"'
+                        + "25.0.4-custom-build-identifier-with-extra-suffixes-exceeding-fifty-chars" + '"', "Java")
+                .length() <= 50);
         assertEquals("Unknown", SystemToolService.parseVersion("", "Git"));
         assertEquals("Unknown", SystemToolService.parseVersion("   \n  ", "Git"));
     }
@@ -133,8 +102,7 @@ class SystemToolServiceTest {
         SettingsService settingsService = new SettingsService(mapper, null);
         settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
 
-        String legacyToml =
-                """
+        String legacyToml = """
                 [[tools]]
                 name = "Ripgrep"
                 version = "ripgrep 14.1.0features:-simd-accel,+pcre2sim..."
@@ -155,7 +123,8 @@ class SystemToolServiceTest {
                 """;
         Files.writeString(tempDir.resolve(SystemToolService.SYSTEM_TOOLS_FILE), legacyToml);
 
-        SystemToolService service = new SystemToolService(settingsService, mapper, event -> {});
+        SystemToolService service = new SystemToolService(settingsService, mapper, event -> {
+        });
         List<SystemTool> loaded = service.detectTools().get(5, TimeUnit.SECONDS);
 
         assertEquals(3, loaded.size());
@@ -181,9 +150,7 @@ class SystemToolServiceTest {
 
     @Test
     void testDetectDockerToolDetectedWithVersionAndApiVersion() {
-        SystemTool dockerTool =
-                assertDockerTool(
-                        () -> new DockerVersionInfo("28.0.1", "1.48"), true, "Detected", true);
+        SystemTool dockerTool = assertDockerTool(() -> new DockerVersionInfo("28.0.1", "1.48"), true, "Detected", true);
         assertEquals("Docker 28.0.1 (API 1.48)", dockerTool.version());
         assertEquals("Apache-2.0", dockerTool.license());
         assertEquals("https://www.docker.com", dockerTool.websiteUrl());
@@ -191,45 +158,28 @@ class SystemToolServiceTest {
 
     @Test
     void testDetectDockerToolErrorOnApiVersionMismatchOrHandshakeFailure() {
-        SystemTool dockerTool =
-                assertDockerTool(
-                        () -> {
-                            throw new IllegalStateException(
-                                    "Could not connect to Docker",
-                                    new RuntimeException(
-                                            "client version 1.32 is too old. Minimum supported API version is 1.44"));
-                        },
-                        false,
-                        "Error",
-                        false);
+        SystemTool dockerTool = assertDockerTool(() -> {
+            throw new IllegalStateException("Could not connect to Docker",
+                    new RuntimeException("client version 1.32 is too old. Minimum supported API version is 1.44"));
+        }, false, "Error", false);
         assertTrue(dockerTool.version().contains("client version 1.32 is too old"));
     }
 
     @Test
     void testDetectDockerToolMissingWhenDockerNotInstalled() {
-        SystemTool dockerTool =
-                assertDockerTool(
-                        () -> {
-                            throw new IllegalStateException(
-                                    "Could not find a valid Docker environment. Please see logs and check configuration");
-                        },
-                        false,
-                        "Missing",
-                        false);
+        SystemTool dockerTool = assertDockerTool(() -> {
+            throw new IllegalStateException(
+                    "Could not find a valid Docker environment. Please see logs and check configuration");
+        }, false, "Missing", false);
         assertEquals("Not found", dockerTool.version());
     }
 
     @Test
     void testDetectDockerToolErrorWhenCliPresentButTestcontainersCannotConnect() {
-        SystemTool dockerTool =
-                assertDockerTool(
-                        () -> {
-                            throw new IllegalStateException(
-                                    "Could not find a valid Docker environment. Please see logs and check configuration");
-                        },
-                        true,
-                        "Error",
-                        false);
+        SystemTool dockerTool = assertDockerTool(() -> {
+            throw new IllegalStateException(
+                    "Could not find a valid Docker environment. Please see logs and check configuration");
+        }, true, "Error", false);
         assertTrue(dockerTool.version().contains("Could not find a valid Docker environment"));
     }
 
@@ -242,24 +192,15 @@ class SystemToolServiceTest {
         List<SystemToolsUpdatedEvent> publishedEvents = new ArrayList<>();
         AtomicInteger probeCount = new AtomicInteger(0);
 
-        SystemToolService service1 =
-                new SystemToolService(
-                        settingsService,
-                        mapper,
-                        event -> {
-                            if (event instanceof SystemToolsUpdatedEvent e) publishedEvents.add(e);
-                        });
-        service1.setToolProber(
-                () -> {
-                    int call = probeCount.incrementAndGet();
-                    return List.of(
-                            new SystemTool("Git", "2.45." + call, "Detected", "Git VCS"),
-                            new SystemTool(
-                                    "Docker",
-                                    call == 1 ? "Not found" : "Docker 28.0.0",
-                                    call == 1 ? "Missing" : "Detected",
-                                    "Testcontainers"));
-                });
+        SystemToolService service1 = new SystemToolService(settingsService, mapper, event -> {
+            if (event instanceof SystemToolsUpdatedEvent e)
+                publishedEvents.add(e);
+        });
+        service1.setToolProber(() -> {
+            int call = probeCount.incrementAndGet();
+            return List.of(new SystemTool("Git", "2.45." + call, "Detected", "Git VCS"), new SystemTool("Docker",
+                    call == 1 ? "Not found" : "Docker 28.0.0", call == 1 ? "Missing" : "Detected", "Testcontainers"));
+        });
 
         assertFalse(service1.hasCachedTools());
         assertTrue(service1.getCachedTools().isEmpty());
@@ -276,20 +217,19 @@ class SystemToolServiceTest {
         assertTrue(Files.exists(tempDir.resolve(SystemToolService.SYSTEM_TOOLS_FILE)));
 
         AtomicInteger secondProbeCount = new AtomicInteger(0);
-        SystemToolService service2 = new SystemToolService(settingsService, mapper, event -> {});
-        service2.setToolProber(
-                () -> {
-                    secondProbeCount.incrementAndGet();
-                    return List.of();
-                });
+        SystemToolService service2 = new SystemToolService(settingsService, mapper, event -> {
+        });
+        service2.setToolProber(() -> {
+            secondProbeCount.incrementAndGet();
+            return List.of();
+        });
 
         final boolean[] edtHasCached = new boolean[1];
         final CompletableFuture<List<SystemTool>>[] edtDetectFuture = new CompletableFuture[1];
-        SwingUtilities.invokeAndWait(
-                () -> {
-                    edtHasCached[0] = service2.hasCachedTools();
-                    edtDetectFuture[0] = service2.detectTools();
-                });
+        SwingUtilities.invokeAndWait(() -> {
+            edtHasCached[0] = service2.hasCachedTools();
+            edtDetectFuture[0] = service2.detectTools();
+        });
         assertFalse(edtHasCached[0]);
         List<SystemTool> diskLoaded = edtDetectFuture[0].get(5, TimeUnit.SECONDS);
         assertTrue(service2.hasCachedTools());
@@ -317,17 +257,16 @@ class SystemToolServiceTest {
         CountDownLatch releaseProbe = new CountDownLatch(1);
         AtomicInteger probeCount = new AtomicInteger(0);
 
-        service.setToolProber(
-                () -> {
-                    probeCount.incrementAndGet();
-                    probeStarted.countDown();
-                    try {
-                        releaseProbe.await(5, TimeUnit.SECONDS);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                    return List.of(new SystemTool("Docker", "28.0", "Detected", "Desc"));
-                });
+        service.setToolProber(() -> {
+            probeCount.incrementAndGet();
+            probeStarted.countDown();
+            try {
+                releaseProbe.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return List.of(new SystemTool("Docker", "28.0", "Detected", "Desc"));
+        });
 
         CompletableFuture<List<SystemTool>> f1 = service.refreshTools();
         assertTrue(probeStarted.await(5, TimeUnit.SECONDS));
@@ -392,10 +331,8 @@ class SystemToolServiceTest {
             when(failingVersionCmd.exec()).thenThrow(new RuntimeException("Daemon stopped"));
             when(mockClient.versionCmd()).thenReturn(failingVersionCmd);
 
-            assertEquals(
-                    "Daemon stopped",
-                    assertThrows(RuntimeException.class, SystemToolService::probeWithTestcontainers)
-                            .getMessage());
+            assertEquals("Daemon stopped",
+                    assertThrows(RuntimeException.class, SystemToolService::probeWithTestcontainers).getMessage());
             assertNull(failureField.get(factory));
             assertNull(clientField.get(factory));
             assertNull(strategyField.get(factory));

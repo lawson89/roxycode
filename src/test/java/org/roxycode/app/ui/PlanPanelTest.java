@@ -30,19 +30,10 @@ class PlanPanelTest {
         SwingTestUtils.awaitWorker(panel.getActiveRefreshWorker());
     }
 
-    private static ImplementationPlan createPlan(
-            List<ImplementationPlan.TechStep> steps, List<ImplementationPlan.LogEntry> logs) {
-        return new ImplementationPlan(
-                "Test Plan",
-                "Test Goal",
-                List.of("Requirement 1"),
-                steps,
-                false,
-                null,
-                null,
-                null,
-                null,
-                logs);
+    private static ImplementationPlan createPlan(List<ImplementationPlan.TechStep> steps,
+            List<ImplementationPlan.LogEntry> logs) {
+        return new ImplementationPlan("Test Plan", "Test Goal", List.of("Requirement 1"), steps, false, null, null,
+                null, null, logs);
     }
 
     private static ImplementationPlan createPlan(ImplementationPlan.TechStep... steps) {
@@ -51,64 +42,37 @@ class PlanPanelTest {
 
     @Test
     void testBuildPlanHtmlUsesNowrapAndNonBreakingCheckbox() {
-        ImplementationPlan plan =
-                createPlan(
-                        new ImplementationPlan.TechStep(
-                                "Long step description that should wrap in its column without squishing the index or checkbox.",
-                                false),
-                        new ImplementationPlan.TechStep("Completed step", true));
+        ImplementationPlan plan = createPlan(new ImplementationPlan.TechStep(
+                "Long step description that should wrap in its column without squishing the index or checkbox.", false),
+                new ImplementationPlan.TechStep("Completed step", true));
 
         String html = PlanPanel.buildPlanHtml(plan);
-        assertContainsAll(
-                html,
-                "<p><b>Title:</b> Test Plan</p>",
-                "<p><b>Goal:</b> Test Goal</p>",
-                "[&nbsp;]",
-                "<b>[x]</b>",
-                "nowrap='nowrap'",
-                "<td width='100%'",
-                "<h3>Changes:</h3>",
-                "No files changed");
+        assertContainsAll(html, "<p><b>Title:</b> Test Plan</p>", "<p><b>Goal:</b> Test Goal</p>", "[&nbsp;]",
+                "<b>[x]</b>", "nowrap='nowrap'", "<td width='100%'", "<h3>Changes:</h3>", "No files changed");
         assertFalse(html.contains(">[ ]<"));
 
-        String htmlWithChanges =
-                PlanPanel.buildPlanHtml(plan, " M src/App.java\n?? src/NewFile.java\n");
-        assertContainsAll(
-                htmlWithChanges,
-                "<h3>Changes:</h3>",
-                "<pre> M src/App.java\n?? src/NewFile.java</pre>");
+        String htmlWithChanges = PlanPanel.buildPlanHtml(plan, " M src/App.java\n?? src/NewFile.java\n");
+        assertContainsAll(htmlWithChanges, "<h3>Changes:</h3>", "<pre> M src/App.java\n?? src/NewFile.java</pre>");
         assertFalse(htmlWithChanges.contains("No files changed"));
 
-        ImplementationPlan planWithLogs =
-                createPlan(
-                        List.of(new ImplementationPlan.TechStep("Completed step", true)),
-                        List.of(
-                                new ImplementationPlan.LogEntry(
-                                        "2026-04-06T12:00:00", "User", "Approved")));
+        ImplementationPlan planWithLogs = createPlan(List.of(new ImplementationPlan.TechStep("Completed step", true)),
+                List.of(new ImplementationPlan.LogEntry("2026-04-06T12:00:00", "User", "Approved")));
         String htmlWithLogs = PlanPanel.buildPlanHtml(planWithLogs);
         for (String legacy : List.of("bgcolor='#2d2d2d'", "#888888", "#569cd6", "#28a745")) {
             assertFalse(htmlWithLogs.contains(legacy));
         }
-        assertContainsAll(
-                htmlWithLogs,
-                "class='plan-step-done'",
-                "class='plan-step-completed'",
+        assertContainsAll(htmlWithLogs, "class='plan-step-done'", "class='plan-step-completed'",
                 "class='plan-log-user'");
-        assertTrue(
-                htmlWithLogs.contains("class='system-entry'")
-                        || htmlWithLogs.contains("class='md-th'"));
+        assertTrue(htmlWithLogs.contains("class='system-entry'") || htmlWithLogs.contains("class='md-th'"));
     }
 
     @Test
     void testPlanPanelRendersNonZeroMinimumSpanForNowrapCells() {
         PlanService planService = mock(PlanService.class);
         GitService gitService = mock(GitService.class);
-        when(planService.getCurrentPlan())
-                .thenReturn(
-                        createPlan(
-                                new ImplementationPlan.TechStep(
-                                        "Update src/main/resources/prompts/plan_phase.md to remove stale planService method names and refer to the provided JEXL API documentation.",
-                                        false)));
+        when(planService.getCurrentPlan()).thenReturn(createPlan(new ImplementationPlan.TechStep(
+                "Update src/main/resources/prompts/plan_phase.md to remove stale planService method names and refer to the provided JEXL API documentation.",
+                false)));
 
         PlanPanel panel = new PlanPanel(planService, gitService);
         awaitRefresh(panel);
@@ -120,57 +84,35 @@ class PlanPanelTest {
         assertTrue(hasPositiveInlineMinSpan(SwingTestUtils.findTdWithText(root, "0."), factory));
         assertTrue(hasPositiveInlineMinSpan(SwingTestUtils.findTdWithText(root, "["), factory));
         assertFalse(
-                hasPositiveInlineMinSpan(
-                        SwingTestUtils.findTdWithText(root, "Update src/main/resources"), factory));
+                hasPositiveInlineMinSpan(SwingTestUtils.findTdWithText(root, "Update src/main/resources"), factory));
     }
 
     @Test
     void testBuildPlanMarkdownFormatsPlanHandoffLogAndChanges() {
         assertEquals("", PlanPanel.buildPlanMarkdown(null));
 
-        ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Visibility Feature",
-                        "Improve visibility",
-                        List.of("Show turns", "Export markdown"),
-                        List.of(
-                                new ImplementationPlan.TechStep("Update ChatPanel", true),
-                                new ImplementationPlan.TechStep("Update PlanPanel", false)),
-                        true,
-                        "2026-04-06T12:00:00",
-                        "user",
-                        "reviewer",
-                        "2026-04-06T13:00:00",
-                        List.of(
-                                new ImplementationPlan.LogEntry(
-                                        "2026-04-06T12:05:30.123",
-                                        "Architect",
-                                        "Created plan | verified\ndetails")));
+        ImplementationPlan plan = new ImplementationPlan("Visibility Feature", "Improve visibility",
+                List.of("Show turns", "Export markdown"),
+                List.of(new ImplementationPlan.TechStep("Update ChatPanel", true),
+                        new ImplementationPlan.TechStep("Update PlanPanel", false)),
+                true, "2026-04-06T12:00:00", "user", "reviewer", "2026-04-06T13:00:00",
+                List.of(new ImplementationPlan.LogEntry("2026-04-06T12:05:30.123", "Architect",
+                        "Created plan | verified\ndetails")));
 
-        assertContainsAll(
-                PlanPanel.buildPlanHtml(plan),
-                "<h3>Approvals:</h3>",
+        assertContainsAll(PlanPanel.buildPlanHtml(plan), "<h3>Approvals:</h3>",
                 "<li><b>Move to Code:</b> Approved by user on 2026-04-06T12:00:00</li>",
                 "<li><b>Final Acceptance:</b> Accepted by reviewer on 2026-04-06T13:00:00</li>");
 
-        assertContainsAll(
-                PlanPanel.buildPlanMarkdown(plan),
-                "# Implementation Plan: Visibility Feature",
-                "**Goal:** Improve visibility",
-                "## Approvals",
+        assertContainsAll(PlanPanel.buildPlanMarkdown(plan), "# Implementation Plan: Visibility Feature",
+                "**Goal:** Improve visibility", "## Approvals",
                 "- **Move to Code:** Approved by user on 2026-04-06T12:00:00",
                 "- **Final Acceptance:** Accepted by reviewer on 2026-04-06T13:00:00",
                 "## Requirements\n- Show turns\n- Export markdown",
-                "## Technical Steps\n- [x] 0. Update ChatPanel\n- [ ] 1. Update PlanPanel",
-                "## Handoff Log",
-                "| Timestamp | User | Message |",
-                "| 2026-04-06 12:05:30 | Architect | Created plan ",
-                "| verified details |",
-                "## Changes\nNo files changed");
+                "## Technical Steps\n- [x] 0. Update ChatPanel\n- [ ] 1. Update PlanPanel", "## Handoff Log",
+                "| Timestamp | User | Message |", "| 2026-04-06 12:05:30 | Architect | Created plan ",
+                "| verified details |", "## Changes\nNo files changed");
 
-        assertContainsAll(
-                PlanPanel.buildPlanMarkdown(plan, " M src/App.java\n?? src/NewFile.java\n"),
-                "## Changes",
+        assertContainsAll(PlanPanel.buildPlanMarkdown(plan, " M src/App.java\n?? src/NewFile.java\n"), "## Changes",
                 " M src/App.java\n?? src/NewFile.java");
     }
 
@@ -180,12 +122,11 @@ class PlanPanelTest {
         GitService gitService = mock(GitService.class);
         AtomicBoolean calledOnEdt = new AtomicBoolean(false);
         when(planService.getCurrentPlan()).thenReturn(null);
-        when(gitService.getStatus())
-                .thenAnswer(
-                        inv -> {
-                            if (SwingUtilities.isEventDispatchThread()) calledOnEdt.set(true);
-                            return "";
-                        });
+        when(gitService.getStatus()).thenAnswer(inv -> {
+            if (SwingUtilities.isEventDispatchThread())
+                calledOnEdt.set(true);
+            return "";
+        });
 
         PlanPanel panel = new PlanPanel(planService, gitService);
         awaitRefresh(panel);
@@ -200,12 +141,11 @@ class PlanPanelTest {
         assertEquals("Copy Plan as Markdown", panel.getCopyMarkdownButton().getText());
         assertTrue(panel.getDisplayArea().getText().contains("No files changed"));
 
-        when(gitService.getStatus())
-                .thenAnswer(
-                        inv -> {
-                            if (SwingUtilities.isEventDispatchThread()) calledOnEdt.set(true);
-                            return " M src/Main.java\n?? src/Extra.java\n";
-                        });
+        when(gitService.getStatus()).thenAnswer(inv -> {
+            if (SwingUtilities.isEventDispatchThread())
+                calledOnEdt.set(true);
+            return " M src/Main.java\n?? src/Extra.java\n";
+        });
         panel.onFileChanged(new FileChangedEvent("src/Main.java"));
         awaitRefresh(panel);
         assertContainsAll(panel.getDisplayArea().getText(), "M src/Main.java", "?? src/Extra.java");
@@ -214,22 +154,17 @@ class PlanPanelTest {
         SwingTestUtils.clickOnEdt(panel.getCopyMarkdownButton());
         verify(gitService, never()).getStatus();
         assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
-        assertContainsAll(
-                panel.getLastCopiedMarkdown(),
-                "# Implementation Plan: Test Plan",
-                "- [x] 0. Step 0",
-                "## Changes",
-                " M src/Main.java");
+        assertContainsAll(panel.getLastCopiedMarkdown(), "# Implementation Plan: Test Plan", "- [x] 0. Step 0",
+                "## Changes", " M src/Main.java");
 
         SwingTestUtils.runOnEdt(panel::updateUI);
         verify(gitService, never()).getStatus();
 
-        when(gitService.getStatus())
-                .thenAnswer(
-                        inv -> {
-                            if (SwingUtilities.isEventDispatchThread()) calledOnEdt.set(true);
-                            return "";
-                        });
+        when(gitService.getStatus()).thenAnswer(inv -> {
+            if (SwingUtilities.isEventDispatchThread())
+                calledOnEdt.set(true);
+            return "";
+        });
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/other")));
         awaitRefresh(panel);
         assertTrue(panel.getDisplayArea().getText().contains("No files changed"));
@@ -240,8 +175,7 @@ class PlanPanelTest {
     void testStaleRefreshWorkerDiscarded() throws Exception {
         PlanService planService = mock(PlanService.class);
         GitService gitService = mock(GitService.class);
-        when(planService.getCurrentPlan())
-                .thenReturn(createPlan(new ImplementationPlan.TechStep("Step 0", false)));
+        when(planService.getCurrentPlan()).thenReturn(createPlan(new ImplementationPlan.TechStep("Step 0", false)));
         when(gitService.getStatus()).thenReturn("");
 
         PlanPanel panel = new PlanPanel(planService, gitService);
@@ -251,16 +185,14 @@ class PlanPanelTest {
         CountDownLatch releaseSlow = new CountDownLatch(1);
         AtomicBoolean firstCall = new AtomicBoolean(true);
 
-        when(gitService.getStatus())
-                .thenAnswer(
-                        inv -> {
-                            if (firstCall.compareAndSet(true, false)) {
-                                slowStarted.countDown();
-                                releaseSlow.await(5, TimeUnit.SECONDS);
-                                return " M src/StaleFile.java\n";
-                            }
-                            return " M src/FreshFile.java\n";
-                        });
+        when(gitService.getStatus()).thenAnswer(inv -> {
+            if (firstCall.compareAndSet(true, false)) {
+                slowStarted.countDown();
+                releaseSlow.await(5, TimeUnit.SECONDS);
+                return " M src/StaleFile.java\n";
+            }
+            return " M src/FreshFile.java\n";
+        });
 
         panel.refresh();
         SwingWorker<String, Void> staleWorker = panel.getActiveRefreshWorker();
@@ -285,7 +217,8 @@ class PlanPanelTest {
             return iv.getMinimumSpan(View.X_AXIS) > 0;
         }
         for (int i = 0; i < elem.getElementCount(); i++) {
-            if (hasPositiveInlineMinSpan(elem.getElement(i), factory)) return true;
+            if (hasPositiveInlineMinSpan(elem.getElement(i), factory))
+                return true;
         }
         return false;
     }

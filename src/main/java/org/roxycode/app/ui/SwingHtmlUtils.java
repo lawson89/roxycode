@@ -42,36 +42,28 @@ import org.apache.commons.text.StringEscapeUtils;
 
 public final class SwingHtmlUtils {
 
-    private static final DataHolder FLEXMARK_OPTIONS =
-            new MutableDataSet()
-                    .set(
-                            Parser.EXTENSIONS,
-                            Arrays.asList(
-                                    TablesExtension.create(),
-                                    StrikethroughExtension.create(),
-                                    new MarkdownTableAttributeExtension()))
-                    .toImmutable();
+    private static final DataHolder FLEXMARK_OPTIONS = new MutableDataSet().set(Parser.EXTENSIONS, Arrays
+            .asList(TablesExtension.create(), StrikethroughExtension.create(), new MarkdownTableAttributeExtension()))
+            .toImmutable();
     private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
-    private static final HtmlRenderer MARKDOWN_RENDERER =
-            HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
+    private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
 
-    private SwingHtmlUtils() {}
+    private SwingHtmlUtils() {
+    }
 
-    private static final class MarkdownTableAttributeExtension
-            implements HtmlRenderer.HtmlRendererExtension {
+    private static final class MarkdownTableAttributeExtension implements HtmlRenderer.HtmlRendererExtension {
         @Override
-        public void rendererOptions(MutableDataHolder options) {}
+        public void rendererOptions(MutableDataHolder options) {
+        }
 
         @Override
         public void extend(HtmlRenderer.Builder htmlRendererBuilder, String rendererType) {
-            htmlRendererBuilder.attributeProviderFactory(
-                    new IndependentAttributeProviderFactory() {
-                        @Override
-                        public AttributeProvider apply(LinkResolverContext context) {
-                            return (node, part, attributes) ->
-                                    setTableNodeAttributes(node, attributes);
-                        }
-                    });
+            htmlRendererBuilder.attributeProviderFactory(new IndependentAttributeProviderFactory() {
+                @Override
+                public AttributeProvider apply(LinkResolverContext context) {
+                    return (node, part, attributes) -> setTableNodeAttributes(node, attributes);
+                }
+            });
         }
     }
 
@@ -89,8 +81,7 @@ public final class SwingHtmlUtils {
     public static String renderMarkdownToHtml(String markdown) {
         return (markdown == null || markdown.isEmpty())
                 ? ""
-                : JexlToHtmlConverter.highlightCodeBlocks(
-                        MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
+                : JexlToHtmlConverter.highlightCodeBlocks(MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
     }
 
     public static JEditorPane createHtmlEditorPane() {
@@ -103,56 +94,48 @@ public final class SwingHtmlUtils {
     }
 
     public static void addChangeListener(JTextComponent component, Runnable onChange) {
-        component
-                .getDocument()
-                .addDocumentListener(
-                        new DocumentListener() {
-                            @Override
-                            public void insertUpdate(DocumentEvent e) {
-                                onChange.run();
-                            }
+        component.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                onChange.run();
+            }
 
-                            @Override
-                            public void removeUpdate(DocumentEvent e) {
-                                onChange.run();
-                            }
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                onChange.run();
+            }
 
-                            @Override
-                            public void changedUpdate(DocumentEvent e) {
-                                onChange.run();
-                            }
-                        });
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                onChange.run();
+            }
+        });
     }
 
-    public static void applyTintedBannerStyle(
-            JComponent banner, Color accent, int topBottomPad, int leftPad, int rightPad) {
+    public static void applyTintedBannerStyle(JComponent banner, Color accent, int topBottomPad, int leftPad,
+            int rightPad) {
         Color tintedBg = getTintedBackground(accent, 0.12);
         banner.setOpaque(true);
         banner.setBackground(tintedBg);
-        banner.setBorder(
-                BorderFactory.createCompoundBorder(
-                        BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
-                        BorderFactory.createEmptyBorder(
-                                topBottomPad, leftPad, topBottomPad, rightPad)));
+        banner.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
+                BorderFactory.createEmptyBorder(topBottomPad, leftPad, topBottomPad, rightPad)));
         banner.putClientProperty(FlatClientProperties.STYLE, "background: " + toHex(tintedBg));
     }
 
     public static void applyTheme(JEditorPane textPane, int marginPx) {
-        HTMLEditorKit kit =
-                new HTMLEditorKit() {
-                    private static final long serialVersionUID = 1L;
-                    private final transient ViewFactory factory = new WrappingHtmlFactory();
+        HTMLEditorKit kit = new HTMLEditorKit() {
+            private static final long serialVersionUID = 1L;
+            private final transient ViewFactory factory = new WrappingHtmlFactory();
 
-                    @Override
-                    public ViewFactory getViewFactory() {
-                        return factory;
-                    }
-                };
+            @Override
+            public ViewFactory getViewFactory() {
+                return factory;
+            }
+        };
         StyleSheet sheet = new StyleSheet();
         boolean isDark = FlatLaf.isLafDark();
-        URL cssUrl =
-                SwingHtmlUtils.class.getResource(
-                        isDark ? "/css/chat-styles-dark.css" : "/css/chat-styles-light.css");
+        URL cssUrl = SwingHtmlUtils.class
+                .getResource(isDark ? "/css/chat-styles-dark.css" : "/css/chat-styles-light.css");
         if (cssUrl != null) {
             sheet.importStyleSheet(cssUrl);
         }
@@ -163,10 +146,8 @@ public final class SwingHtmlUtils {
         textPane.setForeground(fg);
         textPane.setOpaque(true);
 
-        sheet.addRule(
-                String.format(
-                        "body { background-color: %s; color: %s; margin: %dpx; }",
-                        toHex(bg), toHex(fg), marginPx));
+        sheet.addRule(String.format("body { background-color: %s; color: %s; margin: %dpx; }", toHex(bg), toHex(fg),
+                marginPx));
         kit.setStyleSheet(sheet);
         textPane.setEditorKit(kit);
     }
@@ -175,9 +156,11 @@ public final class SwingHtmlUtils {
         for (Element curr = elem; curr != null; curr = curr.getParentElement()) {
             AttributeSet attrs = curr.getAttributes();
             if (attrs != null) {
-                if (attrs.isDefined(HTML.Attribute.NOWRAP)) return true;
+                if (attrs.isDefined(HTML.Attribute.NOWRAP))
+                    return true;
                 Object ws = attrs.getAttribute(CSS.Attribute.WHITE_SPACE);
-                if (ws != null && "nowrap".equalsIgnoreCase(ws.toString())) return true;
+                if (ws != null && "nowrap".equalsIgnoreCase(ws.toString()))
+                    return true;
             }
             if ("td".equalsIgnoreCase(curr.getName()) || "th".equalsIgnoreCase(curr.getName())) {
                 break;
@@ -190,7 +173,8 @@ public final class SwingHtmlUtils {
         @Override
         public View create(Element elem) {
             View view = super.create(elem);
-            if (isNoWrap(elem)) return view;
+            if (isNoWrap(elem))
+                return view;
             if (view.getClass() == InlineView.class) {
                 return new InlineView(elem) {
                     @Override
@@ -220,85 +204,74 @@ public final class SwingHtmlUtils {
     }
 
     public static void installTextContextMenu(JTextComponent component) {
-        component.addMouseListener(
-                new MouseAdapter() {
-                    @Override
-                    public void mousePressed(MouseEvent e) {
-                        if (e.isPopupTrigger()) showPopup(e);
-                    }
+        component.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger())
+                    showPopup(e);
+            }
 
-                    @Override
-                    public void mouseReleased(MouseEvent e) {
-                        if (e.isPopupTrigger()) showPopup(e);
-                    }
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger())
+                    showPopup(e);
+            }
 
-                    private void showPopup(MouseEvent e) {
-                        component.requestFocusInWindow();
-                        JPopupMenu menu = new JPopupMenu();
-                        if (component.isEditable()) {
-                            menu.add(new JMenuItem(new DefaultEditorKit.CutAction()))
-                                    .setText("Cut");
-                        }
-                        menu.add(new JMenuItem(new DefaultEditorKit.CopyAction())).setText("Copy");
-                        if (component.isEditable()) {
-                            menu.add(new JMenuItem(new DefaultEditorKit.PasteAction()))
-                                    .setText("Paste");
-                        }
-                        menu.addSeparator();
-                        JMenuItem selectAll = new JMenuItem("Select All");
-                        selectAll.addActionListener(ae -> component.selectAll());
-                        menu.add(selectAll);
-                        menu.show(e.getComponent(), e.getX(), e.getY());
-                    }
-                });
+            private void showPopup(MouseEvent e) {
+                component.requestFocusInWindow();
+                JPopupMenu menu = new JPopupMenu();
+                if (component.isEditable()) {
+                    menu.add(new JMenuItem(new DefaultEditorKit.CutAction())).setText("Cut");
+                }
+                menu.add(new JMenuItem(new DefaultEditorKit.CopyAction())).setText("Copy");
+                if (component.isEditable()) {
+                    menu.add(new JMenuItem(new DefaultEditorKit.PasteAction())).setText("Paste");
+                }
+                menu.addSeparator();
+                JMenuItem selectAll = new JMenuItem("Select All");
+                selectAll.addActionListener(ae -> component.selectAll());
+                menu.add(selectAll);
+                menu.show(e.getComponent(), e.getX(), e.getY());
+            }
+        });
     }
 
     public static void copyToClipboard(String text) {
-        if (text == null) return;
+        if (text == null)
+            return;
         try {
-            Toolkit.getDefaultToolkit()
-                    .getSystemClipboard()
-                    .setContents(new StringSelection(text), null);
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
         } catch (Exception ignored) {
         }
     }
 
-    public static Timer showCopyButtonFeedback(
-            JButton button,
-            Timer existingTimer,
-            String copiedText,
-            Icon copiedIcon,
-            String originalText,
-            Icon originalIcon,
-            int delayMs) {
+    public static Timer showCopyButtonFeedback(JButton button, Timer existingTimer, String copiedText, Icon copiedIcon,
+            String originalText, Icon originalIcon, int delayMs) {
         if (existingTimer != null && existingTimer.isRunning()) {
             existingTimer.stop();
         }
         button.setText(copiedText);
         button.setIcon(copiedIcon);
-        Timer timer =
-                new Timer(
-                        delayMs,
-                        e -> {
-                            button.setText(originalText);
-                            button.setIcon(originalIcon);
-                        });
+        Timer timer = new Timer(delayMs, e -> {
+            button.setText(originalText);
+            button.setIcon(originalIcon);
+        });
         timer.setRepeats(false);
         timer.start();
         return timer;
     }
 
-    public static javax.swing.border.Border createThemeMatteBorder(
-            int top, int left, int bottom, int right) {
-        return BorderFactory.createMatteBorder(
-                top, left, bottom, right, getUiColor(Color.GRAY, "Component.borderColor"));
+    public static javax.swing.border.Border createThemeMatteBorder(int top, int left, int bottom, int right) {
+        return BorderFactory.createMatteBorder(top, left, bottom, right,
+                getUiColor(Color.GRAY, "Component.borderColor"));
     }
 
     public static Color getUiColor(Color fallback, String... uiKeys) {
         if (uiKeys != null) {
             for (String key : uiKeys) {
                 Color color = UIManager.getColor(key);
-                if (color != null) return color;
+                if (color != null)
+                    return color;
             }
         }
         return fallback;
@@ -322,8 +295,7 @@ public final class SwingHtmlUtils {
     }
 
     public static Color getTintedBackground(Color tint, double tintRatio) {
-        return blendColor(
-                tint, getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background"), tintRatio);
+        return blendColor(tint, getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background"), tintRatio);
     }
 
     public static String toHex(Color color) {

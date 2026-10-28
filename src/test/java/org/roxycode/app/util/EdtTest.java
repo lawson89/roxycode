@@ -18,12 +18,11 @@ class EdtTest {
     @Test
     void testRunOnEdtExecutesImmediately() throws Exception {
         AtomicBoolean executedSynchronously = new AtomicBoolean(false);
-        SwingUtilities.invokeAndWait(
-                () -> {
-                    AtomicBoolean inner = new AtomicBoolean(false);
-                    Edt.run(() -> inner.set(true));
-                    executedSynchronously.set(inner.get());
-                });
+        SwingUtilities.invokeAndWait(() -> {
+            AtomicBoolean inner = new AtomicBoolean(false);
+            Edt.run(() -> inner.set(true));
+            executedSynchronously.set(inner.get());
+        });
         assertTrue(executedSynchronously.get(), "Edt.run should execute immediately when on EDT");
     }
 
@@ -33,11 +32,10 @@ class EdtTest {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicBoolean ranOnEdt = new AtomicBoolean(false);
 
-        Edt.run(
-                () -> {
-                    ranOnEdt.set(SwingUtilities.isEventDispatchThread());
-                    latch.countDown();
-                });
+        Edt.run(() -> {
+            ranOnEdt.set(SwingUtilities.isEventDispatchThread());
+            latch.countDown();
+        });
 
         assertTrue(latch.await(5, TimeUnit.SECONDS), "Action should be executed on EDT");
         assertTrue(ranOnEdt.get(), "Action must run on the Event Dispatch Thread");

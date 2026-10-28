@@ -41,19 +41,10 @@ public final class MainFrame extends JFrame {
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
 
-    public MainFrame(
-            SettingsService settingsService,
-            ProjectService projectService,
-            ChatMemory chatMemory,
-            HeaderPanel header,
-            StatusPanel statusBar,
-            QaWorkspacePanel qaWorkspacePanel,
-            TaskWorkspacePanel taskWorkspacePanel,
-            CodebaseCachePanel codebaseCachePanel,
-            JexlApiPanel jexlApiPanel,
-            SystemToolsPanel systemToolsPanel,
-            SettingsPanel settingsPanel,
-            BuildConfigPanel buildConfigPanel,
+    public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
+            HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
+            TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
+            SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
             ContextManagerPanel contextManagerPanel) {
         this.settingsService = settingsService;
         this.projectService = projectService;
@@ -64,34 +55,23 @@ public final class MainFrame extends JFrame {
 
         setupLaf();
         setupWindow();
-        initComponents(
-                statusBar,
-                codebaseCachePanel,
-                jexlApiPanel,
-                systemToolsPanel,
-                settingsPanel,
-                buildConfigPanel,
+        initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 contextManagerPanel);
     }
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        Edt.run(
-                () -> {
-                    updateTitle();
-                    if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {
-                        qaWorkspacePanel.getQaChatPanel().getController().resetForProjectChange();
-                    }
-                    if (taskWorkspacePanel != null
-                            && taskWorkspacePanel.getTaskChatPanel() != null) {
-                        taskWorkspacePanel
-                                .getTaskChatPanel()
-                                .getController()
-                                .resetForProjectChange();
-                    }
-                    chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
-                    chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
-                });
+        Edt.run(() -> {
+            updateTitle();
+            if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {
+                qaWorkspacePanel.getQaChatPanel().getController().resetForProjectChange();
+            }
+            if (taskWorkspacePanel != null && taskWorkspacePanel.getTaskChatPanel() != null) {
+                taskWorkspacePanel.getTaskChatPanel().getController().resetForProjectChange();
+            }
+            chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
+            chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
+        });
     }
 
     private void setupLaf() {
@@ -104,29 +84,25 @@ public final class MainFrame extends JFrame {
         setSize(1200, 900);
         setLocationRelativeTo(null);
 
-        addWindowListener(
-                new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowOpened(java.awt.event.WindowEvent e) {
-                        if (qaWorkspacePanel != null) qaWorkspacePanel.focusChatInput();
-                    }
-                });
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowOpened(java.awt.event.WindowEvent e) {
+                if (qaWorkspacePanel != null)
+                    qaWorkspacePanel.focusChatInput();
+            }
+        });
 
         try {
             java.net.URL iconUrl = getClass().getResource("/static/images/roxy.png");
-            if (iconUrl != null) setIconImage(new ImageIcon(iconUrl).getImage());
+            if (iconUrl != null)
+                setIconImage(new ImageIcon(iconUrl).getImage());
         } catch (Exception e) {
             log.trace("Failed to load icon: {}", e.getMessage());
         }
     }
 
-    private void initComponents(
-            StatusPanel statusBar,
-            CodebaseCachePanel codebaseCachePanel,
-            JexlApiPanel jexlApiPanel,
-            SystemToolsPanel systemToolsPanel,
-            SettingsPanel settingsPanel,
-            BuildConfigPanel buildConfigPanel,
+    private void initComponents(StatusPanel statusBar, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
+            SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
             ContextManagerPanel contextManagerPanel) {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
@@ -134,8 +110,7 @@ public final class MainFrame extends JFrame {
         qaWorkspacePanel.bindSidebar(sidebar);
         taskWorkspacePanel.bindSidebar(sidebar);
 
-        JPanel workspace =
-                new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
+        JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
 
         contentArea.add(qaWorkspacePanel, QA_VIEW);
         contentArea.add(taskWorkspacePanel, TASK_VIEW);

@@ -15,7 +15,8 @@ public class AppSettings {
     private int maxChatMemoryMessages = 50;
     private List<String> globalContextFolders = new ArrayList<>();
 
-    public AppSettings() {}
+    public AppSettings() {
+    }
 
     public String getTheme() {
         return theme;
@@ -70,9 +71,8 @@ public class AppSettings {
     }
 
     public void setGlobalContextFolders(List<String> globalContextFolders) {
-        this.globalContextFolders =
-                globalContextFolders == null
-                        ? new ArrayList<>()
-                        : new ArrayList<>(globalContextFolders);
+        this.globalContextFolders = globalContextFolders == null
+                ? new ArrayList<>()
+                : new ArrayList<>(globalContextFolders);
     }
 }

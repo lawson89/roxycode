@@ -3,28 +3,22 @@ package org.roxycode.app.model;
 import java.util.ArrayList;
 import java.util.List;
 
-public record ImplementationPlan(
-        String title,
-        String goal,
-        List<String> requirements,
-        List<TechStep> technicalSteps,
-        boolean userApproved,
-        String approvalTimestamp,
-        String approvedBy,
-        String completedBy,
-        String completedOn,
+public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
+        boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
         List<LogEntry> handoffLog) {
 
     public static final String NO_FILES_CHANGED = "No files changed";
     private static final String CODE_FENCE = String.valueOf((char) 96).repeat(3);
 
-    public record TechStep(String description, boolean completed) {}
+    public record TechStep(String description, boolean completed) {
+    }
 
     public record LogEntry(String timestamp, String user, String message) {
         private static final int TIMESTAMP_LENGTH = 19;
 
         public String formattedTimestamp() {
-            if (timestamp == null) return "";
+            if (timestamp == null)
+                return "";
             return timestamp.length() > TIMESTAMP_LENGTH
                     ? timestamp.substring(0, TIMESTAMP_LENGTH).replace('T', ' ')
                     : timestamp;
@@ -38,63 +32,26 @@ public record ImplementationPlan(
     }
 
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
-        return new ImplementationPlan(
-                title,
-                goal,
-                requirements,
-                newSteps,
-                userApproved,
-                approvalTimestamp,
-                approvedBy,
-                completedBy,
-                completedOn,
-                handoffLog);
+        return new ImplementationPlan(title, goal, requirements, newSteps, userApproved, approvalTimestamp, approvedBy,
+                completedBy, completedOn, handoffLog);
     }
 
     public ImplementationPlan withApproval(String user, String timestamp) {
-        return new ImplementationPlan(
-                title,
-                goal,
-                requirements,
-                technicalSteps,
-                true,
-                timestamp,
-                user,
-                completedBy,
-                completedOn,
-                handoffLog);
+        return new ImplementationPlan(title, goal, requirements, technicalSteps, true, timestamp, user, completedBy,
+                completedOn, handoffLog);
     }
 
     public ImplementationPlan withCompletion(String user, String timestamp) {
-        return new ImplementationPlan(
-                title,
-                goal,
-                requirements,
-                technicalSteps,
-                userApproved,
-                approvalTimestamp,
-                approvedBy,
-                user,
-                timestamp,
-                handoffLog);
+        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
+                approvedBy, user, timestamp, handoffLog);
     }
 
     public ImplementationPlan withHandoffLog(List<LogEntry> newLog) {
-        return new ImplementationPlan(
-                title,
-                goal,
-                requirements,
-                technicalSteps,
-                userApproved,
-                approvalTimestamp,
-                approvedBy,
-                completedBy,
-                completedOn,
-                newLog);
+        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
+                approvedBy, completedBy, completedOn, newLog);
     }
 
-    public ImplementationPlan withAddedHandoffLogEntry(
-            String timestamp, String user, String message) {
+    public ImplementationPlan withAddedHandoffLogEntry(String timestamp, String user, String message) {
         List<LogEntry> updatedLog = new ArrayList<>(handoffLog);
         updatedLog.add(new LogEntry(timestamp, user, message));
         return withHandoffLog(updatedLog);
@@ -113,28 +70,18 @@ public record ImplementationPlan(
     }
 
     public String toMarkdown(boolean includeHandoffLog) {
-        StringBuilder md =
-                new StringBuilder("# Implementation Plan: ")
-                        .append(title != null ? title : "")
-                        .append("\n\n**Goal:** ")
-                        .append(goal != null ? goal : "")
-                        .append("\n");
+        StringBuilder md = new StringBuilder("# Implementation Plan: ").append(title != null ? title : "")
+                .append("\n\n**Goal:** ").append(goal != null ? goal : "").append("\n");
 
         if (hasApprovals()) {
             md.append("\n## Approvals\n");
             if (hasMoveToCodeApproval()) {
-                md.append("- **Move to Code:** Approved by ")
-                        .append(isNonBlank(approvedBy) ? approvedBy : "User")
-                        .append(" on ")
-                        .append(isNonBlank(approvalTimestamp) ? approvalTimestamp : "N/A")
-                        .append("\n");
+                md.append("- **Move to Code:** Approved by ").append(isNonBlank(approvedBy) ? approvedBy : "User")
+                        .append(" on ").append(isNonBlank(approvalTimestamp) ? approvalTimestamp : "N/A").append("\n");
             }
             if (hasFinalAcceptance()) {
-                md.append("- **Final Acceptance:** Accepted by ")
-                        .append(isNonBlank(completedBy) ? completedBy : "User")
-                        .append(" on ")
-                        .append(isNonBlank(completedOn) ? completedOn : "N/A")
-                        .append("\n");
+                md.append("- **Final Acceptance:** Accepted by ").append(isNonBlank(completedBy) ? completedBy : "User")
+                        .append(" on ").append(isNonBlank(completedOn) ? completedOn : "N/A").append("\n");
             }
         }
 
@@ -147,23 +94,17 @@ public record ImplementationPlan(
         if (includeHandoffLog && !handoffLog.isEmpty()) {
             md.append("\n## Handoff Log\n| Timestamp | User | Message |\n| :--- | :--- | :--- |\n");
             for (LogEntry entry : handoffLog) {
-                md.append("| ")
-                        .append(escapeMarkdownTableCell(entry.formattedTimestamp()))
-                        .append(" | ")
-                        .append(escapeMarkdownTableCell(entry.user()))
-                        .append(" | ")
-                        .append(escapeMarkdownTableCell(entry.message()))
-                        .append(" |\n");
+                md.append("| ").append(escapeMarkdownTableCell(entry.formattedTimestamp())).append(" | ")
+                        .append(escapeMarkdownTableCell(entry.user())).append(" | ")
+                        .append(escapeMarkdownTableCell(entry.message())).append(" |\n");
             }
         }
         return md.toString();
     }
 
-    public String toArchivedMarkdown(
-            String id, String projectName, String projectPath, String changesText) {
+    public String toArchivedMarkdown(String id, String projectName, String projectPath, String changesText) {
         StringBuilder sb = new StringBuilder();
-        sb.append(
-                """
+        sb.append("""
                 ---
                 id: "%s"
                 project: "%s"
@@ -176,26 +117,17 @@ public record ImplementationPlan(
                 completedOn: "%s"
                 ---
 
-                """
-                        .formatted(
-                                escapeFrontmatterValue(id),
-                                escapeFrontmatterValue(projectName),
-                                escapeFrontmatterValue(projectPath),
-                                escapeFrontmatterValue(title),
-                                userApproved,
-                                escapeFrontmatterValue(approvedBy),
-                                escapeFrontmatterValue(approvalTimestamp),
-                                escapeFrontmatterValue(completedBy),
-                                escapeFrontmatterValue(completedOn)));
+                """.formatted(escapeFrontmatterValue(id), escapeFrontmatterValue(projectName),
+                escapeFrontmatterValue(projectPath), escapeFrontmatterValue(title), userApproved,
+                escapeFrontmatterValue(approvedBy), escapeFrontmatterValue(approvalTimestamp),
+                escapeFrontmatterValue(completedBy), escapeFrontmatterValue(completedOn)));
         sb.append(toMarkdown(true));
         appendChangesMarkdown(sb, changesText);
         return sb.toString();
     }
 
     public static String formatChangesText(String gitStatus) {
-        return (gitStatus == null || gitStatus.isBlank())
-                ? NO_FILES_CHANGED
-                : gitStatus.stripTrailing();
+        return (gitStatus == null || gitStatus.isBlank()) ? NO_FILES_CHANGED : gitStatus.stripTrailing();
     }
 
     public static void appendChangesMarkdown(StringBuilder sb, String gitStatus) {
@@ -204,12 +136,7 @@ public record ImplementationPlan(
         if (NO_FILES_CHANGED.equals(changes)) {
             sb.append(NO_FILES_CHANGED).append("\n");
         } else {
-            sb.append(CODE_FENCE)
-                    .append("text\n")
-                    .append(changes)
-                    .append("\n")
-                    .append(CODE_FENCE)
-                    .append("\n");
+            sb.append(CODE_FENCE).append("text\n").append(changes).append("\n").append(CODE_FENCE).append("\n");
         }
     }
 
@@ -217,10 +144,7 @@ public record ImplementationPlan(
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < technicalSteps.size(); i++) {
             TechStep step = technicalSteps.get(i);
-            sb.append(step.completed() ? "- [x] " : "- [ ] ")
-                    .append(i)
-                    .append(". ")
-                    .append(step.description())
+            sb.append(step.completed() ? "- [x] " : "- [ ] ").append(i).append(". ").append(step.description())
                     .append("\n");
         }
         return sb.toString();
@@ -231,18 +155,16 @@ public record ImplementationPlan(
     }
 
     public static String escapeFrontmatterValue(String value) {
-        if (value == null) return "";
-        return value.replace(String.valueOf('"'), String.valueOf((char) 92) + '"')
-                .replace("\r\n", " ")
-                .replace('\n', ' ')
-                .replace('\r', ' ');
+        if (value == null)
+            return "";
+        return value.replace(String.valueOf('"'), String.valueOf((char) 92) + '"').replace("\r\n", " ")
+                .replace('\n', ' ').replace('\r', ' ');
     }
 
     private static String escapeMarkdownTableCell(String value) {
-        if (value == null) return "";
-        return value.replace("|", String.valueOf((char) 92) + "|")
-                .replace("\r\n", " ")
-                .replace('\n', ' ')
-                .replace('\r', ' ');
+        if (value == null)
+            return "";
+        return value.replace("|", String.valueOf((char) 92) + "|").replace("\r\n", " ").replace('\n', ' ').replace('\r',
+                ' ');
     }
 }

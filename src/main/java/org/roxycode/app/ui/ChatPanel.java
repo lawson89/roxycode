@@ -49,8 +49,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
 
     static final String NEW_TOPIC_BUTTON_TEXT = "New Topic";
     static final String RESET_SESSION_BUTTON_TEXT = "Reset Session";
-    static final String NEW_TOPIC_TOOLTIP =
-            "Archive current conversation and start a new Q&A topic";
+    static final String NEW_TOPIC_TOOLTIP = "Archive current conversation and start a new Q&A topic";
     static final int THUMBNAIL_SIZE = 64;
 
     private final transient ChatModel model;
@@ -71,27 +70,12 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     private final transient FileMentionPopup fileMentionPopup;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
 
-    public ChatPanel(
-            AiService aiService,
-            PlanService planService,
-            ApplicationEventPublisher eventPublisher,
-            ChatMemory chatMemory,
-            String sessionPrefix,
-            WorkflowPhase lockedPhase,
-            boolean isTaskMode,
-            SettingsService settingsService,
-            Executor turnExecutor) {
+    public ChatPanel(AiService aiService, PlanService planService, ApplicationEventPublisher eventPublisher,
+            ChatMemory chatMemory, String sessionPrefix, WorkflowPhase lockedPhase, boolean isTaskMode,
+            SettingsService settingsService, Executor turnExecutor) {
         this.model = new ChatModel(sessionPrefix, lockedPhase, isTaskMode);
-        this.controller =
-                new ChatController(
-                        this.model,
-                        this,
-                        aiService,
-                        planService,
-                        eventPublisher,
-                        chatMemory,
-                        settingsService,
-                        turnExecutor);
+        this.controller = new ChatController(this.model, this, aiService, planService, eventPublisher, chatMemory,
+                settingsService, turnExecutor);
         attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         attachmentPanel.setOpaque(false);
         setLayout(new BorderLayout());
@@ -99,40 +83,22 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         outputArea = new MarkdownPane();
 
         inlineActionPanel = new JPanel(new MigLayout("insets 10 20 10 20, gap 15", "", "center"));
-        inlineActionPanel.putClientProperty(
-                FlatClientProperties.STYLE,
+        inlineActionPanel.putClientProperty(FlatClientProperties.STYLE,
                 "background: darken($TextPane.background, 3%); border: 1,0,0,0,$Component.borderColor");
         inlineActionPanel.setVisible(false);
 
-        Color accentColor =
-                SwingHtmlUtils.getUiColor(Color.GRAY, "Component.accentColor", "Label.foreground");
-        transitionLabel =
-                new JLabel(
-                        "Workflow Transition",
-                        FontIcon.of(Codicons.ROCKET, 16, accentColor),
-                        SwingConstants.LEFT);
+        Color accentColor = SwingHtmlUtils.getUiColor(Color.GRAY, "Component.accentColor", "Label.foreground");
+        transitionLabel = new JLabel("Workflow Transition", FontIcon.of(Codicons.ROCKET, 16, accentColor),
+                SwingConstants.LEFT);
         transitionLabel.setFont(transitionLabel.getFont().deriveFont(Font.BOLD));
-        transitionLabel.putClientProperty(
-                FlatClientProperties.STYLE, "foreground: $Component.accentColor");
+        transitionLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Component.accentColor");
 
-        approveButton =
-                createActionButton(
-                        "Approve",
-                        Codicons.CHECK,
-                        null,
-                        false,
-                        "background: $Actions.Green; foreground: #ffffff",
-                        e -> controller.approvePhase());
+        approveButton = createActionButton("Approve", Codicons.CHECK, null, false,
+                "background: $Actions.Green; foreground: #ffffff", e -> controller.approvePhase());
         approveButton.setEnabled(false);
 
-        rejectButton =
-                createActionButton(
-                        "Reject",
-                        Codicons.CLOSE,
-                        null,
-                        false,
-                        "background: $Actions.Red; foreground: #ffffff",
-                        e -> controller.rejectPhase());
+        rejectButton = createActionButton("Reject", Codicons.CLOSE, null, false,
+                "background: $Actions.Red; foreground: #ffffff", e -> controller.rejectPhase());
         rejectButton.setEnabled(false);
 
         inlineActionPanel.add(transitionLabel);
@@ -141,21 +107,18 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         inlineActionPanel.add(rejectButton);
 
         outputScrollPane = new JScrollPane(outputArea);
-        outputScrollPane.setHorizontalScrollBarPolicy(
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        outputScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         updateOutputScrollPaneBorder();
 
-        outputArea.addComponentListener(
-                new java.awt.event.ComponentAdapter() {
-                    @Override
-                    public void componentResized(java.awt.event.ComponentEvent e) {
-                        SwingUtilities.invokeLater(
-                                () -> {
-                                    JScrollBar vertical = outputScrollPane.getVerticalScrollBar();
-                                    vertical.setValue(vertical.getMaximum());
-                                });
-                    }
+        outputArea.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                SwingUtilities.invokeLater(() -> {
+                    JScrollBar vertical = outputScrollPane.getVerticalScrollBar();
+                    vertical.setValue(vertical.getMaximum());
                 });
+            }
+        });
 
         Component topComponent = outputScrollPane;
         if (isTaskMode) {
@@ -165,17 +128,14 @@ public class ChatPanel extends JPanel implements AutoCloseable {
             topComponent = taskOutputPanel;
         }
 
-        JPanel inputSection =
-                new JPanel(
-                        new MigLayout("fill, insets 6 10 10 10", "[grow, fill][]", "[grow, fill]"));
+        JPanel inputSection = new JPanel(new MigLayout("fill, insets 6 10 10 10", "[grow, fill][]", "[grow, fill]"));
         inputSection.setMinimumSize(new Dimension(0, 85));
 
         inputArea = new JTextArea(3, 0);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         inputArea.setMargin(new Insets(8, 10, 8, 10));
-        inputArea.putClientProperty(
-                FlatClientProperties.PLACEHOLDER_TEXT,
+        inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
                 "Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)");
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
         fileMentionPopup = new FileMentionPopup(inputArea, inputScrollPane);
@@ -185,50 +145,26 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         inputAreaContainer.add(attachmentPanel, BorderLayout.NORTH);
         inputAreaContainer.add(inputScrollPane, BorderLayout.CENTER);
 
-        sendButton =
-                createActionButton(
-                        "Send",
-                        Codicons.CHEVRON_RIGHT,
-                        new Insets(6, 14, 6, 14),
-                        false,
-                        "arc: 8; background: $Component.accentColor; foreground: $List.selectionForeground",
-                        this::sendMessage);
+        sendButton = createActionButton("Send", Codicons.CHEVRON_RIGHT, new Insets(6, 14, 6, 14), false,
+                "arc: 8; background: $Component.accentColor; foreground: $List.selectionForeground", this::sendMessage);
 
-        stopButton =
-                createActionButton(
-                        "Stop",
-                        Codicons.DEBUG_STOP,
-                        new Insets(6, 14, 6, 14),
-                        false,
-                        "arc: 8",
-                        e -> controller.stopTurn());
+        stopButton = createActionButton("Stop", Codicons.DEBUG_STOP, new Insets(6, 14, 6, 14), false, "arc: 8",
+                e -> controller.stopTurn());
         stopButton.setEnabled(false);
 
-        attachImageButton =
-                createActionButton(
-                        "Attach Image",
-                        Codicons.FILE_MEDIA,
-                        new Insets(4, 10, 4, 10),
-                        true,
-                        "arc: 8; foreground: $Label.disabledForeground",
-                        e -> chooseImageAttachment());
+        attachImageButton = createActionButton("Attach Image", Codicons.FILE_MEDIA, new Insets(4, 10, 4, 10), true,
+                "arc: 8; foreground: $Label.disabledForeground", e -> chooseImageAttachment());
         attachImageButton.setToolTipText("Attach Image");
 
-        resetSessionButton =
-                createActionButton(
-                        isTaskMode ? RESET_SESSION_BUTTON_TEXT : NEW_TOPIC_BUTTON_TEXT,
-                        isTaskMode ? Codicons.REFRESH : Codicons.COMMENT_DISCUSSION,
-                        new Insets(4, 10, 4, 10),
-                        true,
-                        "arc: 8; foreground: $Label.disabledForeground",
-                        e -> controller.resetSession());
+        resetSessionButton = createActionButton(isTaskMode ? RESET_SESSION_BUTTON_TEXT : NEW_TOPIC_BUTTON_TEXT,
+                isTaskMode ? Codicons.REFRESH : Codicons.COMMENT_DISCUSSION, new Insets(4, 10, 4, 10), true,
+                "arc: 8; foreground: $Label.disabledForeground", e -> controller.resetSession());
         if (!isTaskMode) {
             resetSessionButton.setToolTipText(NEW_TOPIC_TOOLTIP);
         }
 
         turnLabel = new JLabel();
-        turnLabel.putClientProperty(
-                FlatClientProperties.STYLE,
+        turnLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: $small.font; foreground: $Label.disabledForeground");
         updateTurnLabel();
 
@@ -243,8 +179,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         inputSection.add(inputAreaContainer, "grow");
         inputSection.add(buttonPanel, "aligny top");
 
-        JSplitPane splitPane =
-                new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
         splitPane.setResizeWeight(1.0);
         splitPane.setBorder(BorderFactory.createEmptyBorder());
         add(splitPane, BorderLayout.CENTER);
@@ -254,20 +189,14 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         setupKeyboardShortcuts();
     }
 
-    private static JButton createActionButton(
-            String text,
-            Codicons icon,
-            Insets margin,
-            boolean borderless,
-            String style,
-            ActionListener listener) {
+    private static JButton createActionButton(String text, Codicons icon, Insets margin, boolean borderless,
+            String style, ActionListener listener) {
         JButton btn = new JButton(text, FontIcon.of(icon, 16));
         if (margin != null) {
             btn.setMargin(margin);
         }
         if (borderless) {
-            btn.putClientProperty(
-                    FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+            btn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         }
         if (style != null) {
             btn.putClientProperty(FlatClientProperties.STYLE, style);
@@ -419,13 +348,11 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     boolean confirmResetSession() {
-        String message =
-                model.isTaskMode()
-                        ? "Reset session? This cancels active tasks and clears chat history."
-                        : "Start a new topic? The current conversation will be archived.";
+        String message = model.isTaskMode()
+                ? "Reset session? This cancels active tasks and clears chat history."
+                : "Start a new topic? The current conversation will be archived.";
         String title = model.isTaskMode() ? "Reset" : NEW_TOPIC_BUTTON_TEXT;
-        return JOptionPane.showConfirmDialog(this, message, title, JOptionPane.YES_NO_OPTION)
-                == JOptionPane.YES_OPTION;
+        return JOptionPane.showConfirmDialog(this, message, title, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
     }
 
     private void sendMessage(ActionEvent e) {
@@ -438,16 +365,9 @@ public class ChatPanel extends JPanel implements AutoCloseable {
 
     private void chooseImageAttachment() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setFileFilter(
-                new FileNameExtensionFilter(
-                        "Image Files (png, jpg, jpeg, gif, bmp)",
-                        "png",
-                        "jpg",
-                        "jpeg",
-                        "gif",
-                        "bmp"));
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION
-                && chooser.getSelectedFile() != null) {
+        chooser.setFileFilter(new FileNameExtensionFilter("Image Files (png, jpg, jpeg, gif, bmp)", "png", "jpg",
+                "jpeg", "gif", "bmp"));
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION && chooser.getSelectedFile() != null) {
             loadImageAttachmentAsync(chooser.getSelectedFile());
         }
     }
@@ -456,30 +376,26 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         if (file == null) {
             return CompletableFuture.completedFuture(null);
         }
-        return CompletableFuture.supplyAsync(
-                        () -> {
-                            try {
-                                return ImageIO.read(file);
-                            } catch (Exception ex) {
-                                log.error("Failed to load attached image", ex);
-                                return null;
-                            }
-                        })
-                .thenApply(
-                        img -> {
-                            if (img != null) {
-                                Edt.run(() -> addPendingImage(img));
-                            }
-                            return img;
-                        });
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return ImageIO.read(file);
+            } catch (Exception ex) {
+                log.error("Failed to load attached image", ex);
+                return null;
+            }
+        }).thenApply(img -> {
+            if (img != null) {
+                Edt.run(() -> addPendingImage(img));
+            }
+            return img;
+        });
     }
 
     static BufferedImage createThumbnail(BufferedImage source, int size) {
         BufferedImage thumb = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2 = thumb.createGraphics();
         try {
-            g2.setRenderingHint(
-                    RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
             g2.drawImage(source, 0, 0, size, size, null);
         } finally {
             g2.dispose();
@@ -491,25 +407,22 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         BufferedImage bimage = model.addPendingImage(img);
         JLabel thumbLabel = new JLabel(new ImageIcon(createThumbnail(bimage, THUMBNAIL_SIZE)));
         thumbLabel.setBorder(
-                BorderFactory.createLineBorder(
-                        SwingHtmlUtils.getUiColor(Color.GRAY, "Component.borderColor")));
+                BorderFactory.createLineBorder(SwingHtmlUtils.getUiColor(Color.GRAY, "Component.borderColor")));
 
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setOpaque(false);
         wrapper.add(thumbLabel, BorderLayout.CENTER);
 
         JButton removeBtn = new JButton(FontIcon.of(Codicons.CLOSE, 12));
-        removeBtn.putClientProperty(
-                FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         removeBtn.setMargin(new Insets(0, 0, 0, 0));
-        removeBtn.addActionListener(
-                ae -> {
-                    model.removePendingImage(bimage);
-                    attachmentPanel.remove(wrapper);
-                    attachmentPanel.setVisible(model.hasPendingImages());
-                    attachmentPanel.revalidate();
-                    attachmentPanel.repaint();
-                });
+        removeBtn.addActionListener(ae -> {
+            model.removePendingImage(bimage);
+            attachmentPanel.remove(wrapper);
+            attachmentPanel.setVisible(model.hasPendingImages());
+            attachmentPanel.revalidate();
+            attachmentPanel.repaint();
+        });
         wrapper.add(removeBtn, BorderLayout.NORTH);
 
         attachmentPanel.add(wrapper);
@@ -529,8 +442,7 @@ public class ChatPanel extends JPanel implements AutoCloseable {
             approveButton.setEnabled(enableDecision);
             rejectButton.setEnabled(enableDecision);
         }
-        SwingUtilities.invokeLater(
-                loading ? stopButton::requestFocusInWindow : inputArea::requestFocusInWindow);
+        SwingUtilities.invokeLater(loading ? stopButton::requestFocusInWindow : inputArea::requestFocusInWindow);
         sendButton.setText(loading ? "Sending..." : "Send");
         for (Consumer<Boolean> listener : loadingListeners) {
             listener.accept(loading);
@@ -598,35 +510,26 @@ public class ChatPanel extends JPanel implements AutoCloseable {
 
         InputMap inputMap = inputArea.getInputMap();
         ActionMap actionMap = inputArea.getActionMap();
-        int menuShortcutMask =
-                GraphicsEnvironment.isHeadless()
-                        ? java.awt.event.InputEvent.CTRL_DOWN_MASK
-                        : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        int menuShortcutMask = GraphicsEnvironment.isHeadless()
+                ? java.awt.event.InputEvent.CTRL_DOWN_MASK
+                : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_Z, menuShortcutMask), "Undo");
-        actionMap.put(
-                "Undo",
-                createAction(
-                        () -> {
-                            if (undoManager.canUndo()) {
-                                undoManager.undo();
-                            }
-                        }));
+        actionMap.put("Undo", createAction(() -> {
+            if (undoManager.canUndo()) {
+                undoManager.undo();
+            }
+        }));
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_Y, menuShortcutMask), "Redo");
         inputMap.put(
-                KeyStroke.getKeyStroke(
-                        KeyEvent.VK_Z,
-                        menuShortcutMask | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
+                KeyStroke.getKeyStroke(KeyEvent.VK_Z, menuShortcutMask | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
                 "Redo");
-        actionMap.put(
-                "Redo",
-                createAction(
-                        () -> {
-                            if (undoManager.canRedo()) {
-                                undoManager.redo();
-                            }
-                        }));
+        actionMap.put("Redo", createAction(() -> {
+            if (undoManager.canRedo()) {
+                undoManager.redo();
+            }
+        }));
     }
 
     private void setupKeyboardShortcuts() {
@@ -634,114 +537,69 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         ActionMap am = inputArea.getActionMap();
 
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "send-message");
-        am.put(
-                "send-message",
-                createAction(
-                        () -> {
-                            if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
-                                fileMentionPopup.acceptSelected();
-                                return;
-                            }
-                            sendMessage(null);
-                        }));
+        am.put("send-message", createAction(() -> {
+            if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                fileMentionPopup.acceptSelected();
+                return;
+            }
+            sendMessage(null);
+        }));
 
-        bindPopupKey(
-                im,
-                am,
-                KeyEvent.VK_TAB,
-                "autocomplete-or-tab",
-                fileMentionPopup::acceptSelected,
+        bindPopupKey(im, am, KeyEvent.VK_TAB, "autocomplete-or-tab", fileMentionPopup::acceptSelected,
                 () -> inputArea.insert(String.valueOf((char) 9), inputArea.getCaretPosition()));
-        bindPopupKey(
-                im,
-                am,
-                KeyEvent.VK_UP,
-                "autocomplete-or-up",
-                fileMentionPopup::selectPrevious,
-                null);
-        bindPopupKey(
-                im,
-                am,
-                KeyEvent.VK_DOWN,
-                "autocomplete-or-down",
-                fileMentionPopup::selectNext,
-                null);
-        bindPopupKey(
-                im,
-                am,
-                KeyEvent.VK_ESCAPE,
-                "dismiss-autocomplete",
-                fileMentionPopup::hidePopup,
-                null);
+        bindPopupKey(im, am, KeyEvent.VK_UP, "autocomplete-or-up", fileMentionPopup::selectPrevious, null);
+        bindPopupKey(im, am, KeyEvent.VK_DOWN, "autocomplete-or-down", fileMentionPopup::selectNext, null);
+        bindPopupKey(im, am, KeyEvent.VK_ESCAPE, "dismiss-autocomplete", fileMentionPopup::hidePopup, null);
 
-        im.put(
-                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK),
-                "insert-newline");
-        am.put(
-                "insert-newline",
-                createAction(
-                        () -> {
-                            if (fileMentionPopup != null) {
-                                fileMentionPopup.hidePopup();
-                            }
-                            inputArea.insert(
-                                    String.valueOf((char) 10), inputArea.getCaretPosition());
-                        }));
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "insert-newline");
+        am.put("insert-newline", createAction(() -> {
+            if (fileMentionPopup != null) {
+                fileMentionPopup.hidePopup();
+            }
+            inputArea.insert(String.valueOf((char) 10), inputArea.getCaretPosition());
+        }));
 
         Action defaultPaste = inputArea.getActionMap().get(DefaultEditorKit.pasteAction);
-        inputArea
-                .getActionMap()
-                .put(
-                        DefaultEditorKit.pasteAction,
-                        new AbstractAction() {
-                            private static final long serialVersionUID = 1L;
+        inputArea.getActionMap().put(DefaultEditorKit.pasteAction, new AbstractAction() {
+            private static final long serialVersionUID = 1L;
 
-                            @Override
-                            public void actionPerformed(ActionEvent e) {
-                                Clipboard clipboard =
-                                        Toolkit.getDefaultToolkit().getSystemClipboard();
-                                if (clipboard.isDataFlavorAvailable(DataFlavor.imageFlavor)) {
-                                    try {
-                                        addPendingImage(
-                                                (Image) clipboard.getData(DataFlavor.imageFlavor));
-                                    } catch (Exception ex) {
-                                        log.error("Failed to paste image", ex);
-                                    }
-                                } else {
-                                    defaultPaste.actionPerformed(e);
-                                }
-                            }
-                        });
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                if (clipboard.isDataFlavorAvailable(DataFlavor.imageFlavor)) {
+                    try {
+                        addPendingImage((Image) clipboard.getData(DataFlavor.imageFlavor));
+                    } catch (Exception ex) {
+                        log.error("Failed to paste image", ex);
+                    }
+                } else {
+                    defaultPaste.actionPerformed(e);
+                }
+            }
+        });
     }
 
-    private void bindPopupKey(
-            InputMap im,
-            ActionMap am,
-            int keyCode,
-            String actionName,
-            Runnable onPopupVisible,
+    private void bindPopupKey(InputMap im, ActionMap am, int keyCode, String actionName, Runnable onPopupVisible,
             Runnable fallbackWhenNoDefault) {
         KeyStroke keyStroke = KeyStroke.getKeyStroke(keyCode, 0);
         Object existingKey = im.get(keyStroke);
         Action defaultAction = existingKey != null ? am.get(existingKey) : null;
         im.put(keyStroke, actionName);
-        am.put(
-                actionName,
-                new AbstractAction() {
-                    private static final long serialVersionUID = 1L;
+        am.put(actionName, new AbstractAction() {
+            private static final long serialVersionUID = 1L;
 
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
-                            onPopupVisible.run();
-                            return;
-                        }
-                        if (defaultAction != null) {
-                            defaultAction.actionPerformed(e);
-                        } else if (fallbackWhenNoDefault != null) {
-                            fallbackWhenNoDefault.run();
-                        }
-                    }
-                });
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                    onPopupVisible.run();
+                    return;
+                }
+                if (defaultAction != null) {
+                    defaultAction.actionPerformed(e);
+                } else if (fallbackWhenNoDefault != null) {
+                    fallbackWhenNoDefault.run();
+                }
+            }
+        });
     }
 }

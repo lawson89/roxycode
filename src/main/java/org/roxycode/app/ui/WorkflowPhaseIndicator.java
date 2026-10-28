@@ -65,14 +65,12 @@ public final class WorkflowPhaseIndicator extends JPanel {
         setOpaque(active);
         if (active) {
             setBackground(accentColor);
-            putClientProperty(
-                    FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(accentColor));
+            putClientProperty(FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(accentColor));
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
             textLabel.setForeground(Color.WHITE);
         } else {
             putClientProperty(FlatClientProperties.STYLE, null);
-            textLabel.putClientProperty(
-                    FlatClientProperties.STYLE, completed ? "font: bold -1" : defaultFontStyle);
+            textLabel.putClientProperty(FlatClientProperties.STYLE, completed ? "font: bold -1" : defaultFontStyle);
             textLabel.setForeground(completed ? greenColor : disabledFg);
         }
     }
@@ -80,6 +78,7 @@ public final class WorkflowPhaseIndicator extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (textLabel != null) updateStyle();
+        if (textLabel != null)
+            updateStyle();
     }
 }

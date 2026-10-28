@@ -29,8 +29,7 @@ class ChatModelTest {
         assertTrue(taskModel.isTaskMode());
         assertEquals(WorkflowPhase.CODE, taskModel.resolveActivePhase(WorkflowPhase.CODE));
 
-        ChatModel qaModel =
-                new ChatModel(ChatModel.QA_SESSION_PREFIX, WorkflowPhase.EXPLORE, false);
+        ChatModel qaModel = new ChatModel(ChatModel.QA_SESSION_PREFIX, WorkflowPhase.EXPLORE, false);
         assertEquals(ChatModel.QA_CONVERSATION_ID, qaModel.getConversationId());
         assertEquals(WorkflowPhase.EXPLORE, qaModel.getLockedPhase());
         assertFalse(qaModel.isTaskMode());
@@ -62,9 +61,7 @@ class ChatModelTest {
     void testVolatileFieldsForCrossThreadVisibility() throws Exception {
         Field currentTurnField = ChatModel.class.getDeclaredField("currentTurn");
         Field loadingField = ChatModel.class.getDeclaredField("loading");
-        assertTrue(
-                Modifier.isVolatile(currentTurnField.getModifiers()),
-                "currentTurn must be volatile");
+        assertTrue(Modifier.isVolatile(currentTurnField.getModifiers()), "currentTurn must be volatile");
         assertTrue(Modifier.isVolatile(loadingField.getModifiers()), "loading must be volatile");
     }
 
@@ -79,20 +76,9 @@ class ChatModelTest {
         settings.setMaxAgentToolTurns(5);
         assertEquals("Turns: 2 / 5", taskModel.formatTurnStatus(settings, null));
 
-        ImplementationPlan plan =
-                new ImplementationPlan(
-                        "Plan",
-                        "Goal",
-                        List.of("Req"),
-                        List.of(
-                                new ImplementationPlan.TechStep("S1", true),
-                                new ImplementationPlan.TechStep("S2", false)),
-                        true,
-                        null,
-                        null,
-                        null,
-                        null,
-                        List.of());
+        ImplementationPlan plan = new ImplementationPlan("Plan", "Goal", List.of("Req"),
+                List.of(new ImplementationPlan.TechStep("S1", true), new ImplementationPlan.TechStep("S2", false)),
+                true, null, null, null, null, List.of());
         assertEquals("Turns: 2 / 5 | Plan: 1/2 steps", taskModel.formatTurnStatus(settings, plan));
 
         ChatModel qaModel = new ChatModel("qa", WorkflowPhase.EXPLORE, false);

@@ -35,12 +35,9 @@ public final class BuildConfigPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
     static final String RECHECK_DOCKER_TEXT = "Re-check Docker";
     static final String CHECKING_DOCKER_TEXT = "Checking...";
-    static final String DOCKER_MISSING_WARNING_TEXT =
-            "Docker was not detected in System Tools. Running builds in Testcontainers is unavailable — build and test commands will execute directly on your host machine and can potentially modify your system.";
-    static final String CONTAINER_ACTIVE_TEXT =
-            "Testcontainers Isolation Active — Builds run inside an isolated Docker container.";
-    static final String HOST_EXECUTION_ACTIVE_TEXT =
-            "Host Execution Active — Container isolation is available via Docker ([container] enabled = true). Builds currently run on your host machine.";
+    static final String DOCKER_MISSING_WARNING_TEXT = "Docker was not detected in System Tools. Running builds in Testcontainers is unavailable — build and test commands will execute directly on your host machine and can potentially modify your system.";
+    static final String CONTAINER_ACTIVE_TEXT = "Testcontainers Isolation Active — Builds run inside an isolated Docker container.";
+    static final String HOST_EXECUTION_ACTIVE_TEXT = "Host Execution Active — Container isolation is available via Docker ([container] enabled = true). Builds currently run on your host machine.";
 
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
@@ -57,15 +54,11 @@ public final class BuildConfigPanel extends JPanel {
 
     private boolean dockerAvailable = false;
     private boolean updatingTextProgrammatically = false;
-    private transient volatile CompletableFuture<String> loadConfigFuture =
-            CompletableFuture.completedFuture("");
-    private transient volatile CompletableFuture<Void> saveConfigFuture =
-            CompletableFuture.completedFuture(null);
+    private transient volatile CompletableFuture<String> loadConfigFuture = CompletableFuture.completedFuture("");
+    private transient volatile CompletableFuture<Void> saveConfigFuture = CompletableFuture.completedFuture(null);
     private transient Consumer<String> errorDialogPresenter;
 
-    public BuildConfigPanel(
-            GenericBuildToolService buildToolService,
-            SettingsService settingsService,
+    public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
             SystemToolService systemToolService) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
@@ -83,8 +76,7 @@ public final class BuildConfigPanel extends JPanel {
         bannerMessageLabel = new JLabel();
         containerToggleCheckBox = new JCheckBox("Run builds in Testcontainers (Docker)");
         containerToggleCheckBox.setOpaque(false);
-        containerToggleCheckBox.addActionListener(
-                e -> setContainerEnabledInToml(containerToggleCheckBox.isSelected()));
+        containerToggleCheckBox.addActionListener(e -> setContainerEnabledInToml(containerToggleCheckBox.isSelected()));
 
         recheckDockerButton = new JButton(RECHECK_DOCKER_TEXT);
         recheckDockerButton.addActionListener(e -> refreshDockerStatus());
@@ -111,8 +103,7 @@ public final class BuildConfigPanel extends JPanel {
         buttonPanel.add(saveButton);
 
         statusLabel = new JLabel("");
-        statusLabel.setForeground(
-                SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
+        statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
         buttonPanel.add(statusLabel);
         add(buttonPanel, "growx, gaptop 15");
 
@@ -126,20 +117,18 @@ public final class BuildConfigPanel extends JPanel {
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        Edt.run(
-                () -> {
-                    updateTextAreaTheme();
-                    updateBannerState();
-                });
+        Edt.run(() -> {
+            updateTextAreaTheme();
+            updateBannerState();
+        });
     }
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        Edt.run(
-                () -> {
-                    loadConfig();
-                    updateBannerState();
-                });
+        Edt.run(() -> {
+            loadConfig();
+            updateBannerState();
+        });
     }
 
     @EventListener
@@ -150,14 +139,12 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     private void loadInitialDockerStatus() {
-        CompletableFuture<Boolean> future =
-                systemToolService != null ? systemToolService.isDockerAvailable() : null;
+        CompletableFuture<Boolean> future = systemToolService != null ? systemToolService.isDockerAvailable() : null;
         if (future == null) {
             setDockerAvailable(false);
             return;
         }
-        future.thenAccept(
-                available -> Edt.run(() -> setDockerAvailable(Boolean.TRUE.equals(available))));
+        future.thenAccept(available -> Edt.run(() -> setDockerAvailable(Boolean.TRUE.equals(available))));
     }
 
     public CompletableFuture<Boolean> refreshDockerStatus() {
@@ -165,11 +152,10 @@ public final class BuildConfigPanel extends JPanel {
             setDockerAvailable(false);
             return CompletableFuture.completedFuture(false);
         }
-        Edt.run(
-                () -> {
-                    recheckDockerButton.setEnabled(false);
-                    recheckDockerButton.setText(CHECKING_DOCKER_TEXT);
-                });
+        Edt.run(() -> {
+            recheckDockerButton.setEnabled(false);
+            recheckDockerButton.setText(CHECKING_DOCKER_TEXT);
+        });
         CompletableFuture<Boolean> future = systemToolService.refreshDockerAvailable();
         if (future == null) {
             future = systemToolService.isDockerAvailable();
@@ -177,17 +163,13 @@ public final class BuildConfigPanel extends JPanel {
         if (future == null) {
             future = CompletableFuture.completedFuture(false);
         }
-        return future.whenComplete(
-                        (available, ex) ->
-                                Edt.run(
-                                        () -> {
-                                            if (ex == null) {
-                                                setDockerAvailable(Boolean.TRUE.equals(available));
-                                            }
-                                            recheckDockerButton.setText(RECHECK_DOCKER_TEXT);
-                                            recheckDockerButton.setEnabled(true);
-                                        }))
-                .thenApply(Boolean.TRUE::equals);
+        return future.whenComplete((available, ex) -> Edt.run(() -> {
+            if (ex == null) {
+                setDockerAvailable(Boolean.TRUE.equals(available));
+            }
+            recheckDockerButton.setText(RECHECK_DOCKER_TEXT);
+            recheckDockerButton.setEnabled(true);
+        })).thenApply(Boolean.TRUE::equals);
     }
 
     void setDockerAvailable(boolean available) {
@@ -212,45 +194,29 @@ public final class BuildConfigPanel extends JPanel {
             updateBannerState();
         }
         if (statusLabel != null) {
-            statusLabel.setForeground(
-                    SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
+            statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
         }
     }
 
     void updateBannerState() {
-        boolean containerEnabled =
-                BuildContainerService.isContainerEnabledInToml(
-                        textArea != null ? textArea.getText() : "");
+        boolean containerEnabled = BuildContainerService
+                .isContainerEnabledInToml(textArea != null ? textArea.getText() : "");
         containerToggleCheckBox.setSelected(containerEnabled);
         containerToggleCheckBox.setEnabled(dockerAvailable);
 
         if (!dockerAvailable) {
-            applyTintedBanner(
-                    Codicons.WARNING,
-                    SwingHtmlUtils.getUiColor(
-                            new Color(0xd9, 0x77, 0x06),
-                            "Component.warning.borderColor",
-                            "Actions.Yellow"),
-                    DOCKER_MISSING_WARNING_TEXT);
+            applyTintedBanner(Codicons.WARNING, SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06),
+                    "Component.warning.borderColor", "Actions.Yellow"), DOCKER_MISSING_WARNING_TEXT);
         } else if (containerEnabled) {
-            applyTintedBanner(
-                    Codicons.SHIELD,
-                    SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"),
+            applyTintedBanner(Codicons.SHIELD, SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"),
                     CONTAINER_ACTIVE_TEXT);
         } else {
             Color infoColor = SwingHtmlUtils.getAccentColor();
-            Color borderColor =
-                    SwingHtmlUtils.getUiColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
-            Color panelBg =
-                    SwingHtmlUtils.getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background");
+            Color borderColor = SwingHtmlUtils.getUiColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
+            Color panelBg = SwingHtmlUtils.getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background");
             applyBannerStyle(
-                    Codicons.INFO,
-                    infoColor,
-                    "arc: 12; border: 1,1,1,1,"
-                            + SwingHtmlUtils.toHex(borderColor)
-                            + ",1,12; background: darken("
-                            + SwingHtmlUtils.toHex(panelBg)
-                            + ", 3%)",
+                    Codicons.INFO, infoColor, "arc: 12; border: 1,1,1,1," + SwingHtmlUtils.toHex(borderColor)
+                            + ",1,12; background: darken(" + SwingHtmlUtils.toHex(panelBg) + ", 3%)",
                     HOST_EXECUTION_ACTIVE_TEXT);
         }
         bannerPanel.revalidate();
@@ -260,11 +226,7 @@ public final class BuildConfigPanel extends JPanel {
     private void applyTintedBanner(Codicons icon, Color color, String message) {
         String hex = SwingHtmlUtils.toHex(color);
         String bgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(color, 0.15));
-        applyBannerStyle(
-                icon,
-                color,
-                "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: " + bgHex,
-                message);
+        applyBannerStyle(icon, color, "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: " + bgHex, message);
     }
 
     private void applyBannerStyle(Codicons icon, Color iconColor, String style, String message) {
@@ -295,33 +257,28 @@ public final class BuildConfigPanel extends JPanel {
         if (buildToolService == null) {
             return CompletableFuture.completedFuture("");
         }
-        CompletableFuture<String> completed =
-                CompletableFuture.supplyAsync(
-                                () -> {
-                                    try {
-                                        String content = buildToolService.getConfigContent();
-                                        return content != null ? content : "";
-                                    } catch (IOException e) {
-                                        log.error("Failed to load build config", e);
-                                        return "# Error loading config: " + e.getMessage();
-                                    }
-                                })
-                        .whenComplete(
-                                (content, ex) -> {
-                                    if (ex == null) {
-                                        Edt.run(
-                                                () -> {
-                                                    updatingTextProgrammatically = true;
-                                                    try {
-                                                        textArea.setText(content);
-                                                        textArea.setCaretPosition(0);
-                                                    } finally {
-                                                        updatingTextProgrammatically = false;
-                                                    }
-                                                    updateBannerState();
-                                                });
-                                    }
-                                });
+        CompletableFuture<String> completed = CompletableFuture.supplyAsync(() -> {
+            try {
+                String content = buildToolService.getConfigContent();
+                return content != null ? content : "";
+            } catch (IOException e) {
+                log.error("Failed to load build config", e);
+                return "# Error loading config: " + e.getMessage();
+            }
+        }).whenComplete((content, ex) -> {
+            if (ex == null) {
+                Edt.run(() -> {
+                    updatingTextProgrammatically = true;
+                    try {
+                        textArea.setText(content);
+                        textArea.setCaretPosition(0);
+                    } finally {
+                        updatingTextProgrammatically = false;
+                    }
+                    updateBannerState();
+                });
+            }
+        });
         this.loadConfigFuture = completed;
         return completed;
     }
@@ -332,34 +289,24 @@ public final class BuildConfigPanel extends JPanel {
         }
         String contentToSave = textArea.getText();
         Edt.run(() -> saveButton.setEnabled(false));
-        CompletableFuture<Void> future =
-                CompletableFuture.runAsync(
-                                () -> {
-                                    try {
-                                        buildToolService.saveConfigContent(contentToSave);
-                                    } catch (IOException e) {
-                                        throw new UncheckedIOException(e);
-                                    }
-                                })
-                        .whenComplete(
-                                (unused, ex) ->
-                                        Edt.run(
-                                                () -> {
-                                                    saveButton.setEnabled(true);
-                                                    if (ex == null) {
-                                                        updateBannerState();
-                                                        statusLabel.setText(
-                                                                "Configuration saved successfully!");
-                                                        statusTimer.restart();
-                                                    } else {
-                                                        Throwable cause =
-                                                                ExceptionUtils.getRootCause(ex);
-                                                        log.error(
-                                                                "Failed to save build config: {}",
-                                                                cause.getMessage());
-                                                        showSaveErrorDialog(cause.getMessage());
-                                                    }
-                                                }));
+        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+            try {
+                buildToolService.saveConfigContent(contentToSave);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }).whenComplete((unused, ex) -> Edt.run(() -> {
+            saveButton.setEnabled(true);
+            if (ex == null) {
+                updateBannerState();
+                statusLabel.setText("Configuration saved successfully!");
+                statusTimer.restart();
+            } else {
+                Throwable cause = ExceptionUtils.getRootCause(ex);
+                log.error("Failed to save build config: {}", cause.getMessage());
+                showSaveErrorDialog(cause.getMessage());
+            }
+        }));
         this.saveConfigFuture = future;
         return future;
     }

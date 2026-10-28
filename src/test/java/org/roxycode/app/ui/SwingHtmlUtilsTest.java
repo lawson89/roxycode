@@ -20,8 +20,7 @@ class SwingHtmlUtilsTest {
     void testEscapeHtml() {
         assertEquals("", SwingHtmlUtils.escapeHtml(null));
         assertEquals("", SwingHtmlUtils.escapeHtml(""));
-        assertEquals(
-                "&lt;div&gt;&quot;Hello &amp; World'&quot;&lt;/div&gt;",
+        assertEquals("&lt;div&gt;&quot;Hello &amp; World'&quot;&lt;/div&gt;",
                 SwingHtmlUtils.escapeHtml("<div>" + '"' + "Hello & World'" + '"' + "</div>"));
     }
 
@@ -30,34 +29,20 @@ class SwingHtmlUtilsTest {
         assertEquals("", SwingHtmlUtils.renderMarkdownToHtml(null));
         assertEquals("", SwingHtmlUtils.renderMarkdownToHtml(""));
 
-        String html =
-                SwingHtmlUtils.renderMarkdownToHtml(
-                        "# Heading\n\n| Name | Value |\n| :--- | ---: |\n| Key | 42 |\n\n~~~java\npublic class Demo {}\n~~~\n");
-        assertContainsAll(
-                html,
-                "<h1>Heading</h1>",
-                "md-table",
-                "cellpadding",
-                "md-th",
-                "md-td",
+        String html = SwingHtmlUtils.renderMarkdownToHtml(
+                "# Heading\n\n| Name | Value |\n| :--- | ---: |\n| Key | 42 |\n\n~~~java\npublic class Demo {}\n~~~\n");
+        assertContainsAll(html, "<h1>Heading</h1>", "md-table", "cellpadding", "md-th", "md-td",
                 "<span class='tk-rw'>public</span>");
     }
 
     @Test
     void testStyleMarkdownTablesViaFlexmarkAttributeProviderDoesNotMutateCodeOrInlineHtml() {
-        String rendered =
-                SwingHtmlUtils.renderMarkdownToHtml(
-                        "| Col A | Col B |\n| :--- | ---: |\n| Val 1 | Val 2 |\n\n"
-                                + "<table><tr><td>Inline raw HTML table</td></tr></table>\n\n"
-                                + "~~~html\n<table>\n  <tr><th>Header</th><td>Cell</td></tr>\n</table>\n~~~\n");
-        assertContainsAll(
-                rendered,
-                "md-table",
-                "md-th",
-                "md-td",
-                "right",
-                "<table><tr><td>Inline raw HTML table</td></tr></table>",
-                "&lt;table&gt;");
+        String rendered = SwingHtmlUtils
+                .renderMarkdownToHtml("| Col A | Col B |\n| :--- | ---: |\n| Val 1 | Val 2 |\n\n"
+                        + "<table><tr><td>Inline raw HTML table</td></tr></table>\n\n"
+                        + "~~~html\n<table>\n  <tr><th>Header</th><td>Cell</td></tr>\n</table>\n~~~\n");
+        assertContainsAll(rendered, "md-table", "md-th", "md-td", "right",
+                "<table><tr><td>Inline raw HTML table</td></tr></table>", "&lt;table&gt;");
     }
 
     @Test
@@ -78,16 +63,10 @@ class SwingHtmlUtilsTest {
         pane.setContentType("text/html");
         SwingHtmlUtils.applyTheme(pane, 10);
 
-        String longCodeLine =
-                "public static void veryLongMethodNameWithManyParameters(String paramOne, String paramTwo, String paramThree) {}";
-        String longInlineToken =
-                "https://example.com/very/long/path/that/has/no/spaces/and/should/allow/horizontal/wrapping/in/view";
-        pane.setText(
-                "<html><body><div>"
-                        + longInlineToken
-                        + "<br>SecondLine</div><pre>"
-                        + longCodeLine
-                        + "</pre></body></html>");
+        String longCodeLine = "public static void veryLongMethodNameWithManyParameters(String paramOne, String paramTwo, String paramThree) {}";
+        String longInlineToken = "https://example.com/very/long/path/that/has/no/spaces/and/should/allow/horizontal/wrapping/in/view";
+        pane.setText("<html><body><div>" + longInlineToken + "<br>SecondLine</div><pre>" + longCodeLine
+                + "</pre></body></html>");
 
         ViewFactory factory = ((HTMLEditorKit) pane.getEditorKit()).getViewFactory();
         HTMLDocument doc = (HTMLDocument) pane.getDocument();
@@ -102,8 +81,7 @@ class SwingHtmlUtilsTest {
         if ("br".equalsIgnoreCase(elem.getName())) {
             foundBr = true;
             assertEquals(View.ForcedBreakWeight, view.getBreakWeight(View.X_AXIS, 0f, 100f));
-        } else if (view instanceof InlineView
-                || view instanceof ParagraphView
+        } else if (view instanceof InlineView || view instanceof ParagraphView
                 || (view instanceof BlockView && !"body".equalsIgnoreCase(elem.getName()))) {
             assertEquals(0f, view.getMinimumSpan(View.X_AXIS));
             if ("p-implied".equalsIgnoreCase(elem.getName())) {
@@ -142,22 +120,16 @@ class SwingHtmlUtilsTest {
         apiPanel.getCopyButton().doClick();
         assertEquals(JexlApiPanel.COPIED_BUTTON_TEXT, apiPanel.getCopyButton().getText());
         assertEquals(registry.getDocumentation(null), apiPanel.getLastCopiedDocumentation());
-        assertEquals(
-                0,
-                apiPanel.getTextPane().getSelectionEnd()
-                        - apiPanel.getTextPane().getSelectionStart());
+        assertEquals(0, apiPanel.getTextPane().getSelectionEnd() - apiPanel.getTextPane().getSelectionStart());
 
         JButton btn = new JButton("Original");
-        Timer firstTimer =
-                SwingHtmlUtils.showCopyButtonFeedback(
-                        btn, null, "Copied!", null, "Original", null, 5000);
+        Timer firstTimer = SwingHtmlUtils.showCopyButtonFeedback(btn, null, "Copied!", null, "Original", null, 5000);
         assertEquals("Copied!", btn.getText());
         assertTrue(firstTimer.isRunning());
         assertFalse(firstTimer.isRepeats());
 
-        Timer secondTimer =
-                SwingHtmlUtils.showCopyButtonFeedback(
-                        btn, firstTimer, "Copied Again!", null, "Original", null, 5000);
+        Timer secondTimer = SwingHtmlUtils.showCopyButtonFeedback(btn, firstTimer, "Copied Again!", null, "Original",
+                null, 5000);
         assertFalse(firstTimer.isRunning());
         assertTrue(secondTimer.isRunning());
         assertEquals("Copied Again!", btn.getText());

@@ -57,31 +57,23 @@ public final class FileMentionPopup {
     static final int TIER_NO_MATCH = 0;
     private static final char MENTION_TRIGGER_CHAR = '@';
 
-    private static final Set<String> CODE_EXTENSIONS =
-            Set.of(
-                    "java,kt,kts,groovy,scala,py,js,ts,tsx,jsx,c,cpp,h,hpp,rs,go,rb,php,cs,swift,sql,sh,bash,zsh,xml,json,yaml,yml,toml,properties,html,css,scss,md"
-                            .split(","));
+    private static final Set<String> CODE_EXTENSIONS = Set.of(
+            "java,kt,kts,groovy,scala,py,js,ts,tsx,jsx,c,cpp,h,hpp,rs,go,rb,php,cs,swift,sql,sh,bash,zsh,xml,json,yaml,yml,toml,properties,html,css,scss,md"
+                    .split(","));
 
-    private static final Comparator<FileCandidate> PATH_TIE_BREAKER =
-            Comparator.comparingInt((FileCandidate c) -> c.relativePath().length())
-                    .thenComparing(FileCandidate::pathLower)
-                    .thenComparing(FileCandidate::relativePath);
+    private static final Comparator<FileCandidate> PATH_TIE_BREAKER = Comparator
+            .comparingInt((FileCandidate c) -> c.relativePath().length()).thenComparing(FileCandidate::pathLower)
+            .thenComparing(FileCandidate::relativePath);
 
-    private static final Comparator<FileCandidate> DEFAULT_CANDIDATE_COMPARATOR =
-            Comparator.comparing(FileCandidate::fileNameLower)
-                    .thenComparingInt(c -> c.fileName().length())
-                    .thenComparing(PATH_TIE_BREAKER);
+    private static final Comparator<FileCandidate> DEFAULT_CANDIDATE_COMPARATOR = Comparator
+            .comparing(FileCandidate::fileNameLower).thenComparingInt(c -> c.fileName().length())
+            .thenComparing(PATH_TIE_BREAKER);
 
-    private static final Comparator<FileCandidate> TIER_TIE_BREAKER =
-            Comparator.comparingInt((FileCandidate c) -> c.fileName().length())
-                    .thenComparing(FileCandidate::fileNameLower)
-                    .thenComparing(PATH_TIE_BREAKER);
+    private static final Comparator<FileCandidate> TIER_TIE_BREAKER = Comparator
+            .comparingInt((FileCandidate c) -> c.fileName().length()).thenComparing(FileCandidate::fileNameLower)
+            .thenComparing(PATH_TIE_BREAKER);
 
-    public record FileCandidate(
-            String relativePath,
-            String fileName,
-            String parentDir,
-            String fileNameLower,
+    public record FileCandidate(String relativePath, String fileName, String parentDir, String fileNameLower,
             String pathLower) {
 
         public static FileCandidate fromPath(String rawPath) {
@@ -98,18 +90,16 @@ public final class FileMentionPopup {
             int lastSlash = normalized.lastIndexOf('/');
             String fileName = lastSlash >= 0 ? normalized.substring(lastSlash + 1) : normalized;
             String parentDir = lastSlash > 0 ? normalized.substring(0, lastSlash) : "";
-            return new FileCandidate(
-                    normalized,
-                    fileName,
-                    parentDir,
-                    fileName.toLowerCase(Locale.ROOT),
+            return new FileCandidate(normalized, fileName, parentDir, fileName.toLowerCase(Locale.ROOT),
                     normalized.toLowerCase(Locale.ROOT));
         }
     }
 
-    public record MentionToken(int startOffset, int endOffset, String query) {}
+    public record MentionToken(int startOffset, int endOffset, String query) {
+    }
 
-    private record ScoredCandidate(FileCandidate candidate, int tier) {}
+    private record ScoredCandidate(FileCandidate candidate, int tier) {
+    }
 
     private final JTextArea inputArea;
     private final JScrollPane inputScrollPane;
@@ -138,23 +128,21 @@ public final class FileMentionPopup {
         this.candidateList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         this.candidateList.setFocusable(false);
         this.candidateList.setCellRenderer(new FileCandidateCellRenderer());
-        this.candidateList.addMouseListener(
-                new MouseAdapter() {
-                    @Override
-                    public void mouseClicked(MouseEvent e) {
-                        if (SwingUtilities.isLeftMouseButton(e)) {
-                            int idx = candidateList.locationToIndex(e.getPoint());
-                            if (idx >= 0 && idx < listModel.size()) {
-                                candidateList.setSelectedIndex(idx);
-                                acceptSelected();
-                            }
-                        }
+        this.candidateList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    int idx = candidateList.locationToIndex(e.getPoint());
+                    if (idx >= 0 && idx < listModel.size()) {
+                        candidateList.setSelectedIndex(idx);
+                        acceptSelected();
                     }
-                });
+                }
+            }
+        });
 
         this.popupScrollPane = new JScrollPane(candidateList);
-        this.popupScrollPane.setHorizontalScrollBarPolicy(
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        this.popupScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         this.popupScrollPane.setBorder(BorderFactory.createEmptyBorder());
         this.popupScrollPane.setFocusable(false);
 
@@ -169,13 +157,12 @@ public final class FileMentionPopup {
     private void installInputListeners() {
         SwingHtmlUtils.addChangeListener(inputArea, this::onInputChanged);
         inputArea.addCaretListener(e -> onInputChanged());
-        inputArea.addFocusListener(
-                new FocusAdapter() {
-                    @Override
-                    public void focusLost(FocusEvent e) {
-                        hidePopup();
-                    }
-                });
+        inputArea.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusLost(FocusEvent e) {
+                hidePopup();
+            }
+        });
     }
 
     private void onInputChanged() {
@@ -225,15 +212,11 @@ public final class FileMentionPopup {
             return List.of();
         }
 
-        Comparator<FileCandidate> tieBreaker =
-                Comparator.comparingInt((FileCandidate c) -> c.fileName().length())
-                        .thenComparingInt(c -> c.relativePath().length())
-                        .thenComparing(FileCandidate::fileNameLower)
-                        .thenComparing(FileCandidate::pathLower)
-                        .thenComparing(FileCandidate::relativePath);
+        Comparator<FileCandidate> tieBreaker = Comparator.comparingInt((FileCandidate c) -> c.fileName().length())
+                .thenComparingInt(c -> c.relativePath().length()).thenComparing(FileCandidate::fileNameLower)
+                .thenComparing(FileCandidate::pathLower).thenComparing(FileCandidate::relativePath);
         scored.sort(
-                Comparator.comparingInt(ScoredCandidate::tier)
-                        .thenComparing(ScoredCandidate::candidate, tieBreaker));
+                Comparator.comparingInt(ScoredCandidate::tier).thenComparing(ScoredCandidate::candidate, tieBreaker));
 
         return scored.stream().limit(MAX_RESULTS).map(ScoredCandidate::candidate).toList();
     }
@@ -252,15 +235,13 @@ public final class FileMentionPopup {
         return candidate.pathLower().contains(queryLower) ? TIER_PATH_SUBSTRING : TIER_NO_MATCH;
     }
 
-    static boolean matchesCamelCaseOrWordBoundary(
-            String fileName, String fileNameLower, String queryLower) {
+    static boolean matchesCamelCaseOrWordBoundary(String fileName, String fileNameLower, String queryLower) {
         if (queryLower.isEmpty() || fileName.isEmpty()) {
             return false;
         }
         char firstQ = queryLower.charAt(0);
         for (int i = 0; i < fileName.length(); i++) {
-            if (isWordBoundary(fileName, i)
-                    && fileNameLower.charAt(i) == firstQ
+            if (isWordBoundary(fileName, i) && fileNameLower.charAt(i) == firstQ
                     && matchBoundarySubsequence(fileName, fileNameLower, i, queryLower, 0)) {
                 return true;
             }
@@ -268,24 +249,20 @@ public final class FileMentionPopup {
         return false;
     }
 
-    private static boolean matchBoundarySubsequence(
-            String fileName, String fileNameLower, int fIdx, String queryLower, int qIdx) {
+    private static boolean matchBoundarySubsequence(String fileName, String fileNameLower, int fIdx, String queryLower,
+            int qIdx) {
         if (qIdx + 1 == queryLower.length()) {
             return true;
         }
         char nextQ = queryLower.charAt(qIdx + 1);
         int fLen = fileName.length();
-        if (fIdx + 1 < fLen
-                && fileNameLower.charAt(fIdx + 1) == nextQ
-                && matchBoundarySubsequence(
-                        fileName, fileNameLower, fIdx + 1, queryLower, qIdx + 1)) {
+        if (fIdx + 1 < fLen && fileNameLower.charAt(fIdx + 1) == nextQ
+                && matchBoundarySubsequence(fileName, fileNameLower, fIdx + 1, queryLower, qIdx + 1)) {
             return true;
         }
         for (int nextB = fIdx + 1; nextB < fLen; nextB++) {
-            if (isWordBoundary(fileName, nextB)
-                    && fileNameLower.charAt(nextB) == nextQ
-                    && matchBoundarySubsequence(
-                            fileName, fileNameLower, nextB, queryLower, qIdx + 1)) {
+            if (isWordBoundary(fileName, nextB) && fileNameLower.charAt(nextB) == nextQ
+                    && matchBoundarySubsequence(fileName, fileNameLower, nextB, queryLower, qIdx + 1)) {
                 return true;
             }
         }
@@ -304,10 +281,8 @@ public final class FileMentionPopup {
         if (!Character.isLetterOrDigit(prev) && Character.isLetterOrDigit(curr)) {
             return true;
         }
-        return Character.isUpperCase(curr)
-                && (!Character.isUpperCase(prev)
-                        || (index + 1 < fileName.length()
-                                && Character.isLowerCase(fileName.charAt(index + 1))));
+        return Character.isUpperCase(curr) && (!Character.isUpperCase(prev)
+                || (index + 1 < fileName.length() && Character.isLowerCase(fileName.charAt(index + 1))));
     }
 
     public void setGrepService(GrepService grepService) {
@@ -325,8 +300,7 @@ public final class FileMentionPopup {
     }
 
     void setBackgroundExecutor(Executor backgroundExecutor) {
-        this.backgroundExecutor =
-                backgroundExecutor != null ? backgroundExecutor : ForkJoinPool.commonPool();
+        this.backgroundExecutor = backgroundExecutor != null ? backgroundExecutor : ForkJoinPool.commonPool();
     }
 
     public void invalidateCache() {
@@ -348,38 +322,28 @@ public final class FileMentionPopup {
             return existing;
         }
 
-        CompletableFuture<List<FileCandidate>> future =
-                CompletableFuture.supplyAsync(
-                                () -> {
-                                    List<String> rawFiles = service.listFiles();
-                                    if (rawFiles == null || rawFiles.isEmpty()) {
-                                        return List.<FileCandidate>of();
-                                    }
-                                    return rawFiles.stream()
-                                            .filter(r -> r != null && !r.isBlank())
-                                            .map(FileCandidate::fromPath)
-                                            .sorted(DEFAULT_CANDIDATE_COMPARATOR)
-                                            .toList();
-                                },
-                                backgroundExecutor)
-                        .exceptionally(
-                                ex -> {
-                                    log.debug("Failed to refresh file mention index", ex);
-                                    return cachedCandidates;
-                                });
+        CompletableFuture<List<FileCandidate>> future = CompletableFuture.supplyAsync(() -> {
+            List<String> rawFiles = service.listFiles();
+            if (rawFiles == null || rawFiles.isEmpty()) {
+                return List.<FileCandidate>of();
+            }
+            return rawFiles.stream().filter(r -> r != null && !r.isBlank()).map(FileCandidate::fromPath)
+                    .sorted(DEFAULT_CANDIDATE_COMPARATOR).toList();
+        }, backgroundExecutor).exceptionally(ex -> {
+            log.debug("Failed to refresh file mention index", ex);
+            return cachedCandidates;
+        });
 
         this.inFlightRefresh = future;
-        future.thenAccept(
-                candidates -> {
-                    this.cachedCandidates = candidates;
-                    this.lastCacheRefreshTimeMs = System.currentTimeMillis();
-                    Edt.run(
-                            () -> {
-                                if (activeToken != null) {
-                                    evaluateCurrentInput();
-                                }
-                            });
-                });
+        future.thenAccept(candidates -> {
+            this.cachedCandidates = candidates;
+            this.lastCacheRefreshTimeMs = System.currentTimeMillis();
+            Edt.run(() -> {
+                if (activeToken != null) {
+                    evaluateCurrentInput();
+                }
+            });
+        });
         return future;
     }
 
@@ -395,8 +359,7 @@ public final class FileMentionPopup {
         }
         this.activeToken = token;
 
-        if (cachedCandidates.isEmpty()
-                || System.currentTimeMillis() - lastCacheRefreshTimeMs > STALE_CACHE_TTL_MS) {
+        if (cachedCandidates.isEmpty() || System.currentTimeMillis() - lastCacheRefreshTimeMs > STALE_CACHE_TTL_MS) {
             refreshIndexAsync(false);
         }
 
@@ -414,8 +377,7 @@ public final class FileMentionPopup {
         for (int i = 0; i < matches.size(); i++) {
             FileCandidate c = matches.get(i);
             listModel.addElement(c);
-            if (previousSelection != null
-                    && previousSelection.relativePath().equals(c.relativePath())) {
+            if (previousSelection != null && previousSelection.relativePath().equals(c.relativePath())) {
                 selectedIndex = i;
             }
         }
@@ -424,12 +386,11 @@ public final class FileMentionPopup {
         popupActive = true;
 
         updatePopupPosition(token.startOffset());
-        SwingUtilities.invokeLater(
-                () -> {
-                    if (popupActive && activeToken != null) {
-                        updatePopupPosition(activeToken.startOffset());
-                    }
-                });
+        SwingUtilities.invokeLater(() -> {
+            if (popupActive && activeToken != null) {
+                updatePopupPosition(activeToken.startOffset());
+            }
+        });
     }
 
     void updatePopupPosition(int atTokenStartOffset) {
@@ -448,8 +409,7 @@ public final class FileMentionPopup {
         popupMenu.pack();
 
         Dimension popupSize = popupMenu.getPreferredSize();
-        Point location =
-                computePopupLocation(atTokenStartOffset, popupSize.width, popupSize.height);
+        Point location = computePopupLocation(atTokenStartOffset, popupSize.width, popupSize.height);
         this.lastPopupLocation = location;
 
         if (inputArea.isShowing()) {
@@ -467,9 +427,7 @@ public final class FileMentionPopup {
         if (inputArea.getWidth() > 0) {
             return inputArea.getWidth();
         }
-        return (inputScrollPane != null && inputScrollPane.getWidth() > 0)
-                ? inputScrollPane.getWidth()
-                : 0;
+        return (inputScrollPane != null && inputScrollPane.getWidth() > 0) ? inputScrollPane.getWidth() : 0;
     }
 
     Point computePopupLocation(int atTokenStartOffset, int popupWidth, int popupHeight) {
@@ -478,10 +436,7 @@ public final class FileMentionPopup {
             int docLen = inputArea.getDocument().getLength();
             if (atTokenStartOffset >= 0 && atTokenStartOffset <= docLen) {
                 Rectangle2D rect = inputArea.modelToView2D(atTokenStartOffset);
-                if (rect != null
-                        && (rect.getWidth() > 0
-                                || rect.getHeight() > 0
-                                || inputArea.getWidth() > 0)) {
+                if (rect != null && (rect.getWidth() > 0 || rect.getHeight() > 0 || inputArea.getWidth() > 0)) {
                     int x = (int) Math.round(rect.getX());
                     int y = (int) Math.round(rect.getY()) - popupHeight - POPUP_VERTICAL_GAP;
                     Rectangle visibleRect = inputArea.getVisibleRect();
@@ -596,15 +551,11 @@ public final class FileMentionPopup {
 
     static Codicons resolveFileIcon(String fileNameLower) {
         int dot = fileNameLower.lastIndexOf('.');
-        return (dot >= 0
-                        && dot + 1 < fileNameLower.length()
-                        && CODE_EXTENSIONS.contains(fileNameLower.substring(dot + 1)))
-                ? Codicons.FILE_CODE
-                : Codicons.FILE;
+        return (dot >= 0 && dot + 1 < fileNameLower.length()
+                && CODE_EXTENSIONS.contains(fileNameLower.substring(dot + 1))) ? Codicons.FILE_CODE : Codicons.FILE;
     }
 
-    private static final class FileCandidateCellRenderer extends JPanel
-            implements ListCellRenderer<FileCandidate> {
+    private static final class FileCandidateCellRenderer extends JPanel implements ListCellRenderer<FileCandidate> {
         private static final long serialVersionUID = 1L;
 
         private final JLabel nameLabel = new JLabel();
@@ -622,32 +573,21 @@ public final class FileMentionPopup {
         }
 
         @Override
-        public Component getListCellRendererComponent(
-                JList<? extends FileCandidate> list,
-                FileCandidate value,
-                int index,
-                boolean isSelected,
-                boolean cellHasFocus) {
-            Color bg =
-                    isSelected
-                            ? SwingHtmlUtils.getUiColor(
-                                    list.getSelectionBackground(), "List.selectionBackground")
-                            : SwingHtmlUtils.getUiColor(list.getBackground(), "List.background");
-            Color fg =
-                    isSelected
-                            ? SwingHtmlUtils.getUiColor(
-                                    list.getSelectionForeground(), "List.selectionForeground")
-                            : SwingHtmlUtils.getUiColor(list.getForeground(), "Label.foreground");
+        public Component getListCellRendererComponent(JList<? extends FileCandidate> list, FileCandidate value,
+                int index, boolean isSelected, boolean cellHasFocus) {
+            Color bg = isSelected
+                    ? SwingHtmlUtils.getUiColor(list.getSelectionBackground(), "List.selectionBackground")
+                    : SwingHtmlUtils.getUiColor(list.getBackground(), "List.background");
+            Color fg = isSelected
+                    ? SwingHtmlUtils.getUiColor(list.getSelectionForeground(), "List.selectionForeground")
+                    : SwingHtmlUtils.getUiColor(list.getForeground(), "Label.foreground");
             setBackground(bg);
 
             if (value != null) {
                 nameLabel.setText(value.fileName());
                 nameLabel.setForeground(fg);
-                nameLabel.setIcon(
-                        FontIcon.of(
-                                resolveFileIcon(value.fileNameLower()),
-                                14,
-                                isSelected ? fg : SwingHtmlUtils.getAccentColor()));
+                nameLabel.setIcon(FontIcon.of(resolveFileIcon(value.fileNameLower()), 14,
+                        isSelected ? fg : SwingHtmlUtils.getAccentColor()));
                 dirLabel.setText(value.parentDir());
                 dirLabel.setForeground(isSelected ? fg : SwingHtmlUtils.getMutedForegroundColor());
                 setToolTipText(value.relativePath());

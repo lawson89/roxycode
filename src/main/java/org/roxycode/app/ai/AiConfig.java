@@ -19,11 +19,9 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class AiConfig {
 
-    public static final ObjectMapper SHARED_OBJECT_MAPPER =
-            (ObjectMapper) new ObjectMapper().findAndRegisterModules();
+    public static final ObjectMapper SHARED_OBJECT_MAPPER = (ObjectMapper) new ObjectMapper().findAndRegisterModules();
 
-    public static final TomlMapper SHARED_TOML_MAPPER =
-            (TomlMapper) new TomlMapper().findAndRegisterModules();
+    public static final TomlMapper SHARED_TOML_MAPPER = (TomlMapper) new TomlMapper().findAndRegisterModules();
 
     @Bean
     public ObjectMapper objectMapper() {
@@ -42,18 +40,12 @@ public class AiConfig {
 
     @Bean
     @Primary
-    public ToolCallingManager toolCallingManager(
-            ToolExecutionExceptionProcessor toolExecutionExceptionProcessor,
-            SettingsService settingsService,
-            PlanService planService,
-            ApplicationEventPublisher eventPublisher,
+    public ToolCallingManager toolCallingManager(ToolExecutionExceptionProcessor toolExecutionExceptionProcessor,
+            SettingsService settingsService, PlanService planService, ApplicationEventPublisher eventPublisher,
             ObjectMapper objectMapper) {
-        ToolCallingManager delegate =
-                ToolCallingManager.builder()
-                        .toolExecutionExceptionProcessor(toolExecutionExceptionProcessor)
-                        .build();
-        return new ReturnDirectToolCallingManager(
-                delegate, settingsService, planService, eventPublisher, objectMapper);
+        ToolCallingManager delegate = ToolCallingManager.builder()
+                .toolExecutionExceptionProcessor(toolExecutionExceptionProcessor).build();
+        return new ReturnDirectToolCallingManager(delegate, settingsService, planService, eventPublisher, objectMapper);
     }
 
     @Bean

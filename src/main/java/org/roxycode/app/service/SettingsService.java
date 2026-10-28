@@ -33,12 +33,12 @@ public class SettingsService {
     private AppSettings settings;
     private Path settingsPathOverride;
     private volatile List<GeminiModelConfig> cachedAvailableModels;
-    private volatile CompletableFuture<Void> lastSaveFuture =
-            CompletableFuture.completedFuture(null);
+    private volatile CompletableFuture<Void> lastSaveFuture = CompletableFuture.completedFuture(null);
 
     public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
         this.mapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
-        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {};
+        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {
+        };
     }
 
     public static Path getDefaultRoxyHomeDir() {
@@ -73,18 +73,18 @@ public class SettingsService {
 
     public List<GeminiModelConfig> getAvailableModels() {
         List<GeminiModelConfig> cached = this.cachedAvailableModels;
-        if (cached != null) return cached;
+        if (cached != null)
+            return cached;
         synchronized (this) {
-            if (this.cachedAvailableModels != null) return this.cachedAvailableModels;
+            if (this.cachedAvailableModels != null)
+                return this.cachedAvailableModels;
             try {
-                String content =
-                        new ClassPathResource("models.toml", SettingsService.class.getClassLoader())
-                                .getContentAsString(StandardCharsets.UTF_8);
+                String content = new ClassPathResource("models.toml", SettingsService.class.getClassLoader())
+                        .getContentAsString(StandardCharsets.UTF_8);
                 GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
-                List<GeminiModelConfig> loaded =
-                        geminiModels != null && geminiModels.models() != null
-                                ? List.copyOf(geminiModels.models())
-                                : List.of();
+                List<GeminiModelConfig> loaded = geminiModels != null && geminiModels.models() != null
+                        ? List.copyOf(geminiModels.models())
+                        : List.of();
                 this.cachedAvailableModels = loaded;
                 return loaded;
             } catch (IOException e) {
@@ -95,7 +95,8 @@ public class SettingsService {
     }
 
     public synchronized AppSettings getSettings() {
-        if (settings == null) loadSettings();
+        if (settings == null)
+            loadSettings();
         return settings;
     }
 
@@ -108,8 +109,7 @@ public class SettingsService {
         }
         eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
         if (SwingUtilities.isEventDispatchThread()) {
-            lastSaveFuture =
-                    CompletableFuture.runAsync(() -> writeSettingsToDisk(path, currentSettings));
+            lastSaveFuture = CompletableFuture.runAsync(() -> writeSettingsToDisk(path, currentSettings));
         } else {
             writeSettingsToDisk(path, currentSettings);
             lastSaveFuture = CompletableFuture.completedFuture(null);

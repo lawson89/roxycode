@@ -34,10 +34,8 @@ public final class SettingsPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
     private static final String MIG_WRAP = "wrap";
-    static final String RESTART_LEGEND_TEXT =
-            "(*) Restart required for Gemini API Key and Max Chat History Messages";
-    static final String SAVED_RESTART_REQUIRED_TEXT =
-            "Settings saved. Please restart RoxyCode for API Key / Chat History changes to take effect.";
+    static final String RESTART_LEGEND_TEXT = "(*) Restart required for Gemini API Key and Max Chat History Messages";
+    static final String SAVED_RESTART_REQUIRED_TEXT = "Settings saved. Please restart RoxyCode for API Key / Chat History changes to take effect.";
     static final String SAVED_APPLIED_TEXT = "Settings saved and applied.";
 
     private final transient SettingsService settingsService;
@@ -62,16 +60,8 @@ public final class SettingsPanel extends JPanel {
         add(title, "span, gapbottom 15, " + MIG_WRAP);
 
         add(new JLabel("Theme:"));
-        themeCombo =
-                new JComboBox<>(
-                        new String[] {
-                            "FlatLaf Light",
-                            "FlatLaf Dark",
-                            "IntelliJ",
-                            "Darcula",
-                            "macOS Light",
-                            "macOS Dark"
-                        });
+        themeCombo = new JComboBox<>(
+                new String[]{"FlatLaf Light", "FlatLaf Dark", "IntelliJ", "Darcula", "macOS Light", "macOS Dark"});
         themeCombo.setSelectedItem(settingsService.getSettings().getTheme());
         themeCombo.addActionListener(e -> updateTheme());
         add(themeCombo, MIG_WRAP);
@@ -87,20 +77,13 @@ public final class SettingsPanel extends JPanel {
         add(geminiApiKeyField, MIG_WRAP);
 
         add(new JLabel("Max Agent Tool Turns:"));
-        maxAgentToolTurnsSpinner =
-                new JSpinner(
-                        new SpinnerNumberModel(
-                                settingsService.getSettings().getMaxAgentToolTurns(), 1, 50, 1));
+        maxAgentToolTurnsSpinner = new JSpinner(
+                new SpinnerNumberModel(settingsService.getSettings().getMaxAgentToolTurns(), 1, 50, 1));
         add(maxAgentToolTurnsSpinner, MIG_WRAP);
 
         add(new JLabel("Max Chat History Messages (*):"));
-        maxMessagesSpinner =
-                new JSpinner(
-                        new SpinnerNumberModel(
-                                settingsService.getSettings().getMaxChatMemoryMessages(),
-                                1,
-                                500,
-                                5));
+        maxMessagesSpinner = new JSpinner(
+                new SpinnerNumberModel(settingsService.getSettings().getMaxChatMemoryMessages(), 1, 500, 5));
         add(maxMessagesSpinner, MIG_WRAP);
 
         legendLabel = new JLabel(RESTART_LEGEND_TEXT);
@@ -122,9 +105,9 @@ public final class SettingsPanel extends JPanel {
 
     private void loadModels() {
         List<GeminiModelConfig> modelList = settingsService.getAvailableModels();
-        if (modelList == null) modelList = List.of();
-        modelCombo.setModel(
-                new DefaultComboBoxModel<>(modelList.toArray(new GeminiModelConfig[0])));
+        if (modelList == null)
+            modelList = List.of();
+        modelCombo.setModel(new DefaultComboBoxModel<>(modelList.toArray(new GeminiModelConfig[0])));
 
         String currentModelId = settingsService.getSettings().getGeminiModel();
         for (int i = 0; i < modelCombo.getItemCount(); i++) {
@@ -138,23 +121,24 @@ public final class SettingsPanel extends JPanel {
     @EventListener
     @SuppressWarnings("PMD.UnusedAssignment")
     public void onSettingsChanged(SettingsChangedEvent event) {
-        if (event == null || event.settings() == null) return;
-        Edt.run(
-                () -> {
-                    String theme = event.settings().getTheme();
-                    if (theme != null && !theme.equals(themeCombo.getSelectedItem())) {
-                        updatingFromSettings = true;
-                        try {
-                            themeCombo.setSelectedItem(theme);
-                        } finally {
-                            updatingFromSettings = false;
-                        }
-                    }
-                });
+        if (event == null || event.settings() == null)
+            return;
+        Edt.run(() -> {
+            String theme = event.settings().getTheme();
+            if (theme != null && !theme.equals(themeCombo.getSelectedItem())) {
+                updatingFromSettings = true;
+                try {
+                    themeCombo.setSelectedItem(theme);
+                } finally {
+                    updatingFromSettings = false;
+                }
+            }
+        });
     }
 
     private void updateTheme() {
-        if (updatingFromSettings) return;
+        if (updatingFromSettings)
+            return;
         String selectedTheme = (String) themeCombo.getSelectedItem();
         if (selectedTheme != null) {
             settingsService.getSettings().setTheme(selectedTheme);
@@ -168,18 +152,17 @@ public final class SettingsPanel extends JPanel {
         String newApiKey = new String(geminiApiKeyField.getPassword());
         int oldMaxMessages = settings.getMaxChatMemoryMessages();
         int newMaxMessages = (Integer) maxMessagesSpinner.getValue();
-        boolean restartRequiredChanged =
-                !oldApiKey.equals(newApiKey) || oldMaxMessages != newMaxMessages;
+        boolean restartRequiredChanged = !oldApiKey.equals(newApiKey) || oldMaxMessages != newMaxMessages;
 
         settings.setGeminiApiKey(newApiKey);
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
-        if (selectedModel != null) settings.setGeminiModel(selectedModel.apiName());
+        if (selectedModel != null)
+            settings.setGeminiModel(selectedModel.apiName());
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
         settingsService.saveSettings();
 
-        statusLabel.setText(
-                restartRequiredChanged ? SAVED_RESTART_REQUIRED_TEXT : SAVED_APPLIED_TEXT);
+        statusLabel.setText(restartRequiredChanged ? SAVED_RESTART_REQUIRED_TEXT : SAVED_APPLIED_TEXT);
         statusTimer.restart();
     }
 
@@ -210,16 +193,16 @@ public final class SettingsPanel extends JPanel {
     public static boolean isDarkTheme(String themeName) {
         if (themeName != null && !themeName.isBlank()) {
             String lower = themeName.toLowerCase(Locale.ROOT);
-            if (lower.contains("dark") || "darcula".equals(lower)) return true;
-            if (lower.contains("light") || "intellij".equals(lower)) return false;
+            if (lower.contains("dark") || "darcula".equals(lower))
+                return true;
+            if (lower.contains("light") || "intellij".equals(lower))
+                return false;
         }
         return FlatLaf.isLafDark();
     }
 
-    public static void applyRSyntaxTheme(
-            RSyntaxTextArea textArea, SettingsService settingsService) {
-        applyRSyntaxTheme(
-                textArea,
+    public static void applyRSyntaxTheme(RSyntaxTextArea textArea, SettingsService settingsService) {
+        applyRSyntaxTheme(textArea,
                 settingsService != null && settingsService.getSettings() != null
                         ? settingsService.getSettings().getTheme()
                         : null);
@@ -230,25 +213,29 @@ public final class SettingsPanel extends JPanel {
 
     static Theme getRSyntaxTheme(boolean dark) throws IOException {
         Theme cached = dark ? cachedDarkRSyntaxTheme : cachedLightRSyntaxTheme;
-        if (cached != null) return cached;
+        if (cached != null)
+            return cached;
         synchronized (SettingsPanel.class) {
             cached = dark ? cachedDarkRSyntaxTheme : cachedLightRSyntaxTheme;
-            if (cached != null) return cached;
-            String themePath =
-                    dark
-                            ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
-                            : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
+            if (cached != null)
+                return cached;
+            String themePath = dark
+                    ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
+                    : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
             try (InputStream in = SettingsPanel.class.getResourceAsStream(themePath)) {
                 Theme loaded = Theme.load(in);
-                if (dark) cachedDarkRSyntaxTheme = loaded;
-                else cachedLightRSyntaxTheme = loaded;
+                if (dark)
+                    cachedDarkRSyntaxTheme = loaded;
+                else
+                    cachedLightRSyntaxTheme = loaded;
                 return loaded;
             }
         }
     }
 
     public static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
-        if (textArea == null) return;
+        if (textArea == null)
+            return;
         try {
             getRSyntaxTheme(isDarkTheme(themeName)).apply(textArea);
         } catch (IOException ioe) {
@@ -257,24 +244,22 @@ public final class SettingsPanel extends JPanel {
     }
 
     public static void applyTheme(String themeName) {
-        Edt.runAndWait(
-                () -> {
-                    try {
-                        UIManager.put("TabbedPane.tabType", "card");
-                        UIManager.put("TabbedPane.showTabSeparators", true);
-                        UIManager.setLookAndFeel(
-                                switch (themeName != null ? themeName : "") {
-                                    case "FlatLaf Dark" -> new FlatDarkLaf();
-                                    case "IntelliJ" -> new FlatIntelliJLaf();
-                                    case "Darcula" -> new FlatDarculaLaf();
-                                    case "macOS Light" -> new FlatMacLightLaf();
-                                    case "macOS Dark" -> new FlatMacDarkLaf();
-                                    default -> new FlatLightLaf();
-                                });
-                        FlatLaf.updateUI();
-                    } catch (Exception ex) {
-                        log.error("Failed to apply theme {}: {}", themeName, ex.getMessage());
-                    }
+        Edt.runAndWait(() -> {
+            try {
+                UIManager.put("TabbedPane.tabType", "card");
+                UIManager.put("TabbedPane.showTabSeparators", true);
+                UIManager.setLookAndFeel(switch (themeName != null ? themeName : "") {
+                    case "FlatLaf Dark" -> new FlatDarkLaf();
+                    case "IntelliJ" -> new FlatIntelliJLaf();
+                    case "Darcula" -> new FlatDarculaLaf();
+                    case "macOS Light" -> new FlatMacLightLaf();
+                    case "macOS Dark" -> new FlatMacDarkLaf();
+                    default -> new FlatLightLaf();
                 });
+                FlatLaf.updateUI();
+            } catch (Exception ex) {
+                log.error("Failed to apply theme {}: {}", themeName, ex.getMessage());
+            }
+        });
     }
 }

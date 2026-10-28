@@ -14,7 +14,8 @@ import org.roxycode.app.service.ProjectService;
 
 public class FileReadServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private ProjectService projectService;
     private FileReadService fileReadService;
@@ -55,16 +56,12 @@ public class FileReadServiceTest {
 
         Files.writeString(tempDir.resolve("multi.txt"), "alpha\nbeta\ngamma\ndelta\n");
         assertEquals(4, fileReadService.getLineCount("multi.txt"));
-        assertEquals(
-                "1: alpha\n2: beta\n3: gamma\n4: delta",
-                fileReadService.readFileNumbered("multi.txt"));
+        assertEquals("1: alpha\n2: beta\n3: gamma\n4: delta", fileReadService.readFileNumbered("multi.txt"));
         assertEquals("2: beta\n3: gamma", fileReadService.readLines("multi.txt", 2, 3));
         assertEquals("3: gamma\n4: delta", fileReadService.readLines("multi.txt", 3, 99));
 
-        assertThrows(
-                IllegalArgumentException.class, () -> fileReadService.readLines("multi.txt", 0, 2));
-        assertThrows(
-                IllegalArgumentException.class, () -> fileReadService.readLines("multi.txt", 3, 2));
+        assertThrows(IllegalArgumentException.class, () -> fileReadService.readLines("multi.txt", 0, 2));
+        assertThrows(IllegalArgumentException.class, () -> fileReadService.readLines("multi.txt", 3, 2));
     }
 
     @Test
@@ -72,8 +69,7 @@ public class FileReadServiceTest {
         Files.createFile(tempDir.resolve("file2.txt"));
         Files.createFile(tempDir.resolve("file1.txt"));
         Files.createDirectory(tempDir.resolve("subdir"));
-        assertEquals(
-                List.of("file1.txt", "file2.txt", "subdir/"), fileReadService.listDirectory("."));
+        assertEquals(List.of("file1.txt", "file2.txt", "subdir/"), fileReadService.listDirectory("."));
     }
 
     @Test
@@ -84,9 +80,7 @@ public class FileReadServiceTest {
     @Test
     void testReadFileOutsideRoot() {
         Path outsideFile = tempDir.getParent().resolve("outside.txt");
-        assertThrows(
-                SecurityException.class,
-                () -> fileReadService.readFile("../" + outsideFile.getFileName()));
+        assertThrows(SecurityException.class, () -> fileReadService.readFile("../" + outsideFile.getFileName()));
     }
 
     @Test
@@ -97,13 +91,10 @@ public class FileReadServiceTest {
     }
 
     @Test
-    void testListDirectoryNonExistentOrRegularFileThrowsIllegalArgumentException()
-            throws IOException {
+    void testListDirectoryNonExistentOrRegularFileThrowsIllegalArgumentException() throws IOException {
         Files.writeString(tempDir.resolve("afile.txt"), "data");
-        assertThrows(
-                IllegalArgumentException.class, () -> fileReadService.listDirectory("missing-dir"));
-        assertThrows(
-                IllegalArgumentException.class, () -> fileReadService.listDirectory("afile.txt"));
+        assertThrows(IllegalArgumentException.class, () -> fileReadService.listDirectory("missing-dir"));
+        assertThrows(IllegalArgumentException.class, () -> fileReadService.listDirectory("afile.txt"));
     }
 
     @Test
@@ -115,8 +106,7 @@ public class FileReadServiceTest {
         Path textFile = Files.writeString(tempDir.resolve("plain.txt"), "Hello UTF-8 text\nLine 2");
         assertFalse(FileReadService.isBinaryFile(textFile));
 
-        Path binFile =
-                Files.write(tempDir.resolve("binary.dat"), new byte[] {0x48, 0x65, 0x00, 0x6c});
+        Path binFile = Files.write(tempDir.resolve("binary.dat"), new byte[]{0x48, 0x65, 0x00, 0x6c});
         assertTrue(FileReadService.isBinaryFile(binFile));
     }
 }

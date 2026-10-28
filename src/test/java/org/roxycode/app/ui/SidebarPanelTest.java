@@ -15,12 +15,14 @@ class SidebarPanelTest {
 
     @Test
     void testSidebarPanelInstantiation() {
-        assertNotNull(new SidebarPanel(card -> {}));
+        assertNotNull(new SidebarPanel(card -> {
+        }));
     }
 
     @Test
     void testSidebarStructureAndBranding() {
-        SidebarPanel sidebar = new SidebarPanel(card -> {});
+        SidebarPanel sidebar = new SidebarPanel(card -> {
+        });
         Component[] components = sidebar.getComponents();
         assertEquals(12, components.length);
 
@@ -28,9 +30,12 @@ class SidebarPanelTest {
         int buttonCount = 0;
         JPanel brandingPanel = null;
         for (Component c : components) {
-            if (c instanceof JLabel) headerCount++;
-            if (c instanceof JButton) buttonCount++;
-            if (c instanceof JPanel p) brandingPanel = p;
+            if (c instanceof JLabel)
+                headerCount++;
+            if (c instanceof JButton)
+                buttonCount++;
+            if (c instanceof JPanel p)
+                brandingPanel = p;
         }
 
         assertNotNull(brandingPanel);
@@ -62,7 +67,8 @@ class SidebarPanelTest {
                 g2.dispose();
             } else if (c instanceof JLabel label) {
                 brandingLabels++;
-                if ("RoxyCode".equals(label.getText())) foundTitleLabel = true;
+                if ("RoxyCode".equals(label.getText()))
+                    foundTitleLabel = true;
             }
         }
 
@@ -85,9 +91,7 @@ class SidebarPanelTest {
         assertNotNull(qaBtn);
         assertNotNull(taskBtn);
         assertNotNull(contextBtn);
-        assertEquals(
-                Codicons.GIT_PULL_REQUEST,
-                assertInstanceOf(FontIcon.class, taskBtn.getIcon()).getIkon());
+        assertEquals(Codicons.GIT_PULL_REQUEST, assertInstanceOf(FontIcon.class, taskBtn.getIcon()).getIkon());
         assertTrue(qaBtn.isSelected());
         assertFalse(taskBtn.isSelected());
 
@@ -101,7 +105,8 @@ class SidebarPanelTest {
 
     @Test
     void testSetQaAndTaskBusyAndWaitingApprovalUpdatesSidebarButtons() {
-        SidebarPanel sidebar = new SidebarPanel(card -> {});
+        SidebarPanel sidebar = new SidebarPanel(card -> {
+        });
         assertFalse(sidebar.isQaBusy());
         assertFalse(sidebar.isTaskBusy());
         assertFalse(sidebar.isTaskWaitingApproval());

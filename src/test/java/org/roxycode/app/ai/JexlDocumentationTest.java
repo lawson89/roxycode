@@ -13,14 +13,11 @@ public class JexlDocumentationTest {
     @Test
     public void testJexlDocExists() {
         Path path = Paths.get("src/main/resources/docs/jexl.md");
-        assertTrue(
-                Files.exists(path),
-                "JEXL documentation should exist at src/main/resources/docs/jexl.md");
+        assertTrue(Files.exists(path), "JEXL documentation should exist at src/main/resources/docs/jexl.md");
     }
 
     @Test
-    public void testJexlDocForbidsArbitraryClassInstantiationAndUsesValidServices()
-            throws IOException {
+    public void testJexlDocForbidsArbitraryClassInstantiationAndUsesValidServices() throws IOException {
         Path path = Paths.get("src/main/resources/docs/jexl.md");
         String content = Files.readString(path);
         assertTrue(content.contains("FORBIDDEN: Arbitrary Java Class Instantiation"));

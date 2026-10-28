@@ -7,11 +7,8 @@ import org.kordamp.ikonli.swing.FontIcon;
 public final class HourglassAnimator {
     static final int DEFAULT_ICON_SIZE = 13;
     static final int ANIMATION_DELAY_MS = 500;
-    private static final FontAwesomeSolid[] HOURGLASS_FRAMES = {
-        FontAwesomeSolid.HOURGLASS_START,
-        FontAwesomeSolid.HOURGLASS_HALF,
-        FontAwesomeSolid.HOURGLASS_END
-    };
+    private static final FontAwesomeSolid[] HOURGLASS_FRAMES = {FontAwesomeSolid.HOURGLASS_START,
+            FontAwesomeSolid.HOURGLASS_HALF, FontAwesomeSolid.HOURGLASS_END};
 
     private final int iconSize;
     private final Runnable onFrameChanged;
@@ -45,7 +42,8 @@ public final class HourglassAnimator {
     }
 
     public void stop() {
-        if (timer != null && timer.isRunning()) timer.stop();
+        if (timer != null && timer.isRunning())
+            timer.stop();
     }
 
     public boolean isRunning() {
@@ -59,7 +57,8 @@ public final class HourglassAnimator {
         }
         frameIndex = (frameIndex + 1) % HOURGLASS_FRAMES.length;
         icon.setIkon(HOURGLASS_FRAMES[frameIndex]);
-        if (onFrameChanged != null) onFrameChanged.run();
+        if (onFrameChanged != null)
+            onFrameChanged.run();
     }
 
     public FontIcon getIcon() {

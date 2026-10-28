@@ -7,9 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class AgentJexlPermissionsTest {
 
-    @AgentService(
-            value = "baseService",
-            phases = {"*"})
+    @AgentService(value = "baseService", phases = {"*"})
     static class BaseAgentService {
         @AgentDoc("Documented method")
         public String documentedMethod() {

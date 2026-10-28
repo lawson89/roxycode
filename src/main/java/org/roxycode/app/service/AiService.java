@@ -35,17 +35,13 @@ public class AiService {
     public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
     static final int MAX_TOPIC_TITLE_LENGTH = 80;
     private static final int MAX_EXCERPT_LENGTH = 4000;
-    static final String TOPIC_TITLE_SYSTEM_PROMPT =
-            "Generate a concise, descriptive 3 to 6 word title summarizing this technical Q&A topic. "
-                    + "Return ONLY the plain title text without quotes, markdown, or punctuation.";
+    static final String TOPIC_TITLE_SYSTEM_PROMPT = "Generate a concise, descriptive 3 to 6 word title summarizing this technical Q&A topic. "
+            + "Return ONLY the plain title text without quotes, markdown, or punctuation.";
 
     public static final String TRUNCATED_MARKER = "⚠️ **Response Truncated (finishReason:";
-    public static final String NO_VISIBLE_RESPONSE_MARKER =
-            "⚠️ **No Visible Response (finishReason:";
-    public static final String EMPTY_RESPONSE_MARKER =
-            "⚠️ **Empty Response Returned (finishReason:";
-    public static final String EMPTY_STOP_MESSAGE =
-            "Roxy completed the turn without generating a visible text message.";
+    public static final String NO_VISIBLE_RESPONSE_MARKER = "⚠️ **No Visible Response (finishReason:";
+    public static final String EMPTY_RESPONSE_MARKER = "⚠️ **Empty Response Returned (finishReason:";
+    public static final String EMPTY_STOP_MESSAGE = "Roxy completed the turn without generating a visible text message.";
     private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~" + (char) 96 + '"' + "']";
 
     private final ChatClient statelessChatClient;
@@ -56,14 +52,8 @@ public class AiService {
     private final PlanService planService;
     private final ApplicationEventPublisher eventPublisher;
 
-    public AiService(
-            ChatClient.Builder chatClientBuilder,
-            SettingsService settingsService,
-            PromptService promptService,
-            JexlTool jexlTool,
-            PlanService planService,
-            ChatMemory chatMemory,
-            ToolCallingManager toolCallingManager,
+    public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, PromptService promptService,
+            JexlTool jexlTool, PlanService planService, ChatMemory chatMemory, ToolCallingManager toolCallingManager,
             ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
         this.promptService = promptService;
@@ -71,41 +61,26 @@ public class AiService {
         this.planService = planService;
         this.eventPublisher = eventPublisher;
         this.statelessChatClient = chatClientBuilder.build();
-        this.chatClient =
-                chatClientBuilder
-                        .defaultAdvisors(
-                                MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                                ToolCallingAdvisor.builder()
-                                        .toolCallingManager(toolCallingManager)
-                                        .build())
-                        .build();
+        this.chatClient = chatClientBuilder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build()).build();
     }
 
     public String generateTopicTitle(String conversationExcerpt) {
-        if (StringUtils.isBlank(conversationExcerpt)) return DEFAULT_TOPIC_TITLE;
-        String excerpt =
-                conversationExcerpt.length() > MAX_EXCERPT_LENGTH
-                        ? conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH)
-                        : conversationExcerpt;
+        if (StringUtils.isBlank(conversationExcerpt))
+            return DEFAULT_TOPIC_TITLE;
+        String excerpt = conversationExcerpt.length() > MAX_EXCERPT_LENGTH
+                ? conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH)
+                : conversationExcerpt;
         try {
-            ChatResponse response =
-                    statelessChatClient
-                            .prompt()
-                            .system(TOPIC_TITLE_SYSTEM_PROMPT)
-                            .user(u -> u.text(excerpt))
-                            .options(
-                                    GoogleGenAiChatOptions.builder()
-                                            .model(settingsService.getSettings().getGeminiModel()))
-                            .call()
-                            .chatResponse();
-            String rawTitle =
-                    (response != null
-                                    && response.getResult() != null
-                                    && response.getResult().getOutput() != null)
-                            ? response.getResult().getOutput().getText()
-                            : null;
+            ChatResponse response = statelessChatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT)
+                    .user(u -> u.text(excerpt))
+                    .options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()))
+                    .call().chatResponse();
+            String rawTitle = (response != null && response.getResult() != null
+                    && response.getResult().getOutput() != null) ? response.getResult().getOutput().getText() : null;
             String sanitized = sanitizeTopicTitle(rawTitle);
-            if (!sanitized.isEmpty()) return sanitized;
+            if (!sanitized.isEmpty())
+                return sanitized;
         } catch (Exception e) {
             log.warn("Failed to generate topic title via LLM, using fallback: {}", e.getMessage());
         }
@@ -113,82 +88,65 @@ public class AiService {
     }
 
     static String sanitizeTopicTitle(String rawTitle) {
-        if (StringUtils.isBlank(rawTitle)) return "";
-        String firstLine =
-                rawTitle.lines()
-                        .map(String::trim)
-                        .filter(line -> !line.isEmpty())
-                        .findFirst()
-                        .orElse("");
-        if (firstLine.isEmpty()) return "";
-        String cleaned =
-                firstLine
-                        .replaceAll(STRIP_TITLE_CHARS_REGEX, " ")
-                        .replaceAll(String.valueOf((char) 92) + "s+", " ")
-                        .replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "")
-                        .trim();
+        if (StringUtils.isBlank(rawTitle))
+            return "";
+        String firstLine = rawTitle.lines().map(String::trim).filter(line -> !line.isEmpty()).findFirst().orElse("");
+        if (firstLine.isEmpty())
+            return "";
+        String cleaned = firstLine.replaceAll(STRIP_TITLE_CHARS_REGEX, " ")
+                .replaceAll(String.valueOf((char) 92) + "s+", " ").replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "")
+                .trim();
         return cleaned.length() > MAX_TOPIC_TITLE_LENGTH
-                ? cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH)
-                        .replaceAll("[^a-zA-Z0-9]+$", "")
-                        .trim()
+                ? cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH).replaceAll("[^a-zA-Z0-9]+$", "").trim()
                 : cleaned;
     }
 
     public static String deriveFallbackTopicTitle(String conversationExcerpt) {
-        if (StringUtils.isBlank(conversationExcerpt)) return DEFAULT_TOPIC_TITLE;
+        if (StringUtils.isBlank(conversationExcerpt))
+            return DEFAULT_TOPIC_TITLE;
         for (String rawLine : conversationExcerpt.lines().toList()) {
             String line = rawLine.trim();
-            if (line.isEmpty()) continue;
+            if (line.isEmpty())
+                continue;
             if (line.regionMatches(true, 0, "User:", 0, 5)) {
                 line = line.substring(5).trim();
-            } else if (line.regionMatches(true, 0, "Roxy:", 0, 5)
-                    || line.regionMatches(true, 0, "AI:", 0, 3)) {
+            } else if (line.regionMatches(true, 0, "Roxy:", 0, 5) || line.regionMatches(true, 0, "AI:", 0, 3)) {
                 continue;
             }
             String sanitized = sanitizeTopicTitle(line);
-            if (!sanitized.isEmpty()) return sanitized;
+            if (!sanitized.isEmpty())
+                return sanitized;
         }
         String fallback = sanitizeTopicTitle(conversationExcerpt);
         return fallback.isEmpty() ? DEFAULT_TOPIC_TITLE : fallback;
     }
 
-    public String chat(
-            String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
+    public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
         return chat(conversationId, phase, message, null, images);
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")
-    public String chat(
-            String conversationId,
-            WorkflowPhase phase,
-            String message,
-            String additionalInstructions,
+    public String chat(String conversationId, WorkflowPhase phase, String message, String additionalInstructions,
             List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
-        TurnToolContext turnContext =
-                new TurnToolContext(
-                        conversationId,
-                        phase != null ? phase : planService.getCurrentPhase(),
-                        new AtomicInteger(0),
-                        new StringBuilder());
+        TurnToolContext turnContext = new TurnToolContext(conversationId,
+                phase != null ? phase : planService.getCurrentPhase(), new AtomicInteger(0), new StringBuilder());
         String convId = turnContext.conversationId();
 
         try {
-            ChatClient.ChatClientRequestSpec promptSpec =
-                    buildPrompt(turnContext, message, additionalInstructions, images);
+            ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, additionalInstructions,
+                    images);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-            ChatResponse chatResponse =
-                    promptSpec
-                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId))
-                            .call()
-                            .chatResponse();
+            ChatResponse chatResponse = promptSpec.advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId)).call()
+                    .chatResponse();
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
             String content = formatChatResponse(chatResponse, turnContext);
             publishTurnComplete(convId, turnContext.turnCounter().get(), content);
             return content;
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, "Chat turn cancelled");
-            if (e instanceof RuntimeException re) throw re;
+            if (e instanceof RuntimeException re)
+                throw re;
             throw new RuntimeException("Unexpected error during chat turn", e);
         }
     }
@@ -203,73 +161,57 @@ public class AiService {
         if (chatResponse != null) {
             Generation result = chatResponse.getResult();
             if (result != null) {
-                if (result.getOutput() != null) content = result.getOutput().getText();
+                if (result.getOutput() != null)
+                    content = result.getOutput().getText();
                 if (result.getMetadata() != null) {
                     rawFinishReason = result.getMetadata().getFinishReason();
                 }
             }
-            if (chatResponse.getMetadata() != null) usage = chatResponse.getMetadata().getUsage();
+            if (chatResponse.getMetadata() != null)
+                usage = chatResponse.getMetadata().getUsage();
         }
 
-        String finishReason =
-                StringUtils.defaultIfBlank(
-                        StringUtils.trim(rawFinishReason), FINISH_REASON_UNKNOWN);
+        String finishReason = StringUtils.defaultIfBlank(StringUtils.trim(rawFinishReason), FINISH_REASON_UNKNOWN);
         String usageSummary = formatUsageSummary(usage);
         boolean hasVisibleContent = StringUtils.isNotBlank(content);
 
         if (isTokenLimitFinishReason(finishReason)) {
             if (hasVisibleContent) {
-                StringBuilder sb =
-                        new StringBuilder(prependAccumulatedText(accumulatedText, content))
-                                .append("\n\n---\n> ")
-                                .append(TRUNCATED_MARKER)
-                                .append(" ")
-                                .append(finishReason)
-                                .append(
-                                        ")**: The response was cut off because it reached the maximum output token limit.");
+                StringBuilder sb = new StringBuilder(prependAccumulatedText(accumulatedText, content))
+                        .append("\n\n---\n> ").append(TRUNCATED_MARKER).append(" ").append(finishReason)
+                        .append(")**: The response was cut off because it reached the maximum output token limit.");
                 if (!usageSummary.isEmpty()) {
                     sb.append(" (Token usage: ").append(usageSummary).append(")");
                 }
-                return sb.append(" Reply **'continue'** so Roxy can resume where she left off.")
-                        .toString();
+                return sb.append(" Reply **'continue'** so Roxy can resume where she left off.").toString();
             }
 
             StringBuilder sb = new StringBuilder();
-            if (!accumulatedText.isEmpty()) sb.append(accumulatedText).append("\n\n---\n\n");
-            sb.append(NO_VISIBLE_RESPONSE_MARKER)
-                    .append(" ")
-                    .append(finishReason)
-                    .append(")**\n\n")
-                    .append(
-                            "Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
+            if (!accumulatedText.isEmpty())
+                sb.append(accumulatedText).append("\n\n---\n\n");
+            sb.append(NO_VISIBLE_RESPONSE_MARKER).append(" ").append(finishReason).append(")**\n\n").append(
+                    "Roxy produced no visible text because the model exhausted its output or thinking token limit before generating a final message.");
             appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
-            return sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.")
-                    .toString();
+            return sb.append("\n\nPlease ask Roxy to **'continue'** or summarize in smaller steps.").toString();
         }
 
         if (!hasVisibleContent) {
-            boolean normalStop =
-                    "STOP".equalsIgnoreCase(finishReason)
-                            || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
-            if (normalStop && !accumulatedText.isEmpty()) return accumulatedText;
+            boolean normalStop = "STOP".equalsIgnoreCase(finishReason)
+                    || FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
+            if (normalStop && !accumulatedText.isEmpty())
+                return accumulatedText;
 
-            StringBuilder sb =
-                    new StringBuilder(EMPTY_RESPONSE_MARKER)
-                            .append(" ")
-                            .append(finishReason)
-                            .append(")**\n\n");
+            StringBuilder sb = new StringBuilder(EMPTY_RESPONSE_MARKER).append(" ").append(finishReason)
+                    .append(")**\n\n");
             if (normalStop) {
                 sb.append(EMPTY_STOP_MESSAGE);
             } else {
-                sb.append("Generation was blocked or aborted by the model (")
-                        .append(finishReason)
-                        .append(").");
+                sb.append("Generation was blocked or aborted by the model (").append(finishReason).append(").");
             }
             appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
-            sb.append(
-                    normalStop
-                            ? "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response."
-                            : "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
+            sb.append(normalStop
+                    ? "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response."
+                    : "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
             return sb.toString();
         }
         return prependAccumulatedText(accumulatedText, content);
@@ -281,71 +223,52 @@ public class AiService {
                 : content;
     }
 
-    private static void appendDiagnosticMetadata(
-            StringBuilder sb, String finishReason, int toolTurns, String usageSummary) {
-        sb.append("\n- **Finish reason:** ")
-                .append(finishReason)
-                .append("\n- **Tool turns executed:** ")
+    private static void appendDiagnosticMetadata(StringBuilder sb, String finishReason, int toolTurns,
+            String usageSummary) {
+        sb.append("\n- **Finish reason:** ").append(finishReason).append("\n- **Tool turns executed:** ")
                 .append(toolTurns);
-        if (!usageSummary.isEmpty()) sb.append("\n- **Token usage:** ").append(usageSummary);
+        if (!usageSummary.isEmpty())
+            sb.append("\n- **Token usage:** ").append(usageSummary);
     }
 
     public static boolean isAutoNudgeableResponse(String response, boolean hadToolTurns) {
-        if (StringUtils.isBlank(response)) return false;
+        if (StringUtils.isBlank(response))
+            return false;
         if (response.startsWith(ReturnDirectToolCallingManager.MAX_TURNS_EXCEEDED_PREFIX)
-                || response.contains(TRUNCATED_MARKER)
-                || response.contains(NO_VISIBLE_RESPONSE_MARKER)) {
+                || response.contains(TRUNCATED_MARKER) || response.contains(NO_VISIBLE_RESPONSE_MARKER)) {
             return true;
         }
-        return hadToolTurns
-                && response.contains(EMPTY_RESPONSE_MARKER)
-                && response.contains(EMPTY_STOP_MESSAGE);
+        return hadToolTurns && response.contains(EMPTY_RESPONSE_MARKER) && response.contains(EMPTY_STOP_MESSAGE);
     }
 
     private static boolean isTokenLimitFinishReason(String finishReason) {
-        return "MAX_TOKENS".equalsIgnoreCase(finishReason)
-                || "LENGTH".equalsIgnoreCase(finishReason);
+        return "MAX_TOKENS".equalsIgnoreCase(finishReason) || "LENGTH".equalsIgnoreCase(finishReason);
     }
 
     private static String formatUsageSummary(Usage usage) {
-        if (usage == null) return "";
+        if (usage == null)
+            return "";
         int promptTokens = usage.getPromptTokens() != null ? usage.getPromptTokens() : 0;
-        int completionTokens =
-                usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
+        int completionTokens = usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
         int totalTokens = usage.getTotalTokens() != null ? usage.getTotalTokens() : 0;
         return (promptTokens <= 0 && completionTokens <= 0 && totalTokens <= 0)
                 ? ""
-                : String.format(
-                        "promptTokens=%d, completionTokens=%d, totalTokens=%d",
-                        promptTokens, completionTokens, totalTokens);
+                : String.format("promptTokens=%d, completionTokens=%d, totalTokens=%d", promptTokens, completionTokens,
+                        totalTokens);
     }
 
-    private ChatClient.ChatClientRequestSpec buildPrompt(
-            TurnToolContext turnContext,
-            String message,
-            String additionalInstructions,
-            List<byte[]> images) {
+    private ChatClient.ChatClientRequestSpec buildPrompt(TurnToolContext turnContext, String message,
+            String additionalInstructions, List<byte[]> images) {
         WorkflowPhase currentPhase = turnContext.phase();
-        ChatClient.ChatClientRequestSpec promptSpec =
-                chatClient
-                        .prompt()
-                        .system(
-                                promptService.buildSystemPrompt(
-                                        currentPhase, additionalInstructions))
-                        .user(
-                                u -> {
-                                    u.text(message);
-                                    if (images != null) {
-                                        for (byte[] img : images) {
-                                            u.media(
-                                                    MimeTypeUtils.IMAGE_PNG,
-                                                    new ByteArrayResource(img));
-                                        }
-                                    }
-                                })
-                        .options(
-                                GoogleGenAiChatOptions.builder()
-                                        .model(settingsService.getSettings().getGeminiModel()));
+        ChatClient.ChatClientRequestSpec promptSpec = chatClient.prompt()
+                .system(promptService.buildSystemPrompt(currentPhase, additionalInstructions)).user(u -> {
+                    u.text(message);
+                    if (images != null) {
+                        for (byte[] img : images) {
+                            u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(img));
+                        }
+                    }
+                }).options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()));
         if (currentPhase == WorkflowPhase.EXPLORE) {
             promptSpec.tools(jexlTool);
         } else {
@@ -355,7 +278,6 @@ public class AiService {
     }
 
     private void publishTurnComplete(String conversationId, int totalTurns, String result) {
-        eventPublisher.publishEvent(
-                new AgentTurnCompleteEvent(conversationId, AGENT_NAME, totalTurns, result));
+        eventPublisher.publishEvent(new AgentTurnCompleteEvent(conversationId, AGENT_NAME, totalTurns, result));
     }
 }

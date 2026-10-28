@@ -16,7 +16,8 @@ import org.roxycode.app.service.ProcessRunner.ProcessResult;
 
 class ProcessRunnerTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private static List<String> shellCmd(String script) {
         if (SystemUtils.IS_OS_WINDOWS) {
@@ -28,12 +29,8 @@ class ProcessRunnerTest {
     @Test
     void testSuccessfulExecutionAndEnv() throws IOException {
         String script = SystemUtils.IS_OS_WINDOWS ? "echo %TEST_VAR%" : "echo $TEST_VAR";
-        ProcessResult result =
-                ProcessRunner.run(
-                        shellCmd(script),
-                        tempDir,
-                        Map.of("TEST_VAR", "hello_roxy"),
-                        Duration.ofSeconds(5));
+        ProcessResult result = ProcessRunner.run(shellCmd(script), tempDir, Map.of("TEST_VAR", "hello_roxy"),
+                Duration.ofSeconds(5));
 
         assertFalse(result.timedOut());
         assertEquals(0, result.exitCode());
@@ -54,9 +51,7 @@ class ProcessRunnerTest {
 
     @Test
     void testTimeoutDestroysProcessTree() throws IOException {
-        ProcessResult result =
-                ProcessRunner.run(
-                        shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofMillis(200), true);
+        ProcessResult result = ProcessRunner.run(shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofMillis(200), true);
 
         assertTrue(result.timedOut());
         assertEquals(-1, result.exitCode());
@@ -67,21 +62,14 @@ class ProcessRunnerTest {
         AtomicReference<Throwable> thrown = new AtomicReference<>();
         AtomicReference<Boolean> interruptRestored = new AtomicReference<>(false);
 
-        Thread worker =
-                new Thread(
-                        () -> {
-                            try {
-                                ProcessRunner.run(
-                                        shellCmd("sleep 10"),
-                                        tempDir,
-                                        Map.of(),
-                                        Duration.ofSeconds(10),
-                                        true);
-                            } catch (Throwable t) {
-                                thrown.set(t);
-                                interruptRestored.set(Thread.currentThread().isInterrupted());
-                            }
-                        });
+        Thread worker = new Thread(() -> {
+            try {
+                ProcessRunner.run(shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofSeconds(10), true);
+            } catch (Throwable t) {
+                thrown.set(t);
+                interruptRestored.set(Thread.currentThread().isInterrupted());
+            }
+        });
 
         worker.start();
         Thread.sleep(150);
@@ -95,11 +83,8 @@ class ProcessRunnerTest {
 
     @Test
     void testStreamReaderExecutorUsesVirtualThreads() throws Exception {
-        boolean isVirtual =
-                java.util.concurrent.CompletableFuture.supplyAsync(
-                                () -> Thread.currentThread().isVirtual(),
-                                ProcessRunner.getStreamReaderExecutor())
-                        .get();
+        boolean isVirtual = java.util.concurrent.CompletableFuture
+                .supplyAsync(() -> Thread.currentThread().isVirtual(), ProcessRunner.getStreamReaderExecutor()).get();
         assertTrue(isVirtual, "ProcessRunner stream reader executor must run on virtual threads");
     }
 }

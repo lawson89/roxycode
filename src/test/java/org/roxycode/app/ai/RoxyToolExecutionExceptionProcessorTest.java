@@ -13,15 +13,13 @@ import org.springframework.ai.tool.execution.ToolExecutionException;
 
 class RoxyToolExecutionExceptionProcessorTest {
 
-    private final RoxyToolExecutionExceptionProcessor processor =
-            new RoxyToolExecutionExceptionProcessor();
+    private final RoxyToolExecutionExceptionProcessor processor = new RoxyToolExecutionExceptionProcessor();
 
     @Test
     void testProcessFormatsRootCauseWithErrorPrefix() {
         ToolDefinition toolDef = mock(ToolDefinition.class);
-        ToolExecutionException ex =
-                new ToolExecutionException(
-                        toolDef, new IllegalArgumentException("Invalid parameter"));
+        ToolExecutionException ex = new ToolExecutionException(toolDef,
+                new IllegalArgumentException("Invalid parameter"));
 
         assertEquals("{\"error\":\"Invalid parameter\"}", processor.process(ex));
     }
@@ -29,9 +27,8 @@ class RoxyToolExecutionExceptionProcessorTest {
     @Test
     void testProcessPreservesExistingErrorPrefix() {
         ToolDefinition toolDef = mock(ToolDefinition.class);
-        ToolExecutionException ex =
-                new ToolExecutionException(
-                        toolDef, new IllegalStateException("Error: Plan is missing"));
+        ToolExecutionException ex = new ToolExecutionException(toolDef,
+                new IllegalStateException("Error: Plan is missing"));
 
         assertEquals("{\"error\":\"Error: Plan is missing\"}", processor.process(ex));
     }
@@ -39,28 +36,21 @@ class RoxyToolExecutionExceptionProcessorTest {
     @Test
     void testProcessRethrowsCancellationException() {
         ToolDefinition toolDef = mock(ToolDefinition.class);
-        ToolExecutionException ex =
-                new ToolExecutionException(toolDef, new CancellationException("User stopped"));
+        ToolExecutionException ex = new ToolExecutionException(toolDef, new CancellationException("User stopped"));
 
         assertThrows(CancellationException.class, () -> processor.process(ex));
     }
 
     @Test
     void testIsErrorResponseAndStripErrorPrefix() {
-        assertTrue(
-                RoxyToolExecutionExceptionProcessor.isErrorResponse(
-                        "{\"error\":\"Plan is missing\"}"));
-        assertTrue(
-                RoxyToolExecutionExceptionProcessor.isErrorResponse(
-                        "  {\"error\":\"Invalid step\"}"));
+        assertTrue(RoxyToolExecutionExceptionProcessor.isErrorResponse("{\"error\":\"Plan is missing\"}"));
+        assertTrue(RoxyToolExecutionExceptionProcessor.isErrorResponse("  {\"error\":\"Invalid step\"}"));
         assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse("Method 'submitPlan'"));
         assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse("Success"));
         assertFalse(RoxyToolExecutionExceptionProcessor.isErrorResponse(null));
 
-        assertEquals(
-                "Plan is missing",
-                RoxyToolExecutionExceptionProcessor.stripErrorPrefix(
-                        "{\"error\":\"Plan is missing\"}"));
+        assertEquals("Plan is missing",
+                RoxyToolExecutionExceptionProcessor.stripErrorPrefix("{\"error\":\"Plan is missing\"}"));
         assertEquals("Unknown error", RoxyToolExecutionExceptionProcessor.stripErrorPrefix(null));
     }
 }

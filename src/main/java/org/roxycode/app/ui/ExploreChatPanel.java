@@ -19,25 +19,12 @@ import org.springframework.stereotype.Component;
 public final class ExploreChatPanel extends ChatPanel {
     private static final long serialVersionUID = 1L;
 
-    public ExploreChatPanel(
-            AiService aiService,
-            PlanService planService,
-            ApplicationEventPublisher eventPublisher,
-            ChatMemory chatMemory,
-            SettingsService settingsService,
-            @Qualifier("chatTurnExecutor") Executor turnExecutor,
-            MemoryService memoryService,
+    public ExploreChatPanel(AiService aiService, PlanService planService, ApplicationEventPublisher eventPublisher,
+            ChatMemory chatMemory, SettingsService settingsService,
+            @Qualifier("chatTurnExecutor") Executor turnExecutor, MemoryService memoryService,
             EnvironmentService environmentService) {
-        super(
-                aiService,
-                planService,
-                eventPublisher,
-                chatMemory,
-                ChatModel.QA_SESSION_PREFIX,
-                WorkflowPhase.EXPLORE,
-                false,
-                settingsService,
-                turnExecutor);
+        super(aiService, planService, eventPublisher, chatMemory, ChatModel.QA_SESSION_PREFIX, WorkflowPhase.EXPLORE,
+                false, settingsService, turnExecutor);
         getController().setTopicArchiveServices(memoryService, environmentService);
     }
 }

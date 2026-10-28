@@ -48,17 +48,28 @@ import org.springframework.context.ApplicationEventPublisher;
 @ExtendWith(MockitoExtension.class)
 class AiServiceTest {
 
-    @Mock private ChatClient.Builder chatClientBuilder;
-    @Mock private ChatClient chatClient;
-    @Mock private ChatClient.ChatClientRequestSpec requestSpec;
-    @Mock private ChatClient.CallResponseSpec responseSpec;
-    @Mock private SettingsService settingsService;
-    @Mock private PromptService promptService;
-    @Mock private JexlServiceRegistry jexlServiceRegistry;
-    @Mock private PlanService planService;
-    @Mock private ChatMemory chatMemory;
-    @Mock private ToolCallingManager toolCallingManager;
-    @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private ChatClient.Builder chatClientBuilder;
+    @Mock
+    private ChatClient chatClient;
+    @Mock
+    private ChatClient.ChatClientRequestSpec requestSpec;
+    @Mock
+    private ChatClient.CallResponseSpec responseSpec;
+    @Mock
+    private SettingsService settingsService;
+    @Mock
+    private PromptService promptService;
+    @Mock
+    private JexlServiceRegistry jexlServiceRegistry;
+    @Mock
+    private PlanService planService;
+    @Mock
+    private ChatMemory chatMemory;
+    @Mock
+    private ToolCallingManager toolCallingManager;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private JexlTool jexlTool;
     private AiService aiService;
@@ -77,75 +88,46 @@ class AiServiceTest {
         lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
         lenient().when(requestSpec.tools(any(Object[].class))).thenReturn(requestSpec);
         lenient().when(requestSpec.call()).thenReturn(responseSpec);
-        lenient()
-                .when(chatClientBuilder.defaultAdvisors(any(Advisor[].class)))
-                .thenReturn(chatClientBuilder);
+        lenient().when(chatClientBuilder.defaultAdvisors(any(Advisor[].class))).thenReturn(chatClientBuilder);
         lenient().when(chatClientBuilder.build()).thenReturn(chatClient);
 
         jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher, null);
-        aiService =
-                new AiService(
-                        chatClientBuilder,
-                        settingsService,
-                        promptService,
-                        jexlTool,
-                        planService,
-                        chatMemory,
-                        toolCallingManager,
-                        eventPublisher);
+        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlTool, planService, chatMemory,
+                toolCallingManager, eventPublisher);
     }
 
-    private void stubChatResponse(
-            WorkflowPhase phase,
-            String promptText,
-            String responseText,
-            String finishReason,
+    private void stubChatResponse(WorkflowPhase phase, String promptText, String responseText, String finishReason,
             Usage usage) {
         lenient().when(planService.getCurrentPhase()).thenReturn(phase);
         lenient().when(promptService.buildSystemPrompt(phase, null)).thenReturn(promptText);
-        lenient()
-                .when(responseSpec.chatResponse())
-                .thenReturn(buildChatResponse(responseText, finishReason, usage));
+        lenient().when(responseSpec.chatResponse()).thenReturn(buildChatResponse(responseText, finishReason, usage));
     }
 
     private static ChatResponse buildChatResponse(String text, String finishReason, Usage usage) {
-        ChatGenerationMetadata genMeta =
-                finishReason != null
-                        ? ChatGenerationMetadata.builder().finishReason(finishReason).build()
-                        : ChatGenerationMetadata.NULL;
-        ChatResponseMetadata responseMeta =
-                usage != null
-                        ? ChatResponseMetadata.builder().usage(usage).build()
-                        : new ChatResponseMetadata();
-        return new ChatResponse(
-                List.of(new Generation(new AssistantMessage(text), genMeta)), responseMeta);
+        ChatGenerationMetadata genMeta = finishReason != null
+                ? ChatGenerationMetadata.builder().finishReason(finishReason).build()
+                : ChatGenerationMetadata.NULL;
+        ChatResponseMetadata responseMeta = usage != null
+                ? ChatResponseMetadata.builder().usage(usage).build()
+                : new ChatResponseMetadata();
+        return new ChatResponse(List.of(new Generation(new AssistantMessage(text), genMeta)), responseMeta);
     }
 
-    private void stubToolTurnsAndResponse(
-            int turns, String responseText, String finishReason, Usage usage) {
+    private void stubToolTurnsAndResponse(int turns, String responseText, String finishReason, Usage usage) {
         AtomicReference<Map<String, Object>> capturedToolContext = new AtomicReference<>();
-        when(requestSpec.toolContext(anyMap()))
-                .thenAnswer(
-                        inv -> {
-                            capturedToolContext.set(inv.getArgument(0));
-                            return requestSpec;
-                        });
+        when(requestSpec.toolContext(anyMap())).thenAnswer(inv -> {
+            capturedToolContext.set(inv.getArgument(0));
+            return requestSpec;
+        });
         stubChatResponse(WorkflowPhase.EXPLORE, "EXPLORE PROMPT", responseText, finishReason, null);
-        when(responseSpec.chatResponse())
-                .thenAnswer(
-                        inv -> {
-                            ((AtomicInteger)
-                                            capturedToolContext
-                                                    .get()
-                                                    .get(TurnToolContext.TURN_COUNTER_KEY))
-                                    .set(turns);
-                            return buildChatResponse(responseText, finishReason, usage);
-                        });
+        when(responseSpec.chatResponse()).thenAnswer(inv -> {
+            ((AtomicInteger) capturedToolContext.get().get(TurnToolContext.TURN_COUNTER_KEY)).set(turns);
+            return buildChatResponse(responseText, finishReason, usage);
+        });
     }
 
     private AgentTurnCompleteEvent captureTurnCompleteEvent() {
-        ArgumentCaptor<AgentTurnCompleteEvent> captor =
-                ArgumentCaptor.forClass(AgentTurnCompleteEvent.class);
+        ArgumentCaptor<AgentTurnCompleteEvent> captor = ArgumentCaptor.forClass(AgentTurnCompleteEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         return captor.getValue();
     }
@@ -155,49 +137,29 @@ class AiServiceTest {
         AiConfig config = new AiConfig();
         ToolExecutionExceptionProcessor processor = config.toolExecutionExceptionProcessor();
         assertInstanceOf(RoxyToolExecutionExceptionProcessor.class, processor);
-        assertInstanceOf(
-                ReturnDirectToolCallingManager.class,
-                config.toolCallingManager(
-                        processor,
-                        settingsService,
-                        planService,
-                        eventPublisher,
-                        config.objectMapper()));
+        assertInstanceOf(ReturnDirectToolCallingManager.class, config.toolCallingManager(processor, settingsService,
+                planService, eventPublisher, config.objectMapper()));
     }
 
     @Test
     void testChatUsesConfiguredModelAndDynamicPrompt() {
         settings.setGeminiModel("test-model-123");
-        stubChatResponse(
-                WorkflowPhase.CODE, "FULL CODE SYSTEM PROMPT", "AI Response", "STOP", null);
+        stubChatResponse(WorkflowPhase.CODE, "FULL CODE SYSTEM PROMPT", "AI Response", "STOP", null);
 
         assertEquals("AI Response", aiService.chat("default", null, "Hello", null));
         verify(requestSpec).system("FULL CODE SYSTEM PROMPT");
         verify(promptService).buildSystemPrompt(WorkflowPhase.CODE, null);
         verify(requestSpec).options(any());
         verify(requestSpec).tools(jexlTool, planService);
-        verify(requestSpec)
-                .toolContext(
-                        argThat(
-                                ctx ->
-                                        "default"
-                                                        .equals(
-                                                                ctx.get(
-                                                                        TurnToolContext
-                                                                                .CONVERSATION_ID_KEY))
-                                                && WorkflowPhase.CODE
-                                                        == ctx.get(TurnToolContext.PHASE_KEY)
-                                                && ctx.get(TurnToolContext.TURN_COUNTER_KEY)
-                                                        instanceof AtomicInteger));
+        verify(requestSpec).toolContext(argThat(ctx -> "default".equals(ctx.get(TurnToolContext.CONVERSATION_ID_KEY))
+                && WorkflowPhase.CODE == ctx.get(TurnToolContext.PHASE_KEY)
+                && ctx.get(TurnToolContext.TURN_COUNTER_KEY) instanceof AtomicInteger));
     }
 
     @Test
     void testChatRegistersOnlyJexlToolInExplorePhase() {
-        stubChatResponse(
-                WorkflowPhase.EXPLORE, "EXPLORE SYSTEM PROMPT", "Explore Response", "STOP", null);
-        assertEquals(
-                "Explore Response",
-                aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null));
+        stubChatResponse(WorkflowPhase.EXPLORE, "EXPLORE SYSTEM PROMPT", "Explore Response", "STOP", null);
+        assertEquals("Explore Response", aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null));
         verify(requestSpec).tools(jexlTool);
     }
 
@@ -207,18 +169,14 @@ class AiServiceTest {
         settings.setGeminiModel("test-model-123");
         when(promptService.buildSystemPrompt(WorkflowPhase.REVIEW, "Extra instructions"))
                 .thenReturn("REVIEW SYSTEM PROMPT");
-        when(responseSpec.chatResponse())
-                .thenReturn(buildChatResponse("AI Response", "STOP", null));
+        when(responseSpec.chatResponse()).thenReturn(buildChatResponse("AI Response", "STOP", null));
 
-        assertEquals(
-                "AI Response",
-                aiService.chat(
-                        "custom-conv", WorkflowPhase.REVIEW, "Hello", "Extra instructions", null));
+        assertEquals("AI Response",
+                aiService.chat("custom-conv", WorkflowPhase.REVIEW, "Hello", "Extra instructions", null));
         verify(requestSpec).system("REVIEW SYSTEM PROMPT");
         verify(requestSpec).tools(jexlTool, planService);
 
-        ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorCaptor =
-                ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorCaptor = ArgumentCaptor.forClass(Consumer.class);
         verify(requestSpec).advisors(advisorCaptor.capture());
         ChatClient.AdvisorSpec advisorSpec = mock(ChatClient.AdvisorSpec.class);
         advisorCaptor.getValue().accept(advisorSpec);
@@ -249,48 +207,25 @@ class AiServiceTest {
     }
 
     static Stream<Arguments> finishReasonFormattingCases() {
-        return Stream.of(
-                caseArgs(
-                        "Complete answer.",
-                        "STOP",
-                        new DefaultUsage(100, 50, 150),
-                        "Complete answer."),
-                caseArgs(
-                        "Partial output here...",
-                        "MAX_TOKENS",
-                        new DefaultUsage(1200, 8192, 9392),
-                        "Partial output here...",
-                        "MAX_TOKENS",
-                        "promptTokens=1200, completionTokens=8192, totalTokens=9392",
-                        "continue"),
-                caseArgs(
-                        "   ",
-                        "MAX_TOKENS",
-                        new DefaultUsage(4000, 8192, 12192),
-                        "MAX_TOKENS",
-                        "promptTokens=4000, completionTokens=8192, totalTokens=12192",
-                        "continue"),
-                caseArgs(
-                        null,
-                        "MALFORMED_FUNCTION_CALL",
-                        null,
-                        "MALFORMED_FUNCTION_CALL",
-                        "blocked or aborted"),
+        return Stream.of(caseArgs("Complete answer.", "STOP", new DefaultUsage(100, 50, 150), "Complete answer."),
+                caseArgs("Partial output here...", "MAX_TOKENS", new DefaultUsage(1200, 8192, 9392),
+                        "Partial output here...", "MAX_TOKENS",
+                        "promptTokens=1200, completionTokens=8192, totalTokens=9392", "continue"),
+                caseArgs("   ", "MAX_TOKENS", new DefaultUsage(4000, 8192, 12192), "MAX_TOKENS",
+                        "promptTokens=4000, completionTokens=8192, totalTokens=12192", "continue"),
+                caseArgs(null, "MALFORMED_FUNCTION_CALL", null, "MALFORMED_FUNCTION_CALL", "blocked or aborted"),
                 caseArgs("", "SAFETY", null, "SAFETY", "blocked or aborted"));
     }
 
     @ParameterizedTest
     @MethodSource("finishReasonFormattingCases")
-    void testChatResponseFormattingByFinishReason(
-            String rawText, String finishReason, Usage usage, List<String> expectedSnippets) {
+    void testChatResponseFormattingByFinishReason(String rawText, String finishReason, Usage usage,
+            List<String> expectedSnippets) {
         stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", rawText, finishReason, usage);
 
         String result = aiService.chat("default", null, "Prompt", null);
-        String directFormatted =
-                aiService.formatChatResponse(
-                        buildChatResponse(rawText, finishReason, usage),
-                        new TurnToolContext(
-                                "default", WorkflowPhase.CODE, new AtomicInteger(0), null));
+        String directFormatted = aiService.formatChatResponse(buildChatResponse(rawText, finishReason, usage),
+                new TurnToolContext("default", WorkflowPhase.CODE, new AtomicInteger(0), null));
 
         assertEquals(directFormatted, result);
         for (String snippet : expectedSnippets) {
@@ -304,8 +239,8 @@ class AiServiceTest {
     void testBlankResponseAfterToolExecutionWithStopReturnsDiagnosticMessage() {
         stubToolTurnsAndResponse(3, "", "STOP", new DefaultUsage(2500, 300, 2800));
         String result = aiService.chat("default", null, "Analyze project", null);
-        SwingTestUtils.assertContainsAll(
-                result, "STOP", "3", "promptTokens=2500, completionTokens=300, totalTokens=2800");
+        SwingTestUtils.assertContainsAll(result, "STOP", "3",
+                "promptTokens=2500, completionTokens=300, totalTokens=2800");
         assertTrue(result.toLowerCase().contains("continue"));
         verify(requestSpec, times(1)).call();
     }
@@ -313,18 +248,13 @@ class AiServiceTest {
     @Test
     void testChatPropagatesCancellationAndPostCallInterruption() {
         stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "Ignored", "STOP", null);
-        when(responseSpec.chatResponse())
-                .thenAnswer(
-                        inv -> {
-                            Thread.currentThread().interrupt();
-                            return buildChatResponse(
-                                    "Should be discarded due to interrupt", "STOP", null);
-                        });
+        when(responseSpec.chatResponse()).thenAnswer(inv -> {
+            Thread.currentThread().interrupt();
+            return buildChatResponse("Should be discarded due to interrupt", "STOP", null);
+        });
 
         try {
-            assertThrows(
-                    CancellationException.class,
-                    () -> aiService.chat("default", null, "Run code", null));
+            assertThrows(CancellationException.class, () -> aiService.chat("default", null, "Run code", null));
             assertTrue(Thread.currentThread().isInterrupted());
         } finally {
             Thread.interrupted();
@@ -336,9 +266,7 @@ class AiServiceTest {
         stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "Ignored", "STOP", null);
         when(requestSpec.call()).thenThrow(new IllegalStateException("API failure"));
 
-        assertThrows(
-                IllegalStateException.class,
-                () -> aiService.chat("default", null, "Trigger error", null));
+        assertThrows(IllegalStateException.class, () -> aiService.chat("default", null, "Trigger error", null));
         verify(eventPublisher, never()).publishEvent(any(AgentTurnCompleteEvent.class));
     }
 
@@ -347,27 +275,18 @@ class AiServiceTest {
         assertEquals(AiService.DEFAULT_TOPIC_TITLE, aiService.generateTopicTitle("   "));
 
         when(responseSpec.chatResponse())
-                .thenReturn(
-                        buildChatResponse(
-                                "  '# **Memory Service RipGrep Search**'\nExtra line",
-                                "STOP",
-                                null));
-        assertEquals(
-                "Memory Service RipGrep Search",
-                aiService.generateTopicTitle(
-                        "User: How does memory search work?\nRoxy: It uses RipGrep."));
+                .thenReturn(buildChatResponse("  '# **Memory Service RipGrep Search**'\nExtra line", "STOP", null));
+        assertEquals("Memory Service RipGrep Search",
+                aiService.generateTopicTitle("User: How does memory search work?\nRoxy: It uses RipGrep."));
         verify(requestSpec).system(AiService.TOPIC_TITLE_SYSTEM_PROMPT);
         verify(requestSpec, never()).tools(any(Object[].class));
 
         when(responseSpec.chatResponse()).thenReturn(buildChatResponse("   ", "STOP", null));
-        assertEquals(
-                "How does memory search work",
-                aiService.generateTopicTitle(
-                        "User: How does memory search work?\nRoxy: It uses RipGrep."));
+        assertEquals("How does memory search work",
+                aiService.generateTopicTitle("User: How does memory search work?\nRoxy: It uses RipGrep."));
 
         when(requestSpec.call()).thenThrow(new RuntimeException("LLM offline"));
-        assertEquals(
-                "Exploring Swing HTML Constraints",
+        assertEquals("Exploring Swing HTML Constraints",
                 aiService.generateTopicTitle("User: # Exploring Swing HTML Constraints!"));
     }
 }

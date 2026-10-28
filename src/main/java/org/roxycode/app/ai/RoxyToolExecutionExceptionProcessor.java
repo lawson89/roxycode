@@ -9,8 +9,7 @@ import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
 public class RoxyToolExecutionExceptionProcessor implements ToolExecutionExceptionProcessor {
 
     private static final String ERROR_KEY = "error";
-    private static final String ERROR_JSON_PREFIX =
-            """
+    private static final String ERROR_JSON_PREFIX = """
             {"error":""";
 
     @Override
@@ -21,22 +20,19 @@ public class RoxyToolExecutionExceptionProcessor implements ToolExecutionExcepti
     public static String formatException(Throwable exception) {
         ExceptionUtils.rethrowIfCancelled(exception, "Tool execution cancelled");
         Throwable cause = ExceptionUtils.getRootCause(exception);
-        String msg =
-                cause != null && cause.getMessage() != null
-                        ? cause.getMessage()
-                        : (cause != null ? cause.toString() : "Unknown error");
+        String msg = cause != null && cause.getMessage() != null
+                ? cause.getMessage()
+                : (cause != null ? cause.toString() : "Unknown error");
         return toJsonError(AiConfig.SHARED_OBJECT_MAPPER, msg);
     }
 
     public static String toJsonError(ObjectMapper mapper, String message) {
         ObjectMapper effectiveMapper = mapper != null ? mapper : AiConfig.SHARED_OBJECT_MAPPER;
         try {
-            return effectiveMapper.writeValueAsString(
-                    Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
+            return effectiveMapper.writeValueAsString(Map.of(ERROR_KEY, message != null ? message : "Unknown error"));
         } catch (Exception e) {
             return """
-                    {"error":"Internal Error during error serialization"}"""
-                    .strip();
+                    {"error":"Internal Error during error serialization"}""".strip();
         }
     }
 
@@ -45,7 +41,8 @@ public class RoxyToolExecutionExceptionProcessor implements ToolExecutionExcepti
     }
 
     public static String stripErrorPrefix(String responseText) {
-        if (responseText == null) return "Unknown error";
+        if (responseText == null)
+            return "Unknown error";
         String trimmed = responseText.trim();
         if (trimmed.startsWith(ERROR_JSON_PREFIX)) {
             try {

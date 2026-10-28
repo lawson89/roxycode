@@ -14,25 +14,18 @@ public class JexlToolNotificationTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         AtomicBoolean called = new AtomicBoolean(false);
 
-        JexlTool tool =
-                new JexlTool(
-                        registry,
-                        event -> {
-                            if (event instanceof ToolExecutionEvent tee) {
-                                called.set(true);
-                                assertEquals("qa:default", tee.conversationId());
-                                assertEquals("1 + 1", tee.script());
-                                assertEquals(2, ((Number) tee.result()).intValue());
-                                assertTrue(tee.success());
-                            }
-                        },
-                        null);
+        JexlTool tool = new JexlTool(registry, event -> {
+            if (event instanceof ToolExecutionEvent tee) {
+                called.set(true);
+                assertEquals("qa:default", tee.conversationId());
+                assertEquals("1 + 1", tee.script());
+                assertEquals(2, ((Number) tee.result()).intValue());
+                assertTrue(tee.success());
+            }
+        }, null);
 
-        tool.executeJexl(
-                "1 + 1",
-                new ToolContext(
-                        new TurnToolContext("qa:default", WorkflowPhase.EXPLORE, null, null)
-                                .toMap()));
+        tool.executeJexl("1 + 1",
+                new ToolContext(new TurnToolContext("qa:default", WorkflowPhase.EXPLORE, null, null).toMap()));
         assertTrue(called.get());
     }
 
@@ -41,24 +34,19 @@ public class JexlToolNotificationTest {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         AtomicBoolean called = new AtomicBoolean(false);
 
-        JexlTool tool =
-                new JexlTool(
-                        registry,
-                        event -> {
-                            if (event instanceof ToolExecutionEvent tee) {
-                                called.set(true);
-                                assertEquals("default", tee.conversationId());
-                                assertEquals("if (", tee.script());
-                                assertNull(tee.result());
-                                assertFalse(tee.success());
-                                assertNotNull(tee.error());
-                                assertTrue(tee.error().startsWith("Syntax Error: "));
-                            }
-                        },
-                        null);
+        JexlTool tool = new JexlTool(registry, event -> {
+            if (event instanceof ToolExecutionEvent tee) {
+                called.set(true);
+                assertEquals("default", tee.conversationId());
+                assertEquals("if (", tee.script());
+                assertNull(tee.result());
+                assertFalse(tee.success());
+                assertNotNull(tee.error());
+                assertTrue(tee.error().startsWith("Syntax Error: "));
+            }
+        }, null);
 
         tool.executeJexl("if (");
-        assertTrue(
-                called.get(), "ApplicationEventPublisher should be notified on JEXL syntax error");
+        assertTrue(called.get(), "ApplicationEventPublisher should be notified on JEXL syntax error");
     }
 }

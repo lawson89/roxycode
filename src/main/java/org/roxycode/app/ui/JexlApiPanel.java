@@ -46,15 +46,8 @@ public final class JexlApiPanel extends JPanel {
         String doc = registry.getDocumentation(null);
         this.lastCopiedDocumentation = doc;
         SwingHtmlUtils.copyToClipboard(doc);
-        copyFeedbackTimer =
-                SwingHtmlUtils.showCopyButtonFeedback(
-                        copyBtn,
-                        copyFeedbackTimer,
-                        COPIED_BUTTON_TEXT,
-                        null,
-                        COPY_BUTTON_TEXT,
-                        null,
-                        COPY_FEEDBACK_DELAY_MS);
+        copyFeedbackTimer = SwingHtmlUtils.showCopyButtonFeedback(copyBtn, copyFeedbackTimer, COPIED_BUTTON_TEXT, null,
+                COPY_BUTTON_TEXT, null, COPY_FEEDBACK_DELAY_MS);
     }
 
     JButton getCopyButton() {
@@ -84,8 +77,7 @@ public final class JexlApiPanel extends JPanel {
 
     private void refresh() {
         String doc = registry.getDocumentation(null);
-        textPane.setText(
-                "<html><body><pre>" + JexlToHtmlConverter.convert(doc) + "</pre></body></html>");
+        textPane.setText("<html><body><pre>" + JexlToHtmlConverter.convert(doc) + "</pre></body></html>");
         textPane.setCaretPosition(0);
     }
 }

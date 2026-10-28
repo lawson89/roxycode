@@ -12,14 +12,13 @@ import org.junit.jupiter.api.io.TempDir;
 
 class PathUtilsTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     @Test
-    void testCreateParentDirectoriesCreatesMissingParentsAndHandlesNullSafeCases()
-            throws IOException {
+    void testCreateParentDirectoriesCreatesMissingParentsAndHandlesNullSafeCases() throws IOException {
         assertDoesNotThrow(() -> PathUtils.createParentDirectories(null));
-        assertDoesNotThrow(
-                () -> PathUtils.createParentDirectories(Path.of("relativeFileOnly.txt")));
+        assertDoesNotThrow(() -> PathUtils.createParentDirectories(Path.of("relativeFileOnly.txt")));
 
         Path nestedFile = tempDir.resolve("a/b/c/file.txt");
         PathUtils.createParentDirectories(nestedFile);

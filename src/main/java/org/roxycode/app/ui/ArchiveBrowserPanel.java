@@ -42,20 +42,10 @@ public final class ArchiveBrowserPanel extends JPanel {
     static final String COPY_BUTTON_TEXT = "Copy as Markdown";
 
     public enum ArchiveMode {
-        TOPICS(
-                "Search past topics...",
-                "topic",
-                "topics",
-                Codicons.COMMENT_DISCUSSION,
-                "Archived On",
+        TOPICS("Search past topics...", "topic", "topics", Codicons.COMMENT_DISCUSSION, "Archived On",
                 "No archived Q&A topics yet.",
                 "When you start a New Topic in Codebase Q&A, the conversation is archived here automatically."),
-        PLANS(
-                "Search past plans...",
-                "plan",
-                "plans",
-                Codicons.PROJECT,
-                "Completed On",
+        PLANS("Search past plans...", "plan", "plans", Codicons.PROJECT, "Completed On",
                 "No archived implementation plans yet.",
                 "When a Feature Request is approved as complete in Review, its plan is archived here automatically.");
 
@@ -67,14 +57,8 @@ public final class ArchiveBrowserPanel extends JPanel {
         private final String emptyTitle;
         private final String emptyHint;
 
-        ArchiveMode(
-                String placeholder,
-                String singularNoun,
-                String pluralNoun,
-                Codicons icon,
-                String dateLabel,
-                String emptyTitle,
-                String emptyHint) {
+        ArchiveMode(String placeholder, String singularNoun, String pluralNoun, Codicons icon, String dateLabel,
+                String emptyTitle, String emptyHint) {
             this.placeholder = placeholder;
             this.singularNoun = singularNoun;
             this.pluralNoun = pluralNoun;
@@ -118,15 +102,12 @@ public final class ArchiveBrowserPanel extends JPanel {
         this.memoryService = memoryService;
         this.mode = Objects.requireNonNull(mode, "mode must not be null");
 
-        JPanel topBar =
-                new JPanel(
-                        new MigLayout("insets 8 12 8 12, fillx", "[grow, fill]12[]8[]", "center"));
+        JPanel topBar = new JPanel(new MigLayout("insets 8 12 8 12, fillx", "[grow, fill]12[]8[]", "center"));
         topBar.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
 
         searchField = new JTextField();
         searchField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, mode.getPlaceholder());
-        searchField.putClientProperty(
-                FlatClientProperties.TEXT_FIELD_LEADING_ICON, FontIcon.of(Codicons.SEARCH, 14));
+        searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON, FontIcon.of(Codicons.SEARCH, 14));
         searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, true);
 
         countLabel = new JLabel(formatCountText(0));
@@ -143,22 +124,19 @@ public final class ArchiveBrowserPanel extends JPanel {
 
         entryList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         entryList.setCellRenderer(new ArchiveEntryCellRenderer());
-        entryList.addListSelectionListener(
-                e -> {
-                    if (!e.getValueIsAdjusting()) {
-                        onEntrySelected(entryList.getSelectedValue());
-                    }
-                });
+        entryList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                onEntrySelected(entryList.getSelectedValue());
+            }
+        });
 
         JScrollPane listScrollPane = new JScrollPane(entryList);
         listScrollPane.setBorder(null);
 
         JPanel detailPanel = new JPanel(new BorderLayout());
         JPanel detailToolbar = new JPanel(new BorderLayout(8, 0));
-        detailToolbar.setBorder(
-                BorderFactory.createCompoundBorder(
-                        SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0),
-                        BorderFactory.createEmptyBorder(4, 12, 4, 8)));
+        detailToolbar.setBorder(BorderFactory.createCompoundBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0),
+                BorderFactory.createEmptyBorder(4, 12, 4, 8)));
 
         detailSummaryLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
         detailToolbar.add(detailSummaryLabel, BorderLayout.WEST);
@@ -178,8 +156,7 @@ public final class ArchiveBrowserPanel extends JPanel {
         detailPanel.add(detailToolbar, BorderLayout.NORTH);
         detailPanel.add(detailScrollPane, BorderLayout.CENTER);
 
-        JSplitPane splitPane =
-                new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, listScrollPane, detailPanel);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, listScrollPane, detailPanel);
         splitPane.setDividerLocation(320);
         splitPane.setResizeWeight(0.28);
         splitPane.setBorder(null);
@@ -206,31 +183,28 @@ public final class ArchiveBrowserPanel extends JPanel {
 
     SwingWorker<List<ArchiveEntrySummary>, Void> executeSearchAsync() {
         String query = searchField != null ? searchField.getText() : "";
-        SwingWorker<List<ArchiveEntrySummary>, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected List<ArchiveEntrySummary> doInBackground() {
-                        try {
-                            List<ArchiveEntrySummary> results = loadEntriesForQuery(query);
-                            Edt.run(() -> applySearchResults(this, results, query));
-                            return results;
-                        } catch (Exception e) {
-                            log.warn(
-                                    "Failed to load archive entries for {}: {}",
-                                    mode,
-                                    e.getMessage());
-                            Edt.run(() -> applySearchResults(this, List.of(), query));
-                            return List.of();
-                        }
-                    }
-                };
+        SwingWorker<List<ArchiveEntrySummary>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected List<ArchiveEntrySummary> doInBackground() {
+                try {
+                    List<ArchiveEntrySummary> results = loadEntriesForQuery(query);
+                    Edt.run(() -> applySearchResults(this, results, query));
+                    return results;
+                } catch (Exception e) {
+                    log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
+                    Edt.run(() -> applySearchResults(this, List.of(), query));
+                    return List.of();
+                }
+            }
+        };
         activeSearchWorker = worker;
         worker.execute();
         return worker;
     }
 
     private List<ArchiveEntrySummary> loadEntriesForQuery(String query) {
-        if (memoryService == null) return List.of();
+        if (memoryService == null)
+            return List.of();
         String trimmed = query != null ? query.trim() : "";
         if (mode == ArchiveMode.TOPICS) {
             return trimmed.isEmpty()
@@ -243,14 +217,12 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     @SuppressWarnings("PMD.NullAssignment")
-    private void applySearchResults(
-            SwingWorker<List<ArchiveEntrySummary>, Void> worker,
-            List<ArchiveEntrySummary> results,
-            String query) {
-        if (!Objects.equals(worker, activeSearchWorker)) return;
+    private void applySearchResults(SwingWorker<List<ArchiveEntrySummary>, Void> worker,
+            List<ArchiveEntrySummary> results, String query) {
+        if (!Objects.equals(worker, activeSearchWorker))
+            return;
         List<ArchiveEntrySummary> safeResults = results != null ? results : List.of();
-        String previousFilename =
-                currentSelectedEntry != null ? currentSelectedEntry.filename() : null;
+        String previousFilename = currentSelectedEntry != null ? currentSelectedEntry.filename() : null;
 
         listModel.clear();
         int indexToSelect = -1;
@@ -285,80 +257,69 @@ public final class ArchiveBrowserPanel extends JPanel {
         }
 
         detailSummaryLabel.setText(entry.title());
-        SwingWorker<String, Void> worker =
-                new SwingWorker<>() {
-                    @Override
-                    protected String doInBackground() {
-                        try {
-                            String raw = readEntryMarkdown(entry.filename());
-                            String normalized = raw != null ? raw : "";
-                            Edt.run(() -> applyDetailContent(this, entry, normalized));
-                            return normalized;
-                        } catch (Exception e) {
-                            log.warn(
-                                    "Failed to read archived markdown {}: {}",
-                                    entry.filename(),
-                                    e.getMessage());
-                            Edt.run(() -> applyDetailContent(this, entry, ""));
-                            return "";
-                        }
-                    }
-                };
+        SwingWorker<String, Void> worker = new SwingWorker<>() {
+            @Override
+            protected String doInBackground() {
+                try {
+                    String raw = readEntryMarkdown(entry.filename());
+                    String normalized = raw != null ? raw : "";
+                    Edt.run(() -> applyDetailContent(this, entry, normalized));
+                    return normalized;
+                } catch (Exception e) {
+                    log.warn("Failed to read archived markdown {}: {}", entry.filename(), e.getMessage());
+                    Edt.run(() -> applyDetailContent(this, entry, ""));
+                    return "";
+                }
+            }
+        };
         activeReadWorker = worker;
         worker.execute();
     }
 
     private String readEntryMarkdown(String filename) {
-        if (memoryService == null || filename == null || filename.isBlank()) return "";
+        if (memoryService == null || filename == null || filename.isBlank())
+            return "";
         return mode == ArchiveMode.TOPICS
                 ? memoryService.readArchivedTopic(filename)
                 : memoryService.readArchivedPlan(filename);
     }
 
-    private void applyDetailContent(
-            SwingWorker<String, Void> worker, ArchiveEntrySummary entry, String rawMarkdown) {
-        if (!Objects.equals(worker, activeReadWorker)) return;
+    private void applyDetailContent(SwingWorker<String, Void> worker, ArchiveEntrySummary entry, String rawMarkdown) {
+        if (!Objects.equals(worker, activeReadWorker))
+            return;
         this.currentRawMarkdown = rawMarkdown != null ? rawMarkdown : "";
         copyMarkdownButton.setEnabled(!this.currentRawMarkdown.isBlank());
         displayArea.setText(buildDetailHtml(entry, this.currentRawMarkdown, mode));
         displayArea.setCaretPosition(0);
     }
 
-    static String buildDetailHtml(
-            ArchiveEntrySummary entry, String rawMarkdown, ArchiveMode archiveMode) {
-        if (entry == null) return "<html><body></body></html>";
-        String renderedBody =
-                SwingHtmlUtils.renderMarkdownToHtml(MemoryService.stripFrontmatter(rawMarkdown));
+    static String buildDetailHtml(ArchiveEntrySummary entry, String rawMarkdown, ArchiveMode archiveMode) {
+        if (entry == null)
+            return "<html><body></body></html>";
+        String renderedBody = SwingHtmlUtils.renderMarkdownToHtml(MemoryService.stripFrontmatter(rawMarkdown));
         String formattedDate = formatTimestampDisplay(entry.timestamp());
         String author = StringUtils.defaultIfBlank(entry.createdBy(), "User");
 
         StringBuilder metaRows = new StringBuilder();
-        metaRows.append(
-                """
+        metaRows.append("""
                 <tr>
                     <td valign='top' nowrap='nowrap' class='plan-muted'><b>%s:</b></td>
                     <td width='100%%'>%s &nbsp;&bull;&nbsp; <b>By:</b> %s%s</td>
                 </tr>
-                """
-                        .formatted(
-                                SwingHtmlUtils.escapeHtml(archiveMode.dateLabel),
-                                SwingHtmlUtils.escapeHtml(
-                                        formattedDate.isEmpty() ? entry.filename() : formattedDate),
-                                SwingHtmlUtils.escapeHtml(author),
-                                archiveMode == ArchiveMode.TOPICS && entry.messageCount() > 0
-                                        ? " &nbsp;&bull;&nbsp; <b>Messages:</b> "
-                                                + entry.messageCount()
-                                        : ""));
+                """.formatted(SwingHtmlUtils.escapeHtml(archiveMode.dateLabel),
+                SwingHtmlUtils.escapeHtml(formattedDate.isEmpty() ? entry.filename() : formattedDate),
+                SwingHtmlUtils.escapeHtml(author),
+                archiveMode == ArchiveMode.TOPICS && entry.messageCount() > 0
+                        ? " &nbsp;&bull;&nbsp; <b>Messages:</b> " + entry.messageCount()
+                        : ""));
 
         if (entry.matchSnippet() != null && !entry.matchSnippet().isBlank()) {
-            metaRows.append(
-                    """
+            metaRows.append("""
                     <tr>
                         <td valign='top' nowrap='nowrap' class='plan-muted'><b>Match:</b></td>
                         <td width='100%%'><i>%s</i></td>
                     </tr>
-                    """
-                            .formatted(SwingHtmlUtils.escapeHtml(entry.matchSnippet())));
+                    """.formatted(SwingHtmlUtils.escapeHtml(entry.matchSnippet())));
         }
 
         return """
@@ -371,41 +332,26 @@ public final class ArchiveBrowserPanel extends JPanel {
                 </table>
                 <div class='content'>%s</div>
                 </body></html>
-                """
-                .formatted(
-                        SwingHtmlUtils.escapeHtml(entry.title()),
-                        SwingHtmlUtils.escapeHtml(entry.filename()),
-                        metaRows,
-                        renderedBody);
+                """.formatted(SwingHtmlUtils.escapeHtml(entry.title()), SwingHtmlUtils.escapeHtml(entry.filename()),
+                metaRows, renderedBody);
     }
 
     private void renderEmptyState(boolean isSearchEmpty) {
-        String title =
-                isSearchEmpty ? "No matching " + mode.pluralNoun + " found." : mode.emptyTitle;
-        String hint =
-                isSearchEmpty
-                        ? "Try a different search term or clear the search box."
-                        : mode.emptyHint;
-        displayArea.setText(
-                "<html><body><h3>%s</h3><p class='plan-muted'>%s</p></body></html>"
-                        .formatted(
-                                SwingHtmlUtils.escapeHtml(title), SwingHtmlUtils.escapeHtml(hint)));
+        String title = isSearchEmpty ? "No matching " + mode.pluralNoun + " found." : mode.emptyTitle;
+        String hint = isSearchEmpty ? "Try a different search term or clear the search box." : mode.emptyHint;
+        displayArea.setText("<html><body><h3>%s</h3><p class='plan-muted'>%s</p></body></html>"
+                .formatted(SwingHtmlUtils.escapeHtml(title), SwingHtmlUtils.escapeHtml(hint)));
         displayArea.setCaretPosition(0);
     }
 
     private void copyCurrentMarkdown() {
-        if (currentRawMarkdown == null || currentRawMarkdown.isBlank()) return;
+        if (currentRawMarkdown == null || currentRawMarkdown.isBlank())
+            return;
         this.lastCopiedMarkdown = currentRawMarkdown;
         SwingHtmlUtils.copyToClipboard(currentRawMarkdown);
-        copyFeedbackTimer =
-                SwingHtmlUtils.showCopyButtonFeedback(
-                        copyMarkdownButton,
-                        copyFeedbackTimer,
-                        "Copied!",
-                        FontIcon.of(Codicons.CHECK, 14),
-                        COPY_BUTTON_TEXT,
-                        FontIcon.of(Codicons.CLIPPY, 14),
-                        COPY_FEEDBACK_DELAY_MS);
+        copyFeedbackTimer = SwingHtmlUtils.showCopyButtonFeedback(copyMarkdownButton, copyFeedbackTimer, "Copied!",
+                FontIcon.of(Codicons.CHECK, 14), COPY_BUTTON_TEXT, FontIcon.of(Codicons.CLIPPY, 14),
+                COPY_FEEDBACK_DELAY_MS);
     }
 
     private String formatCountText(int count) {
@@ -413,7 +359,8 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     static String formatTimestampDisplay(String rawTimestamp) {
-        if (rawTimestamp == null || rawTimestamp.isBlank()) return "";
+        if (rawTimestamp == null || rawTimestamp.isBlank())
+            return "";
         String trimmed = rawTimestamp.trim();
         return trimmed.length() >= TIMESTAMP_PREFIX_LEN
                 ? trimmed.substring(0, TIMESTAMP_PREFIX_LEN).replace('T', ' ')
@@ -426,8 +373,7 @@ public final class ArchiveBrowserPanel extends JPanel {
         if (displayArea != null) {
             updateTheme();
             if (currentSelectedEntry != null) {
-                displayArea.setText(
-                        buildDetailHtml(currentSelectedEntry, currentRawMarkdown, mode));
+                displayArea.setText(buildDetailHtml(currentSelectedEntry, currentRawMarkdown, mode));
                 displayArea.setCaretPosition(0);
             } else {
                 renderEmptyState(searchField != null && !searchField.getText().isBlank());
@@ -490,8 +436,7 @@ public final class ArchiveBrowserPanel extends JPanel {
         return activeReadWorker;
     }
 
-    private final class ArchiveEntryCellRenderer extends JPanel
-            implements ListCellRenderer<ArchiveEntrySummary> {
+    private final class ArchiveEntryCellRenderer extends JPanel implements ListCellRenderer<ArchiveEntrySummary> {
         private static final long serialVersionUID = 1L;
 
         private final JLabel titleLabel = new JLabel();
@@ -512,12 +457,8 @@ public final class ArchiveBrowserPanel extends JPanel {
         }
 
         @Override
-        public Component getListCellRendererComponent(
-                JList<? extends ArchiveEntrySummary> list,
-                ArchiveEntrySummary value,
-                int index,
-                boolean isSelected,
-                boolean cellHasFocus) {
+        public Component getListCellRendererComponent(JList<? extends ArchiveEntrySummary> list,
+                ArchiveEntrySummary value, int index, boolean isSelected, boolean cellHasFocus) {
             Color bg = isSelected ? list.getSelectionBackground() : list.getBackground();
             Color fg = isSelected ? list.getSelectionForeground() : list.getForeground();
             Color muted = isSelected ? fg : SwingHtmlUtils.getMutedForegroundColor();
@@ -528,16 +469,13 @@ public final class ArchiveBrowserPanel extends JPanel {
             if (value != null) {
                 titleLabel.setText(value.title());
                 titleLabel.setForeground(fg);
-                titleLabel.setIcon(
-                        FontIcon.of(
-                                mode.getIcon(),
-                                14,
-                                isSelected ? fg : SwingHtmlUtils.getAccentColor()));
+                titleLabel.setIcon(FontIcon.of(mode.getIcon(), 14, isSelected ? fg : SwingHtmlUtils.getAccentColor()));
 
                 String dateStr = formatTimestampDisplay(value.timestamp());
                 String author = StringUtils.defaultIfBlank(value.createdBy(), "User");
                 StringBuilder sub = new StringBuilder();
-                if (!dateStr.isEmpty()) sub.append(dateStr).append("  •  ");
+                if (!dateStr.isEmpty())
+                    sub.append(dateStr).append("  •  ");
                 sub.append(author);
                 if (mode == ArchiveMode.TOPICS && value.messageCount() > 0) {
                     sub.append("  •  ").append(value.messageCount()).append(" msgs");
@@ -547,10 +485,7 @@ public final class ArchiveBrowserPanel extends JPanel {
 
                 String snippet = value.matchSnippet();
                 boolean hasSnippet = snippet != null && !snippet.isBlank();
-                snippetLabel.setText(
-                        hasSnippet
-                                ? StringUtils.abbreviate(snippet.trim(), MAX_SNIPPET_LENGTH)
-                                : "");
+                snippetLabel.setText(hasSnippet ? StringUtils.abbreviate(snippet.trim(), MAX_SNIPPET_LENGTH) : "");
                 snippetLabel.setForeground(muted);
                 snippetLabel.setVisible(hasSnippet);
                 setToolTipText(value.title() + " (" + value.filename() + ")");

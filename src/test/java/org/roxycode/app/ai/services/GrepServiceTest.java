@@ -22,7 +22,8 @@ import org.roxycode.app.service.ProjectService;
 
 class GrepServiceTest {
 
-    @TempDir Path tempDir;
+    @TempDir
+    Path tempDir;
 
     private ProjectService projectService;
     private GrepService grepService;
@@ -37,8 +38,7 @@ class GrepServiceTest {
         grepService = new GrepService(projectService);
     }
 
-    private static Arguments rgCase(
-            Function<GrepService, EditorResult> fn, String cmd, String out, String expected) {
+    private static Arguments rgCase(Function<GrepService, EditorResult> fn, String cmd, String out, String expected) {
         return Arguments.of(fn, List.of(cmd.split(" ")), out, expected);
     }
 
@@ -46,8 +46,7 @@ class GrepServiceTest {
     void testGrepSuccessAndRelativePaths() throws IOException {
         Path testFile = Files.writeString(tempDir.resolve("test.txt"), "hello world");
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
-            runnerMock
-                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
                     .thenReturn(new ProcessResult(0, testFile + ":1:hello world\n", "", false));
             EditorResult result = grepService.grep("hello world", ".", "*.txt");
             assertTrue(result.success());
@@ -57,70 +56,39 @@ class GrepServiceTest {
     }
 
     static Stream<Arguments> grepCommandVariants() {
-        String ctxOut =
-                String.join(
-                        "\n",
-                        "src/Sample.java-1-line 1 before",
-                        "src/Sample.java-2-line 2 before",
-                        "src/Sample.java:3:@AgentDoc",
-                        "src/Sample.java-4-public void targetMethod() {");
+        String ctxOut = String.join("\n", "src/Sample.java-1-line 1 before", "src/Sample.java-2-line 2 before",
+                "src/Sample.java:3:@AgentDoc", "src/Sample.java-4-public void targetMethod() {");
         String fixOut = "src/Notes.java:1:1:// FIXME: urgent";
         return Stream.of(
-                rgCase(
-                        s -> s.grepWithContext("@AgentDoc", "src", "*.java", 2),
-                        "rg -n -C 2 --no-heading --color=never -g *.java -- @AgentDoc src",
-                        ctxOut,
+                rgCase(s -> s.grepWithContext("@AgentDoc", "src", "*.java", 2),
+                        "rg -n -C 2 --no-heading --color=never -g *.java -- @AgentDoc src", ctxOut,
                         "src/Sample.java:3:@AgentDoc"),
-                rgCase(
-                        s -> s.grepWithContext("@AgentDoc", 50),
-                        "rg -n -C 20 --no-heading --color=never -- @AgentDoc .",
-                        ctxOut,
-                        "line 1 before"),
-                rgCase(
-                        s -> s.grepWithContext("@AgentDoc", "src", 3),
-                        "rg -n -C 3 --no-heading --color=never -- @AgentDoc src",
-                        ctxOut,
+                rgCase(s -> s.grepWithContext("@AgentDoc", 50), "rg -n -C 20 --no-heading --color=never -- @AgentDoc .",
+                        ctxOut, "line 1 before"),
+                rgCase(s -> s.grepWithContext("@AgentDoc", "src", 3),
+                        "rg -n -C 3 --no-heading --color=never -- @AgentDoc src", ctxOut,
                         "src/Sample.java:3:@AgentDoc"),
-                rgCase(
-                        s -> s.grepLiteral("std::vector<int>"),
+                rgCase(s -> s.grepLiteral("std::vector<int>"),
                         "rg --vimgrep --no-heading --color=never -F -- std::vector<int> .",
-                        "src/Code.cpp:1:1:std::vector<int>",
-                        "std::vector<int>"),
-                rgCase(
-                        s -> s.grepLiteral("foo(bar[0])", "src"),
-                        "rg --vimgrep --no-heading --color=never -F -- foo(bar[0]) src",
-                        "src/Code.cpp:1:1:foo(bar[0])",
+                        "src/Code.cpp:1:1:std::vector<int>", "std::vector<int>"),
+                rgCase(s -> s.grepLiteral("foo(bar[0])", "src"),
+                        "rg --vimgrep --no-heading --color=never -F -- foo(bar[0]) src", "src/Code.cpp:1:1:foo(bar[0])",
                         "foo(bar[0])"),
-                rgCase(
-                        s -> s.grepLiteral("-Dtest=MyTest", "src", "*.cpp"),
+                rgCase(s -> s.grepLiteral("-Dtest=MyTest", "src", "*.cpp"),
                         "rg --vimgrep --no-heading --color=never -F -g *.cpp -- -Dtest=MyTest src",
-                        "src/Code.cpp:1:1:-Dtest=MyTest",
-                        "-Dtest=MyTest"),
-                rgCase(
-                        s -> s.grepIgnoreCase("fixme"),
-                        "rg --vimgrep --no-heading --color=never -i -- fixme .",
-                        fixOut,
+                        "src/Code.cpp:1:1:-Dtest=MyTest", "-Dtest=MyTest"),
+                rgCase(s -> s.grepIgnoreCase("fixme"), "rg --vimgrep --no-heading --color=never -i -- fixme .", fixOut,
                         "FIXME: urgent"),
-                rgCase(
-                        s -> s.grepIgnoreCase("urgent", "src"),
-                        "rg --vimgrep --no-heading --color=never -i -- urgent src",
-                        fixOut,
-                        "FIXME: urgent"),
-                rgCase(
-                        s -> s.grepIgnoreCase("urgent", "src", "*.java"),
-                        "rg --vimgrep --no-heading --color=never -i -g *.java -- urgent src",
-                        fixOut,
-                        "FIXME: urgent"));
+                rgCase(s -> s.grepIgnoreCase("urgent", "src"),
+                        "rg --vimgrep --no-heading --color=never -i -- urgent src", fixOut, "FIXME: urgent"),
+                rgCase(s -> s.grepIgnoreCase("urgent", "src", "*.java"),
+                        "rg --vimgrep --no-heading --color=never -i -g *.java -- urgent src", fixOut, "FIXME: urgent"));
     }
 
     @ParameterizedTest
     @MethodSource("grepCommandVariants")
-    void testGrepCommandVariantsAndOutput(
-            Function<GrepService, EditorResult> invocation,
-            List<String> expectedCommand,
-            String sampleStdout,
-            String expectedSnippet)
-            throws IOException {
+    void testGrepCommandVariantsAndOutput(Function<GrepService, EditorResult> invocation, List<String> expectedCommand,
+            String sampleStdout, String expectedSnippet) throws IOException {
         Files.createDirectories(tempDir.resolve("src"));
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             runner.when(() -> ProcessRunner.run(anyList(), eq(tempDir), eq(true)))
@@ -136,7 +104,8 @@ class GrepServiceTest {
     void testOutputCappingAtMaxLines() {
         StringBuilder manyLines = new StringBuilder();
         for (int i = 1; i <= 250; i++) {
-            if (i > 1) manyLines.append('\n');
+            if (i > 1)
+                manyLines.append('\n');
             manyLines.append("src/Many.java:").append(i).append(":1:match ").append(i);
         }
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
@@ -155,15 +124,11 @@ class GrepServiceTest {
     @Test
     void testListFilesReturnsProjectRelativePaths() throws IOException {
         Path rootFile = Files.writeString(tempDir.resolve("root.txt"), "root");
-        Path nestedFile =
-                Files.writeString(
-                        Files.createDirectories(tempDir.resolve("sub")).resolve("nested.txt"),
-                        "nested");
+        Path nestedFile = Files.writeString(Files.createDirectories(tempDir.resolve("sub")).resolve("nested.txt"),
+                "nested");
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
-            runnerMock
-                    .when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(
-                            new ProcessResult(0, rootFile + "\n" + nestedFile + "\n", "", false));
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, rootFile + "\n" + nestedFile + "\n", "", false));
             List<String> files = grepService.listFiles(null);
             assertTrue(files.containsAll(List.of("root.txt", "sub/nested.txt")));
             for (String file : files) {

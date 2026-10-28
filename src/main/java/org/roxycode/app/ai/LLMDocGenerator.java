@@ -16,25 +16,23 @@ public class LLMDocGenerator {
     private static final String FENCE_END = String.valueOf((char) 96).repeat(3) + "\n";
 
     public String generateDoc(Collection<Object> services) {
-        StringBuilder sb =
-                new StringBuilder("### JEXL API Documentation\n\n")
-                        .append(FENCE_START)
-                        .append(
-                                """
-                                /**
-                                 * ⚠️ INTEROP WARNING: These services return Java objects in Apache Commons JEXL.
-                                 * Always return objects as the last expression of your script to inspect them.
-                                 * Note: Code must be written in Apache Commons JEXL 3 syntax.
-                                 */
+        StringBuilder sb = new StringBuilder("### JEXL API Documentation\n\n").append(FENCE_START).append("""
+                /**
+                 * ⚠️ INTEROP WARNING: These services return Java objects in Apache Commons JEXL.
+                 * Always return objects as the last expression of your script to inspect them.
+                 * Note: Code must be written in Apache Commons JEXL 3 syntax.
+                 */
 
-                                """);
+                """);
         Set<Class<?>> extraTypes = new LinkedHashSet<>();
 
         for (Object service : services) {
-            if (service == null) continue;
+            if (service == null)
+                continue;
             Class<?> clazz = AopUtils.getTargetClass(service);
             AgentService agentService = AnnotationUtils.findAnnotation(clazz, AgentService.class);
-            if (agentService == null) continue;
+            if (agentService == null)
+                continue;
 
             AgentDoc agentDoc = AnnotationUtils.findAnnotation(clazz, AgentDoc.class);
             if (agentDoc != null) {
@@ -44,9 +42,7 @@ public class LLMDocGenerator {
                 }
                 sb.append(DOC_END);
             }
-            sb.append("// Global variable exposed in JEXL: ")
-                    .append(agentService.value())
-                    .append("\n");
+            sb.append("// Global variable exposed in JEXL: ").append(agentService.value()).append("\n");
             generateClassStub(clazz, sb, extraTypes);
             sb.append("\n");
         }
@@ -61,7 +57,8 @@ public class LLMDocGenerator {
                 generateTypeSchema(type, sb, discovered);
                 sb.append("\n");
                 for (Class<?> newType : discovered) {
-                    if (visited.add(newType)) queue.add(newType);
+                    if (visited.add(newType))
+                        queue.add(newType);
                 }
             }
         }
@@ -71,30 +68,23 @@ public class LLMDocGenerator {
     private void generateClassStub(Class<?> clazz, StringBuilder sb, Set<Class<?>> extraTypes) {
         sb.append("interface ").append(clazz.getSimpleName()).append(" {\n");
         Method[] methods = clazz.getMethods();
-        Arrays.sort(
-                methods,
-                Comparator.comparing(Method::getName)
-                        .thenComparingInt(Method::getParameterCount)
-                        .thenComparing(m -> Arrays.toString(m.getParameterTypes())));
+        Arrays.sort(methods, Comparator.comparing(Method::getName).thenComparingInt(Method::getParameterCount)
+                .thenComparing(m -> Arrays.toString(m.getParameterTypes())));
 
         for (Method m : methods) {
-            if (m.getDeclaringClass() == Object.class
-                    || m.isBridge()
-                    || m.isSynthetic()
-                    || !Modifier.isPublic(m.getModifiers())) continue;
+            if (m.getDeclaringClass() == Object.class || m.isBridge() || m.isSynthetic()
+                    || !Modifier.isPublic(m.getModifiers()))
+                continue;
             AgentDoc doc = AnnotationUtils.findAnnotation(m, AgentDoc.class);
-            if (doc == null) continue;
+            if (doc == null)
+                continue;
 
             sb.append("    /**\n     * ").append(doc.value()).append("\n");
             Parameter[] params = m.getParameters();
             for (Parameter p : params) {
                 AgentDoc paramDoc = AnnotationUtils.findAnnotation(p, AgentDoc.class);
                 if (paramDoc != null && !paramDoc.value().isBlank()) {
-                    sb.append("     * @param ")
-                            .append(p.getName())
-                            .append(" ")
-                            .append(paramDoc.value())
-                            .append("\n");
+                    sb.append("     * @param ").append(p.getName()).append(" ").append(paramDoc.value()).append("\n");
                 }
             }
             for (String example : doc.examples()) {
@@ -103,10 +93,9 @@ public class LLMDocGenerator {
             sb.append("     */\n    ").append(m.getName()).append("(");
 
             for (int i = 0; i < params.length; i++) {
-                if (i > 0) sb.append(", ");
-                sb.append(params[i].getName())
-                        .append(": ")
-                        .append(getTypeName(params[i].getType(), extraTypes));
+                if (i > 0)
+                    sb.append(", ");
+                sb.append(params[i].getName()).append(": ").append(getTypeName(params[i].getType(), extraTypes));
             }
             sb.append("): ").append(getTypeName(m.getReturnType(), extraTypes)).append(";\n\n");
         }
@@ -116,15 +105,14 @@ public class LLMDocGenerator {
     private String getGenericTypeName(Type genericType, Set<Class<?>> extraTypes) {
         if (genericType instanceof ParameterizedType pt) {
             Type raw = pt.getRawType();
-            String rawName =
-                    raw instanceof Class<?> rawClass
-                            ? getTypeName(rawClass, extraTypes)
-                            : raw.getTypeName();
+            String rawName = raw instanceof Class<?> rawClass ? getTypeName(rawClass, extraTypes) : raw.getTypeName();
             Type[] typeArgs = pt.getActualTypeArguments();
-            if (typeArgs.length == 0) return rawName;
+            if (typeArgs.length == 0)
+                return rawName;
             StringBuilder sb = new StringBuilder(rawName).append("<");
             for (int i = 0; i < typeArgs.length; i++) {
-                if (i > 0) sb.append(", ");
+                if (i > 0)
+                    sb.append(", ");
                 sb.append(getGenericTypeArgumentName(typeArgs[i], extraTypes));
             }
             return sb.append(">").toString();
@@ -140,7 +128,8 @@ public class LLMDocGenerator {
 
     private String getGenericTypeArgumentName(Type argType, Set<Class<?>> extraTypes) {
         if (argType instanceof Class<?> clazz) {
-            if (clazz.getName().startsWith("org.roxycode.app")) extraTypes.add(clazz);
+            if (clazz.getName().startsWith("org.roxycode.app"))
+                extraTypes.add(clazz);
             return clazz.getSimpleName();
         }
         if (argType instanceof WildcardType wt) {
@@ -153,16 +142,19 @@ public class LLMDocGenerator {
     }
 
     private String getTypeName(Class<?> type, Set<Class<?>> extraTypes) {
-        if (type.isArray()) return getTypeName(type.getComponentType(), extraTypes) + "[]";
-        if (type == void.class || type == Void.class) return "void";
-        if (type == String.class) return "string";
-        if (type == boolean.class || type == Boolean.class) return "boolean";
-        if (Number.class.isAssignableFrom(type)
-                || type == int.class
-                || type == long.class
-                || type == double.class
-                || type == float.class) return "number";
-        if (type.getName().startsWith("org.roxycode.app")) extraTypes.add(type);
+        if (type.isArray())
+            return getTypeName(type.getComponentType(), extraTypes) + "[]";
+        if (type == void.class || type == Void.class)
+            return "void";
+        if (type == String.class)
+            return "string";
+        if (type == boolean.class || type == Boolean.class)
+            return "boolean";
+        if (Number.class.isAssignableFrom(type) || type == int.class || type == long.class || type == double.class
+                || type == float.class)
+            return "number";
+        if (type.getName().startsWith("org.roxycode.app"))
+            extraTypes.add(type);
         return type.getSimpleName();
     }
 
@@ -171,21 +163,17 @@ public class LLMDocGenerator {
             sb.append("enum ").append(type.getSimpleName()).append(" {\n    ");
             Object[] constants = type.getEnumConstants();
             for (int i = 0; i < constants.length; i++) {
-                if (i > 0) sb.append(", ");
+                if (i > 0)
+                    sb.append(", ");
                 sb.append(constants[i]);
             }
             sb.append("\n}\n");
         } else if (type.isRecord()) {
-            sb.append(
-                            "// Java Record: access fields via method calls, e.g. obj.field()\ninterface ")
-                    .append(type.getSimpleName())
-                    .append(" {\n");
+            sb.append("// Java Record: access fields via method calls, e.g. obj.field()\ninterface ")
+                    .append(type.getSimpleName()).append(" {\n");
             for (RecordComponent comp : type.getRecordComponents()) {
-                sb.append("    ")
-                        .append(comp.getName())
-                        .append(": ")
-                        .append(getGenericTypeName(comp.getGenericType(), extraTypes))
-                        .append(";\n");
+                sb.append("    ").append(comp.getName()).append(": ")
+                        .append(getGenericTypeName(comp.getGenericType(), extraTypes)).append(";\n");
             }
             sb.append("}\n");
         } else {
@@ -195,24 +183,20 @@ public class LLMDocGenerator {
             Arrays.sort(fields, Comparator.comparing(Field::getName));
             for (Field f : fields) {
                 if (Modifier.isPublic(f.getModifiers()) && !Modifier.isStatic(f.getModifiers())) {
-                    properties.putIfAbsent(
-                            f.getName(), getGenericTypeName(f.getGenericType(), extraTypes));
+                    properties.putIfAbsent(f.getName(), getGenericTypeName(f.getGenericType(), extraTypes));
                 }
             }
             try {
-                for (PropertyDescriptor pd :
-                        Introspector.getBeanInfo(type, Object.class).getPropertyDescriptors()) {
+                for (PropertyDescriptor pd : Introspector.getBeanInfo(type, Object.class).getPropertyDescriptors()) {
                     Method readMethod = pd.getReadMethod();
                     if (readMethod != null && pd.getPropertyType() != null) {
-                        properties.putIfAbsent(
-                                pd.getName(),
+                        properties.putIfAbsent(pd.getName(),
                                 getGenericTypeName(readMethod.getGenericReturnType(), extraTypes));
                     }
                 }
             } catch (IntrospectionException ignored) {
             }
-            properties.forEach(
-                    (k, v) -> sb.append("    ").append(k).append(": ").append(v).append(";\n"));
+            properties.forEach((k, v) -> sb.append("    ").append(k).append(": ").append(v).append(";\n"));
             sb.append("}\n");
         }
     }
