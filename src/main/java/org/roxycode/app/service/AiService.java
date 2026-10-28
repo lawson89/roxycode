@@ -1,8 +1,15 @@
 package org.roxycode.app.service;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -12,16 +19,23 @@ import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientRequest;
+import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
+import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
+import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.retry.RetryUtils;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.Ordered;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.retry.RetryTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MimeTypeUtils;
 
@@ -43,6 +57,9 @@ public class AiService {
     public static final String EMPTY_STOP_MESSAGE = "Roxy completed the turn without generating a visible text message.";
     private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
 
+    public static final Duration DEFAULT_TOPIC_TITLE_TIMEOUT = Duration.ofSeconds(10);
+    private static final ExecutorService TITLE_TIMEOUT_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+
     private final ChatClient statelessChatClient;
     private final ChatClient chatClient;
     private final SettingsService settingsService;
@@ -50,6 +67,8 @@ public class AiService {
     private final JexlTool jexlTool;
     private final PlanService planService;
     private final ApplicationEventPublisher eventPublisher;
+    private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
+    private volatile Duration topicTitleTimeout = DEFAULT_TOPIC_TITLE_TIMEOUT;
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, PromptService promptService,
             JexlTool jexlTool, PlanService planService, ChatMemory chatMemory, ToolCallingManager toolCallingManager,
@@ -61,7 +80,24 @@ public class AiService {
         this.eventPublisher = eventPublisher;
         this.statelessChatClient = chatClientBuilder.build();
         this.chatClient = chatClientBuilder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build()).build();
+                ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
+                new ModelCallRetryAdvisor()).build();
+    }
+
+    void setRetryTemplate(RetryTemplate retryTemplate) {
+        this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
+    }
+
+    RetryTemplate getRetryTemplate() {
+        return retryTemplate;
+    }
+
+    void setTopicTitleTimeout(Duration topicTitleTimeout) {
+        this.topicTitleTimeout = Objects.requireNonNull(topicTitleTimeout, "topicTitleTimeout must not be null");
+    }
+
+    Duration getTopicTitleTimeout() {
+        return topicTitleTimeout;
     }
 
     public String generateTopicTitle(String conversationExcerpt) {
@@ -70,17 +106,22 @@ public class AiService {
         String excerpt = conversationExcerpt.length() > MAX_EXCERPT_LENGTH
                 ? conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH)
                 : conversationExcerpt;
+        Future<ChatResponse> future = TITLE_TIMEOUT_EXECUTOR
+                .submit(() -> statelessChatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT).user(u -> u.text(excerpt))
+                        .options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()))
+                        .call().chatResponse());
         try {
-            ChatResponse response = statelessChatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT)
-                    .user(u -> u.text(excerpt))
-                    .options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()))
-                    .call().chatResponse();
+            ChatResponse response = future.get(Math.max(1L, topicTitleTimeout.toMillis()), TimeUnit.MILLISECONDS);
             String rawTitle = (response != null && response.getResult() != null
                     && response.getResult().getOutput() != null) ? response.getResult().getOutput().getText() : null;
             String sanitized = sanitizeTopicTitle(rawTitle);
             if (!sanitized.isEmpty())
                 return sanitized;
         } catch (Exception e) {
+            future.cancel(true);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Failed to generate topic title via LLM, using fallback: {}", e.getMessage());
         }
         return deriveFallbackTopicTitle(conversationExcerpt);
@@ -131,12 +172,12 @@ public class AiService {
                 phase != null ? phase : planService.getCurrentPhase(), new AtomicInteger(0));
         String convId = turnContext.conversationId();
 
+        AiConfig.clearHandledRetryState();
         try {
             ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, additionalInstructions,
                     images);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-            ChatResponse chatResponse = promptSpec.advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId)).call()
-                    .chatResponse();
+            ChatResponse chatResponse = executeChatCall(promptSpec, convId, turnContext);
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
             String content = formatChatResponse(chatResponse, turnContext);
             publishTurnComplete(convId, turnContext.turnCounter().get(), content);
@@ -146,6 +187,43 @@ public class AiService {
             if (e instanceof RuntimeException re)
                 throw re;
             throw new RuntimeException("Unexpected error during chat turn", e);
+        } finally {
+            AiConfig.clearHandledRetryState();
+        }
+    }
+
+    private ChatResponse executeChatCall(ChatClient.ChatClientRequestSpec promptSpec, String convId,
+            TurnToolContext turnContext) {
+        return RetryUtils.execute(retryTemplate, () -> {
+            ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
+            try {
+                return promptSpec.advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId)).call().chatResponse();
+            } catch (Throwable t) {
+                if (turnContext.turnCounter().get() > 0) {
+                    AiConfig.markHandledTerminalException(t);
+                }
+                throw t;
+            }
+        });
+    }
+
+    private final class ModelCallRetryAdvisor implements CallAdvisor {
+        @Override
+        public String getName() {
+            return "ModelCallRetryAdvisor";
+        }
+
+        @Override
+        public int getOrder() {
+            return Ordered.LOWEST_PRECEDENCE - 1;
+        }
+
+        @Override
+        public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
+            return RetryUtils.execute(retryTemplate, () -> {
+                ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
+                return callAdvisorChain.copy(this).nextCall(chatClientRequest);
+            });
         }
     }
 

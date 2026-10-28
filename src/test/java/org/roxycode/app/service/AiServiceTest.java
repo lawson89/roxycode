@@ -4,9 +4,18 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.google.genai.Client;
+import com.google.genai.errors.ClientException;
+import com.google.genai.errors.GenAiIOException;
+import com.google.genai.errors.ServerException;
+import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -37,9 +46,18 @@ import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiConnectionProperties;
+import org.springframework.ai.model.tool.DefaultToolExecutionResult;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.execution.ToolExecutionException;
 import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
@@ -292,5 +310,174 @@ class AiServiceTest {
         when(requestSpec.call()).thenThrow(new RuntimeException("LLM offline"));
         assertEquals("Exploring Swing HTML Constraints",
                 aiService.generateTopicTitle("User: # Exploring Swing HTML Constraints!"));
+    }
+
+    @Test
+    void testAiConfigCreatesGoogleGenAiClientAndRetryTemplate() throws Exception {
+        AiConfig config = new AiConfig();
+        GoogleGenAiConnectionProperties props = new GoogleGenAiConnectionProperties();
+        props.setApiKey("test-api-key");
+        try (Client client = config.googleGenAiClient(props, AiConfig.DEFAULT_HTTP_TIMEOUT_MS)) {
+            assertEquals("test-api-key", client.apiKey());
+            assertFalse(client.vertexAI());
+        }
+        assertNotNull(config.retryTemplate());
+        assertTrue(AiConfig.isTransientAiError(new ClientException(429, "Too Many Requests", "RESOURCE_EXHAUSTED")));
+        assertTrue(AiConfig.isTransientAiError(new ServerException(503, "Service Unavailable", "UNAVAILABLE")));
+        assertTrue(AiConfig.isTransientAiError(
+                new RuntimeException("Failed to generate content", new SocketTimeoutException("Read timed out"))));
+        assertTrue(AiConfig.isTransientAiError(new GenAiIOException("Network failure")));
+        assertTrue(AiConfig.isTransientAiError(new TransientAiException("Rate limit")));
+
+        assertFalse(AiConfig.isTransientAiError(new ClientException(400, "Bad Request", "INVALID_ARGUMENT")));
+        assertFalse(AiConfig.isTransientAiError(new ClientException(401, "Unauthorized", "UNAUTHENTICATED")));
+        assertFalse(AiConfig.isTransientAiError(new ClientException(403, "Forbidden", "PERMISSION_DENIED")));
+        assertFalse(AiConfig.isTransientAiError(new NonTransientAiException("Invalid API key")));
+        assertFalse(AiConfig.isTransientAiError(new CancellationException("Stopped")));
+    }
+
+    @Test
+    void testChatRetriesOnTransientErrorsAndSucceeds() {
+        aiService.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0));
+        stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "Recovered Response", "STOP", null);
+
+        AtomicInteger attempts = new AtomicInteger();
+        when(requestSpec.call()).thenAnswer(inv -> {
+            int attempt = attempts.incrementAndGet();
+            if (attempt == 1) {
+                throw new RuntimeException("Failed to generate content",
+                        new ClientException(429, "Too Many Requests", "RESOURCE_EXHAUSTED"));
+            }
+            if (attempt == 2) {
+                throw new RuntimeException("Failed to generate content", new SocketTimeoutException("Read timed out"));
+            }
+            return responseSpec;
+        });
+
+        assertEquals("Recovered Response", aiService.chat("default", null, "Retry test", null));
+        assertEquals(3, attempts.get());
+        verify(requestSpec, times(3)).call();
+        assertEquals("Recovered Response", captureTurnCompleteEvent().result());
+    }
+
+    @Test
+    void testChatExhaustsMaxRetryAttemptsOnPersistentTransientError() {
+        aiService.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0));
+        stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "Ignored", "STOP", null);
+        when(requestSpec.call()).thenThrow(new ServerException(503, "Service Unavailable", "UNAVAILABLE"));
+
+        assertThrows(ServerException.class, () -> aiService.chat("default", null, "Fail all retries", null));
+        verify(requestSpec, times(3)).call();
+        verify(eventPublisher, never()).publishEvent(any(AgentTurnCompleteEvent.class));
+    }
+
+    @Test
+    void testChatDoesNotRetryOnCancellationInterruptionOrNonRetryableClientErrors() {
+        aiService.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0));
+        stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "Ignored", "STOP", null);
+
+        for (RuntimeException nonRetryable : List.of(new ClientException(400, "Bad Request", "INVALID_ARGUMENT"),
+                new ClientException(401, "Unauthorized", "UNAUTHENTICATED"),
+                new ClientException(403, "Forbidden", "PERMISSION_DENIED"), new NonTransientAiException("Bad request"),
+                new CancellationException("Cancelled by user"))) {
+            clearInvocations(requestSpec);
+            doThrow(nonRetryable).when(requestSpec).call();
+            try {
+                assertThrows(RuntimeException.class, () -> aiService.chat("default", null, "Non-retryable", null));
+                verify(requestSpec, times(1)).call();
+            } finally {
+                Thread.interrupted();
+            }
+        }
+
+        clearInvocations(requestSpec);
+        doAnswer(inv -> {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Failed to generate content", new SocketTimeoutException("Interrupted I/O"));
+        }).when(requestSpec).call();
+        try {
+            assertThrows(CancellationException.class, () -> aiService.chat("default", null, "Interrupt test", null));
+            verify(requestSpec, times(1)).call();
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void testModelCallRetryAdvisorRetriesSecondTurnWithoutReExecutingCompletedToolTurn() {
+        ChatModel mockChatModel = mock(ChatModel.class);
+        when(mockChatModel.getOptions()).thenReturn(
+                org.springframework.ai.google.genai.GoogleGenAiChatOptions.builder().model("gemini-2.5-flash").build());
+        ChatMemory realMemory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository()).maxMessages(10).build();
+        ToolCallingManager customToolManager = mock(ToolCallingManager.class);
+
+        AssistantMessage.ToolCall toolCall = new AssistantMessage.ToolCall("call-1", "function", "executeJexl", "{}");
+        AssistantMessage toolCallMsg = AssistantMessage.builder().content("").toolCalls(List.of(toolCall)).build();
+        ChatResponse firstTurnResponse = new ChatResponse(
+                List.of(new Generation(toolCallMsg, ChatGenerationMetadata.NULL)));
+        ChatResponse secondTurnResponse = buildChatResponse("Final answer after tool & retry", "STOP", null);
+
+        AtomicInteger modelCalls = new AtomicInteger();
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            int callNum = modelCalls.incrementAndGet();
+            if (callNum == 1) {
+                return firstTurnResponse;
+            }
+            if (callNum == 2) {
+                throw new ServerException(503, "Service Unavailable", "UNAVAILABLE");
+            }
+            return secondTurnResponse;
+        });
+
+        AtomicInteger toolExecutions = new AtomicInteger();
+        when(customToolManager.executeToolCalls(any(Prompt.class), eq(firstTurnResponse))).thenAnswer(inv -> {
+            toolExecutions.incrementAndGet();
+            return DefaultToolExecutionResult.builder()
+                    .conversationHistory(List.of(new UserMessage("Run tool"), toolCallMsg)).returnDirect(false).build();
+        });
+
+        ChatClient.Builder realBuilder = ChatClient.builder(mockChatModel);
+        AiService serviceWithRealClient = new AiService(realBuilder, settingsService, promptService, jexlTool,
+                planService, realMemory, customToolManager, eventPublisher);
+        serviceWithRealClient.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0));
+
+        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null)).thenReturn("EXPLORE PROMPT");
+
+        String result = serviceWithRealClient.chat("qa:default", WorkflowPhase.EXPLORE, "Run tool", null);
+        assertEquals("Final answer after tool & retry", result);
+        assertEquals(1, toolExecutions.get(),
+                "Completed tool turn must not be re-executed when subsequent model call retries");
+        assertEquals(3, modelCalls.get(), "Second model call should be retried once after transient 503");
+    }
+
+    @Test
+    void testGenerateTopicTitleTimesOutQuicklyAndFallsBack() throws Exception {
+        aiService.setTopicTitleTimeout(Duration.ofMillis(50));
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        AtomicBoolean wasInterrupted = new AtomicBoolean(false);
+
+        when(responseSpec.chatResponse()).thenAnswer(inv -> {
+            started.countDown();
+            try {
+                Thread.sleep(10_000);
+            } catch (InterruptedException e) {
+                wasInterrupted.set(true);
+                interrupted.countDown();
+                Thread.currentThread().interrupt();
+            }
+            return buildChatResponse("Delayed Title", "STOP", null);
+        });
+        long startNanos = System.nanoTime();
+        String title = aiService.generateTopicTitle("User: Why did Gemini time out?");
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+
+        assertEquals("Why did Gemini time out", title);
+        assertTrue(started.await(1, TimeUnit.SECONDS));
+        assertTrue(interrupted.await(1, TimeUnit.SECONDS),
+                "Stalled title generation call should be interrupted on timeout");
+        assertTrue(wasInterrupted.get());
+        assertTrue(elapsedMs < 2000, "Topic title timeout fallback should complete quickly, took " + elapsedMs + "ms");
     }
 }
