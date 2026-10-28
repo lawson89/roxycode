@@ -17,7 +17,7 @@ public final class SplashScreenWindow extends JWindow {
     private static final long serialVersionUID = 1L;
     private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
 
-    private final JLabel statusLabel = new JLabel("Starting Spring context...");
+    private final JLabel statusLabel = new JLabel("Starting Roxy...");
     private final JProgressBar progressBar = new JProgressBar();
     private transient Image logoImage;
 
