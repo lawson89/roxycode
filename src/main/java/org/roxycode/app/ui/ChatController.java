@@ -45,8 +45,6 @@ public final class ChatController implements AutoCloseable {
     static final String AUTO_NUDGE_PROMPT = "Roxy, you completed tool turns but didn't provide a final summary or answer to the user. "
             + "Please review the tool outputs above and provide a concise summary of your actions and findings.";
     static final int DEFAULT_ERROR_NUDGE_DELAY_MS = 1000;
-    private static final int MAX_EXCERPT_ENTRIES = 8;
-    private static final int MAX_ENTRY_CHARS = 500;
     private static final String BT = "`";
 
     private final ChatModel model;
@@ -269,56 +267,41 @@ public final class ChatController implements AutoCloseable {
         List<ChatTranscriptEntry> capturedTranscript = view.getConversationMessages();
         boolean shouldArchive = !capturedTranscript.isEmpty() && memoryService != null;
         resetSessionState(true, shouldArchive ? null : "Started a new topic.");
-        if (!shouldArchive)
-            return;
+        if (shouldArchive) {
+            turnExecutor.execute(() -> archiveCapturedTopic(capturedTranscript));
+        }
+    }
 
-        turnExecutor.execute(() -> {
-            String excerpt = buildTranscriptExcerpt(capturedTranscript);
-            String title = null;
-            if (aiService != null) {
-                try {
-                    title = aiService.generateTopicTitle(excerpt);
-                } catch (Exception e) {
-                    log.warn("Failed to generate topic title: {}", e.getMessage());
-                }
+    private void archiveCapturedTopic(List<ChatTranscriptEntry> capturedTranscript) {
+        String excerpt = MemoryService.buildTranscriptExcerpt(capturedTranscript);
+        String title = null;
+        if (aiService != null) {
+            try {
+                title = aiService.generateTopicTitle(excerpt);
+            } catch (Exception e) {
+                log.warn("Failed to generate topic title: {}", e.getMessage());
             }
-            if (title == null || title.isBlank()) {
-                title = AiService.deriveFallbackTopicTitle(excerpt);
-            }
-            String rawUser = environmentService != null ? environmentService.getCurrentUser() : null;
-            String user = (rawUser != null && !rawUser.isBlank()) ? rawUser : "User";
-            String filename = memoryService.archiveTopicConversation(title, user, Instant.now().toString(),
-                    capturedTranscript);
-            if (filename != null && !filename.isBlank() && eventPublisher != null) {
-                eventPublisher.publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC, filename));
-            }
-            String finalTitle = title;
-            Edt.run(() -> view.appendMessage(ROLE_SYSTEM,
-                    (filename != null && !filename.isBlank())
-                            ? "Archived previous topic as **" + finalTitle + "** (" + BT + filename + BT
-                                    + ") and started a new topic."
-                            : "Started a new topic."));
-        });
+        }
+        if (title == null || title.isBlank()) {
+            title = AiService.deriveFallbackTopicTitle(excerpt);
+        }
+        String rawUser = environmentService != null ? environmentService.getCurrentUser() : null;
+        String user = (rawUser != null && !rawUser.isBlank()) ? rawUser : "User";
+        String filename = memoryService.archiveTopicConversation(title, user, Instant.now().toString(),
+                capturedTranscript);
+        if (filename != null && !filename.isBlank() && eventPublisher != null) {
+            eventPublisher.publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC, filename));
+        }
+        String finalTitle = title;
+        Edt.run(() -> view.appendMessage(ROLE_SYSTEM,
+                (filename != null && !filename.isBlank())
+                        ? "Archived previous topic as **" + finalTitle + "** (" + BT + filename + BT
+                                + ") and started a new topic."
+                        : "Started a new topic."));
     }
 
     static String buildTranscriptExcerpt(List<ChatTranscriptEntry> entries) {
-        if (entries == null || entries.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        int count = Math.min(entries.size(), MAX_EXCERPT_ENTRIES);
-        for (int i = 0; i < count; i++) {
-            ChatTranscriptEntry entry = entries.get(i);
-            String speaker = ROLE_USER.equalsIgnoreCase(entry.role()) ? "User" : "Roxy";
-            String content = entry.content() != null ? entry.content().trim() : "";
-            if (content.length() > MAX_ENTRY_CHARS) {
-                content = content.substring(0, MAX_ENTRY_CHARS) + "...";
-            }
-            if (i > 0)
-                sb.append('\n');
-            sb.append(speaker).append(": ").append(content);
-        }
-        return sb.toString();
+        return MemoryService.buildTranscriptExcerpt(entries);
     }
 
     private void resetSessionState(boolean clearMemory, String systemNotice) {

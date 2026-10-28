@@ -40,6 +40,9 @@ public class MemoryService {
     static final int MAX_PINNED_MEMORY_LINES = 200;
     static final int MAX_PINNED_MEMORY_CHARS = 8192;
     private static final int SEARCH_CONTEXT_LINES = 2;
+    private static final int MAX_EXCERPT_ENTRIES = 8;
+    private static final int MAX_ENTRY_CHARS = 500;
+    private static final char LF = 10;
 
     private static final String SCOPE_GLOBAL = "global";
     private static final String SCOPE_PROJECT = "project";
@@ -228,6 +231,27 @@ public class MemoryService {
             log.warn("Failed to archive Q&A topic conversation: {}", e.getMessage());
             return null;
         }
+    }
+
+    public static String buildTranscriptExcerpt(List<ChatTranscriptEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        int count = Math.min(entries.size(), MAX_EXCERPT_ENTRIES);
+        for (int i = 0; i < count; i++) {
+            ChatTranscriptEntry entry = entries.get(i);
+            String speaker = "user".equalsIgnoreCase(entry.role()) ? "User" : "Roxy";
+            String content = entry.content() != null ? entry.content().trim() : "";
+            if (content.length() > MAX_ENTRY_CHARS) {
+                content = content.substring(0, MAX_ENTRY_CHARS) + "...";
+            }
+            if (i > 0) {
+                sb.append(LF);
+            }
+            sb.append(speaker).append(": ").append(content);
+        }
+        return sb.toString();
     }
 
     public record ArchiveEntrySummary(String filename, String type, String title, String createdBy, String timestamp,

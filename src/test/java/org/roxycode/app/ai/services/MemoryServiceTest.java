@@ -373,4 +373,20 @@ class MemoryServiceTest {
                 fmCache, snippets);
         assertEquals("Fallback Windows path snippet", snippets.get("20250514-unmatched-prefix.md"));
     }
+
+    @Test
+    void testBuildTranscriptExcerpt() {
+        assertEquals("", MemoryService.buildTranscriptExcerpt(null));
+        assertEquals("", MemoryService.buildTranscriptExcerpt(List.of()));
+
+        String longMsg = "x".repeat(600);
+        List<ChatTranscriptEntry> entries = List.of(
+                new ChatTranscriptEntry("user", "  How does repo map packing work?  ", "10:00:00"),
+                new ChatTranscriptEntry("ai", longMsg, "10:00:01"), new ChatTranscriptEntry("user", null, "10:00:02"));
+        String excerpt = MemoryService.buildTranscriptExcerpt(entries);
+        String nl = String.valueOf((char) 10);
+        assertTrue(excerpt
+                .startsWith("User: How does repo map packing work?" + nl + "Roxy: " + "x".repeat(500) + "..." + nl));
+        assertTrue(excerpt.endsWith(nl + "User: "));
+    }
 }
