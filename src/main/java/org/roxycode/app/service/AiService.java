@@ -335,10 +335,9 @@ public class AiService {
                         }
                     }
                 }).options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()));
-        if (currentPhase == WorkflowPhase.EXPLORE) {
-            promptSpec.tools(jexlTool);
-        } else {
-            promptSpec.tools(jexlTool, planService);
+        promptSpec.tools(jexlTool);
+        if (currentPhase != WorkflowPhase.EXPLORE) {
+            promptSpec.toolCallbacks(planService.getToolCallbacksForPhase(currentPhase));
         }
         return promptSpec.toolContext(turnContext.toMap());
     }

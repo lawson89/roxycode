@@ -263,7 +263,16 @@ public class AiConfig {
         return exception -> {
             ExceptionUtils.rethrowIfCancelled(exception, "Tool execution cancelled");
             Throwable cause = ExceptionUtils.getRootCause(exception);
-            return cause != null && cause.getMessage() != null ? cause.getMessage() : exception.getMessage();
+            String rawMessage = cause != null && StringUtils.hasText(cause.getMessage())
+                    ? cause.getMessage()
+                    : exception.getMessage();
+            String message = StringUtils.hasText(rawMessage) ? rawMessage : "Tool execution failed";
+            try {
+                return SHARED_OBJECT_MAPPER.writeValueAsString(Map.of("error", message));
+            } catch (Exception e) {
+                return """
+                        {"error":"Tool execution failed"}""";
+            }
         };
     }
 

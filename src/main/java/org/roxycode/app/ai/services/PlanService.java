@@ -29,6 +29,8 @@ import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.support.ToolCallbacks;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.context.ApplicationEventPublisher;
@@ -78,6 +80,21 @@ public class PlanService {
             new TransitionKey(WorkflowPhase.REVIEW, WorkflowPhase.CODE), new TransitionRule(true, true),
             new TransitionKey(WorkflowPhase.REVIEW, WorkflowPhase.PLAN), new TransitionRule(false, true));
 
+    private static final Map<String, List<WorkflowPhase>> ALLOWED_PHASES_BY_TOOL = Map.ofEntries(
+            Map.entry("submitPlan", List.of(WorkflowPhase.PLAN)),
+            Map.entry("addTechnicalStep", List.of(WorkflowPhase.PLAN, WorkflowPhase.CODE)),
+            Map.entry("updateTechnicalStep", List.of(WorkflowPhase.PLAN, WorkflowPhase.CODE)),
+            Map.entry("markStepCompleted", List.of(WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
+            Map.entry("markStepsCompleted", List.of(WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
+            Map.entry("markStepIncomplete", List.of(WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
+            Map.entry("markStepsIncomplete", List.of(WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
+            Map.entry("addHandoffLogEntry", List.of(WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
+            Map.entry("requestDevelopment", List.of(WorkflowPhase.PLAN)),
+            Map.entry("requestReview", List.of(WorkflowPhase.CODE)),
+            Map.entry("requestFixes", List.of(WorkflowPhase.REVIEW)),
+            Map.entry("requestCompletion", List.of(WorkflowPhase.REVIEW)),
+            Map.entry("requestPlanRevision", List.of(WorkflowPhase.CODE)));
+
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectService projectService;
@@ -96,8 +113,17 @@ public class PlanService {
         this.gitService = gitService;
     }
 
+    public ToolCallback[] getToolCallbacksForPhase(WorkflowPhase phase) {
+        if (phase == null || phase == WorkflowPhase.EXPLORE) {
+            return new ToolCallback[0];
+        }
+        return Arrays.stream(ToolCallbacks.from(this)).filter(
+                cb -> ALLOWED_PHASES_BY_TOOL.getOrDefault(cb.getToolDefinition().name(), List.of()).contains(phase))
+                .toArray(ToolCallback[]::new);
+    }
+
     public synchronized String submitPlan(ImplementationPlan plan) {
-        requirePhase("submitPlan", WorkflowPhase.PLAN);
+        requirePhase("submitPlan");
         if (plan == null) {
             throw new IllegalArgumentException("Error: Plan cannot be null.");
         }
@@ -138,7 +164,7 @@ public class PlanService {
             @ToolParam(description = "The high-level goal of the plan.") String goal,
             @ToolParam(description = "List of functional requirements.") List<String> requirements,
             @ToolParam(description = "List of technical implementation steps.") List<String> technicalSteps) {
-        requirePhase("submitPlan", WorkflowPhase.PLAN);
+        requirePhase("submitPlan");
         List<String> safeRequirements = requirements != null ? List.copyOf(requirements) : List.of();
         List<ImplementationPlan.TechStep> steps = technicalSteps != null
                 ? technicalSteps.stream().map(s -> new ImplementationPlan.TechStep(s, false)).toList()
@@ -204,7 +230,7 @@ public class PlanService {
     @Tool(description = "Adds a new technical implementation step to the current plan (inserted before trailing verification gates) without losing progress on completed steps.")
     public synchronized String addTechnicalStep(
             @ToolParam(description = "Description of the new technical implementation step.") String description) {
-        requirePhase("addTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE);
+        requirePhase("addTechnicalStep");
         ensureActivePlan();
         String trimmed = requireNonBlankDescription(description);
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
@@ -222,7 +248,7 @@ public class PlanService {
     public synchronized String updateTechnicalStep(
             @ToolParam(description = "The 0-based index of the step to update.") int index,
             @ToolParam(description = "The updated description for the technical step.") String description) {
-        requirePhase("updateTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE);
+        requirePhase("updateTechnicalStep");
         ensureActivePlan();
         String trimmed = requireNonBlankDescription(description);
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
@@ -248,28 +274,28 @@ public class PlanService {
     @Tool(description = "Marks a specific technical implementation step as completed using its 0-based index. Call this immediately after a step is verified rather than deferring to the end of the phase.")
     public synchronized String markStepCompleted(
             @ToolParam(description = "The index of the step (0-based). Must be valid for the current plan.") int index) {
-        requirePhase("markStepCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+        requirePhase("markStepCompleted");
         return updateStepsStatus(List.of(index), true);
     }
 
     @Tool(description = "Marks multiple technical implementation steps as completed using their 0-based indices. Call this immediately after a batch of steps is verified rather than deferring to the end of the phase.")
     public synchronized String markStepsCompleted(
             @ToolParam(description = "List of 0-based step indices to mark as completed.") List<Integer> indices) {
-        requirePhase("markStepsCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+        requirePhase("markStepsCompleted");
         return updateStepsStatus(indices, true);
     }
 
     @Tool(description = "Marks a technical implementation step as incomplete using its 0-based index.")
     public synchronized String markStepIncomplete(
             @ToolParam(description = "The index of the step (0-based).") int index) {
-        requirePhase("markStepIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+        requirePhase("markStepIncomplete");
         return updateStepsStatus(List.of(index), false);
     }
 
     @Tool(description = "Marks multiple technical implementation steps as incomplete using their 0-based indices.")
     public synchronized String markStepsIncomplete(
             @ToolParam(description = "List of 0-based step indices to mark as incomplete.") List<Integer> indices) {
-        requirePhase("markStepsIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+        requirePhase("markStepsIncomplete");
         return updateStepsStatus(indices, false);
     }
 
@@ -344,35 +370,35 @@ public class PlanService {
     @Tool(description = "Requests transition to the development (CODE) phase.")
     public synchronized String requestDevelopment(
             @ToolParam(description = "The reason for requesting transition to the CODE phase.") String reason) {
-        requirePhase("requestDevelopment", WorkflowPhase.PLAN);
+        requirePhase("requestDevelopment");
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
     @Tool(description = "Requests transition to the review phase.")
     public synchronized String requestReview(
             @ToolParam(description = "The reason for requesting transition to the REVIEW phase.") String reason) {
-        requirePhase("requestReview", WorkflowPhase.CODE);
+        requirePhase("requestReview");
         return routeToPhase(WorkflowPhase.REVIEW, reason);
     }
 
     @Tool(description = "Requests transition back to development to address fixes.")
     public synchronized String requestFixes(
             @ToolParam(description = "The reason for requesting transition back to the CODE phase.") String reason) {
-        requirePhase("requestFixes", WorkflowPhase.REVIEW);
+        requirePhase("requestFixes");
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
     @Tool(description = "Signals completion of the current cycle and returns to planning.")
     public synchronized String requestCompletion(
             @ToolParam(description = "The reason for completing the current cycle.") String reason) {
-        requirePhase("requestCompletion", WorkflowPhase.REVIEW);
+        requirePhase("requestCompletion");
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
     @Tool(description = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.")
     public synchronized String requestPlanRevision(
             @ToolParam(description = "The reason for requesting a plan revision.") String reason) {
-        requirePhase("requestPlanRevision", WorkflowPhase.CODE);
+        requirePhase("requestPlanRevision");
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
@@ -601,14 +627,14 @@ public class PlanService {
                 """ + plan.toMarkdown(false).trim();
     }
 
-    private void requirePhase(String methodName, WorkflowPhase... allowedPhases) {
+    private void requirePhase(String methodName) {
+        List<WorkflowPhase> allowedPhases = ALLOWED_PHASES_BY_TOOL.getOrDefault(methodName, List.of());
         WorkflowPhase current = getCurrentPhase();
-        for (WorkflowPhase allowed : allowedPhases) {
-            if (current == allowed)
-                return;
+        if (allowedPhases.contains(current)) {
+            return;
         }
-        throw new IllegalStateException("Method '" + methodName + "' is only allowed in phase(s) "
-                + Arrays.toString(allowedPhases) + ". Current phase: " + current);
+        throw new IllegalStateException("Method '" + methodName + "' is only allowed in phase(s) " + allowedPhases
+                + ". Current phase: " + current);
     }
 
     public synchronized void addHandoffLogEntry(String timestamp, String user, String message) {
@@ -620,7 +646,7 @@ public class PlanService {
     @Tool(description = "Adds a high-level summary entry to the handoff log.")
     public synchronized String addHandoffLogEntry(
             @ToolParam(description = "The summary entry to add to the handoff log.") String entry) {
-        requirePhase("addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+        requirePhase("addHandoffLogEntry");
         ensureActivePlan();
         if (StringUtils.isBlank(entry)) {
             throw new IllegalArgumentException("Error: Handoff log entry cannot be null or blank.");

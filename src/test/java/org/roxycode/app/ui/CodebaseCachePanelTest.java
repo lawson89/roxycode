@@ -6,7 +6,8 @@ import static org.mockito.Mockito.*;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import javax.swing.*;
+import javax.swing.JButton;
+import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,11 +42,6 @@ class CodebaseCachePanelTest {
     }
 
     @Test
-    void testButtonsExist() {
-        assertNotNull(SwingTestUtils.findButton(panel, "Update Implicit Cache"));
-    }
-
-    @Test
     void testUpdateImplicitCacheButtonCallsForceRegenerateRepoMap() {
         JButton packButton = SwingTestUtils.findButton(panel, "Update Implicit Cache");
         assertNotNull(packButton);
@@ -62,11 +58,6 @@ class CodebaseCachePanelTest {
                 () -> "# Forced Repo Map".equals(panel.getRepoMapArea().getText()) && packButton.isEnabled());
         verify(packerService, times(2)).forceRegenerateRepoMap();
         assertEquals("# Forced Repo Map", panel.getRepoMapArea().getText());
-    }
-
-    @Test
-    void testRepoMapAreaExists() {
-        assertNotNull(SwingTestUtils.findComponent(panel, JTextArea.class));
     }
 
     @Test

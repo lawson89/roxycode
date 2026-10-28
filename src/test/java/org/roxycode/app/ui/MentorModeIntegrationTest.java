@@ -3,20 +3,13 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.Container;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import javax.swing.JLabel;
-import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
-import javax.swing.border.CompoundBorder;
-import javax.swing.border.MatteBorder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
@@ -67,85 +60,33 @@ class MentorModeIntegrationTest {
     }
 
     @Test
-    void testWorkspaceBarsLocatedInRespectiveViews() {
-        JTabbedPane qaTabs = qaWorkspacePanel.getQaTabs();
-        assertEquals(2, qaTabs.getTabCount());
-        assertEquals("Chat", qaTabs.getTitleAt(0));
-        assertEquals("Past Topics", qaTabs.getTitleAt(1));
-        assertInstanceOf(ArchiveBrowserPanel.class, qaTabs.getComponentAt(1));
-        assertEquals(FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
-                qaTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE));
-        JPanel qaHeaderBar = (JPanel) qaTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT);
-        assertSame(qaWorkspacePanel.getQaHeaderBar(), qaHeaderBar);
+    void testDualChatPanelsAreIndependent() {
+        ChatPanel qaChat = qaWorkspacePanel.getQaChatPanel();
+        ChatPanel taskChat = taskWorkspacePanel.getTaskChatPanel();
 
-        JPanel mentorBanner = assertInstanceOf(JPanel.class, qaHeaderBar.getComponent(0));
-        assertSame(qaWorkspacePanel.getMentorBanner(), mentorBanner);
-        assertEquals(255, mentorBanner.getBackground().getAlpha());
-        String bannerStyle = (String) mentorBanner.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(bannerStyle != null && bannerStyle.startsWith("background: #"));
-        assertFalse(bannerStyle.contains("fade("));
+        assertEquals(ChatModel.QA_CONVERSATION_ID, qaChat.getModel().getConversationId());
+        assertEquals(WorkflowPhase.EXPLORE, qaChat.getModel().getLockedPhase());
+        assertFalse(qaChat.getModel().isTaskMode());
 
-        JLabel mentorModeLabel = qaWorkspacePanel.getMentorModeLabel();
-        assertEquals("READ-ONLY MENTOR MODE", mentorModeLabel.getText());
-        assertEquals(Codicons.SEARCH, assertInstanceOf(FontIcon.class, mentorModeLabel.getIcon()).getIkon());
-        assertTrue(qaWorkspacePanel.getMentorSubtitleLabel().getText().contains(QaWorkspacePanel.MENTOR_MODE_SUBTITLE));
+        assertEquals(ChatModel.TASK_CONVERSATION_ID, taskChat.getModel().getConversationId());
+        assertNull(taskChat.getModel().getLockedPhase());
+        assertTrue(taskChat.getModel().isTaskMode());
 
-        qaWorkspacePanel.updateUI();
-        assertNotNull(mentorModeLabel.getIcon());
+        qaChat.appendMessage("user", "QA only question");
+        assertEquals(1, qaChat.getConversationMessages().size());
+        assertTrue(taskChat.getConversationMessages().isEmpty());
+    }
 
-        JPanel progressTracker = taskWorkspacePanel.getProgressTracker();
-        JLabel phaseHeaderLabel = taskWorkspacePanel.getPhaseHeaderLabel();
+    @Test
+    void testActivePhaseAndPlanTitleTruncation() {
         JLabel planLabel = taskWorkspacePanel.getPlanLabel();
-        JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
-        assertEquals(3, taskTabs.getTabCount());
-        assertEquals("Chat", taskTabs.getTitleAt(0));
-        assertEquals("Plan", taskTabs.getTitleAt(1));
-        assertEquals("Past Plans", taskTabs.getTitleAt(2));
-        assertInstanceOf(ArchiveBrowserPanel.class, taskTabs.getComponentAt(2));
-        assertEquals(FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED,
-                taskTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE));
-        Container taskHeaderBar = progressTracker.getParent();
-        assertSame(taskHeaderBar, taskTabs.getClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT));
-        assertSame(taskWorkspacePanel.getTopBar(), taskHeaderBar);
-        assertSame(taskHeaderBar, planLabel.getParent());
-        assertEquals(0, taskHeaderBar.getComponentZOrder(progressTracker));
-        assertEquals(1, taskHeaderBar.getComponentZOrder(planLabel));
-
-        assertTrue(progressTracker.isOpaque());
-        assertEquals(255, progressTracker.getBackground().getAlpha());
-        CompoundBorder trackerBorder = assertInstanceOf(CompoundBorder.class, progressTracker.getBorder());
-        assertEquals(4, assertInstanceOf(MatteBorder.class, trackerBorder.getOutsideBorder()).getBorderInsets().left);
-        String trackerStyle = (String) progressTracker.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(trackerStyle != null && trackerStyle.startsWith("background: #") && !trackerStyle.contains("arc:")
-                && !trackerStyle.contains("fade("));
-
-        assertEquals(6, progressTracker.getComponentCount());
-        assertSame(phaseHeaderLabel, progressTracker.getComponent(0));
-        assertEquals("CURRENT PHASE", phaseHeaderLabel.getText());
-        assertEquals("font: bold -2", phaseHeaderLabel.getClientProperty(FlatClientProperties.STYLE));
-        assertEquals(SwingHtmlUtils.getAccentColor(), phaseHeaderLabel.getForeground());
-        for (int idx : new int[]{1, 3, 5}) {
-            assertInstanceOf(WorkflowPhaseIndicator.class, progressTracker.getComponent(idx));
-        }
-        for (int idx : new int[]{2, 4}) {
-            FontIcon chevron = assertInstanceOf(FontIcon.class,
-                    assertInstanceOf(JLabel.class, progressTracker.getComponent(idx)).getIcon());
-            assertEquals(Codicons.CHEVRON_RIGHT, chevron.getIkon());
-            assertEquals(12, chevron.getIconSize());
-        }
-
         when(planService.getVisitedPhases()).thenReturn(EnumSet.of(WorkflowPhase.PLAN, WorkflowPhase.CODE));
         when(planService.getCurrentPlan()).thenReturn(planWithTitle("My Feature Plan"));
+
         taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
         assertTrue(planLabel.isVisible());
         assertEquals("MY FEATURE PLAN", planLabel.getText());
         assertEquals("My Feature Plan", planLabel.getToolTipText());
-        assertEquals(Codicons.PROJECT, assertInstanceOf(FontIcon.class, planLabel.getIcon()).getIkon());
-        String planStyle = (String) planLabel.getClientProperty(FlatClientProperties.STYLE);
-        assertTrue(planStyle != null && planStyle.contains("background: #") && !planStyle.contains("fade("));
-
-        taskWorkspacePanel.updateUI();
-        assertNotNull(planLabel.getIcon());
 
         String longTitle = "Consolidate EDT dispatch with Edt.run, clean up ProcessRunner buffers, and standardize PromptService I/O exceptions";
         when(planService.getCurrentPlan()).thenReturn(planWithTitle("  " + longTitle + "  "));

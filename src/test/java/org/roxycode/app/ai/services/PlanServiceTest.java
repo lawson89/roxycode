@@ -491,4 +491,26 @@ class PlanServiceTest {
             assertEquals(String.class, m.getReturnType());
         }
     }
+
+    @Test
+    void testGetToolCallbacksForPhaseFiltersToolsByWorkflowPhase() {
+        assertEquals(0, service.getToolCallbacksForPhase(null).length);
+        assertEquals(0, service.getToolCallbacksForPhase(WorkflowPhase.EXPLORE).length);
+
+        Set<String> planTools = Arrays.stream(service.getToolCallbacksForPhase(WorkflowPhase.PLAN))
+                .map(cb -> cb.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("submitPlan", "addTechnicalStep", "updateTechnicalStep", "addHandoffLogEntry",
+                "requestDevelopment"), planTools);
+
+        Set<String> codeTools = Arrays.stream(service.getToolCallbacksForPhase(WorkflowPhase.CODE))
+                .map(cb -> cb.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("addTechnicalStep", "updateTechnicalStep", "markStepCompleted", "markStepsCompleted",
+                "markStepIncomplete", "markStepsIncomplete", "addHandoffLogEntry", "requestReview",
+                "requestPlanRevision"), codeTools);
+
+        Set<String> reviewTools = Arrays.stream(service.getToolCallbacksForPhase(WorkflowPhase.REVIEW))
+                .map(cb -> cb.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("markStepCompleted", "markStepsCompleted", "markStepIncomplete", "markStepsIncomplete",
+                "addHandoffLogEntry", "requestFixes", "requestCompletion"), reviewTools);
+    }
 }

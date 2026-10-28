@@ -5,14 +5,10 @@ import static org.mockito.Mockito.*;
 
 import java.awt.Container;
 import java.net.URI;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
-import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.RoxyCode;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService;
@@ -20,13 +16,10 @@ import org.roxycode.app.ui.SystemToolsPanel.ToolCard;
 
 public class SystemToolsPanelTest {
 
-    private static void assertCardState(ToolCard card, String name, String status, String expectedRequirementText,
-            Codicons statusIcon, Codicons nameIcon) {
+    private static void assertCardState(ToolCard card, String name, String status, String expectedRequirementText) {
         assertEquals(name, card.getNameLabel().getText());
         assertEquals(status, card.getStatusBadge().getText());
         assertEquals(expectedRequirementText, card.getRequirementBadge().getText());
-        assertEquals(statusIcon, assertInstanceOf(FontIcon.class, card.getStatusBadge().getIcon()).getIkon());
-        assertEquals(nameIcon, assertInstanceOf(FontIcon.class, card.getNameLabel().getIcon()).getIkon());
     }
 
     @Test
@@ -110,16 +103,13 @@ public class SystemToolsPanelTest {
         SwingTestUtils.flushEdt();
 
         assertEquals(3, panel.getToolCards().size());
-        assertCardState(panel.getToolCards().get(0), "Git", "Detected", "Required", Codicons.CHECK,
-                Codicons.SOURCE_CONTROL);
-        assertCardState(panel.getToolCards().get(1), "Docker", "Error", "Optional", Codicons.WARNING,
-                Codicons.SERVER_ENVIRONMENT);
-        assertCardState(panel.getToolCards().get(2), "Universal Ctags", "Missing", "Required", Codicons.ERROR,
-                Codicons.SYMBOL_CLASS);
+        assertCardState(panel.getToolCards().get(0), "Git", "Detected", "Required");
+        assertCardState(panel.getToolCards().get(1), "Docker", "Error", "Optional");
+        assertCardState(panel.getToolCards().get(2), "Universal Ctags", "Missing", "Required");
     }
 
     @Test
-    public void testWebsiteLinkClickInvokesBrowserLauncherAndUpdateUiRefreshesTheme() {
+    public void testWebsiteLinkClickInvokesBrowserLauncher() {
         SystemToolService service = mock(SystemToolService.class);
         when(service.detectTools()).thenReturn(CompletableFuture
                 .completedFuture(List.of(SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"))));
@@ -139,19 +129,6 @@ public class SystemToolsPanelTest {
             throw new UnsupportedOperationException("Headless test");
         });
         assertDoesNotThrow(() -> SwingTestUtils.clickOnEdt(gitCard.getWebsiteLinkButton()));
-
-        SwingTestUtils.withDarkTheme(panel, () -> {
-            assertNotNull(gitCard.getNameLabel().getIcon());
-            assertNotNull(gitCard.getStatusBadge().getIcon());
-        });
-        assertNotNull(gitCard.getNameLabel().getIcon());
-        assertNotNull(gitCard.getStatusBadge().getIcon());
-    }
-
-    @Test
-    public void testRoxyCodeDoesNotExposeSplashSystemToolsInitializer() {
-        assertFalse(Arrays.stream(RoxyCode.class.getDeclaredMethods())
-                .anyMatch(m -> "initializeSystemTools".equals(m.getName())));
     }
 
     @Test

@@ -58,6 +58,7 @@ import org.springframework.ai.model.tool.DefaultToolExecutionResult;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.execution.ToolExecutionException;
 import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
@@ -105,6 +106,7 @@ class AiServiceTest {
         lenient().when(requestSpec.options(any())).thenReturn(requestSpec);
         lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
         lenient().when(requestSpec.tools(any(Object[].class))).thenReturn(requestSpec);
+        lenient().when(requestSpec.toolCallbacks(any(ToolCallback[].class))).thenReturn(requestSpec);
         lenient().when(requestSpec.call()).thenReturn(responseSpec);
         lenient().when(chatClientBuilder.defaultAdvisors(any(Advisor[].class))).thenReturn(chatClientBuilder);
         lenient().when(chatClientBuilder.build()).thenReturn(chatClient);
@@ -151,13 +153,21 @@ class AiServiceTest {
     }
 
     @Test
-    void testAiConfigCreatesToolExecutionExceptionProcessorAndToolCallingManagerBeans() {
+    void testAiConfigCreatesToolExecutionExceptionProcessorAndToolCallingManagerBeans() throws Exception {
         AiConfig config = new AiConfig();
         ToolExecutionExceptionProcessor processor = config.toolExecutionExceptionProcessor();
         assertNotNull(processor);
         ToolDefinition toolDef = mock(ToolDefinition.class);
-        assertEquals("Invalid parameter", processor
-                .process(new ToolExecutionException(toolDef, new IllegalArgumentException("Invalid parameter"))));
+        String jsonError = processor
+                .process(new ToolExecutionException(toolDef, new IllegalArgumentException("Invalid parameter")));
+        assertEquals("""
+                {"error":"Invalid parameter"}""", jsonError);
+        assertEquals(Map.of("error", "Invalid parameter"),
+                AiConfig.SHARED_OBJECT_MAPPER.readValue(jsonError, Map.class));
+        String fallbackJsonError = processor
+                .process(new ToolExecutionException(toolDef, new IllegalArgumentException("   ")));
+        assertEquals(Map.of("error", "Tool execution failed"),
+                AiConfig.SHARED_OBJECT_MAPPER.readValue(fallbackJsonError, Map.class));
         assertThrows(CancellationException.class, () -> processor
                 .process(new ToolExecutionException(toolDef, new CancellationException("User stopped"))));
         assertNotNull(config.toolCallingManager(processor));
@@ -166,13 +176,16 @@ class AiServiceTest {
     @Test
     void testChatUsesConfiguredModelAndDynamicPrompt() {
         settings.setGeminiModel("test-model-123");
+        ToolCallback mockCallback = mock(ToolCallback.class);
+        when(planService.getToolCallbacksForPhase(WorkflowPhase.CODE)).thenReturn(new ToolCallback[]{mockCallback});
         stubChatResponse(WorkflowPhase.CODE, "FULL CODE SYSTEM PROMPT", "AI Response", "STOP", null);
 
         assertEquals("AI Response", aiService.chat("default", null, "Hello", null));
         verify(requestSpec).system("FULL CODE SYSTEM PROMPT");
         verify(promptService).buildSystemPrompt(WorkflowPhase.CODE, null);
         verify(requestSpec).options(any());
-        verify(requestSpec).tools(jexlTool, planService);
+        verify(requestSpec).tools(jexlTool);
+        verify(requestSpec).toolCallbacks(mockCallback);
         verify(requestSpec).toolContext(argThat(ctx -> "default".equals(ctx.get(TurnToolContext.CONVERSATION_ID_KEY))
                 && WorkflowPhase.CODE == ctx.get(TurnToolContext.PHASE_KEY)
                 && ctx.get(TurnToolContext.TURN_COUNTER_KEY) instanceof AtomicInteger));
@@ -183,12 +196,16 @@ class AiServiceTest {
         stubChatResponse(WorkflowPhase.EXPLORE, "EXPLORE SYSTEM PROMPT", "Explore Response", "STOP", null);
         assertEquals("Explore Response", aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null));
         verify(requestSpec).tools(jexlTool);
+        verify(requestSpec, never()).toolCallbacks(any(ToolCallback[].class));
+        verify(planService, never()).getToolCallbacksForPhase(any());
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void testChatWithConversationIdAndPhase() {
         settings.setGeminiModel("test-model-123");
+        ToolCallback reviewCallback = mock(ToolCallback.class);
+        when(planService.getToolCallbacksForPhase(WorkflowPhase.REVIEW)).thenReturn(new ToolCallback[]{reviewCallback});
         when(promptService.buildSystemPrompt(WorkflowPhase.REVIEW, "Extra instructions"))
                 .thenReturn("REVIEW SYSTEM PROMPT");
         when(responseSpec.chatResponse()).thenReturn(buildChatResponse("AI Response", "STOP", null));
@@ -196,7 +213,8 @@ class AiServiceTest {
         assertEquals("AI Response",
                 aiService.chat("custom-conv", WorkflowPhase.REVIEW, "Hello", "Extra instructions", null));
         verify(requestSpec).system("REVIEW SYSTEM PROMPT");
-        verify(requestSpec).tools(jexlTool, planService);
+        verify(requestSpec).tools(jexlTool);
+        verify(requestSpec).toolCallbacks(reviewCallback);
 
         ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorCaptor = ArgumentCaptor.forClass(Consumer.class);
         verify(requestSpec).advisors(advisorCaptor.capture());
