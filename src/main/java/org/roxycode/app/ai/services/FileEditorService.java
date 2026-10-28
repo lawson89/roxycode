@@ -5,8 +5,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
@@ -71,6 +74,92 @@ public class FileEditorService {
             return new EditorResult(false, "", buildTargetNotFoundHint(relativePath, content, targetBlock));
         }
 
+        BlockMatch match = findUniqueBlockMatch(SINGLE_MATCH_COUNT, relativePath, content, targetBlock,
+                replacementBlock);
+        if (match.errorHint() != null) {
+            return new EditorResult(false, "", match.errorHint());
+        }
+        return applyReplacement(path, relativePath, content, match.start(), match.end(), match.replacement());
+    }
+
+    @AgentDoc(value = "Replaces multiple non-overlapping target blocks in a file atomically in a single write operation.", examples = "fileEditorService.replaceBlocks('src/Main.java', [{'target': 'old1', 'replacement': 'new1'}, {'target': 'old2', 'replacement': 'new2'}])")
+    public EditorResult replaceBlocks(@AgentDoc("The file path relative to the project root") String relativePath,
+            @AgentDoc("List of maps with 'target' and 'replacement' keys") List<Map<String, String>> edits)
+            throws IOException {
+        return replaceBlocksInternal(relativePath, edits);
+    }
+
+    @AgentDoc(value = "Replaces multiple non-overlapping target blocks in a file atomically in a single write operation.", examples = "fileEditorService.replaceBlocks('src/Main.java', [{'target': 'old1', 'replacement': 'new1'}, {'target': 'old2', 'replacement': 'new2'}])")
+    public EditorResult replaceBlocks(@AgentDoc("The file path relative to the project root") String relativePath,
+            @AgentDoc("Array of maps with 'target' and 'replacement' keys") Object[] edits) throws IOException {
+        return replaceBlocksInternal(relativePath, edits == null ? null : Arrays.asList(edits));
+    }
+
+    private EditorResult replaceBlocksInternal(String relativePath, List<?> edits) throws IOException {
+        Path path = projectService.resolvePath(relativePath);
+        EditorResult validationError = validateRegularFile(path, relativePath);
+        if (validationError != null) {
+            return validationError;
+        }
+        if (edits == null || edits.isEmpty()) {
+            return new EditorResult(false, "", "No edits provided for file: " + relativePath);
+        }
+
+        String content = Files.readString(path);
+        List<BlockMatch> matches = new ArrayList<>(edits.size());
+
+        for (int i = 0; i < edits.size(); i++) {
+            int editNum = i + 1;
+            Object rawEdit = edits.get(i);
+            if (!(rawEdit instanceof Map<?, ?> editMap)) {
+                return new EditorResult(false, "",
+                        "Edit #" + editNum + " failed: Edit entry must be a map with 'target' and 'replacement' keys");
+            }
+            Object targetObj = editMap.get("target");
+            Object replacementObj = editMap.get("replacement");
+            String targetBlock = targetObj instanceof String s ? s : (targetObj != null ? targetObj.toString() : null);
+            String replacementBlock = replacementObj instanceof String s
+                    ? s
+                    : (replacementObj != null ? replacementObj.toString() : null);
+
+            if (targetBlock == null || targetBlock.isBlank()) {
+                return new EditorResult(false, "",
+                        "Edit #" + editNum + " failed: " + buildTargetNotFoundHint(relativePath, content, targetBlock));
+            }
+            if (replacementBlock == null) {
+                return new EditorResult(false, "",
+                        "Edit #" + editNum + " failed: 'replacement' must not be null in file: " + relativePath);
+            }
+
+            BlockMatch match = findUniqueBlockMatch(editNum, relativePath, content, targetBlock, replacementBlock);
+            if (match.errorHint() != null) {
+                return new EditorResult(false, "", "Edit #" + editNum + " failed: " + match.errorHint());
+            }
+
+            for (BlockMatch existing : matches) {
+                if (match.start() < existing.end() && existing.start() < match.end()) {
+                    return new EditorResult(false, "", "Edit #" + editNum + " failed: Target block overlaps with Edit #"
+                            + existing.editIndex() + " in file: " + relativePath);
+                }
+            }
+            matches.add(match);
+        }
+
+        matches.sort(Comparator.comparingInt(BlockMatch::start).reversed());
+        StringBuilder updated = new StringBuilder(content);
+        for (BlockMatch match : matches) {
+            updated.replace(match.start(), match.end(), match.replacement());
+        }
+        Files.writeString(path, updated.toString());
+        return completeFileMutation(path, relativePath,
+                "Replaced " + matches.size() + " blocks successfully in: " + relativePath);
+    }
+
+    private record BlockMatch(int editIndex, int start, int end, String replacement, String errorHint) {
+    }
+
+    private BlockMatch findUniqueBlockMatch(int editIndex, String relativePath, String content, String targetBlock,
+            String replacementBlock) {
         String lineSeparator = detectLineSeparator(content, replacementBlock);
         String normalizedTarget = normalizeLineEndings(targetBlock, lineSeparator);
         String normalizedReplacement = replacementBlock == null
@@ -80,11 +169,11 @@ public class FileEditorService {
         List<Integer> exactMatchOffsets = findExactMatches(content, normalizedTarget);
         if (exactMatchOffsets.size() == SINGLE_MATCH_COUNT) {
             int start = exactMatchOffsets.get(0);
-            return applyReplacement(path, relativePath, content, start, start + normalizedTarget.length(),
-                    normalizedReplacement);
+            return new BlockMatch(editIndex, start, start + normalizedTarget.length(), normalizedReplacement, null);
         }
         if (exactMatchOffsets.size() > SINGLE_MATCH_COUNT) {
-            return nonUniqueMatchResult(relativePath, content, exactMatchOffsets);
+            return new BlockMatch(editIndex, -1, -1, null,
+                    formatNonUniqueMatchError(relativePath, content, exactMatchOffsets));
         }
 
         String[] parts = normalizedTarget.trim().split(WHITESPACE_REGEX);
@@ -103,10 +192,11 @@ public class FileEditorService {
         }
 
         if (regexMatches.isEmpty()) {
-            return new EditorResult(false, "", buildTargetNotFoundHint(relativePath, content, targetBlock));
+            return new BlockMatch(editIndex, -1, -1, null, buildTargetNotFoundHint(relativePath, content, targetBlock));
         }
         if (regexMatches.size() > SINGLE_MATCH_COUNT) {
-            return nonUniqueMatchResult(relativePath, content, regexMatches.stream().map(m -> m[0]).toList());
+            return new BlockMatch(editIndex, -1, -1, null,
+                    formatNonUniqueMatchError(relativePath, content, regexMatches.stream().map(m -> m[0]).toList()));
         }
 
         int start = regexMatches.get(0)[0];
@@ -118,7 +208,7 @@ public class FileEditorService {
                         || startsWithHorizontalWhitespace(normalizedReplacement))) {
             start = lineStart;
         }
-        return applyReplacement(path, relativePath, content, start, end, normalizedReplacement);
+        return new BlockMatch(editIndex, start, end, normalizedReplacement, null);
     }
 
     @AgentDoc(value = "Replaces a range of lines with new content using 1-based indexing.", examples = """
@@ -261,10 +351,10 @@ public class FileEditorService {
         return new EditorResult(true, message, null);
     }
 
-    private static EditorResult nonUniqueMatchResult(String relativePath, String content, List<Integer> matchOffsets) {
+    private static String formatNonUniqueMatchError(String relativePath, String content, List<Integer> matchOffsets) {
         List<Integer> matchLines = offsetsToLineNumbers(content, matchOffsets);
-        return new EditorResult(false, "", "TargetBlock is not unique in file: " + relativePath + " (found "
-                + matchLines.size() + " matches at lines: " + matchLines + ")");
+        return "TargetBlock is not unique in file: " + relativePath + " (found " + matchLines.size()
+                + " matches at lines: " + matchLines + ")";
     }
 
     private static List<Integer> findExactMatches(String content, String target) {

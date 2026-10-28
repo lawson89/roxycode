@@ -36,6 +36,8 @@ class LLMDocGeneratorTest {
                 "readFileNumbered(relativePath: string): string;", "getLineCount(relativePath: string): number;",
                 "readFiles(relativePaths: string[]): Map;", "readFilesNumbered(relativePaths: string[]): Map;"),
                 serviceCase(FileEditorService.class, new FileEditorService(ps, null),
+                        "replaceBlocks(relativePath: string, edits: List): EditorResult;",
+                        "replaceBlocks(relativePath: string, edits: Object[]): EditorResult;",
                         "moveFile(sourcePath: string, targetPath: string): EditorResult;",
                         "copyFile(sourcePath: string, targetPath: string): EditorResult;",
                         "mkdirs(relativePath: string): EditorResult;"),

@@ -42,8 +42,9 @@ class AgentServiceTest {
             GrepService.class, FileReadService.class, FileEditorService.class, MemoryService.class,
             SymbolService.class);
 
-    private static final Set<Class<?>> ALLOWED_JS_PARAM_TYPES = Set.of(String.class, String[].class, int.class,
-            Integer.class, long.class, Long.class, double.class, Double.class, boolean.class, Boolean.class);
+    private static final Set<Class<?>> ALLOWED_JS_PARAM_TYPES = Set.of(String.class, String[].class, Object[].class,
+            List.class, int.class, Integer.class, long.class, Long.class, double.class, Double.class, boolean.class,
+            Boolean.class);
 
     @AgentService(value = "testService", phases = {"EXPLORE", "PLAN"})
     private static class MockService {
@@ -112,10 +113,19 @@ class AgentServiceTest {
                 if (!method.isAnnotationPresent(AgentDoc.class)) {
                     continue;
                 }
-                for (Class<?> paramType : method.getParameterTypes()) {
-                    assertFalse(Collection.class.isAssignableFrom(paramType),
-                            serviceClass.getSimpleName() + "#" + method.getName()
-                                    + " should accept array/varargs instead of Collection/List for JS compatibility");
+                Class<?>[] paramTypes = method.getParameterTypes();
+                for (int i = 0; i < paramTypes.length; i++) {
+                    Class<?> paramType = paramTypes[i];
+                    if (Collection.class.isAssignableFrom(paramType)) {
+                        int paramIndex = i;
+                        boolean hasArrayOverload = java.util.Arrays.stream(serviceClass.getDeclaredMethods())
+                                .anyMatch(m -> m.isAnnotationPresent(AgentDoc.class)
+                                        && m.getName().equals(method.getName())
+                                        && m.getParameterCount() == paramTypes.length
+                                        && m.getParameterTypes()[paramIndex].isArray());
+                        assertTrue(hasArrayOverload, serviceClass.getSimpleName() + "#" + method.getName()
+                                + " accepting Collection/List must also expose an @AgentDoc array overload for JS compatibility");
+                    }
                     assertTrue(ALLOWED_JS_PARAM_TYPES.contains(paramType), serviceClass.getSimpleName() + "#"
                             + method.getName() + " has non-JS-friendly parameter type: " + paramType.getName());
                 }

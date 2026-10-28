@@ -6,13 +6,22 @@ import static org.mockito.Mockito.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.AiConfig;
+import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.ai.JexlTool;
+import org.roxycode.app.ai.TurnToolContext;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.ui.SwingTestUtils;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.context.ApplicationEventPublisher;
 
 class FileEditorServiceTest {
@@ -258,5 +267,174 @@ class FileEditorServiceTest {
                 .replaceLines("blank_lines.txt", 2, 3, "Replaced A" + (char) 10 + "Replaced B" + (char) 10 + (char) 10)
                 .success());
         assertEquals(List.of("Line 1", "Replaced A", "Replaced B", "", "Line 2", "Line 3"), Files.readAllLines(file));
+    }
+
+    @Test
+    void testReplaceBlocksDisjointEditsViaJexlListAndArraySingleWrite() throws Exception {
+        String initial = """
+                public class Calculator {
+                    public int add(int a, int b) {
+                        return a + b;
+                    }
+
+                    public int subtract(int a, int b) {
+                        return a   -   b;
+                    }
+
+                    public int multiply(int a, int b) {
+                        return a * b;
+                    }
+                }
+                """;
+        Path file = Files.writeString(tempDir.resolve("Calculator.java"), initial);
+        clearInvocations(eventPublisher);
+
+        JexlServiceRegistry registry = new JexlServiceRegistry();
+        registry.register(fileEditorService);
+        JexlTool jexlTool = new JexlTool(registry, null, AiConfig.SHARED_OBJECT_MAPPER, null);
+        ToolContext codeContext = new ToolContext(new TurnToolContext("conv-1", WorkflowPhase.CODE, null).toMap());
+
+        String arrayScript = """
+                fileEditorService.replaceBlocks('Calculator.java', [
+                    {'target': 'return a + b;', 'replacement': 'return Math.addExact(a, b);'},
+                    {'target': 'return a - b;', 'replacement': 'return Math.subtractExact(a, b);'},
+                    {'target': 'return a * b;', 'replacement': 'return Math.multiplyExact(a, b);'}
+                ])
+                """;
+        var arrayJson = AiConfig.SHARED_OBJECT_MAPPER.readTree(jexlTool.executeJexl(arrayScript, codeContext))
+                .get("result");
+        assertTrue(arrayJson.get("success").asBoolean());
+        verify(eventPublisher, times(1)).publishEvent(new FileChangedEvent("Calculator.java"));
+
+        String afterArrayEdits = Files.readString(file);
+        SwingTestUtils.assertContainsAll(afterArrayEdits, "return Math.addExact(a, b);",
+                "return Math.subtractExact(a, b);", "return Math.multiplyExact(a, b);");
+
+        clearInvocations(eventPublisher);
+        String listScript = """
+                fileEditorService.replaceBlocks('Calculator.java', [
+                    {'target': 'Math.multiplyExact(a, b)', 'replacement': 'a * b'},
+                    {'target': 'Math.addExact(a, b)', 'replacement': 'a + b'},
+                    ...
+                ])
+                """;
+        var listJson = AiConfig.SHARED_OBJECT_MAPPER.readTree(jexlTool.executeJexl(listScript, codeContext))
+                .get("result");
+        assertTrue(listJson.get("success").asBoolean());
+        verify(eventPublisher, times(1)).publishEvent(new FileChangedEvent("Calculator.java"));
+        SwingTestUtils.assertContainsAll(Files.readString(file), "return a + b;", "return Math.subtractExact(a, b);",
+                "return a * b;");
+    }
+
+    @Test
+    void testReplaceBlocksAtomicRollbackWhenSecondEditFails() throws IOException {
+        String initial = """
+                package demo;
+                public class OrderService {
+                    public String createOrder(int id) {
+                        return 'created:' + id;
+                    }
+                    public String cancelOrder(int id) {
+                        return 'cancelled:' + id;
+                    }
+                }
+                """;
+        Path file = Files.writeString(tempDir.resolve("OrderService.java"), initial);
+        clearInvocations(eventPublisher);
+
+        EditorResult notFoundResult = fileEditorService.replaceBlocks("OrderService.java",
+                List.of(Map.of("target", "return 'created:' + id;", "replacement", "return 'ok:' + id;"),
+                        Map.of("target", "public String cancelOrder(String orderCode)", "replacement",
+                                "public String cancelOrder(long id)")));
+        assertEditFails(notFoundResult, "Edit #2 failed:", "TargetBlock not found in file: OrderService.java",
+                "Line 6:     public String cancelOrder(int id) {");
+        assertEquals(initial, Files.readString(file));
+        verify(eventPublisher, never()).publishEvent(any());
+
+        String duplicateFileContent = """
+                int x = 1;
+                int y = 2;
+                int y = 2;
+                """;
+        Path dupFile = Files.writeString(tempDir.resolve("Dup.java"), duplicateFileContent);
+        EditorResult nonUniqueResult = fileEditorService.replaceBlocks("Dup.java",
+                new Object[]{Map.of("target", "int x = 1;", "replacement", "int x = 10;"),
+                        Map.of("target", "int y = 2;", "replacement", "int y = 20;")});
+        assertEditFails(nonUniqueResult, "Edit #2 failed:", "TargetBlock is not unique in file: Dup.java", "[2, 3]");
+        assertEquals(duplicateFileContent, Files.readString(dupFile));
+        verify(eventPublisher, never()).publishEvent(any());
+
+        Map<String, String> nullReplacementEdit = new HashMap<>();
+        nullReplacementEdit.put("target", "return 'cancelled:' + id;");
+        nullReplacementEdit.put("replacement", null);
+        assertEditFails(fileEditorService.replaceBlocks("OrderService.java", List
+                .of(Map.of("target", "return 'created:' + id;", "replacement", "return 'ok';"), nullReplacementEdit)),
+                "Edit #2 failed:", "'replacement' must not be null");
+        assertEquals(initial, Files.readString(file));
+
+        assertEditFails(
+                fileEditorService.replaceBlocks("OrderService.java",
+                        List.of(Map.of("target", "return 'created:' + id;", "replacement", "return 'ok';"),
+                                Map.of("target", "   ", "replacement", "non-empty"))),
+                "Edit #2 failed:", "TargetBlock not found in file: OrderService.java");
+        assertEquals(initial, Files.readString(file));
+
+        assertEditFails(fileEditorService.replaceBlocks("OrderService.java", new Object[]{"not-a-map"}),
+                "Edit #1 failed:", "Edit entry must be a map");
+        assertEditFails(fileEditorService.replaceBlocks("OrderService.java", Collections.emptyList()),
+                "No edits provided for file: OrderService.java");
+        assertEditFails(fileEditorService.replaceBlocks("OrderService.java", (Object[]) null),
+                "No edits provided for file: OrderService.java");
+        assertEditFails(fileEditorService.replaceBlocks("missing_multi.java",
+                List.of(Map.of("target", "a", "replacement", "b"))), "File does not exist: missing_multi.java");
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void testReplaceBlocksRejectsOverlappingTargetBlocksAtomically() throws IOException {
+        String initial = """
+                line 1
+                line 2
+                line 3
+                line 4
+                """;
+        Path file = Files.writeString(tempDir.resolve("overlap.txt"), initial);
+        clearInvocations(eventPublisher);
+
+        EditorResult result = fileEditorService.replaceBlocks("overlap.txt", List.of(Map.of("target", """
+                line 1
+                line 2
+                line 3""", "replacement", "block A"), Map.of("target", """
+                line 2
+                line 3
+                line 4""", "replacement", "block B")));
+
+        assertEditFails(result, "Edit #2 failed:", "Target block overlaps with Edit #1 in file: overlap.txt");
+        assertEquals(initial, Files.readString(file));
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void testReplaceBlocksPreservesLfAndCrlfLineEndings() throws IOException {
+        String crlf = String.valueOf((char) 13) + (char) 10;
+        String lf = String.valueOf((char) 10);
+        Path crlfFile = Files.writeString(tempDir.resolve("crlf_multi.java"),
+                String.join(crlf, "class A {", "    int a = 1;", "    int b = 2;", "    int c = 3;", "}") + crlf);
+        EditorResult crlfResult = fileEditorService.replaceBlocks("crlf_multi.java",
+                List.of(Map.of("target", "    int a = 1;" + lf + "    int b = 2;", "replacement",
+                        "    int a = 10;" + lf + "    int b = 20;"),
+                        Map.of("target", "    int c = 3;", "replacement", "    int c = 30;" + lf + "    int d = 40;")));
+        assertTrue(crlfResult.success());
+        assertEquals(String.join(crlf, "class A {", "    int a = 10;", "    int b = 20;", "    int c = 30;",
+                "    int d = 40;", "}") + crlf, Files.readString(crlfFile));
+
+        Path lfFile = Files.writeString(tempDir.resolve("lf_multi.java"),
+                String.join(lf, "class B {", "    int a = 1;", "    int b = 2;", "}") + lf);
+        EditorResult lfResult = fileEditorService.replaceBlocks("lf_multi.java",
+                List.of(Map.of("target", "    int a = 1;" + crlf, "replacement", "    int a = 100;" + crlf),
+                        Map.of("target", "    int b = 2;", "replacement", "    int b = 200;")));
+        assertTrue(lfResult.success());
+        assertEquals(String.join(lf, "class B {", "    int a = 100;", "    int b = 200;", "}") + lf,
+                Files.readString(lfFile));
     }
 }
