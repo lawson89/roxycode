@@ -116,7 +116,7 @@ public class SystemToolsPanelTest {
     public void testWebsiteLinkClickInvokesBrowserLauncherAndUpdateUiRefreshesTheme() {
         SystemToolService service = mock(SystemToolService.class);
         when(service.detectTools()).thenReturn(CompletableFuture
-                .completedFuture(List.of(SystemTool.ofKnownTool("Java", "version 25.0.4", "Detected"))));
+                .completedFuture(List.of(SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"))));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
         SwingTestUtils.flushEdt();
@@ -124,22 +124,22 @@ public class SystemToolsPanelTest {
         AtomicReference<URI> launchedUri = new AtomicReference<>();
         panel.setBrowserLauncher(launchedUri::set);
 
-        ToolCard javaCard = panel.getToolCards().get(0);
-        assertEquals("adoptium.net", javaCard.getWebsiteLinkButton().getText());
-        SwingTestUtils.clickOnEdt(javaCard.getWebsiteLinkButton());
-        assertEquals(URI.create("https://adoptium.net"), launchedUri.get());
+        ToolCard gitCard = panel.getToolCards().get(0);
+        assertEquals("git-scm.com", gitCard.getWebsiteLinkButton().getText());
+        SwingTestUtils.clickOnEdt(gitCard.getWebsiteLinkButton());
+        assertEquals(URI.create("https://git-scm.com"), launchedUri.get());
 
         panel.setBrowserLauncher(uri -> {
             throw new UnsupportedOperationException("Headless test");
         });
-        assertDoesNotThrow(() -> SwingTestUtils.clickOnEdt(javaCard.getWebsiteLinkButton()));
+        assertDoesNotThrow(() -> SwingTestUtils.clickOnEdt(gitCard.getWebsiteLinkButton()));
 
         SwingTestUtils.withDarkTheme(panel, () -> {
-            assertNotNull(javaCard.getNameLabel().getIcon());
-            assertNotNull(javaCard.getStatusBadge().getIcon());
+            assertNotNull(gitCard.getNameLabel().getIcon());
+            assertNotNull(gitCard.getStatusBadge().getIcon());
         });
-        assertNotNull(javaCard.getNameLabel().getIcon());
-        assertNotNull(javaCard.getStatusBadge().getIcon());
+        assertNotNull(gitCard.getNameLabel().getIcon());
+        assertNotNull(gitCard.getStatusBadge().getIcon());
     }
 
     @Test
@@ -147,7 +147,7 @@ public class SystemToolsPanelTest {
         SystemToolService service = mock(SystemToolService.class);
         when(service.hasCachedTools()).thenReturn(false);
         when(service.detectTools()).thenReturn(
-                CompletableFuture.completedFuture(List.of(new SystemTool("Java", "25", "Detected", "Runtime"))));
+                CompletableFuture.completedFuture(List.of(new SystemTool("Git", "2.43.0", "Detected", "VCS"))));
 
         SplashScreenWindow splash = mock(SplashScreenWindow.class);
         RoxyCode.initializeSystemTools(service, splash);
@@ -169,7 +169,6 @@ public class SystemToolsPanelTest {
                 .completedFuture(List.of(SystemTool.ofKnownTool("Ripgrep", "ripgrep 14.1.0", "Detected"),
                         SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"),
                         SystemTool.ofKnownTool("Universal Ctags", "Universal Ctags 5.9.0", "Detected"),
-                        SystemTool.ofKnownTool("Java", "version " + '"' + "25.0.4" + '"' + " LTS", "Detected"),
                         SystemTool.ofKnownTool("Docker", "Docker 29.1.3 (API 1.52)", "Detected"))));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);

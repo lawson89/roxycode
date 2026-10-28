@@ -220,7 +220,6 @@ public final class SystemToolsPanel extends JPanel {
             case SystemTool.TOOL_RIPGREP -> Codicons.SEARCH;
             case SystemTool.TOOL_GIT -> Codicons.SOURCE_CONTROL;
             case SystemTool.TOOL_CTAGS -> Codicons.SYMBOL_CLASS;
-            case SystemTool.TOOL_JAVA -> Codicons.TERMINAL;
             case SystemTool.TOOL_DOCKER -> Codicons.SERVER_ENVIRONMENT;
             default -> Codicons.TOOLS;
         };

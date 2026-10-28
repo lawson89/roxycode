@@ -54,8 +54,8 @@ class SystemToolServiceTest {
                 () -> new DockerVersionInfo("27.0.3", "1.46"), () -> true);
         List<SystemTool> tools = service.detectTools().get();
 
-        assertEquals(5, tools.size());
-        for (String expectedName : List.of("Ripgrep", "Git", "Universal Ctags", "Java", "Docker")) {
+        assertEquals(4, tools.size());
+        for (String expectedName : List.of("Ripgrep", "Git", "Universal Ctags", "Docker")) {
             assertTrue(tools.stream().anyMatch(t -> t.name().equals(expectedName)));
         }
         for (SystemTool tool : tools) {
@@ -71,81 +71,28 @@ class SystemToolServiceTest {
 
     @Test
     void testParseVersionExtractsCleanFirstLineOnly() {
-        assertEquals("ripgrep 14.1.0", SystemToolService.parseVersion(
-                "ripgrep 14.1.0\nfeatures:-simd-accel,+pcre2\nsimd(compile):+SSE2,-SSSE3,-AVX2\n", "Ripgrep"));
-        assertEquals("Universal Ctags 5.9.0", SystemToolService.parseVersion(
-                "Universal Ctags 5.9.0, Copyright (C) 2015-2022 Universal Ctags Team\n", "Universal Ctags"));
-        String expectedJavaVer = "version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS";
-        assertEquals(expectedJavaVer, SystemToolService.parseVersion(
-                "openjdk " + expectedJavaVer + "\nOpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)\n",
-                "Java"));
-        assertEquals("git version 2.43.0", SystemToolService.parseVersion("git version 2.43.0\n", "Git"));
-        assertEquals("ripgrep 14.1.0", SystemToolService
-                .parseVersion("ripgrep 14.1.0features:-simd-accel,+pcre2simd(compile):+SSE2", "Ripgrep"));
-        assertEquals("Universal Ctags 5.9.0", SystemToolService
-                .parseVersion("Universal Ctags 5.9.0, Copyright (C) 2015 Universal Ctags Team", "Universal Ctags"));
-        assertEquals(expectedJavaVer,
-                SystemToolService.parseVersion(expectedJavaVer
-                        + "OpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)OpenJDK 64-Bit Server VM",
-                        "Java"));
+        assertEquals("ripgrep 14.1.0", SystemToolService.parseVersion("""
+                ripgrep 14.1.0
+                features:-simd-accel,+pcre2
+                simd(compile):+SSE2,-SSSE3,-AVX2
+                """));
+        assertEquals("Universal Ctags 5.9.0", SystemToolService.parseVersion("""
+                Universal Ctags 5.9.0, Copyright (C) 2015-2022 Universal Ctags Team
+                """));
+        assertEquals("git version 2.43.0", SystemToolService.parseVersion("""
+                git version 2.43.0
+                """));
+        assertEquals("ripgrep 14.1.0",
+                SystemToolService.parseVersion("ripgrep 14.1.0features:-simd-accel,+pcre2simd(compile):+SSE2"));
+        assertEquals("Universal Ctags 5.9.0",
+                SystemToolService.parseVersion("Universal Ctags 5.9.0, Copyright (C) 2015 Universal Ctags Team"));
         assertTrue(SystemToolService
-                .parseVersion("version " + '"'
-                        + "25.0.4-custom-build-identifier-with-extra-suffixes-exceeding-fifty-chars" + '"', "Java")
+                .parseVersion("ripgrep 14.1.0-custom-build-identifier-with-extra-suffixes-exceeding-fifty-chars")
                 .length() <= 50);
-        assertEquals("Unknown", SystemToolService.parseVersion("", "Git"));
-        assertEquals("Unknown", SystemToolService.parseVersion("   \n  ", "Git"));
-    }
+        assertEquals("Unknown", SystemToolService.parseVersion(""));
+        assertEquals("Unknown", SystemToolService.parseVersion("""
 
-    @Test
-    void testLegacyTomlCacheEnrichesMissingLicenseWebsiteAndLegacyDescriptions() throws Exception {
-        TomlMapper mapper = AiConfig.SHARED_TOML_MAPPER;
-        SettingsService settingsService = new SettingsService(mapper, null);
-        settingsService.setSettingsPathOverride(tempDir.resolve("settings.toml"));
-
-        String legacyToml = """
-                [[tools]]
-                name = "Ripgrep"
-                version = "ripgrep 14.1.0features:-simd-accel,+pcre2sim..."
-                status = "Detected"
-                description = "Required for fast file searching."
-
-                [[tools]]
-                name = "Java"
-                version = 'version "25.0.4" 2026-07-21 LTSOpenJDK Runtime Environment Temurin-25.0.4+7 (build 25.0.4+7-LTS)OpenJDK 64-Bit Server VM'
-                status = "Detected"
-                description = "The runtime environment for this application."
-
-                [[tools]]
-                name = "Docker"
-                version = "Docker 28.0.1 (API 1.48)"
-                status = "Detected"
-                description = "Required for isolated build and test execution via Testcontainers."
-                """;
-        Files.writeString(tempDir.resolve(SystemToolService.SYSTEM_TOOLS_FILE), legacyToml);
-
-        SystemToolService service = new SystemToolService(settingsService, mapper, event -> {
-        });
-        List<SystemTool> loaded = service.detectTools().get(5, TimeUnit.SECONDS);
-
-        assertEquals(3, loaded.size());
-        SystemTool rg = loaded.get(0);
-        assertEquals("Ripgrep", rg.name());
-        assertEquals("ripgrep 14.1.0", rg.version());
-        assertEquals("Unlicense / MIT", rg.license());
-        assertEquals("https://github.com/BurntSushi/ripgrep", rg.websiteUrl());
-        assertTrue(rg.description().contains("GrepService"));
-
-        SystemTool javaTool = loaded.get(1);
-        assertEquals("Java", javaTool.name());
-        assertEquals("version " + '"' + "25.0.4" + '"' + " 2026-07-21 LTS", javaTool.version());
-        assertEquals("GPL-2.0 with Classpath Exception", javaTool.license());
-        assertEquals("https://adoptium.net", javaTool.websiteUrl());
-
-        SystemTool docker = loaded.get(2);
-        assertEquals("Docker", docker.name());
-        assertEquals("Apache-2.0", docker.license());
-        assertEquals("https://www.docker.com", docker.websiteUrl());
-        assertTrue(docker.description().contains("BuildContainerService"));
+                """));
     }
 
     @Test

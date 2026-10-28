@@ -36,7 +36,6 @@ public class SystemToolService {
     private static final String RIPGREP = SystemTool.TOOL_RIPGREP;
     private static final String GIT = SystemTool.TOOL_GIT;
     private static final String CTAGS = SystemTool.TOOL_CTAGS;
-    private static final String JAVA = SystemTool.TOOL_JAVA;
     private static final String DOCKER = SystemTool.TOOL_DOCKER;
     private static final String ARG_VERSION = "--version";
     public static final String STATUS_DETECTED = "Detected";
@@ -46,8 +45,7 @@ public class SystemToolService {
     static final String VERSION_UNKNOWN = "Unknown";
     private static final int MAX_DOCKER_ERROR_LENGTH = 120;
     private static final int MAX_VERSION_LENGTH = 50;
-    private static final List<String> LEGACY_VERSION_NOISE_MARKERS = List.of("features:", ", Copyright", "OpenJDK",
-            "Java(TM)");
+    private static final List<String> VERSION_NOISE_MARKERS = List.of("features:", ", Copyright");
 
     public record DockerVersionInfo(String version, String apiVersion) {
     }
@@ -228,7 +226,7 @@ public class SystemToolService {
 
     private List<SystemTool> probeAllTools() {
         return List.of(detectTool(RIPGREP, "rg", ARG_VERSION), detectTool(GIT, "git", ARG_VERSION),
-                detectTool(CTAGS, "ctags", ARG_VERSION), detectTool(JAVA, "java", "-version"), detectDockerTool());
+                detectTool(CTAGS, "ctags", ARG_VERSION), detectDockerTool());
     }
 
     private void updateCacheAndPublish(List<SystemTool> detected) {
@@ -250,10 +248,7 @@ public class SystemToolService {
             return List.of();
         try {
             SystemToolsCache cache = mapper.readValue(path.toFile(), SystemToolsCache.class);
-            if (cache == null || cache.tools() == null)
-                return List.of();
-            return cache.tools().stream().map(SystemTool::enrichLegacyMetadata)
-                    .map(SystemToolService::sanitizeCachedToolVersion).toList();
+            return (cache != null && cache.tools() != null) ? List.copyOf(cache.tools()) : List.of();
         } catch (IOException e) {
             log.warn("Failed to load cached system tools from {}: {}", path, e.getMessage());
             return List.of();
@@ -325,7 +320,7 @@ public class SystemToolService {
         try {
             ProcessResult result = ProcessRunner.run(List.of(command, versionArg), null, true);
             if (!result.timedOut() && result.exitCode() == 0) {
-                return SystemTool.ofKnownTool(name, parseVersion(result.output(), name), STATUS_DETECTED);
+                return SystemTool.ofKnownTool(name, parseVersion(result.output()), STATUS_DETECTED);
             }
             log.warn("Tool {} detection failed with exit code {}", name, result.exitCode());
         } catch (CancellationException e) {
@@ -336,26 +331,14 @@ public class SystemToolService {
         return SystemTool.ofKnownTool(name, VERSION_NOT_FOUND, STATUS_MISSING);
     }
 
-    private static SystemTool sanitizeCachedToolVersion(SystemTool tool) {
-        if (tool == null || StringUtils.isBlank(tool.version()) || VERSION_NOT_FOUND.equals(tool.version())) {
-            return tool;
-        }
-        return tool.withVersion((DOCKER.equals(tool.name()) && STATUS_ERROR.equals(tool.status()))
-                ? formatDockerErrorMessage(tool.version())
-                : parseVersion(tool.version(), tool.name()));
-    }
-
-    static String parseVersion(String output, String toolName) {
+    static String parseVersion(String output) {
         if (StringUtils.isBlank(output))
             return VERSION_UNKNOWN;
         String firstLine = output.lines().map(String::trim).filter(line -> !line.isEmpty()).findFirst()
                 .orElse(VERSION_UNKNOWN);
         if (VERSION_UNKNOWN.equals(firstLine))
             return firstLine;
-        if (JAVA.equals(toolName) && firstLine.contains("version")) {
-            firstLine = firstLine.substring(firstLine.indexOf("version"));
-        }
-        for (String marker : LEGACY_VERSION_NOISE_MARKERS) {
+        for (String marker : VERSION_NOISE_MARKERS) {
             int idx = firstLine.indexOf(marker);
             if (idx > 0) {
                 firstLine = firstLine.substring(0, idx).trim();
