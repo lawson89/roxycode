@@ -34,7 +34,7 @@ class HeaderPanelTest {
     }
 
     @Test
-    void testHeaderDisplaysProjectBranchAndModel() {
+    void testHeaderDisplaysProjectBranchAndEffectiveModel() {
         SettingsService ss = createSettingsService();
         ProjectService ps = new ProjectService(ss, null);
         GitService gitService = mock(GitService.class);
@@ -54,6 +54,16 @@ class HeaderPanelTest {
         SwingTestUtils.runOnEdt(() -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
 
         assertEquals("updated-proj", header.getProjectLabel().getText());
+        assertEquals("gemini-4-argon", header.getModelLabel().getText());
+
+        ps.setProjectGeminiModel("gemini-project-override");
+        SwingTestUtils.runOnEdt(() -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
+        assertEquals("gemini-project-override", header.getModelLabel().getText());
+
+        Path secondProject = tempDir.resolve("second-proj");
+        ps.setCurrentProjectRoot(secondProject);
+        SwingTestUtils.runOnEdt(() -> header.onProjectChanged(new ProjectChangedEvent(secondProject)));
+        assertEquals("second-proj", header.getProjectLabel().getText());
         assertEquals("gemini-4-argon", header.getModelLabel().getText());
     }
 
@@ -96,38 +106,6 @@ class HeaderPanelTest {
         themeButton.doClick();
         assertEquals("FlatLaf Light", ss.getSettings().getTheme());
         verify(ss, times(2)).saveSettings();
-    }
-
-    @Test
-    void testModelSelectorPopupAndStatusPanelMemoryBar() {
-        SettingsService ss = spy(createSettingsService());
-        HeaderPanel header = new HeaderPanel(new ProjectService(ss, null), createGitService(), ss);
-
-        javax.swing.JPopupMenu popup = header.buildModelSelectorPopup();
-        assertNotNull(popup);
-        assertTrue(popup.getComponentCount() > 0);
-
-        header.selectModel("gemini-4-argon");
-        assertEquals("gemini-4-argon", header.getModelLabel().getText());
-        assertEquals("gemini-4-argon", ss.getSettings().getGeminiModel());
-        verify(ss, atLeastOnce()).saveSettings();
-
-        org.roxycode.app.service.EnvironmentService envService = mock(
-                org.roxycode.app.service.EnvironmentService.class);
-        when(envService.getOsName()).thenReturn("Linux");
-        when(envService.getOsVersion()).thenReturn("6.8");
-        when(envService.getCurrentUser()).thenReturn("dev");
-        when(envService.getJavaVersion()).thenReturn("21");
-        when(envService.getMemoryUsageMb()).thenReturn(150L);
-        when(envService.getTotalMemoryMb()).thenReturn(300L);
-
-        StatusPanel statusPanel = new StatusPanel(envService);
-        try {
-            assertEquals(50, statusPanel.getMemProgressBar().getValue());
-            assertTrue(statusPanel.getMemProgressBar().getToolTipText().contains("50%"));
-        } finally {
-            statusPanel.removeNotify();
-        }
     }
 
     @Test

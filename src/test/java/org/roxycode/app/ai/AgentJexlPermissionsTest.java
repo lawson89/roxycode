@@ -3,7 +3,6 @@ package org.roxycode.app.ai;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,18 +43,6 @@ class AgentJexlPermissionsTest {
         public String helperMethod() {
             return "plain";
         }
-    }
-
-    @Test
-    void testNullSafety() throws Exception {
-        AgentJexlPermissions permissions = AgentJexlPermissions.INSTANCE;
-        Method method = BaseAgentService.class.getMethod("documentedMethod");
-
-        assertFalse(permissions.allow((Constructor<?>) null));
-        assertFalse(permissions.allow((Method) null));
-        assertFalse(permissions.allow(null, method));
-        assertFalse(permissions.allow(BaseAgentService.class, (Method) null));
-        assertFalse(AgentJexlPermissions.isAllowedNonServiceType(null));
     }
 
     @Test

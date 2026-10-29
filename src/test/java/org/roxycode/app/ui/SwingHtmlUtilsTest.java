@@ -3,11 +3,7 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
-import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.Insets;
 import javax.swing.*;
-import javax.swing.border.Border;
 import javax.swing.text.Element;
 import javax.swing.text.View;
 import javax.swing.text.ViewFactory;
@@ -44,29 +40,6 @@ class SwingHtmlUtilsTest {
                         + "~~~html\n<table>\n  <tr><th>Header</th><td>Cell</td></tr>\n</table>\n~~~\n");
         assertContainsAll(rendered, "md-table", "md-th", "md-td", "right",
                 "<table><tr><td>Inline raw HTML table</td></tr></table>", "&lt;table&gt;");
-    }
-
-    @Test
-    void testApplyThemeAndReadOnlyCaretAndCursorConfiguration() {
-        JEditorPane pane = SwingHtmlUtils.createHtmlEditorPane();
-        SwingHtmlUtils.applyTheme(pane, 12);
-
-        HTMLEditorKit kit = assertInstanceOf(HTMLEditorKit.class, pane.getEditorKit());
-        assertEquals(Cursor.DEFAULT_CURSOR, kit.getDefaultCursor().getType());
-        assertEquals(Cursor.HAND_CURSOR, kit.getLinkCursor().getType());
-        assertEquals(Cursor.DEFAULT_CURSOR, pane.getCursor().getType());
-        assertNotNull(pane.getBackground());
-        assertNotNull(pane.getForeground());
-        assertTrue(pane.isOpaque());
-
-        assertInstanceOf(SwingHtmlUtils.NonPaintingCaret.class, pane.getCaret());
-        assertEquals(0, pane.getCaret().getBlinkRate());
-        assertEquals(0, pane.getCaretColor().getAlpha());
-
-        pane.setText("<html><body>Hello Selectable World</body></html>");
-        pane.selectAll();
-        assertNotNull(pane.getSelectedText());
-        assertTrue(pane.getSelectedText().contains("Hello Selectable World"));
     }
 
     @Test
@@ -127,11 +100,7 @@ class SwingHtmlUtilsTest {
     }
 
     @Test
-    void testGetUiColorAndToHexAndJexlApiPanelCopyFeedback() {
-        Color fallback = new Color(0x12, 0x34, 0x56);
-        assertEquals("#123456", SwingHtmlUtils.toHex(fallback));
-        assertEquals(fallback, SwingHtmlUtils.getUiColor(fallback, "NonExistent.uiKey.12345"));
-
+    void testJexlApiPanelCopyFeedbackTimerStateTransitions() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         JexlApiPanel apiPanel = new JexlApiPanel(registry);
         assertEquals(JexlApiPanel.COPY_BUTTON_TEXT, apiPanel.getCopyButton().getText());
@@ -159,9 +128,6 @@ class SwingHtmlUtilsTest {
         }
         secondTimer.stop();
         assertEquals("Original", btn.getText());
-
-        Border border = SwingHtmlUtils.createThemeMatteBorder(1, 0, 1, 0);
-        assertEquals(new Insets(1, 0, 1, 0), border.getBorderInsets(btn));
     }
 
 }

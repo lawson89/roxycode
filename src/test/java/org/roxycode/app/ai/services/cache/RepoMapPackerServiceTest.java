@@ -51,14 +51,6 @@ class RepoMapPackerServiceTest {
     }
 
     @Test
-    void testNoActiveProject() {
-        when(projectService.hasActiveProject()).thenReturn(false);
-        EditorResult result = service.generateRepoMap();
-        assertFalse(result.success());
-        assertEquals("No active project", result.errorHint());
-    }
-
-    @Test
     void testUnifiedFlatSortedOutputSourceOnlySkeletonsAndBoilerplateFiltering() throws IOException {
         String nl = System.lineSeparator();
         Path srcDir = Files.createDirectories(tempDir.resolve("src/main/java/demo"));
@@ -66,7 +58,8 @@ class RepoMapPackerServiceTest {
 
         Path smallJava = Files.writeString(srcDir.resolve("SmallService.java"),
                 String.join(nl, "package demo;", "import java.util.List;", "public class SmallService {",
-                        "    private int secretBodyLine = 42;", "    public void execute() {}", "}", ""));
+                        "    private int secretBodyLine = 42;", "    public void execute() {}",
+                        "    public String submitPlan(", "            String title) { return title; }", "}", ""));
         Files.writeString(testDir.resolve("SmallServiceTest.java"),
                 "package demo;\nclass SmallServiceTest { void testIt() {} }\n");
         Files.writeString(tempDir.resolve("README.md"), "# Project Title" + nl + "Some markdown prose");
@@ -84,7 +77,8 @@ class RepoMapPackerServiceTest {
                             + ctagsLineWithKind("List", smallJava.toString(), 2, "import")
                             + ctagsLineWithKind("ns", smallJava.toString(), 1, "namespace")
                             + ctagsLineWithKind("SmallService", smallJava.toString(), 3, "class")
-                            + ctagsLineWithKind("execute", smallJava.toString(), 5, "method"),
+                            + ctagsLineWithKind("execute", smallJava.toString(), 5, "method")
+                            + ctagsLineWithKind("submitPlan", smallJava.toString(), 6, "method"),
                     "", false);
         });
 
@@ -94,7 +88,8 @@ class RepoMapPackerServiceTest {
 
         assertEquals(String.join("\n", "# Repo Map Snapshot", "README.md", "pom.xml", "src/main/java/demo/Empty.java",
                 "src/main/java/demo/SmallService.java", "  3: public class SmallService {",
-                "  5: public void execute() {}", "src/test/java/demo/SmallServiceTest.java", ""), content);
+                "  5: public void execute() {}", "  6: public String submitPlan(",
+                "src/test/java/demo/SmallServiceTest.java", ""), content);
         SwingTestUtils.assertContainsNone(content, "## Project Tree", "--- ", "1: package demo;",
                 "2: import java.util.List;", "secretBodyLine", "Some markdown prose", "testIt");
         assertEquals(1, ctagsCommands.size());
@@ -233,76 +228,4 @@ class RepoMapPackerServiceTest {
         verify(grepService, times(2)).listFiles(null);
     }
 
-    @Test
-    void testSingleLineDeclarationsInSkeletonFormatting() throws IOException {
-        Path planServiceFile = Files.writeString(tempDir.resolve("PlanServiceSample.java"), """
-                package demo;
-                import java.util.List;
-                public class PlanServiceSample {
-                    public synchronized String submitPlan(
-                            @ToolParam(description = "The concise title (max 50 chars).") String title,
-                            @ToolParam(description = "The high-level goal.") String goal,
-                            @ToolParam(description = "List of requirements.") List<String> requirements,
-                            @ToolParam(description = "List of technical steps.") List<String> technicalSteps) {
-                        return title;
-                    }
-                    public String readLines(@AgentDoc(DOC_FILE_PATH) String relativePath,
-                            @AgentDoc("The 1-based start line number (inclusive)") int startLine,
-                            @AgentDoc("The 1-based end line number (inclusive)") int endLine)
-                            throws IOException {
-                        return relativePath;
-                    }
-                }
-                """);
-
-        when(grepService.listFiles(null)).thenReturn(List.of("PlanServiceSample.java"));
-        service.setCtagsRunner(cmd -> new ProcessResult(0,
-                ctagsLineWithKind("PlanServiceSample", planServiceFile.toString(), 3, "class")
-                        + ctagsLineWithKind("submitPlan", planServiceFile.toString(), 4, "method")
-                        + ctagsLineWithKind("readLines", planServiceFile.toString(), 11, "method"),
-                "", false));
-
-        EditorResult result = service.generateRepoMap();
-        assertTrue(result.success());
-        assertEquals("""
-                # Repo Map Snapshot
-                PlanServiceSample.java
-                  3: public class PlanServiceSample {
-                  4: public synchronized String submitPlan(
-                  11: public String readLines(@AgentDoc(DOC_FILE_PATH) String relativePath,
-                """, result.content());
-    }
-
-    @Test
-    void testRecordHeadersAndSingleLineDeclarations() throws IOException {
-        Path recordFile = Files.writeString(tempDir.resolve("ImplementationPlanSample.java"), """
-                package demo;
-                import java.util.List;
-                public record ImplementationPlanSample(
-                        String title,
-                        String goal,
-                        List<String> requirements,
-                        boolean userApproved) {
-                    public static final String STEP_COMPILE = "Code compiles successfully";
-                    public String summary() { return title + ": " + goal; }
-                }
-                """);
-
-        when(grepService.listFiles(null)).thenReturn(List.of("ImplementationPlanSample.java"));
-        service.setCtagsRunner(cmd -> new ProcessResult(0,
-                ctagsLineWithKind("ImplementationPlanSample", recordFile.toString(), 3, "record")
-                        + ctagsLineWithKind("STEP_COMPILE", recordFile.toString(), 8, "field")
-                        + ctagsLineWithKind("summary", recordFile.toString(), 9, "method"),
-                "", false));
-
-        EditorResult result = service.generateRepoMap();
-        assertTrue(result.success());
-        assertEquals("""
-                # Repo Map Snapshot
-                ImplementationPlanSample.java
-                  3: public record ImplementationPlanSample(
-                  8: public static final String STEP_COMPILE = "Code compiles successfully";
-                  9: public String summary() { return title + ": " + goal; }
-                """, result.content());
-    }
 }

@@ -3,11 +3,8 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.io.File;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
@@ -17,7 +14,6 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -77,15 +73,8 @@ public final class HeaderPanel extends JPanel {
         rightPanel.setOpaque(false);
 
         modelLabel = new JLabel();
-        modelLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        modelLabel.setToolTipText("Click to switch Gemini model");
-        modelLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                showModelSelectorPopup();
-            }
-        });
-        updateModelDisplay(settingsService.getSettings().getGeminiModel());
+        modelLabel.setToolTipText("Active Gemini model");
+        updateModelDisplay(resolveEffectiveModel());
         themeToggleButton = createIconButton(Codicons.COLOR_MODE, "Toggle Light/Dark Theme", e -> toggleTheme());
 
         rightPanel.add(modelLabel);
@@ -97,8 +86,22 @@ public final class HeaderPanel extends JPanel {
         updateProjectTooltip(projectService.getCurrentProjectRoot());
     }
 
+    private String resolveEffectiveModel() {
+        if (projectService != null) {
+            return projectService.getEffectiveGeminiModel();
+        }
+        if (settingsService != null && settingsService.getSettings() != null) {
+            return settingsService.getSettings().getGeminiModel();
+        }
+        return AppSettings.DEFAULT_GEMINI_MODEL;
+    }
+
     private void updateProjectTooltip(Path root) {
-        projectLabel.setToolTipText(root != null ? root.toAbsolutePath().toString() : "No project selected");
+        if (root != null) {
+            projectLabel.setToolTipText(root.toAbsolutePath().toString());
+        } else {
+            projectLabel.setToolTipText("No project selected");
+        }
     }
 
     @Override
@@ -119,11 +122,17 @@ public final class HeaderPanel extends JPanel {
     }
 
     static Color resolveBranchAccentColor() {
-        return FlatLaf.isLafDark() ? BRANCH_ACCENT_DARK : BRANCH_ACCENT_LIGHT;
+        if (FlatLaf.isLafDark()) {
+            return BRANCH_ACCENT_DARK;
+        }
+        return BRANCH_ACCENT_LIGHT;
     }
 
     static Color resolveModelAccentColor() {
-        return FlatLaf.isLafDark() ? MODEL_ACCENT_DARK : MODEL_ACCENT_LIGHT;
+        if (FlatLaf.isLafDark()) {
+            return MODEL_ACCENT_DARK;
+        }
+        return MODEL_ACCENT_LIGHT;
     }
 
     void applyHeaderStyling() {
@@ -156,61 +165,49 @@ public final class HeaderPanel extends JPanel {
         themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, resolveForegroundColor()));
     }
 
-    JPopupMenu buildModelSelectorPopup() {
-        JPopupMenu popup = new JPopupMenu();
-        List<GeminiModelConfig> models = settingsService.getAvailableModels();
-        String activeModel = settingsService.getSettings().getGeminiModel();
-        if (models != null) {
-            for (GeminiModelConfig cfg : models) {
-                boolean selected = cfg.apiName().equals(activeModel);
-                JMenuItem item = new JMenuItem(cfg.name() + " (" + cfg.apiName() + ")",
-                        selected ? FontIcon.of(Codicons.CHECK, 14, SwingHtmlUtils.getAccentColor()) : null);
-                item.setToolTipText(cfg.description());
-                item.addActionListener(e -> selectModel(cfg.apiName()));
-                popup.add(item);
-            }
-        }
-        return popup;
-    }
-
-    void selectModel(String apiName) {
-        if (apiName == null || apiName.isBlank()) {
-            return;
-        }
-        AppSettings settings = settingsService.getSettings();
-        settings.setGeminiModel(apiName);
-        updateModelDisplay(apiName);
-        settingsService.saveSettings();
-    }
-
-    private void showModelSelectorPopup() {
-        JPopupMenu popup = buildModelSelectorPopup();
-        if (popup.getComponentCount() > 0) {
-            popup.show(modelLabel, 0, modelLabel.getHeight() + 4);
-        }
-    }
-
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             projectLabel.setText(projectService.getProjectName());
             updateProjectTooltip(event.projectRoot());
+            updateModelDisplay(resolveEffectiveModel());
             updateBranchLabel();
         });
     }
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        Edt.run(() -> updateModelDisplay(event.settings().getGeminiModel()));
+        Edt.run(() -> {
+            if (projectService != null && projectService.hasActiveProject()) {
+                String projectModel = projectService.getProjectGeminiModel();
+                if (!projectModel.isEmpty()) {
+                    updateModelDisplay(projectModel);
+                    return;
+                }
+            }
+            if (event != null && event.settings() != null && event.settings().getGeminiModel() != null) {
+                updateModelDisplay(event.settings().getGeminiModel());
+            } else {
+                updateModelDisplay(resolveEffectiveModel());
+            }
+        });
     }
 
     private void toggleTheme() {
         AppSettings settings = settingsService.getSettings();
         String currentTheme = settings.getTheme();
-        boolean isDark = (currentTheme != null && !currentTheme.isBlank())
-                ? SettingsPanel.isDarkTheme(currentTheme)
-                : FlatLaf.isLafDark();
-        String newTheme = isDark ? "FlatLaf Light" : "FlatLaf Dark";
+        boolean isDark;
+        if (currentTheme != null && !currentTheme.isBlank()) {
+            isDark = SettingsPanel.isDarkTheme(currentTheme);
+        } else {
+            isDark = FlatLaf.isLafDark();
+        }
+        String newTheme;
+        if (isDark) {
+            newTheme = "FlatLaf Light";
+        } else {
+            newTheme = "FlatLaf Dark";
+        }
         settings.setTheme(newTheme);
         SettingsPanel.applyTheme(newTheme);
         settingsService.saveSettings();
@@ -252,8 +249,13 @@ public final class HeaderPanel extends JPanel {
         return Edt.supplyAsync(gitService::getCurrentBranch, branch -> {
             boolean valid = branch != null && !branch.isEmpty() && !branch.startsWith("Error")
                     && !"Not a git repository".equals(branch);
-            branchLabel.setIcon(valid ? FontIcon.of(Codicons.SOURCE_CONTROL, 14, resolveBranchAccentColor()) : null);
-            branchLabel.setText(valid ? branch : "");
+            if (valid) {
+                branchLabel.setIcon(FontIcon.of(Codicons.SOURCE_CONTROL, 14, resolveBranchAccentColor()));
+                branchLabel.setText(branch);
+            } else {
+                branchLabel.setIcon(null);
+                branchLabel.setText("");
+            }
             branchLabel.setVisible(valid);
         }, e -> {
             log.error("Failed to fetch git branch", e);
@@ -285,7 +287,11 @@ public final class HeaderPanel extends JPanel {
 
     private void updateModelDisplay(String modelName) {
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, resolveModelAccentColor()));
-        modelLabel.setText(modelName != null ? modelName : "No model selected");
+        if (modelName != null) {
+            modelLabel.setText(modelName);
+        } else {
+            modelLabel.setText("No model selected");
+        }
     }
 
     private void chooseProject() {

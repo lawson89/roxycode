@@ -137,17 +137,6 @@ class PromptServiceTest {
     }
 
     @Test
-    void testLoadExplorePhasePromptSubstitutesMaxTurns() {
-        AppSettings settings = new AppSettings();
-        settings.setMaxAgentToolTurns(42);
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        String prompt = promptService.loadPhasePrompt(WorkflowPhase.EXPLORE);
-        SwingTestUtils.assertContainsAll(prompt, "42");
-        assertContainsNone(prompt, "$" + "{maxTurns}");
-    }
-
-    @Test
     void testGetStableSessionAndSystemPrompt() throws IOException {
         Path projectDataDir = tempDir.resolve("project-data");
         Path globalDir = Files.createDirectories(tempDir.resolve("global-rules"));

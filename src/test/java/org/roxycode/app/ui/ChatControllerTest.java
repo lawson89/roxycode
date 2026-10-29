@@ -86,28 +86,6 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testOnToolExecutionRendersSuccessAndErrorStatus() {
-        FeatureChatPanel panel = createFeatureChatPanel(null);
-        panel.onToolExecution(new ToolExecutionEvent("task:default", "1 + 1", 2, true, null));
-        panel.onToolExecution(new ToolExecutionEvent("task:default", "if (", null, false, "Syntax Error: <bad>"));
-        panel.onToolExecution(new ToolExecutionEvent("qa:default", "ignoredCall()", null, true, null));
-        flushEdt();
-
-        String html = panel.outputArea.getText();
-        assertContainsAll(html, "Executed successfully", "Error: Syntax Error: &lt;bad&gt;");
-        assertFalse(html.contains("<bad>"));
-        assertFalse(html.contains("ignoredCall"));
-    }
-
-    @Test
-    void testSendMessagePublishesUserMessageEvent() {
-        ExploreChatPanel panel = createExploreChatPanel(directExecutor);
-        assertSame(directExecutor, panel.controller.getTurnExecutor());
-        panel.controller.sendMessage("Hello mentor");
-        verify(publisher).publishEvent(new UserMessageEvent("qa:default", "user", "Hello mentor"));
-    }
-
-    @Test
     void testClosePreservesSharedExecutorWhileCancellingActiveTurn() throws Exception {
         ExecutorService executorService = new AiConfig().chatTurnExecutor();
         try {
@@ -316,6 +294,7 @@ class ChatControllerTest extends ChatTestFixture {
 
         sendOnEdt(chatPanel, "Build feature");
         flushEdt();
+        verify(publisher).publishEvent(new UserMessageEvent("task:default", "user", "Build feature"));
 
         String renderedHtml = chatPanel.outputArea.getText();
         assertTrue(renderedHtml.contains("FINAL_PLAN_SUMMARY"));

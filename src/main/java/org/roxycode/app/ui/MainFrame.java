@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class MainFrame extends JFrame {
+public final class MainFrame extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(MainFrame.class);
     private static final long serialVersionUID = 1L;
 
@@ -34,11 +34,13 @@ public final class MainFrame extends JFrame {
     private static final String CACHE_VIEW = "CACHE";
     private static final String API_VIEW = "API";
     static final String TOOLS_VIEW = "TOOLS";
-    private static final String SETTINGS_VIEW = "SETTINGS";
+    static final String SETTINGS_VIEW = "SETTINGS";
     private static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String MISSING_REQUIRED_TOOLS_TITLE = "Required System Tools Missing";
     static final String MISSING_REQUIRED_TOOLS_MESSAGE = "RoxyCode requires Ripgrep, Git, and Universal Ctags to function properly. Please review the System Tools page to install or configure any missing required tools.";
+    static final String MISSING_API_KEY_TITLE = "Gemini API Key Required";
+    static final String MISSING_API_KEY_MESSAGE = "Welcome to RoxyCode! Please enter and save your Gemini API Key in Global Settings to get started.";
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
@@ -46,14 +48,20 @@ public final class MainFrame extends JFrame {
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
+    private final JFrame hostFrame;
     private final HeaderPanel header;
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
+    private final SettingsPanel settingsPanel;
     private SidebarPanel sidebar;
+    private String title = "";
     private String currentCard = QA_VIEW;
     private String lastMissingToolsMessage;
     private boolean pendingMissingToolsAlert;
     private transient Consumer<String> missingToolsDialogPresenter;
+    private String lastMissingApiKeyMessage;
+    private boolean pendingMissingApiKeyAlert;
+    private transient Consumer<String> missingApiKeyDialogPresenter;
 
     public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
             HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
@@ -66,11 +74,18 @@ public final class MainFrame extends JFrame {
         this.header = header;
         this.qaWorkspacePanel = qaWorkspacePanel;
         this.taskWorkspacePanel = taskWorkspacePanel;
+        this.settingsPanel = settingsPanel;
+        if (GraphicsEnvironment.isHeadless()) {
+            this.hostFrame = null;
+        } else {
+            this.hostFrame = new JFrame();
+        }
 
         setupLaf();
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 contextManagerPanel);
+        checkSettingsOnStartup();
         checkRequiredSystemToolsOnStartup(systemToolsPanel);
     }
 
@@ -95,29 +110,70 @@ public final class MainFrame extends JFrame {
 
     private void setupWindow() {
         updateTitle();
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 900);
-        setLocationRelativeTo(null);
+        if (hostFrame == null) {
+            return;
+        }
+        hostFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        hostFrame.setSize(1200, 900);
+        hostFrame.setLocationRelativeTo(null);
+        hostFrame.setContentPane(this);
 
-        addWindowListener(new java.awt.event.WindowAdapter() {
+        hostFrame.addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowOpened(java.awt.event.WindowEvent e) {
-                if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null) {
-                    qaWorkspacePanel.focusChatInput();
-                }
-                if (pendingMissingToolsAlert) {
-                    pendingMissingToolsAlert = false;
-                    Edt.run(() -> showMissingToolsOptionPane(MISSING_REQUIRED_TOOLS_MESSAGE));
-                }
+                onWindowOpened();
             }
         });
 
         try {
             java.net.URL iconUrl = getClass().getResource("/static/images/roxy.png");
-            if (iconUrl != null)
-                setIconImage(new ImageIcon(iconUrl).getImage());
+            if (iconUrl != null) {
+                hostFrame.setIconImage(new ImageIcon(iconUrl).getImage());
+            }
         } catch (Exception e) {
             log.trace("Failed to load icon: {}", e.getMessage());
+        }
+    }
+
+    void onWindowOpened() {
+        if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null) {
+            qaWorkspacePanel.focusChatInput();
+        } else if (SETTINGS_VIEW.equals(currentCard) && settingsPanel != null) {
+            settingsPanel.getGeminiApiKeyField().requestFocusInWindow();
+        }
+        if (pendingMissingApiKeyAlert) {
+            pendingMissingApiKeyAlert = false;
+            Edt.run(() -> showMissingApiKeyOptionPane(MISSING_API_KEY_MESSAGE));
+        }
+        if (pendingMissingToolsAlert) {
+            pendingMissingToolsAlert = false;
+            Edt.run(() -> showMissingToolsOptionPane(MISSING_REQUIRED_TOOLS_MESSAGE));
+        }
+    }
+
+    @Override
+    public void setVisible(boolean visible) {
+        super.setVisible(visible);
+        if (hostFrame != null) {
+            hostFrame.setVisible(visible);
+        }
+    }
+
+    public void dispose() {
+        if (hostFrame != null) {
+            hostFrame.dispose();
+        }
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+        if (hostFrame != null) {
+            hostFrame.setTitle(title);
         }
     }
 
@@ -150,9 +206,46 @@ public final class MainFrame extends JFrame {
         showCard(QA_VIEW);
     }
 
-    private void checkRequiredSystemToolsOnStartup(SystemToolsPanel systemToolsPanel) {
-        if (systemToolsPanel == null)
+    private void checkSettingsOnStartup() {
+        handleStartupSettingsCheck();
+    }
+
+    void handleStartupSettingsCheck() {
+        if (settingsService == null || settingsService.hasConfiguredApiKey()) {
             return;
+        }
+        showCard(SETTINGS_VIEW);
+        if (settingsPanel != null) {
+            settingsPanel.getGeminiApiKeyField().requestFocusInWindow();
+        }
+        lastMissingApiKeyMessage = MISSING_API_KEY_MESSAGE;
+        if (missingApiKeyDialogPresenter != null) {
+            missingApiKeyDialogPresenter.accept(MISSING_API_KEY_MESSAGE);
+        } else if (!GraphicsEnvironment.isHeadless()) {
+            if (isShowing()) {
+                showMissingApiKeyOptionPane(MISSING_API_KEY_MESSAGE);
+            } else {
+                pendingMissingApiKeyAlert = true;
+            }
+        }
+    }
+
+    private void showMissingApiKeyOptionPane(String message) {
+        if (missingApiKeyDialogPresenter != null) {
+            missingApiKeyDialogPresenter.accept(message);
+        } else if (!GraphicsEnvironment.isHeadless()) {
+            java.awt.Component parent = this;
+            if (hostFrame != null) {
+                parent = hostFrame;
+            }
+            JOptionPane.showMessageDialog(parent, message, MISSING_API_KEY_TITLE, JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    private void checkRequiredSystemToolsOnStartup(SystemToolsPanel systemToolsPanel) {
+        if (systemToolsPanel == null) {
+            return;
+        }
         CompletableFuture<List<SystemTool>> future = systemToolsPanel.getInitialToolsFuture();
         if (future == null)
             return;
@@ -181,8 +274,14 @@ public final class MainFrame extends JFrame {
     }
 
     private void showMissingToolsOptionPane(String message) {
-        if (!GraphicsEnvironment.isHeadless()) {
-            JOptionPane.showMessageDialog(this, message, MISSING_REQUIRED_TOOLS_TITLE, JOptionPane.WARNING_MESSAGE);
+        if (missingToolsDialogPresenter != null) {
+            missingToolsDialogPresenter.accept(message);
+        } else if (!GraphicsEnvironment.isHeadless()) {
+            java.awt.Component parent = this;
+            if (hostFrame != null) {
+                parent = hostFrame;
+            }
+            JOptionPane.showMessageDialog(parent, message, MISSING_REQUIRED_TOOLS_TITLE, JOptionPane.WARNING_MESSAGE);
         }
     }
 
@@ -205,6 +304,14 @@ public final class MainFrame extends JFrame {
 
     String getLastMissingToolsMessage() {
         return lastMissingToolsMessage;
+    }
+
+    void setMissingApiKeyDialogPresenter(Consumer<String> presenter) {
+        this.missingApiKeyDialogPresenter = presenter;
+    }
+
+    String getLastMissingApiKeyMessage() {
+        return lastMissingApiKeyMessage;
     }
 
     String getCurrentCard() {

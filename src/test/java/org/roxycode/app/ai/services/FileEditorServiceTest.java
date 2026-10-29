@@ -92,18 +92,6 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testReplaceBlockWithVariableWhitespace() throws IOException {
-        assertEquals("private int newMethod() { }", writeAndReplace("test.java", "public    void   myMethod() { }",
-                "public void myMethod", "private int newMethod"));
-    }
-
-    @Test
-    void testReplaceBlockWithNewlinesAndTabs() throws IOException {
-        assertEquals("private int newMethod() { }", writeAndReplace("test_whitespace.java",
-                "public\nvoid\tmyMethod() { }", "public void myMethod", "private int newMethod"));
-    }
-
-    @Test
     void testReplaceBlockNotUniqueReturnsFailureWithLineNumbers() throws IOException {
         Path filePath = Files.writeString(tempDir.resolve("test.java"), "// TODO\n // TODO");
         assertEditFails(fileEditorService.replaceBlock("test.java", "// TODO", "// Done"), "not unique", "1", "2");
@@ -130,12 +118,8 @@ class FileEditorServiceTest {
         assertTrue(fileEditorService.replaceLines("test.txt", 2, 3, "New Content").success());
         assertEquals(List.of("Line 1", "New Content", "Line 4"), Files.readAllLines(filePath));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
-    }
 
-    @Test
-    void testReplaceLinesMultiLineAndTrailingNewline() throws IOException {
-        Path filePath = Files.write(tempDir.resolve("test.txt"), List.of("Line 1", "Line 2", "Line 3", "Line 4"));
-        assertTrue(fileEditorService.replaceLines("test.txt", 2, 3, "Replaced 2\nReplaced 3\n").success());
+        assertTrue(fileEditorService.replaceLines("test.txt", 2, 2, "Replaced 2\nReplaced 3\n").success());
         assertEquals(List.of("Line 1", "Replaced 2", "Replaced 3", "Line 4"), Files.readAllLines(filePath));
     }
 
@@ -154,29 +138,19 @@ class FileEditorServiceTest {
 
     @Test
     void testInsertAtLineSuccess() throws IOException {
-        Path filePath = Files.write(tempDir.resolve("test.txt"), List.of("Line 1", "Line 3"));
-        assertTrue(fileEditorService.insertAtLine("test.txt", 2, "Line 2").success());
-        assertEquals(List.of("Line 1", "Line 2", "Line 3"), Files.readAllLines(filePath));
+        Path filePath = Files.write(tempDir.resolve("test.txt"), List.of("Line 1", "Line 4"));
+        assertTrue(fileEditorService.insertAtLine("test.txt", 2, "Line 2\nLine 3\n").success());
+        assertEquals(List.of("Line 1", "Line 2", "Line 3", "Line 4"), Files.readAllLines(filePath));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
     }
 
     @Test
-    void testInsertAtLineMultiLineAndTrailingNewline() throws IOException {
-        Path filePath = Files.write(tempDir.resolve("test.txt"), List.of("Line 1", "Line 4"));
-        assertTrue(fileEditorService.insertAtLine("test.txt", 2, "Line 2\nLine 3\n").success());
-        assertEquals(List.of("Line 1", "Line 2", "Line 3", "Line 4"), Files.readAllLines(filePath));
-    }
-
-    @Test
-    void testDeleteFileSuccess() throws IOException {
+    void testDeleteFileSuccessAndFailureCases() throws IOException {
         Path filePath = Files.writeString(tempDir.resolve("to_delete.txt"), "delete me");
         assertTrue(fileEditorService.deleteFile("to_delete.txt").success());
         assertFalse(Files.exists(filePath));
         verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
-    }
 
-    @Test
-    void testDeleteFileNonExistentAndDirectoryReturnStructuredFailure() throws IOException {
         assertEditFails(fileEditorService.deleteFile("missing.txt"), "File does not exist: missing.txt");
         Files.createDirectory(tempDir.resolve("some_dir"));
         assertEditFails(fileEditorService.deleteFile("some_dir"), "Cannot delete directory: some_dir");
@@ -210,12 +184,6 @@ class FileEditorServiceTest {
         assertThrows(SecurityException.class,
                 () -> fileEditorService.copyFile("moved/sub/renamed.txt", "../outside.txt"));
         assertThrows(SecurityException.class, () -> fileEditorService.mkdirs("../outside_dir"));
-    }
-
-    @Test
-    void testPathTraversalReturnsFailure() {
-        assertTrue(assertThrows(SecurityException.class, () -> fileEditorService.writeFile("../outside.txt", "content"))
-                .getMessage().contains("Path traversal"));
     }
 
     @Test

@@ -32,10 +32,13 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.retry.RetryUtils;
+import org.roxycode.app.model.AppSettings;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.retry.RetryTemplate;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MimeTypeUtils;
 
@@ -66,6 +69,7 @@ public class AiService {
     private final ChatClient statelessChatClient;
     private final ChatClient chatClient;
     private final SettingsService settingsService;
+    private final ProjectService projectService;
     private final PromptService promptService;
     private final JexlTool jexlTool;
     private final PlanService planService;
@@ -77,7 +81,17 @@ public class AiService {
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, PromptService promptService,
             JexlTool jexlTool, PlanService planService, ChatMemory chatMemory, ToolCallingManager toolCallingManager,
             ApplicationEventPublisher eventPublisher) {
+        this(chatClientBuilder, settingsService, null, promptService, jexlTool, planService, chatMemory,
+                toolCallingManager, eventPublisher);
+    }
+
+    @Autowired
+    public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService,
+            @Nullable ProjectService projectService, PromptService promptService, JexlTool jexlTool,
+            PlanService planService, ChatMemory chatMemory, ToolCallingManager toolCallingManager,
+            ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
+        this.projectService = projectService;
         this.promptService = promptService;
         this.jexlTool = jexlTool;
         this.planService = planService;
@@ -87,6 +101,16 @@ public class AiService {
         this.chatClient = chatClientBuilder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
                 new ModelCallRetryAdvisor()).build();
+    }
+
+    String resolveEffectiveGeminiModel() {
+        if (projectService != null) {
+            return projectService.getEffectiveGeminiModel();
+        }
+        if (settingsService != null && settingsService.getSettings() != null) {
+            return settingsService.getSettings().getGeminiModel();
+        }
+        return AppSettings.DEFAULT_GEMINI_MODEL;
     }
 
     void setRetryTemplate(RetryTemplate retryTemplate) {
@@ -111,10 +135,10 @@ public class AiService {
         String excerpt = conversationExcerpt.length() > MAX_EXCERPT_LENGTH
                 ? conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH)
                 : conversationExcerpt;
+        String activeModel = resolveEffectiveGeminiModel();
         Future<ChatResponse> future = TITLE_TIMEOUT_EXECUTOR
                 .submit(() -> statelessChatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT).user(u -> u.text(excerpt))
-                        .options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()))
-                        .call().chatResponse());
+                        .options(GoogleGenAiChatOptions.builder().model(activeModel)).call().chatResponse());
         try {
             ChatResponse response = future.get(Math.max(1L, topicTitleTimeout.toMillis()), TimeUnit.MILLISECONDS);
             String rawTitle = extractResponseText(response);
@@ -349,7 +373,7 @@ public class AiService {
                             u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(img));
                         }
                     }
-                }).options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()));
+                }).options(GoogleGenAiChatOptions.builder().model(resolveEffectiveGeminiModel()));
         promptSpec.tools(jexlTool);
         promptSpec.advisors(new AutoNudgeAdvisor(turnContext, chatMemory));
         return promptSpec.toolContext(turnContext.toMap());

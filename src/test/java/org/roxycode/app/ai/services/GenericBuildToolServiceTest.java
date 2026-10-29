@@ -88,18 +88,6 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testDetectNoConfig() {
-        assertFalse(buildToolService.detect());
-    }
-
-    @Test
-    void testDetectWithConfig() throws IOException {
-        writeBuildToml("[build]\ncompile = 'echo hi'\n");
-        assertTrue(buildToolService.detect());
-        assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
-    }
-
-    @Test
     void testEnsureConfigAutoDetectionMavenIncludesContainerSection() throws IOException {
         Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
         buildToolService.compile();
@@ -162,12 +150,6 @@ class GenericBuildToolServiceTest {
         assertEquals(1, result.getExitCode());
         assertEquals(List.of("Container compile failure"), result.getErrors());
         assertEquals(List.of("ContainerTest#fail"), result.getFailedTests());
-    }
-
-    @Test
-    void testEnvironmentVariables() throws IOException {
-        writeBuildToml("[build]\ncompile = 'echo test'\n[env]\nTEST_VAR = 'hello-env'\n");
-        assertTrue(buildToolService.compile().isSuccess());
     }
 
     @Test

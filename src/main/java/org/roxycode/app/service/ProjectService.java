@@ -1,22 +1,41 @@
 package org.roxycode.app.service;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.util.PathUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
 @SuppressWarnings("PMD.NullAssignment")
 public class ProjectService {
+    private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
     private static final String PROJECTS_SUBDIR = "projects";
     private static final int MAX_PROJECT_NAME_LENGTH = 40;
+    static final String PROJECT_CONFIG_FILE = "project.toml";
+
+    public record ProjectConfig(String geminiModel) {
+        public ProjectConfig {
+            if (geminiModel == null) {
+                geminiModel = "";
+            } else {
+                geminiModel = geminiModel.trim();
+            }
+        }
+    }
 
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
@@ -24,10 +43,18 @@ public class ProjectService {
 
     public ProjectService(SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
-        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {
-        };
+        if (eventPublisher != null) {
+            this.eventPublisher = eventPublisher;
+        } else {
+            this.eventPublisher = event -> {
+            };
+        }
         String savedPath = settingsService.getSettings().getCurrentProjectPath();
-        this.currentProjectRoot = (savedPath != null && !savedPath.isEmpty()) ? Paths.get(savedPath) : null;
+        if (savedPath != null && !savedPath.isEmpty()) {
+            this.currentProjectRoot = Paths.get(savedPath);
+        } else {
+            this.currentProjectRoot = null;
+        }
     }
 
     public Path getCurrentProjectRoot() {
@@ -50,39 +77,110 @@ public class ProjectService {
 
     public String getProjectName() {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null)
+        if (projectRoot == null) {
             return "No Project";
+        }
         Path fileName = projectRoot.getFileName();
-        return fileName != null ? fileName.toString() : projectRoot.toString();
+        if (fileName != null) {
+            return fileName.toString();
+        }
+        return projectRoot.toString();
+    }
+
+    public String getProjectGeminiModel() {
+        if (!hasActiveProject()) {
+            return "";
+        }
+        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
+        if (configFile == null || !Files.exists(configFile)) {
+            return "";
+        }
+        try {
+            ProjectConfig config = AiConfig.SHARED_TOML_MAPPER.readValue(configFile.toFile(), ProjectConfig.class);
+            if (config != null) {
+                return config.geminiModel();
+            }
+            return "";
+        } catch (IOException e) {
+            log.warn("Failed to read project config {}: {}", configFile, e.getMessage());
+            return "";
+        }
+    }
+
+    public void setProjectGeminiModel(String geminiModel) {
+        if (!hasActiveProject()) {
+            throw new IllegalStateException("Project root is not set.");
+        }
+        String normalized = "";
+        if (geminiModel != null) {
+            normalized = geminiModel.trim();
+        }
+        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
+        try {
+            PathUtils.createParentDirectories(configFile);
+            AiConfig.SHARED_TOML_MAPPER.writeValue(configFile.toFile(), new ProjectConfig(normalized));
+            AppSettings currentSettings = null;
+            if (settingsService != null && settingsService.getSettings() != null) {
+                currentSettings = settingsService.getSettings().copy();
+            }
+            eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
+        } catch (IOException e) {
+            log.error("Failed to save project config {}: {}", configFile, e.getMessage());
+            throw new UncheckedIOException("Failed to save project config", e);
+        }
+    }
+
+    public String getEffectiveGeminiModel() {
+        String projectModel = getProjectGeminiModel();
+        if (!projectModel.isEmpty()) {
+            return projectModel;
+        }
+        if (settingsService != null && settingsService.getSettings() != null) {
+            String globalModel = settingsService.getSettings().getGeminiModel();
+            if (globalModel != null && !globalModel.isBlank()) {
+                return globalModel.trim();
+            }
+        }
+        return AppSettings.DEFAULT_GEMINI_MODEL;
     }
 
     public Path resolvePath(String relativePath) {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null)
+        if (projectRoot == null) {
             throw new IllegalStateException("Project root is not set.");
+        }
         return resolveWithinSandbox(projectRoot, relativePath);
     }
 
     public String resolveRelativePath(String relativePath) {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null)
+        if (projectRoot == null) {
             throw new IllegalStateException("Project root is not set.");
+        }
         Path root = projectRoot.toAbsolutePath().normalize();
-        String target = (relativePath == null || relativePath.isBlank()) ? "." : relativePath.trim();
+        String target = ".";
+        if (relativePath != null && !relativePath.isBlank()) {
+            target = relativePath.trim();
+        }
         Path resolved = resolveWithinSandbox(root, target);
-        String rel = root.relativize(resolved).toString().replace('\\', '/');
-        return rel.isEmpty() ? "." : rel;
+        String rel = PathUtils.normalizeRelativePath(root.relativize(resolved).toString());
+        if (rel.isEmpty()) {
+            return ".";
+        }
+        return rel;
     }
 
     public Path getProjectDataDir() {
         Path projectRoot = getCurrentProjectRoot();
-        if (projectRoot == null)
+        if (projectRoot == null) {
             throw new IllegalStateException("Project root is not set.");
+        }
         Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
         String dirName = sanitizeProjectName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
         Path roxyHome = settingsService.getRoxyHomeDir();
-        if (roxyHome == null)
+        if (roxyHome == null) {
             roxyHome = SettingsService.getDefaultRoxyHomeDir();
+        }
         return roxyHome.toAbsolutePath().normalize().resolve(PROJECTS_SUBDIR).resolve(dirName);
     }
 
@@ -92,7 +190,11 @@ public class ProjectService {
 
     private static Path resolveWithinSandbox(Path sandboxRoot, String relativePath) {
         Path root = sandboxRoot.toAbsolutePath().normalize();
-        Path resolved = root.resolve(relativePath != null ? relativePath : ".").toAbsolutePath().normalize();
+        String target = ".";
+        if (relativePath != null) {
+            target = relativePath;
+        }
+        Path resolved = root.resolve(target).toAbsolutePath().normalize();
         if (!resolved.startsWith(root)) {
             throw new SecurityException("Path traversal attempt detected: " + relativePath);
         }
@@ -100,8 +202,15 @@ public class ProjectService {
     }
 
     public static String sanitizeProjectName(Path projectRoot) {
-        Path fileName = projectRoot != null ? projectRoot.getFileName() : null;
-        return PathUtils.sanitizeSlug(fileName != null ? fileName.toString() : "", MAX_PROJECT_NAME_LENGTH, "project");
+        Path fileName = null;
+        if (projectRoot != null) {
+            fileName = projectRoot.getFileName();
+        }
+        String rawName = "";
+        if (fileName != null) {
+            rawName = fileName.toString();
+        }
+        return PathUtils.sanitizeSlug(rawName, MAX_PROJECT_NAME_LENGTH, "project");
     }
 
     static String computeProjectHash(Path normalizedRoot) {

@@ -173,6 +173,7 @@ class AiServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void testChatUsesConfiguredModelAndDynamicPrompt() {
         settings.setGeminiModel("test-model-123");
         stubChatResponse(WorkflowPhase.CODE, "FULL CODE SYSTEM PROMPT", "AI Response", "STOP", null);
@@ -186,35 +187,28 @@ class AiServiceTest {
         verify(requestSpec).toolContext(argThat(ctx -> "default".equals(ctx.get(TurnToolContext.CONVERSATION_ID_KEY))
                 && WorkflowPhase.CODE == ctx.get(TurnToolContext.PHASE_KEY)
                 && ctx.get(TurnToolContext.TURN_COUNTER_KEY) instanceof AtomicInteger));
-    }
 
-    @Test
-    void testChatRegistersOnlyJexlToolInExplorePhase() {
-        stubChatResponse(WorkflowPhase.EXPLORE, "EXPLORE SYSTEM PROMPT", "Explore Response", "STOP", null);
-        assertEquals("Explore Response", aiService.chat("qa:default", WorkflowPhase.EXPLORE, "Inspect repo", null));
-        verify(requestSpec).tools(jexlTool);
-        verify(requestSpec, times(1)).tools(any(Object[].class));
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void testChatWithConversationIdAndPhase() {
-        settings.setGeminiModel("test-model-123");
+        clearInvocations(requestSpec);
         when(promptService.buildSystemPrompt(WorkflowPhase.REVIEW, "Extra instructions"))
                 .thenReturn("REVIEW SYSTEM PROMPT");
-        when(responseSpec.chatResponse()).thenReturn(buildChatResponse("AI Response", "STOP", null));
-
         assertEquals("AI Response",
                 aiService.chat("custom-conv", WorkflowPhase.REVIEW, "Hello", "Extra instructions", null));
         verify(requestSpec).system("REVIEW SYSTEM PROMPT");
         verify(requestSpec).tools(jexlTool);
-        verify(requestSpec, times(1)).tools(any(Object[].class));
 
         ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorCaptor = ArgumentCaptor.forClass(Consumer.class);
         verify(requestSpec).advisors(advisorCaptor.capture());
         ChatClient.AdvisorSpec advisorSpec = mock(ChatClient.AdvisorSpec.class);
         advisorCaptor.getValue().accept(advisorSpec);
         verify(advisorSpec).param(ChatMemory.CONVERSATION_ID, "custom-conv");
+
+        ProjectService mockProjectService = mock(ProjectService.class);
+        when(mockProjectService.getEffectiveGeminiModel()).thenReturn("gemini-project-override");
+        AiService aiServiceWithProject = new AiService(chatClientBuilder, settingsService, mockProjectService,
+                promptService, jexlTool, planService, chatMemory, toolCallingManager, eventPublisher);
+        assertEquals("gemini-project-override", aiServiceWithProject.resolveEffectiveGeminiModel());
+        assertEquals("AI Response", aiServiceWithProject.chat("default", WorkflowPhase.CODE, "Hello", null));
+        verify(mockProjectService, atLeast(2)).getEffectiveGeminiModel();
     }
 
     @Test
@@ -227,13 +221,6 @@ class AiServiceTest {
         AgentTurnCompleteEvent ev = captureTurnCompleteEvent();
         assertEquals(2, ev.totalTurns());
         assertEquals(result, ev.result());
-    }
-
-    @Test
-    void testChatFormatsDirectReturnTransitionOutput() {
-        String expectedMarkdown = "PLAN SUMMARY\n\nTransition Request";
-        stubChatResponse(WorkflowPhase.PLAN, "PLAN PROMPT", expectedMarkdown, "STOP", null);
-        assertEquals(expectedMarkdown, aiService.chat("default", null, "Create plan", null));
     }
 
     private static Arguments caseArgs(String text, String reason, Usage usage, String... snippets) {

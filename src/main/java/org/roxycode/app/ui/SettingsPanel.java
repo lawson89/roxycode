@@ -97,7 +97,7 @@ public final class SettingsPanel extends JPanel {
         setLayout(new MigLayout("fill, insets 20, hidemode 3", MIG_COL_GROW_FILL, "[]12[grow, fill]"));
         setOpaque(true);
 
-        titleLabel = new JLabel("Settings");
+        titleLabel = new JLabel("Global Settings");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 18f));
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
 

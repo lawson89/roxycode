@@ -35,42 +35,27 @@ class GitServiceTest {
     }
 
     @Test
-    void testNoProjectRoot() {
-        ProjectService projectService = mock(ProjectService.class);
-        when(projectService.hasActiveProject()).thenReturn(false);
-
-        GitService gitService = new GitService(projectService);
-        assertEquals("No active project", gitService.getStatus());
-        assertEquals("No active project", gitService.getDiff());
-        assertEquals("No active project", gitService.getDiffHead());
-        assertEquals(List.of(), gitService.getChangedFiles());
-        assertEquals("No active project", gitService.getBlame("Tracked.java", 1, 2));
-    }
-
-    @Test
-    void testNotAGitRepository() {
-        GitService gitService = new GitService(createActiveProjectService());
-        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyMap())).thenReturn(new ProcessResult(128,
-                    "fatal: not a git repository (or any of the parent directories): .git\n", "", false));
-            assertEquals("Not a git repository", gitService.getStatus());
-        }
-    }
-
-    @Test
-    void testGetDiffPerFileDelegatesOnBlankAndChecksActiveProject() {
+    void testNoProjectRootAndNotAGitRepository() {
         ProjectService projectService = mock(ProjectService.class);
         when(projectService.hasActiveProject()).thenReturn(false);
         GitService gitService = spy(new GitService(projectService));
 
+        assertEquals("No active project", gitService.getStatus());
         assertEquals("No active project", gitService.getDiff("src/App.java"));
         verify(gitService, never()).getDiff();
-
         assertEquals("No active project", gitService.getDiff(null));
-        verify(gitService, times(1)).getDiff();
-
         assertEquals("No active project", gitService.getDiff("   "));
         verify(gitService, times(2)).getDiff();
+        assertEquals("No active project", gitService.getDiffHead());
+        assertEquals(List.of(), gitService.getChangedFiles());
+        assertEquals("No active project", gitService.getBlame("Tracked.java", 1, 2));
+
+        GitService activeGitService = new GitService(createActiveProjectService());
+        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyMap())).thenReturn(new ProcessResult(128,
+                    "fatal: not a git repository (or any of the parent directories): .git\n", "", false));
+            assertEquals("Not a git repository", activeGitService.getStatus());
+        }
     }
 
     @Test

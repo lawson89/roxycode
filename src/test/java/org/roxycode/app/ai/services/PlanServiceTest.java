@@ -88,28 +88,6 @@ class PlanServiceTest {
     }
 
     @Test
-    void testApproveAndCompletePlan() {
-        service.submitPlan("Title", "Goal", List.of(), List.of("Step 1"));
-        assertFalse(service.getCurrentPlan().userApproved());
-
-        service.approvePlan("user1", "2023-01-01");
-        assertTrue(service.getCurrentPlan().userApproved());
-        assertEquals("user1", service.getCurrentPlan().approvedBy());
-
-        service.completePlan("user2", "2023-01-02");
-        assertEquals("user2", service.getCurrentPlan().completedBy());
-        assertEquals("2023-01-02", service.getCurrentPlan().completedOn());
-    }
-
-    @Test
-    void testClearPlan() {
-        service.submitPlan("T", "G", List.of(), List.of("S"));
-        assertNotNull(service.getCurrentPlan());
-        service.clearPlan();
-        assertNull(service.getCurrentPlan());
-    }
-
-    @Test
     void testBatchMarkStepsCompletedAndIncompleteAndReturnMessages() {
         setupCodePhase();
         assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());

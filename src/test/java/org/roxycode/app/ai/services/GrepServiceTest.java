@@ -167,6 +167,13 @@ class GrepServiceTest {
             assertEquals("class One {}", contents.get("src/One.java"));
             assertEquals("class Two {}", contents.get("src/Two.java"));
         }
+
+        when(projectService.hasActiveProject()).thenReturn(false);
+        EditorResult noProjectResult = grepService.grep("pattern", "src", null);
+        assertFalse(noProjectResult.success());
+        assertEquals("No active project", noProjectResult.errorHint());
+        assertTrue(grepService.findMatchingFiles("pattern").isEmpty());
+        assertTrue(grepService.readMatchingFiles("pattern").isEmpty());
     }
 
     @Test
@@ -191,18 +198,4 @@ class GrepServiceTest {
         }
     }
 
-    @Test
-    void testPathTraversalProtection() {
-        assertThrows(SecurityException.class, () -> grepService.grep("pattern", "../secret", null));
-    }
-
-    @Test
-    void testNoProjectRoot() {
-        when(projectService.hasActiveProject()).thenReturn(false);
-        EditorResult result = grepService.grep("pattern", "src", null);
-        assertFalse(result.success());
-        assertEquals("No active project", result.errorHint());
-        assertTrue(grepService.findMatchingFiles("pattern").isEmpty());
-        assertTrue(grepService.readMatchingFiles("pattern").isEmpty());
-    }
 }

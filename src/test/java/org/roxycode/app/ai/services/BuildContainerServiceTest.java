@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -110,15 +109,6 @@ class BuildContainerServiceTest {
         assertTrue(custom.enabled());
         assertEquals("eclipse-temurin:25-jdk", custom.image());
         assertEquals("/app", custom.workdir());
-    }
-
-    @Test
-    void testIsDockerAvailableDelegatesToSystemToolService() {
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(true));
-        assertTrue(buildContainerService.isDockerAvailable());
-
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
-        assertFalse(buildContainerService.isDockerAvailable());
     }
 
     @Test

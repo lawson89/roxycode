@@ -49,8 +49,8 @@ public final class SidebarPanel extends JPanel {
 
         add(createSectionHeader("CONFIG"), "gaptop 15");
         add(createNavButton("System Tools", "TOOLS", Codicons.TOOLS));
-        add(createNavButton("Build Config", "BUILD_CONFIG", Codicons.PACKAGE));
-        add(createNavButton("Settings", "SETTINGS", Codicons.SETTINGS_GEAR));
+        add(createNavButton("Project Settings", "BUILD_CONFIG", Codicons.PACKAGE));
+        add(createNavButton("Global Settings", "SETTINGS", Codicons.SETTINGS_GEAR));
 
         updateSelection(qaBtn);
     }

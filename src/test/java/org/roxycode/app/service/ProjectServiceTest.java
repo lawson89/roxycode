@@ -85,4 +85,40 @@ class ProjectServiceTest {
         assertThrows(SecurityException.class,
                 () -> projectService.resolveProjectDataPath("../other-project/build.toml"));
     }
+
+    @Test
+    void testProjectGeminiModelOverrideAndEffectiveModelResolution() {
+        SettingsService settingsService = createSettingsService();
+        settingsService.getSettings().setGeminiModel("gemini-global-default");
+        AtomicReference<Object> publishedEvent = new AtomicReference<>();
+        ProjectService projectService = new ProjectService(settingsService, publishedEvent::set);
+
+        assertEquals("", projectService.getProjectGeminiModel());
+        assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
+        assertThrows(IllegalStateException.class, () -> projectService.setProjectGeminiModel("gemini-project-custom"));
+
+        Path projectA = tempDir.resolve("project-a");
+        projectService.setCurrentProjectRoot(projectA);
+        assertEquals("", projectService.getProjectGeminiModel());
+        assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
+
+        publishedEvent.set(null);
+        projectService.setProjectGeminiModel("  gemini-project-custom  ");
+        assertEquals("gemini-project-custom", projectService.getProjectGeminiModel());
+        assertEquals("gemini-project-custom", projectService.getEffectiveGeminiModel());
+        assertInstanceOf(org.roxycode.app.events.SettingsChangedEvent.class, publishedEvent.get());
+
+        Path projectB = tempDir.resolve("project-b");
+        projectService.setCurrentProjectRoot(projectB);
+        assertEquals("", projectService.getProjectGeminiModel());
+        assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
+
+        projectService.setCurrentProjectRoot(projectA);
+        assertEquals("gemini-project-custom", projectService.getProjectGeminiModel());
+        assertEquals("gemini-project-custom", projectService.getEffectiveGeminiModel());
+
+        projectService.setProjectGeminiModel("   ");
+        assertEquals("", projectService.getProjectGeminiModel());
+        assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
+    }
 }

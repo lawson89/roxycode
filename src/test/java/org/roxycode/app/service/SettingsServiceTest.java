@@ -37,6 +37,13 @@ class SettingsServiceTest {
         Path settingsFile = tempDir.resolve("custom-roxy").resolve("settings.toml");
         service.setSettingsPathOverride(settingsFile);
         assertEquals(tempDir.resolve("custom-roxy"), service.getRoxyHomeDir());
+        assertFalse(service.hasSettingsFile());
+        assertFalse(service.hasConfiguredApiKey());
+
+        service.getSettings().setGeminiApiKey("   ");
+        service.saveSettings();
+        assertTrue(service.hasSettingsFile());
+        assertFalse(service.hasConfiguredApiKey());
 
         AppSettings settings = service.getSettings();
         settings.setTheme("Darcula");
@@ -46,6 +53,8 @@ class SettingsServiceTest {
         service.saveSettings();
 
         assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
+        assertTrue(service.hasSettingsFile());
+        assertTrue(service.hasConfiguredApiKey());
 
         SettingsService service2 = new SettingsService(null, null);
         service2.setSettingsPathOverride(settingsFile);

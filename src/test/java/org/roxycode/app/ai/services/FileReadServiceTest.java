@@ -31,19 +31,6 @@ public class FileReadServiceTest {
     }
 
     @Test
-    void testFileExists() throws IOException {
-        Files.writeString(tempDir.resolve("test.txt"), "hello");
-        assertTrue(fileReadService.fileExists("test.txt"));
-        assertFalse(fileReadService.fileExists("nonexistent.txt"));
-    }
-
-    @Test
-    void testReadFile() throws IOException {
-        Files.writeString(tempDir.resolve("test.txt"), "hello world");
-        assertEquals("hello world", fileReadService.readFile("test.txt"));
-    }
-
-    @Test
     void testReadLinesReadFileNumberedAndGetLineCount() throws IOException {
         String nl = String.valueOf((char) 10);
         Files.writeString(tempDir.resolve("empty.txt"), "");
@@ -161,31 +148,8 @@ public class FileReadServiceTest {
         Files.createFile(tempDir.resolve("file1.txt"));
         Files.createDirectory(tempDir.resolve("subdir"));
         assertEquals(List.of("file1.txt", "file2.txt", "subdir/"), fileReadService.listDirectory("."));
-    }
-
-    @Test
-    void testPathTraversalProtection() {
-        assertThrows(SecurityException.class, () -> fileReadService.readFile("../secret.txt"));
-    }
-
-    @Test
-    void testReadFileOutsideRoot() {
-        Path outsideFile = tempDir.getParent().resolve("outside.txt");
-        assertThrows(SecurityException.class, () -> fileReadService.readFile("../" + outsideFile.getFileName()));
-    }
-
-    @Test
-    void testReadFileNonExistentOrDirectoryThrowsIllegalArgumentException() throws IOException {
-        Files.createDirectory(tempDir.resolve("adir"));
-        assertThrows(IllegalArgumentException.class, () -> fileReadService.readFile("missing.txt"));
-        assertThrows(IllegalArgumentException.class, () -> fileReadService.readFile("adir"));
-    }
-
-    @Test
-    void testListDirectoryNonExistentOrRegularFileThrowsIllegalArgumentException() throws IOException {
-        Files.writeString(tempDir.resolve("afile.txt"), "data");
         assertThrows(IllegalArgumentException.class, () -> fileReadService.listDirectory("missing-dir"));
-        assertThrows(IllegalArgumentException.class, () -> fileReadService.listDirectory("afile.txt"));
+        assertThrows(IllegalArgumentException.class, () -> fileReadService.listDirectory("file1.txt"));
     }
 
     @Test

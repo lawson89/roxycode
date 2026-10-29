@@ -99,9 +99,22 @@ public class SettingsService {
         }
     }
 
+    public synchronized boolean hasSettingsFile() {
+        return Files.exists(getSettingsPath());
+    }
+
+    public synchronized boolean hasConfiguredApiKey() {
+        if (!hasSettingsFile()) {
+            return false;
+        }
+        String apiKey = getSettings().getGeminiApiKey();
+        return apiKey != null && !apiKey.isBlank();
+    }
+
     public synchronized AppSettings getSettings() {
-        if (settings == null)
+        if (settings == null) {
             loadSettings();
+        }
         return settings;
     }
 
