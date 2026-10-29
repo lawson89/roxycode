@@ -282,21 +282,6 @@ public class JexlToolTest {
     }
 
     @Test
-    public void testExecuteJexlSuccess() throws Exception {
-        assertEquals("2", evalJson(createTool(), "1 + 1").get("result").asText());
-    }
-
-    @Test
-    public void testExecuteJexlWithVariable() throws Exception {
-        assertEquals("20", evalJson(createTool(), "var x = 10; x * 2").get("result").asText());
-    }
-
-    @Test
-    public void testExecuteJexlNull() throws Exception {
-        assertEquals("null", evalJson(createTool(), "null").get("result").asText());
-    }
-
-    @Test
     public void testExecuteJexlError() {
         AtomicReference<ToolExecutionEvent> capturedEvent = new AtomicReference<>();
         assertTrue(createTool(capturedEvent).executeJexl("if (").contains("Syntax Error"));

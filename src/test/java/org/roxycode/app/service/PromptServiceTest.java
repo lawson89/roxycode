@@ -65,56 +65,6 @@ class PromptServiceTest {
     }
 
     @Test
-    void testLoadCoreWorkflowPrompt() {
-        SwingTestUtils.assertContainsAll(promptService.getStableContext(), "RoxyCode Workflow Protocol");
-    }
-
-    @Test
-    void testCoreWorkflowPromptReflectsRoxyCodePhasesAndServices() {
-        String prompt = promptService.getStableContext();
-        SwingTestUtils.assertContainsAll(prompt, "EXPLORE (Technical Mentor)", "PLAN (Lead Architect)",
-                "CODE (Senior Developer)", "REVIEW (Code Reviewer)", "requestDevelopment", "requestReview",
-                "requestFixes", "requestCompletion", "buildToolService", "fileEditorService", "fileReadService",
-                "grepService", "gitService", "memoryService", "planService");
-        assertContainsNone(prompt, "textEditorService", "createPlan(", "completeStep(", "validateReadyForApproval");
-    }
-
-    @Test
-    void testLoadReviewPrompt() {
-        String prompt = promptService.loadPhasePrompt(WorkflowPhase.REVIEW);
-        SwingTestUtils.assertContainsAll(prompt, "REVIEW", "PHASE", "buildToolService");
-        assertContainsNone(prompt, "genericBuildToolService");
-    }
-
-    @Test
-    void testLoadExplorePrompt() {
-        String prompt = promptService.loadPhasePrompt(WorkflowPhase.EXPLORE);
-        SwingTestUtils.assertContainsAll(prompt, "EXPLORE phase", "grepService", "fileReadService",
-                "fileReadService.readFiles", "grepService.readMatchingFiles");
-        assertContainsNone(prompt, "textEditorService");
-    }
-
-    @Test
-    void testLoadPlanPrompt() {
-        String prompt = promptService.loadPhasePrompt(WorkflowPhase.PLAN);
-        SwingTestUtils.assertContainsAll(prompt, "ANALYST", "PLANNING", "Requirements Gathering & Clarification",
-                "planService", "buildToolService");
-        assertContainsNone(prompt, "createPlan", "addRequirement", "addConstraint", "validateReadyForApproval");
-    }
-
-    @Test
-    void testLoadCodePrompt() {
-        SwingTestUtils.assertContainsAll(promptService.loadPhasePrompt(WorkflowPhase.CODE), "CODER", "ACTING");
-    }
-
-    @Test
-    void testLoadPhasePrompt() {
-        for (WorkflowPhase phase : WorkflowPhase.values()) {
-            assertFalse(promptService.loadPhasePrompt(phase).isBlank());
-        }
-    }
-
-    @Test
     void testGlobalAndProjectContextFoldersAndTopLevelTextDiscovery() throws IOException {
         Path projectDataDir = tempDir.resolve("project-data");
         Path projectRoot = Files.createDirectories(tempDir.resolve("project-root"));

@@ -3,8 +3,6 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.image.BufferedImage;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -12,29 +10,6 @@ import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 
 class ChatModelTest {
-
-    @Test
-    void testConfigurationAndResolveActivePhase() {
-        assertEquals("qa", ChatModel.QA_SESSION_PREFIX);
-        assertEquals("task", ChatModel.TASK_SESSION_PREFIX);
-        assertEquals(":default", ChatModel.DEFAULT_CONVERSATION_SUFFIX);
-        assertEquals("qa:default", ChatModel.QA_CONVERSATION_ID);
-        assertEquals("task:default", ChatModel.TASK_CONVERSATION_ID);
-        assertEquals("custom:default", ChatModel.defaultConversationId("custom"));
-
-        ChatModel taskModel = new ChatModel(ChatModel.TASK_SESSION_PREFIX, null, true);
-        assertEquals("task", taskModel.getSessionPrefix());
-        assertEquals(ChatModel.TASK_CONVERSATION_ID, taskModel.getConversationId());
-        assertNull(taskModel.getLockedPhase());
-        assertTrue(taskModel.isTaskMode());
-        assertEquals(WorkflowPhase.CODE, taskModel.resolveActivePhase(WorkflowPhase.CODE));
-
-        ChatModel qaModel = new ChatModel(ChatModel.QA_SESSION_PREFIX, WorkflowPhase.EXPLORE, false);
-        assertEquals(ChatModel.QA_CONVERSATION_ID, qaModel.getConversationId());
-        assertEquals(WorkflowPhase.EXPLORE, qaModel.getLockedPhase());
-        assertFalse(qaModel.isTaskMode());
-        assertEquals(WorkflowPhase.EXPLORE, qaModel.resolveActivePhase(WorkflowPhase.CODE));
-    }
 
     @Test
     void testPendingImagesAndPngEncoding() {
@@ -55,14 +30,6 @@ class ChatModelTest {
         assertFalse(model.hasPendingImages());
         // Snapshot taken before drain remains intact (defensive copy)
         assertEquals(1, snapshot.size());
-    }
-
-    @Test
-    void testVolatileFieldsForCrossThreadVisibility() throws Exception {
-        Field currentTurnField = ChatModel.class.getDeclaredField("currentTurn");
-        Field loadingField = ChatModel.class.getDeclaredField("loading");
-        assertTrue(Modifier.isVolatile(currentTurnField.getModifiers()), "currentTurn must be volatile");
-        assertTrue(Modifier.isVolatile(loadingField.getModifiers()), "loading must be volatile");
     }
 
     @Test

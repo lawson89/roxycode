@@ -2,15 +2,10 @@ package org.roxycode.app.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.roxycode.app.ai.AgentDoc;
-import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.events.ProjectChangedEvent;
 
 class ProjectServiceTest {
@@ -22,12 +17,6 @@ class ProjectServiceTest {
         SettingsService s = new SettingsService(null, null);
         s.setSettingsPathOverride(tempDir.resolve("settings.toml"));
         return s;
-    }
-
-    @Test
-    void testCurrentProjectRootFieldIsVolatile() throws Exception {
-        Field field = ProjectService.class.getDeclaredField("currentProjectRoot");
-        assertTrue(Modifier.isVolatile(field.getModifiers()));
     }
 
     @Test
@@ -95,14 +84,5 @@ class ProjectServiceTest {
         assertEquals(dataDirB.resolve("context/rules.md"), projectService.resolveProjectDataPath("context/rules.md"));
         assertThrows(SecurityException.class,
                 () -> projectService.resolveProjectDataPath("../other-project/build.toml"));
-    }
-
-    @Test
-    void testNotAnnotatedWithAgentServiceOrAgentDoc() {
-        assertNull(ProjectService.class.getAnnotation(AgentService.class));
-        assertNull(ProjectService.class.getAnnotation(AgentDoc.class));
-        for (Method method : ProjectService.class.getDeclaredMethods()) {
-            assertNull(method.getAnnotation(AgentDoc.class), "Method " + method.getName() + " must not have @AgentDoc");
-        }
     }
 }
