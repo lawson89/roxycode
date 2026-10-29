@@ -69,10 +69,6 @@ public final class NavButton extends JButton {
         return hourglassAnimator.getTimer();
     }
 
-    HourglassAnimator getHourglassAnimator() {
-        return hourglassAnimator;
-    }
-
     void advanceBusyFrame() {
         if (!busy || statusIcon == null) {
             hourglassAnimator.stop();

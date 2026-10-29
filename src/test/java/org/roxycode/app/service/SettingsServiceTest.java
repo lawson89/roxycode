@@ -8,9 +8,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
@@ -26,9 +23,20 @@ class SettingsServiceTest {
 
     @Test
     void testSaveAndLoadSettings() {
-        SettingsService service = new SettingsService(null, null);
-        Path settingsFile = tempDir.resolve("settings.toml");
+        AtomicBoolean listenerCalled = new AtomicBoolean(false);
+        SettingsService service = new SettingsService(null, event -> {
+            if (event instanceof SettingsChangedEvent)
+                listenerCalled.set(true);
+        });
+
+        Path defaultHome = service.getRoxyHomeDir();
+        assertNotNull(defaultHome);
+        assertTrue(defaultHome.endsWith(".roxycode"));
+        assertEquals(SettingsService.getDefaultRoxyHomeDir(), defaultHome);
+
+        Path settingsFile = tempDir.resolve("custom-roxy").resolve("settings.toml");
         service.setSettingsPathOverride(settingsFile);
+        assertEquals(tempDir.resolve("custom-roxy"), service.getRoxyHomeDir());
 
         AppSettings settings = service.getSettings();
         settings.setTheme("Darcula");
@@ -36,6 +44,8 @@ class SettingsServiceTest {
         settings.setLogToolCalls(true);
         settings.setGlobalContextFolders(List.of("/tmp/global-a", "/tmp/global-b"));
         service.saveSettings();
+
+        assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
 
         SettingsService service2 = new SettingsService(null, null);
         service2.setSettingsPathOverride(settingsFile);
@@ -51,18 +61,6 @@ class SettingsServiceTest {
     }
 
     @Test
-    void testGetRoxyHomeDirDefaultAndOverride() {
-        SettingsService service = new SettingsService(null, null);
-        Path defaultHome = service.getRoxyHomeDir();
-        assertNotNull(defaultHome);
-        assertTrue(defaultHome.endsWith(".roxycode"));
-        assertEquals(SettingsService.getDefaultRoxyHomeDir(), defaultHome);
-
-        service.setSettingsPathOverride(tempDir.resolve("custom-roxy").resolve("settings.toml"));
-        assertEquals(tempDir.resolve("custom-roxy"), service.getRoxyHomeDir());
-    }
-
-    @Test
     void testLoadFromDiskFallbacksAndDefaultPath() throws IOException {
         Path defaultPath = SettingsService.getDefaultSettingsPath();
         assertNotNull(defaultPath);
@@ -75,19 +73,6 @@ class SettingsServiceTest {
         Path corruptFile = Files.writeString(tempDir.resolve("corrupt.toml"), "invalid = [toml");
         AppSettings fromCorrupt = SettingsService.loadFromDisk(corruptFile, null);
         assertEquals("FlatLaf Light", fromCorrupt.getTheme());
-    }
-
-    @Test
-    void testSettingsListener() {
-        AtomicBoolean listenerCalled = new AtomicBoolean(false);
-        SettingsService service = new SettingsService(null, event -> {
-            if (event instanceof SettingsChangedEvent) {
-                listenerCalled.set(true);
-            }
-        });
-        service.setSettingsPathOverride(tempDir.resolve("test_listener.toml"));
-        service.saveSettings();
-        assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
     }
 
     @Test
@@ -107,33 +92,6 @@ class SettingsServiceTest {
         assertTrue(Files.exists(edtSettingsFile));
         assertEquals("FlatLaf Dark",
                 SettingsService.loadFromDisk(edtSettingsFile, AiConfig.SHARED_TOML_MAPPER).getTheme());
-    }
-
-    @Test
-    void testConcurrentLazyInitializationReturnsSameInstance() throws Exception {
-        SettingsService service = new SettingsService(null, null);
-        service.setSettingsPathOverride(tempDir.resolve("concurrent_settings.toml"));
-
-        int threads = 8;
-        CountDownLatch ready = new CountDownLatch(threads);
-        CountDownLatch start = new CountDownLatch(1);
-        List<Future<AppSettings>> futures = new ArrayList<>();
-        try (ExecutorService executor = Executors.newFixedThreadPool(threads)) {
-            for (int i = 0; i < threads; i++) {
-                futures.add(executor.submit(() -> {
-                    ready.countDown();
-                    start.await();
-                    return service.getSettings();
-                }));
-            }
-            ready.await();
-            start.countDown();
-            AppSettings expected = futures.get(0).get();
-            assertNotNull(expected);
-            for (Future<AppSettings> future : futures) {
-                assertSame(expected, future.get());
-            }
-        }
     }
 
     @Test

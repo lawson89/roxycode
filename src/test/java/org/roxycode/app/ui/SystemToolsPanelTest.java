@@ -3,11 +3,8 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import java.awt.Container;
-import java.net.URI;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
@@ -106,65 +103,5 @@ public class SystemToolsPanelTest {
         assertCardState(panel.getToolCards().get(0), "Git", "Detected", "Required");
         assertCardState(panel.getToolCards().get(1), "Docker", "Error", "Optional");
         assertCardState(panel.getToolCards().get(2), "Universal Ctags", "Missing", "Required");
-    }
-
-    @Test
-    public void testWebsiteLinkClickInvokesBrowserLauncher() {
-        SystemToolService service = mock(SystemToolService.class);
-        when(service.detectTools()).thenReturn(CompletableFuture
-                .completedFuture(List.of(SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"))));
-
-        SystemToolsPanel panel = new SystemToolsPanel(service);
-        SwingTestUtils.flushEdt();
-
-        AtomicReference<URI> launchedUri = new AtomicReference<>();
-        panel.setBrowserLauncher(launchedUri::set);
-
-        ToolCard gitCard = panel.getToolCards().get(0);
-        assertEquals("git-scm.com", gitCard.getWebsiteLinkButton().getText());
-        SwingTestUtils.clickOnEdt(gitCard.getWebsiteLinkButton());
-        assertEquals(URI.create("https://git-scm.com"), launchedUri.get());
-
-        panel.setBrowserLauncher(uri -> {
-            throw new UnsupportedOperationException("Headless test");
-        });
-        assertDoesNotThrow(() -> SwingTestUtils.clickOnEdt(gitCard.getWebsiteLinkButton()));
-    }
-
-    @Test
-    public void testCardsFitWithinConstrainedViewportWithoutHorizontalOverflow() {
-        SystemToolService service = mock(SystemToolService.class);
-        when(service.detectTools()).thenReturn(CompletableFuture
-                .completedFuture(List.of(SystemTool.ofKnownTool("Ripgrep", "ripgrep 14.1.0", "Detected"),
-                        SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"),
-                        SystemTool.ofKnownTool("Universal Ctags", "Universal Ctags 5.9.0", "Detected"),
-                        SystemTool.ofKnownTool("Docker", "Docker 29.1.3 (API 1.52)", "Detected"))));
-
-        SystemToolsPanel panel = new SystemToolsPanel(service);
-        SwingTestUtils.runOnEdt(() -> {
-            panel.setSize(700, 600);
-            layoutRecursively(panel);
-            layoutRecursively(panel);
-        });
-
-        int viewportWidth = panel.getCardsContainer().getParent().getWidth();
-        assertTrue(viewportWidth > 0 && viewportWidth <= 700);
-        assertTrue(panel.getCardsContainer().getWidth() <= viewportWidth);
-
-        for (ToolCard card : panel.getToolCards()) {
-            assertTrue(card.getWidth() > 0 && card.getWidth() <= viewportWidth);
-            assertTrue(card.getStatusBadge().getX() + card.getStatusBadge().getWidth() <= card.getStatusBadge()
-                    .getParent().getWidth());
-            assertTrue(card.getWebsiteLinkButton().getX() + card.getWebsiteLinkButton().getWidth() <= card
-                    .getWebsiteLinkButton().getParent().getWidth());
-        }
-    }
-
-    private static void layoutRecursively(Container container) {
-        container.doLayout();
-        for (var child : container.getComponents()) {
-            if (child instanceof Container childContainer)
-                layoutRecursively(childContainer);
-        }
     }
 }

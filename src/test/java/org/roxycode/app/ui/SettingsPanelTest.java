@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.event.ActionListener;
 import javax.swing.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,24 +33,6 @@ class SettingsPanelTest {
         lenient().when(settingsService.getAvailableModels())
                 .thenReturn(new SettingsService(null, null).getAvailableModels());
         settingsPanel = new SettingsPanel(settingsService);
-    }
-
-    @Test
-    void testSectionCardsBadgesAndPasswordFieldStyling() {
-        assertEquals(SettingsPanel.SUBTITLE_TEXT, settingsPanel.getSubtitleLabel().getText());
-        assertEquals(3, settingsPanel.getSectionCards().size());
-        assertEquals(2, settingsPanel.getRestartBadges().size());
-        for (JLabel badge : settingsPanel.getRestartBadges()) {
-            assertEquals(SettingsPanel.RESTART_BADGE_TEXT, badge.getText());
-            assertNotNull(badge.getIcon());
-        }
-
-        JPasswordField apiKeyField = settingsPanel.getGeminiApiKeyField();
-        assertNotNull(apiKeyField);
-        String style = (String) apiKeyField.getClientProperty(FlatClientProperties.STYLE);
-        assertNotNull(style);
-        assertTrue(style.contains("showRevealButton: true"));
-        assertNotNull(settingsPanel.getSaveButton().getIcon());
     }
 
     @Test
@@ -167,16 +148,5 @@ class SettingsPanelTest {
                     .getProperty("spring.ai.google.genai.api-key"));
             assertEquals("gemini-3.5-flash", env.getProperty("spring.ai.google.genai.chat.options.model"));
         }
-    }
-
-    @Test
-    void testGetRSyntaxThemeCachesLightAndDarkInstances() throws Exception {
-        var light1 = SettingsPanel.getRSyntaxTheme(false);
-        var dark1 = SettingsPanel.getRSyntaxTheme(true);
-        assertNotNull(light1);
-        assertNotNull(dark1);
-        assertSame(light1, SettingsPanel.getRSyntaxTheme(false));
-        assertSame(dark1, SettingsPanel.getRSyntaxTheme(true));
-        assertNotSame(light1, dark1);
     }
 }

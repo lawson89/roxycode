@@ -3,13 +3,11 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
-import java.awt.Cursor;
 import java.awt.event.ActionListener;
 import javax.swing.Timer;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.Document;
 import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.HTMLEditorKit;
 import org.junit.jupiter.api.Test;
 
 class MarkdownPaneTest {
@@ -17,14 +15,6 @@ class MarkdownPaneTest {
     @Test
     void testEmptyStateRendersWelcomeCardAndConfiguresReadOnlyCursorAndCaret() {
         MarkdownPane pane = new MarkdownPane();
-        HTMLEditorKit kit = assertInstanceOf(HTMLEditorKit.class, pane.getEditorKit());
-        assertEquals(Cursor.DEFAULT_CURSOR, kit.getDefaultCursor().getType());
-        assertEquals(Cursor.HAND_CURSOR, kit.getLinkCursor().getType());
-        assertEquals(Cursor.DEFAULT_CURSOR, pane.getCursor().getType());
-        assertInstanceOf(SwingHtmlUtils.NonPaintingCaret.class, pane.getCaret());
-        assertEquals(0, pane.getCaret().getBlinkRate());
-        assertEquals(0, pane.getCaretColor().getAlpha());
-
         assertContainsAll(pane.getText(), "welcome-card", "Ready to Assist");
         pane.appendMessage("user", "Hello selectable message");
         assertFalse(pane.getText().contains("welcome-card"));
@@ -129,10 +119,16 @@ class MarkdownPaneTest {
         MarkdownPane pane = new MarkdownPane();
         pane.appendToolLog("var x = 1;", true, null);
         pane.appendToolLog("if (", false, "Syntax Error: <eof>");
+        pane.appendToolLog("bad()", false, "   ");
 
         String html = pane.getText();
-        assertContainsAll(html, "Executed successfully", "Error: Syntax Error: &lt;eof&gt;");
+        assertContainsAll(html, "Executed successfully", "Error: Syntax Error: &lt;eof&gt;", "Error: Unknown error");
         assertFalse(html.contains("<eof>"));
+
+        String escapedEntry = ChatHtmlTemplates.renderChatEntry("user<bad>", "<p>Safe</p>", "12:00<img src=x>", -1,
+                false);
+        assertContainsAll(escapedEntry, "user&lt;bad&gt;-entry", "12:00&lt;img src=x&gt;");
+        assertFalse(escapedEntry.contains("<img src=x>"));
     }
 
     @Test

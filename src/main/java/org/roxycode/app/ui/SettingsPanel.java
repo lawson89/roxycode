@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import javax.swing.*;
@@ -503,10 +502,6 @@ public final class SettingsPanel extends JPanel {
         statusTimer.restart();
     }
 
-    JLabel getSubtitleLabel() {
-        return subtitleLabel;
-    }
-
     JLabel getLegendLabel() {
         return legendLabel;
     }
@@ -553,14 +548,6 @@ public final class SettingsPanel extends JPanel {
 
     JButton getSaveButton() {
         return saveButton;
-    }
-
-    List<JPanel> getSectionCards() {
-        return Collections.unmodifiableList(sectionCards);
-    }
-
-    List<JLabel> getRestartBadges() {
-        return Collections.unmodifiableList(restartBadges);
     }
 
     private static final class ScrollableCardsPanel extends JPanel implements Scrollable {

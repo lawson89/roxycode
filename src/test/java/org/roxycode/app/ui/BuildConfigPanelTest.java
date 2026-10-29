@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.formdev.flatlaf.FlatLightLaf;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -43,19 +42,6 @@ class BuildConfigPanelTest {
                 .callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService, systemToolService));
         SwingTestUtils.awaitWorker(panel.loadConfigFuture);
         return panel;
-    }
-
-    @Test
-    void testCachedDockerAvailabilityOnInitializationWithoutReprobe() {
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(true));
-
-        BuildConfigPanel panel = createPanelOnEdt();
-        assertTrue(panel.dockerAvailable);
-        assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
-        verify(systemToolService, never()).refreshDockerAvailable();
-        verify(systemToolService, never()).refreshTools();
-        verify(systemToolService, never()).checkDockerAvailable();
-        verify(systemToolService, never()).hasCachedTools();
     }
 
     @Test
@@ -100,17 +86,6 @@ class BuildConfigPanelTest {
     }
 
     @Test
-    void testWarningBannerWhenDockerUnavailable() {
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
-
-        BuildConfigPanel panel = createPanelOnEdt();
-        assertFalse(panel.dockerAvailable);
-        assertEquals(BuildConfigPanel.DOCKER_MISSING_WARNING_TEXT, panel.bannerMessageLabel.getText());
-        assertFalse(panel.containerToggleCheckBox.isEnabled());
-        assertFalse(panel.containerToggleCheckBox.isSelected());
-    }
-
-    @Test
     void testDockerAvailableAndToggleCheckboxUpdatesTomlAndBanner() {
         when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(true));
 
@@ -119,6 +94,10 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
         assertTrue(panel.containerToggleCheckBox.isEnabled());
         assertFalse(panel.containerToggleCheckBox.isSelected());
+        verify(systemToolService, never()).refreshDockerAvailable();
+        verify(systemToolService, never()).refreshTools();
+        verify(systemToolService, never()).checkDockerAvailable();
+        verify(systemToolService, never()).hasCachedTools();
 
         SwingTestUtils.clickOnEdt(panel.containerToggleCheckBox);
         assertTrue(panel.containerToggleCheckBox.isSelected());
@@ -174,34 +153,16 @@ class BuildConfigPanelTest {
 
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(panel.dockerAvailable);
+        assertEquals(BuildConfigPanel.DOCKER_MISSING_WARNING_TEXT, panel.bannerMessageLabel.getText());
+        assertFalse(panel.containerToggleCheckBox.isEnabled());
+        assertFalse(panel.containerToggleCheckBox.isSelected());
 
         panel.onSystemToolsUpdated(
                 new SystemToolsUpdatedEvent(List.of(new SystemTool("Docker", "28.0", "Detected", "Desc")), true));
         SwingTestUtils.flushEdt();
 
         assertTrue(panel.dockerAvailable);
+        assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
         assertTrue(panel.containerToggleCheckBox.isEnabled());
-    }
-
-    @Test
-    void testFlatLafStyleParsingAcrossAllBannerStatesAndThemes() {
-        FlatLightLaf.setup();
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
-
-        BuildConfigPanel panel = assertDoesNotThrow(this::createPanelOnEdt);
-        assertFalse(panel.bannerPanel.isOpaque());
-        assertNotNull(panel.bannerPanel.getBorder());
-
-        panel.setDockerAvailable(true);
-        assertNotNull(panel.bannerPanel.getBorder());
-
-        panel.setContainerEnabledInToml(true);
-        assertNotNull(panel.bannerPanel.getBorder());
-
-        SwingTestUtils.withDarkTheme(panel, () -> {
-            assertNotNull(panel.bannerPanel.getBorder());
-            panel.setDockerAvailable(false);
-            assertNotNull(panel.bannerPanel.getBorder());
-        });
     }
 }

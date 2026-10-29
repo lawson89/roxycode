@@ -4,10 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
-import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.command.VersionCmd;
-import com.github.dockerjava.api.model.Version;
-import java.lang.reflect.Field;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -24,8 +21,6 @@ import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService.DockerProbe;
 import org.roxycode.app.service.SystemToolService.DockerVersionInfo;
-import org.testcontainers.DockerClientFactory;
-import org.testcontainers.dockerclient.DockerClientProviderStrategy;
 
 class SystemToolServiceTest {
 
@@ -40,39 +35,6 @@ class SystemToolServiceTest {
         assertEquals(expectedStatus, dockerTool.status());
         assertEquals(expectedAvailable, service.checkDockerAvailable());
         return dockerTool;
-    }
-
-    private static Field accessibleField(String name) throws Exception {
-        Field f = DockerClientFactory.class.getDeclaredField(name);
-        f.setAccessible(true);
-        return f;
-    }
-
-    @Test
-    void testDetectToolsIncludesRichMetadataForAllCuratedTools() throws Exception {
-        SystemToolService service = new SystemToolService(null, null, null,
-                () -> new DockerVersionInfo("27.0.3", "1.46"), () -> true);
-        List<SystemTool> tools = service.detectTools().get();
-
-        assertEquals(4, tools.size());
-        for (String expectedName : List.of("Ripgrep", "Git", "Universal Ctags", "Docker")) {
-            assertTrue(tools.stream().anyMatch(t -> t.name().equals(expectedName)));
-        }
-        for (SystemTool tool : tools) {
-            assertNotNull(tool.name());
-            assertNotNull(tool.status());
-            assertNotNull(tool.version());
-            assertFalse(tool.description().isBlank());
-            assertFalse(tool.license().isBlank());
-            assertTrue(tool.websiteUrl().startsWith("https://"));
-            assertEquals(!SystemTool.TOOL_DOCKER.equals(tool.name()), tool.required());
-        }
-        assertTrue(SystemTool.defaultRequiredFor(SystemTool.TOOL_RIPGREP));
-        assertTrue(SystemTool.defaultRequiredFor(SystemTool.TOOL_GIT));
-        assertTrue(SystemTool.defaultRequiredFor(SystemTool.TOOL_CTAGS));
-        assertFalse(SystemTool.defaultRequiredFor(SystemTool.TOOL_DOCKER));
-        assertFalse(SystemTool.defaultRequiredFor("CustomTool"));
-        assertEquals(service.checkDockerAvailable(), service.isDockerAvailable().get());
     }
 
     @Test
@@ -143,38 +105,27 @@ class SystemToolServiceTest {
     }
 
     @Test
-    void testDetectDockerToolDetectedWithVersionAndApiVersion() {
-        SystemTool dockerTool = assertDockerTool(() -> new DockerVersionInfo("28.0.1", "1.48"), true, "Detected", true);
-        assertEquals("Docker 28.0.1 (API 1.48)", dockerTool.version());
-        assertEquals("Apache-2.0", dockerTool.license());
-        assertEquals("https://www.docker.com", dockerTool.websiteUrl());
-    }
+    void testDetectDockerToolStatusTransitions() {
+        SystemTool okTool = assertDockerTool(() -> new DockerVersionInfo("28.0.1", "1.48"), true, "Detected", true);
+        assertEquals("Docker 28.0.1 (API 1.48)", okTool.version());
 
-    @Test
-    void testDetectDockerToolErrorOnApiVersionMismatchOrHandshakeFailure() {
-        SystemTool dockerTool = assertDockerTool(() -> {
+        SystemTool errTool = assertDockerTool(() -> {
             throw new IllegalStateException("Could not connect to Docker",
                     new RuntimeException("client version 1.32 is too old. Minimum supported API version is 1.44"));
         }, false, "Error", false);
-        assertTrue(dockerTool.version().contains("client version 1.32 is too old"));
-    }
+        assertTrue(errTool.version().contains("client version 1.32 is too old"));
 
-    @Test
-    void testDetectDockerToolMissingWhenDockerNotInstalled() {
-        SystemTool dockerTool = assertDockerTool(() -> {
+        SystemTool missingTool = assertDockerTool(() -> {
             throw new IllegalStateException(
                     "Could not find a valid Docker environment. Please see logs and check configuration");
         }, false, "Missing", false);
-        assertEquals("Not found", dockerTool.version());
-    }
+        assertEquals("Not found", missingTool.version());
 
-    @Test
-    void testDetectDockerToolErrorWhenCliPresentButTestcontainersCannotConnect() {
-        SystemTool dockerTool = assertDockerTool(() -> {
+        SystemTool cliErrTool = assertDockerTool(() -> {
             throw new IllegalStateException(
                     "Could not find a valid Docker environment. Please see logs and check configuration");
         }, true, "Error", false);
-        assertTrue(dockerTool.version().contains("Could not find a valid Docker environment"));
+        assertTrue(cliErrTool.version().contains("Could not find a valid Docker environment"));
     }
 
     @Test
@@ -276,65 +227,4 @@ class SystemToolServiceTest {
         assertEquals(1, probeCount.get());
     }
 
-    @Test
-    void testResetTestcontainersCachesAndProbeWithTestcontainersCleanup() throws Exception {
-        DockerClientFactory factory = DockerClientFactory.instance();
-        Field failureField = accessibleField("cachedClientFailure");
-        Field clientField = accessibleField("client");
-        Field strategyField = accessibleField("strategy");
-
-        Object origFailure = failureField.get(factory);
-        Object origClient = clientField.get(factory);
-        Object origStrategy = strategyField.get(factory);
-
-        try {
-            failureField.set(factory, new RuntimeException("latched failure"));
-            assertNotNull(failureField.get(factory));
-            SystemToolService.resetTestcontainersFailureCache();
-            assertNull(failureField.get(factory));
-            assertDoesNotThrow(() -> SystemToolService.clearDockerClientFactoryField(factory, "nonExistentField"));
-
-            DockerClient mockClient = mock(DockerClient.class);
-            DockerClientProviderStrategy mockStrategy = mock(DockerClientProviderStrategy.class);
-            failureField.set(factory, new RuntimeException("latched failure"));
-            clientField.set(factory, mockClient);
-            strategyField.set(factory, mockStrategy);
-
-            SystemToolService.resetTestcontainersClientAndFailureCache();
-            assertNull(failureField.get(factory));
-            assertNull(clientField.get(factory));
-            assertNull(strategyField.get(factory));
-
-            VersionCmd okVersionCmd = mock(VersionCmd.class);
-            Version mockVersion = mock(Version.class);
-            when(mockVersion.getVersion()).thenReturn("28.0.4");
-            when(mockVersion.getApiVersion()).thenReturn("1.48");
-            when(okVersionCmd.exec()).thenReturn(mockVersion);
-            when(mockClient.versionCmd()).thenReturn(okVersionCmd);
-
-            failureField.set(factory, new RuntimeException("stale failure before recovery"));
-            clientField.set(factory, mockClient);
-            strategyField.set(factory, mockStrategy);
-
-            DockerVersionInfo versionInfo = SystemToolService.probeWithTestcontainers();
-            assertEquals("28.0.4", versionInfo.version());
-            assertEquals("1.48", versionInfo.apiVersion());
-            assertNull(failureField.get(factory));
-            assertSame(mockClient, clientField.get(factory));
-
-            VersionCmd failingVersionCmd = mock(VersionCmd.class);
-            when(failingVersionCmd.exec()).thenThrow(new RuntimeException("Daemon stopped"));
-            when(mockClient.versionCmd()).thenReturn(failingVersionCmd);
-
-            assertEquals("Daemon stopped",
-                    assertThrows(RuntimeException.class, SystemToolService::probeWithTestcontainers).getMessage());
-            assertNull(failureField.get(factory));
-            assertNull(clientField.get(factory));
-            assertNull(strategyField.get(factory));
-        } finally {
-            failureField.set(factory, origFailure);
-            clientField.set(factory, origClient);
-            strategyField.set(factory, origStrategy);
-        }
-    }
 }

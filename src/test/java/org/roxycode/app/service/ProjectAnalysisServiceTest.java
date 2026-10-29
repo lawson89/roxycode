@@ -26,38 +26,28 @@ class ProjectAnalysisServiceTest {
     private ProjectAnalysisService projectAnalysisService;
 
     @Test
-    void testGetDominantLanguageJava() {
+    void testGetDominantLanguageAcrossFileListsAndEdgeCases() {
         when(grepService.listFiles(null))
                 .thenReturn(Arrays.asList("src/Main.java", "src/Util.java", "README.md", "pom.xml"));
         assertEquals("Java", projectAnalysisService.getDominantLanguage());
-    }
 
-    @Test
-    void testGetDominantLanguagePython() {
+        projectAnalysisService.onProjectChanged(new ProjectChangedEvent(null));
         when(grepService.listFiles(null)).thenReturn(Arrays.asList("app.py", "utils.py", "requirements.txt"));
         assertEquals("Python", projectAnalysisService.getDominantLanguage());
-    }
 
-    @Test
-    void testGetDominantLanguageUnknown() {
+        projectAnalysisService.onProjectChanged(new ProjectChangedEvent(null));
         when(grepService.listFiles(null)).thenReturn(Arrays.asList("config.conf", "data.dat"));
         assertEquals("Unknown (.conf)", projectAnalysisService.getDominantLanguage());
-    }
 
-    @Test
-    void testGetDominantLanguageEmpty() {
+        projectAnalysisService.onProjectChanged(new ProjectChangedEvent(null));
         when(grepService.listFiles(null)).thenReturn(Collections.emptyList());
         assertEquals("Unknown", projectAnalysisService.getDominantLanguage());
-    }
 
-    @Test
-    void testGetDominantLanguageNull() {
+        projectAnalysisService.onProjectChanged(new ProjectChangedEvent(null));
         when(grepService.listFiles(null)).thenReturn(null);
         assertEquals("Unknown", projectAnalysisService.getDominantLanguage());
-    }
 
-    @Test
-    void testGetDominantLanguageHiddenFiles() {
+        projectAnalysisService.onProjectChanged(new ProjectChangedEvent(null));
         when(grepService.listFiles(null)).thenReturn(
                 Arrays.asList(".gitignore", "dir/.env", "dir/trailingdot.", "Makefile", "   ", "script.sh"));
         assertEquals("Shell", projectAnalysisService.getDominantLanguage());

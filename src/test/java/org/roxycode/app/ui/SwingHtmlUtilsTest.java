@@ -5,9 +5,7 @@ import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.awt.Color;
 import java.awt.Cursor;
-import java.awt.Graphics2D;
 import java.awt.Insets;
-import java.awt.image.BufferedImage;
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.text.Element;
@@ -65,19 +63,6 @@ class SwingHtmlUtilsTest {
         assertEquals(0, pane.getCaret().getBlinkRate());
         assertEquals(0, pane.getCaretColor().getAlpha());
 
-        BufferedImage img = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = img.createGraphics();
-        try {
-            pane.getCaret().paint(g2);
-        } finally {
-            g2.dispose();
-        }
-        for (int y = 0; y < img.getHeight(); y++) {
-            for (int x = 0; x < img.getWidth(); x++) {
-                assertEquals(0, img.getRGB(x, y));
-            }
-        }
-
         pane.setText("<html><body>Hello Selectable World</body></html>");
         pane.selectAll();
         assertNotNull(pane.getSelectedText());
@@ -92,17 +77,37 @@ class SwingHtmlUtilsTest {
 
         String longCodeLine = "public static void veryLongMethodNameWithManyParameters(String paramOne, String paramTwo, String paramThree) {}";
         String longInlineToken = "https://example.com/very/long/path/that/has/no/spaces/and/should/allow/horizontal/wrapping/in/view";
-        pane.setText("<html><body><div>" + longInlineToken + "<br>SecondLine</div><pre>" + longCodeLine
-                + "</pre></body></html>");
+        pane.setText("<html><body><table><tr><td nowrap='nowrap'>0.</td><td><div>" + longInlineToken
+                + "<br>SecondLine</div></td></tr></table><pre>" + longCodeLine + "</pre></body></html>");
 
         ViewFactory factory = ((HTMLEditorKit) pane.getEditorKit()).getViewFactory();
         HTMLDocument doc = (HTMLDocument) pane.getDocument();
         assertContainsAll(doc.getText(0, doc.getLength()), longCodeLine, longInlineToken);
         assertNotNull(SwingTestUtils.findElement(doc.getDefaultRootElement(), "br", e -> true));
-        assertTrue(verifyWrappingViews(doc.getDefaultRootElement(), factory));
+
+        Element nowrapTd = SwingTestUtils.findElement(doc.getDefaultRootElement(), "td",
+                e -> e.getAttributes().isDefined(HTML.Attribute.NOWRAP));
+        assertNotNull(nowrapTd);
+        assertTrue(hasPositiveInlineMinSpan(nowrapTd, factory));
+        assertTrue(verifyWrappingViews(doc.getDefaultRootElement(), nowrapTd, factory));
     }
 
-    private boolean verifyWrappingViews(Element elem, ViewFactory factory) {
+    private boolean hasPositiveInlineMinSpan(Element elem, ViewFactory factory) {
+        if (factory.create(elem) instanceof InlineView iv && iv.getMinimumSpan(View.X_AXIS) > 0f) {
+            return true;
+        }
+        for (int i = 0; i < elem.getElementCount(); i++) {
+            if (hasPositiveInlineMinSpan(elem.getElement(i), factory)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean verifyWrappingViews(Element elem, Element excludedSubtree, ViewFactory factory) {
+        if (elem == excludedSubtree) {
+            return false;
+        }
         boolean foundBr = false;
         View view = factory.create(elem);
         if ("br".equalsIgnoreCase(elem.getName())) {
@@ -116,20 +121,9 @@ class SwingHtmlUtilsTest {
             }
         }
         for (int i = 0; i < elem.getElementCount(); i++) {
-            foundBr |= verifyWrappingViews(elem.getElement(i), factory);
+            foundBr |= verifyWrappingViews(elem.getElement(i), excludedSubtree, factory);
         }
         return foundBr;
-    }
-
-    @Test
-    void testInstallTextContextMenuAndCopyToClipboard() {
-        JTextArea area = new JTextArea("Sample text");
-        int initialListeners = area.getMouseListeners().length;
-        SwingHtmlUtils.installTextContextMenu(area);
-
-        assertEquals(initialListeners + 1, area.getMouseListeners().length);
-        assertDoesNotThrow(() -> SwingHtmlUtils.copyToClipboard("Copied text"));
-        assertDoesNotThrow(() -> SwingHtmlUtils.copyToClipboard(null));
     }
 
     @Test

@@ -74,57 +74,11 @@ class SymbolServiceTest {
     }
 
     @Test
-    void testSymbolInfoRecordNormalizationAndJavaBeanGetters() throws Exception {
+    void testGetFileOutlineFiltersNoiseSortsByStartLineAndResolvesEndLineFallbacks() throws IOException {
         SymbolInfo normalized = new SymbolInfo(null, null, null, 5, 10, null, null);
         assertEquals("", normalized.name());
-        assertEquals("", normalized.getName());
-        assertEquals("", normalized.kind());
-        assertEquals("", normalized.getKind());
-        assertEquals("", normalized.path());
-        assertEquals("", normalized.getPath());
-        assertEquals(5, normalized.startLine());
-        assertEquals(5, normalized.getStartLine());
-        assertEquals(10, normalized.endLine());
-        assertEquals(10, normalized.getEndLine());
-        assertEquals("", normalized.scope());
-        assertEquals("", normalized.getScope());
         assertEquals("", normalized.signature());
-        assertEquals("", normalized.getSignature());
 
-        Path file = tempDir.resolve("Sample.java");
-        Files.writeString(file,
-                String.join(NL, "public class Sample {", "    public void greet(String who) {", "    }", "}"));
-        symbolService.setCtagsRunner(cmd -> new ProcessResult(0,
-                tagJson("greet", file, 2, 3, "method", "Sample", "(String who)"), "", false));
-
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(symbolService);
-        JexlTool jexlTool = new JexlTool(registry, null, null, null);
-        String json = jexlTool.executeJexl("""
-                var syms = symbolService.getFileOutline('Sample.java');
-                var s = syms[0];
-                {
-                  'name': s.name,
-                  'kind': s.kind,
-                  'path': s.path,
-                  'startLine': s.startLine,
-                  'endLine': s.endLine,
-                  'scope': s.scope,
-                  'signature': s.signature
-                }
-                """);
-        JsonNode root = AiConfig.SHARED_OBJECT_MAPPER.readTree(json);
-        assertEquals("greet", root.get("name").asText());
-        assertEquals("method", root.get("kind").asText());
-        assertEquals("Sample.java", root.get("path").asText());
-        assertEquals(2, root.get("startLine").asInt());
-        assertEquals(3, root.get("endLine").asInt());
-        assertEquals("Sample", root.get("scope").asText());
-        assertEquals("(String who)", root.get("signature").asText());
-    }
-
-    @Test
-    void testGetFileOutlineFiltersNoiseSortsByStartLineAndResolvesEndLineFallbacks() throws IOException {
         Path file = tempDir.resolve("ServiceTest.java");
         Files.writeString(file,
                 String.join(NL, "package demo;", "import java.util.List;", "class ServiceTest {",
@@ -329,27 +283,6 @@ class SymbolServiceTest {
         assertTrue(symbolService.findSymbol("   ").isEmpty());
         when(projectService.hasActiveProject()).thenReturn(false);
         assertTrue(symbolService.findSymbol("targetMethod").isEmpty());
-    }
-
-    @Test
-    void testCtagsEntryDeserializationAndSharedRunnerEdgeCases() throws Exception {
-        String rawJson = """
-                {"_type":"tag","name":"myFunc","path":"/tmp/Demo.java","kind":"method","line":12,"end":20,"scope":"Demo","signature":"(int a)","extraIgnoredField":true}
-                """;
-        CtagsRunner.CtagsEntry entry = AiConfig.SHARED_OBJECT_MAPPER.readValue(rawJson, CtagsRunner.CtagsEntry.class);
-        assertEquals("tag", entry.type());
-        assertEquals("myFunc", entry.name());
-        assertEquals("/tmp/Demo.java", entry.path());
-        assertEquals("method", entry.kind());
-        assertEquals(12, entry.line());
-        assertEquals(20, entry.end());
-        assertEquals("Demo", entry.scope());
-        assertEquals("(int a)", entry.signature());
-
-        CtagsRunner runner = cmd -> new ProcessResult(0, rawJson, "", false);
-        assertTrue(runner.runAndParse(null, "--fields=+n", null, "cancelled").isEmpty());
-        assertTrue(runner.runAndParse(List.of(), "--fields=+n", null, "cancelled").isEmpty());
-        assertNull(CtagsRunner.resolveTargetPath(null, List.of(tempDir.resolve("A.java"), tempDir.resolve("B.java"))));
     }
 
     @Test

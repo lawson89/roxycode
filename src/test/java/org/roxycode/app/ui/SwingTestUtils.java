@@ -167,15 +167,4 @@ public final class SwingTestUtils {
         return findElement(root, "td",
                 elem -> className.equals(String.valueOf(elem.getAttributes().getAttribute(HTML.Attribute.CLASS))));
     }
-
-    static Element findTdWithText(Element root, String snippet) {
-        return findElement(root, "td", elem -> {
-            try {
-                int start = elem.getStartOffset();
-                return elem.getDocument().getText(start, elem.getEndOffset() - start).contains(snippet);
-            } catch (Exception e) {
-                return false;
-            }
-        });
-    }
 }

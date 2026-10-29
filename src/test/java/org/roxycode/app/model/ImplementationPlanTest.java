@@ -19,32 +19,6 @@ class ImplementationPlanTest {
     }
 
     @Test
-    void testImplementationPlan() {
-        ImplementationPlan plan = createPlan(List.of("Req 1"),
-                List.of(new ImplementationPlan.TechStep("Step 1", false)), null);
-        assertEquals("Title", plan.title());
-        assertEquals("Goal", plan.goal());
-        assertEquals(1, plan.requirements().size());
-        assertEquals(1, plan.technicalSteps().size());
-        assertFalse(plan.technicalSteps().get(0).completed());
-        assertNull(plan.completedBy());
-        assertNull(plan.completedOn());
-        assertNotNull(plan.handoffLog());
-        assertTrue(plan.handoffLog().isEmpty());
-    }
-
-    @Test
-    void testImmutabilityAndSafety() {
-        ImplementationPlan plan = createPlan(null, null,
-                List.of(new ImplementationPlan.LogEntry("now", "user", "Handoff 1")));
-        assertNotNull(plan.requirements());
-        assertNotNull(plan.technicalSteps());
-        assertEquals(1, plan.handoffLog().size());
-        assertThrows(UnsupportedOperationException.class,
-                () -> plan.handoffLog().add(new ImplementationPlan.LogEntry("now", "user", "fail")));
-    }
-
-    @Test
     void testWithCopyHelperMethodsPreserveFieldsAndImmutability() {
         ImplementationPlan base = createPlan(List.of("Req 1"),
                 List.of(new ImplementationPlan.TechStep("Step 1", false)),

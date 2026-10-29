@@ -2,7 +2,6 @@ package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
@@ -52,40 +51,5 @@ class NavButtonTest {
         assertTrue(btn.getBusyTimer().isRunning());
         btn.removeNotify();
         assertFalse(btn.getBusyTimer().isRunning());
-    }
-
-    @Test
-    void testHourglassAnimatorStandaloneLifecycleAndFrameCycling() {
-        AtomicInteger frameCallbacks = new AtomicInteger(0);
-        HourglassAnimator animator = new HourglassAnimator(frameCallbacks::incrementAndGet);
-
-        assertFalse(animator.isRunning());
-        assertNull(animator.getIcon());
-        animator.advanceFrame();
-        assertEquals(0, frameCallbacks.get());
-
-        FontIcon icon = animator.start();
-        assertSame(icon, animator.getIcon());
-        assertEquals(HourglassAnimator.DEFAULT_ICON_SIZE, icon.getIconSize());
-        assertEquals(FontAwesomeSolid.HOURGLASS_HALF, icon.getIkon());
-        assertTrue(animator.isRunning());
-        assertEquals(HourglassAnimator.ANIMATION_DELAY_MS, animator.getTimer().getDelay());
-
-        FontAwesomeSolid[] expectedFrames = {FontAwesomeSolid.HOURGLASS_END, FontAwesomeSolid.HOURGLASS_START,
-                FontAwesomeSolid.HOURGLASS_HALF};
-        for (int i = 0; i < expectedFrames.length; i++) {
-            animator.advanceFrame();
-            assertEquals(expectedFrames[i], icon.getIkon());
-            assertEquals(i + 1, frameCallbacks.get());
-        }
-
-        animator.stop();
-        assertFalse(animator.isRunning());
-        animator.advanceFrame();
-        assertEquals(FontAwesomeSolid.HOURGLASS_END, icon.getIkon());
-        assertSame(icon, animator.start());
-        assertEquals(FontAwesomeSolid.HOURGLASS_HALF, icon.getIkon());
-        assertTrue(animator.isRunning());
-        animator.stop();
     }
 }

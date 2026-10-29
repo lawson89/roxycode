@@ -6,6 +6,8 @@ import static org.mockito.Mockito.*;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JTabbedPane;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +31,7 @@ class MentorModeIntegrationTest {
     private QaWorkspacePanel qaWorkspacePanel;
     private TaskWorkspacePanel taskWorkspacePanel;
     private SidebarPanel sidebar;
+    private final AtomicReference<String> selectedCard = new AtomicReference<>();
 
     @BeforeEach
     void setUp() {
@@ -49,8 +52,7 @@ class MentorModeIntegrationTest {
                 new FeatureChatPanel(aiService, planService, pub, chatMemory, settingsService, null), planService,
                 new PlanPanel(planService, gitService), null);
 
-        sidebar = new SidebarPanel(card -> {
-        });
+        sidebar = new SidebarPanel(selectedCard::set);
         qaWorkspacePanel.bindSidebar(sidebar);
         taskWorkspacePanel.bindSidebar(sidebar);
     }
@@ -158,6 +160,19 @@ class MentorModeIntegrationTest {
         assertTrue(sidebar.isTaskBusy());
         taskWorkspacePanel.taskChatPanel.setLoading(false);
         assertFalse(sidebar.isTaskBusy());
+
+        JButton qaBtn = SwingTestUtils.findButton(sidebar, "Codebase Q&A");
+        JButton taskBtn = SwingTestUtils.findButton(sidebar, "Feature Request");
+        JButton toolsBtn = SwingTestUtils.findButton(sidebar, "System Tools");
+        assertTrue(qaBtn.isSelected());
+        assertFalse(taskBtn.isSelected());
+
+        taskBtn.doClick();
+        assertEquals("TASK_VIEW", selectedCard.get());
+
+        sidebar.selectCard("TOOLS");
+        assertTrue(toolsBtn.isSelected());
+        assertFalse(qaBtn.isSelected());
     }
 
     @Test

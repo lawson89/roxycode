@@ -58,7 +58,6 @@ public final class SystemToolsPanel extends JPanel {
     private final JPanel cardsContainer;
     private final JScrollPane scrollPane;
     private final List<ToolCard> toolCards = new ArrayList<>();
-    private transient Consumer<URI> browserLauncher = SystemToolsPanel::browseWithDesktop;
     private transient volatile CompletableFuture<List<SystemTool>> initialToolsFuture = CompletableFuture
             .completedFuture(List.of());
 
@@ -178,12 +177,8 @@ public final class SystemToolsPanel extends JPanel {
         if (StringUtils.isBlank(websiteUrl))
             return;
         try {
-            URI uri = URI.create(websiteUrl.trim());
-            Consumer<URI> launcher = browserLauncher;
-            if (launcher != null) {
-                launcher.accept(uri);
-                return;
-            }
+            browseWithDesktop(URI.create(websiteUrl.trim()));
+            return;
         } catch (Exception e) {
             log.debug("Browser launch failed for {}, falling back to clipboard: {}", websiteUrl, e.getMessage());
         }
@@ -202,20 +197,12 @@ public final class SystemToolsPanel extends JPanel {
         throw new UnsupportedOperationException("Desktop browse action is not supported");
     }
 
-    void setBrowserLauncher(Consumer<URI> browserLauncher) {
-        this.browserLauncher = browserLauncher;
-    }
-
     JButton getRefreshButton() {
         return refreshBtn;
     }
 
     JProgressBar getProgressBar() {
         return progressBar;
-    }
-
-    JPanel getCardsContainer() {
-        return cardsContainer;
     }
 
     List<ToolCard> getToolCards() {

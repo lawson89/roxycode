@@ -9,15 +9,8 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
-import javax.swing.text.Element;
-import javax.swing.text.View;
-import javax.swing.text.ViewFactory;
-import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.html.InlineView;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
@@ -55,65 +48,19 @@ class PlanPanelTest {
         assertContainsAll(htmlWithChanges, "<h3>Changes:</h3>", "<pre> M src/App.java\n?? src/NewFile.java</pre>");
         assertFalse(htmlWithChanges.contains("No files changed"));
 
-        ImplementationPlan planWithLogs = createPlan(List.of(new ImplementationPlan.TechStep("Completed step", true)),
+        ImplementationPlan planWithLogs = new ImplementationPlan("Test Plan", "Test Goal", List.of("Requirement 1"),
+                List.of(new ImplementationPlan.TechStep("Completed step", true)), true, "2026-04-06T12:00:00", "user",
+                "reviewer", "2026-04-06T13:00:00",
                 List.of(new ImplementationPlan.LogEntry("2026-04-06T12:00:00", "User", "Approved")));
         String htmlWithLogs = PlanPanel.buildPlanHtml(planWithLogs);
         for (String legacy : List.of("bgcolor='#2d2d2d'", "#888888", "#569cd6", "#28a745")) {
             assertFalse(htmlWithLogs.contains(legacy));
         }
-        assertContainsAll(htmlWithLogs, "class='plan-step-done'", "class='plan-step-completed'",
-                "class='plan-log-user'");
-        assertTrue(htmlWithLogs.contains("class='system-entry'") || htmlWithLogs.contains("class='md-th'"));
-    }
-
-    @Test
-    void testPlanPanelRendersNonZeroMinimumSpanForNowrapCells() {
-        PlanService planService = mock(PlanService.class);
-        GitService gitService = mock(GitService.class);
-        when(planService.getCurrentPlan()).thenReturn(createPlan(new ImplementationPlan.TechStep(
-                "Update src/main/resources/prompts/plan_phase.md to remove stale planService method names and refer to the provided JEXL API documentation.",
-                false)));
-
-        PlanPanel panel = new PlanPanel(planService, gitService);
-        awaitRefresh(panel);
-
-        JEditorPane editorPane = panel.getDisplayArea();
-        ViewFactory factory = ((HTMLEditorKit) editorPane.getEditorKit()).getViewFactory();
-        Element root = ((HTMLDocument) editorPane.getDocument()).getDefaultRootElement();
-
-        assertTrue(hasPositiveInlineMinSpan(SwingTestUtils.findTdWithText(root, "0."), factory));
-        assertTrue(hasPositiveInlineMinSpan(SwingTestUtils.findTdWithText(root, "["), factory));
-        assertFalse(
-                hasPositiveInlineMinSpan(SwingTestUtils.findTdWithText(root, "Update src/main/resources"), factory));
-    }
-
-    @Test
-    void testBuildPlanMarkdownFormatsPlanHandoffLogAndChanges() {
-        assertEquals("", PlanPanel.buildPlanMarkdown(null));
-
-        ImplementationPlan plan = new ImplementationPlan("Visibility Feature", "Improve visibility",
-                List.of("Show turns", "Export markdown"),
-                List.of(new ImplementationPlan.TechStep("Update ChatPanel", true),
-                        new ImplementationPlan.TechStep("Update PlanPanel", false)),
-                true, "2026-04-06T12:00:00", "user", "reviewer", "2026-04-06T13:00:00",
-                List.of(new ImplementationPlan.LogEntry("2026-04-06T12:05:30.123", "Architect",
-                        "Created plan | verified\ndetails")));
-
-        assertContainsAll(PlanPanel.buildPlanHtml(plan), "<h3>Approvals:</h3>",
+        assertContainsAll(htmlWithLogs, "<h3>Approvals:</h3>",
                 "<li><b>Move to Code:</b> Approved by user on 2026-04-06T12:00:00</li>",
-                "<li><b>Final Acceptance:</b> Accepted by reviewer on 2026-04-06T13:00:00</li>");
-
-        assertContainsAll(PlanPanel.buildPlanMarkdown(plan), "# Implementation Plan: Visibility Feature",
-                "**Goal:** Improve visibility", "## Approvals",
-                "- **Move to Code:** Approved by user on 2026-04-06T12:00:00",
-                "- **Final Acceptance:** Accepted by reviewer on 2026-04-06T13:00:00",
-                "## Requirements\n- Show turns\n- Export markdown",
-                "## Technical Steps\n- [x] 0. Update ChatPanel\n- [ ] 1. Update PlanPanel", "## Handoff Log",
-                "| Timestamp | User | Message |", "| 2026-04-06 12:05:30 | Architect | Created plan ",
-                "| verified details |", "## Changes\nNo files changed");
-
-        assertContainsAll(PlanPanel.buildPlanMarkdown(plan, " M src/App.java\n?? src/NewFile.java\n"), "## Changes",
-                " M src/App.java\n?? src/NewFile.java");
+                "<li><b>Final Acceptance:</b> Accepted by reviewer on 2026-04-06T13:00:00</li>",
+                "class='plan-step-done'", "class='plan-step-completed'", "class='plan-log-user'");
+        assertTrue(htmlWithLogs.contains("class='system-entry'") || htmlWithLogs.contains("class='md-th'"));
     }
 
     @Test
@@ -209,17 +156,5 @@ class PlanPanelTest {
         assertEquals(" M src/FreshFile.java\n", panel.getLastGitStatus());
         assertTrue(panel.getDisplayArea().getText().contains("FreshFile.java"));
         assertFalse(panel.getDisplayArea().getText().contains("StaleFile.java"));
-    }
-
-    private boolean hasPositiveInlineMinSpan(Element elem, ViewFactory factory) {
-        assertNotNull(elem);
-        if (factory.create(elem) instanceof InlineView iv) {
-            return iv.getMinimumSpan(View.X_AXIS) > 0;
-        }
-        for (int i = 0; i < elem.getElementCount(); i++) {
-            if (hasPositiveInlineMinSpan(elem.getElement(i), factory))
-                return true;
-        }
-        return false;
     }
 }

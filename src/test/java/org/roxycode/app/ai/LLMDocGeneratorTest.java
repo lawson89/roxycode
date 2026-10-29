@@ -5,7 +5,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,6 +23,7 @@ import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.SymbolService;
 import org.roxycode.app.service.ProjectService;
@@ -23,6 +31,10 @@ import org.roxycode.app.ui.SwingTestUtils;
 import org.springframework.aop.framework.ProxyFactory;
 
 class LLMDocGeneratorTest {
+
+    private static final Set<Class<?>> ALLOWED_JS_PARAM_TYPES = Set.of(String.class, String[].class, Object[].class,
+            int[].class, List.class, int.class, Integer.class, long.class, Long.class, double.class, Double.class,
+            boolean.class, Boolean.class);
 
     private static Arguments serviceCase(Class<?> clazz, Object instance, String... signatures) {
         return Arguments.of(clazz, instance, List.of(signatures));
@@ -55,6 +67,10 @@ class LLMDocGeneratorTest {
                 serviceCase(GenericBuildToolService.class, new GenericBuildToolService(ps, null, null),
                         "buildAndTest(): BuildResult;", "compile(): BuildResult;",
                         "runSingleTest(testName: string): BuildResult;", "runTests(): BuildResult;"),
+                serviceCase(MemoryService.class, new MemoryService(null, ps), "readGlobalMemory(): string;",
+                        "readProjectMemory(): string;",
+                        "saveProjectNote(slug: string, title: string, tags: string, content: string): EditorResult;",
+                        "search(pattern: string): EditorResult;", "searchIgnoreCase(pattern: string): EditorResult;"),
                 serviceCase(SymbolService.class,
                         new SymbolService(ps, new GrepService(ps, frs), AiConfig.SHARED_OBJECT_MAPPER),
                         "getFileOutline(relativePath: string): List<SymbolInfo>;",
@@ -85,6 +101,7 @@ class LLMDocGeneratorTest {
                 documentedMethodCount++;
                 assertTrue(AgentJexlPermissions.INSTANCE.allow(serviceClass, method));
                 assertTrue(doc.contains(method.getName() + "("));
+                assertJsFriendlyParamsAndReturnedRecordGetters(serviceClass, method);
             } else {
                 assertFalse(AgentJexlPermissions.INSTANCE.allow(serviceClass, method));
             }
@@ -93,12 +110,50 @@ class LLMDocGeneratorTest {
         expectedSignatures.forEach(sig -> assertTrue(doc.contains(sig)));
     }
 
-    @Test
-    void testGenerateDoc() {
-        String doc = new LLMDocGenerator().generateDoc(List.of(new MockAgentService()));
-        SwingTestUtils.assertContainsAll(doc, "### JEXL API Documentation",
-                "// Global variable exposed in JEXL: mockService", "interface MockAgentService",
-                "doSomething(input: string): string;", "This is a mock service");
+    private static void assertJsFriendlyParamsAndReturnedRecordGetters(Class<?> serviceClass, Method method) {
+        Class<?>[] paramTypes = method.getParameterTypes();
+        for (int i = 0; i < paramTypes.length; i++) {
+            Class<?> paramType = paramTypes[i];
+            if (Collection.class.isAssignableFrom(paramType)) {
+                int paramIndex = i;
+                boolean hasArrayOverload = Arrays.stream(serviceClass.getDeclaredMethods())
+                        .anyMatch(m -> m.isAnnotationPresent(AgentDoc.class) && m.getName().equals(method.getName())
+                                && m.getParameterCount() == paramTypes.length
+                                && m.getParameterTypes()[paramIndex].isArray());
+                assertTrue(hasArrayOverload, serviceClass.getSimpleName() + "#" + method.getName()
+                        + " accepting Collection/List must also expose an @AgentDoc array overload for JS compatibility");
+            }
+            assertTrue(ALLOWED_JS_PARAM_TYPES.contains(paramType), serviceClass.getSimpleName() + "#" + method.getName()
+                    + " has non-JS-friendly parameter type: " + paramType.getName());
+        }
+        Class<?> returnType = method.getReturnType();
+        if (returnType.isRecord()) {
+            assertRecordExposesJavaBeanGetters(returnType);
+        }
+        if (method.getGenericReturnType() instanceof ParameterizedType pt) {
+            for (Type typeArg : pt.getActualTypeArguments()) {
+                if (typeArg instanceof Class<?> typeArgClass && typeArgClass.isRecord()) {
+                    assertRecordExposesJavaBeanGetters(typeArgClass);
+                }
+            }
+        }
+    }
+
+    private static void assertRecordExposesJavaBeanGetters(Class<?> recordType) {
+        for (RecordComponent comp : recordType.getRecordComponents()) {
+            String compName = comp.getName();
+            String cap = Character.toUpperCase(compName.charAt(0)) + compName.substring(1);
+            String prefix = "get";
+            if (comp.getType() == boolean.class) {
+                prefix = "is";
+            }
+            String getterName = prefix + cap;
+            Method getter = assertDoesNotThrow(() -> recordType.getMethod(getterName),
+                    recordType.getSimpleName() + " must expose public JavaBean getter " + getterName
+                            + "() so JS property access (obj." + compName + ") works in JEXL");
+            assertTrue(Modifier.isPublic(getter.getModifiers()));
+            assertEquals(comp.getType(), getter.getReturnType());
+        }
     }
 
     @Test
@@ -141,30 +196,6 @@ class LLMDocGeneratorTest {
         SwingTestUtils.assertContainsAll(generator.generateDoc(List.of(new SubclassMockAgentService())),
                 "interface SubclassMockAgentService {", "doSomething(input: string): string;",
                 "extraAction(): string;");
-    }
-
-    @Test
-    void testParameterAgentDocAndBuildResultSupportingRecordSchema() {
-        ProjectService projectService = mock(ProjectService.class);
-        when(projectService.hasActiveProject()).thenReturn(false);
-        String doc = new LLMDocGenerator()
-                .generateDoc(List.of(new MockAgentService(), new GenericBuildToolService(projectService, null, null)));
-
-        SwingTestUtils.assertContainsAll(doc,
-                "executeJexl is a lightweight JavaScript-like orchestration layer over RoxyCode's Java services.",
-                "* @param input The input string to process",
-                "* @param testName The name of the test class or method (e.g., MyTest or MyTest#myMethod)",
-                "// Supporting Result Type: access fields as JS properties (obj.field) or method calls (obj.field())",
-                "interface BuildResult {", "success: boolean;", "exitCode: number;", "output: string;",
-                "errors: List<String>;", "failedTests: List<String>;", "log: string;");
-    }
-
-    @Test
-    void testSupportingTypes() {
-        SwingTestUtils.assertContainsAll(new LLMDocGenerator().generateDoc(List.of(new ServiceWithTypes())),
-                "interface ServiceWithTypes", "getDetails(): Details;", "getStatus(): Status;", "enum Status {",
-                "ACTIVE, INACTIVE", "interface Details {", "id: number;", "name: string;", "interface BeanInfoItem {",
-                "active: boolean;", "title: string;");
     }
 
     @Test
@@ -216,34 +247,6 @@ class LLMDocGeneratorTest {
         @AgentDoc("Extra subclass action")
         public String extraAction() {
             return "extra";
-        }
-    }
-
-    @AgentService("typedService")
-    public static class ServiceWithTypes {
-        @AgentDoc("Get details")
-        public Details getDetails() {
-            return null;
-        }
-
-        @AgentDoc("Get status")
-        public Status getStatus() {
-            return null;
-        }
-
-        @AgentDoc("Get bean info item")
-        public BeanInfoItem getBeanInfoItem() {
-            return null;
-        }
-    }
-
-    public static class BeanInfoItem {
-        public String getTitle() {
-            return "sample";
-        }
-
-        public boolean isActive() {
-            return true;
         }
     }
 

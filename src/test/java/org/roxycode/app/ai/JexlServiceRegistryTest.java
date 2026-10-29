@@ -55,14 +55,30 @@ class JexlServiceRegistryTest {
     }
 
     @Test
-    void testFileEditorServiceFiltering() {
+    void testServicePhaseFiltering() {
         JexlServiceRegistry registry = new JexlServiceRegistry();
         FileEditorService editor = mock(FileEditorService.class);
+        GenericBuildToolService buildTool = mock(GenericBuildToolService.class);
+        MemoryService memoryService = mock(MemoryService.class);
+        SymbolService symbolService = mock(SymbolService.class);
+
         registry.register(editor);
+        registry.register(buildTool);
+        registry.register(memoryService);
+        registry.register(symbolService);
 
         assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(editor));
         assertFalse(registry.getServices(WorkflowPhase.PLAN).containsValue(editor));
         assertFalse(registry.getServices(WorkflowPhase.EXPLORE).containsValue(editor));
+
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            assertTrue(registry.getServices(phase).containsValue(buildTool));
+            assertTrue(registry.getServices(phase).containsValue(memoryService));
+            assertTrue(registry.getServices(phase).containsValue(symbolService));
+            assertTrue(registry.getDocumentation(phase).contains("memoryService"));
+            assertTrue(registry.getDocumentation(phase).contains("symbolService"));
+            assertTrue(registry.getDocumentation(phase).contains("interface SymbolInfo {"));
+        }
     }
 
     @Test
@@ -97,48 +113,6 @@ class JexlServiceRegistryTest {
         assertFalse(reviewDoc.contains("submitPlan("));
         assertFalse(reviewDoc.contains("addTechnicalStep("));
         assertFalse(reviewDoc.contains("requestReview("));
-    }
-
-    @Test
-    void testBuildToolServiceAvailableInPlanPhase() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        GenericBuildToolService buildTool = mock(GenericBuildToolService.class);
-        registry.register(buildTool);
-
-        assertTrue(registry.getServices(WorkflowPhase.PLAN).containsValue(buildTool));
-        assertTrue(registry.getServices(WorkflowPhase.EXPLORE).containsValue(buildTool));
-        assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(buildTool));
-        assertTrue(registry.getServices(WorkflowPhase.REVIEW).containsValue(buildTool));
-    }
-
-    @Test
-    void testMemoryServiceAvailableInAllPhases() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        MemoryService memoryService = mock(MemoryService.class);
-        registry.register(memoryService);
-
-        for (WorkflowPhase phase : WorkflowPhase.values()) {
-            assertTrue(registry.getServices(phase).containsValue(memoryService),
-                    "MemoryService should be exposed in " + phase);
-            assertTrue(registry.getDocumentation(phase).contains("memoryService"),
-                    "JEXL docs should include memoryService in " + phase);
-        }
-    }
-
-    @Test
-    void testSymbolServiceAvailableInAllPhases() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        SymbolService symbolService = mock(SymbolService.class);
-        registry.register(symbolService);
-
-        for (WorkflowPhase phase : WorkflowPhase.values()) {
-            assertTrue(registry.getServices(phase).containsValue(symbolService),
-                    "SymbolService should be exposed in " + phase);
-            assertTrue(registry.getDocumentation(phase).contains("symbolService"),
-                    "JEXL docs should include symbolService in " + phase);
-            assertTrue(registry.getDocumentation(phase).contains("interface SymbolInfo {"),
-                    "JEXL docs should include SymbolInfo supporting type in " + phase);
-        }
     }
 
     public interface ServiceContract {
