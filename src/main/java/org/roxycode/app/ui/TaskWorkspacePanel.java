@@ -125,6 +125,7 @@ public final class TaskWorkspacePanel extends JPanel {
     void applyPhaseTrackerStyling() {
         Color accent = SwingHtmlUtils.getAccentColor();
         SwingHtmlUtils.applyTintedBannerStyle(progressTracker, accent, 2, 8, 6);
+        phaseHeaderLabel.setIcon(FontIcon.of(Codicons.GIT_PULL_REQUEST, 14, accent));
         phaseHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2");
         phaseHeaderLabel.setForeground(accent);
     }

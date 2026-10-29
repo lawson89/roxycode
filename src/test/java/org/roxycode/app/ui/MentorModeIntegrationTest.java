@@ -74,6 +74,8 @@ class MentorModeIntegrationTest {
         assertNull(taskChat.model.getLockedPhase());
         assertTrue(taskChat.model.isTaskMode());
 
+        assertNotNull(qaWorkspacePanel.mentorModeLabel.getIcon());
+        assertNotNull(taskWorkspacePanel.phaseHeaderLabel.getIcon());
         assertNotNull(qaWorkspacePanel.qaTabs.getIconAt(0));
         assertNotNull(qaWorkspacePanel.qaTabs.getIconAt(1));
         assertNotNull(taskWorkspacePanel.taskTabs.getIconAt(0));
