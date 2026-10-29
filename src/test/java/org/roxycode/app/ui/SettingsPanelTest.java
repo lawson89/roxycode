@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.event.ActionListener;
 import javax.swing.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.RoxyCode;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.service.SettingsService;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -32,6 +34,47 @@ class SettingsPanelTest {
         lenient().when(settingsService.getAvailableModels())
                 .thenReturn(new SettingsService(null, null).getAvailableModels());
         settingsPanel = new SettingsPanel(settingsService);
+    }
+
+    @Test
+    void testSectionCardsBadgesAndPasswordFieldStyling() {
+        assertEquals(SettingsPanel.SUBTITLE_TEXT, settingsPanel.getSubtitleLabel().getText());
+        assertEquals(3, settingsPanel.getSectionCards().size());
+        assertEquals(2, settingsPanel.getRestartBadges().size());
+        for (JLabel badge : settingsPanel.getRestartBadges()) {
+            assertEquals(SettingsPanel.RESTART_BADGE_TEXT, badge.getText());
+            assertNotNull(badge.getIcon());
+        }
+
+        JPasswordField apiKeyField = settingsPanel.getGeminiApiKeyField();
+        assertNotNull(apiKeyField);
+        String style = (String) apiKeyField.getClientProperty(FlatClientProperties.STYLE);
+        assertNotNull(style);
+        assertTrue(style.contains("showRevealButton: true"));
+        assertNotNull(settingsPanel.getSaveButton().getIcon());
+    }
+
+    @Test
+    void testModelSelectionUpdatesApiBadgeAndDescription() {
+        JComboBox<GeminiModelConfig> modelCombo = settingsPanel.getModelCombo();
+        assertTrue(modelCombo.getItemCount() > 1);
+
+        GeminiModelConfig initial = (GeminiModelConfig) modelCombo.getSelectedItem();
+        assertNotNull(initial);
+        assertEquals(initial.apiName(), settingsPanel.getModelApiBadgeLabel().getText());
+        assertEquals(initial.description(), settingsPanel.getModelDescriptionArea().getText());
+
+        GeminiModelConfig firstModel = modelCombo.getItemAt(0);
+        modelCombo.setSelectedIndex(0);
+        assertEquals(firstModel.apiName(), settingsPanel.getModelApiBadgeLabel().getText());
+        assertEquals(firstModel.description(), settingsPanel.getModelDescriptionArea().getText());
+        assertTrue(settingsPanel.getModelApiBadgeLabel().isVisible());
+        assertTrue(settingsPanel.getModelDescriptionArea().isVisible());
+
+        settings.setGeminiModel(modelCombo.getItemAt(1).apiName());
+        settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
+        SwingTestUtils.flushEdt();
+        assertEquals(modelCombo.getItemAt(1).apiName(), ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
     }
 
     @Test
