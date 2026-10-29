@@ -39,6 +39,7 @@ public final class MarkdownPane extends JTextPane {
         setContentType("text/html");
         setOpaque(true);
         putClientProperty("JEditorPane.honorDisplayProperties", true);
+        SwingHtmlUtils.configureReadOnlyCaret(this);
 
         addHyperlinkListener(e -> {
             if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {

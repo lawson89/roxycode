@@ -25,6 +25,6 @@ public final class ExploreChatPanel extends ChatPanel {
             EnvironmentService environmentService) {
         super(aiService, planService, eventPublisher, chatMemory, ChatModel.QA_SESSION_PREFIX, WorkflowPhase.EXPLORE,
                 false, settingsService, turnExecutor);
-        getController().setTopicArchiveServices(memoryService, environmentService);
+        controller.setTopicArchiveServices(memoryService, environmentService);
     }
 }

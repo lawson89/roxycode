@@ -78,11 +78,11 @@ public final class MainFrame extends JFrame {
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             updateTitle();
-            if (qaWorkspacePanel != null && qaWorkspacePanel.getQaChatPanel() != null) {
-                qaWorkspacePanel.getQaChatPanel().getController().resetForProjectChange();
+            if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null) {
+                qaWorkspacePanel.qaChatPanel.controller.resetForProjectChange();
             }
-            if (taskWorkspacePanel != null && taskWorkspacePanel.getTaskChatPanel() != null) {
-                taskWorkspacePanel.getTaskChatPanel().getController().resetForProjectChange();
+            if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null) {
+                taskWorkspacePanel.taskChatPanel.controller.resetForProjectChange();
             }
             chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
             chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);

@@ -66,6 +66,14 @@ public class FileReadServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> fileReadService.readLines("multi.txt", 0, 2));
         assertThrows(IllegalArgumentException.class, () -> fileReadService.readLines("multi.txt", 3, 2));
+
+        assertEquals("", FileReadService.formatNumberedLines(null, 1, 5));
+        assertEquals("", FileReadService.formatNumberedLines(List.of(), 1, 5));
+        assertEquals("", FileReadService.formatNumberedLines(List.of("only"), 2, 5));
+        assertEquals(String.join(nl, "2: beta", "3: gamma"),
+                FileReadService.formatNumberedLines(List.of("alpha", "beta", "gamma", "delta"), 2, 3));
+        assertThrows(IllegalArgumentException.class, () -> FileReadService.formatNumberedLines(List.of("a"), 0, 1));
+        assertThrows(IllegalArgumentException.class, () -> FileReadService.formatNumberedLines(List.of("a"), 2, 1));
     }
 
     @Test

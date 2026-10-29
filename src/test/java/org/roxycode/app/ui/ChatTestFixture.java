@@ -58,7 +58,7 @@ abstract class ChatTestFixture {
     }
 
     protected static void sendOnEdt(ChatPanel panel, String text) {
-        SwingTestUtils.runOnEdt(() -> panel.getController().sendMessage(text));
+        SwingTestUtils.runOnEdt(() -> panel.controller.sendMessage(text));
     }
 
     protected static WorkflowTransitionEvent transitionEvent(WorkflowPhase from, WorkflowPhase to, String reason,

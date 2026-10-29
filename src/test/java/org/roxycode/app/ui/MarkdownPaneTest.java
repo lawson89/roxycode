@@ -3,21 +3,36 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
+import java.awt.Cursor;
 import java.awt.event.ActionListener;
 import javax.swing.Timer;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.Document;
 import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.html.HTMLEditorKit;
 import org.junit.jupiter.api.Test;
 
 class MarkdownPaneTest {
 
     @Test
-    void testEmptyStateRendersWelcomeCard() {
+    void testEmptyStateRendersWelcomeCardAndConfiguresReadOnlyCursorAndCaret() {
         MarkdownPane pane = new MarkdownPane();
+        HTMLEditorKit kit = assertInstanceOf(HTMLEditorKit.class, pane.getEditorKit());
+        assertEquals(Cursor.DEFAULT_CURSOR, kit.getDefaultCursor().getType());
+        assertEquals(Cursor.HAND_CURSOR, kit.getLinkCursor().getType());
+        assertEquals(Cursor.DEFAULT_CURSOR, pane.getCursor().getType());
+        assertInstanceOf(SwingHtmlUtils.NonPaintingCaret.class, pane.getCaret());
+        assertEquals(0, pane.getCaret().getBlinkRate());
+        assertEquals(0, pane.getCaretColor().getAlpha());
+
         assertContainsAll(pane.getText(), "welcome-card", "Ready to Assist");
-        pane.appendMessage("user", "Hello");
+        pane.appendMessage("user", "Hello selectable message");
         assertFalse(pane.getText().contains("welcome-card"));
+
+        pane.selectAll();
+        assertNotNull(pane.getSelectedText());
+        assertTrue(pane.getSelectedText().contains("Hello selectable message"));
+
         pane.clear();
         assertTrue(pane.getText().contains("welcome-card"));
     }

@@ -29,16 +29,16 @@ public final class FeatureChatPanel extends ChatPanel {
 
     @EventListener
     public void onWorkflowTransition(WorkflowTransitionEvent event) {
-        getController().onWorkflowTransition(event);
+        controller.onWorkflowTransition(event);
     }
 
     @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
-        getController().onPhaseChanged(event);
+        controller.onPhaseChanged(event);
     }
 
     @EventListener
     public void onPlanUpdated(PlanUpdatedEvent event) {
-        getController().onPlanUpdated(event);
+        controller.onPlanUpdated(event);
     }
 }

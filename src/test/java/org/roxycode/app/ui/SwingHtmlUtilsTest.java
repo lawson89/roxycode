@@ -4,7 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Graphics2D;
 import java.awt.Insets;
+import java.awt.image.BufferedImage;
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.text.Element;
@@ -46,15 +49,39 @@ class SwingHtmlUtilsTest {
     }
 
     @Test
-    void testApplyTheme() {
-        JEditorPane pane = new JEditorPane();
-        pane.setContentType("text/html");
+    void testApplyThemeAndReadOnlyCaretAndCursorConfiguration() {
+        JEditorPane pane = SwingHtmlUtils.createHtmlEditorPane();
         SwingHtmlUtils.applyTheme(pane, 12);
 
-        assertInstanceOf(HTMLEditorKit.class, pane.getEditorKit());
+        HTMLEditorKit kit = assertInstanceOf(HTMLEditorKit.class, pane.getEditorKit());
+        assertEquals(Cursor.DEFAULT_CURSOR, kit.getDefaultCursor().getType());
+        assertEquals(Cursor.HAND_CURSOR, kit.getLinkCursor().getType());
+        assertEquals(Cursor.DEFAULT_CURSOR, pane.getCursor().getType());
         assertNotNull(pane.getBackground());
         assertNotNull(pane.getForeground());
         assertTrue(pane.isOpaque());
+
+        assertInstanceOf(SwingHtmlUtils.NonPaintingCaret.class, pane.getCaret());
+        assertEquals(0, pane.getCaret().getBlinkRate());
+        assertEquals(0, pane.getCaretColor().getAlpha());
+
+        BufferedImage img = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = img.createGraphics();
+        try {
+            pane.getCaret().paint(g2);
+        } finally {
+            g2.dispose();
+        }
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                assertEquals(0, img.getRGB(x, y));
+            }
+        }
+
+        pane.setText("<html><body>Hello Selectable World</body></html>");
+        pane.selectAll();
+        assertNotNull(pane.getSelectedText());
+        assertTrue(pane.getSelectedText().contains("Hello Selectable World"));
     }
 
     @Test

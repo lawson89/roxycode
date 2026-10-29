@@ -131,11 +131,34 @@ public class FileReadService {
             if (isBinaryFile(path)) {
                 return ERROR_PREFIX + "Binary file cannot be read as text: " + relativePath;
             }
-            return numbered ? readFileNumbered(relativePath) : readFile(relativePath);
+            String content = Files.readString(path);
+            return numbered
+                    ? formatNumberedLines(content.isEmpty() ? List.of() : content.lines().toList(), 1,
+                            Integer.MAX_VALUE)
+                    : content;
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             return msg.startsWith(ERROR_PREFIX) ? msg : ERROR_PREFIX + msg;
         }
+    }
+
+    public static String formatNumberedLines(List<String> lines, int startLine, int endLine) {
+        if (startLine < 1 || endLine < startLine) {
+            throw new IllegalArgumentException("Error: Invalid line range: " + startLine + " to " + endLine
+                    + " (startLine must be >= 1 and endLine >= startLine)");
+        }
+        if (lines == null || lines.isEmpty() || startLine > lines.size()) {
+            return "";
+        }
+        int clampedEnd = Math.min(endLine, lines.size());
+        StringBuilder sb = new StringBuilder();
+        for (int i = startLine; i <= clampedEnd; i++) {
+            if (i > startLine) {
+                sb.append((char) 10);
+            }
+            sb.append(i).append(": ").append(lines.get(i - 1));
+        }
+        return sb.toString();
     }
 
     @AgentDoc(value = "Reads a 1-based inclusive range of lines from a file, prefixed with line numbers.", examples = "fileReadService.readLines('src/main/java/Main.java', 1, 50)")
@@ -143,23 +166,7 @@ public class FileReadService {
             @AgentDoc("The 1-based start line number (inclusive)") int startLine,
             @AgentDoc("The 1-based end line number (inclusive)") int endLine) throws IOException {
         String content = readFile(relativePath);
-        if (startLine < 1 || endLine < startLine) {
-            throw new IllegalArgumentException("Error: Invalid line range: " + startLine + " to " + endLine
-                    + " (startLine must be >= 1 and endLine >= startLine)");
-        }
-        if (content.isEmpty())
-            return "";
-        List<String> lines = content.lines().toList();
-        if (startLine > lines.size())
-            return "";
-        int clampedEnd = Math.min(endLine, lines.size());
-        StringBuilder sb = new StringBuilder();
-        for (int i = startLine; i <= clampedEnd; i++) {
-            if (i > startLine)
-                sb.append((char) 10);
-            sb.append(i).append(": ").append(lines.get(i - 1));
-        }
-        return sb.toString();
+        return formatNumberedLines(content.isEmpty() ? List.of() : content.lines().toList(), startLine, endLine);
     }
 
     @AgentDoc(value = "Reads the entire file with every line prefixed by its 1-based line number ('<line>: <content>').", examples = "fileReadService.readFileNumbered('src/main/java/Main.java')")

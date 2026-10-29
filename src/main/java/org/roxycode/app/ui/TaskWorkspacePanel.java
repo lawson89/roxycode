@@ -39,14 +39,14 @@ public final class TaskWorkspacePanel extends JPanel {
     static final int MAX_PLAN_TITLE_LENGTH = 40;
 
     private final transient PlanService planService;
-    private final PlanPanel planPanel;
-    private final FeatureChatPanel taskChatPanel;
-    private final ArchiveBrowserPanel pastPlansPanel;
-    private final JTabbedPane taskTabs;
-    private final JPanel topBar;
-    private final JLabel phaseHeaderLabel = new JLabel(PHASE_HEADER_TEXT);
-    private final JLabel planLabel = new JLabel();
-    private final JPanel progressTracker;
+    final PlanPanel planPanel;
+    final FeatureChatPanel taskChatPanel;
+    final ArchiveBrowserPanel pastPlansPanel;
+    final JTabbedPane taskTabs;
+    final JPanel topBar;
+    final JLabel phaseHeaderLabel = new JLabel(PHASE_HEADER_TEXT);
+    final JLabel planLabel = new JLabel();
+    final JPanel progressTracker;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
     private SidebarPanel sidebar;
 
@@ -224,37 +224,5 @@ public final class TaskWorkspacePanel extends JPanel {
                 ? SwingHtmlUtils.getAccentColor()
                 : SwingHtmlUtils.getUiColor(Color.GRAY, "Label.disabledForeground", "Component.borderColor");
         return new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 12, color));
-    }
-
-    JTabbedPane getTaskTabs() {
-        return taskTabs;
-    }
-
-    JPanel getTopBar() {
-        return topBar;
-    }
-
-    ChatPanel getTaskChatPanel() {
-        return taskChatPanel;
-    }
-
-    JPanel getProgressTracker() {
-        return progressTracker;
-    }
-
-    JLabel getPhaseHeaderLabel() {
-        return phaseHeaderLabel;
-    }
-
-    JLabel getPlanLabel() {
-        return planLabel;
-    }
-
-    PlanPanel getPlanPanel() {
-        return planPanel;
-    }
-
-    ArchiveBrowserPanel getPastPlansPanel() {
-        return pastPlansPanel;
     }
 }

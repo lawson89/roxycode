@@ -42,20 +42,20 @@ public final class BuildConfigPanel extends JPanel {
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
     private final transient SystemToolService systemToolService;
-    private final JPanel bannerPanel;
-    private final JLabel bannerIconLabel;
-    private final JLabel bannerMessageLabel;
-    private final JCheckBox containerToggleCheckBox;
-    private final JButton recheckDockerButton;
-    private final RSyntaxTextArea textArea;
-    private final JButton saveButton;
-    private final JLabel statusLabel;
+    final JPanel bannerPanel;
+    final JLabel bannerIconLabel;
+    final JLabel bannerMessageLabel;
+    final JCheckBox containerToggleCheckBox;
+    final JButton recheckDockerButton;
+    final RSyntaxTextArea textArea;
+    final JButton saveButton;
+    final JLabel statusLabel;
     private final Timer statusTimer;
 
-    private boolean dockerAvailable = false;
+    boolean dockerAvailable = false;
     private boolean updatingTextProgrammatically = false;
-    private transient volatile CompletableFuture<String> loadConfigFuture = CompletableFuture.completedFuture("");
-    private transient volatile CompletableFuture<Void> saveConfigFuture = CompletableFuture.completedFuture(null);
+    transient volatile CompletableFuture<String> loadConfigFuture = CompletableFuture.completedFuture("");
+    transient volatile CompletableFuture<Void> saveConfigFuture = CompletableFuture.completedFuture(null);
     private transient Consumer<String> errorDialogPresenter;
 
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
@@ -175,10 +175,6 @@ public final class BuildConfigPanel extends JPanel {
     void setDockerAvailable(boolean available) {
         this.dockerAvailable = available;
         updateBannerState();
-    }
-
-    boolean isDockerAvailableState() {
-        return dockerAvailable;
     }
 
     private void onTomlTextEdited() {
@@ -324,47 +320,7 @@ public final class BuildConfigPanel extends JPanel {
         this.errorDialogPresenter = errorDialogPresenter;
     }
 
-    CompletableFuture<String> getLoadConfigFuture() {
-        return loadConfigFuture;
-    }
-
-    CompletableFuture<Void> getSaveConfigFuture() {
-        return saveConfigFuture;
-    }
-
-    JLabel getStatusLabel() {
-        return statusLabel;
-    }
-
     private void updateTextAreaTheme() {
         SettingsPanel.applyRSyntaxTheme(textArea, settingsService);
-    }
-
-    JPanel getBannerPanel() {
-        return bannerPanel;
-    }
-
-    JLabel getBannerIconLabel() {
-        return bannerIconLabel;
-    }
-
-    JLabel getBannerMessageLabel() {
-        return bannerMessageLabel;
-    }
-
-    JCheckBox getContainerToggleCheckBox() {
-        return containerToggleCheckBox;
-    }
-
-    JButton getRecheckDockerButton() {
-        return recheckDockerButton;
-    }
-
-    RSyntaxTextArea getTextArea() {
-        return textArea;
-    }
-
-    JButton getSaveButton() {
-        return saveButton;
     }
 }

@@ -30,26 +30,25 @@ class ContextManagerPanelTest {
         when(promptService.listProjectContextFiles()).thenReturn(List.of(projItem));
 
         ContextManagerPanel panel = new ContextManagerPanel(promptService);
-        var globalCol = panel.getGlobalColumn();
-        var projCol = panel.getProjectColumn();
-        SwingTestUtils.awaitCondition(
-                () -> globalCol.getFolderListModel().getSize() == 1 && globalCol.getFileListModel().getSize() == 1
-                        && projCol.getFolderListModel().getSize() == 1 && projCol.getFileListModel().getSize() == 1);
+        var globalCol = panel.globalColumn;
+        var projCol = panel.projectColumn;
+        SwingTestUtils
+                .awaitCondition(() -> globalCol.folderListModel.getSize() == 1 && globalCol.fileListModel.getSize() == 1
+                        && projCol.folderListModel.getSize() == 1 && projCol.fileListModel.getSize() == 1);
 
-        assertEquals("/global", globalCol.getFolderListModel().getElementAt(0));
-        assertEquals("rules.yaml", globalCol.getFileListModel().getElementAt(0).fileName());
-        assertEquals("/tmp/docs", projCol.getFolderListModel().getElementAt(0));
-        assertEquals("old.md", projCol.getFileListModel().getElementAt(0).fileName());
+        assertEquals("/global", globalCol.folderListModel.getElementAt(0));
+        assertEquals("rules.yaml", globalCol.fileListModel.getElementAt(0).fileName());
+        assertEquals("/tmp/docs", projCol.folderListModel.getElementAt(0));
+        assertEquals("old.md", projCol.fileListModel.getElementAt(0).fileName());
 
-        assertFalse(globalCol.getRemoveFolderButton().isEnabled());
-        SwingTestUtils.runOnEdt(() -> globalCol.getFolderList().setSelectedIndex(0));
-        assertTrue(globalCol.getRemoveFolderButton().isEnabled());
+        assertFalse(globalCol.btnRemoveFolder.isEnabled());
+        SwingTestUtils.runOnEdt(() -> globalCol.folderList.setSelectedIndex(0));
+        assertTrue(globalCol.btnRemoveFolder.isEnabled());
         SwingTestUtils.runOnEdt(globalCol::clearSelection);
-        assertEquals(-1, globalCol.getFolderList().getSelectedIndex());
-        assertFalse(globalCol.getRemoveFolderButton().isEnabled());
+        assertEquals(-1, globalCol.folderList.getSelectedIndex());
+        assertFalse(globalCol.btnRemoveFolder.isEnabled());
 
-        JLabel cellLabel = assertInstanceOf(JLabel.class,
-                SwingTestUtils.renderListCell(projCol.getFileList(), 0, false));
+        JLabel cellLabel = assertInstanceOf(JLabel.class, SwingTestUtils.renderListCell(projCol.fileList, 0, false));
         assertEquals("old.md", cellLabel.getText());
         assertEquals(projPath.toString(), cellLabel.getToolTipText());
 
@@ -62,9 +61,9 @@ class ContextManagerPanelTest {
         verify(promptService).setProjectContextFolders(List.of("/tmp/docs", "/tmp/new"));
 
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
-        SwingTestUtils.awaitCondition(() -> projCol.getFileListModel().getSize() == 2);
-        assertEquals("new1.java", projCol.getFileListModel().getElementAt(0).fileName());
-        assertEquals("new2.json", projCol.getFileListModel().getElementAt(1).fileName());
+        SwingTestUtils.awaitCondition(() -> projCol.fileListModel.getSize() == 2);
+        assertEquals("new1.java", projCol.fileListModel.getElementAt(0).fileName());
+        assertEquals("new2.json", projCol.fileListModel.getElementAt(1).fileName());
 
         when(promptService.getGlobalContextFolders()).thenReturn(List.of("/global", "/global2"));
         SwingTestUtils.awaitWorker(globalCol.addFolderAsync("/global2"));
@@ -75,8 +74,7 @@ class ContextManagerPanelTest {
         SwingTestUtils.awaitWorker(globalCol.removeFolderAsync("/global"));
 
         panel.onSettingsChanged(new SettingsChangedEvent(new AppSettings()));
-        SwingTestUtils.awaitCondition(
-                () -> globalCol.getFolderListModel().isEmpty() && globalCol.getFileListModel().isEmpty());
+        SwingTestUtils.awaitCondition(() -> globalCol.folderListModel.isEmpty() && globalCol.fileListModel.isEmpty());
     }
 
     @Test
@@ -89,11 +87,11 @@ class ContextManagerPanelTest {
         panel.setErrorDialogPresenter(errors::add);
 
         try {
-            SwingTestUtils.awaitWorker(panel.getProjectColumn().addFolderAsync("/tmp/folder"));
+            SwingTestUtils.awaitWorker(panel.projectColumn.addFolderAsync("/tmp/folder"));
         } catch (Exception ignored) {
         }
         SwingTestUtils.awaitCondition(() -> !errors.isEmpty());
         assertTrue(errors.get(0).contains("No active project"));
-        assertTrue(panel.getLastErrorMessage().contains("No active project"));
+        assertTrue(panel.lastErrorMessage.contains("No active project"));
     }
 }

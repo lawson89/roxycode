@@ -9,6 +9,8 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.SwingUtilities;
+import org.apache.commons.lang3.concurrent.ConcurrentException;
+import org.apache.commons.lang3.concurrent.LazyInitializer;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
@@ -33,7 +35,8 @@ public class SettingsService {
     private final Object writeLock = new Object();
     private AppSettings settings;
     private Path settingsPathOverride;
-    private volatile List<GeminiModelConfig> cachedAvailableModels;
+    private final LazyInitializer<List<GeminiModelConfig>> availableModelsInitializer = LazyInitializer
+            .<List<GeminiModelConfig>>builder().setInitializer(this::loadAvailableModels).get();
     private volatile CompletableFuture<Void> lastSaveFuture = CompletableFuture.completedFuture(null);
 
     public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
@@ -72,27 +75,27 @@ public class SettingsService {
         return new AppSettings();
     }
 
-    @SuppressWarnings("PMD.UseProperClassLoader")
     public List<GeminiModelConfig> getAvailableModels() {
-        List<GeminiModelConfig> cached = this.cachedAvailableModels;
-        if (cached != null)
-            return cached;
-        synchronized (this) {
-            if (this.cachedAvailableModels != null)
-                return this.cachedAvailableModels;
-            try {
-                String content = new ClassPathResource("models.toml", SettingsService.class.getClassLoader())
-                        .getContentAsString(StandardCharsets.UTF_8);
-                GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
-                List<GeminiModelConfig> loaded = geminiModels != null && geminiModels.models() != null
-                        ? List.copyOf(geminiModels.models())
-                        : List.of();
-                this.cachedAvailableModels = loaded;
-                return loaded;
-            } catch (IOException e) {
-                log.error("Failed to load Gemini models: {}", e.getMessage(), e);
-                return List.of();
-            }
+        try {
+            return availableModelsInitializer.get();
+        } catch (ConcurrentException e) {
+            log.error("Failed to load Gemini models: {}", e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    @SuppressWarnings("PMD.UseProperClassLoader")
+    private List<GeminiModelConfig> loadAvailableModels() {
+        try {
+            String content = new ClassPathResource("models.toml", SettingsService.class.getClassLoader())
+                    .getContentAsString(StandardCharsets.UTF_8);
+            GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
+            return geminiModels != null && geminiModels.models() != null
+                    ? List.copyOf(geminiModels.models())
+                    : List.of();
+        } catch (IOException e) {
+            log.error("Failed to load Gemini models: {}", e.getMessage(), e);
+            return List.of();
         }
     }
 

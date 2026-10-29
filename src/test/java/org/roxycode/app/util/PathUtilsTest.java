@@ -64,6 +64,12 @@ class PathUtilsTest {
         assertEquals("java", PathUtils.getLowerExtension("src/Main.JAVA", false));
         assertEquals("", PathUtils.getLowerExtension(".gitignore", false));
         assertEquals("gitignore", PathUtils.getLowerExtension(".gitignore", true));
+
+        assertEquals("", PathUtils.normalizeRelativePath(null));
+        assertEquals("src/main/ChatPanel.java", PathUtils.normalizeRelativePath("." + (char) 92 + winPath));
+        assertEquals("src/main/ChatPanel.java", PathUtils.normalizeRelativePath("./src/main/ChatPanel.java"));
+        assertEquals("", PathUtils.toSlashPrefix(null));
+        assertTrue(PathUtils.toSlashPrefix(tempDir).endsWith("/"));
     }
 
     @Test

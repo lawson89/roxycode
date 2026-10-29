@@ -3,10 +3,13 @@ package org.roxycode.app.model;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ui.SwingTestUtils;
+import org.roxycode.app.util.FrontmatterUtils;
 
 class ImplementationPlanTest {
 
@@ -147,9 +150,17 @@ class ImplementationPlanTest {
         assertEquals(ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText(null));
         assertEquals(ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText("   "));
         assertEquals(" M src/App.java", ImplementationPlan.formatChangesText(" M src/App.java\n  "));
-        assertEquals("", ImplementationPlan.escapeFrontmatterValue(null));
+        assertEquals("", FrontmatterUtils.escapeFrontmatterValue(null));
         assertEquals("Quote " + (char) 92 + '"' + " and newline",
-                ImplementationPlan.escapeFrontmatterValue("Quote " + '"' + "\nand\r\nnewline"));
+                FrontmatterUtils.escapeFrontmatterValue("Quote " + '"' + "\nand\r\nnewline"));
+        assertEquals("---\n---\n\n", FrontmatterUtils.formatFrontmatter(null));
+        Map<String, Object> fm = new LinkedHashMap<>();
+        fm.put("title", "Say " + '"' + "Hi" + '"');
+        fm.put("approved", true);
+        fm.put("count", 3);
+        fm.put("optional", null);
+        String expectedFm = FrontmatterUtils.formatFrontmatter(fm);
+        SwingTestUtils.assertContainsAll(expectedFm, "title: ", "approved: true", "count: 3", "optional: ");
     }
 
     @Test

@@ -56,7 +56,7 @@ class LLMDocGeneratorTest {
                         "buildAndTest(): BuildResult;", "compile(): BuildResult;",
                         "runSingleTest(testName: string): BuildResult;", "runTests(): BuildResult;"),
                 serviceCase(SymbolService.class,
-                        new SymbolService(ps, frs, new GrepService(ps, frs), AiConfig.SHARED_OBJECT_MAPPER),
+                        new SymbolService(ps, new GrepService(ps, frs), AiConfig.SHARED_OBJECT_MAPPER),
                         "getFileOutline(relativePath: string): List<SymbolInfo>;",
                         "readSymbol(relativePath: string, symbolName: string): string;",
                         "readSymbols(relativePath: string, symbolNames: string[]): Map;",

@@ -3,8 +3,10 @@ package org.roxycode.app.model;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import org.roxycode.app.util.FrontmatterUtils;
 
@@ -210,24 +212,17 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public String toArchivedMarkdown(String id, String projectName, String projectPath, String changesText) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("""
-                ---
-                id: "%s"
-                project: "%s"
-                projectPath: "%s"
-                title: "%s"
-                userApproved: %s
-                approvedBy: "%s"
-                approvalTimestamp: "%s"
-                completedBy: "%s"
-                completedOn: "%s"
-                ---
-
-                """.formatted(escapeFrontmatterValue(id), escapeFrontmatterValue(projectName),
-                escapeFrontmatterValue(projectPath), escapeFrontmatterValue(title), userApproved,
-                escapeFrontmatterValue(approvedBy), escapeFrontmatterValue(approvalTimestamp),
-                escapeFrontmatterValue(completedBy), escapeFrontmatterValue(completedOn)));
+        Map<String, Object> frontmatter = new LinkedHashMap<>();
+        frontmatter.put("id", id);
+        frontmatter.put("project", projectName);
+        frontmatter.put("projectPath", projectPath);
+        frontmatter.put("title", title);
+        frontmatter.put("userApproved", userApproved);
+        frontmatter.put("approvedBy", approvedBy);
+        frontmatter.put("approvalTimestamp", approvalTimestamp);
+        frontmatter.put("completedBy", completedBy);
+        frontmatter.put("completedOn", completedOn);
+        StringBuilder sb = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
         sb.append(toMarkdown(true));
         appendChangesMarkdown(sb, changesText);
         return sb.toString();
@@ -259,10 +254,6 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     private static boolean isNonBlank(String value) {
         return value != null && !value.isBlank();
-    }
-
-    public static String escapeFrontmatterValue(String value) {
-        return FrontmatterUtils.escapeFrontmatterValue(value);
     }
 
     private static String escapeMarkdownTableCell(String value) {

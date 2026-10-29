@@ -7,6 +7,7 @@ import java.awt.Component;
 import java.awt.FlowLayout;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -28,6 +29,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.MemoryService.ArchiveEntrySummary;
 import org.roxycode.app.util.Edt;
+import org.roxycode.app.util.FrontmatterUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,24 +80,24 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     private final transient MemoryService memoryService;
-    private final ArchiveMode mode;
+    final ArchiveMode mode;
 
-    private final JTextField searchField;
-    private final JLabel countLabel;
-    private final JButton refreshButton;
-    private final DefaultListModel<ArchiveEntrySummary> listModel = new DefaultListModel<>();
-    private final JList<ArchiveEntrySummary> entryList = new JList<>(listModel);
-    private final JLabel detailSummaryLabel = new JLabel("");
-    private final JButton copyMarkdownButton;
-    private final JEditorPane displayArea;
+    final JTextField searchField;
+    final JLabel countLabel;
+    final JButton refreshButton;
+    final DefaultListModel<ArchiveEntrySummary> listModel = new DefaultListModel<>();
+    final JList<ArchiveEntrySummary> entryList = new JList<>(listModel);
+    final JLabel detailSummaryLabel = new JLabel("");
+    final JButton copyMarkdownButton;
+    final JEditorPane displayArea;
     private final Timer searchDebounceTimer;
 
     private Timer copyFeedbackTimer;
     private String currentRawMarkdown = "";
-    private String lastCopiedMarkdown;
+    String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
-    private transient volatile SwingWorker<List<ArchiveEntrySummary>, Void> activeSearchWorker;
-    private transient volatile SwingWorker<String, Void> activeReadWorker;
+    final transient AtomicReference<SwingWorker<List<ArchiveEntrySummary>, Void>> activeSearchWorker = new AtomicReference<>();
+    final transient AtomicReference<SwingWorker<String, Void>> activeReadWorker = new AtomicReference<>();
 
     public ArchiveBrowserPanel(MemoryService memoryService, ArchiveMode mode) {
         super(new BorderLayout());
@@ -182,19 +184,16 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     SwingWorker<List<ArchiveEntrySummary>, Void> executeSearchAsync() {
-        String query = searchField != null ? searchField.getText() : "";
-        var holder = new java.util.concurrent.atomic.AtomicReference<SwingWorker<List<ArchiveEntrySummary>, Void>>();
-        SwingWorker<List<ArchiveEntrySummary>, Void> worker = Edt.supplyAsync(() -> {
-            try {
-                return loadEntriesForQuery(query);
-            } catch (Exception e) {
-                log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
-                return List.of();
-            }
-        }, results -> applySearchResults(holder.get(), results, query));
-        holder.set(worker);
-        activeSearchWorker = worker;
-        return worker;
+        String query = "";
+        if (searchField != null) {
+            query = searchField.getText();
+        }
+        final String searchQuery = query;
+        return Edt.supplyAsync(activeSearchWorker, () -> loadEntriesForQuery(searchQuery),
+                results -> applySearchResults(results, searchQuery), e -> {
+                    log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
+                    applySearchResults(List.of(), searchQuery);
+                });
     }
 
     private List<ArchiveEntrySummary> loadEntriesForQuery(String query) {
@@ -212,10 +211,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     @SuppressWarnings("PMD.NullAssignment")
-    private void applySearchResults(SwingWorker<List<ArchiveEntrySummary>, Void> worker,
-            List<ArchiveEntrySummary> results, String query) {
-        if (worker != null && !Objects.equals(worker, activeSearchWorker))
-            return;
+    private void applySearchResults(List<ArchiveEntrySummary> results, String query) {
         List<ArchiveEntrySummary> safeResults = results != null ? results : List.of();
         String previousFilename = currentSelectedEntry != null ? currentSelectedEntry.filename() : null;
 
@@ -252,31 +248,23 @@ public final class ArchiveBrowserPanel extends JPanel {
         }
 
         detailSummaryLabel.setText(entry.title());
-        var holder = new java.util.concurrent.atomic.AtomicReference<SwingWorker<String, Void>>();
-        SwingWorker<String, Void> worker = Edt.supplyAsync(() -> {
-            try {
-                String raw = readEntryMarkdown(entry.filename());
-                return raw != null ? raw : "";
-            } catch (Exception e) {
-                log.warn("Failed to read archived markdown {}: {}", entry.filename(), e.getMessage());
-                return "";
-            }
-        }, normalized -> applyDetailContent(holder.get(), entry, normalized));
-        holder.set(worker);
-        activeReadWorker = worker;
+        Edt.supplyAsync(activeReadWorker, () -> readEntryMarkdown(entry.filename()),
+                normalized -> applyDetailContent(entry, normalized), e -> {
+                    log.warn("Failed to read archived markdown {}: {}", entry.filename(), e.getMessage());
+                    applyDetailContent(entry, "");
+                });
     }
 
     private String readEntryMarkdown(String filename) {
         if (memoryService == null || filename == null || filename.isBlank())
             return "";
-        return mode == ArchiveMode.TOPICS
-                ? memoryService.readArchivedTopic(filename)
-                : memoryService.readArchivedPlan(filename);
+        if (mode == ArchiveMode.TOPICS) {
+            return memoryService.readArchivedTopic(filename);
+        }
+        return memoryService.readArchivedPlan(filename);
     }
 
-    private void applyDetailContent(SwingWorker<String, Void> worker, ArchiveEntrySummary entry, String rawMarkdown) {
-        if (worker != null && !Objects.equals(worker, activeReadWorker))
-            return;
+    private void applyDetailContent(ArchiveEntrySummary entry, String rawMarkdown) {
         this.currentRawMarkdown = rawMarkdown != null ? rawMarkdown : "";
         copyMarkdownButton.setEnabled(!this.currentRawMarkdown.isBlank());
         displayArea.setText(buildDetailHtml(entry, this.currentRawMarkdown, mode));
@@ -286,7 +274,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     static String buildDetailHtml(ArchiveEntrySummary entry, String rawMarkdown, ArchiveMode archiveMode) {
         if (entry == null)
             return "<html><body></body></html>";
-        String renderedBody = SwingHtmlUtils.renderMarkdownToHtml(MemoryService.stripFrontmatter(rawMarkdown));
+        String renderedBody = SwingHtmlUtils.renderMarkdownToHtml(FrontmatterUtils.stripFrontmatter(rawMarkdown));
         String formattedDate = formatTimestampDisplay(entry.timestamp());
         String author = StringUtils.defaultIfBlank(entry.createdBy(), "User");
 
@@ -376,54 +364,6 @@ public final class ArchiveBrowserPanel extends JPanel {
         if (countLabel != null) {
             countLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         }
-    }
-
-    ArchiveMode getMode() {
-        return mode;
-    }
-
-    JTextField getSearchField() {
-        return searchField;
-    }
-
-    JLabel getCountLabel() {
-        return countLabel;
-    }
-
-    JButton getRefreshButton() {
-        return refreshButton;
-    }
-
-    DefaultListModel<ArchiveEntrySummary> getListModel() {
-        return listModel;
-    }
-
-    JList<ArchiveEntrySummary> getEntryList() {
-        return entryList;
-    }
-
-    JLabel getDetailSummaryLabel() {
-        return detailSummaryLabel;
-    }
-
-    JButton getCopyMarkdownButton() {
-        return copyMarkdownButton;
-    }
-
-    JEditorPane getDisplayArea() {
-        return displayArea;
-    }
-
-    String getLastCopiedMarkdown() {
-        return lastCopiedMarkdown;
-    }
-
-    SwingWorker<List<ArchiveEntrySummary>, Void> getActiveSearchWorker() {
-        return activeSearchWorker;
-    }
-
-    SwingWorker<String, Void> getActiveReadWorker() {
-        return activeReadWorker;
     }
 
     private final class ArchiveEntryCellRenderer extends JPanel implements ListCellRenderer<ArchiveEntrySummary> {

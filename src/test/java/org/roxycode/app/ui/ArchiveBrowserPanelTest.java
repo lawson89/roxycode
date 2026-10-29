@@ -31,49 +31,49 @@ class ArchiveBrowserPanelTest {
         when(memoryService.searchArchivedTopics("NoMatch")).thenReturn(List.of());
 
         ArchiveBrowserPanel panel = new ArchiveBrowserPanel(memoryService, ArchiveMode.TOPICS);
-        assertEquals(ArchiveMode.TOPICS, panel.getMode());
-        assertEquals("0 topics", panel.getCountLabel().getText());
-        assertFalse(panel.getCopyMarkdownButton().isEnabled());
+        assertEquals(ArchiveMode.TOPICS, panel.mode);
+        assertEquals("0 topics", panel.countLabel.getText());
+        assertFalse(panel.copyMarkdownButton.isEnabled());
 
         SwingTestUtils.awaitWorker(panel.refresh());
-        SwingTestUtils.awaitWorker(panel.getActiveReadWorker());
+        SwingTestUtils.awaitWorker(panel.activeReadWorker.get());
 
-        assertEquals(2, panel.getListModel().getSize());
-        assertEquals("2 topics", panel.getCountLabel().getText());
-        assertEquals(0, panel.getEntryList().getSelectedIndex());
-        assertEquals("First Topic Title", panel.getDetailSummaryLabel().getText());
-        assertTrue(panel.getCopyMarkdownButton().isEnabled());
+        assertEquals(2, panel.listModel.getSize());
+        assertEquals("2 topics", panel.countLabel.getText());
+        assertEquals(0, panel.entryList.getSelectedIndex());
+        assertEquals("First Topic Title", panel.detailSummaryLabel.getText());
+        assertTrue(panel.copyMarkdownButton.isEnabled());
 
-        String html = panel.getDisplayArea().getText();
+        String html = panel.displayArea.getText();
         assertContainsAll(html, "First Topic Title", "Hello world");
         assertFalse(html.contains("id:"));
 
-        JList<ArchiveEntrySummary> list = panel.getEntryList();
+        JList<ArchiveEntrySummary> list = panel.entryList;
         assertNotNull(SwingTestUtils.renderListCell(list, 0, true));
         assertNotNull(SwingTestUtils.renderListCell(list, 1, false));
 
-        SwingTestUtils.clickOnEdt(panel.getCopyMarkdownButton());
-        assertEquals(rawMd1, panel.getLastCopiedMarkdown());
-        assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
+        SwingTestUtils.clickOnEdt(panel.copyMarkdownButton);
+        assertEquals(rawMd1, panel.lastCopiedMarkdown);
+        assertEquals("Copied!", panel.copyMarkdownButton.getText());
 
-        panel.getSearchField().setText("Second");
+        panel.searchField.setText("Second");
         SwingTestUtils.awaitWorker(panel.executeSearchAsync());
-        SwingTestUtils.awaitWorker(panel.getActiveReadWorker());
+        SwingTestUtils.awaitWorker(panel.activeReadWorker.get());
 
-        assertEquals(1, panel.getListModel().getSize());
-        assertEquals("1 topic", panel.getCountLabel().getText());
-        assertEquals("Second Topic Title", panel.getDetailSummaryLabel().getText());
-        assertTrue(panel.getDisplayArea().getText().contains("Matched line in second topic"));
+        assertEquals(1, panel.listModel.getSize());
+        assertEquals("1 topic", panel.countLabel.getText());
+        assertEquals("Second Topic Title", panel.detailSummaryLabel.getText());
+        assertTrue(panel.displayArea.getText().contains("Matched line in second topic"));
 
-        panel.getSearchField().setText("NoMatch");
+        panel.searchField.setText("NoMatch");
         SwingTestUtils.awaitWorker(panel.executeSearchAsync());
-        assertEquals(0, panel.getListModel().getSize());
-        assertEquals("0 topics", panel.getCountLabel().getText());
-        assertFalse(panel.getCopyMarkdownButton().isEnabled());
-        assertTrue(panel.getDisplayArea().getText().contains("No matching topics found."));
+        assertEquals(0, panel.listModel.getSize());
+        assertEquals("0 topics", panel.countLabel.getText());
+        assertFalse(panel.copyMarkdownButton.isEnabled());
+        assertTrue(panel.displayArea.getText().contains("No matching topics found."));
 
         SwingTestUtils.withDarkTheme(panel,
-                () -> assertTrue(panel.getDisplayArea().getText().contains("No matching topics found.")));
+                () -> assertTrue(panel.displayArea.getText().contains("No matching topics found.")));
     }
 
     @Test
@@ -87,14 +87,14 @@ class ArchiveBrowserPanelTest {
         when(memoryService.readArchivedPlan("20250514-120000-plan.md")).thenReturn(rawPlanMd);
 
         ArchiveBrowserPanel panel = new ArchiveBrowserPanel(memoryService, ArchiveMode.PLANS);
-        assertEquals(ArchiveMode.PLANS, panel.getMode());
+        assertEquals(ArchiveMode.PLANS, panel.mode);
 
         SwingTestUtils.awaitWorker(panel.refresh());
-        SwingTestUtils.awaitWorker(panel.getActiveReadWorker());
-        assertEquals(1, panel.getListModel().getSize());
-        assertEquals("1 plan", panel.getCountLabel().getText());
-        assertEquals("Feature Plan Alpha", panel.getDetailSummaryLabel().getText());
-        assertContainsAll(panel.getDisplayArea().getText(), "Completed On:", "Charlie");
+        SwingTestUtils.awaitWorker(panel.activeReadWorker.get());
+        assertEquals(1, panel.listModel.getSize());
+        assertEquals("1 plan", panel.countLabel.getText());
+        assertEquals("Feature Plan Alpha", panel.detailSummaryLabel.getText());
+        assertContainsAll(panel.displayArea.getText(), "Completed On:", "Charlie");
     }
 
     @Test

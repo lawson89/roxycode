@@ -127,6 +127,26 @@ public final class FrontmatterUtils {
         return val;
     }
 
+    public static String formatFrontmatter(Map<String, Object> fields) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(FRONTMATTER_DELIMITER).append(LF);
+        if (fields != null) {
+            for (Map.Entry<String, Object> entry : fields.entrySet()) {
+                Object val = entry.getValue();
+                sb.append(entry.getKey()).append(": ");
+                if (val instanceof Boolean || val instanceof Number) {
+                    sb.append(val);
+                } else {
+                    sb.append(DQUOTE).append(escapeFrontmatterValue(val != null ? val.toString() : null))
+                            .append(DQUOTE);
+                }
+                sb.append(LF);
+            }
+        }
+        sb.append(FRONTMATTER_DELIMITER).append(LF).append(LF);
+        return sb.toString();
+    }
+
     public static String escapeFrontmatterValue(String value) {
         if (value == null) {
             return "";

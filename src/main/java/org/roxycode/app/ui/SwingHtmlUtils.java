@@ -26,6 +26,7 @@ import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.AttributeSet;
+import javax.swing.text.DefaultCaret;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.Element;
 import javax.swing.text.JTextComponent;
@@ -47,8 +48,30 @@ public final class SwingHtmlUtils {
             .toImmutable();
     private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
     private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
+    private static final Color TRANSPARENT_CARET_COLOR = new Color(0, 0, 0, 0);
 
     private SwingHtmlUtils() {
+    }
+
+    static final class NonPaintingCaret extends DefaultCaret {
+        private static final long serialVersionUID = 1L;
+
+        NonPaintingCaret() {
+            setBlinkRate(0);
+        }
+
+        @Override
+        public void paint(Graphics g) {
+            // Do not paint a visible text cursor in read-only HTML panes
+        }
+    }
+
+    public static void configureReadOnlyCaret(JTextComponent component) {
+        if (!(component.getCaret() instanceof NonPaintingCaret)) {
+            component.setCaret(new NonPaintingCaret());
+        }
+        component.getCaret().setBlinkRate(0);
+        component.setCaretColor(TRANSPARENT_CARET_COLOR);
     }
 
     private static final class MarkdownTableAttributeExtension implements HtmlRenderer.HtmlRendererExtension {
@@ -89,6 +112,7 @@ public final class SwingHtmlUtils {
         pane.setEditable(false);
         pane.setContentType("text/html");
         pane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        configureReadOnlyCaret(pane);
         installTextContextMenu(pane);
         return pane;
     }
@@ -149,7 +173,9 @@ public final class SwingHtmlUtils {
         sheet.addRule(String.format("body { background-color: %s; color: %s; margin: %dpx; }", toHex(bg), toHex(fg),
                 marginPx));
         kit.setStyleSheet(sheet);
+        kit.setDefaultCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
         textPane.setEditorKit(kit);
+        configureReadOnlyCaret(textPane);
     }
 
     private static boolean isNoWrap(Element elem) {

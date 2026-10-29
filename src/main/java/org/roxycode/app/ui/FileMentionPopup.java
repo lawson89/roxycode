@@ -37,8 +37,9 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GrepService;
-import org.roxycode.app.util.Edt;
 import org.apache.commons.io.FilenameUtils;
+import org.roxycode.app.util.AsyncRefreshCache;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,9 +77,8 @@ public final class FileMentionPopup {
             String pathLower) {
 
         public static FileCandidate fromPath(String rawPath) {
-            String normalized = StringUtils.stripStart(
-                    StringUtils.removeStart(FilenameUtils.separatorsToUnix(StringUtils.trimToEmpty(rawPath)), "./"),
-                    "/");
+            String normalized = StringUtils
+                    .stripStart(PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(rawPath)), "/");
             String fileName = PathUtils.getFileName(normalized);
             String parentDir = StringUtils.defaultString(FilenameUtils.getPathNoEndSeparator(normalized));
             return new FileCandidate(normalized, fileName, parentDir, fileName.toLowerCase(Locale.ROOT),
@@ -101,9 +101,8 @@ public final class FileMentionPopup {
 
     private volatile GrepService grepService;
     private volatile Executor backgroundExecutor = ForkJoinPool.commonPool();
-    private volatile List<FileCandidate> cachedCandidates = List.of();
-    private volatile long cacheTimestampMs;
-    private CompletableFuture<List<FileCandidate>> inFlightRefresh;
+    private final AsyncRefreshCache<List<FileCandidate>> candidateCache = new AsyncRefreshCache<>(List.of(),
+            STALE_CACHE_TTL_MS);
 
     private boolean popupActive = false;
     private boolean updatingInputText = false;
@@ -276,15 +275,12 @@ public final class FileMentionPopup {
                 || (index + 1 < fileName.length() && Character.isLowerCase(fileName.charAt(index + 1))));
     }
 
-    @SuppressWarnings("PMD.NullAssignment")
     public synchronized void setGrepService(GrepService grepService) {
         this.grepService = grepService;
         if (grepService != null) {
             refreshIndexAsync(true);
         } else {
-            cachedCandidates = List.of();
-            cacheTimestampMs = 0L;
-            inFlightRefresh = null;
+            candidateCache.clear();
         }
     }
 
@@ -304,19 +300,12 @@ public final class FileMentionPopup {
         return refreshIndexAsync(true);
     }
 
-    @SuppressWarnings({"PMD.CompareObjectsWithEquals", "PMD.NullAssignment"})
     synchronized CompletableFuture<List<FileCandidate>> refreshIndexAsync(boolean force) {
         GrepService service = this.grepService;
         if (service == null) {
-            return CompletableFuture.completedFuture(cachedCandidates);
+            return CompletableFuture.completedFuture(candidateCache.get());
         }
-        if (!force && cacheTimestampMs > 0 && System.currentTimeMillis() - cacheTimestampMs < STALE_CACHE_TTL_MS) {
-            return CompletableFuture.completedFuture(cachedCandidates);
-        }
-        if (!force && inFlightRefresh != null && !inFlightRefresh.isDone()) {
-            return inFlightRefresh;
-        }
-        CompletableFuture<List<FileCandidate>> future = CompletableFuture.supplyAsync(() -> {
+        return candidateCache.refreshAsync(force, () -> CompletableFuture.supplyAsync(() -> {
             List<String> rawFiles = service.listFiles();
             if (rawFiles == null || rawFiles.isEmpty()) {
                 return List.<FileCandidate>of();
@@ -325,26 +314,16 @@ public final class FileMentionPopup {
                     .sorted(DEFAULT_CANDIDATE_COMPARATOR).toList();
         }, backgroundExecutor).exceptionally(ex -> {
             log.debug("Failed to refresh file mention index", ex);
-            return cachedCandidates;
+            return candidateCache.get();
         }).thenApply(candidates -> {
-            this.cachedCandidates = candidates;
-            this.cacheTimestampMs = System.currentTimeMillis();
+            candidateCache.set(candidates);
             Edt.run(() -> {
                 if (activeToken != null) {
                     evaluateCurrentInput();
                 }
             });
             return candidates;
-        });
-        inFlightRefresh = future;
-        future.whenComplete((res, ex) -> {
-            synchronized (this) {
-                if (inFlightRefresh == future) {
-                    inFlightRefresh = null;
-                }
-            }
-        });
-        return future;
+        }));
     }
 
     void evaluateCurrentInput() {
@@ -361,7 +340,7 @@ public final class FileMentionPopup {
 
         refreshIndexAsync(false);
 
-        List<FileCandidate> matches = rankCandidates(cachedCandidates, token.query());
+        List<FileCandidate> matches = rankCandidates(candidateCache.get(), token.query());
         if (matches.isEmpty()) {
             popupActive = false;
             listModel.clear();
@@ -544,7 +523,7 @@ public final class FileMentionPopup {
     }
 
     List<FileCandidate> getCachedCandidates() {
-        return cachedCandidates;
+        return candidateCache.get();
     }
 
     static Codicons resolveFileIcon(String fileNameLower) {

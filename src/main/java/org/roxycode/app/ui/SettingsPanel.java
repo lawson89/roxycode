@@ -9,8 +9,11 @@ import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import java.awt.*;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -607,28 +610,22 @@ public final class SettingsPanel extends JPanel {
                         : null);
     }
 
-    private static volatile Theme cachedDarkRSyntaxTheme;
-    private static volatile Theme cachedLightRSyntaxTheme;
+    private static final Cache<Boolean, Theme> RSYNTAX_THEME_CACHE = Caffeine.newBuilder().maximumSize(2).build();
 
     static Theme getRSyntaxTheme(boolean dark) throws IOException {
-        Theme cached = dark ? cachedDarkRSyntaxTheme : cachedLightRSyntaxTheme;
-        if (cached != null)
-            return cached;
-        synchronized (SettingsPanel.class) {
-            cached = dark ? cachedDarkRSyntaxTheme : cachedLightRSyntaxTheme;
-            if (cached != null)
-                return cached;
-            String themePath = dark
-                    ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
-                    : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
-            try (InputStream in = SettingsPanel.class.getResourceAsStream(themePath)) {
-                Theme loaded = Theme.load(in);
-                if (dark)
-                    cachedDarkRSyntaxTheme = loaded;
-                else
-                    cachedLightRSyntaxTheme = loaded;
-                return loaded;
-            }
+        try {
+            return RSYNTAX_THEME_CACHE.get(dark, isDark -> {
+                String themePath = isDark
+                        ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
+                        : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
+                try (InputStream in = SettingsPanel.class.getResourceAsStream(themePath)) {
+                    return Theme.load(in);
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
+        } catch (UncheckedIOException e) {
+            throw e.getCause();
         }
     }
 

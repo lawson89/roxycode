@@ -2,7 +2,7 @@ package org.roxycode.app.ui;
 
 import java.awt.*;
 import java.util.List;
-import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.*;
 import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -37,7 +37,7 @@ public final class PlanPanel extends JPanel {
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
     private volatile String lastGitStatus = "";
-    private transient volatile SwingWorker<String, Void> activeRefreshWorker;
+    private final transient AtomicReference<SwingWorker<String, Void>> activeRefreshWorker = new AtomicReference<>();
 
     public PlanPanel(PlanService planManagerService, GitService gitService) {
         this.planManagerService = planManagerService;
@@ -117,7 +117,7 @@ public final class PlanPanel extends JPanel {
     }
 
     SwingWorker<String, Void> getActiveRefreshWorker() {
-        return activeRefreshWorker;
+        return activeRefreshWorker.get();
     }
 
     @Override
@@ -140,24 +140,17 @@ public final class PlanPanel extends JPanel {
     }
 
     private void updateDisplay(ImplementationPlan plan) {
-        var holder = new java.util.concurrent.atomic.AtomicReference<SwingWorker<String, Void>>();
-        SwingWorker<String, Void> worker = Edt.supplyAsync(() -> {
-            try {
-                String status = getGitStatusText();
-                return status != null ? status : "";
-            } catch (Exception e) {
-                log.debug("Failed to refresh git status for plan panel", e);
-                return lastGitStatus;
-            }
-        }, normalized -> applyWorkerResult(holder.get(), plan, normalized));
-        holder.set(worker);
-        activeRefreshWorker = worker;
+        Edt.supplyAsync(activeRefreshWorker, this::getGitStatusText, status -> applyWorkerResult(plan, status), e -> {
+            log.debug("Failed to refresh git status for plan panel", e);
+            applyWorkerResult(plan, lastGitStatus);
+        });
     }
 
-    private void applyWorkerResult(SwingWorker<String, Void> worker, ImplementationPlan plan, String status) {
-        if (worker != null && !Objects.equals(worker, activeRefreshWorker))
-            return;
-        String normalized = status != null ? status : "";
+    private void applyWorkerResult(ImplementationPlan plan, String status) {
+        String normalized = "";
+        if (status != null) {
+            normalized = status;
+        }
         lastGitStatus = normalized;
         applyDisplayOnEdt(plan, normalized);
     }

@@ -21,6 +21,7 @@ import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
+import org.roxycode.app.util.AsyncRefreshCache;
 import org.roxycode.app.util.ExceptionUtils;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -66,8 +67,7 @@ public class SystemToolService {
     private final DockerProbe dockerProbe;
     private final BooleanSupplier dockerCliPresentSupplier;
     private Supplier<List<SystemTool>> toolProber;
-    private List<SystemTool> cachedTools;
-    private CompletableFuture<List<SystemTool>> inFlightRefresh;
+    private final AsyncRefreshCache<List<SystemTool>> toolsCache = new AsyncRefreshCache<>(List.of());
 
     @Autowired
     public SystemToolService(SettingsService settingsService, TomlMapper mapper,
@@ -150,48 +150,35 @@ public class SystemToolService {
     }
 
     public synchronized List<SystemTool> getCachedTools() {
-        if (cachedTools != null && !cachedTools.isEmpty()) {
-            return cachedTools;
+        List<SystemTool> cached = toolsCache.get();
+        if (!cached.isEmpty()) {
+            return cached;
         }
         if (SwingUtilities.isEventDispatchThread()) {
             return List.of();
         }
         List<SystemTool> loaded = loadFromDisk();
         if (!loaded.isEmpty()) {
-            cachedTools = loaded;
+            toolsCache.set(loaded);
         }
         return loaded;
     }
 
     public CompletableFuture<List<SystemTool>> detectTools() {
-        synchronized (this) {
-            if (cachedTools != null && !cachedTools.isEmpty()) {
-                return CompletableFuture.completedFuture(cachedTools);
-            }
+        List<SystemTool> cached = toolsCache.get();
+        if (!cached.isEmpty()) {
+            return CompletableFuture.completedFuture(cached);
         }
         return CompletableFuture.supplyAsync(this::getCachedTools)
                 .thenCompose(tools -> !tools.isEmpty() ? CompletableFuture.completedFuture(tools) : refreshTools());
     }
 
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     public synchronized CompletableFuture<List<SystemTool>> refreshTools() {
-        if (inFlightRefresh != null && !inFlightRefresh.isDone()) {
-            return inFlightRefresh;
-        }
-        CompletableFuture<List<SystemTool>> future = CompletableFuture.supplyAsync(() -> {
+        return toolsCache.refreshAsync(true, () -> CompletableFuture.supplyAsync(() -> {
             List<SystemTool> detected = List.copyOf(toolProber.get());
             updateCacheAndPublish(detected);
             return detected;
-        });
-        inFlightRefresh = future;
-        future.whenComplete((res, ex) -> {
-            synchronized (SystemToolService.this) {
-                if (inFlightRefresh == future) {
-                    inFlightRefresh = null;
-                }
-            }
-        });
-        return future;
+        }));
     }
 
     public CompletableFuture<Boolean> isDockerAvailable() {
@@ -244,7 +231,7 @@ public class SystemToolService {
 
     private void updateCacheAndPublish(List<SystemTool> detected) {
         synchronized (this) {
-            cachedTools = detected;
+            toolsCache.set(detected);
             saveToDisk(detected);
         }
         eventPublisher.publishEvent(new SystemToolsUpdatedEvent(detected, isDockerDetected(detected)));

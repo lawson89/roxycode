@@ -8,12 +8,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +38,6 @@ public class GrepService {
     private static final String COLOR_NEVER_ARG = "--color=never";
     private static final String GLOB_FLAG = "-g";
     private static final String END_OF_OPTIONS = "--";
-    private static final char BACKSLASH = 92;
     private static final char LF = 10;
     private final ProjectService projectService;
     private final FileReadService fileReadService;
@@ -137,22 +138,8 @@ public class GrepService {
         command.addAll(List.of(END_OF_OPTIONS, pattern, targetArg));
 
         Set<String> matches = new LinkedHashSet<>();
-        try {
-            ProcessResult result = ProcessRunner.run(command, root, true);
-            if (result.timedOut()) {
-                log.warn("RipGrep findMatchingFiles timed out for pattern: {}", pattern);
-                return new ArrayList<>();
-            }
-            if (result.exitCode() == 0 && result.output() != null && !result.output().isEmpty()) {
-                for (String line : result.output().lines().toList()) {
-                    String trimmed = line.trim();
-                    if (!trimmed.isEmpty()) {
-                        matches.add(normalizeRelativeOutputLine(trimmed));
-                    }
-                }
-            }
-        } catch (IOException e) {
-            log.warn("Failed to find matching files using RipGrep: {}", e.getMessage());
+        for (String line : runRipGrepLines(command, root, true)) {
+            matches.add(PathUtils.normalizeRelativePath(line.trim()));
         }
         return new ArrayList<>(matches);
     }
@@ -211,32 +198,49 @@ public class GrepService {
         }
         command.addAll(List.of(END_OF_OPTIONS, pattern, targetArg));
 
+        return runRipGrepSearch(command, root, rawOutput -> String.join(String.valueOf(LF),
+                rawOutput.lines().map(PathUtils::normalizeRelativePath).toList()));
+    }
+
+    static List<String> runRipGrepLines(List<String> command, Path workingDir, boolean redirectErrorStream) {
         try {
-            ProcessResult result = ProcessRunner.run(command, root, true);
+            ProcessResult result = ProcessRunner.run(command, workingDir, redirectErrorStream);
             if (result.timedOut()) {
-                log.warn("RipGrep timed out for pattern: {}", pattern);
+                log.warn("RipGrep command timed out in {}: {}", workingDir, command);
+                return List.of();
+            }
+            if (result.exitCode() == 0 && result.output() != null && !result.output().isEmpty()) {
+                return result.output().lines().filter(line -> !line.isBlank()).toList();
+            }
+        } catch (IOException e) {
+            log.warn("Failed to execute RipGrep command {}: {}", command, e.getMessage());
+        }
+        return List.of();
+    }
+
+    static EditorResult runRipGrepSearch(List<String> command, Path workingDir,
+            UnaryOperator<String> outputNormalizer) {
+        try {
+            ProcessResult result = ProcessRunner.run(command, workingDir, true);
+            if (result.timedOut()) {
+                log.warn("RipGrep timed out: {}", command);
                 return new EditorResult(false, "", "RipGrep timed out");
             }
             int exitCode = result.exitCode();
             if (exitCode == EXIT_CODE_NO_MATCHES) {
                 return new EditorResult(true, "", null);
-            } else if (exitCode != 0) {
-                String error = result.output().trim();
-                log.warn("RipGrep failed with exit code {}: {}", exitCode, error);
-                return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + error);
             }
-            String cleaned = String.join(String.valueOf(LF),
-                    result.output().trim().lines().map(GrepService::normalizeRelativeOutputLine).toList());
-            return new EditorResult(true, capOutputLines(cleaned, MAX_OUTPUT_LINES), null);
+            String trimmedOutput = result.output() != null ? result.output().trim() : "";
+            if (exitCode != 0) {
+                log.warn("RipGrep failed with exit code {}: {}", exitCode, trimmedOutput);
+                return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + trimmedOutput);
+            }
+            String normalized = outputNormalizer.apply(trimmedOutput);
+            return new EditorResult(true, capOutputLines(normalized, MAX_OUTPUT_LINES), null);
         } catch (IOException e) {
-            log.warn("Failed to execute ripgrep: {}", e.getMessage());
+            log.warn("Failed to execute RipGrep: {}", e.getMessage());
             return new EditorResult(false, "", "Error executing RipGrep: " + e.getMessage());
         }
-    }
-
-    private static String normalizeRelativeOutputLine(String line) {
-        String normalized = line.replace(BACKSLASH, '/');
-        return normalized.startsWith("./") ? normalized.substring(2) : normalized;
     }
 
     static String capOutputLines(String rawOutput, int maxLines) {
@@ -270,22 +274,8 @@ public class GrepService {
         }
 
         List<String> files = new ArrayList<>();
-        try {
-            ProcessResult result = ProcessRunner.run(command, root, false);
-            if (result.timedOut()) {
-                log.warn("RipGrep listFiles timed out in {}", root);
-                return files;
-            }
-            String output = result.output();
-            if (output != null && !output.isEmpty()) {
-                for (String line : output.lines().toList()) {
-                    if (!line.isBlank()) {
-                        files.add(normalizeRelativeOutputLine(line));
-                    }
-                }
-            }
-        } catch (IOException e) {
-            log.warn("Failed to list files using RipGrep: {}", e.getMessage());
+        for (String line : runRipGrepLines(command, root, false)) {
+            files.add(PathUtils.normalizeRelativePath(line));
         }
         return files;
     }

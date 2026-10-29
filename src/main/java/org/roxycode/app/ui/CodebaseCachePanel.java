@@ -2,8 +2,8 @@ package org.roxycode.app.ui;
 
 import java.awt.*;
 import java.time.format.DateTimeFormatter;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
@@ -40,7 +40,7 @@ public final class CodebaseCachePanel extends JPanel {
     private final JTextArea repoMapArea = new JTextArea();
     private final JTextArea stableContextArea = new JTextArea();
     private final JTextArea sessionContextArea = new JTextArea();
-    private transient volatile SwingWorker<CacheStatusData, Void> activeRefreshWorker;
+    private final transient AtomicReference<SwingWorker<CacheStatusData, Void>> activeRefreshWorker = new AtomicReference<>();
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     record CacheStatusData(Optional<ProjectCacheMeta> meta, Optional<String> packed, long stableTokens,
@@ -149,10 +149,13 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     SwingWorker<CacheStatusData, Void> refreshStatus() {
-        var holder = new java.util.concurrent.atomic.AtomicReference<SwingWorker<CacheStatusData, Void>>();
-        SwingWorker<CacheStatusData, Void> worker = Edt.supplyAsync(() -> {
-            Optional<ProjectCacheMeta> meta = metaService != null ? metaService.loadMeta() : Optional.empty();
-            Optional<String> packed = metaService != null ? metaService.loadRepoCache() : Optional.empty();
+        return Edt.supplyAsync(activeRefreshWorker, () -> {
+            Optional<ProjectCacheMeta> meta = Optional.empty();
+            Optional<String> packed = Optional.empty();
+            if (metaService != null) {
+                meta = metaService.loadMeta();
+                packed = metaService.loadRepoCache();
+            }
             if (meta.isPresent()) {
                 String stableContext = getStableContextString();
                 return new CacheStatusData(meta, packed, TokenUtils.estimateTokens(stableContext),
@@ -162,11 +165,7 @@ public final class CodebaseCachePanel extends JPanel {
             return new CacheStatusData(meta, packed, 0,
                     createDisplayDocument(packed.orElse("Repo Map will appear here after generation.")),
                     createDisplayDocument(""), createDisplayDocument(""));
-        }, data -> applyStatusDataOnEdt(holder.get(), data),
-                e -> log.error("Failed to refresh codebase cache status", e));
-        holder.set(worker);
-        activeRefreshWorker = worker;
-        return worker;
+        }, this::applyStatusDataOnEdt, e -> log.error("Failed to refresh codebase cache status", e));
     }
 
     private static void setAreaDocument(JTextArea area, Document doc) {
@@ -174,9 +173,7 @@ public final class CodebaseCachePanel extends JPanel {
         area.setCaretPosition(0);
     }
 
-    private void applyStatusDataOnEdt(SwingWorker<CacheStatusData, Void> worker, CacheStatusData data) {
-        if (worker != null && !Objects.equals(worker, activeRefreshWorker))
-            return;
+    private void applyStatusDataOnEdt(CacheStatusData data) {
         setAreaDocument(repoMapArea, data.repoMapDoc());
         if (data.meta().isPresent()) {
             ProjectCacheMeta m = data.meta().get();

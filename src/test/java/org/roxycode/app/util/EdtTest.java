@@ -122,4 +122,57 @@ class EdtTest {
         });
         assertFalse(successCalled.get(), "Cancelled worker must not invoke success callback");
     }
+
+    @Test
+    void testSupplyAsyncWithActiveWorkerRefSuppressesSupersededSuccessAndErrorCallbacks() throws Exception {
+        AtomicReference<SwingWorker<String, Void>> activeRef = new AtomicReference<>();
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondDoneLatch = new CountDownLatch(1);
+        AtomicReference<String> appliedValue = new AtomicReference<>();
+
+        SwingWorker<String, Void> staleWorker = Edt.supplyAsync(activeRef, () -> {
+            firstStarted.countDown();
+            releaseFirst.await(5, TimeUnit.SECONDS);
+            return "stale";
+        }, appliedValue::set);
+
+        assertSame(staleWorker, activeRef.get());
+        assertTrue(firstStarted.await(5, TimeUnit.SECONDS));
+
+        SwingWorker<String, Void> freshWorker = Edt.supplyAsync(activeRef, () -> "fresh", val -> {
+            appliedValue.set(val);
+            secondDoneLatch.countDown();
+        });
+
+        assertSame(freshWorker, activeRef.get());
+        assertEquals("fresh", freshWorker.get(5, TimeUnit.SECONDS));
+        assertTrue(secondDoneLatch.await(5, TimeUnit.SECONDS));
+
+        releaseFirst.countDown();
+        assertEquals("stale", staleWorker.get(5, TimeUnit.SECONDS));
+        SwingUtilities.invokeAndWait(() -> {
+        });
+        assertEquals("fresh", appliedValue.get(), "Stale worker must not overwrite fresh result");
+
+        CountDownLatch failStarted = new CountDownLatch(1);
+        CountDownLatch releaseFail = new CountDownLatch(1);
+        AtomicBoolean staleErrorCalled = new AtomicBoolean(false);
+
+        SwingWorker<String, Void> staleFailingWorker = Edt.supplyAsync(activeRef, () -> {
+            failStarted.countDown();
+            releaseFail.await(5, TimeUnit.SECONDS);
+            throw new IllegalStateException("stale-failure");
+        }, appliedValue::set, ex -> staleErrorCalled.set(true));
+
+        assertTrue(failStarted.await(5, TimeUnit.SECONDS));
+        SwingWorker<String, Void> latestWorker = Edt.supplyAsync(activeRef, () -> "latest", appliedValue::set);
+        assertEquals("latest", latestWorker.get(5, TimeUnit.SECONDS));
+
+        releaseFail.countDown();
+        assertThrows(Exception.class, () -> staleFailingWorker.get(5, TimeUnit.SECONDS));
+        SwingUtilities.invokeAndWait(() -> {
+        });
+        assertFalse(staleErrorCalled.get(), "Superseded worker must not invoke error callback");
+    }
 }

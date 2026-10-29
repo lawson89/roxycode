@@ -51,22 +51,22 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     static final String NEW_TOPIC_TOOLTIP = "Archive current conversation and start a new Q&A topic";
     static final int THUMBNAIL_SIZE = 64;
 
-    private final transient ChatModel model;
-    private final transient ChatController controller;
-    private MarkdownPane outputArea;
-    private JTextArea inputArea;
-    private JButton sendButton;
-    private JButton stopButton;
-    private JButton attachImageButton;
-    private JButton approveButton;
-    private JButton rejectButton;
-    private JButton resetSessionButton;
-    private final JPanel inlineActionPanel;
-    private JLabel transitionLabel;
-    private JLabel turnLabel;
+    final transient ChatModel model;
+    final transient ChatController controller;
+    MarkdownPane outputArea;
+    JTextArea inputArea;
+    JButton sendButton;
+    JButton stopButton;
+    JButton attachImageButton;
+    JButton approveButton;
+    JButton rejectButton;
+    JButton resetSessionButton;
+    final JPanel inlineActionPanel;
+    JLabel transitionLabel;
+    JLabel turnLabel;
     private JScrollPane outputScrollPane;
     private JPanel attachmentPanel;
-    private transient FileMentionPopup fileMentionPopup;
+    transient FileMentionPopup fileMentionPopup;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
 
     public ChatPanel(AiService aiService, PlanService planService, ApplicationEventPublisher eventPublisher,
@@ -287,10 +287,6 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         fileMentionPopup.setGrepService(grepService);
     }
 
-    public FileMentionPopup getFileMentionPopup() {
-        return fileMentionPopup;
-    }
-
     @EventListener
     public void onAgentTurn(AgentTurnEvent event) {
         controller.onAgentTurn(event);
@@ -323,18 +319,6 @@ public class ChatPanel extends JPanel implements AutoCloseable {
 
     void updateTurnLabel() {
         turnLabel.setText(controller.formatCurrentTurnStatus());
-    }
-
-    JLabel getTurnLabel() {
-        return turnLabel;
-    }
-
-    ChatModel getModel() {
-        return model;
-    }
-
-    ChatController getController() {
-        return controller;
     }
 
     void appendMessage(String role, String content) {
@@ -488,46 +472,6 @@ public class ChatPanel extends JPanel implements AutoCloseable {
 
     public List<MarkdownPane.ChatTranscriptEntry> getConversationMessages() {
         return outputArea.getConversationMessages();
-    }
-
-    public MarkdownPane getOutputArea() {
-        return outputArea;
-    }
-
-    public JTextArea getInputArea() {
-        return inputArea;
-    }
-
-    public JButton getSendButton() {
-        return sendButton;
-    }
-
-    public JButton getStopButton() {
-        return stopButton;
-    }
-
-    public JButton getAttachImageButton() {
-        return attachImageButton;
-    }
-
-    public JButton getResetSessionButton() {
-        return resetSessionButton;
-    }
-
-    JPanel getInlineActionPanel() {
-        return inlineActionPanel;
-    }
-
-    JLabel getTransitionLabel() {
-        return transitionLabel;
-    }
-
-    JButton getApproveButton() {
-        return approveButton;
-    }
-
-    JButton getRejectButton() {
-        return rejectButton;
     }
 
     public void focusInput() {

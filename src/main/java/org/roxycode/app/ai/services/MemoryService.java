@@ -16,8 +16,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.AiService;
-import org.roxycode.app.service.ProcessRunner;
-import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
@@ -194,28 +192,18 @@ public class MemoryService {
             String resolvedUser = firstNonBlank(user, "User");
             String resolvedTimestamp = firstNonBlank(isoTimestamp, Instant.now().toString());
 
-            StringBuilder md = new StringBuilder();
-            md.append("""
-                    ---
-                    id: "%s"
-                    type: "topic"
-                    project: "%s"
-                    projectPath: "%s"
-                    title: "%s"
-                    createdBy: "%s"
-                    archivedOn: "%s"
-                    messageCount: %d
-                    ---
+            Map<String, Object> frontmatter = new LinkedHashMap<>();
+            frontmatter.put("id", archiveTarget.id());
+            frontmatter.put("type", "topic");
+            frontmatter.put("project", projectService.getProjectName());
+            frontmatter.put("projectPath", projectPath);
+            frontmatter.put("title", resolvedTitle);
+            frontmatter.put("createdBy", resolvedUser);
+            frontmatter.put("archivedOn", resolvedTimestamp);
+            frontmatter.put("messageCount", entries.size());
 
-                    # Topic: %s
-
-                    ## Conversation Transcript
-                    """.formatted(FrontmatterUtils.escapeFrontmatterValue(archiveTarget.id()),
-                    FrontmatterUtils.escapeFrontmatterValue(projectService.getProjectName()),
-                    FrontmatterUtils.escapeFrontmatterValue(projectPath),
-                    FrontmatterUtils.escapeFrontmatterValue(resolvedTitle),
-                    FrontmatterUtils.escapeFrontmatterValue(resolvedUser),
-                    FrontmatterUtils.escapeFrontmatterValue(resolvedTimestamp), entries.size(), resolvedTitle));
+            StringBuilder md = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
+            md.append("# Topic: ").append(resolvedTitle).append("\n\n## Conversation Transcript\n");
 
             for (ChatTranscriptEntry entry : entries) {
                 md.append("\n### ").append("user".equalsIgnoreCase(entry.role()) ? "User" : "Roxy");
@@ -277,18 +265,6 @@ public class MemoryService {
         return searchArchiveEntries(listArchivedPlanSummaries(), getArchivedPlansDir(), query);
     }
 
-    public static String stripFrontmatter(String rawMarkdown) {
-        return FrontmatterUtils.stripFrontmatter(rawMarkdown);
-    }
-
-    static int findFrontmatterEndLine(Path file) {
-        return FrontmatterUtils.findFrontmatterEndLine(file);
-    }
-
-    static Map<String, String> parseFrontmatter(Path file) {
-        return FrontmatterUtils.parseFrontmatter(file);
-    }
-
     private List<ArchiveEntrySummary> listArchivedEntrySummaries(Path archiveDir, String defaultType) {
         if (archiveDir == null || !Files.isDirectory(archiveDir)) {
             return List.of();
@@ -306,7 +282,7 @@ public class MemoryService {
 
     private static ArchiveEntrySummary buildArchiveEntrySummary(Path file, String defaultType) {
         String filename = file.getFileName().toString();
-        Map<String, String> fm = parseFrontmatter(file);
+        Map<String, String> fm = FrontmatterUtils.parseFrontmatter(file);
         String type = firstNonBlank(fm.get("type"), defaultType);
         String title = firstNonBlank(fm.get("title"), StringUtils.removeEnd(filename, MD_EXTENSION));
         String createdBy = firstNonBlank(fm.get("createdBy"), fm.get("completedBy"), fm.get("approvedBy"), "User");
@@ -373,21 +349,12 @@ public class MemoryService {
         }
         List<String> command = buildBaseRipGrepCommand();
         command.addAll(List.of("--ignore-case", "--fixed-strings", "-e", query, "."));
-        try {
-            ProcessResult result = ProcessRunner.run(command, archiveDir, true);
-            if (result.timedOut() || result.exitCode() != 0) {
-                return Map.of();
-            }
-            Map<String, String> snippetsByFilename = new LinkedHashMap<>();
-            Map<String, Integer> frontmatterEndLineCache = new LinkedHashMap<>();
-            for (String line : result.output().lines().toList()) {
-                parseRipGrepArchiveLine(line, archiveDir, frontmatterEndLineCache, snippetsByFilename);
-            }
-            return snippetsByFilename;
-        } catch (IOException e) {
-            log.warn("Failed to run RipGrep on archive directory {}: {}", archiveDir, e.getMessage());
-            return Map.of();
+        Map<String, String> snippetsByFilename = new LinkedHashMap<>();
+        Map<String, Integer> frontmatterEndLineCache = new LinkedHashMap<>();
+        for (String line : GrepService.runRipGrepLines(command, archiveDir, true)) {
+            parseRipGrepArchiveLine(line, archiveDir, frontmatterEndLineCache, snippetsByFilename);
         }
+        return snippetsByFilename;
     }
 
     static void parseRipGrepArchiveLine(String rawLine, Path archiveDir, Map<String, Integer> frontmatterEndLineCache,
@@ -395,7 +362,7 @@ public class MemoryService {
         if (rawLine == null || rawLine.isBlank()) {
             return;
         }
-        String rel = StringUtils.removeStart(rawLine.replace((char) 92, '/'), "./");
+        String rel = PathUtils.normalizeRelativePath(rawLine);
         int colonSearchStart = (rel.length() >= 3 && Character.isLetter(rel.charAt(0)) && rel.charAt(1) == ':'
                 && rel.charAt(2) == '/') ? 3 : 0;
         int firstColon = rel.indexOf(':', colonSearchStart);
@@ -417,7 +384,7 @@ public class MemoryService {
         }
         if (lineNumber > 0 && archiveDir != null) {
             int fmEndLine = frontmatterEndLineCache.computeIfAbsent(filename,
-                    fn -> findFrontmatterEndLine(archiveDir.resolve(fn)));
+                    fn -> FrontmatterUtils.findFrontmatterEndLine(archiveDir.resolve(fn)));
             if (lineNumber <= fmEndLine) {
                 return;
             }
@@ -462,27 +429,8 @@ public class MemoryService {
         command.addAll(List.of("-e", pattern));
         existingDirs.forEach(dir -> command.add(dir.toString()));
 
-        try {
-            ProcessResult result = ProcessRunner.run(command, null, true);
-            if (result.timedOut()) {
-                log.warn("Memory RipGrep search timed out for pattern: {}", pattern);
-                return new EditorResult(false, "", "RipGrep search timed out");
-            }
-            int exitCode = result.exitCode();
-            if (exitCode == GrepService.EXIT_CODE_NO_MATCHES) {
-                return new EditorResult(true, "", null);
-            } else if (exitCode != 0) {
-                String error = result.output().trim();
-                log.warn("Memory RipGrep failed with exit code {}: {}", exitCode, error);
-                return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + error);
-            }
-            String normalized = normalizeSearchOutput(result.output().trim(), globalDir, projectDir, archiveDir,
-                    archiveTopicsDir);
-            return new EditorResult(true, GrepService.capOutputLines(normalized, GrepService.MAX_OUTPUT_LINES), null);
-        } catch (IOException e) {
-            log.warn("Failed to execute RipGrep for memory search: {}", e.getMessage());
-            return new EditorResult(false, "", "Error executing RipGrep: " + e.getMessage());
-        }
+        return GrepService.runRipGrepSearch(command, null,
+                rawOutput -> normalizeSearchOutput(rawOutput, globalDir, projectDir, archiveDir, archiveTopicsDir));
     }
 
     static String normalizeSearchOutput(String rawOutput, Path globalDir, Path projectDir, Path archiveDir) {
@@ -494,19 +442,19 @@ public class MemoryService {
         if (rawOutput == null || rawOutput.isEmpty()) {
             return "";
         }
-        List<PrefixLabel> prefixLabels = List.of(new PrefixLabel(toSlashPrefix(globalDir), "[GLOBAL] "),
-                new PrefixLabel(toSlashPrefix(projectDir), "[PROJECT] "),
-                new PrefixLabel(toSlashPrefix(archiveDir), "[ARCHIVE] plans/"),
-                new PrefixLabel(toSlashPrefix(archiveTopicsDir), "[ARCHIVE] topics/"));
+        List<PrefixLabel> prefixLabels = List.of(new PrefixLabel(PathUtils.toSlashPrefix(globalDir), "[GLOBAL] "),
+                new PrefixLabel(PathUtils.toSlashPrefix(projectDir), "[PROJECT] "),
+                new PrefixLabel(PathUtils.toSlashPrefix(archiveDir), "[ARCHIVE] plans/"),
+                new PrefixLabel(PathUtils.toSlashPrefix(archiveTopicsDir), "[ARCHIVE] topics/"));
 
         List<String> lines = rawOutput.lines().toList();
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < lines.size(); i++) {
             if (i > 0) {
-                sb.append('\n');
+                sb.append(LF);
             }
             String line = lines.get(i);
-            String slashLine = line.replace((char) 92, '/');
+            String slashLine = PathUtils.normalizeRelativePath(line);
             boolean replaced = false;
             for (PrefixLabel pl : prefixLabels) {
                 if (startsWithSlashPrefix(slashLine, pl.prefix())) {
@@ -533,14 +481,6 @@ public class MemoryService {
                 && prefix.charAt(2) == '/'
                 && Character.toLowerCase(slashLine.charAt(0)) == Character.toLowerCase(prefix.charAt(0))
                 && slashLine.regionMatches(1, prefix, 1, prefix.length() - 1);
-    }
-
-    private static String toSlashPrefix(Path dir) {
-        if (dir == null) {
-            return "";
-        }
-        String normalized = dir.toAbsolutePath().normalize().toString().replace((char) 92, '/');
-        return normalized.endsWith("/") ? normalized : normalized + "/";
     }
 
     public static String sanitizeSlug(String rawSlug) {
@@ -606,20 +546,14 @@ public class MemoryService {
         String resolvedTags = tags != null ? tags.trim() : "";
         String body = content != null ? content.stripLeading() : "";
 
-        StringBuilder md = new StringBuilder();
-        md.append("""
-                ---
-                id: "%s"
-                scope: "%s"
-                title: "%s"
-                tags: "%s"
-                updatedAt: "%s"
-                ---
+        Map<String, Object> frontmatter = new LinkedHashMap<>();
+        frontmatter.put("id", sanitizedSlug);
+        frontmatter.put("scope", scope);
+        frontmatter.put("title", resolvedTitle);
+        frontmatter.put("tags", resolvedTags);
+        frontmatter.put("updatedAt", Instant.now().toString());
 
-                """.formatted(FrontmatterUtils.escapeFrontmatterValue(sanitizedSlug),
-                FrontmatterUtils.escapeFrontmatterValue(scope), FrontmatterUtils.escapeFrontmatterValue(resolvedTitle),
-                FrontmatterUtils.escapeFrontmatterValue(resolvedTags),
-                FrontmatterUtils.escapeFrontmatterValue(Instant.now().toString())));
+        StringBuilder md = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
 
         if (!body.startsWith("# ") && !body.startsWith("#\t")) {
             md.append("# ").append(resolvedTitle).append("\n\n");
@@ -662,7 +596,7 @@ public class MemoryService {
                     .sorted(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
                     .map(file -> {
                         String filename = file.getFileName().toString();
-                        Map<String, String> fm = parseFrontmatter(file);
+                        Map<String, String> fm = FrontmatterUtils.parseFrontmatter(file);
                         String title = fm.getOrDefault("title", StringUtils.removeEnd(filename, MD_EXTENSION));
                         String tags = fm.getOrDefault("tags", "");
                         String updatedAt = fm.getOrDefault("updatedAt", "");

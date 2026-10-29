@@ -30,7 +30,6 @@ class SymbolServiceTest {
     Path tempDir;
 
     private ProjectService projectService;
-    private FileReadService fileReadService;
     private GrepService grepService;
     private SymbolService symbolService;
 
@@ -40,9 +39,8 @@ class SymbolServiceTest {
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.hasActiveProject()).thenReturn(true);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
-        fileReadService = new FileReadService(projectService);
         grepService = mock(GrepService.class);
-        symbolService = new SymbolService(projectService, fileReadService, grepService, AiConfig.SHARED_OBJECT_MAPPER);
+        symbolService = new SymbolService(projectService, grepService, AiConfig.SHARED_OBJECT_MAPPER);
     }
 
     private static String tagJson(String name, Path path, int line, Integer end, String kind, String scope,
@@ -254,12 +252,22 @@ class SymbolServiceTest {
         assertTrue(symbolService.readSymbols("Batch.java", (List<String>) null).isEmpty());
         assertTrue(symbolService.readSymbols("Batch.java", List.of()).isEmpty());
 
+        String originalContent = Files.readString(file);
+        clearInvocations(projectService);
+        symbolService.setCtagsRunner(cmd -> {
+            Files.writeString(file, "corrupted on disk after initial read");
+            return new ProcessResult(0, String.join(NL, tagJson("alpha", null, 2, 3, "method", "Batch", "()"),
+                    tagJson("beta", null, 4, 5, "method", "Batch", "()")), "", false);
+        });
+
         Map<String, String> batchResult = symbolService.readSymbols("Batch.java", "alpha", "beta", "missing", "alpha",
                 "");
+        verify(projectService, times(1)).resolvePath("Batch.java");
         assertEquals(List.of("alpha", "beta", "missing"), new ArrayList<>(batchResult.keySet()));
         assertEquals(String.join(NL, "2:     void alpha() {", "3:     }"), batchResult.get("alpha"));
         assertEquals(String.join(NL, "4:     void beta() {", "5:     }"), batchResult.get("beta"));
         assertTrue(batchResult.get("missing").startsWith("Error: Symbol 'missing' not found"));
+        Files.writeString(file, originalContent);
 
         Map<String, String> missingFileBatch = symbolService.readSymbols("NoSuchFile.java", "alpha", "beta");
         assertTrue(missingFileBatch.get("alpha").startsWith("Error:"));
@@ -321,6 +329,27 @@ class SymbolServiceTest {
         assertTrue(symbolService.findSymbol("   ").isEmpty());
         when(projectService.hasActiveProject()).thenReturn(false);
         assertTrue(symbolService.findSymbol("targetMethod").isEmpty());
+    }
+
+    @Test
+    void testCtagsEntryDeserializationAndSharedRunnerEdgeCases() throws Exception {
+        String rawJson = """
+                {"_type":"tag","name":"myFunc","path":"/tmp/Demo.java","kind":"method","line":12,"end":20,"scope":"Demo","signature":"(int a)","extraIgnoredField":true}
+                """;
+        CtagsRunner.CtagsEntry entry = AiConfig.SHARED_OBJECT_MAPPER.readValue(rawJson, CtagsRunner.CtagsEntry.class);
+        assertEquals("tag", entry.type());
+        assertEquals("myFunc", entry.name());
+        assertEquals("/tmp/Demo.java", entry.path());
+        assertEquals("method", entry.kind());
+        assertEquals(12, entry.line());
+        assertEquals(20, entry.end());
+        assertEquals("Demo", entry.scope());
+        assertEquals("(int a)", entry.signature());
+
+        CtagsRunner runner = cmd -> new ProcessResult(0, rawJson, "", false);
+        assertTrue(runner.runAndParse(null, "--fields=+n", null, "cancelled").isEmpty());
+        assertTrue(runner.runAndParse(List.of(), "--fields=+n", null, "cancelled").isEmpty());
+        assertNull(CtagsRunner.resolveTargetPath(null, List.of(tempDir.resolve("A.java"), tempDir.resolve("B.java"))));
     }
 
     @Test

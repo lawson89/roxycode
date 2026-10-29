@@ -2,6 +2,7 @@ package org.roxycode.app.util;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -44,28 +45,49 @@ public final class Edt {
     }
 
     public static <T> SwingWorker<T, Void> supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess) {
-        return supplyAsync(backgroundTask, onEdtSuccess, null);
+        return supplyAsync(null, backgroundTask, onEdtSuccess, null);
     }
 
     public static <T> SwingWorker<T, Void> supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess,
             Consumer<Exception> onEdtError) {
+        return supplyAsync(null, backgroundTask, onEdtSuccess, onEdtError);
+    }
+
+    public static <T> SwingWorker<T, Void> supplyAsync(AtomicReference<SwingWorker<T, Void>> activeWorkerRef,
+            Callable<T> backgroundTask, Consumer<T> onEdtSuccess) {
+        return supplyAsync(activeWorkerRef, backgroundTask, onEdtSuccess, null);
+    }
+
+    public static <T> SwingWorker<T, Void> supplyAsync(AtomicReference<SwingWorker<T, Void>> activeWorkerRef,
+            Callable<T> backgroundTask, Consumer<T> onEdtSuccess, Consumer<Exception> onEdtError) {
         SwingWorker<T, Void> worker = new SwingWorker<>() {
+            private boolean isActive() {
+                if (isCancelled()) {
+                    return false;
+                }
+                return activeWorkerRef == null || activeWorkerRef.get() == this;
+            }
+
             @Override
             protected T doInBackground() throws Exception {
                 try {
-                    T result = backgroundTask != null ? backgroundTask.call() : null;
-                    if (!isCancelled() && onEdtSuccess != null) {
+                    T result = null;
+                    if (backgroundTask != null) {
+                        result = backgroundTask.call();
+                    }
+                    final T finalResult = result;
+                    if (isActive() && onEdtSuccess != null) {
                         Edt.run(() -> {
-                            if (!isCancelled()) {
-                                onEdtSuccess.accept(result);
+                            if (isActive()) {
+                                onEdtSuccess.accept(finalResult);
                             }
                         });
                     }
                     return result;
                 } catch (Exception e) {
-                    if (!isCancelled() && onEdtError != null) {
+                    if (isActive() && onEdtError != null) {
                         Edt.run(() -> {
-                            if (!isCancelled()) {
+                            if (isActive()) {
                                 onEdtError.accept(e);
                             }
                         });
@@ -74,6 +96,9 @@ public final class Edt {
                 }
             }
         };
+        if (activeWorkerRef != null) {
+            activeWorkerRef.set(worker);
+        }
         worker.execute();
         return worker;
     }

@@ -61,22 +61,22 @@ class MentorModeIntegrationTest {
 
     @Test
     void testDualChatPanelsAreIndependent() {
-        ChatPanel qaChat = qaWorkspacePanel.getQaChatPanel();
-        ChatPanel taskChat = taskWorkspacePanel.getTaskChatPanel();
+        ChatPanel qaChat = qaWorkspacePanel.qaChatPanel;
+        ChatPanel taskChat = taskWorkspacePanel.taskChatPanel;
 
-        assertEquals(ChatModel.QA_CONVERSATION_ID, qaChat.getModel().getConversationId());
-        assertEquals(WorkflowPhase.EXPLORE, qaChat.getModel().getLockedPhase());
-        assertFalse(qaChat.getModel().isTaskMode());
+        assertEquals(ChatModel.QA_CONVERSATION_ID, qaChat.model.getConversationId());
+        assertEquals(WorkflowPhase.EXPLORE, qaChat.model.getLockedPhase());
+        assertFalse(qaChat.model.isTaskMode());
 
-        assertEquals(ChatModel.TASK_CONVERSATION_ID, taskChat.getModel().getConversationId());
-        assertNull(taskChat.getModel().getLockedPhase());
-        assertTrue(taskChat.getModel().isTaskMode());
+        assertEquals(ChatModel.TASK_CONVERSATION_ID, taskChat.model.getConversationId());
+        assertNull(taskChat.model.getLockedPhase());
+        assertTrue(taskChat.model.isTaskMode());
 
-        assertNotNull(qaWorkspacePanel.getQaTabs().getIconAt(0));
-        assertNotNull(qaWorkspacePanel.getQaTabs().getIconAt(1));
-        assertNotNull(taskWorkspacePanel.getTaskTabs().getIconAt(0));
-        assertNotNull(taskWorkspacePanel.getTaskTabs().getIconAt(1));
-        assertNotNull(taskWorkspacePanel.getTaskTabs().getIconAt(2));
+        assertNotNull(qaWorkspacePanel.qaTabs.getIconAt(0));
+        assertNotNull(qaWorkspacePanel.qaTabs.getIconAt(1));
+        assertNotNull(taskWorkspacePanel.taskTabs.getIconAt(0));
+        assertNotNull(taskWorkspacePanel.taskTabs.getIconAt(1));
+        assertNotNull(taskWorkspacePanel.taskTabs.getIconAt(2));
 
         qaChat.appendMessage("user", "QA only question");
         assertEquals(1, qaChat.getConversationMessages().size());
@@ -85,7 +85,7 @@ class MentorModeIntegrationTest {
 
     @Test
     void testActivePhaseAndPlanTitleTruncation() {
-        JLabel planLabel = taskWorkspacePanel.getPlanLabel();
+        JLabel planLabel = taskWorkspacePanel.planLabel;
         when(planService.getVisitedPhases()).thenReturn(EnumSet.of(WorkflowPhase.PLAN, WorkflowPhase.CODE));
         when(planService.getCurrentPlan()).thenReturn(planWithTitle("My Feature Plan"));
 
@@ -111,24 +111,24 @@ class MentorModeIntegrationTest {
 
     @Test
     void testShowCardFocusesInputAndSetsCaretToEnd() {
-        ChatPanel qaChatPanel = qaWorkspacePanel.getQaChatPanel();
-        ChatPanel taskChatPanel = taskWorkspacePanel.getTaskChatPanel();
-        JTabbedPane taskTabs = taskWorkspacePanel.getTaskTabs();
+        ChatPanel qaChatPanel = qaWorkspacePanel.qaChatPanel;
+        ChatPanel taskChatPanel = taskWorkspacePanel.taskChatPanel;
+        JTabbedPane taskTabs = taskWorkspacePanel.taskTabs;
 
-        qaChatPanel.getInputArea().setText("QA draft message");
-        qaChatPanel.getInputArea().setCaretPosition(0);
-        taskChatPanel.getInputArea().setText("Task draft message");
-        taskChatPanel.getInputArea().setCaretPosition(0);
+        qaChatPanel.inputArea.setText("QA draft message");
+        qaChatPanel.inputArea.setCaretPosition(0);
+        taskChatPanel.inputArea.setText("Task draft message");
+        taskChatPanel.inputArea.setCaretPosition(0);
         taskTabs.setSelectedIndex(1);
 
         taskWorkspacePanel.onViewShown();
         SwingTestUtils.flushEdt();
         assertEquals(taskChatPanel, taskTabs.getSelectedComponent());
-        assertEquals("Task draft message".length(), taskChatPanel.getInputArea().getCaretPosition());
+        assertEquals("Task draft message".length(), taskChatPanel.inputArea.getCaretPosition());
 
         qaWorkspacePanel.focusChatInput();
         SwingTestUtils.flushEdt();
-        assertEquals("QA draft message".length(), qaChatPanel.getInputArea().getCaretPosition());
+        assertEquals("QA draft message".length(), qaChatPanel.inputArea.getCaretPosition());
     }
 
     @Test
@@ -147,16 +147,16 @@ class MentorModeIntegrationTest {
         assertFalse(sidebar.isQaBusy());
         assertFalse(sidebar.isTaskBusy());
 
-        qaWorkspacePanel.getQaChatPanel().setLoading(true);
+        qaWorkspacePanel.qaChatPanel.setLoading(true);
         assertTrue(sidebar.isQaBusy());
         assertFalse(sidebar.isTaskBusy());
 
-        qaWorkspacePanel.getQaChatPanel().setLoading(false);
+        qaWorkspacePanel.qaChatPanel.setLoading(false);
         assertFalse(sidebar.isQaBusy());
 
-        taskWorkspacePanel.getTaskChatPanel().setLoading(true);
+        taskWorkspacePanel.taskChatPanel.setLoading(true);
         assertTrue(sidebar.isTaskBusy());
-        taskWorkspacePanel.getTaskChatPanel().setLoading(false);
+        taskWorkspacePanel.taskChatPanel.setLoading(false);
         assertFalse(sidebar.isTaskBusy());
     }
 
@@ -175,8 +175,8 @@ class MentorModeIntegrationTest {
         bgThread.join();
         SwingTestUtils.flushEdt();
 
-        assertTrue(taskWorkspacePanel.getPlanLabel().isVisible());
-        assertEquals("OFF EDT PLAN", taskWorkspacePanel.getPlanLabel().getText());
+        assertTrue(taskWorkspacePanel.planLabel.isVisible());
+        assertEquals("OFF EDT PLAN", taskWorkspacePanel.planLabel.getText());
         assertTrue(sidebar.isTaskWaitingApproval());
     }
 }

@@ -27,13 +27,13 @@ public final class QaWorkspacePanel extends JPanel {
     static final String MENTOR_MODE_SUBTITLE = "Explore & Ask Questions (read-only)";
     static final String PAST_TOPICS_TAB_TITLE = "Past Topics";
 
-    private final JTabbedPane qaTabs;
-    private final ExploreChatPanel qaChatPanel;
-    private final ArchiveBrowserPanel pastTopicsPanel;
-    private final JPanel qaHeaderBar;
-    private final JPanel mentorBanner;
-    private final JLabel mentorModeLabel;
-    private final JLabel mentorSubtitleLabel;
+    final JTabbedPane qaTabs;
+    final ExploreChatPanel qaChatPanel;
+    final ArchiveBrowserPanel pastTopicsPanel;
+    final JPanel qaHeaderBar;
+    final JPanel mentorBanner;
+    final JLabel mentorModeLabel;
+    final JLabel mentorSubtitleLabel;
 
     public QaWorkspacePanel(ExploreChatPanel exploreChatPanel, MemoryService memoryService) {
         super(new BorderLayout());
@@ -116,33 +116,5 @@ public final class QaWorkspacePanel extends JPanel {
             qaTabs.setSelectedComponent(qaChatPanel);
             SwingUtilities.invokeLater(qaChatPanel::focusInput);
         }
-    }
-
-    JTabbedPane getQaTabs() {
-        return qaTabs;
-    }
-
-    JPanel getQaHeaderBar() {
-        return qaHeaderBar;
-    }
-
-    JPanel getMentorBanner() {
-        return mentorBanner;
-    }
-
-    JLabel getMentorModeLabel() {
-        return mentorModeLabel;
-    }
-
-    JLabel getMentorSubtitleLabel() {
-        return mentorSubtitleLabel;
-    }
-
-    ChatPanel getQaChatPanel() {
-        return qaChatPanel;
-    }
-
-    ArchiveBrowserPanel getPastTopicsPanel() {
-        return pastTopicsPanel;
     }
 }

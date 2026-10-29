@@ -44,45 +44,45 @@ class ChatControllerTest extends ChatTestFixture {
         when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Let's revise the plan.");
 
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
-        assertSame(directExecutor, panel.getController().getTurnExecutor());
+        assertSame(directExecutor, panel.controller.getTurnExecutor());
 
-        panel.getController().rejectPhase();
+        panel.controller.rejectPhase();
         flushEdt();
 
         verify(planService).rejectTransition();
         verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN),
                 contains("I have rejected the transition to Code"), any());
-        assertEquals(0L, panel.getController().getActiveTurnId());
-        assertTrue(panel.getOutputArea().getText().contains("Transition to"));
+        assertEquals(0L, panel.controller.getActiveTurnId());
+        assertTrue(panel.outputArea.getText().contains("Transition to"));
     }
 
     @Test
     void testPerformResetSessionAndResetForProjectChangeBehavior() {
         FeatureChatPanel panel = createFeatureChatPanel(null);
-        panel.getModel().setCurrentTurn(3);
-        panel.getController().performResetSession();
+        panel.model.setCurrentTurn(3);
+        panel.controller.performResetSession();
         flushEdt();
 
         verify(planService).resetWorkflow();
         verify(chatMemory).clear("task:default");
-        assertEquals(0, panel.getModel().getCurrentTurn());
-        assertEquals(0L, panel.getController().getActiveTurnId());
-        assertTrue(panel.getOutputArea().getText().contains("Session reset."));
+        assertEquals(0, panel.model.getCurrentTurn());
+        assertEquals(0L, panel.controller.getActiveTurnId());
+        assertTrue(panel.outputArea.getText().contains("Session reset."));
 
         clearInvocations(planService, chatMemory);
         panel.appendMessage("user", "Project-specific message");
-        panel.getModel().setCurrentTurn(2);
-        panel.getModel().addPendingImage(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB));
+        panel.model.setCurrentTurn(2);
+        panel.model.addPendingImage(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB));
 
-        panel.getController().resetForProjectChange();
+        panel.controller.resetForProjectChange();
         flushEdt();
 
         verify(planService).resetWorkflow();
         verify(chatMemory, never()).clear(anyString());
-        assertEquals(0, panel.getModel().getCurrentTurn());
-        assertFalse(panel.getModel().hasPendingImages());
+        assertEquals(0, panel.model.getCurrentTurn());
+        assertFalse(panel.model.hasPendingImages());
         assertTrue(panel.getConversationMessages().isEmpty());
-        assertFalse(panel.getOutputArea().getText().contains("Session reset."));
+        assertFalse(panel.outputArea.getText().contains("Session reset."));
     }
 
     @Test
@@ -93,7 +93,7 @@ class ChatControllerTest extends ChatTestFixture {
         panel.onToolExecution(new ToolExecutionEvent("qa:default", "ignoredCall()", null, true, null));
         flushEdt();
 
-        String html = panel.getOutputArea().getText();
+        String html = panel.outputArea.getText();
         assertContainsAll(html, "Executed successfully", "Error: Syntax Error: &lt;bad&gt;");
         assertFalse(html.contains("<bad>"));
         assertFalse(html.contains("ignoredCall"));
@@ -102,8 +102,8 @@ class ChatControllerTest extends ChatTestFixture {
     @Test
     void testSendMessagePublishesUserMessageEvent() {
         ExploreChatPanel panel = createExploreChatPanel(directExecutor);
-        assertSame(directExecutor, panel.getController().getTurnExecutor());
-        panel.getController().sendMessage("Hello mentor");
+        assertSame(directExecutor, panel.controller.getTurnExecutor());
+        panel.controller.sendMessage("Hello mentor");
         verify(publisher).publishEvent(new UserMessageEvent("qa:default", "user", "Hello mentor"));
     }
 
@@ -127,7 +127,7 @@ class ChatControllerTest extends ChatTestFixture {
             });
 
             ExploreChatPanel panel = createExploreChatPanel(executorService);
-            assertFalse(panel.getController().ownsTurnExecutor());
+            assertFalse(panel.controller.ownsTurnExecutor());
 
             JPanel host = new JPanel();
             host.add(panel);
@@ -137,12 +137,12 @@ class ChatControllerTest extends ChatTestFixture {
 
             sendOnEdt(panel, "Long running query");
             assertTrue(turnStarted.await(5, TimeUnit.SECONDS));
-            assertTrue(panel.getController().isTurnActive());
+            assertTrue(panel.controller.isTurnActive());
 
             panel.close();
             assertTrue(turnInterrupted.await(5, TimeUnit.SECONDS));
-            assertFalse(panel.getController().isTurnActive());
-            assertTrue(panel.getModel().isTurnCancelled());
+            assertFalse(panel.controller.isTurnActive());
+            assertTrue(panel.model.isTurnCancelled());
             assertFalse(executorService.isShutdown(), "Shared injected executor must not be shut down by close()");
         } finally {
             executorService.close();
@@ -154,17 +154,15 @@ class ChatControllerTest extends ChatTestFixture {
         ChatPanel panel = new ChatPanel(aiService, planService, publisher, chatMemory, ChatModel.QA_SESSION_PREFIX,
                 WorkflowPhase.EXPLORE, false, null, null);
 
-        assertTrue(panel.getController().ownsTurnExecutor());
-        ExecutorService fallbackExecutor = assertInstanceOf(ExecutorService.class,
-                panel.getController().getTurnExecutor());
+        assertTrue(panel.controller.ownsTurnExecutor());
+        ExecutorService fallbackExecutor = assertInstanceOf(ExecutorService.class, panel.controller.getTurnExecutor());
         assertFalse(fallbackExecutor.isShutdown());
 
         panel.removeNotify();
         assertTrue(fallbackExecutor.isShutdown());
 
         panel.addNotify();
-        ExecutorService recreatedExecutor = assertInstanceOf(ExecutorService.class,
-                panel.getController().getTurnExecutor());
+        ExecutorService recreatedExecutor = assertInstanceOf(ExecutorService.class, panel.controller.getTurnExecutor());
         assertFalse(recreatedExecutor.isShutdown());
 
         panel.close();
@@ -174,13 +172,13 @@ class ChatControllerTest extends ChatTestFixture {
     @Test
     void testSendMessageWithEmptyTextAndPendingImageShowsFeedbackAndPreservesImage() {
         ExploreChatPanel panel = createExploreChatPanel(directExecutor);
-        panel.getModel().addPendingImage(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB));
-        assertTrue(panel.getModel().hasPendingImages());
+        panel.model.addPendingImage(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB));
+        assertTrue(panel.model.hasPendingImages());
 
-        panel.getController().sendMessage("   ");
+        panel.controller.sendMessage("   ");
 
-        assertTrue(panel.getModel().hasPendingImages());
-        assertTrue(panel.getOutputArea().getText().contains(ChatController.IMAGE_REQUIRES_TEXT_MESSAGE));
+        assertTrue(panel.model.hasPendingImages());
+        assertTrue(panel.outputArea.getText().contains(ChatController.IMAGE_REQUIRES_TEXT_MESSAGE));
         verifyNoInteractions(publisher, aiService);
     }
 
@@ -188,16 +186,16 @@ class ChatControllerTest extends ChatTestFixture {
     void testTransientErrorWhenCurrentTurnPositiveAutoNudgesWhileTurnZeroDoesNot() {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
-        panel.getController().setErrorNudgeDelayMs(0);
+        panel.controller.setErrorNudgeDelayMs(0);
 
         when(aiService.chat(anyString(), any(), eq("Bad API call"), any()))
                 .thenThrow(new RuntimeException("Failed to generate content"));
 
         sendOnEdt(panel, "Bad API call");
         verify(aiService, times(1)).chat(anyString(), any(), anyString(), any());
-        assertEquals(0, panel.getController().getConsecutiveAutoNudges());
-        assertFalse(panel.getOutputArea().getText().contains("Auto-nudging Roxy to continue"));
-        assertFalse(panel.getModel().isLoading());
+        assertEquals(0, panel.controller.getConsecutiveAutoNudges());
+        assertFalse(panel.outputArea.getText().contains("Auto-nudging Roxy to continue"));
+        assertFalse(panel.model.isLoading());
 
         clearInvocations(aiService);
         AtomicInteger callCount = new AtomicInteger(0);
@@ -213,10 +211,10 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals(2, callCount.get());
         verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), eq("Implement step"), any());
         verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), eq(ChatController.AUTO_NUDGE_PROMPT), any());
-        assertEquals(1, panel.getController().getConsecutiveAutoNudges());
-        assertContainsAll(panel.getOutputArea().getText(), "Error: Failed to generate content",
+        assertEquals(1, panel.controller.getConsecutiveAutoNudges());
+        assertContainsAll(panel.outputArea.getText(), "Error: Failed to generate content",
                 "Auto-nudging Roxy to continue (1/2)...", "Recovered and completed.");
-        assertFalse(panel.getModel().isLoading());
+        assertFalse(panel.model.isLoading());
     }
 
     @Test
@@ -230,11 +228,11 @@ class ChatControllerTest extends ChatTestFixture {
                 : "Autonomous execution stopped: Maximum tool turns (5) exceeded.");
         sendOnEdt(panel, "Run long task");
         assertEquals(3, callCount.get());
-        assertEquals(ChatController.MAX_AUTO_NUDGES, panel.getController().getConsecutiveAutoNudges());
-        String html = panel.getOutputArea().getText();
+        assertEquals(ChatController.MAX_AUTO_NUDGES, panel.controller.getConsecutiveAutoNudges());
+        String html = panel.outputArea.getText();
         assertContainsAll(html, "Auto-nudging Roxy to continue (1/2)...", "Auto-nudging Roxy to continue (2/2)...");
         assertFalse(html.contains("Auto-nudging Roxy to continue (3/2)..."));
-        assertFalse(panel.getModel().isLoading());
+        assertFalse(panel.model.isLoading());
 
         AtomicInteger secondBatchCalls = new AtomicInteger(0);
         when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
@@ -246,14 +244,14 @@ class ChatControllerTest extends ChatTestFixture {
         });
 
         sendOnEdt(panel, "Next user message");
-        assertTrue(panel.getOutputArea().getText().contains("Final summary after empty response nudge."));
+        assertTrue(panel.outputArea.getText().contains("Final summary after empty response nudge."));
     }
 
     @Test
     void testStopTurnAndPhaseActionsCancelPendingAutoNudgeTimerAndResetCounter() {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
-        panel.getController().setErrorNudgeDelayMs(5000);
+        panel.controller.setErrorNudgeDelayMs(5000);
 
         when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
             panel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 1, "CODE"));
@@ -261,35 +259,35 @@ class ChatControllerTest extends ChatTestFixture {
         });
 
         sendOnEdt(panel, "Start work");
-        assertEquals(1, panel.getController().getConsecutiveAutoNudges());
-        assertNotNull(panel.getController().getAutoNudgeTimer());
-        assertTrue(panel.getController().isTurnActive());
-        assertTrue(panel.getModel().isLoading());
-        assertTrue(panel.getStopButton().isEnabled());
+        assertEquals(1, panel.controller.getConsecutiveAutoNudges());
+        assertNotNull(panel.controller.getAutoNudgeTimer());
+        assertTrue(panel.controller.isTurnActive());
+        assertTrue(panel.model.isLoading());
+        assertTrue(panel.stopButton.isEnabled());
 
-        SwingTestUtils.runOnEdt(() -> panel.getController().stopTurn());
-        assertEquals(0, panel.getController().getConsecutiveAutoNudges());
-        assertNull(panel.getController().getAutoNudgeTimer());
-        assertFalse(panel.getController().isTurnActive());
-        assertFalse(panel.getModel().isLoading());
-        assertTrue(panel.getOutputArea().getText().contains("Request cancelled by user."));
+        SwingTestUtils.runOnEdt(() -> panel.controller.stopTurn());
+        assertEquals(0, panel.controller.getConsecutiveAutoNudges());
+        assertNull(panel.controller.getAutoNudgeTimer());
+        assertFalse(panel.controller.isTurnActive());
+        assertFalse(panel.model.isLoading());
+        assertTrue(panel.outputArea.getText().contains("Request cancelled by user."));
         verify(aiService, times(1)).chat(anyString(), any(), anyString(), any());
 
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.REVIEW);
         sendOnEdt(panel, "Try with pending");
-        assertEquals(0, panel.getController().getConsecutiveAutoNudges());
-        assertNull(panel.getController().getAutoNudgeTimer());
+        assertEquals(0, panel.controller.getConsecutiveAutoNudges());
+        assertNull(panel.controller.getAutoNudgeTimer());
     }
 
     @Test
     void testPerformResetSessionInQaModeArchivesNonEmptyTopicAndSkipsWhenEmpty() {
         ExploreChatPanel panel = createExploreChatPanel(directExecutor);
-        SwingTestUtils.runOnEdt(() -> panel.getController().performResetSession());
+        SwingTestUtils.runOnEdt(() -> panel.controller.performResetSession());
         flushEdt();
 
         verify(chatMemory).clear("qa:default");
         verifyNoInteractions(memoryService);
-        assertTrue(panel.getOutputArea().getText().contains("Started a new topic."));
+        assertTrue(panel.outputArea.getText().contains("Started a new topic."));
 
         clearInvocations(chatMemory, aiService, memoryService);
         when(environmentService.getCurrentUser()).thenReturn("DevUser");
@@ -300,7 +298,7 @@ class ChatControllerTest extends ChatTestFixture {
         SwingTestUtils.runOnEdt(() -> {
             panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
             panel.appendMessage("ai", "It searches global, project, and archive dirs.");
-            panel.getController().performResetSession();
+            panel.controller.performResetSession();
         });
         flushEdt();
 
@@ -308,7 +306,7 @@ class ChatControllerTest extends ChatTestFixture {
         verify(aiService).generateTopicTitle(contains("How does RipGrep search work"));
         verify(memoryService).archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
                 argThat(list -> list.size() == 2));
-        assertContainsAll(panel.getOutputArea().getText(), "Archived previous topic as", "RipGrep Search Architecture",
+        assertContainsAll(panel.outputArea.getText(), "Archived previous topic as", "RipGrep Search Architecture",
                 "20250514-153000-ripgrep-search-architecture.md");
         verify(publisher).publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC,
                 "20250514-153000-ripgrep-search-architecture.md"));
@@ -336,16 +334,16 @@ class ChatControllerTest extends ChatTestFixture {
         });
 
         FeatureChatPanel panel = createFeatureChatPanel(null);
-        panel.getModel().addPendingImage(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
+        panel.model.addPendingImage(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
 
-        SwingTestUtils.runOnEdt(() -> panel.getController().approvePhase());
+        SwingTestUtils.runOnEdt(() -> panel.controller.approvePhase());
         SwingTestUtils.awaitCondition(() -> capturedImages.get() != null);
 
         assertFalse(approveOnEdt.get());
         assertFalse(chatOnEdt.get());
         assertEquals(1, capturedImages.get().size());
         assertTrue(capturedImages.get().get(0).length > 0);
-        assertFalse(panel.getModel().hasPendingImages());
+        assertFalse(panel.model.hasPendingImages());
     }
 
     @Test
@@ -369,24 +367,24 @@ class ChatControllerTest extends ChatTestFixture {
 
         FeatureChatPanel chatPanel = createFeatureChatPanel(null);
         SwingTestUtils.runOnEdt(() -> {
-            chatPanel.getInputArea().setText("Start coding");
-            chatPanel.getSendButton().doClick();
+            chatPanel.inputArea.setText("Start coding");
+            chatPanel.sendButton.doClick();
         });
         assertTrue(callStarted.await(5, TimeUnit.SECONDS));
 
         chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop", true));
         flushEdt();
-        SwingTestUtils.clickOnEdt(chatPanel.getStopButton());
+        SwingTestUtils.clickOnEdt(chatPanel.stopButton);
         chatPanel.onWorkflowTransition(
                 transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
         chatPanel.onToolExecution(new ToolExecutionEvent("task:default", "lateToolCall()", "ok", true, null));
         chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 99, "CODE"));
 
         allowExit.countDown();
-        SwingTestUtils.awaitCondition(() -> !chatPanel.getController().isTurnActive());
+        SwingTestUtils.awaitCondition(() -> !chatPanel.controller.isTurnActive());
         flushEdt();
 
-        String html = chatPanel.getOutputArea().getText();
+        String html = chatPanel.outputArea.getText();
         assertTrue(html.contains("Request cancelled by user"));
         assertFalse(html.contains("lateToolCall"));
         assertFalse(html.contains("Late transition"));
@@ -416,18 +414,18 @@ class ChatControllerTest extends ChatTestFixture {
         sendOnEdt(chatPanel, "Build feature");
         flushEdt();
 
-        String renderedHtml = chatPanel.getOutputArea().getText();
+        String renderedHtml = chatPanel.outputArea.getText();
         assertTrue(renderedHtml.contains("FINAL_PLAN_SUMMARY"));
-        assertTrue(chatPanel.getInlineActionPanel().isVisible());
-        assertEquals("Approve Plan and proceed to Code", chatPanel.getTransitionLabel().getText());
+        assertTrue(chatPanel.inlineActionPanel.isVisible());
+        assertEquals("Approve Plan and proceed to Code", chatPanel.transitionLabel.getText());
 
         chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All done", false));
         flushEdt();
-        assertEquals("Approve Feature Request as complete", chatPanel.getTransitionLabel().getText());
+        assertEquals("Approve Feature Request as complete", chatPanel.transitionLabel.getText());
 
         chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Need revision", false));
         flushEdt();
-        assertEquals("Approve Plan Revision and return to Plan", chatPanel.getTransitionLabel().getText());
+        assertEquals("Approve Plan Revision and return to Plan", chatPanel.transitionLabel.getText());
 
         clearInvocations(aiService, chatMemory);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
@@ -438,7 +436,7 @@ class ChatControllerTest extends ChatTestFixture {
         }).when(planService).approveTransition();
         when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Revised plan");
 
-        SwingTestUtils.runOnEdt(() -> chatPanel.getController().approvePhase());
+        SwingTestUtils.runOnEdt(() -> chatPanel.controller.approvePhase());
         flushEdt();
 
         verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN), contains("I approve the transition to Plan"),
@@ -449,12 +447,12 @@ class ChatControllerTest extends ChatTestFixture {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
 
-        SwingTestUtils.runOnEdt(() -> chatPanel.getController().approvePhase());
+        SwingTestUtils.runOnEdt(() -> chatPanel.controller.approvePhase());
         flushEdt();
 
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
         verify(chatMemory).clear("task:default");
-        assertTrue(chatPanel.getOutputArea().getText().contains("Task complete"));
+        assertTrue(chatPanel.outputArea.getText().contains("Task complete"));
     }
 
     @Test
@@ -467,44 +465,44 @@ class ChatControllerTest extends ChatTestFixture {
         List<Boolean> loadingStates = new ArrayList<>();
         chatPanel.addLoadingListener(loadingStates::add);
 
-        assertTrue(chatPanel.getSendButton().isVisible());
-        assertFalse(chatPanel.getStopButton().isVisible());
+        assertTrue(chatPanel.sendButton.isVisible());
+        assertFalse(chatPanel.stopButton.isVisible());
 
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
         chatPanel.setLoading(true);
-        assertFalse(chatPanel.getSendButton().isVisible());
-        assertTrue(chatPanel.getStopButton().isVisible());
-        assertFalse(chatPanel.getApproveButton().isEnabled());
-        assertFalse(chatPanel.getRejectButton().isEnabled());
+        assertFalse(chatPanel.sendButton.isVisible());
+        assertTrue(chatPanel.stopButton.isVisible());
+        assertFalse(chatPanel.approveButton.isEnabled());
+        assertFalse(chatPanel.rejectButton.isEnabled());
 
         chatPanel.setLoading(false);
-        assertTrue(chatPanel.getSendButton().isVisible());
-        assertFalse(chatPanel.getStopButton().isVisible());
-        assertTrue(chatPanel.getApproveButton().isEnabled());
-        assertTrue(chatPanel.getRejectButton().isEnabled());
+        assertTrue(chatPanel.sendButton.isVisible());
+        assertFalse(chatPanel.stopButton.isVisible());
+        assertTrue(chatPanel.approveButton.isEnabled());
+        assertTrue(chatPanel.rejectButton.isEnabled());
         assertEquals(List.of(true, false), loadingStates);
 
-        assertEquals("Turns: 0 / 5", chatPanel.getTurnLabel().getText());
+        assertEquals("Turns: 0 / 5", chatPanel.turnLabel.getText());
         ImplementationPlan plan = samplePlan(new ImplementationPlan.TechStep("Step 0", true),
                 new ImplementationPlan.TechStep("Step 1", false));
         when(planService.getCurrentPlan()).thenReturn(plan);
 
         chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
         flushEdt();
-        assertEquals("Turns: 2 / 5 | Plan: 1/2 steps", chatPanel.getTurnLabel().getText());
+        assertEquals("Turns: 2 / 5 | Plan: 1/2 steps", chatPanel.turnLabel.getText());
 
         ImplementationPlan updatedPlan = samplePlan(new ImplementationPlan.TechStep("Step 0", true),
                 new ImplementationPlan.TechStep("Step 1", true));
         when(planService.getCurrentPlan()).thenReturn(updatedPlan);
         chatPanel.onPlanUpdated(new PlanUpdatedEvent(updatedPlan));
         flushEdt();
-        assertEquals("Turns: 2 / 5 | Plan: 2/2 steps", chatPanel.getTurnLabel().getText());
+        assertEquals("Turns: 2 / 5 | Plan: 2/2 steps", chatPanel.turnLabel.getText());
     }
 
     @Test
     void testInputAreaUndoRedoActions() {
         ChatPanel chatPanel = createChatPanel();
-        JTextArea inputArea = chatPanel.getInputArea();
+        JTextArea inputArea = chatPanel.inputArea;
         Action undoAction = inputArea.getActionMap().get("Undo");
         Action redoAction = inputArea.getActionMap().get("Redo");
         assertNotNull(undoAction);
@@ -544,15 +542,15 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         assertNotNull(loaded);
         assertEquals(120, loaded.getWidth());
-        assertTrue(chatPanel.getModel().hasPendingImages());
-        assertEquals(1, chatPanel.getModel().getPendingImages().size());
+        assertTrue(chatPanel.model.hasPendingImages());
+        assertEquals(1, chatPanel.model.getPendingImages().size());
 
         JButton removeChipButton = SwingTestUtils.findComponent(chatPanel, JButton.class,
-                b -> b != chatPanel.getRejectButton() && b.getIcon() instanceof FontIcon fi
+                b -> b != chatPanel.rejectButton && b.getIcon() instanceof FontIcon fi
                         && fi.getIkon() == Codicons.CLOSE);
         assertNotNull(removeChipButton);
         SwingTestUtils.clickOnEdt(removeChipButton);
-        assertFalse(chatPanel.getModel().hasPendingImages());
+        assertFalse(chatPanel.model.hasPendingImages());
     }
 
     @Test
@@ -563,12 +561,12 @@ class ChatControllerTest extends ChatTestFixture {
                 "src/main/java/org/roxycode/app/ui/ChatController.java",
                 "src/main/java/org/roxycode/app/ui/ChatModel.java"));
 
-        FileMentionPopup mentionPopup = chatPanel.getFileMentionPopup();
+        FileMentionPopup mentionPopup = chatPanel.fileMentionPopup;
         mentionPopup.setBackgroundExecutor(Runnable::run);
         chatPanel.setGrepService(grepService);
         verify(grepService, times(1)).listFiles();
 
-        JTextArea inputArea = chatPanel.getInputArea();
+        JTextArea inputArea = chatPanel.inputArea;
         SwingTestUtils.runOnEdt(() -> {
             inputArea.setText("Review @Chat");
             inputArea.setCaretPosition(inputArea.getText().length());

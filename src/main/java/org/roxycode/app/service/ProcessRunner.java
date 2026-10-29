@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.apache.commons.io.output.NullOutputStream;
+import org.apache.commons.io.output.ThresholdingOutputStream;
 import org.zeroturnaround.exec.InvalidExitValueException;
 import org.zeroturnaround.exec.ProcessExecutor;
 import org.zeroturnaround.exec.ProcessInitException;
@@ -83,52 +85,40 @@ public final class ProcessRunner {
         }
     }
 
-    static final class BoundedOutputStream extends OutputStream {
+    static final class BoundedOutputStream extends ThresholdingOutputStream {
 
         private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        private final int maxBytes;
-        private boolean truncated;
+        private OutputStream currentStream = buffer;
 
         BoundedOutputStream() {
             this(MAX_OUTPUT_CHARS);
         }
 
         BoundedOutputStream(int maxBytes) {
-            this.maxBytes = maxBytes;
+            super(maxBytes);
         }
 
         @Override
-        public void write(int b) {
-            if (truncated) {
-                return;
+        public void write(byte[] b, int off, int len) throws IOException {
+            long remaining = getThreshold() - getByteCount();
+            if (remaining > 0 && len > remaining) {
+                int prefixLen = (int) remaining;
+                super.write(b, off, prefixLen);
+                off += prefixLen;
+                len -= prefixLen;
             }
-            if (buffer.size() < maxBytes) {
-                buffer.write(b);
-            } else {
-                appendTruncationSuffix();
-            }
+            super.write(b, off, len);
         }
 
         @Override
-        public void write(byte[] b, int off, int len) {
-            if (truncated || len <= 0) {
-                return;
-            }
-            int remaining = maxBytes - buffer.size();
-            if (len <= remaining) {
-                buffer.write(b, off, len);
-            } else {
-                if (remaining > 0) {
-                    buffer.write(b, off, remaining);
-                }
-                appendTruncationSuffix();
-            }
+        protected OutputStream getStream() {
+            return currentStream;
         }
 
-        private void appendTruncationSuffix() {
-            byte[] suffix = TRUNCATION_SUFFIX.getBytes(StandardCharsets.UTF_8);
-            buffer.write(suffix, 0, suffix.length);
-            truncated = true;
+        @Override
+        protected void thresholdReached() {
+            buffer.writeBytes(TRUNCATION_SUFFIX.getBytes(StandardCharsets.UTF_8));
+            currentStream = NullOutputStream.INSTANCE;
         }
 
         @Override

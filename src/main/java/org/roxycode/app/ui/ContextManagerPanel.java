@@ -8,6 +8,7 @@ import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -45,9 +46,9 @@ public final class ContextManagerPanel extends JPanel {
     static final String GLOBAL_SUBTITLE = "Shared across all projects";
     static final String PROJECT_SUBTITLE = "Scoped to active project";
 
-    private final ContextScopeColumn globalColumn;
-    private final ContextScopeColumn projectColumn;
-    private String lastErrorMessage;
+    final ContextScopeColumn globalColumn;
+    final ContextScopeColumn projectColumn;
+    String lastErrorMessage;
     private transient Consumer<String> errorDialogPresenter;
 
     public ContextManagerPanel(PromptService promptService) {
@@ -90,18 +91,6 @@ public final class ContextManagerPanel extends JPanel {
         this.errorDialogPresenter = presenter;
     }
 
-    String getLastErrorMessage() {
-        return lastErrorMessage;
-    }
-
-    ContextScopeColumn getGlobalColumn() {
-        return globalColumn;
-    }
-
-    ContextScopeColumn getProjectColumn() {
-        return projectColumn;
-    }
-
     static final class ContextScopeColumn extends JPanel {
         private static final long serialVersionUID = 1L;
         private static final Logger log = LoggerFactory.getLogger(ContextScopeColumn.class);
@@ -110,19 +99,20 @@ public final class ContextManagerPanel extends JPanel {
         private final boolean globalScope;
         private final transient Consumer<String> errorReporter;
 
-        private final JPanel headerBanner;
-        private final JLabel headerLabel;
-        private final JLabel subtitleLabel;
-        private final JLabel foldersSectionLabel;
-        private final JLabel filesSectionLabel;
+        final JPanel headerBanner;
+        final JLabel headerLabel;
+        final JLabel subtitleLabel;
+        final JLabel foldersSectionLabel;
+        final JLabel filesSectionLabel;
 
-        private final DefaultListModel<String> folderListModel = new DefaultListModel<>();
-        private final JList<String> folderList = new JList<>(folderListModel);
-        private final JButton btnAddFolder = new JButton("Add Folder...");
-        private final JButton btnRemoveFolder = new JButton("Remove Folder");
+        final DefaultListModel<String> folderListModel = new DefaultListModel<>();
+        final JList<String> folderList = new JList<>(folderListModel);
+        final JButton btnAddFolder = new JButton("Add Folder...");
+        final JButton btnRemoveFolder = new JButton("Remove Folder");
 
-        private final DefaultListModel<ContextFileItem> fileListModel = new DefaultListModel<>();
-        private final JList<ContextFileItem> fileList = new JList<>(fileListModel);
+        final DefaultListModel<ContextFileItem> fileListModel = new DefaultListModel<>();
+        final JList<ContextFileItem> fileList = new JList<>(fileListModel);
+        private final transient AtomicReference<SwingWorker<FolderAndFilesData, Void>> activeRefreshWorker = new AtomicReference<>();
 
         record FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {
         }
@@ -280,9 +270,9 @@ public final class ContextManagerPanel extends JPanel {
             }
         }
 
-        private <T> SwingWorker<T, Void> executeOperationAsync(Callable<T> backgroundTask, Consumer<T> onSuccess,
-                String logVerb, String errorVerb, String target) {
-            return Edt.supplyAsync(backgroundTask, onSuccess, ex -> {
+        private <T> SwingWorker<T, Void> executeOperationAsync(AtomicReference<SwingWorker<T, Void>> activeWorkerRef,
+                Callable<T> backgroundTask, Consumer<T> onSuccess, String logVerb, String errorVerb, String target) {
+            return Edt.supplyAsync(activeWorkerRef, backgroundTask, onSuccess, ex -> {
                 log.warn("Failed to {} {}: {}", logVerb, target, ex.getMessage());
                 Throwable root = ExceptionUtils.getRootCause(ex);
                 if (errorReporter != null && errorVerb != null) {
@@ -293,7 +283,7 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         SwingWorker<Void, Void> addFolderAsync(String folderPath) {
-            return executeOperationAsync(() -> {
+            return executeOperationAsync(null, () -> {
                 if (folderPath == null || folderPath.isBlank()) {
                     throw new IllegalArgumentException("Folder path must not be blank");
                 }
@@ -308,7 +298,7 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         SwingWorker<Void, Void> removeFolderAsync(String folderPath) {
-            return executeOperationAsync(() -> {
+            return executeOperationAsync(null, () -> {
                 List<String> updated = new ArrayList<>(loadConfiguredFolders());
                 updated.remove(folderPath);
                 saveConfiguredFolders(updated);
@@ -320,7 +310,7 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         SwingWorker<FolderAndFilesData, Void> refreshFoldersAndFiles() {
-            return executeOperationAsync(() -> {
+            return executeOperationAsync(activeRefreshWorker, () -> {
                 List<String> folders = loadConfiguredFolders();
                 List<ContextFileItem> files = loadDiscoveredFiles();
                 return new FolderAndFilesData(folders != null ? folders : List.of(), files != null ? files : List.of());
@@ -347,50 +337,6 @@ public final class ContextManagerPanel extends JPanel {
 
         private List<ContextFileItem> loadDiscoveredFiles() {
             return globalScope ? promptService.listGlobalContextFiles() : promptService.listProjectContextFiles();
-        }
-
-        JPanel getHeaderBanner() {
-            return headerBanner;
-        }
-
-        JLabel getHeaderLabel() {
-            return headerLabel;
-        }
-
-        JLabel getSubtitleLabel() {
-            return subtitleLabel;
-        }
-
-        JLabel getFoldersSectionLabel() {
-            return foldersSectionLabel;
-        }
-
-        JLabel getFilesSectionLabel() {
-            return filesSectionLabel;
-        }
-
-        DefaultListModel<String> getFolderListModel() {
-            return folderListModel;
-        }
-
-        JList<String> getFolderList() {
-            return folderList;
-        }
-
-        DefaultListModel<ContextFileItem> getFileListModel() {
-            return fileListModel;
-        }
-
-        JList<ContextFileItem> getFileList() {
-            return fileList;
-        }
-
-        JButton getAddFolderButton() {
-            return btnAddFolder;
-        }
-
-        JButton getRemoveFolderButton() {
-            return btnRemoveFolder;
         }
     }
 }

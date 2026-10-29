@@ -1,5 +1,7 @@
 package org.roxycode.app.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -14,28 +16,19 @@ import org.springframework.stereotype.Service;
 public class ProjectAnalysisService {
 
     private final GrepService grepService;
-    private volatile String cachedDominantLanguage;
+    private final Cache<Boolean, String> dominantLanguageCache = Caffeine.newBuilder().maximumSize(1).build();
 
     public ProjectAnalysisService(GrepService grepService) {
         this.grepService = grepService;
     }
 
     @EventListener
-    @SuppressWarnings("PMD.NullAssignment")
-    public synchronized void onProjectChanged(ProjectChangedEvent event) {
-        this.cachedDominantLanguage = null;
+    public void onProjectChanged(ProjectChangedEvent event) {
+        dominantLanguageCache.invalidateAll();
     }
 
     public String getDominantLanguage() {
-        String cached = this.cachedDominantLanguage;
-        if (cached != null)
-            return cached;
-        synchronized (this) {
-            if (this.cachedDominantLanguage != null)
-                return this.cachedDominantLanguage;
-            this.cachedDominantLanguage = computeDominantLanguage();
-            return this.cachedDominantLanguage;
-        }
+        return dominantLanguageCache.get(Boolean.TRUE, k -> computeDominantLanguage());
     }
 
     private String computeDominantLanguage() {

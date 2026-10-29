@@ -21,6 +21,7 @@ import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
+import org.roxycode.app.util.FrontmatterUtils;
 
 class MemoryServiceTest {
 
@@ -243,12 +244,12 @@ class MemoryServiceTest {
 
     @Test
     void testStripFrontmatter() {
-        assertEquals("", MemoryService.stripFrontmatter(null));
-        assertEquals("", MemoryService.stripFrontmatter(""));
-        assertEquals("# Heading\nBody", MemoryService.stripFrontmatter("# Heading\nBody"));
-        assertEquals("---\nunclosed frontmatter", MemoryService.stripFrontmatter("---\nunclosed frontmatter"));
+        assertEquals("", FrontmatterUtils.stripFrontmatter(null));
+        assertEquals("", FrontmatterUtils.stripFrontmatter(""));
+        assertEquals("# Heading\nBody", FrontmatterUtils.stripFrontmatter("# Heading\nBody"));
+        assertEquals("---\nunclosed frontmatter", FrontmatterUtils.stripFrontmatter("---\nunclosed frontmatter"));
 
-        String stripped = MemoryService.stripFrontmatter("""
+        String stripped = FrontmatterUtils.stripFrontmatter("""
                 ---
                 id: "20250514-topic"
                 title: "Test Topic"
@@ -337,11 +338,12 @@ class MemoryServiceTest {
             assertEquals(1, bodyKeyMatched.size());
             assertEquals("title: " + dq + "BodyExampleTitle" + dq, bodyKeyMatched.get(0).matchSnippet());
         }
-        assertEquals(6, MemoryService.findFrontmatterEndLine(planFile));
-        assertEquals(0, MemoryService.findFrontmatterEndLine(fallbackPlanFile));
-        assertEquals(0, MemoryService.findFrontmatterEndLine(null));
-        assertTrue(MemoryService.parseFrontmatter(fallbackPlanFile).isEmpty());
-        assertTrue(MemoryService.parseFrontmatter(null).isEmpty());
+        assertEquals(6, FrontmatterUtils.findFrontmatterEndLine(planFile));
+        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine(fallbackPlanFile));
+        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine((Path) null));
+        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine((List<String>) null));
+        assertTrue(FrontmatterUtils.parseFrontmatter(fallbackPlanFile).isEmpty());
+        assertTrue(FrontmatterUtils.parseFrontmatter(null).isEmpty());
 
         Path unclosedFrontmatterFile = plansDir.resolve("20250511-080000-unclosed.md");
         Files.writeString(unclosedFrontmatterFile, """
@@ -350,8 +352,9 @@ class MemoryServiceTest {
                 created_by: "Dave"
                 # Missing closing delimiter
                 """, StandardCharsets.UTF_8);
-        assertEquals(0, MemoryService.findFrontmatterEndLine(unclosedFrontmatterFile));
-        assertEquals("Unclosed \"Quote\" Plan", MemoryService.parseFrontmatter(unclosedFrontmatterFile).get("title"));
+        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine(unclosedFrontmatterFile));
+        assertEquals("Unclosed " + '"' + "Quote" + '"' + " Plan",
+                FrontmatterUtils.parseFrontmatter(unclosedFrontmatterFile).get("title"));
     }
 
     @Test

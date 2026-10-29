@@ -1,26 +1,23 @@
 package org.roxycode.app.ai.services.cache;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
+import org.roxycode.app.ai.services.CtagsRunner;
+import org.roxycode.app.ai.services.CtagsRunner.CtagsEntry;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
-import org.roxycode.app.service.ProcessRunner;
-import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -35,8 +32,8 @@ import org.springframework.stereotype.Service;
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);
     static final int CTAGS_BATCH_SIZE = 100;
-    private static final int SINGLE_FILE_BATCH_SIZE = 1;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
+    private static final String CTAGS_SKELETON_FIELDS = "--fields=+n";
     private static final char LF = 10;
     static final int MAX_SIGNATURE_CONTINUATION_LINES = 8;
     static final int MAX_SIGNATURE_CHARS = 240;
@@ -53,13 +50,14 @@ public class RepoMapPackerService {
     private static final char SLASH = '/';
     private static final char AT_SIGN = '@';
     private static final char SPACE = ' ';
-    private static final List<String> INLINE_PARAM_ANNOTATIONS = List.of("@ToolParam", "@AgentDoc");
+    private static final Pattern INLINE_PARAM_ANNOTATION_PATTERN = Pattern
+            .compile("@(?:ToolParam|AgentDoc)\\s*(?:\\((?:\"[^\"]*\"|\'[^\']*\'|[^()])*\\))?\\s*");
     private static final List<String> HEADER_CONTINUATION_PREFIXES = List.of("throws ", "{", "implements ", "extends ",
             "permits ");
 
     static final Set<String> SOURCE_EXTENSIONS = Set
             .of("java,py,ts,tsx,js,jsx,go,rs,c,cpp,cc,cxx,h,hpp,cs,rb,php,kt,kts,swift,scala".split(","));
-    static final Set<String> IGNORED_TAG_KINDS = Set.of("package", "namespace", "import");
+    static final Set<String> IGNORED_TAG_KINDS = CtagsRunner.IGNORED_TAG_KINDS;
     private static final List<String> TEST_DIR_MARKERS = List.of("src/test/", "test/", "tests/", "__tests__/");
     private static final List<String> TEST_FILE_SUFFIXES = List.of(
             "Test.java,Tests.java,IT.java,_test.py,_test.go,.test.ts,.spec.ts,.test.tsx,.spec.tsx,.test.js,.spec.js,.test.jsx,.spec.jsx"
@@ -72,18 +70,11 @@ public class RepoMapPackerService {
     private final List<String> excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
     private final AtomicLong generation = new AtomicLong(1);
 
-    @FunctionalInterface
-    interface CtagsRunner {
-        ProcessResult run(List<String> command) throws IOException;
-    }
-
     static final int MAX_SKELETON_CACHE_SIZE = 10_000;
     private final Cache<Path, CachedSkeleton> skeletonCache = Caffeine.newBuilder().maximumSize(MAX_SKELETON_CACHE_SIZE)
             .build();
-    private CtagsRunner ctagsRunner = command -> ProcessRunner.run(command, null, false);
-
-    private String cachedMap = null;
-    private long cachedGeneration = 0;
+    private final Cache<Long, String> repoMapCache = Caffeine.newBuilder().maximumSize(1).build();
+    private CtagsRunner ctagsRunner = CtagsRunner.DEFAULT;
 
     public RepoMapPackerService(ProjectService projectService, ObjectMapper objectMapper, GrepService grepService,
             ProjectCacheMetaService metaService) {
@@ -109,12 +100,10 @@ public class RepoMapPackerService {
         log.debug("Repo map invalidated due to file change: {}", event != null ? event.path() : "");
     }
 
-    @SuppressWarnings("PMD.NullAssignment")
     public void invalidateCache() {
         synchronized (this) {
             generation.incrementAndGet();
-            cachedMap = null;
-            cachedGeneration = 0;
+            repoMapCache.invalidateAll();
             skeletonCache.invalidateAll();
         }
         metaService.deleteRepoCache();
@@ -125,11 +114,9 @@ public class RepoMapPackerService {
         return generateRepoMap();
     }
 
-    @SuppressWarnings("PMD.NullAssignment")
     private synchronized void invalidateForFileChange(String changedRelativePath) {
         generation.incrementAndGet();
-        cachedMap = null;
-        cachedGeneration = 0;
+        repoMapCache.invalidateAll();
         if (changedRelativePath != null && !changedRelativePath.isBlank()) {
             Path root = projectService.getCurrentProjectRoot();
             if (root != null) {
@@ -146,10 +133,9 @@ public class RepoMapPackerService {
         }
 
         long startGeneration = generation.get();
-        synchronized (this) {
-            if (cachedMap != null && cachedGeneration == startGeneration) {
-                return new EditorResult(true, cachedMap, null);
-            }
+        String existingMap = repoMapCache.getIfPresent(startGeneration);
+        if (existingMap != null) {
+            return new EditorResult(true, existingMap, null);
         }
 
         List<String> rawFiles = grepService.listFiles(null);
@@ -189,8 +175,7 @@ public class RepoMapPackerService {
         boolean cacheSaved = false;
         synchronized (this) {
             if (generation.get() == startGeneration && root.equals(projectService.getCurrentProjectRoot())) {
-                this.cachedMap = generatedMap;
-                this.cachedGeneration = startGeneration;
+                repoMapCache.put(startGeneration, generatedMap);
                 cacheSaved = true;
             }
         }
@@ -254,61 +239,16 @@ public class RepoMapPackerService {
     }
 
     private void populateSkeletonBatch(List<FileStat> batch) {
-        if (batch.isEmpty())
+        if (batch.isEmpty()) {
             return;
-        try {
-            List<String> command = new ArrayList<>(List.of("ctags", "-f", "-", "--output-format=json", "--fields=+n"));
-            batch.forEach(stat -> command.add(stat.path().toString()));
-
-            ProcessResult result = ctagsRunner.run(command);
-            if (result.timedOut()) {
-                log.warn("Ctags timed out for batch of {} files", batch.size());
-                return;
-            }
-
-            Map<Path, List<Tag>> tagsByPath = new HashMap<>();
-            String output = result.output();
-            if (output != null && !output.isEmpty()) {
-                for (String line : output.lines().toList()) {
-                    if (line.isBlank())
-                        continue;
-                    try {
-                        JsonNode node = objectMapper.readTree(line);
-                        JsonNode kindNode = node.get("kind");
-                        if (kindNode != null
-                                && IGNORED_TAG_KINDS.contains(kindNode.asText().toLowerCase(Locale.ROOT))) {
-                            continue;
-                        }
-                        JsonNode nameNode = node.get("name");
-                        JsonNode lineNode = node.get("line");
-                        if (nameNode != null && lineNode != null) {
-                            JsonNode pathNode = node.get("path");
-                            Path targetPath = null;
-                            if (pathNode != null && !pathNode.asText().isBlank()) {
-                                targetPath = Path.of(pathNode.asText()).toAbsolutePath().normalize();
-                            } else if (batch.size() == SINGLE_FILE_BATCH_SIZE) {
-                                targetPath = batch.get(0).path();
-                            }
-                            if (targetPath != null) {
-                                tagsByPath.computeIfAbsent(targetPath, k -> new ArrayList<>())
-                                        .add(new Tag(lineNode.asInt()));
-                            }
-                        }
-                    } catch (Exception e) {
-                        ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-                        log.trace("Skip unparseable line: {}", line);
-                    }
-                }
-            }
-
-            for (FileStat stat : batch) {
-                String skeleton = formatSkeletonLines(stat.path(), tagsByPath.get(stat.path()));
-                skeletonCache.put(stat.path(),
-                        new CachedSkeleton(stat.lastModifiedMillis(), stat.size(), skeleton != null ? skeleton : ""));
-            }
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-            log.warn("Ctags batch failed: {}", e.getMessage());
+        }
+        List<Path> paths = batch.stream().map(FileStat::path).toList();
+        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(paths, CTAGS_SKELETON_FIELDS, objectMapper,
+                CANCELLED_MSG);
+        for (FileStat stat : batch) {
+            String skeleton = formatSkeletonLines(stat.path(), entriesByPath.get(stat.path()));
+            skeletonCache.put(stat.path(),
+                    new CachedSkeleton(stat.lastModifiedMillis(), stat.size(), skeleton != null ? skeleton : ""));
         }
     }
 
@@ -339,19 +279,20 @@ public class RepoMapPackerService {
                 : null;
     }
 
-    static String formatSkeletonLines(Path filePath, List<Tag> tags) {
+    static String formatSkeletonLines(Path filePath, List<CtagsEntry> tags) {
         if (tags == null || tags.isEmpty())
             return null;
         try {
-            tags.sort(Comparator.comparingInt(t -> t.line));
+            tags.sort(Comparator.comparingInt(CtagsEntry::line));
             List<String> lines = Files.readAllLines(filePath);
             StringBuilder skeleton = new StringBuilder();
             int lastLine = 0;
-            for (Tag tag : tags) {
-                if (tag.line > lastLine && tag.line <= lines.size()) {
-                    CollapsedSignature collapsed = collapseSignatureWithEndLine(lines, tag.line - 1);
+            for (CtagsEntry tag : tags) {
+                int tagLine = tag.line();
+                if (tagLine > lastLine && tagLine <= lines.size()) {
+                    CollapsedSignature collapsed = collapseSignatureWithEndLine(lines, tagLine - 1);
                     if (!collapsed.text().isEmpty()) {
-                        skeleton.append("  ").append(tag.line).append(": ").append(collapsed.text()).append(LF);
+                        skeleton.append("  ").append(tagLine).append(": ").append(collapsed.text()).append(LF);
                     }
                     lastLine = collapsed.endLineIndex() + 1;
                 }
@@ -502,160 +443,15 @@ public class RepoMapPackerService {
     }
 
     private static String stripParameterAnnotations(String text) {
-        StringBuilder out = new StringBuilder(text.length());
-        boolean inDoubleQuote = false;
-        boolean inSingleQuote = false;
-        int i = 0;
-        int len = text.length();
-        while (i < len) {
-            char c = text.charAt(i);
-            if (c == BACKSLASH && (inDoubleQuote || inSingleQuote) && i + 1 < len) {
-                out.append(c).append(text.charAt(i + 1));
-                i += 2;
-                continue;
-            }
-            if (!inSingleQuote && c == DQUOTE) {
-                inDoubleQuote = !inDoubleQuote;
-                out.append(c);
-                i++;
-                continue;
-            }
-            if (!inDoubleQuote && c == SQUOTE) {
-                inSingleQuote = !inSingleQuote;
-                out.append(c);
-                i++;
-                continue;
-            }
-            if (!inDoubleQuote && !inSingleQuote && c == AT_SIGN) {
-                int afterAnnotation = matchInlineParamAnnotationEnd(text, i);
-                if (afterAnnotation > i) {
-                    i = afterAnnotation;
-                    continue;
-                }
-            }
-            out.append(c);
-            i++;
-        }
-        return out.toString();
-    }
-
-    private static int matchInlineParamAnnotationEnd(String text, int atIndex) {
-        int nameEnd = findAnnotationNameEnd(text, atIndex);
-        if (nameEnd < 0) {
-            return atIndex;
-        }
-        int len = text.length();
-        int j = nameEnd;
-        while (j < len && Character.isWhitespace(text.charAt(j))) {
-            j++;
-        }
-        if (j < len && text.charAt(j) == OPEN_PAREN) {
-            int depth = 0;
-            boolean inDouble = false;
-            boolean inSingle = false;
-            while (j < len) {
-                char c = text.charAt(j);
-                if (c == BACKSLASH && (inDouble || inSingle)) {
-                    j += 2;
-                    continue;
-                }
-                if (!inSingle && c == DQUOTE) {
-                    inDouble = !inDouble;
-                } else if (!inDouble && c == SQUOTE) {
-                    inSingle = !inSingle;
-                } else if (!inDouble && !inSingle) {
-                    if (c == OPEN_PAREN) {
-                        depth++;
-                    } else if (c == CLOSE_PAREN) {
-                        depth--;
-                        if (depth == 0) {
-                            j++;
-                            break;
-                        }
-                    }
-                }
-                j++;
-            }
-        }
-        while (j < len && Character.isWhitespace(text.charAt(j))) {
-            j++;
-        }
-        return j;
-    }
-
-    private static int findAnnotationNameEnd(String text, int atIndex) {
-        int len = text.length();
-        for (String candidate : INLINE_PARAM_ANNOTATIONS) {
-            if (text.startsWith(candidate, atIndex)) {
-                int nameEnd = atIndex + candidate.length();
-                if (nameEnd == len || !Character.isJavaIdentifierPart(text.charAt(nameEnd))) {
-                    return nameEnd;
-                }
-            }
-        }
-        return -1;
+        return INLINE_PARAM_ANNOTATION_PATTERN.matcher(text).replaceAll("");
     }
 
     private static String normalizeSignatureWhitespace(String text) {
-        StringBuilder out = new StringBuilder(text.length());
-        boolean inDouble = false;
-        boolean inSingle = false;
-        boolean pendingSpace = false;
-        int i = 0;
-        int len = text.length();
-        while (i < len) {
-            char c = text.charAt(i);
-            if (c == BACKSLASH && (inDouble || inSingle) && i + 1 < len) {
-                if (pendingSpace) {
-                    out.append(SPACE);
-                    pendingSpace = false;
-                }
-                out.append(c).append(text.charAt(i + 1));
-                i += 2;
-                continue;
-            }
-            if (!inSingle && c == DQUOTE) {
-                if (pendingSpace && !out.isEmpty() && out.charAt(out.length() - 1) != OPEN_PAREN) {
-                    out.append(SPACE);
-                }
-                pendingSpace = false;
-                inDouble = !inDouble;
-                out.append(c);
-                i++;
-                continue;
-            }
-            if (!inDouble && c == SQUOTE) {
-                if (pendingSpace && !out.isEmpty() && out.charAt(out.length() - 1) != OPEN_PAREN) {
-                    out.append(SPACE);
-                }
-                pendingSpace = false;
-                inSingle = !inSingle;
-                out.append(c);
-                i++;
-                continue;
-            }
-            if (inDouble || inSingle) {
-                out.append(Character.isWhitespace(c) ? SPACE : c);
-            } else if (Character.isWhitespace(c)) {
-                pendingSpace = true;
-            } else {
-                if (pendingSpace && !out.isEmpty() && out.charAt(out.length() - 1) != OPEN_PAREN && c != CLOSE_PAREN
-                        && c != COMMA && c != SEMICOLON) {
-                    out.append(SPACE);
-                }
-                pendingSpace = false;
-                out.append(c);
-            }
-            i++;
-        }
-        return out.toString().trim();
+        return StringUtils.normalizeSpace(text).replaceAll("\\s*([),;])", "$1").replace("( ", "(");
     }
 
     private boolean isExcluded(String filePath) {
         return excludePatterns.stream().anyMatch(filePath::startsWith);
-    }
-
-    private record Tag(int line) {
     }
 
     private record FileStat(Path path, long lastModifiedMillis, long size) {
