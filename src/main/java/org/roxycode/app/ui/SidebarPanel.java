@@ -17,6 +17,7 @@ public final class SidebarPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
     static final int LOGO_SIZE = 88;
+    static final String SUBTITLE_BADGE_TEXT = "AI Workspace";
     private final Consumer<String> navigationAction;
     private final List<NavButton> navButtons = new ArrayList<>();
     private final Map<String, NavButton> cardButtons = new LinkedHashMap<>();
@@ -65,13 +66,17 @@ public final class SidebarPanel extends JPanel {
     }
 
     private JPanel createBrandingHeader() {
-        JPanel brandingPanel = new JPanel(new MigLayout("fillx, insets 10 10 15 10, wrap 1", "[center]", "[]10[]"));
+        JPanel brandingPanel = new JPanel(new MigLayout("fillx, insets 8 10 10 10, wrap 1", "[center]", "[]8[]3[]"));
         brandingPanel.setOpaque(false);
         JLabel titleLabel = new JLabel("RoxyCode");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
+        JLabel subtitleBadge = new JLabel(SUBTITLE_BADGE_TEXT);
+        subtitleBadge.putClientProperty(FlatClientProperties.STYLE,
+                "font: bold -2; foreground: $Label.disabledForeground; background: darken($Panel.background, 5%); arc: 8; border: 2,8,2,8");
         brandingPanel.add(new RoundedImagePanel(LOGO_RESOURCE_PATH, LOGO_SIZE, 22),
                 "w " + LOGO_SIZE + "!, h " + LOGO_SIZE + "!");
         brandingPanel.add(titleLabel);
+        brandingPanel.add(subtitleBadge);
         return brandingPanel;
     }
 

@@ -6,9 +6,10 @@ body { font-family: sans-serif; font-size: 13px; color: #cccccc; margin: 10px; b
 .system-entry { background-color: #2d2d2d; }
 .system-accent { background-color: #666666; }
 
-.tool-call { background-color: transparent; }
-.tool-accent { background-color: #f57c00; }
-.tool-body { font-family: monospace; color: #aaaaaa; background-color: transparent; border: none; padding: 0; margin: 0; }
+.tool-call { background-color: #1e2228; border-color: #333842; border-style: solid; border-width: 1px; }
+.tool-accent { background-color: #f59e0b; }
+.role-tool { font-family: monospace; font-size: 10px; font-weight: bold; color: #f59e0b; }
+.tool-body { font-family: monospace; color: #c9d1d9; background-color: transparent; border-style: none; border-width: 0px; padding: 0px; margin: 4px 0px 0px 0px; }
 
 .role-ai { font-family: monospace; font-size: 11px; font-weight: bold; color: #4caf50; }
 .role-user { font-family: monospace; font-size: 11px; font-weight: bold; color: #3794ff; }
@@ -23,18 +24,18 @@ h4, h5, h6 { font-size: 12px; font-weight: bold; color: #9cdcfe; margin-top: 4px
 blockquote { color: #9cdcfe; margin-left: 10px; }
 a { color: #3794ff; text-decoration: none; }
 
-pre { background-color: #1e1e1e; color: #d4d4d4; padding: 8px; margin: 4px 0px 4px 0px; }
-code { font-family: monospace; background-color: #1e1e1e; color: #d4d4d4; }
+pre { background-color: #181a1f; color: #e2e8f0; padding: 10px 12px; margin: 6px 0px 6px 0px; border-color: #333842; border-style: solid; border-width: 1px; }
+code { font-family: monospace; background-color: #2c313a; color: #e2e8f0; }
 
 .spec-functional-header { color: #2196F3; }
 .spec-technical-header { color: #4CAF50; }
 
-.tk-rw { color: #569cd6; font-weight: bold; }
-.tk-st { color: #ce9178; }
-.tk-nm { color: #b5cea8; }
-.tk-cm { color: #6a9955; font-style: italic; }
-.tool-result { color: #4caf50; margin-top: 4px; }
-.tool-error { color: #f44336; margin-top: 4px; }
+.tk-rw { color: #ff7b72; font-weight: bold; }
+.tk-st { color: #a5d6ff; }
+.tk-nm { color: #79c0ff; }
+.tk-cm { color: #8b949e; font-style: italic; }
+.tool-result { font-family: sans-serif; font-size: 11px; color: #4ade80; font-weight: bold; }
+.tool-error { font-family: sans-serif; font-size: 11px; color: #f87171; font-weight: bold; }
 .copy-action { font-family: sans-serif; font-size: 10px; color: #888888; text-decoration: none; }
 .copy-feedback { font-family: sans-serif; font-size: 10px; color: #4caf50; font-weight: bold; }
 .welcome-card { background-color: #252526; }

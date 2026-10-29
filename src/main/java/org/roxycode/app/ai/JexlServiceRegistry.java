@@ -39,6 +39,6 @@ public class JexlServiceRegistry {
     public String getDocumentation(WorkflowPhase currentPhase) {
         String cacheKey = currentPhase != null ? currentPhase.name() : "NULL_PHASE";
         return docCache.get(cacheKey,
-                key -> docGenerator.generateDoc(new ArrayList<>(getServices(currentPhase).values())));
+                key -> docGenerator.generateDoc(new ArrayList<>(getServices(currentPhase).values()), currentPhase));
     }
 }

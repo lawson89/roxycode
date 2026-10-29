@@ -16,6 +16,7 @@ import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.SymbolService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.ui.SwingTestUtils;
@@ -60,7 +61,13 @@ class LLMDocGeneratorTest {
                         "readSymbol(relativePath: string, symbolName: string): string;",
                         "readSymbols(relativePath: string, symbolNames: string[]): Map;",
                         "findSymbol(symbolName: string): List<SymbolInfo>;", "interface SymbolInfo {",
-                        "startLine: number;", "endLine: number;", "signature: string;"));
+                        "startLine: number;", "endLine: number;", "signature: string;"),
+                serviceCase(PlanService.class, new PlanService(null, null, null, null),
+                        "submitPlan(title: string, goal: string, requirements: string[], technicalSteps: string[]): string;",
+                        "markStepCompleted(index: number): string;", "markStepsCompleted(indices: number[]): string;",
+                        "requestDevelopment(reason: string): string;", "requestReview(reason: string): string;",
+                        "requestFixes(reason: string): string;", "requestCompletion(reason: string): string;",
+                        "requestPlanRevision(reason: string): string;"));
     }
 
     @ParameterizedTest
@@ -92,6 +99,31 @@ class LLMDocGeneratorTest {
         SwingTestUtils.assertContainsAll(doc, "### JEXL API Documentation",
                 "// Global variable exposed in JEXL: mockService", "interface MockAgentService",
                 "doSomething(input: string): string;", "This is a mock service");
+    }
+
+    @Test
+    void testGenerateDocFiltersMethodsAndSupportingTypesByWorkflowPhase() {
+        LLMDocGenerator generator = new LLMDocGenerator();
+        PhaseFilteredService svc = new PhaseFilteredService();
+
+        String allDoc = generator.generateDoc(List.of(svc));
+        SwingTestUtils.assertContainsAll(allDoc, "wildcardMethod(): string;", "planOnlyMethod(): Details;",
+                "codeReviewMethod(): Status;", "interface Details {", "enum Status {");
+        assertFalse(allDoc.contains("emptyPhasesMethod"));
+
+        String planDoc = generator.generateDoc(List.of(svc), WorkflowPhase.PLAN);
+        SwingTestUtils.assertContainsAll(planDoc, "wildcardMethod(): string;", "planOnlyMethod(): Details;",
+                "interface Details {");
+        assertFalse(planDoc.contains("codeReviewMethod"));
+        assertFalse(planDoc.contains("enum Status {"));
+        assertFalse(planDoc.contains("emptyPhasesMethod"));
+
+        String codeDoc = generator.generateDoc(List.of(svc), WorkflowPhase.CODE);
+        SwingTestUtils.assertContainsAll(codeDoc, "wildcardMethod(): string;", "codeReviewMethod(): Status;",
+                "enum Status {");
+        assertFalse(codeDoc.contains("planOnlyMethod"));
+        assertFalse(codeDoc.contains("interface Details {"));
+        assertFalse(codeDoc.contains("emptyPhasesMethod"));
     }
 
     @Test
@@ -141,6 +173,29 @@ class LLMDocGeneratorTest {
         SwingTestUtils.assertContainsAll(doc, "interface ServiceWithNestedTypes", "getParent(): ParentRecord;",
                 "interface ParentRecord {", "child: ChildRecord;", "steps: NestedStep[];", "interface ChildRecord {",
                 "status: Status;", "interface NestedStep {", "description: string;", "enum Status {");
+    }
+
+    @AgentService(value = "phaseService", phases = {"*"})
+    public static class PhaseFilteredService {
+        @AgentDoc("Wildcard method")
+        public String wildcardMethod() {
+            return "ok";
+        }
+
+        @AgentDoc(value = "Plan only", phases = {"PLAN"})
+        public Details planOnlyMethod() {
+            return null;
+        }
+
+        @AgentDoc(value = "Code and review", phases = {"CODE", "REVIEW"})
+        public Status codeReviewMethod() {
+            return null;
+        }
+
+        @AgentDoc(value = "Empty phases", phases = {})
+        public String emptyPhasesMethod() {
+            return "none";
+        }
     }
 
     @AgentService("mockService")

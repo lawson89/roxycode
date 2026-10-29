@@ -53,24 +53,30 @@ public class ChatHtmlTemplates {
 
     public static String renderToolLog(String output, boolean success, String error) {
         String statusHtml = success
-                ? "<div class='tool-result'>&#10003; Executed successfully</div>"
-                : "<div class='tool-error'>&#10007; Error: " + ((error == null || error.trim().isEmpty())
+                ? "<span class='tool-result'>&#10003; Executed successfully</span>"
+                : "<span class='tool-error'>&#10007; Error: " + ((error == null || error.trim().isEmpty())
                         ? "Unknown error"
-                        : SwingHtmlUtils.escapeHtml(error)) + "</div>";
+                        : SwingHtmlUtils.escapeHtml(error)) + "</span>";
         return """
                 <table class="tool-call" width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                         <td class="tool-accent" width="4" nowrap="nowrap">&nbsp;</td>
-                        <td class="tool-body-container" width="100%%" style="padding: 8px 12px;">
+                        <td class="tool-body-container" width="100%%" style="padding: 6px 12px 8px 12px;">
+                            <table width="100%%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td align="left" valign="middle"><span class="role-tool">&#9889; JEXL TOOL</span></td>
+                                    <td align="right" valign="middle">%s</td>
+                                </tr>
+                            </table>
                             <pre class="tool-body">%s</pre>
-                            %s
                         </td>
                     </tr>
                 </table>
                 <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr><td height="8">&nbsp;</td></tr>
                 </table>
-                """.formatted(output != null ? output : "", statusHtml);
+                """
+                .formatted(statusHtml, output != null ? output : "");
     }
 
     public static String renderWelcomeCard() {

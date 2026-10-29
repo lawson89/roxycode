@@ -3,12 +3,12 @@
 This document describes the Apache Commons JEXL 3 syntax and safety rules for the RoxyCode environment. Always consult the injected **JEXL API Documentation** in your session context for the exact workspace services and methods available in your current phase.
 
 ## Purpose: Lightweight JS-Style Orchestration of Java Services
-- **Heavy Lifting Lives in Java Services**: File I/O, RipGrep text search, Universal Ctags symbol analysis, Git operations, build/test execution, and agent memory management are implemented in dedicated Java `@AgentService` classes (`fileReadService`, `fileEditorService`, `grepService`, `symbolService`, `gitService`, `buildToolService`, `memoryService`).
-- **JEXL is the Glue Layer**: Use `executeJexl` strictly as a concise, JavaScript-like orchestration layer to batch and coordinate multiple service calls in a single turn (e.g., reading multiple files or symbols, applying edits, and running `buildToolService.compile()`), rather than writing complex procedural algorithms in JEXL.
+- **Heavy Lifting Lives in Java Services**: File I/O, RipGrep text search, Universal Ctags symbol analysis, Git operations, build/test execution, agent memory management, and plan/workflow management are implemented in dedicated Java `@AgentService` classes (`fileReadService`, `fileEditorService`, `grepService`, `symbolService`, `gitService`, `buildToolService`, `memoryService`, `planService`).
+- **JEXL is the Glue Layer**: Use `executeJexl` strictly as a concise, JavaScript-like orchestration layer to batch and coordinate multiple service calls in a single turn (e.g., reading multiple files or symbols, applying edits, running `buildToolService.compile()`, and marking steps completed via `planService.markStepsCompleted([0, 1])`), rather than writing complex procedural algorithms in JEXL.
 
-## Tool Separation: Workspace Services (`executeJexl`) vs. Native Plan Tools
-- **`executeJexl` (`JexlTool`)** is strictly for workspace services: `fileReadService`, `fileEditorService`, `grepService`, `symbolService`, `gitService`, `buildToolService`, and `memoryService`.
-- **`PlanService` tools** (`submitPlan`, `addTechnicalStep`, `updateTechnicalStep`, `markStepCompleted`, `markStepsCompleted`, `markStepIncomplete`, `markStepsIncomplete`, `addHandoffLogEntry`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`) are dedicated native tools called directly—**NOT** inside JEXL scripts.
+## Unified JEXL Services (`executeJexl`)
+- **`executeJexl` (`JexlTool`)** exposes all workspace and workflow services according to the active phase: `fileReadService`, `fileEditorService`, `grepService`, `symbolService`, `gitService`, `buildToolService`, `memoryService`, and `planService`.
+- **`planService`** methods (`submitPlan`, `addTechnicalStep`, `updateTechnicalStep`, `markStepCompleted`, `markStepsCompleted`, `markStepIncomplete`, `markStepsIncomplete`, `addHandoffLogEntry`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`) are invoked directly on `planService` inside `executeJexl` (e.g., `planService.markStepsCompleted([0, 1])`).
 
 ## JEXL Syntax Rules
 

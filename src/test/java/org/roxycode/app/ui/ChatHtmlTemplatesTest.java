@@ -56,8 +56,8 @@ class ChatHtmlTemplatesTest {
     @Test
     void testRenderToolLog() {
         String result = ChatHtmlTemplates.renderToolLog("diff output", true, null);
-        assertContainsAll(result, "tool-call", "tool-accent", "tool-body-container", "diff output", "tool-result",
-                "&#10003; Executed successfully");
+        assertContainsAll(result, "tool-call", "tool-accent", "tool-body-container", "role-tool", "&#9889; JEXL TOOL",
+                "diff output", "tool-result", "&#10003; Executed successfully");
         for (String absent : new String[]{"accent-bar", "tool-header", "tool-error"}) {
             assertFalse(result.contains(absent));
         }

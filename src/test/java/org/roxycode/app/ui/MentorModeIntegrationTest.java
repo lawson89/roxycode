@@ -72,6 +72,12 @@ class MentorModeIntegrationTest {
         assertNull(taskChat.getModel().getLockedPhase());
         assertTrue(taskChat.getModel().isTaskMode());
 
+        assertNotNull(qaWorkspacePanel.getQaTabs().getIconAt(0));
+        assertNotNull(qaWorkspacePanel.getQaTabs().getIconAt(1));
+        assertNotNull(taskWorkspacePanel.getTaskTabs().getIconAt(0));
+        assertNotNull(taskWorkspacePanel.getTaskTabs().getIconAt(1));
+        assertNotNull(taskWorkspacePanel.getTaskTabs().getIconAt(2));
+
         qaChat.appendMessage("user", "QA only question");
         assertEquals(1, qaChat.getConversationMessages().size());
         assertTrue(taskChat.getConversationMessages().isEmpty());

@@ -467,12 +467,19 @@ class ChatControllerTest extends ChatTestFixture {
         List<Boolean> loadingStates = new ArrayList<>();
         chatPanel.addLoadingListener(loadingStates::add);
 
+        assertTrue(chatPanel.getSendButton().isVisible());
+        assertFalse(chatPanel.getStopButton().isVisible());
+
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
         chatPanel.setLoading(true);
+        assertFalse(chatPanel.getSendButton().isVisible());
+        assertTrue(chatPanel.getStopButton().isVisible());
         assertFalse(chatPanel.getApproveButton().isEnabled());
         assertFalse(chatPanel.getRejectButton().isEnabled());
 
         chatPanel.setLoading(false);
+        assertTrue(chatPanel.getSendButton().isVisible());
+        assertFalse(chatPanel.getStopButton().isVisible());
         assertTrue(chatPanel.getApproveButton().isEnabled());
         assertTrue(chatPanel.getRejectButton().isEnabled());
         assertEquals(List.of(true, false), loadingStates);

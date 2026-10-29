@@ -16,6 +16,10 @@ public class AgentDocTest {
         @AgentDoc(value = "Test method", examples = {"methodExample"})
         public void testMethod(@AgentDoc("Test param") String param) {
         }
+
+        @AgentDoc(value = "Phase restricted method", phases = {"CODE", "REVIEW"})
+        public void restrictedMethod() {
+        }
     }
 
     @Test
@@ -25,6 +29,7 @@ public class AgentDocTest {
         assertEquals("Test class", classDoc.value());
         assertArrayEquals(new String[]{"example1", "example2"}, classDoc.examples());
         assertArrayEquals(new String[]{"note1"}, classDoc.notes());
+        assertArrayEquals(new String[]{"*"}, classDoc.phases());
 
         Field field = TestClass.class.getField("testField");
         AgentDoc fieldDoc = field.getAnnotation(AgentDoc.class);
@@ -36,6 +41,12 @@ public class AgentDocTest {
         assertNotNull(methodDoc);
         assertEquals("Test method", methodDoc.value());
         assertArrayEquals(new String[]{"methodExample"}, methodDoc.examples());
+        assertArrayEquals(new String[]{"*"}, methodDoc.phases());
+
+        Method restricted = TestClass.class.getMethod("restrictedMethod");
+        AgentDoc restrictedDoc = restricted.getAnnotation(AgentDoc.class);
+        assertNotNull(restrictedDoc);
+        assertArrayEquals(new String[]{"CODE", "REVIEW"}, restrictedDoc.phases());
 
         AgentDoc paramDoc = (AgentDoc) method.getParameters()[0].getAnnotation(AgentDoc.class);
         assertNotNull(paramDoc);

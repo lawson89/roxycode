@@ -58,8 +58,10 @@ public final class QaWorkspacePanel extends JPanel {
         qaTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, qaHeaderBar);
         this.qaChatPanel = exploreChatPanel;
         this.pastTopicsPanel = new ArchiveBrowserPanel(memoryService, ArchiveMode.TOPICS);
-        qaTabs.addTab("Chat", qaChatPanel);
-        qaTabs.addTab(PAST_TOPICS_TAB_TITLE, pastTopicsPanel);
+        qaTabs.addTab("Chat", FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, SwingHtmlUtils.getAccentColor()),
+                qaChatPanel);
+        qaTabs.addTab(PAST_TOPICS_TAB_TITLE,
+                FontIcon.of(Codicons.HISTORY, 15, SwingHtmlUtils.getMutedForegroundColor()), pastTopicsPanel);
         qaTabs.addChangeListener(e -> {
             if (qaChatPanel != null && qaChatPanel.equals(qaTabs.getSelectedComponent())) {
                 SwingUtilities.invokeLater(qaChatPanel::focusInput);
@@ -95,7 +97,12 @@ public final class QaWorkspacePanel extends JPanel {
         SwingHtmlUtils.applyTintedBannerStyle(mentorBanner, accent, 4, 10, 10);
         mentorModeLabel.setIcon(FontIcon.of(Codicons.SEARCH, 15, accent));
         mentorModeLabel.setForeground(accent);
-        mentorSubtitleLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+        Color muted = SwingHtmlUtils.getMutedForegroundColor();
+        mentorSubtitleLabel.setForeground(muted);
+        if (qaTabs != null && qaTabs.getTabCount() >= 2) {
+            qaTabs.setIconAt(0, FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent));
+            qaTabs.setIconAt(1, FontIcon.of(Codicons.HISTORY, 15, muted));
+        }
     }
 
     public void bindSidebar(SidebarPanel sidebar) {

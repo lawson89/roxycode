@@ -99,6 +99,38 @@ class HeaderPanelTest {
     }
 
     @Test
+    void testModelSelectorPopupAndStatusPanelMemoryBar() {
+        SettingsService ss = spy(createSettingsService());
+        HeaderPanel header = new HeaderPanel(new ProjectService(ss, null), createGitService(), ss);
+
+        javax.swing.JPopupMenu popup = header.buildModelSelectorPopup();
+        assertNotNull(popup);
+        assertTrue(popup.getComponentCount() > 0);
+
+        header.selectModel("gemini-4-argon");
+        assertEquals("gemini-4-argon", header.getModelLabel().getText());
+        assertEquals("gemini-4-argon", ss.getSettings().getGeminiModel());
+        verify(ss, atLeastOnce()).saveSettings();
+
+        org.roxycode.app.service.EnvironmentService envService = mock(
+                org.roxycode.app.service.EnvironmentService.class);
+        when(envService.getOsName()).thenReturn("Linux");
+        when(envService.getOsVersion()).thenReturn("6.8");
+        when(envService.getCurrentUser()).thenReturn("dev");
+        when(envService.getJavaVersion()).thenReturn("21");
+        when(envService.getMemoryUsageMb()).thenReturn(150L);
+        when(envService.getTotalMemoryMb()).thenReturn(300L);
+
+        StatusPanel statusPanel = new StatusPanel(envService);
+        try {
+            assertEquals(50, statusPanel.getMemProgressBar().getValue());
+            assertTrue(statusPanel.getMemProgressBar().getToolTipText().contains("50%"));
+        } finally {
+            statusPanel.removeNotify();
+        }
+    }
+
+    @Test
     void testSwitchProjectAsyncRunsOffEdt() {
         SettingsService ss = createSettingsService();
         ProjectService ps = spy(new ProjectService(ss, null));

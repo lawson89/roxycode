@@ -45,7 +45,6 @@ import org.springframework.context.event.EventListener;
 public class ChatPanel extends JPanel implements AutoCloseable {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
-    private static final String MIG_GROWX_WRAP = "growx, wrap";
 
     static final String NEW_TOPIC_BUTTON_TEXT = "New Topic";
     static final String RESET_SESSION_BUTTON_TEXT = "Reset Session";
@@ -147,57 +146,72 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     private JPanel createInputSection(boolean isTaskMode) {
         attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         attachmentPanel.setOpaque(false);
+        attachmentPanel.setVisible(false);
 
-        JPanel inputSection = new JPanel(new MigLayout("fill, insets 6 10 10 10", "[grow, fill][]", "[grow, fill]"));
-        inputSection.setMinimumSize(new Dimension(0, 85));
+        JPanel inputSection = new JPanel(new MigLayout("fill, insets 8 12 10 12", "[grow, fill]", "[grow, fill]"));
+        inputSection.setMinimumSize(new Dimension(0, 95));
+
+        JPanel composerCard = new JPanel(new BorderLayout());
+        composerCard.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 12; background: $TextArea.background; border: 1,1,1,1,$Component.borderColor");
 
         inputArea = new JTextArea(3, 0);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
-        inputArea.setMargin(new Insets(8, 10, 8, 10));
+        inputArea.setMargin(new Insets(8, 12, 4, 12));
+        inputArea.setBorder(BorderFactory.createEmptyBorder(8, 12, 4, 12));
         inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
-                "Ask Roxy... (Enter to send, Shift+Enter for new line, Ctrl+V to paste image)");
+                "Ask Roxy... (Enter to send, Shift+Enter for new line, @ to mention files, Ctrl+V to paste image)");
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
+        inputScrollPane.setBorder(BorderFactory.createEmptyBorder());
+        inputScrollPane.setOpaque(false);
+        inputScrollPane.getViewport().setOpaque(false);
         fileMentionPopup = new FileMentionPopup(inputArea, inputScrollPane);
 
-        JPanel inputAreaContainer = new JPanel(new BorderLayout());
-        inputAreaContainer.setOpaque(false);
-        inputAreaContainer.add(attachmentPanel, BorderLayout.NORTH);
-        inputAreaContainer.add(inputScrollPane, BorderLayout.CENTER);
+        sendButton = createActionButton("Send", Codicons.CHEVRON_RIGHT, new Insets(5, 14, 5, 14), false,
+                "arc: 8; font: bold; background: $Component.accentColor; foreground: $List.selectionForeground",
+                this::sendMessage);
 
-        sendButton = createActionButton("Send", Codicons.CHEVRON_RIGHT, new Insets(6, 14, 6, 14), false,
-                "arc: 8; background: $Component.accentColor; foreground: $List.selectionForeground", this::sendMessage);
-
-        stopButton = createActionButton("Stop", Codicons.DEBUG_STOP, new Insets(6, 14, 6, 14), false, "arc: 8",
-                e -> controller.stopTurn());
+        stopButton = createActionButton("Stop", Codicons.DEBUG_STOP, new Insets(5, 14, 5, 14), false,
+                "arc: 8; font: bold; background: $Actions.Red; foreground: #ffffff", e -> controller.stopTurn());
         stopButton.setEnabled(false);
+        stopButton.setVisible(false);
 
-        attachImageButton = createActionButton("Attach Image", Codicons.FILE_MEDIA, new Insets(4, 10, 4, 10), true,
-                "arc: 8; foreground: $Label.disabledForeground", e -> chooseImageAttachment());
-        attachImageButton.setToolTipText("Attach Image");
+        attachImageButton = createActionButton("Attach Image", Codicons.FILE_MEDIA, new Insets(4, 8, 4, 8), true,
+                "arc: 8; font: -1; foreground: $Label.disabledForeground", e -> chooseImageAttachment());
+        attachImageButton.setToolTipText("Attach Image (or paste with Ctrl+V)");
 
         resetSessionButton = createActionButton(isTaskMode ? RESET_SESSION_BUTTON_TEXT : NEW_TOPIC_BUTTON_TEXT,
-                isTaskMode ? Codicons.REFRESH : Codicons.COMMENT_DISCUSSION, new Insets(4, 10, 4, 10), true,
-                "arc: 8; foreground: $Label.disabledForeground", e -> controller.resetSession());
+                isTaskMode ? Codicons.REFRESH : Codicons.COMMENT_DISCUSSION, new Insets(4, 8, 4, 8), true,
+                "arc: 8; font: -1; foreground: $Label.disabledForeground", e -> controller.resetSession());
         if (!isTaskMode) {
             resetSessionButton.setToolTipText(NEW_TOPIC_TOOLTIP);
         }
 
+        JLabel mentionHintLabel = new JLabel("@ Mention");
+        mentionHintLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: -1; foreground: $Label.disabledForeground");
+        mentionHintLabel.setToolTipText("Type @ in the prompt to search and mention project files");
+
         turnLabel = new JLabel();
         turnLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: $small.font; foreground: $Label.disabledForeground");
+                "font: $small.font; foreground: $Label.disabledForeground; background: darken($TextArea.background, 4%); arc: 8; border: 2,8,2,8");
         updateTurnLabel();
 
-        JPanel buttonPanel = new JPanel(new MigLayout("insets 0, gap 5", "[]", "[]"));
-        buttonPanel.setOpaque(false);
-        buttonPanel.add(sendButton, MIG_GROWX_WRAP);
-        buttonPanel.add(stopButton, MIG_GROWX_WRAP);
-        buttonPanel.add(attachImageButton, MIG_GROWX_WRAP);
-        buttonPanel.add(resetSessionButton, MIG_GROWX_WRAP);
-        buttonPanel.add(turnLabel, "center");
+        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", "[]4[]10[]push[]8[]", "center"));
+        actionToolbar.setOpaque(false);
+        actionToolbar.add(attachImageButton);
+        actionToolbar.add(resetSessionButton);
+        actionToolbar.add(mentionHintLabel);
+        actionToolbar.add(turnLabel);
+        actionToolbar.add(sendButton, "hidemode 3");
+        actionToolbar.add(stopButton, "hidemode 3");
 
-        inputSection.add(inputAreaContainer, "grow");
-        inputSection.add(buttonPanel, "aligny top");
+        composerCard.add(attachmentPanel, BorderLayout.NORTH);
+        composerCard.add(inputScrollPane, BorderLayout.CENTER);
+        composerCard.add(actionToolbar, BorderLayout.SOUTH);
+
+        inputSection.add(composerCard, "grow");
         return inputSection;
     }
 
@@ -449,7 +463,9 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     void setLoading(boolean loading) {
         model.setLoading(loading);
         stopButton.setEnabled(loading);
+        stopButton.setVisible(loading);
         sendButton.setEnabled(!loading);
+        sendButton.setVisible(!loading);
         attachImageButton.setEnabled(!loading);
         inputArea.setEnabled(!loading);
         if (model.isTaskMode()) {

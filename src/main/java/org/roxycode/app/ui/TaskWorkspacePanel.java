@@ -34,7 +34,7 @@ import org.springframework.stereotype.Component;
 public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
-    static final String PHASE_HEADER_TEXT = "FEATURE MODE • ";
+    static final String PHASE_HEADER_TEXT = "FEATURE MODE  • ";
     static final String PAST_PLANS_TAB_TITLE = "Past Plans";
     static final int MAX_PLAN_TITLE_LENGTH = 40;
 
@@ -81,9 +81,11 @@ public final class TaskWorkspacePanel extends JPanel {
         taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE,
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
         taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, topBar);
-        taskTabs.addTab("Chat", taskChatPanel);
-        taskTabs.addTab("Plan", planPanel);
-        taskTabs.addTab(PAST_PLANS_TAB_TITLE, pastPlansPanel);
+        Color accent = SwingHtmlUtils.getAccentColor();
+        Color muted = SwingHtmlUtils.getMutedForegroundColor();
+        taskTabs.addTab("Chat", FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent), taskChatPanel);
+        taskTabs.addTab("Plan", FontIcon.of(Codicons.LIST_ORDERED, 15, accent), planPanel);
+        taskTabs.addTab(PAST_PLANS_TAB_TITLE, FontIcon.of(Codicons.HISTORY, 15, muted), pastPlansPanel);
         taskTabs.addChangeListener(e -> {
             if (taskChatPanel != null && taskChatPanel.equals(taskTabs.getSelectedComponent())) {
                 SwingUtilities.invokeLater(taskChatPanel::focusInput);
@@ -134,6 +136,12 @@ public final class TaskWorkspacePanel extends JPanel {
         planLabel.setForeground(accent);
         planLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -2; background: " + SwingHtmlUtils.toHex(tintedBg) + "; arc: 10; border: 3,8,3,8");
+        if (taskTabs != null && taskTabs.getTabCount() >= 3) {
+            Color muted = SwingHtmlUtils.getMutedForegroundColor();
+            taskTabs.setIconAt(0, FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent));
+            taskTabs.setIconAt(1, FontIcon.of(Codicons.LIST_ORDERED, 15, accent));
+            taskTabs.setIconAt(2, FontIcon.of(Codicons.HISTORY, 15, muted));
+        }
     }
 
     public void bindSidebar(SidebarPanel sidebar) {

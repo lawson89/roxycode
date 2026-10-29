@@ -16,6 +16,10 @@ public class LLMDocGenerator {
     private static final String FENCE_END = "```\n";
 
     public String generateDoc(Collection<Object> services) {
+        return generateDoc(services, null);
+    }
+
+    public String generateDoc(Collection<Object> services, WorkflowPhase currentPhase) {
         StringBuilder sb = new StringBuilder("### JEXL API Documentation\n\n").append(FENCE_START)
                 .append("""
                         /**
@@ -46,7 +50,7 @@ public class LLMDocGenerator {
                 sb.append(DOC_END);
             }
             sb.append("// Global variable exposed in JEXL: ").append(agentService.value()).append("\n");
-            generateClassStub(clazz, sb, extraTypes);
+            generateClassStub(clazz, currentPhase, sb, extraTypes);
             sb.append("\n");
         }
 
@@ -69,7 +73,16 @@ public class LLMDocGenerator {
         return sb.append(FENCE_END).toString();
     }
 
-    private void generateClassStub(Class<?> clazz, StringBuilder sb, Set<Class<?>> extraTypes) {
+    static boolean isMethodAllowedInPhase(AgentDoc doc, WorkflowPhase currentPhase) {
+        if (doc == null || doc.phases().length == 0) {
+            return false;
+        }
+        List<String> phaseList = Arrays.asList(doc.phases());
+        return currentPhase == null || phaseList.contains("*") || phaseList.contains(currentPhase.name());
+    }
+
+    private void generateClassStub(Class<?> clazz, WorkflowPhase currentPhase, StringBuilder sb,
+            Set<Class<?>> extraTypes) {
         sb.append("interface ").append(clazz.getSimpleName()).append(" {\n");
         Method[] methods = clazz.getMethods();
         Arrays.sort(methods, Comparator.comparing(Method::getName).thenComparingInt(Method::getParameterCount)
@@ -81,7 +94,7 @@ public class LLMDocGenerator {
                 continue;
             }
             AgentDoc doc = AnnotationUtils.findAnnotation(m, AgentDoc.class);
-            if (doc == null) {
+            if (!isMethodAllowedInPhase(doc, currentPhase)) {
                 continue;
             }
 

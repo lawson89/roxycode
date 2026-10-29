@@ -20,9 +20,12 @@ import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
+import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -30,7 +33,7 @@ import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
-import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -457,60 +460,59 @@ class PlanServiceTest {
     }
 
     @Test
-    void testPlanServiceIsDedicatedSpringToolBeanAndNotExposedInJexl() throws Exception {
-        assertNull(PlanService.class.getAnnotation(AgentService.class));
-        assertNotNull(PlanService.class.getAnnotation(Service.class));
+    void testPlanServiceIsExposedInJexlWithJsArrayLiteralsAndPhaseFiltering() throws Exception {
+        AgentService agentService = PlanService.class.getAnnotation(AgentService.class);
+        assertNotNull(agentService);
+        assertEquals("planService", agentService.value());
+        assertArrayEquals(new String[]{"PLAN", "CODE", "REVIEW"}, agentService.phases());
+        assertNull(PlanService.class.getDeclaredAnnotation(Service.class));
 
         JexlServiceRegistry registry = new JexlServiceRegistry();
         registry.register(service);
-        assertTrue(registry.getServices(WorkflowPhase.PLAN).isEmpty());
+        assertTrue(registry.getServices(WorkflowPhase.EXPLORE).isEmpty());
+        assertSame(service, registry.getServices(WorkflowPhase.PLAN).get("planService"));
+        assertSame(service, registry.getServices(WorkflowPhase.CODE).get("planService"));
+        assertSame(service, registry.getServices(WorkflowPhase.REVIEW).get("planService"));
 
         JexlTool jexlTool = new JexlTool(registry, null, null, null);
-        assertTrue(jexlTool.executeJexl("planService.submitPlan('T', 'G', [], [])").contains("error"));
+        String planResult = jexlTool.executeJexl("planService.submitPlan('T', 'G', ['Req 1'], ['Step 1', 'Step 2'])",
+                new ToolContext(new TurnToolContext("conv", WorkflowPhase.PLAN, new AtomicInteger()).toMap()));
+        assertTrue(planResult.contains("Implementation plan submitted successfully"));
 
-        Tool submitTool = PlanService.class.getMethod("submitPlan", String.class, String.class, List.class, List.class)
-                .getAnnotation(Tool.class);
-        assertNotNull(submitTool);
-        assertFalse(submitTool.returnDirect());
+        String devResult = jexlTool.executeJexl("planService.requestDevelopment('Ready')",
+                new ToolContext(new TurnToolContext("conv", WorkflowPhase.PLAN, new AtomicInteger()).toMap()));
+        assertTrue(devResult.contains("Transition Request"));
+        service.approveTransition();
+
+        String markResult = jexlTool.executeJexl("planService.markStepsCompleted([0, 1])",
+                new ToolContext(new TurnToolContext("conv", WorkflowPhase.CODE, new AtomicInteger()).toMap()));
+        assertTrue(markResult.contains("Marked steps [0, 1] completed."));
+        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
+        assertTrue(service.getCurrentPlan().technicalSteps().get(1).completed());
+
+        String unmarkResult = jexlTool.executeJexl("planService.markStepsIncomplete([1])",
+                new ToolContext(new TurnToolContext("conv", WorkflowPhase.CODE, new AtomicInteger()).toMap()));
+        assertTrue(unmarkResult.contains("Marked steps [1] incomplete."));
+        assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
 
         for (Method m : List.of(PlanService.class.getMethod("markStepCompleted", int.class),
+                PlanService.class.getMethod("markStepsCompleted", int[].class),
                 PlanService.class.getMethod("markStepsCompleted", List.class),
                 PlanService.class.getMethod("markStepIncomplete", int.class),
+                PlanService.class.getMethod("markStepsIncomplete", int[].class),
                 PlanService.class.getMethod("markStepsIncomplete", List.class),
                 PlanService.class.getMethod("addTechnicalStep", String.class),
                 PlanService.class.getMethod("updateTechnicalStep", int.class, String.class),
                 PlanService.class.getMethod("addHandoffLogEntry", String.class))) {
-            assertFalse(m.getAnnotation(Tool.class).returnDirect());
+            assertNotNull(m.getAnnotation(AgentDoc.class));
             assertEquals(String.class, m.getReturnType());
         }
 
         for (String name : List.of("requestDevelopment", "requestReview", "requestFixes", "requestCompletion",
                 "requestPlanRevision")) {
             Method m = PlanService.class.getMethod(name, String.class);
-            assertFalse(m.getAnnotation(Tool.class).returnDirect());
+            assertNotNull(m.getAnnotation(AgentDoc.class));
             assertEquals(String.class, m.getReturnType());
         }
-    }
-
-    @Test
-    void testGetToolCallbacksForPhaseFiltersToolsByWorkflowPhase() {
-        assertEquals(0, service.getToolCallbacksForPhase(null).length);
-        assertEquals(0, service.getToolCallbacksForPhase(WorkflowPhase.EXPLORE).length);
-
-        Set<String> planTools = Arrays.stream(service.getToolCallbacksForPhase(WorkflowPhase.PLAN))
-                .map(cb -> cb.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet());
-        assertEquals(Set.of("submitPlan", "addTechnicalStep", "updateTechnicalStep", "addHandoffLogEntry",
-                "requestDevelopment"), planTools);
-
-        Set<String> codeTools = Arrays.stream(service.getToolCallbacksForPhase(WorkflowPhase.CODE))
-                .map(cb -> cb.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet());
-        assertEquals(Set.of("addTechnicalStep", "updateTechnicalStep", "markStepCompleted", "markStepsCompleted",
-                "markStepIncomplete", "markStepsIncomplete", "addHandoffLogEntry", "requestReview",
-                "requestPlanRevision"), codeTools);
-
-        Set<String> reviewTools = Arrays.stream(service.getToolCallbacksForPhase(WorkflowPhase.REVIEW))
-                .map(cb -> cb.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet());
-        assertEquals(Set.of("markStepCompleted", "markStepsCompleted", "markStepIncomplete", "markStepsIncomplete",
-                "addHandoffLogEntry", "requestFixes", "requestCompletion"), reviewTools);
     }
 }

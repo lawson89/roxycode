@@ -13,11 +13,12 @@ public final class StatusPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private final transient EnvironmentService envService;
     private final JLabel memLabel = new JLabel();
+    private final JProgressBar memProgressBar = new JProgressBar(0, 100);
     private final Timer statsTimer;
 
     public StatusPanel(EnvironmentService envService) {
         this.envService = envService;
-        setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push []", "center"));
+        setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push [] 6 []", "center"));
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
@@ -29,11 +30,15 @@ public final class StatusPanel extends JPanel {
         javaLabel.setFont(osLabel.getFont());
         javaLabel.setForeground(UIManager.getColor("Label.disabledForeground"));
         memLabel.setFont(osLabel.getFont());
+
+        memProgressBar.setStringPainted(false);
+        memProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
         updateStats();
 
         add(osLabel);
         add(javaLabel);
         add(memLabel);
+        add(memProgressBar, "w 60!, h 8!");
 
         statsTimer = new Timer(5000, e -> updateStats());
         statsTimer.start();
@@ -57,6 +62,10 @@ public final class StatusPanel extends JPanel {
         return statsTimer;
     }
 
+    JProgressBar getMemProgressBar() {
+        return memProgressBar;
+    }
+
     @Override
     public void updateUI() {
         super.updateUI();
@@ -68,6 +77,11 @@ public final class StatusPanel extends JPanel {
     }
 
     void updateStats() {
-        memLabel.setText("Mem: " + envService.getMemoryUsageMb() + "/" + envService.getTotalMemoryMb() + "MB");
+        long usedMb = envService.getMemoryUsageMb();
+        long totalMb = envService.getTotalMemoryMb();
+        memLabel.setText("Mem: " + usedMb + "/" + totalMb + "MB");
+        int pct = totalMb > 0 ? (int) Math.min(100L, Math.max(0L, (usedMb * 100L) / totalMb)) : 0;
+        memProgressBar.setValue(pct);
+        memProgressBar.setToolTipText(pct + "% JVM heap used (" + usedMb + " / " + totalMb + " MB)");
     }
 }

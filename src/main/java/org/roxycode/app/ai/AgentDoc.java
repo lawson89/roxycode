@@ -30,4 +30,12 @@ public @interface AgentDoc {
      * @return the notes
      */
     String[] notes() default {};
+
+    /**
+     * The phases allowed to access this method. Defaults to {"*"}, meaning all phases allowed by the enclosing
+     * {@link AgentService}.
+     *
+     * @return the allowed phases
+     */
+    String[] phases() default {"*"};
 }

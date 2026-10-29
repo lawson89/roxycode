@@ -22,6 +22,8 @@ class SidebarPanelTest {
 
         assertNotNull(qaBtn);
         assertNotNull(taskBtn);
+        assertNotNull(SwingTestUtils.findComponent(sidebar, javax.swing.JLabel.class,
+                l -> SidebarPanel.SUBTITLE_BADGE_TEXT.equals(l.getText())));
         assertNotNull(contextBtn);
         assertNotNull(toolsBtn);
         assertTrue(qaBtn.isSelected());

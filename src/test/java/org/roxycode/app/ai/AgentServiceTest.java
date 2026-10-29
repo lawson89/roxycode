@@ -39,12 +39,12 @@ import org.springframework.stereotype.Service;
 class AgentServiceTest {
 
     private static final List<Class<?>> AGENT_SERVICES = List.of(GenericBuildToolService.class, GitService.class,
-            GrepService.class, FileReadService.class, FileEditorService.class, MemoryService.class,
-            SymbolService.class);
+            GrepService.class, FileReadService.class, FileEditorService.class, MemoryService.class, SymbolService.class,
+            PlanService.class);
 
     private static final Set<Class<?>> ALLOWED_JS_PARAM_TYPES = Set.of(String.class, String[].class, Object[].class,
-            List.class, int.class, Integer.class, long.class, Long.class, double.class, Double.class, boolean.class,
-            Boolean.class);
+            int[].class, List.class, int.class, Integer.class, long.class, Long.class, double.class, Double.class,
+            boolean.class, Boolean.class);
 
     @AgentService(value = "testService", phases = {"EXPLORE", "PLAN"})
     private static class MockService {

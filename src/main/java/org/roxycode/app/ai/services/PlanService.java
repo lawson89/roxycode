@@ -1,5 +1,6 @@
 package org.roxycode.app.ai.services;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -8,12 +9,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.AgentDoc;
+import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
@@ -25,15 +29,12 @@ import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.support.ToolCallbacks;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
+import org.springframework.core.annotation.AnnotationUtils;
 
-@Service
-@SuppressWarnings("PMD.NullAssignment")
+@AgentService(value = "planService", phases = {"PLAN", "CODE", "REVIEW"})
+@AgentDoc("Manages implementation plans, technical step progress, handoff logs, and workflow phase transitions.")
+@SuppressWarnings({"PMD.NullAssignment", "PMD.AvoidDuplicateLiterals"})
 public class PlanService {
 
     private static final Logger log = LoggerFactory.getLogger(PlanService.class);
@@ -74,20 +75,27 @@ public class PlanService {
             new TransitionKey(WorkflowPhase.REVIEW, WorkflowPhase.CODE), new TransitionRule(true, true),
             new TransitionKey(WorkflowPhase.REVIEW, WorkflowPhase.PLAN), new TransitionRule(false, true));
 
-    private static final Map<String, List<WorkflowPhase>> ALLOWED_PHASES_BY_TOOL = Map.ofEntries(
-            Map.entry("submitPlan", List.of(WorkflowPhase.PLAN)),
-            Map.entry("addTechnicalStep", List.of(WorkflowPhase.PLAN, WorkflowPhase.CODE)),
-            Map.entry("updateTechnicalStep", List.of(WorkflowPhase.PLAN, WorkflowPhase.CODE)),
-            Map.entry("markStepCompleted", List.of(WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
-            Map.entry("markStepsCompleted", List.of(WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
-            Map.entry("markStepIncomplete", List.of(WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
-            Map.entry("markStepsIncomplete", List.of(WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
-            Map.entry("addHandoffLogEntry", List.of(WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW)),
-            Map.entry("requestDevelopment", List.of(WorkflowPhase.PLAN)),
-            Map.entry("requestReview", List.of(WorkflowPhase.CODE)),
-            Map.entry("requestFixes", List.of(WorkflowPhase.REVIEW)),
-            Map.entry("requestCompletion", List.of(WorkflowPhase.REVIEW)),
-            Map.entry("requestPlanRevision", List.of(WorkflowPhase.CODE)));
+    private static final Map<String, List<WorkflowPhase>> ALLOWED_PHASES_BY_METHOD = buildAllowedPhasesByMethod();
+
+    private static Map<String, List<WorkflowPhase>> buildAllowedPhasesByMethod() {
+        Map<String, List<WorkflowPhase>> map = new LinkedHashMap<>();
+        for (Method method : PlanService.class.getDeclaredMethods()) {
+            AgentDoc doc = AnnotationUtils.findAnnotation(method, AgentDoc.class);
+            if (doc == null) {
+                continue;
+            }
+            List<WorkflowPhase> phases = new ArrayList<>();
+            for (String phaseName : doc.phases()) {
+                if ("*".equals(phaseName)) {
+                    Collections.addAll(phases, WorkflowPhase.values());
+                } else {
+                    phases.add(WorkflowPhase.valueOf(phaseName));
+                }
+            }
+            map.putIfAbsent(method.getName(), List.copyOf(phases));
+        }
+        return Collections.unmodifiableMap(map);
+    }
 
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
@@ -107,15 +115,6 @@ public class PlanService {
         this.gitService = gitService;
     }
 
-    public ToolCallback[] getToolCallbacksForPhase(WorkflowPhase phase) {
-        if (phase == null || phase == WorkflowPhase.EXPLORE) {
-            return new ToolCallback[0];
-        }
-        return Arrays.stream(ToolCallbacks.from(this)).filter(
-                cb -> ALLOWED_PHASES_BY_TOOL.getOrDefault(cb.getToolDefinition().name(), List.of()).contains(phase))
-                .toArray(ToolCallback[]::new);
-    }
-
     public synchronized String submitPlan(ImplementationPlan plan) {
         requirePhase("submitPlan");
         if (plan == null) {
@@ -125,12 +124,25 @@ public class PlanService {
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
-    @Tool(description = "Submits a project plan covering both functional requirements and technical implementation steps.")
+    @AgentDoc(value = "Submits a project plan covering both functional requirements and technical implementation steps.", phases = {
+            "PLAN"}, examples = {"planService.submitPlan('Add Feature', 'Goal description', ['Req 1'], ['Step 1'])"})
     public synchronized String submitPlan(
-            @ToolParam(description = "The concise title of the project or feature plan (max 50 characters).") String title,
-            @ToolParam(description = "The high-level goal of the plan.") String goal,
-            @ToolParam(description = "List of functional requirements.") List<String> requirements,
-            @ToolParam(description = "List of technical implementation steps.") List<String> technicalSteps) {
+            @AgentDoc("The concise title of the project or feature plan (max 50 characters)") String title,
+            @AgentDoc("The high-level goal of the plan") String goal,
+            @AgentDoc("Array of functional requirements") String[] requirements,
+            @AgentDoc("Array of technical implementation steps") String[] technicalSteps) {
+        requirePhase("submitPlan");
+        return submitPlan(title, goal, requirements != null ? Arrays.asList(requirements) : List.of(),
+                technicalSteps != null ? Arrays.asList(technicalSteps) : List.of());
+    }
+
+    @AgentDoc(value = "Submits a project plan covering both functional requirements and technical implementation steps.", phases = {
+            "PLAN"}, examples = {"planService.submitPlan('Add Feature', 'Goal description', ['Req 1'], ['Step 1'])"})
+    public synchronized String submitPlan(
+            @AgentDoc("The concise title of the project or feature plan (max 50 characters)") String title,
+            @AgentDoc("The high-level goal of the plan") String goal,
+            @AgentDoc("List of functional requirements") List<String> requirements,
+            @AgentDoc("List of technical implementation steps") List<String> technicalSteps) {
         requirePhase("submitPlan");
         List<String> safeRequirements = requirements != null ? List.copyOf(requirements) : List.of();
         List<ImplementationPlan.TechStep> steps = technicalSteps != null
@@ -148,9 +160,10 @@ public class PlanService {
         return description.trim();
     }
 
-    @Tool(description = "Adds a new technical implementation step to the current plan (inserted before trailing verification gates) without losing progress on completed steps.")
+    @AgentDoc(value = "Adds a new technical implementation step to the current plan (inserted before trailing verification gates) without losing progress on completed steps.", phases = {
+            "PLAN", "CODE"}, examples = {"planService.addTechnicalStep('Add unit tests for edge cases')"})
     public synchronized String addTechnicalStep(
-            @ToolParam(description = "Description of the new technical implementation step.") String description) {
+            @AgentDoc("Description of the new technical implementation step") String description) {
         requirePhase("addTechnicalStep");
         ensureActivePlan();
         String trimmed = requireNonBlankDescription(description);
@@ -166,10 +179,10 @@ public class PlanService {
                 currentPlan.formatRemainingIncompleteSteps());
     }
 
-    @Tool(description = "Updates the description of an existing technical step at the given 0-based index while preserving its completion status.")
-    public synchronized String updateTechnicalStep(
-            @ToolParam(description = "The 0-based index of the step to update.") int index,
-            @ToolParam(description = "The updated description for the technical step.") String description) {
+    @AgentDoc(value = "Updates the description of an existing technical step at the given 0-based index while preserving its completion status.", phases = {
+            "PLAN", "CODE"}, examples = {"planService.updateTechnicalStep(0, 'Updated step description')"})
+    public synchronized String updateTechnicalStep(@AgentDoc("The 0-based index of the step to update") int index,
+            @AgentDoc("The updated description for the technical step") String description) {
         requirePhase("updateTechnicalStep");
         ensureActivePlan();
         String trimmed = requireNonBlankDescription(description);
@@ -193,32 +206,62 @@ public class PlanService {
         }
     }
 
-    @Tool(description = "Marks a specific technical implementation step as completed using its 0-based index. Call this immediately after a step is verified rather than deferring to the end of the phase.")
+    @AgentDoc(value = "Marks a specific technical implementation step as completed using its 0-based index. Call this immediately after a step is verified rather than deferring to the end of the phase.", phases = {
+            "CODE", "REVIEW"}, examples = {"planService.markStepCompleted(0)"})
     public synchronized String markStepCompleted(
-            @ToolParam(description = "The index of the step (0-based). Must be valid for the current plan.") int index) {
+            @AgentDoc("The index of the step (0-based). Must be valid for the current plan") int index) {
         requirePhase("markStepCompleted");
         return updateStepsStatus(List.of(index), true);
     }
 
-    @Tool(description = "Marks multiple technical implementation steps as completed using their 0-based indices. Call this immediately after a batch of steps is verified rather than deferring to the end of the phase.")
+    @AgentDoc(value = "Marks multiple technical implementation steps as completed in a single batch call (0-based indices).", phases = {
+            "CODE", "REVIEW"}, examples = {"planService.markStepsCompleted([0, 1])"})
     public synchronized String markStepsCompleted(
-            @ToolParam(description = "List of 0-based step indices to mark as completed.") List<Integer> indices) {
+            @AgentDoc("Array of 0-based step indices to mark as completed") int... indices) {
+        requirePhase("markStepsCompleted");
+        return updateStepsStatus(toIntegerList(indices), true);
+    }
+
+    @AgentDoc(value = "Marks multiple technical implementation steps as completed using their 0-based indices. Call this immediately after a batch of steps is verified rather than deferring to the end of the phase.", phases = {
+            "CODE", "REVIEW"}, examples = {"planService.markStepsCompleted([0, 1])"})
+    public synchronized String markStepsCompleted(
+            @AgentDoc("List of 0-based step indices to mark as completed") List<Integer> indices) {
         requirePhase("markStepsCompleted");
         return updateStepsStatus(indices, true);
     }
 
-    @Tool(description = "Marks a technical implementation step as incomplete using its 0-based index.")
-    public synchronized String markStepIncomplete(
-            @ToolParam(description = "The index of the step (0-based).") int index) {
+    @AgentDoc(value = "Marks a technical implementation step as incomplete using its 0-based index.", phases = {"CODE",
+            "REVIEW"}, examples = {"planService.markStepIncomplete(0)"})
+    public synchronized String markStepIncomplete(@AgentDoc("The index of the step (0-based)") int index) {
         requirePhase("markStepIncomplete");
         return updateStepsStatus(List.of(index), false);
     }
 
-    @Tool(description = "Marks multiple technical implementation steps as incomplete using their 0-based indices.")
+    @AgentDoc(value = "Marks multiple technical implementation steps as incomplete in a single batch call (0-based indices).", phases = {
+            "CODE", "REVIEW"}, examples = {"planService.markStepsIncomplete([0, 1])"})
     public synchronized String markStepsIncomplete(
-            @ToolParam(description = "List of 0-based step indices to mark as incomplete.") List<Integer> indices) {
+            @AgentDoc("Array of 0-based step indices to mark as incomplete") int... indices) {
+        requirePhase("markStepsIncomplete");
+        return updateStepsStatus(toIntegerList(indices), false);
+    }
+
+    @AgentDoc(value = "Marks multiple technical implementation steps as incomplete using their 0-based indices.", phases = {
+            "CODE", "REVIEW"}, examples = {"planService.markStepsIncomplete([0, 1])"})
+    public synchronized String markStepsIncomplete(
+            @AgentDoc("List of 0-based step indices to mark as incomplete") List<Integer> indices) {
         requirePhase("markStepsIncomplete");
         return updateStepsStatus(indices, false);
+    }
+
+    private static List<Integer> toIntegerList(int... indices) {
+        if (indices == null) {
+            return null;
+        }
+        List<Integer> list = new ArrayList<>(indices.length);
+        for (int index : indices) {
+            list.add(index);
+        }
+        return list;
     }
 
     private synchronized String updateStepsStatus(List<Integer> indices, boolean completed) {
@@ -270,37 +313,42 @@ public class PlanService {
         setCurrentPlan(null);
     }
 
-    @Tool(description = "Requests transition to the development (CODE) phase.")
+    @AgentDoc(value = "Requests transition to the development (CODE) phase.", phases = {"PLAN"}, examples = {
+            "planService.requestDevelopment('Plan is complete and ready for implementation')"})
     public synchronized String requestDevelopment(
-            @ToolParam(description = "The reason for requesting transition to the CODE phase.") String reason) {
+            @AgentDoc("The reason for requesting transition to the CODE phase") String reason) {
         requirePhase("requestDevelopment");
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
-    @Tool(description = "Requests transition to the review phase.")
+    @AgentDoc(value = "Requests transition to the review phase.", phases = {"CODE"}, examples = {
+            "planService.requestReview('All implementation steps and unit tests are complete')"})
     public synchronized String requestReview(
-            @ToolParam(description = "The reason for requesting transition to the REVIEW phase.") String reason) {
+            @AgentDoc("The reason for requesting transition to the REVIEW phase") String reason) {
         requirePhase("requestReview");
         return routeToPhase(WorkflowPhase.REVIEW, reason);
     }
 
-    @Tool(description = "Requests transition back to development to address fixes.")
+    @AgentDoc(value = "Requests transition back to development to address fixes.", phases = {"REVIEW"}, examples = {
+            "planService.requestFixes('Found failing edge case in unit test')"})
     public synchronized String requestFixes(
-            @ToolParam(description = "The reason for requesting transition back to the CODE phase.") String reason) {
+            @AgentDoc("The reason for requesting transition back to the CODE phase") String reason) {
         requirePhase("requestFixes");
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
-    @Tool(description = "Signals completion of the current cycle and returns to planning.")
+    @AgentDoc(value = "Signals completion of the current cycle and returns to planning.", phases = {
+            "REVIEW"}, examples = {"planService.requestCompletion('All requirements and quality gates verified')"})
     public synchronized String requestCompletion(
-            @ToolParam(description = "The reason for completing the current cycle.") String reason) {
+            @AgentDoc("The reason for completing the current cycle") String reason) {
         requirePhase("requestCompletion");
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-    @Tool(description = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.")
+    @AgentDoc(value = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.", phases = {
+            "CODE"}, examples = {"planService.requestPlanRevision('Need architectural adjustment before proceeding')"})
     public synchronized String requestPlanRevision(
-            @ToolParam(description = "The reason for requesting a plan revision.") String reason) {
+            @AgentDoc("The reason for requesting a plan revision") String reason) {
         requirePhase("requestPlanRevision");
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
@@ -524,7 +572,7 @@ public class PlanService {
     }
 
     private void requirePhase(String methodName) {
-        List<WorkflowPhase> allowedPhases = ALLOWED_PHASES_BY_TOOL.getOrDefault(methodName, List.of());
+        List<WorkflowPhase> allowedPhases = ALLOWED_PHASES_BY_METHOD.getOrDefault(methodName, List.of());
         WorkflowPhase current = getCurrentPhase();
         if (allowedPhases.contains(current)) {
             return;
@@ -539,9 +587,10 @@ public class PlanService {
         }
     }
 
-    @Tool(description = "Adds a high-level summary entry to the handoff log.")
+    @AgentDoc(value = "Adds a high-level summary entry to the handoff log.", phases = {"PLAN", "CODE",
+            "REVIEW"}, examples = {"planService.addHandoffLogEntry('Completed refactoring of service layer')"})
     public synchronized String addHandoffLogEntry(
-            @ToolParam(description = "The summary entry to add to the handoff log.") String entry) {
+            @AgentDoc("The summary entry to add to the handoff log") String entry) {
         requirePhase("addHandoffLogEntry");
         ensureActivePlan();
         if (StringUtils.isBlank(entry)) {
