@@ -8,7 +8,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.swing.Timer;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
@@ -41,10 +40,6 @@ public final class ChatController implements AutoCloseable {
     static final String ROLE_USER = "user";
     static final String ROLE_AI = "ai";
     static final String IMAGE_REQUIRES_TEXT_MESSAGE = "Please enter a prompt message to accompany the attached image.";
-    static final int MAX_AUTO_NUDGES = 2;
-    static final String AUTO_NUDGE_PROMPT = "Roxy, you completed tool turns but didn't provide a final summary or answer to the user. "
-            + "Please review the tool outputs above and provide a concise summary of your actions and findings.";
-    static final int DEFAULT_ERROR_NUDGE_DELAY_MS = 1000;
     private static final String BT = "`";
 
     private final ChatModel model;
@@ -63,9 +58,6 @@ public final class ChatController implements AutoCloseable {
     private volatile long activeTurnId = 0;
     private volatile Future<?> activeTurnFuture;
     private volatile WorkflowTransitionEvent deferredTransitionEvent;
-    private int consecutiveAutoNudges = 0;
-    private int errorNudgeDelayMs = DEFAULT_ERROR_NUDGE_DELAY_MS;
-    private volatile Timer autoNudgeTimer;
 
     public ChatController(ChatModel model, ChatPanel view, AiService aiService, PlanService planService,
             ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
@@ -111,33 +103,6 @@ public final class ChatController implements AutoCloseable {
         return activeTurnId;
     }
 
-    int getConsecutiveAutoNudges() {
-        return consecutiveAutoNudges;
-    }
-
-    void setErrorNudgeDelayMs(int errorNudgeDelayMs) {
-        this.errorNudgeDelayMs = Math.max(0, errorNudgeDelayMs);
-    }
-
-    int getErrorNudgeDelayMs() {
-        return errorNudgeDelayMs;
-    }
-
-    Timer getAutoNudgeTimer() {
-        return autoNudgeTimer;
-    }
-
-    private boolean cancelAutoNudgeTimer() {
-        Timer timer = autoNudgeTimer;
-        if (timer == null) {
-            return false;
-        }
-        autoNudgeTimer = null;
-        boolean wasRunning = timer.isRunning();
-        timer.stop();
-        return wasRunning;
-    }
-
     @Override
     public void close() {
         cancelActiveTurnState(true);
@@ -149,8 +114,7 @@ public final class ChatController implements AutoCloseable {
     }
 
     public boolean isTurnActive() {
-        return (activeTurnId != 0 && activeTurnFuture != null)
-                || (autoNudgeTimer != null && autoNudgeTimer.isRunning());
+        return (activeTurnId != 0 && activeTurnFuture != null);
     }
 
     public String formatCurrentTurnStatus() {
@@ -174,8 +138,6 @@ public final class ChatController implements AutoCloseable {
             }
             return;
         }
-        consecutiveAutoNudges = 0;
-        cancelAutoNudgeTimer();
         if (eventPublisher != null) {
             eventPublisher.publishEvent(new UserMessageEvent(model.getConversationId(), ROLE_USER, text));
         }
@@ -186,10 +148,6 @@ public final class ChatController implements AutoCloseable {
 
     private boolean cancelActiveTurnState(boolean markCancelled) {
         model.setTurnCancelled(markCancelled);
-        if (markCancelled) {
-            consecutiveAutoNudges = 0;
-        }
-        boolean hadPendingNudge = cancelAutoNudgeTimer();
         deferredTransitionEvent = null;
         activeTurnId = 0;
         Future<?> futureToCancel = activeTurnFuture;
@@ -197,7 +155,7 @@ public final class ChatController implements AutoCloseable {
             activeTurnFuture = null;
             futureToCancel.cancel(true);
         }
-        return futureToCancel != null || hadPendingNudge;
+        return futureToCancel != null;
     }
 
     public void stopTurn() {
@@ -215,7 +173,6 @@ public final class ChatController implements AutoCloseable {
         if (requested == null)
             return;
         cancelActiveTurnState(false);
-        consecutiveAutoNudges = 0;
         Edt.run(view::hideTransitionBanner);
         turnExecutor.execute(() -> {
             planService.approveTransition();
@@ -238,7 +195,6 @@ public final class ChatController implements AutoCloseable {
         if (requested == null)
             return;
         cancelActiveTurnState(false);
-        consecutiveAutoNudges = 0;
         planService.rejectTransition();
         view.appendMessage(ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
         triggerTurn("I have rejected the transition to " + requested.getDisplayName()
@@ -367,14 +323,14 @@ public final class ChatController implements AutoCloseable {
     }
 
     private void finishTurnSuccess(long turnId, String response) {
-        finishTurn(turnId, ROLE_AI, response, shouldAutoNudgeOnResponse(response), 0);
+        finishTurn(turnId, ROLE_AI, response);
     }
 
     private void finishTurnError(long turnId, String errorMsg) {
-        finishTurn(turnId, ROLE_AI, errorMsg, shouldAutoNudgeOnError(), errorNudgeDelayMs);
+        finishTurn(turnId, ROLE_AI, errorMsg);
     }
 
-    private void finishTurn(long turnId, String role, String message, boolean autoNudge, int nudgeDelayMs) {
+    private void finishTurn(long turnId, String role, String message) {
         if (activeTurnId != turnId || model.isTurnCancelled())
             return;
         activeTurnId = 0;
@@ -386,42 +342,9 @@ public final class ChatController implements AutoCloseable {
         if (transition != null && !model.isTurnCancelled()) {
             view.setLoading(false);
             applyWorkflowTransition(transition);
-        } else if (autoNudge) {
-            scheduleAutoNudge(nudgeDelayMs);
         } else {
             view.setLoading(false);
         }
-    }
-
-    private boolean shouldAutoNudgeOnError() {
-        return !model.isTurnCancelled() && !hasPendingPhase() && model.getCurrentTurn() > 0
-                && consecutiveAutoNudges < MAX_AUTO_NUDGES;
-    }
-
-    private boolean shouldAutoNudgeOnResponse(String response) {
-        return !model.isTurnCancelled() && !hasPendingPhase() && consecutiveAutoNudges < MAX_AUTO_NUDGES
-                && AiService.isAutoNudgeableResponse(response, model.getCurrentTurn() > 0);
-    }
-
-    private void scheduleAutoNudge(int delayMs) {
-        cancelAutoNudgeTimer();
-        consecutiveAutoNudges++;
-        view.appendMessage(ROLE_SYSTEM,
-                "_Auto-nudging Roxy to continue (" + consecutiveAutoNudges + "/" + MAX_AUTO_NUDGES + ")..._");
-        if (delayMs <= 0) {
-            triggerTurn(AUTO_NUDGE_PROMPT);
-            return;
-        }
-        view.setLoading(true);
-        Timer timer = new Timer(delayMs, e -> {
-            autoNudgeTimer = null;
-            if (!model.isTurnCancelled()) {
-                triggerTurn(AUTO_NUDGE_PROMPT);
-            }
-        });
-        timer.setRepeats(false);
-        autoNudgeTimer = timer;
-        timer.start();
     }
 
     private void finishTurnCancelled(long turnId) {

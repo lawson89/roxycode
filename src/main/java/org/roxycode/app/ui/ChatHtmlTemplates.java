@@ -51,7 +51,7 @@ public class ChatHtmlTemplates {
                         actionCell, content != null ? content : "");
     }
 
-    public static String renderToolLog(String output, boolean success, String error) {
+    public static String renderToolLog(String output, boolean success, String error, String timestamp) {
         String statusHtml = success
                 ? "<span class='tool-result'>&#10003; Executed successfully</span>"
                 : "<span class='tool-error'>&#10007; Error: " + ((error == null || error.trim().isEmpty())
@@ -64,7 +64,7 @@ public class ChatHtmlTemplates {
                         <td class="tool-body-container" width="100%%" style="padding: 6px 12px 8px 12px;">
                             <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                                 <tr>
-                                    <td align="left" valign="middle"><span class="role-tool">&#9889; JEXL TOOL</span></td>
+                                    <td align="left" valign="middle"><span class="role-tool">&#9889; JEXL TOOL</span>&nbsp;&nbsp;<span class="timestamp">%s</span></td>
                                     <td align="right" valign="middle">%s</td>
                                 </tr>
                             </table>
@@ -76,7 +76,8 @@ public class ChatHtmlTemplates {
                     <tr><td height="8">&nbsp;</td></tr>
                 </table>
                 """
-                .formatted(statusHtml, output != null ? output : "");
+                .formatted(SwingHtmlUtils.escapeHtml(timestamp != null ? timestamp : ""), statusHtml,
+                        output != null ? output : "");
     }
 
     public static String renderWelcomeCard() {

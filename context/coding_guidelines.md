@@ -7,6 +7,7 @@
 *   **Restrict lambdas and method references:** While Java 21 supports robust functional paradigms, limit lambdas (`->`) and method references (`::`) to very simple, highly readable operations (no more than a few lines). For anything more complex, rely on plain procedural blocks and standard `for` loops.
 *   **Enforce early returns (guard clauses):** Check for invalid conditions and return or throw immediately at the top of a method. This flattens the architecture and completely avoids deeply nested `if/else` blocks.
 *   **Restrict complex pattern matching:** Although Java 21 has powerful pattern matching capabilities, avoid complex `switch` expressions with `when` clauses. Favor straightforward `instanceof` checks or basic `switch` statements to keep branching logic universally understandable.
+*   **Always use a full set of brackets on if statements: **
 
 ### Syntax and Typing
 *   **Ban `var` for local variables:** Require explicit type declarations (e.g., `String name` instead of `var name`). This ensures the code is completely readable and self-documenting without relying on an IDE's type inference.

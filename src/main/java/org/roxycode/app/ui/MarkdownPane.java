@@ -89,7 +89,7 @@ public final class MarkdownPane extends JTextPane {
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         int index = messages.size();
         Message msg = new Message(null, safeOutput, timestamp, true, success, error,
-                renderToolLogSafely(safeOutput, success, error));
+                renderToolLogSafely(safeOutput, success, error, timestamp));
         messages.add(msg);
         appendRenderedEntry(formatMessageEntryHtml(msg, index));
     }
@@ -202,9 +202,9 @@ public final class MarkdownPane extends JTextPane {
         }
     }
 
-    private static String renderToolLogSafely(String output, boolean success, String error) {
+    private static String renderToolLogSafely(String output, boolean success, String error, String timestamp) {
         try {
-            return ChatHtmlTemplates.renderToolLog(output, success, error);
+            return ChatHtmlTemplates.renderToolLog(output, success, error, timestamp);
         } catch (Exception e) {
             return ERROR_RENDERING_HTML;
         }

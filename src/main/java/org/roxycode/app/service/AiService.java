@@ -43,7 +43,7 @@ import org.springframework.util.MimeTypeUtils;
 public class AiService {
     private static final Logger log = LoggerFactory.getLogger(AiService.class);
     private static final String AGENT_NAME = "Roxy";
-    private static final String FINISH_REASON_UNKNOWN = "UNKNOWN";
+    static final String FINISH_REASON_UNKNOWN = "UNKNOWN";
 
     public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
     static final int MAX_TOPIC_TITLE_LENGTH = 80;
@@ -60,6 +60,9 @@ public class AiService {
     public static final Duration DEFAULT_TOPIC_TITLE_TIMEOUT = Duration.ofSeconds(10);
     private static final ExecutorService TITLE_TIMEOUT_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
+    public static final int MAX_AUTO_NUDGES = 2;
+    public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
+
     private final ChatClient statelessChatClient;
     private final ChatClient chatClient;
     private final SettingsService settingsService;
@@ -67,6 +70,7 @@ public class AiService {
     private final JexlTool jexlTool;
     private final PlanService planService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ChatMemory chatMemory;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
     private volatile Duration topicTitleTimeout = DEFAULT_TOPIC_TITLE_TIMEOUT;
 
@@ -78,6 +82,7 @@ public class AiService {
         this.jexlTool = jexlTool;
         this.planService = planService;
         this.eventPublisher = eventPublisher;
+        this.chatMemory = chatMemory;
         this.statelessChatClient = chatClientBuilder.build();
         this.chatClient = chatClientBuilder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
@@ -245,7 +250,7 @@ public class AiService {
         return content;
     }
 
-    private static String extractResponseText(ChatResponse chatResponse) {
+    static String extractResponseText(ChatResponse chatResponse) {
         if (chatResponse == null || chatResponse.getResult() == null) {
             return null;
         }
@@ -253,7 +258,7 @@ public class AiService {
         return result.getOutput() != null ? result.getOutput().getText() : null;
     }
 
-    private static String extractFinishReason(ChatResponse chatResponse) {
+    static String extractFinishReason(ChatResponse chatResponse) {
         String rawFinishReason = null;
         if (chatResponse != null && chatResponse.getResult() != null
                 && chatResponse.getResult().getMetadata() != null) {
@@ -346,6 +351,7 @@ public class AiService {
                     }
                 }).options(GoogleGenAiChatOptions.builder().model(settingsService.getSettings().getGeminiModel()));
         promptSpec.tools(jexlTool);
+        promptSpec.advisors(new AutoNudgeAdvisor(turnContext, chatMemory));
         return promptSpec.toolContext(turnContext.toMap());
     }
 
