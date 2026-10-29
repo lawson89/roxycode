@@ -140,27 +140,22 @@ public final class PlanPanel extends JPanel {
     }
 
     private void updateDisplay(ImplementationPlan plan) {
-        SwingWorker<String, Void> worker = new SwingWorker<>() {
-            @Override
-            protected String doInBackground() {
-                try {
-                    String status = getGitStatusText();
-                    String normalized = status != null ? status : "";
-                    Edt.run(() -> applyWorkerResult(this, plan, normalized));
-                    return normalized;
-                } catch (Exception e) {
-                    log.debug("Failed to refresh git status for plan panel", e);
-                    Edt.run(() -> applyWorkerResult(this, plan, lastGitStatus));
-                    return lastGitStatus;
-                }
+        var holder = new java.util.concurrent.atomic.AtomicReference<SwingWorker<String, Void>>();
+        SwingWorker<String, Void> worker = Edt.supplyAsync(() -> {
+            try {
+                String status = getGitStatusText();
+                return status != null ? status : "";
+            } catch (Exception e) {
+                log.debug("Failed to refresh git status for plan panel", e);
+                return lastGitStatus;
             }
-        };
+        }, normalized -> applyWorkerResult(holder.get(), plan, normalized));
+        holder.set(worker);
         activeRefreshWorker = worker;
-        worker.execute();
     }
 
     private void applyWorkerResult(SwingWorker<String, Void> worker, ImplementationPlan plan, String status) {
-        if (!Objects.equals(worker, activeRefreshWorker))
+        if (worker != null && !Objects.equals(worker, activeRefreshWorker))
             return;
         String normalized = status != null ? status : "";
         lastGitStatus = normalized;

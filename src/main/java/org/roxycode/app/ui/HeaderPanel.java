@@ -249,32 +249,18 @@ public final class HeaderPanel extends JPanel {
     }
 
     SwingWorker<String, Void> updateBranchLabel() {
-        SwingWorker<String, Void> worker = new SwingWorker<>() {
-            @Override
-            protected String doInBackground() {
-                return gitService.getCurrentBranch();
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    String branch = get();
-                    boolean valid = branch != null && !branch.isEmpty() && !branch.startsWith("Error")
-                            && !"Not a git repository".equals(branch);
-                    branchLabel.setIcon(
-                            valid ? FontIcon.of(Codicons.SOURCE_CONTROL, 14, resolveBranchAccentColor()) : null);
-                    branchLabel.setText(valid ? branch : "");
-                    branchLabel.setVisible(valid);
-                } catch (Exception e) {
-                    log.error("Failed to fetch git branch", e);
-                    branchLabel.setIcon(null);
-                    branchLabel.setText("");
-                    branchLabel.setVisible(false);
-                }
-            }
-        };
-        worker.execute();
-        return worker;
+        return Edt.supplyAsync(gitService::getCurrentBranch, branch -> {
+            boolean valid = branch != null && !branch.isEmpty() && !branch.startsWith("Error")
+                    && !"Not a git repository".equals(branch);
+            branchLabel.setIcon(valid ? FontIcon.of(Codicons.SOURCE_CONTROL, 14, resolveBranchAccentColor()) : null);
+            branchLabel.setText(valid ? branch : "");
+            branchLabel.setVisible(valid);
+        }, e -> {
+            log.error("Failed to fetch git branch", e);
+            branchLabel.setIcon(null);
+            branchLabel.setText("");
+            branchLabel.setVisible(false);
+        });
     }
 
     JLabel getProjectLabel() {

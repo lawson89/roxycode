@@ -183,22 +183,17 @@ public final class ArchiveBrowserPanel extends JPanel {
 
     SwingWorker<List<ArchiveEntrySummary>, Void> executeSearchAsync() {
         String query = searchField != null ? searchField.getText() : "";
-        SwingWorker<List<ArchiveEntrySummary>, Void> worker = new SwingWorker<>() {
-            @Override
-            protected List<ArchiveEntrySummary> doInBackground() {
-                try {
-                    List<ArchiveEntrySummary> results = loadEntriesForQuery(query);
-                    Edt.run(() -> applySearchResults(this, results, query));
-                    return results;
-                } catch (Exception e) {
-                    log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
-                    Edt.run(() -> applySearchResults(this, List.of(), query));
-                    return List.of();
-                }
+        var holder = new java.util.concurrent.atomic.AtomicReference<SwingWorker<List<ArchiveEntrySummary>, Void>>();
+        SwingWorker<List<ArchiveEntrySummary>, Void> worker = Edt.supplyAsync(() -> {
+            try {
+                return loadEntriesForQuery(query);
+            } catch (Exception e) {
+                log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
+                return List.of();
             }
-        };
+        }, results -> applySearchResults(holder.get(), results, query));
+        holder.set(worker);
         activeSearchWorker = worker;
-        worker.execute();
         return worker;
     }
 
@@ -219,7 +214,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     @SuppressWarnings("PMD.NullAssignment")
     private void applySearchResults(SwingWorker<List<ArchiveEntrySummary>, Void> worker,
             List<ArchiveEntrySummary> results, String query) {
-        if (!Objects.equals(worker, activeSearchWorker))
+        if (worker != null && !Objects.equals(worker, activeSearchWorker))
             return;
         List<ArchiveEntrySummary> safeResults = results != null ? results : List.of();
         String previousFilename = currentSelectedEntry != null ? currentSelectedEntry.filename() : null;
@@ -257,23 +252,18 @@ public final class ArchiveBrowserPanel extends JPanel {
         }
 
         detailSummaryLabel.setText(entry.title());
-        SwingWorker<String, Void> worker = new SwingWorker<>() {
-            @Override
-            protected String doInBackground() {
-                try {
-                    String raw = readEntryMarkdown(entry.filename());
-                    String normalized = raw != null ? raw : "";
-                    Edt.run(() -> applyDetailContent(this, entry, normalized));
-                    return normalized;
-                } catch (Exception e) {
-                    log.warn("Failed to read archived markdown {}: {}", entry.filename(), e.getMessage());
-                    Edt.run(() -> applyDetailContent(this, entry, ""));
-                    return "";
-                }
+        var holder = new java.util.concurrent.atomic.AtomicReference<SwingWorker<String, Void>>();
+        SwingWorker<String, Void> worker = Edt.supplyAsync(() -> {
+            try {
+                String raw = readEntryMarkdown(entry.filename());
+                return raw != null ? raw : "";
+            } catch (Exception e) {
+                log.warn("Failed to read archived markdown {}: {}", entry.filename(), e.getMessage());
+                return "";
             }
-        };
+        }, normalized -> applyDetailContent(holder.get(), entry, normalized));
+        holder.set(worker);
         activeReadWorker = worker;
-        worker.execute();
     }
 
     private String readEntryMarkdown(String filename) {
@@ -285,7 +275,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     private void applyDetailContent(SwingWorker<String, Void> worker, ArchiveEntrySummary entry, String rawMarkdown) {
-        if (!Objects.equals(worker, activeReadWorker))
+        if (worker != null && !Objects.equals(worker, activeReadWorker))
             return;
         this.currentRawMarkdown = rawMarkdown != null ? rawMarkdown : "";
         copyMarkdownButton.setEnabled(!this.currentRawMarkdown.isBlank());

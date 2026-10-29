@@ -9,7 +9,6 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.PlainDocument;
 import net.miginfocom.swing.MigLayout;
-import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.ContextChangedEvent;
@@ -150,35 +149,23 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     SwingWorker<CacheStatusData, Void> refreshStatus() {
-        SwingWorker<CacheStatusData, Void> worker = new SwingWorker<>() {
-            @Override
-            protected CacheStatusData doInBackground() {
-                Optional<ProjectCacheMeta> meta = metaService != null ? metaService.loadMeta() : Optional.empty();
-                Optional<String> packed = metaService != null ? metaService.loadRepoCache() : Optional.empty();
-                if (meta.isPresent()) {
-                    String stableContext = getStableContextString();
-                    return new CacheStatusData(meta, packed, TokenUtils.estimateTokens(stableContext),
-                            createDisplayDocument(packed.orElse("Content not found on disk.")),
-                            createDisplayDocument(stableContext), createDisplayDocument(getSessionContextString()));
-                }
-                return new CacheStatusData(meta, packed, 0,
-                        createDisplayDocument(packed.orElse("Repo Map will appear here after generation.")),
-                        createDisplayDocument(""), createDisplayDocument(""));
+        var holder = new java.util.concurrent.atomic.AtomicReference<SwingWorker<CacheStatusData, Void>>();
+        SwingWorker<CacheStatusData, Void> worker = Edt.supplyAsync(() -> {
+            Optional<ProjectCacheMeta> meta = metaService != null ? metaService.loadMeta() : Optional.empty();
+            Optional<String> packed = metaService != null ? metaService.loadRepoCache() : Optional.empty();
+            if (meta.isPresent()) {
+                String stableContext = getStableContextString();
+                return new CacheStatusData(meta, packed, TokenUtils.estimateTokens(stableContext),
+                        createDisplayDocument(packed.orElse("Content not found on disk.")),
+                        createDisplayDocument(stableContext), createDisplayDocument(getSessionContextString()));
             }
-
-            @Override
-            protected void done() {
-                if (isCancelled() || this != activeRefreshWorker)
-                    return;
-                try {
-                    applyStatusDataOnEdt(this, get());
-                } catch (Exception e) {
-                    log.error("Failed to refresh codebase cache status", e);
-                }
-            }
-        };
+            return new CacheStatusData(meta, packed, 0,
+                    createDisplayDocument(packed.orElse("Repo Map will appear here after generation.")),
+                    createDisplayDocument(""), createDisplayDocument(""));
+        }, data -> applyStatusDataOnEdt(holder.get(), data),
+                e -> log.error("Failed to refresh codebase cache status", e));
+        holder.set(worker);
         activeRefreshWorker = worker;
-        worker.execute();
         return worker;
     }
 
@@ -188,7 +175,7 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     private void applyStatusDataOnEdt(SwingWorker<CacheStatusData, Void> worker, CacheStatusData data) {
-        if (!Objects.equals(worker, activeRefreshWorker))
+        if (worker != null && !Objects.equals(worker, activeRefreshWorker))
             return;
         setAreaDocument(repoMapArea, data.repoMapDoc());
         if (data.meta().isPresent()) {
@@ -236,34 +223,25 @@ public final class CodebaseCachePanel extends JPanel {
         progressBar.setIndeterminate(true);
         statusLabel.setText("Generating Repo Map...");
 
-        SwingWorker<EditorResult, Void> worker = new SwingWorker<>() {
-            @Override
-            protected EditorResult doInBackground() {
-                return packerService.forceRegenerateRepoMap();
+        Edt.supplyAsync(packerService::forceRegenerateRepoMap, result -> {
+            if (result != null && result.success()) {
+                statusLabel.setText("Repo Map updated successfully.");
+            } else {
+                String hint = result != null ? result.errorHint() : "Unknown error";
+                statusLabel.setText("Failed: " + hint);
             }
+            refreshStatus();
+            finishPackUi();
+        }, e -> {
+            log.error("Repo map generation failed", e);
+            statusLabel.setText("Failed: " + e.getMessage());
+            finishPackUi();
+        });
+    }
 
-            @Override
-            protected void done() {
-                try {
-                    var result = get();
-                    if (result != null && result.success()) {
-                        statusLabel.setText("Repo Map updated successfully.");
-                        refreshStatus();
-                    } else {
-                        String hint = result != null ? result.errorHint() : "Unknown error";
-                        statusLabel.setText("Failed: " + hint);
-                        refreshStatus();
-                    }
-                } catch (Exception e) {
-                    log.error("Repo map generation failed", e);
-                    statusLabel.setText("Failed: " + e.getMessage());
-                } finally {
-                    packButton.setEnabled(true);
-                    progressBar.setIndeterminate(false);
-                    progressBar.setVisible(false);
-                }
-            }
-        };
-        worker.execute();
+    private void finishPackUi() {
+        packButton.setEnabled(true);
+        progressBar.setIndeterminate(false);
+        progressBar.setVisible(false);
     }
 }

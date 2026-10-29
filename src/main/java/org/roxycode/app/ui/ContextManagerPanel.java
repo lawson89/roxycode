@@ -282,31 +282,14 @@ public final class ContextManagerPanel extends JPanel {
 
         private <T> SwingWorker<T, Void> executeOperationAsync(Callable<T> backgroundTask, Consumer<T> onSuccess,
                 String logVerb, String errorVerb, String target) {
-            SwingWorker<T, Void> worker = new SwingWorker<>() {
-                @Override
-                protected T doInBackground() throws Exception {
-                    return backgroundTask.call();
+            return Edt.supplyAsync(backgroundTask, onSuccess, ex -> {
+                log.warn("Failed to {} {}: {}", logVerb, target, ex.getMessage());
+                Throwable root = ExceptionUtils.getRootCause(ex);
+                if (errorReporter != null && errorVerb != null) {
+                    errorReporter.accept("Error " + errorVerb + " " + target + ": "
+                            + (root != null ? root.getMessage() : ex.getMessage()));
                 }
-
-                @Override
-                protected void done() {
-                    try {
-                        T result = get();
-                        if (onSuccess != null) {
-                            onSuccess.accept(result);
-                        }
-                    } catch (Exception ex) {
-                        log.warn("Failed to {} {}: {}", logVerb, target, ex.getMessage());
-                        Throwable root = ExceptionUtils.getRootCause(ex);
-                        if (errorReporter != null && errorVerb != null) {
-                            errorReporter.accept("Error " + errorVerb + " " + target + ": "
-                                    + (root != null ? root.getMessage() : ex.getMessage()));
-                        }
-                    }
-                }
-            };
-            worker.execute();
-            return worker;
+            });
         }
 
         SwingWorker<Void, Void> addFolderAsync(String folderPath) {
