@@ -14,6 +14,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -57,6 +58,10 @@ public final class SettingsPanel extends JPanel {
     static final String SECTION_APPEARANCE_TITLE = "Appearance";
     static final String SECTION_AI_MODEL_TITLE = "AI Model & Credentials";
     static final String SECTION_AGENT_EXECUTION_TITLE = "Agent Execution & Diagnostics";
+    static final int MIN_AGENT_TOOL_TURNS = 1;
+    static final int MAX_AGENT_TOOL_TURNS = 100;
+    static final int MIN_CHAT_MEMORY_MESSAGES = 1;
+    static final int MAX_CHAT_MEMORY_MESSAGES = 500;
 
     private final transient SettingsService settingsService;
     private final JLabel titleLabel;
@@ -138,11 +143,15 @@ public final class SettingsPanel extends JPanel {
         geminiApiKeyField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Enter your Gemini API key...");
         SwingHtmlUtils.installTextContextMenu(geminiApiKeyField);
 
+        int initialToolTurns = Math.clamp(settingsService.getSettings().getMaxAgentToolTurns(), MIN_AGENT_TOOL_TURNS,
+                MAX_AGENT_TOOL_TURNS);
         maxAgentToolTurnsSpinner = new JSpinner(
-                new SpinnerNumberModel(settingsService.getSettings().getMaxAgentToolTurns(), 1, 50, 1));
+                new SpinnerNumberModel(initialToolTurns, MIN_AGENT_TOOL_TURNS, MAX_AGENT_TOOL_TURNS, 1));
 
+        int initialMaxMessages = Math.clamp(settingsService.getSettings().getMaxChatMemoryMessages(),
+                MIN_CHAT_MEMORY_MESSAGES, MAX_CHAT_MEMORY_MESSAGES);
         maxMessagesSpinner = new JSpinner(
-                new SpinnerNumberModel(settingsService.getSettings().getMaxChatMemoryMessages(), 1, 500, 5));
+                new SpinnerNumberModel(initialMaxMessages, MIN_CHAT_MEMORY_MESSAGES, MAX_CHAT_MEMORY_MESSAGES, 5));
 
         logToolCallsCheckBox = new JCheckBox("Write tool calls and results to ~/.roxycode/logs/toolcalls.log");
         logToolCallsCheckBox.setOpaque(false);
@@ -232,7 +241,7 @@ public final class SettingsPanel extends JPanel {
         turnsRow.setOpaque(false);
         turnsRow.add(
                 createFieldTextBlock("Max Agent Tool Turns",
-                        "Maximum consecutive JEXL tool execution turns allowed per prompt (1–50)."),
+                        "Maximum consecutive JEXL tool execution turns allowed per prompt (1–100)."),
                 MIG_GROWX_WMIN_ZERO);
         turnsRow.add(maxAgentToolTurnsSpinner, "w 100:120:140");
         card.add(turnsRow, MIG_GROWX_WMIN_ZERO);
@@ -468,6 +477,20 @@ public final class SettingsPanel extends JPanel {
                     }
                 }
             }
+            int clampedToolTurns = Math.clamp(event.settings().getMaxAgentToolTurns(), MIN_AGENT_TOOL_TURNS,
+                    MAX_AGENT_TOOL_TURNS);
+            if (!Integer.valueOf(clampedToolTurns).equals(maxAgentToolTurnsSpinner.getValue())) {
+                maxAgentToolTurnsSpinner.setValue(clampedToolTurns);
+            }
+            int clampedMaxMessages = Math.clamp(event.settings().getMaxChatMemoryMessages(), MIN_CHAT_MEMORY_MESSAGES,
+                    MAX_CHAT_MEMORY_MESSAGES);
+            if (!Integer.valueOf(clampedMaxMessages).equals(maxMessagesSpinner.getValue())) {
+                maxMessagesSpinner.setValue(clampedMaxMessages);
+            }
+            boolean logToolCalls = event.settings().isLogToolCalls();
+            if (logToolCalls != logToolCallsCheckBox.isSelected()) {
+                logToolCallsCheckBox.setSelected(logToolCalls);
+            }
         });
     }
 
@@ -481,9 +504,23 @@ public final class SettingsPanel extends JPanel {
         }
     }
 
+    private static void commitSpinnerEdit(JSpinner spinner) {
+        try {
+            spinner.commitEdit();
+        } catch (ParseException ex) {
+            log.debug("Ignoring invalid spinner text edit: {}", ex.getMessage());
+        }
+    }
+
     private void saveSettings() {
+        commitSpinnerEdit(maxAgentToolTurnsSpinner);
+        commitSpinnerEdit(maxMessagesSpinner);
+
         AppSettings settings = settingsService.getSettings();
-        String oldApiKey = settings.getGeminiApiKey() != null ? settings.getGeminiApiKey() : "";
+        String oldApiKey = "";
+        if (settings.getGeminiApiKey() != null) {
+            oldApiKey = settings.getGeminiApiKey();
+        }
         String newApiKey = new String(geminiApiKeyField.getPassword());
         int oldMaxMessages = settings.getMaxChatMemoryMessages();
         int newMaxMessages = (Integer) maxMessagesSpinner.getValue();
@@ -491,14 +528,19 @@ public final class SettingsPanel extends JPanel {
 
         settings.setGeminiApiKey(newApiKey);
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
-        if (selectedModel != null)
+        if (selectedModel != null) {
             settings.setGeminiModel(selectedModel.apiName());
+        }
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
         settings.setLogToolCalls(logToolCallsCheckBox.isSelected());
         settingsService.saveSettings();
 
-        statusLabel.setText(restartRequiredChanged ? SAVED_RESTART_REQUIRED_TEXT : SAVED_APPLIED_TEXT);
+        if (restartRequiredChanged) {
+            statusLabel.setText(SAVED_RESTART_REQUIRED_TEXT);
+        } else {
+            statusLabel.setText(SAVED_APPLIED_TEXT);
+        }
         statusTimer.restart();
     }
 

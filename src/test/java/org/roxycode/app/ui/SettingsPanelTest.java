@@ -64,16 +64,32 @@ class SettingsPanelTest {
         assertEquals("", settingsPanel.getStatusLabel().getText());
         assertFalse(settingsPanel.getLogToolCallsCheckBox().isSelected());
 
-        settingsPanel.getMaxAgentToolTurnsSpinner().setValue(12);
+        SpinnerNumberModel turnsModel = (SpinnerNumberModel) settingsPanel.getMaxAgentToolTurnsSpinner().getModel();
+        assertEquals(1, turnsModel.getMinimum());
+        assertEquals(100, turnsModel.getMaximum());
+
+        JSpinner.DefaultEditor turnsEditor = (JSpinner.DefaultEditor) settingsPanel.getMaxAgentToolTurnsSpinner()
+                .getEditor();
+        turnsEditor.getTextField().setText("85");
         settingsPanel.getLogToolCallsCheckBox().setSelected(true);
         JButton saveButton = SwingTestUtils.findButton(settingsPanel, "Save Settings");
         assertNotNull(saveButton);
         saveButton.doClick();
 
         verify(settingsService, times(1)).saveSettings();
-        assertEquals(12, settings.getMaxAgentToolTurns());
+        assertEquals(85, settings.getMaxAgentToolTurns());
+        assertEquals(85, settingsPanel.getMaxAgentToolTurnsSpinner().getValue());
         assertTrue(settings.isLogToolCalls());
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
+
+        settings.setMaxAgentToolTurns(100);
+        settings.setMaxChatMemoryMessages(250);
+        settings.setLogToolCalls(false);
+        settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
+        SwingTestUtils.flushEdt();
+        assertEquals(100, settingsPanel.getMaxAgentToolTurnsSpinner().getValue());
+        assertEquals(250, settingsPanel.getMaxMessagesSpinner().getValue());
+        assertFalse(settingsPanel.getLogToolCallsCheckBox().isSelected());
 
         for (ActionListener listener : settingsPanel.getStatusTimer().getActionListeners()) {
             listener.actionPerformed(null);
