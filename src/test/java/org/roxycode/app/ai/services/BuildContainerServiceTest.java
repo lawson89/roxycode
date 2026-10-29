@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -55,8 +56,9 @@ class BuildContainerServiceTest {
     @Test
     void testResolveHostUserSpec() {
         assertTrue(BuildContainerService.resolveHostUserSpec(null).isEmpty());
-        var existingSpec = BuildContainerService.resolveHostUserSpec(tempDir);
-        var nonExistentChildSpec = BuildContainerService.resolveHostUserSpec(tempDir.resolve("nonexistent/child"));
+        Optional<String> existingSpec = BuildContainerService.resolveHostUserSpec(tempDir);
+        Optional<String> nonExistentChildSpec = BuildContainerService
+                .resolveHostUserSpec(tempDir.resolve("nonexistent/child"));
         assertEquals(existingSpec, nonExistentChildSpec);
         existingSpec.ifPresent(spec -> assertTrue(spec.matches("^[0-9]+:[0-9]+$")));
     }
@@ -81,7 +83,7 @@ class BuildContainerServiceTest {
         verify(mockCmd).withName(nameCaptor.capture());
         assertTrue(nameCaptor.getValue().matches("^roxycode-build-roxy-test-app-[a-f0-9]{8}$"));
 
-        var expectedUserSpec = BuildContainerService.resolveHostUserSpec(tempDir);
+        Optional<String> expectedUserSpec = BuildContainerService.resolveHostUserSpec(tempDir);
         if (expectedUserSpec.isPresent()) {
             verify(mockCmd).withUser(expectedUserSpec.get());
         } else {
@@ -258,22 +260,5 @@ class BuildContainerServiceTest {
         assertEquals(1, updatedSpaced.lines().filter(l -> l.contains("container")).count());
         assertTrue(updatedSpaced.contains("enabled = true"));
         assertTrue(BuildContainerService.isContainerEnabledInToml(updatedSpaced));
-
-        String transientSyntaxErrorInBuild = """
-                [build]
-                compile =
-
-                [ container ] # comment
-                enabled = true # inline
-                """;
-        assertTrue(BuildContainerService.isContainerEnabledInToml(transientSyntaxErrorInBuild));
-        String transientDisabled = """
-                [build]
-                compile =
-
-                [container]
-                enabled = false
-                """;
-        assertFalse(BuildContainerService.isContainerEnabledInToml(transientDisabled));
     }
 }

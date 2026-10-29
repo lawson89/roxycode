@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.regex.Pattern;
 import org.roxycode.app.ai.services.CtagsRunner;
 import org.roxycode.app.ai.services.CtagsRunner.CtagsEntry;
 import org.roxycode.app.ai.services.EditorResult;
@@ -35,25 +34,7 @@ public class RepoMapPackerService {
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
     private static final String CTAGS_SKELETON_FIELDS = "--fields=+n";
     private static final char LF = 10;
-    static final int MAX_SIGNATURE_CONTINUATION_LINES = 8;
     static final int MAX_SIGNATURE_CHARS = 240;
-    private static final char SQUOTE = 39;
-    private static final char DQUOTE = 34;
-    private static final char BACKSLASH = 92;
-    private static final char OPEN_PAREN = '(';
-    private static final char CLOSE_PAREN = ')';
-    private static final char OPEN_BRACE = '{';
-    private static final char SEMICOLON = ';';
-    private static final char COMMA = ',';
-    private static final char COLON = ':';
-    private static final char EQUALS_SIGN = '=';
-    private static final char SLASH = '/';
-    private static final char AT_SIGN = '@';
-    private static final char SPACE = ' ';
-    private static final Pattern INLINE_PARAM_ANNOTATION_PATTERN = Pattern
-            .compile("@(?:ToolParam|AgentDoc)\\s*(?:\\((?:\"[^\"]*\"|\'[^\']*\'|[^()])*\\))?\\s*");
-    private static final List<String> HEADER_CONTINUATION_PREFIXES = List.of("throws ", "{", "implements ", "extends ",
-            "permits ");
 
     static final Set<String> SOURCE_EXTENSIONS = Set
             .of("java,py,ts,tsx,js,jsx,go,rs,c,cpp,cc,cxx,h,hpp,cs,rb,php,kt,kts,swift,scala".split(","));
@@ -96,8 +77,16 @@ public class RepoMapPackerService {
 
     @EventListener
     public void handleFileChanged(FileChangedEvent event) {
-        invalidateForFileChange(event != null ? event.path() : null);
-        log.debug("Repo map invalidated due to file change: {}", event != null ? event.path() : "");
+        String path = null;
+        if (event != null) {
+            path = event.path();
+        }
+        invalidateForFileChange(path);
+        String logPath = "";
+        if (event != null && event.path() != null) {
+            logPath = event.path();
+        }
+        log.debug("Repo map invalidated due to file change: {}", logPath);
     }
 
     public void invalidateCache() {
@@ -155,8 +144,9 @@ public class RepoMapPackerService {
         for (String relPath : files) {
             ExceptionUtils.checkInterrupted("Repo map generation cancelled");
             Path filePath = root.resolve(relPath);
-            if (!Files.isRegularFile(filePath))
+            if (!Files.isRegularFile(filePath)) {
                 continue;
+            }
             sb.append(relPath).append(LF);
             if (shouldGenerateSkeleton(relPath)) {
                 try {
@@ -191,8 +181,9 @@ public class RepoMapPackerService {
     }
 
     static boolean isTestFile(String relPath) {
-        if (relPath == null || relPath.isBlank())
+        if (relPath == null || relPath.isBlank()) {
             return false;
+        }
         String normalized = FilenameUtils.separatorsToUnix(relPath);
         for (String marker : TEST_DIR_MARKERS) {
             if (normalized.startsWith(marker) || normalized.contains("/" + marker)) {
@@ -214,15 +205,18 @@ public class RepoMapPackerService {
         List<FileStat> uncached = new ArrayList<>();
         for (String relPath : relativeFiles) {
             ExceptionUtils.checkInterrupted("Repo map generation cancelled");
-            if (!shouldGenerateSkeleton(relPath))
+            if (!shouldGenerateSkeleton(relPath)) {
                 continue;
+            }
             Path filePath = root.resolve(relPath).toAbsolutePath().normalize();
-            if (!Files.isRegularFile(filePath))
+            if (!Files.isRegularFile(filePath)) {
                 continue;
+            }
             try {
                 long size = Files.size(filePath);
-                if (size <= 0)
+                if (size <= 0) {
                     continue;
+                }
                 long lastModified = Files.getLastModifiedTime(filePath).toMillis();
                 if (getValidCachedSkeleton(filePath, lastModified, size) == null) {
                     uncached.add(new FileStat(filePath, lastModified, size));
@@ -247,8 +241,11 @@ public class RepoMapPackerService {
                 CANCELLED_MSG);
         for (FileStat stat : batch) {
             String skeleton = formatSkeletonLines(stat.path(), entriesByPath.get(stat.path()));
-            skeletonCache.put(stat.path(),
-                    new CachedSkeleton(stat.lastModifiedMillis(), stat.size(), skeleton != null ? skeleton : ""));
+            String cachedSkeleton = "";
+            if (skeleton != null) {
+                cachedSkeleton = skeleton;
+            }
+            skeletonCache.put(stat.path(), new CachedSkeleton(stat.lastModifiedMillis(), stat.size(), cachedSkeleton));
         }
     }
 
@@ -256,15 +253,19 @@ public class RepoMapPackerService {
         try {
             Path normalized = filePath.toAbsolutePath().normalize();
             long size = Files.size(normalized);
-            if (size <= 0)
+            if (size <= 0) {
                 return null;
+            }
             long lastModified = Files.getLastModifiedTime(normalized).toMillis();
             CachedSkeleton cached = getValidCachedSkeleton(normalized, lastModified, size);
             if (cached == null) {
                 populateSkeletonBatch(List.of(new FileStat(normalized, lastModified, size)));
                 cached = getValidCachedSkeleton(normalized, lastModified, size);
             }
-            return (cached != null && !cached.skeleton().isEmpty()) ? cached.skeleton() : null;
+            if (cached != null && !cached.skeleton().isEmpty()) {
+                return cached.skeleton();
+            }
+            return null;
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
             log.warn("Ctags failed for {}: {}", filePath, e.getMessage());
@@ -274,14 +275,16 @@ public class RepoMapPackerService {
 
     private CachedSkeleton getValidCachedSkeleton(Path path, long lastModifiedMillis, long size) {
         CachedSkeleton cached = skeletonCache.getIfPresent(path);
-        return (cached != null && cached.lastModifiedMillis() == lastModifiedMillis && cached.size() == size)
-                ? cached
-                : null;
+        if (cached != null && cached.lastModifiedMillis() == lastModifiedMillis && cached.size() == size) {
+            return cached;
+        }
+        return null;
     }
 
     static String formatSkeletonLines(Path filePath, List<CtagsEntry> tags) {
-        if (tags == null || tags.isEmpty())
+        if (tags == null || tags.isEmpty()) {
             return null;
+        }
         try {
             tags.sort(Comparator.comparingInt(CtagsEntry::line));
             List<String> lines = Files.readAllLines(filePath);
@@ -290,11 +293,13 @@ public class RepoMapPackerService {
             for (CtagsEntry tag : tags) {
                 int tagLine = tag.line();
                 if (tagLine > lastLine && tagLine <= lines.size()) {
-                    CollapsedSignature collapsed = collapseSignatureWithEndLine(lines, tagLine - 1);
-                    if (!collapsed.text().isEmpty()) {
-                        skeleton.append("  ").append(tagLine).append(": ").append(collapsed.text()).append(LF);
+                    String lineText = lines.get(tagLine - 1);
+                    String normalized = StringUtils.abbreviate(StringUtils.normalizeSpace(lineText),
+                            MAX_SIGNATURE_CHARS);
+                    if (!normalized.isEmpty()) {
+                        skeleton.append("  ").append(tagLine).append(": ").append(normalized).append(LF);
                     }
-                    lastLine = collapsed.endLineIndex() + 1;
+                    lastLine = tagLine;
                 }
             }
             return skeleton.toString();
@@ -303,151 +308,6 @@ public class RepoMapPackerService {
             log.warn("Failed to format skeleton for {}: {}", filePath, e.getMessage());
             return null;
         }
-    }
-
-    record CollapsedSignature(String text, int endLineIndex) {
-    }
-
-    static String collapseSignature(List<String> lines, int startIndex) {
-        return collapseSignatureWithEndLine(lines, startIndex).text();
-    }
-
-    static CollapsedSignature collapseSignatureWithEndLine(List<String> lines, int startIndex) {
-        if (lines == null || startIndex < 0 || startIndex >= lines.size()) {
-            return new CollapsedSignature("", startIndex);
-        }
-        String firstLine = stripLineComment(lines.get(startIndex)).trim();
-        if (firstLine.isEmpty()) {
-            return new CollapsedSignature("", startIndex);
-        }
-
-        int maxIndex = Math.min(lines.size() - 1, startIndex + MAX_SIGNATURE_CONTINUATION_LINES);
-        StringBuilder joined = new StringBuilder();
-        int parenDepth = 0;
-        boolean sawOpenParen = false;
-        boolean sawTerminator = false;
-        boolean sawEquals = false;
-        boolean inDoubleQuote = false;
-        boolean inSingleQuote = false;
-        int endLineIndex = startIndex;
-
-        for (int i = startIndex; i <= maxIndex; i++) {
-            String line = (i == startIndex) ? firstLine : stripLineComment(lines.get(i)).trim();
-            endLineIndex = i;
-            if (!line.isEmpty()) {
-                appendSignatureSegment(joined, line);
-                int idx = 0;
-                int len = line.length();
-                while (idx < len) {
-                    char c = line.charAt(idx);
-                    if (c == BACKSLASH && (inDoubleQuote || inSingleQuote)) {
-                        idx += 2;
-                        continue;
-                    }
-                    if (!inSingleQuote && c == DQUOTE) {
-                        inDoubleQuote = !inDoubleQuote;
-                    } else if (!inDoubleQuote && c == SQUOTE) {
-                        inSingleQuote = !inSingleQuote;
-                    } else if (!inDoubleQuote && !inSingleQuote) {
-                        if (c == OPEN_PAREN) {
-                            parenDepth++;
-                            sawOpenParen = true;
-                        } else if (c == CLOSE_PAREN && parenDepth > 0) {
-                            parenDepth--;
-                        } else if (c == EQUALS_SIGN && parenDepth == 0) {
-                            sawEquals = true;
-                        } else if ((c == OPEN_BRACE || c == SEMICOLON) && (parenDepth == 0 || idx == len - 1)) {
-                            sawTerminator = true;
-                        }
-                    }
-                    idx++;
-                }
-            }
-
-            if (!shouldContinueSignature(lines, i, maxIndex, parenDepth, sawOpenParen, sawTerminator, sawEquals,
-                    firstLine)) {
-                break;
-            }
-        }
-
-        String cleaned = normalizeSignatureWhitespace(stripParameterAnnotations(joined.toString()));
-        String abbreviated = StringUtils.abbreviate(cleaned, MAX_SIGNATURE_CHARS);
-        return new CollapsedSignature(abbreviated, endLineIndex);
-    }
-
-    private static boolean shouldContinueSignature(List<String> lines, int currentIndex, int maxIndex, int parenDepth,
-            boolean sawOpenParen, boolean sawTerminator, boolean sawEquals, String firstLine) {
-        if (sawTerminator || currentIndex >= maxIndex) {
-            return false;
-        }
-        if (parenDepth > 0) {
-            return true;
-        }
-        String nextTrimmed = stripLineComment(lines.get(currentIndex + 1)).trim();
-        if (nextTrimmed.isEmpty()) {
-            return false;
-        }
-        if (startsWithContinuationClause(nextTrimmed)) {
-            return true;
-        }
-        return !sawOpenParen && !sawEquals && firstLine.charAt(firstLine.length() - 1) != COLON
-                && firstLine.charAt(0) != AT_SIGN;
-    }
-
-    private static boolean startsWithContinuationClause(String trimmedLine) {
-        for (String prefix : HEADER_CONTINUATION_PREFIXES) {
-            if (trimmedLine.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static void appendSignatureSegment(StringBuilder joined, String segment) {
-        if (joined.isEmpty()) {
-            joined.append(segment);
-            return;
-        }
-        char prev = joined.charAt(joined.length() - 1);
-        char next = segment.charAt(0);
-        if (prev != OPEN_PAREN && next != CLOSE_PAREN && next != COMMA && next != SEMICOLON) {
-            joined.append(SPACE);
-        }
-        joined.append(segment);
-    }
-
-    private static String stripLineComment(String line) {
-        if (line == null || line.isEmpty()) {
-            return "";
-        }
-        boolean inDouble = false;
-        boolean inSingle = false;
-        int i = 0;
-        int len = line.length();
-        while (i < len) {
-            char c = line.charAt(i);
-            if (c == BACKSLASH && (inDouble || inSingle)) {
-                i += 2;
-                continue;
-            }
-            if (!inSingle && c == DQUOTE) {
-                inDouble = !inDouble;
-            } else if (!inDouble && c == SQUOTE) {
-                inSingle = !inSingle;
-            } else if (!inDouble && !inSingle && c == SLASH && i + 1 < len && line.charAt(i + 1) == SLASH) {
-                return line.substring(0, i);
-            }
-            i++;
-        }
-        return line;
-    }
-
-    private static String stripParameterAnnotations(String text) {
-        return INLINE_PARAM_ANNOTATION_PATTERN.matcher(text).replaceAll("");
-    }
-
-    private static String normalizeSignatureWhitespace(String text) {
-        return StringUtils.normalizeSpace(text).replaceAll("\\s*([),;])", "$1").replace("( ", "(");
     }
 
     private boolean isExcluded(String filePath) {

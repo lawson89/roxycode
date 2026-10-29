@@ -55,9 +55,8 @@ public final class FileMentionPopup {
     static final long STALE_CACHE_TTL_MS = 10_000L;
 
     static final int TIER_FILENAME_PREFIX = 1;
-    static final int TIER_CAMEL_OR_BOUNDARY = 2;
-    static final int TIER_FILENAME_SUBSTRING = 3;
-    static final int TIER_PATH_SUBSTRING = 4;
+    static final int TIER_FILENAME_SUBSTRING = 2;
+    static final int TIER_PATH_SUBSTRING = 3;
     static final int TIER_NO_MATCH = 0;
     private static final char MENTION_TRIGGER_CHAR = '@';
 
@@ -171,9 +170,10 @@ public final class FileMentionPopup {
                 return null;
             }
             if (c == MENTION_TRIGGER_CHAR) {
-                return (i == 0 || Character.isWhitespace(text.charAt(i - 1)))
-                        ? new MentionToken(i, caretOffset, text.substring(i + 1, caretOffset))
-                        : null;
+                if (i == 0 || Character.isWhitespace(text.charAt(i - 1))) {
+                    return new MentionToken(i, caretOffset, text.substring(i + 1, caretOffset));
+                }
+                return null;
             }
         }
         return null;
@@ -183,7 +183,10 @@ public final class FileMentionPopup {
         if (candidates == null || candidates.isEmpty()) {
             return List.of();
         }
-        String trimmedQuery = query == null ? "" : query.trim();
+        String trimmedQuery = "";
+        if (query != null) {
+            trimmedQuery = query.trim();
+        }
         if (trimmedQuery.isEmpty()) {
             List<FileCandidate> sorted = new ArrayList<>(candidates);
             sorted.sort(DEFAULT_CANDIDATE_COMPARATOR);
@@ -216,63 +219,13 @@ public final class FileMentionPopup {
         if (queryLower.isEmpty() || fileNameLower.startsWith(queryLower)) {
             return TIER_FILENAME_PREFIX;
         }
-        if (matchesCamelCaseOrWordBoundary(candidate.fileName(), fileNameLower, queryLower)) {
-            return TIER_CAMEL_OR_BOUNDARY;
-        }
         if (fileNameLower.contains(queryLower)) {
             return TIER_FILENAME_SUBSTRING;
         }
-        return candidate.pathLower().contains(queryLower) ? TIER_PATH_SUBSTRING : TIER_NO_MATCH;
-    }
-
-    static boolean matchesCamelCaseOrWordBoundary(String fileName, String fileNameLower, String queryLower) {
-        if (queryLower.isEmpty() || fileName.isEmpty()) {
-            return false;
+        if (candidate.pathLower().contains(queryLower)) {
+            return TIER_PATH_SUBSTRING;
         }
-        char firstQ = queryLower.charAt(0);
-        for (int i = 0; i < fileName.length(); i++) {
-            if (isWordBoundary(fileName, i) && fileNameLower.charAt(i) == firstQ
-                    && matchBoundarySubsequence(fileName, fileNameLower, i, queryLower, 0)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean matchBoundarySubsequence(String fileName, String fileNameLower, int fIdx, String queryLower,
-            int qIdx) {
-        if (qIdx + 1 == queryLower.length()) {
-            return true;
-        }
-        char nextQ = queryLower.charAt(qIdx + 1);
-        int fLen = fileName.length();
-        if (fIdx + 1 < fLen && fileNameLower.charAt(fIdx + 1) == nextQ
-                && matchBoundarySubsequence(fileName, fileNameLower, fIdx + 1, queryLower, qIdx + 1)) {
-            return true;
-        }
-        for (int nextB = fIdx + 1; nextB < fLen; nextB++) {
-            if (isWordBoundary(fileName, nextB) && fileNameLower.charAt(nextB) == nextQ
-                    && matchBoundarySubsequence(fileName, fileNameLower, nextB, queryLower, qIdx + 1)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    static boolean isWordBoundary(String fileName, int index) {
-        if (index < 0 || index >= fileName.length()) {
-            return false;
-        }
-        if (index == 0) {
-            return true;
-        }
-        char curr = fileName.charAt(index);
-        char prev = fileName.charAt(index - 1);
-        if (!Character.isLetterOrDigit(prev) && Character.isLetterOrDigit(curr)) {
-            return true;
-        }
-        return Character.isUpperCase(curr) && (!Character.isUpperCase(prev)
-                || (index + 1 < fileName.length() && Character.isLowerCase(fileName.charAt(index + 1))));
+        return TIER_NO_MATCH;
     }
 
     public synchronized void setGrepService(GrepService grepService) {
@@ -289,7 +242,11 @@ public final class FileMentionPopup {
     }
 
     void setBackgroundExecutor(Executor backgroundExecutor) {
-        this.backgroundExecutor = backgroundExecutor != null ? backgroundExecutor : ForkJoinPool.commonPool();
+        if (backgroundExecutor != null) {
+            this.backgroundExecutor = backgroundExecutor;
+        } else {
+            this.backgroundExecutor = ForkJoinPool.commonPool();
+        }
     }
 
     public void invalidateCache() {
@@ -405,9 +362,12 @@ public final class FileMentionPopup {
         if (visibleRect != null && visibleRect.width > 0) {
             return visibleRect;
         }
-        int width = inputArea.getWidth() > 0
-                ? inputArea.getWidth()
-                : (inputScrollPane != null ? Math.max(0, inputScrollPane.getWidth()) : 0);
+        int width = 0;
+        if (inputArea.getWidth() > 0) {
+            width = inputArea.getWidth();
+        } else if (inputScrollPane != null && inputScrollPane.getWidth() > 0) {
+            width = inputScrollPane.getWidth();
+        }
         return new Rectangle(0, 0, width, 0);
     }
 
@@ -462,7 +422,14 @@ public final class FileMentionPopup {
             return;
         }
         int current = candidateList.getSelectedIndex();
-        int next = delta > 0 ? (current + 1) % size : (current <= 0 ? size : current) - 1;
+        int next;
+        if (delta > 0) {
+            next = (current + 1) % size;
+        } else if (current <= 0) {
+            next = size - 1;
+        } else {
+            next = current - 1;
+        }
         candidateList.setSelectedIndex(next);
         candidateList.ensureIndexIsVisible(next);
     }
@@ -528,7 +495,10 @@ public final class FileMentionPopup {
 
     static Codicons resolveFileIcon(String fileNameLower) {
         String ext = PathUtils.getLowerExtension(fileNameLower, true);
-        return (!ext.isEmpty() && CODE_EXTENSIONS.contains(ext)) ? Codicons.FILE_CODE : Codicons.FILE;
+        if (!ext.isEmpty() && CODE_EXTENSIONS.contains(ext)) {
+            return Codicons.FILE_CODE;
+        }
+        return Codicons.FILE;
     }
 
     private static final class FileCandidateCellRenderer extends JPanel implements ListCellRenderer<FileCandidate> {
@@ -551,21 +521,38 @@ public final class FileMentionPopup {
         @Override
         public Component getListCellRendererComponent(JList<? extends FileCandidate> list, FileCandidate value,
                 int index, boolean isSelected, boolean cellHasFocus) {
-            Color bg = isSelected
-                    ? SwingHtmlUtils.getUiColor(list.getSelectionBackground(), "List.selectionBackground")
-                    : SwingHtmlUtils.getUiColor(list.getBackground(), "List.background");
-            Color fg = isSelected
-                    ? SwingHtmlUtils.getUiColor(list.getSelectionForeground(), "List.selectionForeground")
-                    : SwingHtmlUtils.getUiColor(list.getForeground(), "Label.foreground");
+            Color bg;
+            if (isSelected) {
+                bg = SwingHtmlUtils.getUiColor(list.getSelectionBackground(), "List.selectionBackground");
+            } else {
+                bg = SwingHtmlUtils.getUiColor(list.getBackground(), "List.background");
+            }
+            Color fg;
+            if (isSelected) {
+                fg = SwingHtmlUtils.getUiColor(list.getSelectionForeground(), "List.selectionForeground");
+            } else {
+                fg = SwingHtmlUtils.getUiColor(list.getForeground(), "Label.foreground");
+            }
             setBackground(bg);
 
             if (value != null) {
                 nameLabel.setText(value.fileName());
                 nameLabel.setForeground(fg);
-                nameLabel.setIcon(FontIcon.of(resolveFileIcon(value.fileNameLower()), 14,
-                        isSelected ? fg : SwingHtmlUtils.getAccentColor()));
+                Color iconColor;
+                if (isSelected) {
+                    iconColor = fg;
+                } else {
+                    iconColor = SwingHtmlUtils.getAccentColor();
+                }
+                nameLabel.setIcon(FontIcon.of(resolveFileIcon(value.fileNameLower()), 14, iconColor));
                 dirLabel.setText(value.parentDir());
-                dirLabel.setForeground(isSelected ? fg : SwingHtmlUtils.getMutedForegroundColor());
+                Color dirFg;
+                if (isSelected) {
+                    dirFg = fg;
+                } else {
+                    dirFg = SwingHtmlUtils.getMutedForegroundColor();
+                }
+                dirLabel.setForeground(dirFg);
                 setToolTipText(value.relativePath());
             } else {
                 nameLabel.setText("");

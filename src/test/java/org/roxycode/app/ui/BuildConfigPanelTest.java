@@ -111,7 +111,7 @@ class BuildConfigPanelTest {
 
         SwingTestUtils.runOnEdt(() -> panel.textArea.setText("""
                 [build]
-                compile =
+                compile = 'mvn'
 
                 [container] # inline comment
                 enabled = true # keep enabled

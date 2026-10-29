@@ -309,35 +309,30 @@ class MemoryServiceTest {
         assertEquals(2, memoryService.searchArchivedTopics("").size());
         assertEquals(2, memoryService.searchArchivedPlans("   ").size());
 
-        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(1, "", "", false));
+        List<MemoryService.ArchiveEntrySummary> metaMatched = memoryService.searchArchivedTopics("alice");
+        assertEquals(1, metaMatched.size());
+        assertEquals("First Q&A Topic", metaMatched.get(0).title());
 
-            List<MemoryService.ArchiveEntrySummary> metaMatched = memoryService.searchArchivedTopics("alice");
-            assertEquals(1, metaMatched.size());
-            assertEquals("First Q&A Topic", metaMatched.get(0).title());
+        List<MemoryService.ArchiveEntrySummary> planMatched = memoryService.searchArchivedPlans("UniqueBodyMatchToken");
+        assertEquals(1, planMatched.size());
+        assertEquals("Archive Browser Feature", planMatched.get(0).title());
+        assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
 
-            Path normPlan = planFile.toAbsolutePath().normalize();
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, normPlan + ":9:UniqueBodyMatchToken in plan steps", "", false));
+        String dq = String.valueOf('"');
+        Path planWithSnippet = plansDir.resolve("20250515-100000-extra.md");
+        Files.writeString(planWithSnippet, """
+                ---
+                title: "Extra Plan"
+                ---
 
-            List<MemoryService.ArchiveEntrySummary> planMatched = memoryService
-                    .searchArchivedPlans("UniqueBodyMatchToken");
-            assertEquals(1, planMatched.size());
-            assertEquals("Archive Browser Feature", planMatched.get(0).title());
-            assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
+                # Plan
+                title: "BodyExampleTitle"
+                """, StandardCharsets.UTF_8);
 
-            String dq = String.valueOf('"');
-            String rgFrontmatterAndBody = normPlan + ":3:title: " + dq + "Archive Browser Feature" + dq + "\n"
-                    + normPlan + ":10:title: " + dq + "BodyExampleTitle" + dq + "\n";
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, rgFrontmatterAndBody, "", false));
+        List<MemoryService.ArchiveEntrySummary> bodyKeyMatched = memoryService.searchArchivedPlans("BodyExampleTitle");
+        assertEquals(1, bodyKeyMatched.size());
+        assertEquals("title: " + dq + "BodyExampleTitle" + dq, bodyKeyMatched.get(0).matchSnippet());
 
-            List<MemoryService.ArchiveEntrySummary> bodyKeyMatched = memoryService
-                    .searchArchivedPlans("BodyExampleTitle");
-            assertEquals(1, bodyKeyMatched.size());
-            assertEquals("title: " + dq + "BodyExampleTitle" + dq, bodyKeyMatched.get(0).matchSnippet());
-        }
         assertEquals(6, FrontmatterUtils.findFrontmatterEndLine(planFile));
         assertEquals(0, FrontmatterUtils.findFrontmatterEndLine(fallbackPlanFile));
         assertEquals(0, FrontmatterUtils.findFrontmatterEndLine((Path) null));
@@ -348,7 +343,7 @@ class MemoryServiceTest {
         Path unclosedFrontmatterFile = plansDir.resolve("20250511-080000-unclosed.md");
         Files.writeString(unclosedFrontmatterFile, """
                 ---
-                title: "Unclosed \"Quote\" Plan"
+                title: "Unclosed \\"Quote\\" Plan"
                 created_by: "Dave"
                 # Missing closing delimiter
                 """, StandardCharsets.UTF_8);
@@ -365,16 +360,6 @@ class MemoryServiceTest {
                 "c:/Users/dev/.roxycode/archive/plans/"));
         assertFalse(MemoryService.startsWithSlashPrefix("d:/Users/dev/.roxycode/archive/plans/plan.md:8:text",
                 "C:/Users/dev/.roxycode/archive/plans/"));
-
-        java.util.Map<String, String> snippets = new java.util.LinkedHashMap<>();
-        java.util.Map<String, Integer> fmCache = new java.util.LinkedHashMap<>();
-        MemoryService.parseRipGrepArchiveLine(
-                "c:/Users/dev/archive/plans/20250514-win-plan.md:12:Matched Windows snippet", null, fmCache, snippets);
-        assertEquals("Matched Windows snippet", snippets.get("20250514-win-plan.md"));
-
-        MemoryService.parseRipGrepArchiveLine("./20250514-unmatched-prefix.md:14:Fallback Windows path snippet", null,
-                fmCache, snippets);
-        assertEquals("Fallback Windows path snippet", snippets.get("20250514-unmatched-prefix.md"));
     }
 
     @Test

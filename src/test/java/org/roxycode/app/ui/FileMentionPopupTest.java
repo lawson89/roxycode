@@ -71,18 +71,6 @@ class FileMentionPopupTest {
     }
 
     @Test
-    void testCamelCaseHumpAndWordBoundaryMatching() {
-        List<FileCandidate> index = List.of(FileCandidate.fromPath("src/ui/ChatPanel.java"),
-                FileCandidate.fromPath("src/ui/CodebaseCachePanel.java"),
-                FileCandidate.fromPath("src/ui/CopyHelper.java"), FileCandidate.fromPath("src/cp/Other.java"));
-
-        assertEquals(List.of("src/ui/ChatPanel.java", "src/ui/CodebaseCachePanel.java", "src/cp/Other.java"),
-                FileMentionPopup.rankCandidates(index, "cp").stream().map(FileCandidate::relativePath).toList());
-        assertEquals(List.of("src/ui/ChatPanel.java"),
-                FileMentionPopup.rankCandidates(index, "ChPa").stream().map(FileCandidate::relativePath).toList());
-    }
-
-    @Test
     void testEmptyQueryReturnsFirst15SortedAndCapsResults() {
         List<FileCandidate> manyFiles = new ArrayList<>();
         for (int i = 25; i >= 1; i--) {

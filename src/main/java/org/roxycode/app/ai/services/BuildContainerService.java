@@ -39,8 +39,7 @@ public class BuildContainerService {
     static final String LABEL_PROJECT = "roxycode.project";
     private static final String NL = "\n";
     private static final Pattern CONTAINER_SECTION_PATTERN = Pattern
-            .compile("(?m)^[ \t]*\\[[ \t]*container[ \t]*\\][ \t]*(?:#.*)?$");
-    private static final Pattern ANY_SECTION_PATTERN = Pattern.compile("(?m)^[ \t]*\\[[^\\]\r\n]+\\][ \t]*(?:#.*)?$");
+            .compile("(?m)^[ \\t]*\\[[ \\t]*container[ \\t]*\\][ \\t]*(?:#.*)?$");
     private static final Pattern ENABLED_LINE_PATTERN = Pattern
             .compile("(?m)^([ \t]*enabled[ \t]*=[ \t]*)(true|false)([ \t]*(?:#.*)?)$");
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -60,11 +59,13 @@ public class BuildContainerService {
     public record ContainerExecResult(int exitCode, String stdout, String stderr) {
         public String combinedOutput() {
             StringBuilder sb = new StringBuilder();
-            if (StringUtils.isNotEmpty(stdout))
+            if (StringUtils.isNotEmpty(stdout)) {
                 sb.append(stdout);
+            }
             if (StringUtils.isNotEmpty(stderr)) {
-                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n')
+                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n') {
                     sb.append('\n');
+                }
                 sb.append(stderr);
             }
             return sb.toString();
@@ -113,14 +114,21 @@ public class BuildContainerService {
     }
 
     public boolean isDockerAvailable() {
-        if (systemToolService == null)
+        if (systemToolService == null) {
             return false;
+        }
         CompletableFuture<Boolean> future = systemToolService.isDockerAvailable();
-        return future != null ? Boolean.TRUE.equals(future.join()) : systemToolService.checkDockerAvailable();
+        if (future != null) {
+            return Boolean.TRUE.equals(future.join());
+        }
+        return systemToolService.checkDockerAvailable();
     }
 
     public ContainerConfig parseContainerConfig(ContainerConfig config) {
-        return config != null ? config : ContainerConfig.DEFAULT;
+        if (config != null) {
+            return config;
+        }
+        return ContainerConfig.DEFAULT;
     }
 
     public ContainerExecResult executeCommand(Path projectRoot, ContainerConfig containerConfig,
@@ -146,28 +154,27 @@ public class BuildContainerService {
     }
 
     public static boolean isContainerEnabledInToml(String toml) {
-        if (StringUtils.isBlank(toml))
+        if (StringUtils.isBlank(toml)) {
             return false;
+        }
         try {
-            var parsed = AiConfig.SHARED_TOML_MAPPER.readValue(toml, GenericBuildToolService.BuildConfig.class);
-            return parsed != null && parsed.container().enabled();
-        } catch (Exception e) {
-            log.debug("Failed to parse full TOML when checking container.enabled flag; falling back to section scan",
-                    e);
-            Matcher sectionMatcher = CONTAINER_SECTION_PATTERN.matcher(toml);
-            if (!sectionMatcher.find()) {
-                return false;
+            GenericBuildToolService.BuildConfig parsed = AiConfig.SHARED_TOML_MAPPER.readValue(toml,
+                    GenericBuildToolService.BuildConfig.class);
+            if (parsed != null && parsed.container() != null) {
+                return parsed.container().enabled();
             }
-            int bodyStart = sectionMatcher.end();
-            Matcher nextSection = ANY_SECTION_PATTERN.matcher(toml);
-            int bodyEnd = nextSection.find(bodyStart) ? nextSection.start() : toml.length();
-            Matcher enabledMatcher = ENABLED_LINE_PATTERN.matcher(toml.substring(bodyStart, bodyEnd));
-            return enabledMatcher.find() && Boolean.parseBoolean(enabledMatcher.group(2));
+            return false;
+        } catch (Exception e) {
+            log.debug("Failed to parse TOML when checking container.enabled flag: {}", e.getMessage());
+            return false;
         }
     }
 
     public static String updateContainerEnabledInToml(String toml, boolean enabled) {
-        String safeToml = toml != null ? toml : "";
+        String safeToml = "";
+        if (toml != null) {
+            safeToml = toml;
+        }
         Matcher sectionMatcher = CONTAINER_SECTION_PATTERN.matcher(safeToml);
         if (!sectionMatcher.find()) {
             String section = ("""
@@ -176,17 +183,17 @@ public class BuildContainerService {
                     image = '%s'
                     workdir = '%s'
                     """).formatted(enabled, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
-            return safeToml.isEmpty() ? section : safeToml.stripTrailing() + NL + NL + section;
+            if (safeToml.isEmpty()) {
+                return section;
+            }
+            return safeToml.stripTrailing() + NL + NL + section;
         }
-        int bodyStart = sectionMatcher.end();
-        Matcher nextSection = ANY_SECTION_PATTERN.matcher(safeToml);
-        int bodyEnd = nextSection.find(bodyStart) ? nextSection.start() : safeToml.length();
-        String body = safeToml.substring(bodyStart, bodyEnd);
-        Matcher enabledMatcher = ENABLED_LINE_PATTERN.matcher(body);
-        String updatedBody = enabledMatcher.find()
-                ? enabledMatcher.replaceFirst("$1" + enabled + "$3")
-                : NL + "enabled = " + enabled + body;
-        return safeToml.substring(0, bodyStart) + updatedBody + safeToml.substring(bodyEnd);
+        Matcher enabledMatcher = ENABLED_LINE_PATTERN.matcher(safeToml);
+        if (enabledMatcher.find()) {
+            return enabledMatcher.replaceFirst("$1" + enabled + "$3");
+        }
+        int insertPos = sectionMatcher.end();
+        return safeToml.substring(0, insertPos) + NL + "enabled = " + enabled + safeToml.substring(insertPos);
     }
 
     static String buildContainerName(Path projectRoot) {

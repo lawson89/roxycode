@@ -95,7 +95,6 @@ class RepoMapPackerServiceTest {
         assertEquals(String.join("\n", "# Repo Map Snapshot", "README.md", "pom.xml", "src/main/java/demo/Empty.java",
                 "src/main/java/demo/SmallService.java", "  3: public class SmallService {",
                 "  5: public void execute() {}", "src/test/java/demo/SmallServiceTest.java", ""), content);
-
         SwingTestUtils.assertContainsNone(content, "## Project Tree", "--- ", "1: package demo;",
                 "2: import java.util.List;", "secretBodyLine", "Some markdown prose", "testIt");
         assertEquals(1, ctagsCommands.size());
@@ -235,7 +234,7 @@ class RepoMapPackerServiceTest {
     }
 
     @Test
-    void testMultiLineMethodSignaturesAndInlineAnnotationStripping() throws IOException {
+    void testSingleLineDeclarationsInSkeletonFormatting() throws IOException {
         Path planServiceFile = Files.writeString(tempDir.resolve("PlanServiceSample.java"), """
                 package demo;
                 import java.util.List;
@@ -260,26 +259,22 @@ class RepoMapPackerServiceTest {
         service.setCtagsRunner(cmd -> new ProcessResult(0,
                 ctagsLineWithKind("PlanServiceSample", planServiceFile.toString(), 3, "class")
                         + ctagsLineWithKind("submitPlan", planServiceFile.toString(), 4, "method")
-                        + ctagsLineWithKind("title", planServiceFile.toString(), 5, "local")
-                        + ctagsLineWithKind("goal", planServiceFile.toString(), 6, "local")
                         + ctagsLineWithKind("readLines", planServiceFile.toString(), 11, "method"),
                 "", false));
 
         EditorResult result = service.generateRepoMap();
         assertTrue(result.success());
-        assertEquals(
-                """
-                        # Repo Map Snapshot
-                        PlanServiceSample.java
-                          3: public class PlanServiceSample {
-                          4: public synchronized String submitPlan(String title, String goal, List<String> requirements, List<String> technicalSteps) {
-                          11: public String readLines(String relativePath, int startLine, int endLine) throws IOException {
-                        """,
-                result.content());
+        assertEquals("""
+                # Repo Map Snapshot
+                PlanServiceSample.java
+                  3: public class PlanServiceSample {
+                  4: public synchronized String submitPlan(
+                  11: public String readLines(@AgentDoc(DOC_FILE_PATH) String relativePath,
+                """, result.content());
     }
 
     @Test
-    void testMultiLineRecordHeadersAndSingleLineDeclarations() throws IOException {
+    void testRecordHeadersAndSingleLineDeclarations() throws IOException {
         Path recordFile = Files.writeString(tempDir.resolve("ImplementationPlanSample.java"), """
                 package demo;
                 import java.util.List;
@@ -296,55 +291,18 @@ class RepoMapPackerServiceTest {
         when(grepService.listFiles(null)).thenReturn(List.of("ImplementationPlanSample.java"));
         service.setCtagsRunner(cmd -> new ProcessResult(0,
                 ctagsLineWithKind("ImplementationPlanSample", recordFile.toString(), 3, "record")
-                        + ctagsLineWithKind("title", recordFile.toString(), 4, "field")
                         + ctagsLineWithKind("STEP_COMPILE", recordFile.toString(), 8, "field")
                         + ctagsLineWithKind("summary", recordFile.toString(), 9, "method"),
                 "", false));
 
         EditorResult result = service.generateRepoMap();
         assertTrue(result.success());
-        assertEquals(
-                """
-                        # Repo Map Snapshot
-                        ImplementationPlanSample.java
-                          3: public record ImplementationPlanSample(String title, String goal, List<String> requirements, boolean userApproved) {
-                          8: public static final String STEP_COMPILE = "Code compiles successfully";
-                          9: public String summary() { return title + ": " + goal; }
-                        """,
-                result.content());
-    }
-
-    @Test
-    void testCollapseSignatureGuardrailCapsForContinuationLinesAndMaxChars() {
-        List<String> unclosedManyLines = List.of("public void methodWithManyContinuationLines(",
-                "        String param1,", "        String param2,", "        String param3,", "        String param4,",
-                "        String param5,", "        String param6,", "        String param7,", "        String param8,",
-                "        String param9BeyondCap,", "        String param10BeyondCap) {");
-
-        RepoMapPackerService.CollapsedSignature collapsedLinesCap = RepoMapPackerService
-                .collapseSignatureWithEndLine(unclosedManyLines, 0);
-        assertEquals(RepoMapPackerService.MAX_SIGNATURE_CONTINUATION_LINES, collapsedLinesCap.endLineIndex());
-        assertTrue(collapsedLinesCap.text().contains("String param8,"));
-        assertFalse(collapsedLinesCap.text().contains("param9BeyondCap"));
-        assertFalse(collapsedLinesCap.text().contains("param10BeyondCap"));
-
-        List<String> hugeDeclaration = List.of(
-                "public Map<String, List<Map<String, Object>>> veryLongMethodDeclarationName(",
-                "        String firstExtremelyDescriptiveParameterName,",
-                "        String secondExtremelyDescriptiveParameterName,",
-                "        String thirdExtremelyDescriptiveParameterName,",
-                "        String fourthExtremelyDescriptiveParameterName,",
-                "        String fifthExtremelyDescriptiveParameterName) {");
-
-        String collapsedHuge = RepoMapPackerService.collapseSignature(hugeDeclaration, 0);
-        assertEquals(RepoMapPackerService.MAX_SIGNATURE_CHARS, collapsedHuge.length());
-        assertTrue(collapsedHuge
-                .startsWith("public Map<String, List<Map<String, Object>>> veryLongMethodDeclarationName("));
-        assertTrue(collapsedHuge.endsWith("..."));
-        assertFalse(collapsedHuge.contains("fifthExtremelyDescriptiveParameterName"));
-
-        assertEquals("", RepoMapPackerService.collapseSignature(null, 0));
-        assertEquals("", RepoMapPackerService.collapseSignature(List.of("public class A {}"), -1));
-        assertEquals("", RepoMapPackerService.collapseSignature(List.of("public class A {}"), 5));
+        assertEquals("""
+                # Repo Map Snapshot
+                ImplementationPlanSample.java
+                  3: public record ImplementationPlanSample(
+                  8: public static final String STEP_COMPILE = "Code compiles successfully";
+                  9: public String summary() { return title + ": " + goal; }
+                """, result.content());
     }
 }

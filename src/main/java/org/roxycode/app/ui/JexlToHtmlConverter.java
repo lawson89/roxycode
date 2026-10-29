@@ -1,16 +1,12 @@
 package org.roxycode.app.ui;
 
-import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.text.Segment;
 import org.apache.commons.text.StringEscapeUtils;
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenMaker;
-import org.fife.ui.rsyntaxtextarea.TokenMakerFactory;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.fife.ui.rsyntaxtextarea.modes.JavaScriptTokenMaker;
 
@@ -25,65 +21,30 @@ public class JexlToHtmlConverter {
             .compile("[a-zA-Z_][a-zA-Z0-9_]*[sS]ervice[a-zA-Z0-9_]*");
     private static final Set<String> EXTRA_KEYWORDS = Set.of("and", "or", "not", "mod", "div", "empty", "size",
             "assert", "interface", "record", "String", "List", "Map", "Set", "Optional", "int", "long", "double",
-            "float", "short", "byte", "char", "boolean", "def", "self", "lambda", "None", "True", "False", "from", "as",
-            "fn");
+            "float", "short", "byte", "char", "boolean");
     private static final Pattern PRE_PATTERN = Pattern.compile("<pre([^>]*)>(.*?)</pre>", Pattern.DOTALL);
     private static final Pattern CODE_PATTERN = Pattern.compile("^[ \t\r\n]*<code([^>]*)>(.*?)</code>[ \t\r\n]*$",
             Pattern.DOTALL);
     private static final Pattern PROSE_LANG_PATTERN = Pattern.compile(
             "(?<![a-zA-Z0-9_-])language-(?:markdown|md|text|plaintext|txt)(?![a-zA-Z0-9_-])", Pattern.CASE_INSENSITIVE);
-    private static final Pattern LANG_CLASS_PATTERN = Pattern.compile("(?<![a-zA-Z0-9_-])language-([a-zA-Z0-9_+-]+)",
-            Pattern.CASE_INSENSITIVE);
-
-    private static final Map<String, String> LANGUAGE_SYNTAX_MAP = Map.ofEntries(
-            Map.entry("java", SyntaxConstants.SYNTAX_STYLE_JAVA),
-            Map.entry("js", SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT),
-            Map.entry("javascript", SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT),
-            Map.entry("jexl", SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT),
-            Map.entry("ts", SyntaxConstants.SYNTAX_STYLE_TYPESCRIPT),
-            Map.entry("typescript", SyntaxConstants.SYNTAX_STYLE_TYPESCRIPT),
-            Map.entry("py", SyntaxConstants.SYNTAX_STYLE_PYTHON),
-            Map.entry("python", SyntaxConstants.SYNTAX_STYLE_PYTHON), Map.entry("go", SyntaxConstants.SYNTAX_STYLE_GO),
-            Map.entry("golang", SyntaxConstants.SYNTAX_STYLE_GO), Map.entry("rs", SyntaxConstants.SYNTAX_STYLE_RUST),
-            Map.entry("rust", SyntaxConstants.SYNTAX_STYLE_RUST), Map.entry("c", SyntaxConstants.SYNTAX_STYLE_C),
-            Map.entry("cpp", SyntaxConstants.SYNTAX_STYLE_CPLUSPLUS),
-            Map.entry("c++", SyntaxConstants.SYNTAX_STYLE_CPLUSPLUS),
-            Map.entry("cs", SyntaxConstants.SYNTAX_STYLE_CSHARP),
-            Map.entry("csharp", SyntaxConstants.SYNTAX_STYLE_CSHARP),
-            Map.entry("kt", SyntaxConstants.SYNTAX_STYLE_KOTLIN),
-            Map.entry("kotlin", SyntaxConstants.SYNTAX_STYLE_KOTLIN),
-            Map.entry("groovy", SyntaxConstants.SYNTAX_STYLE_GROOVY),
-            Map.entry("scala", SyntaxConstants.SYNTAX_STYLE_SCALA), Map.entry("rb", SyntaxConstants.SYNTAX_STYLE_RUBY),
-            Map.entry("ruby", SyntaxConstants.SYNTAX_STYLE_RUBY), Map.entry("php", SyntaxConstants.SYNTAX_STYLE_PHP),
-            Map.entry("sql", SyntaxConstants.SYNTAX_STYLE_SQL),
-            Map.entry("sh", SyntaxConstants.SYNTAX_STYLE_UNIX_SHELL),
-            Map.entry("bash", SyntaxConstants.SYNTAX_STYLE_UNIX_SHELL),
-            Map.entry("zsh", SyntaxConstants.SYNTAX_STYLE_UNIX_SHELL),
-            Map.entry("shell", SyntaxConstants.SYNTAX_STYLE_UNIX_SHELL),
-            Map.entry("xml", SyntaxConstants.SYNTAX_STYLE_XML), Map.entry("html", SyntaxConstants.SYNTAX_STYLE_HTML),
-            Map.entry("css", SyntaxConstants.SYNTAX_STYLE_CSS), Map.entry("json", SyntaxConstants.SYNTAX_STYLE_JSON),
-            Map.entry("yaml", SyntaxConstants.SYNTAX_STYLE_YAML), Map.entry("yml", SyntaxConstants.SYNTAX_STYLE_YAML),
-            Map.entry("properties", SyntaxConstants.SYNTAX_STYLE_PROPERTIES_FILE),
-            Map.entry("toml", SyntaxConstants.SYNTAX_STYLE_PROPERTIES_FILE));
 
     public static String convert(String script) {
-        return script == null ? "" : highlightHtml(StringEscapeUtils.escapeHtml4(script));
+        if (script == null) {
+            return "";
+        }
+        return highlightHtml(StringEscapeUtils.escapeHtml4(script));
     }
 
     public static String highlightHtml(String escapedCode) {
-        return highlightHtml(escapedCode, null);
-    }
-
-    static String highlightHtml(String escapedCode, String languageHint) {
         if (escapedCode == null || escapedCode.isEmpty()) {
             return "";
         }
         String rawCode = StringEscapeUtils.unescapeHtml4(escapedCode);
-        TokenMaker tokenMaker = resolveTokenMaker(languageHint);
+        TokenMaker tokenMaker = new JavaScriptTokenMaker();
         StringBuilder sb = new StringBuilder(escapedCode.length() + 64);
         int initialTokenType = TokenTypes.NULL;
 
-        String[] parts = rawCode.splitWithDelimiters("\\r?\\n", -1);
+        String[] parts = rawCode.splitWithDelimiters("\r?\n", -1);
         for (int i = 0; i < parts.length; i += 2) {
             initialTokenType = highlightLine(parts[i], tokenMaker, initialTokenType, sb);
             if (i + 1 < parts.length) {
@@ -135,7 +96,10 @@ public class JexlToHtmlConverter {
             }
             curr = curr.getNextToken();
         }
-        return extractEndTokenType(curr != null ? curr : token);
+        if (curr != null) {
+            return extractEndTokenType(curr);
+        }
+        return extractEndTokenType(token);
     }
 
     private static int extractEndTokenType(Token token) {
@@ -143,7 +107,10 @@ public class JexlToHtmlConverter {
         while (last != null && last.getNextToken() != null) {
             last = last.getNextToken();
         }
-        return last != null ? last.getType() : TokenTypes.NULL;
+        if (last != null) {
+            return last.getType();
+        }
+        return TokenTypes.NULL;
     }
 
     private static String mapTokenToCssClass(int tokenType, String lexeme) {
@@ -158,11 +125,18 @@ public class JexlToHtmlConverter {
             case TokenTypes.COMMENT_EOL, TokenTypes.COMMENT_MULTILINE, TokenTypes.COMMENT_DOCUMENTATION,
                     TokenTypes.COMMENT_KEYWORD, TokenTypes.COMMENT_MARKUP ->
                 "tk-cm";
-            case TokenTypes.IDENTIFIER, TokenTypes.FUNCTION, TokenTypes.VARIABLE ->
-                (SERVICE_IDENTIFIER_PATTERN.matcher(lexeme).matches() || EXTRA_KEYWORDS.contains(lexeme))
-                        ? "tk-rw"
-                        : null;
-            default -> SERVICE_IDENTIFIER_PATTERN.matcher(lexeme).matches() ? "tk-rw" : null;
+            case TokenTypes.IDENTIFIER, TokenTypes.FUNCTION, TokenTypes.VARIABLE -> {
+                if (SERVICE_IDENTIFIER_PATTERN.matcher(lexeme).matches() || EXTRA_KEYWORDS.contains(lexeme)) {
+                    yield "tk-rw";
+                }
+                yield null;
+            }
+            default -> {
+                if (SERVICE_IDENTIFIER_PATTERN.matcher(lexeme).matches()) {
+                    yield "tk-rw";
+                }
+                yield null;
+            }
         };
     }
 
@@ -196,30 +170,10 @@ public class JexlToHtmlConverter {
         return -1;
     }
 
-    private static TokenMaker resolveTokenMaker(String languageHint) {
-        if (languageHint != null && !languageHint.isBlank()) {
-            String style = LANGUAGE_SYNTAX_MAP.get(languageHint.trim().toLowerCase(Locale.ROOT));
-            if (style != null && !SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT.equals(style)) {
-                TokenMaker tm = TokenMakerFactory.getDefaultInstance().getTokenMaker(style);
-                if (tm != null) {
-                    return tm;
-                }
-            }
-        }
-        return new JavaScriptTokenMaker();
-    }
-
-    private static String extractLanguageHint(String codeAttrs) {
-        if (codeAttrs == null || codeAttrs.isBlank()) {
-            return null;
-        }
-        Matcher m = LANG_CLASS_PATTERN.matcher(codeAttrs);
-        return m.find() ? m.group(1) : null;
-    }
-
     public static String highlightCodeBlocks(String html) {
-        if (html == null)
+        if (html == null) {
             return "";
+        }
         Matcher preMatcher = PRE_PATTERN.matcher(html);
         StringBuilder sb = new StringBuilder();
         int lastEnd = 0;
@@ -231,9 +185,12 @@ public class JexlToHtmlConverter {
             if (codeMatcher.matches()) {
                 String codeAttrs = codeMatcher.group(1);
                 String codeContent = codeMatcher.group(2);
-                String highlighted = isProseLanguage(codeAttrs)
-                        ? codeContent
-                        : highlightHtml(codeContent, extractLanguageHint(codeAttrs));
+                String highlighted;
+                if (isProseLanguage(codeAttrs)) {
+                    highlighted = codeContent;
+                } else {
+                    highlighted = highlightHtml(codeContent);
+                }
                 sb.append("<pre").append(preAttrs).append("><code").append(codeAttrs).append(">").append(highlighted)
                         .append("</code></pre>");
             } else {
