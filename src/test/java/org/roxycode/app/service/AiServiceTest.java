@@ -102,6 +102,7 @@ class AiServiceTest {
         lenient().when(requestSpec.system(anyString())).thenReturn(requestSpec);
         lenient().when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
         lenient().when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+        lenient().when(requestSpec.advisors(any(Advisor[].class))).thenReturn(requestSpec);
         lenient().when(requestSpec.options(any())).thenReturn(requestSpec);
         lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
         lenient().when(requestSpec.tools(any(Object[].class))).thenReturn(requestSpec);
@@ -460,6 +461,91 @@ class AiServiceTest {
         assertEquals(1, toolExecutions.get(),
                 "Completed tool turn must not be re-executed when subsequent model call retries");
         assertEquals(3, modelCalls.get(), "Second model call should be retried once after transient 503");
+    }
+
+    @Test
+    void testAutoNudgeAdvisorExecutesMultipleNudgesWithoutChainCrashAndSendsNudgePrompt() {
+        ChatModel mockChatModel = mock(ChatModel.class);
+        when(mockChatModel.getOptions()).thenReturn(
+                org.springframework.ai.google.genai.GoogleGenAiChatOptions.builder().model("gemini-2.5-flash").build());
+        ChatMemory realMemory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository()).maxMessages(20).build();
+        ToolCallingManager customToolManager = mock(ToolCallingManager.class);
+
+        AssistantMessage.ToolCall toolCall = new AssistantMessage.ToolCall("call-1", "function", "executeJexl", "{}");
+        AssistantMessage toolCallMsg = AssistantMessage.builder().content("").toolCalls(List.of(toolCall)).build();
+        ChatResponse firstTurnToolCall = new ChatResponse(
+                List.of(new Generation(toolCallMsg, ChatGenerationMetadata.NULL)));
+        ChatResponse emptyStopResponse = buildChatResponse("", "STOP", null);
+        ChatResponse finalNudgedResponse = buildChatResponse("Summary after second nudge", "STOP", null);
+
+        List<Prompt> capturedPrompts = new java.util.ArrayList<>();
+        AtomicInteger modelCalls = new AtomicInteger();
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            Prompt prompt = inv.getArgument(0);
+            capturedPrompts.add(prompt);
+            int callNum = modelCalls.incrementAndGet();
+            if (callNum == 1) {
+                return firstTurnToolCall;
+            }
+            if (callNum == 2 || callNum == 3) {
+                return emptyStopResponse;
+            }
+            return finalNudgedResponse;
+        });
+
+        when(customToolManager.executeToolCalls(any(Prompt.class), eq(firstTurnToolCall))).thenAnswer(inv -> {
+            Prompt prompt = inv.getArgument(0);
+            Map<String, Object> ctx = prompt
+                    .getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions toolOpts
+                            ? toolOpts.getToolContext()
+                            : Map.of();
+            Object counter = ctx.get(TurnToolContext.TURN_COUNTER_KEY);
+            if (counter instanceof AtomicInteger atomicCounter) {
+                atomicCounter.incrementAndGet();
+            }
+            return DefaultToolExecutionResult.builder()
+                    .conversationHistory(List.of(new UserMessage("Run tool"), toolCallMsg)).returnDirect(false).build();
+        });
+
+        ChatClient.Builder realBuilder = ChatClient.builder(mockChatModel);
+        AiService serviceWithRealClient = new AiService(realBuilder, settingsService, promptService, jexlTool,
+                planService, realMemory, customToolManager, eventPublisher);
+        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null)).thenReturn("EXPLORE SYSTEM PROMPT");
+
+        String result = serviceWithRealClient.chat("qa:nudge-ok", WorkflowPhase.EXPLORE, "Run tool", null);
+        assertEquals("Summary after second nudge", result);
+        assertEquals(4, modelCalls.get(),
+                "Expected 1 tool-call turn + 1 empty post-tool turn + 2 auto-nudge turns = 4 model calls");
+
+        Prompt firstNudgePrompt = capturedPrompts.get(2);
+        Prompt secondNudgePrompt = capturedPrompts.get(3);
+        assertTrue(
+                firstNudgePrompt.getInstructions().stream()
+                        .anyMatch(m -> m instanceof UserMessage && AiService.AUTO_NUDGE_PROMPT.equals(m.getText())),
+                "First nudge Prompt must contain AUTO_NUDGE_PROMPT");
+        assertTrue(
+                secondNudgePrompt.getInstructions().stream()
+                        .anyMatch(m -> m instanceof UserMessage && AiService.AUTO_NUDGE_PROMPT.equals(m.getText())),
+                "Second nudge Prompt must contain AUTO_NUDGE_PROMPT");
+
+        // Also verify exhausting MAX_AUTO_NUDGES (all empty responses) does not throw IllegalArgumentException
+        capturedPrompts.clear();
+        modelCalls.set(0);
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            capturedPrompts.add(inv.getArgument(0));
+            int callNum = modelCalls.incrementAndGet();
+            if (callNum == 1) {
+                return firstTurnToolCall;
+            }
+            return emptyStopResponse;
+        });
+
+        String exhaustedResult = serviceWithRealClient.chat("qa:nudge-exhausted", WorkflowPhase.EXPLORE, "Run tool",
+                null);
+        assertTrue(exhaustedResult.contains(AiService.EMPTY_RESPONSE_MARKER));
+        assertEquals(2 + AiService.MAX_AUTO_NUDGES, modelCalls.get(),
+                "Should stop nudging after MAX_AUTO_NUDGES attempts without throwing IllegalArgumentException");
     }
 
     @Test
