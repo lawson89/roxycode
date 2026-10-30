@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +31,7 @@ public class SymbolService {
     private static final String DOC_SYMBOL_NAMES = "Array of symbol names to read from the file";
     private static final String ERROR_PREFIX = "Error: ";
     private static final String CANCELLED_MSG = "Symbol operation cancelled";
-    private static final String CTAGS_OUTLINE_FIELDS = "--fields=+neKSs";
+    private static final List<String> CTAGS_OUTLINE_FLAGS = List.of("--fields=+neKSs");
 
     static final int MAX_PRECEDING_CONTEXT_LINES = 5;
     static final int MAX_FIND_SYMBOL_FILES = 25;
@@ -42,7 +41,7 @@ public class SymbolService {
     private static final char DOT_CHAR = '.';
     private static final char BACKSLASH_CHAR = 92;
     private static final char SLASH_CHAR = '/';
-    private static final String DOUBLE_NEWLINE = "\n\n";
+    private static final String DOUBLE_NEWLINE = String.valueOf((char) 10) + (char) 10;
 
     static final Set<String> IGNORED_TAG_KINDS = CtagsRunner.IGNORED_TAG_KINDS;
     private static final Pattern SIMPLE_IDENTIFIER_PATTERN = Pattern.compile("^[A-Za-z0-9_$]+$");
@@ -58,7 +57,11 @@ public class SymbolService {
     public SymbolService(ProjectService projectService, GrepService grepService, ObjectMapper objectMapper) {
         this.projectService = projectService;
         this.grepService = grepService;
-        this.objectMapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
+        if (objectMapper != null) {
+            this.objectMapper = objectMapper;
+        } else {
+            this.objectMapper = AiConfig.SHARED_OBJECT_MAPPER;
+        }
     }
 
     void setCtagsRunner(CtagsRunner ctagsRunner) {
@@ -69,7 +72,7 @@ public class SymbolService {
     public List<SymbolInfo> getFileOutline(@AgentDoc(DOC_FILE_PATH) String relativePath) {
         ExceptionUtils.checkInterrupted(CANCELLED_MSG);
         Path filePath = resolveRegularFile(relativePath);
-        return getFileOutlineWithLines(filePath, relativePath, countFileLinesSafely(filePath));
+        return getFileOutlineWithLines(filePath, relativePath, readLinesSafely(filePath).size());
     }
 
     @AgentDoc(value = "Reads the numbered lines of all matching symbols (including overloads or 'Scope.symbolName' and immediately preceding annotations/comments) in a file.", examples = {
@@ -90,13 +93,9 @@ public class SymbolService {
     @AgentDoc(value = "Reads multiple symbols from a file in a single batch call, returning a map of symbolName to numbered lines (or 'Error: ...' if not found).", examples = "symbolService.readSymbols('src/main/java/App.java', ['main', 'helper'])")
     public Map<String, String> readSymbols(@AgentDoc(DOC_FILE_PATH) String relativePath,
             @AgentDoc(DOC_SYMBOL_NAMES) String... symbolNames) {
-        return readSymbols(relativePath, symbolNames == null ? List.of() : Arrays.asList(symbolNames));
-    }
-
-    public Map<String, String> readSymbols(String relativePath, List<String> symbolNames) {
         ExceptionUtils.checkInterrupted(CANCELLED_MSG);
         Map<String, String> results = new LinkedHashMap<>();
-        if (symbolNames == null || symbolNames.isEmpty()) {
+        if (symbolNames == null || symbolNames.length == 0) {
             return results;
         }
         try {
@@ -112,8 +111,14 @@ public class SymbolService {
             }
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            String errorMsg = msg.startsWith(ERROR_PREFIX) ? msg : ERROR_PREFIX + msg;
+            String msg = e.getClass().getSimpleName();
+            if (e.getMessage() != null) {
+                msg = e.getMessage();
+            }
+            String errorMsg = ERROR_PREFIX + msg;
+            if (msg.startsWith(ERROR_PREFIX)) {
+                errorMsg = msg;
+            }
             for (String rawSymbolName : symbolNames) {
                 if (rawSymbolName != null && !rawSymbolName.isBlank()) {
                     results.putIfAbsent(rawSymbolName, errorMsg);
@@ -135,9 +140,10 @@ public class SymbolService {
         if (unqualifiedName.isEmpty()) {
             return List.of();
         }
-        String searchPattern = SIMPLE_IDENTIFIER_PATTERN.matcher(unqualifiedName).matches()
-                ? unqualifiedName
-                : Pattern.quote(unqualifiedName);
+        String searchPattern = Pattern.quote(unqualifiedName);
+        if (SIMPLE_IDENTIFIER_PATTERN.matcher(unqualifiedName).matches()) {
+            searchPattern = unqualifiedName;
+        }
         List<String> candidateRelPaths = grepService.findMatchingFiles(searchPattern);
         if (candidateRelPaths == null || candidateRelPaths.isEmpty()) {
             return List.of();
@@ -168,7 +174,7 @@ public class SymbolService {
             return List.of();
         }
 
-        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(candidatePaths, CTAGS_OUTLINE_FIELDS,
+        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(candidatePaths, CTAGS_OUTLINE_FLAGS,
                 objectMapper, CANCELLED_MSG);
         List<SymbolInfo> matches = new ArrayList<>();
         for (Path filePath : candidatePaths) {
@@ -177,7 +183,7 @@ public class SymbolService {
                 continue;
             }
             String relPath = relPathByAbsPath.getOrDefault(filePath, normalizeRelativePath(filePath, null));
-            int totalLines = countFileLinesSafely(filePath);
+            int totalLines = readLinesSafely(filePath).size();
             for (SymbolInfo symbol : finalizeSymbolsForFile(entriesForFile, relPath, totalLines)) {
                 if (matchesSymbol(symbol, trimmedQuery)) {
                     matches.add(symbol);
@@ -190,7 +196,7 @@ public class SymbolService {
     }
 
     private List<SymbolInfo> getFileOutlineWithLines(Path filePath, String relativePath, int totalLines) {
-        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(List.of(filePath), CTAGS_OUTLINE_FIELDS,
+        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(List.of(filePath), CTAGS_OUTLINE_FLAGS,
                 objectMapper, CANCELLED_MSG);
         List<CtagsEntry> entries = entriesByPath.getOrDefault(filePath, List.of());
         if (entries.isEmpty()) {
@@ -215,9 +221,10 @@ public class SymbolService {
         int totalLines = fileLines.size();
         for (SymbolInfo symbol : matching) {
             int adjustedStart = adjustStartLineForPrecedingContext(fileLines, symbol.startLine());
-            int clampedEnd = totalLines > 0
-                    ? Math.min(Math.max(adjustedStart, symbol.endLine()), totalLines)
-                    : Math.max(adjustedStart, symbol.endLine());
+            int clampedEnd = Math.max(adjustedStart, symbol.endLine());
+            if (totalLines > 0) {
+                clampedEnd = Math.min(clampedEnd, totalLines);
+            }
             ranges.add(new LineRange(adjustedStart, clampedEnd));
         }
 
@@ -298,11 +305,18 @@ public class SymbolService {
 
     private static String extractUnqualifiedName(String symbolQuery) {
         int dotIndex = symbolQuery.lastIndexOf(DOT_CHAR);
-        return dotIndex == NOT_FOUND_INDEX ? symbolQuery : symbolQuery.substring(dotIndex + 1).trim();
+        if (dotIndex == NOT_FOUND_INDEX) {
+            return symbolQuery;
+        }
+        return symbolQuery.substring(dotIndex + 1).trim();
     }
 
     private static String formatSymbolNotFoundError(String symbolName, String relativePath) {
-        return ERROR_PREFIX + "Symbol '" + (symbolName == null ? "" : symbolName) + "' not found in " + relativePath;
+        String resolvedName = "";
+        if (symbolName != null) {
+            resolvedName = symbolName;
+        }
+        return ERROR_PREFIX + "Symbol '" + resolvedName + "' not found in " + relativePath;
     }
 
     private static List<SymbolInfo> finalizeSymbolsForFile(List<CtagsEntry> entries, String relPath, int totalLines) {
@@ -321,7 +335,10 @@ public class SymbolService {
     private static int resolveEndLine(List<CtagsEntry> sorted, int index, int totalLines) {
         CtagsEntry current = sorted.get(index);
         if (current.end() >= current.line()) {
-            return totalLines > 0 ? Math.min(current.end(), Math.max(current.line(), totalLines)) : current.end();
+            if (totalLines > 0) {
+                return Math.min(current.end(), Math.max(current.line(), totalLines));
+            }
+            return current.end();
         }
         for (int j = index + 1; j < sorted.size(); j++) {
             int nextStart = sorted.get(j).line();
@@ -356,14 +373,17 @@ public class SymbolService {
                 }
             }
         }
-        return fallbackRelativePath == null ? "" : fallbackRelativePath.trim().replace(BACKSLASH_CHAR, SLASH_CHAR);
+        if (fallbackRelativePath == null) {
+            return "";
+        }
+        return fallbackRelativePath.trim().replace(BACKSLASH_CHAR, SLASH_CHAR);
     }
 
-    private static int countFileLinesSafely(Path filePath) {
+    private static List<String> readLinesSafely(Path filePath) {
         try {
-            return (int) Files.readString(filePath).lines().count();
+            return Files.readAllLines(filePath);
         } catch (Exception e) {
-            return 0;
+            return List.of();
         }
     }
 }

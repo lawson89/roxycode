@@ -31,26 +31,13 @@ public interface CtagsRunner {
     int SINGLE_FILE_COUNT = 1;
     int MIN_LINE_NUMBER = 1;
     String TAG_TYPE = "tag";
-    char BACKSLASH_CHAR = 92;
-    char DQUOTE_CHAR = 34;
-    String END_ANCHOR_COMMENT = "$/;" + DQUOTE_CHAR;
-    String END_COMMENT = "/;" + DQUOTE_CHAR;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record CtagsEntry(@JsonProperty("_type") String type, String name, String path, String kind, int line, int end,
-            String scope, String signature, String pattern) {
+            String scope, String signature) {
     }
 
     ProcessResult run(List<String> command);
-
-    default Map<Path, List<CtagsEntry>> runAndParse(List<Path> files, String fieldsArg, ObjectMapper objectMapper,
-            String cancelMessage) {
-        List<String> flags = List.of();
-        if (fieldsArg != null && !fieldsArg.isBlank()) {
-            flags = List.of(fieldsArg);
-        }
-        return runAndParse(files, flags, objectMapper, cancelMessage);
-    }
 
     default Map<Path, List<CtagsEntry>> runAndParse(List<Path> files, List<String> extraFlags,
             ObjectMapper objectMapper, String cancelMessage) {
@@ -96,41 +83,6 @@ public interface CtagsRunner {
             }
         }
         return results;
-    }
-
-    static String extractPatternText(String rawPattern) {
-        if (rawPattern == null || rawPattern.isBlank()) {
-            return "";
-        }
-        String text = rawPattern.trim();
-        if (text.startsWith("/^")) {
-            text = text.substring(2);
-        } else if (text.startsWith("/")) {
-            text = text.substring(1);
-        }
-        if (text.endsWith(END_ANCHOR_COMMENT)) {
-            text = text.substring(0, text.length() - 4);
-        } else if (text.endsWith(END_COMMENT)) {
-            text = text.substring(0, text.length() - 3);
-        } else if (text.endsWith("$/")) {
-            text = text.substring(0, text.length() - 2);
-        } else if (text.endsWith("/")) {
-            text = text.substring(0, text.length() - 1);
-        }
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (ch == BACKSLASH_CHAR && i + 1 < text.length()) {
-                char next = text.charAt(i + 1);
-                if (next == '/' || next == BACKSLASH_CHAR) {
-                    sb.append(next);
-                    i++;
-                    continue;
-                }
-            }
-            sb.append(ch);
-        }
-        return sb.toString();
     }
 
     private static void parseJsonLine(String line, List<Path> files, ObjectMapper mapper, String cancelMessage,

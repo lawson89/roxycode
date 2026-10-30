@@ -135,21 +135,18 @@ class GenericBuildToolServiceTest {
         assertTrue(Files.readString(persistedLog).contains("MyTest"));
         assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
 
-        Path smallLog = tempDir.resolve("small.log");
-        Files.writeString(smallLog, "short output");
-        assertEquals("short output", GenericBuildToolService.getLogTail(smallLog, "fallback"));
+        assertEquals("short output", GenericBuildToolService.getLogTail("short output"));
 
         String largeContent = "HEADER-" + "A".repeat(5000) + "-TAIL_MARKER";
-        Path largeLog = tempDir.resolve("large.log");
-        Files.writeString(largeLog, largeContent);
-        String truncated = GenericBuildToolService.getLogTail(largeLog, "fallback");
+        String truncated = GenericBuildToolService.getLogTail(largeContent);
         assertTrue(truncated.startsWith(GenericBuildToolService.LOG_TRUNCATED_PREFIX));
         assertFalse(truncated.contains("HEADER-"));
         assertTrue(truncated.endsWith("-TAIL_MARKER"));
         assertEquals(GenericBuildToolService.LOG_TRUNCATED_PREFIX.length() + GenericBuildToolService.MAX_LOG_TAIL_BYTES,
                 truncated.length());
 
-        assertEquals("fallback", GenericBuildToolService.getLogTail(tempDir.resolve("missing.log"), "fallback"));
+        assertEquals("", GenericBuildToolService.getLogTail(null));
+        assertEquals("", GenericBuildToolService.getLogTail(""));
     }
 
     @Test

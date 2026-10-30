@@ -12,7 +12,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.roxycode.app.ai.services.CtagsRunner;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -75,10 +74,10 @@ class RepoMapPackerServiceTest {
 
         Path smallJava = Files.writeString(srcDir.resolve("SmallService.java"),
                 String.join(nl, "package demo;", "import java.util.List;", "public class SmallService {",
-                        "    private int secretBodyLine = 42;", "    public void execute() {}",
+                        "    private int secretBodyLine = 42;", "    public void execute() {}// comment",
                         "    public String submitPlan(", "            String title) { return title; }", "}", ""));
         Files.writeString(testDir.resolve("SmallServiceTest.java"),
-                "package demo;\nclass SmallServiceTest { void testIt() {} }\n");
+                "package demo;" + nl + "class SmallServiceTest { void testIt() {} }" + nl);
         Files.writeString(tempDir.resolve("README.md"), "# Project Title" + nl + "Some markdown prose");
         Files.writeString(tempDir.resolve("pom.xml"), "<project><groupId>demo</groupId></project>");
         Files.writeString(srcDir.resolve("Empty.java"), "");
@@ -90,14 +89,11 @@ class RepoMapPackerServiceTest {
         service.setCtagsRunner(cmd -> {
             ctagsCommands.add(cmd);
             return new ProcessResult(0,
-                    ctagsLineWithPattern("demo", smallJava.toString(), 1, "package", "/^package demo;$/")
-                            + ctagsLineWithPattern("List", smallJava.toString(), 2, "import",
-                                    "/^import java.util.List;$/")
+                    ctagsLineWithPattern("demo", smallJava.toString(), 1, "package", null)
+                            + ctagsLineWithPattern("List", smallJava.toString(), 2, "import", null)
                             + ctagsLineWithPattern("ns", smallJava.toString(), 1, "namespace", null)
-                            + ctagsLineWithPattern("SmallService", smallJava.toString(), 3, "class",
-                                    "/^public class SmallService {$/")
-                            + ctagsLineWithPattern("execute", smallJava.toString(), 5, "method",
-                                    "/^    public void execute() {}" + (char) 92 + "/" + (char) 92 + "/ comment$/")
+                            + ctagsLineWithPattern("SmallService", smallJava.toString(), 3, "class", null)
+                            + ctagsLineWithPattern("execute", smallJava.toString(), 5, "method", null)
                             + ctagsLineWithPattern("submitPlan", smallJava.toString(), 6, "method", null),
                     "", false);
         });
@@ -106,22 +102,17 @@ class RepoMapPackerServiceTest {
         assertTrue(result.success());
         String content = result.content();
 
-        assertEquals(String.join("\n", "# Repo Map Snapshot", "README.md", "pom.xml", "src/main/java/demo/Empty.java",
-                "src/main/java/demo/SmallService.java", "  3: public class SmallService {",
-                "  5: public void execute() {}// comment", "  6: public String submitPlan(",
-                "src/test/java/demo/SmallServiceTest.java", ""), content);
+        assertEquals(String.join(String.valueOf((char) 10), "# Repo Map Snapshot", "README.md", "pom.xml",
+                "src/main/java/demo/Empty.java", "src/main/java/demo/SmallService.java",
+                "  3: public class SmallService {", "  5: public void execute() {}// comment",
+                "  6: public String submitPlan(", "src/test/java/demo/SmallServiceTest.java", ""), content);
         SwingTestUtils.assertContainsNone(content, "## Project Tree", "--- ", "1: package demo;",
                 "2: import java.util.List;", "secretBodyLine", "Some markdown prose", "testIt");
         assertEquals(1, ctagsCommands.size());
         assertEquals(7, ctagsCommands.get(0).size());
         assertTrue(ctagsCommands.get(0).contains("--fields=+n"));
-        assertTrue(ctagsCommands.get(0).contains("--pattern-length-limit=250"));
+        assertTrue(ctagsCommands.get(0).contains("--pattern-length-limit=0"));
         assertTrue(ctagsCommands.get(0).get(6).endsWith("SmallService.java"));
-
-        assertEquals("", CtagsRunner.extractPatternText(null));
-        assertEquals("", CtagsRunner.extractPatternText("   "));
-        assertEquals("String path = " + (char) 92 + "a/b;", CtagsRunner
-                .extractPatternText("/^String path = " + (char) 92 + (char) 92 + "a" + (char) 92 + "/b;$/;" + '"'));
     }
 
     @Test

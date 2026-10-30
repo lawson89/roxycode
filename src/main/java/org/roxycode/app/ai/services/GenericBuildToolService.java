@@ -6,7 +6,6 @@ import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -45,7 +44,8 @@ public class GenericBuildToolService {
     private static final String CONFIG_FILE = "build.toml";
     static final String BUILD_LOG_REL_PATH = "tmp/build.log";
     static final int MAX_LOG_TAIL_BYTES = 4096;
-    static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]\n";
+    static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]"
+            + (char) 10;
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
     private static final String DEFAULT_FALLBACK_TOML = """
             [build]
@@ -155,11 +155,6 @@ public class GenericBuildToolService {
         return projectService.hasActiveProject() && Files.exists(getConfigPath());
     }
 
-    @AgentDoc(value = "Alias for runTests(). Runs all tests using the configured test command.", examples = "buildToolService.test()")
-    public BuildResult test() {
-        return runTests();
-    }
-
     @AgentDoc(value = "Runs all tests using the configured test command", examples = "buildToolService.runTests()")
     public BuildResult runTests() {
         return runCommand("test.run_all", config -> config.test().runAll());
@@ -211,11 +206,12 @@ public class GenericBuildToolService {
             String testFailureRegex = config.parse().testFailureRegex();
             Map<String, String> env = config.env();
             ContainerConfig containerConfig = config.container();
+            Path logFile = prepareBuildLogFile();
             if (containerConfig.enabled()) {
-                return executeInContainer(command, containerConfig, env, errorRegex, testFailureRegex);
+                return executeInContainer(command, containerConfig, env, logFile, errorRegex, testFailureRegex);
             }
             stopActiveContainer();
-            return execute(command, env, errorRegex, testFailureRegex);
+            return execute(command, env, logFile, errorRegex, testFailureRegex);
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
@@ -228,10 +224,14 @@ public class GenericBuildToolService {
         return projectService.resolveProjectDataPath(CONFIG_FILE);
     }
 
-    private Path prepareBuildLogFile() throws IOException {
+    private Path prepareBuildLogFile() {
         Path logFile = projectService.resolveProjectDataPath(BUILD_LOG_REL_PATH);
-        PathUtils.createParentDirectories(logFile);
-        Files.deleteIfExists(logFile);
+        try {
+            PathUtils.createParentDirectories(logFile);
+            Files.deleteIfExists(logFile);
+        } catch (IOException e) {
+            log.warn("Failed to prepare build log file {}: {}", logFile, e.getMessage());
+        }
         return logFile;
     }
 
@@ -284,7 +284,7 @@ public class GenericBuildToolService {
 
     @SuppressWarnings("PMD.PreserveStackTrace")
     private BuildResult executeInContainer(String command, ContainerConfig containerConfig, Map<String, String> env,
-            String errorRegex, String testFailureRegex) {
+            Path logFile, String errorRegex, String testFailureRegex) {
         if (!buildContainerService.isDockerAvailable()) {
             stopActiveContainer();
             String msg = "Docker was not detected or the Docker daemon is not running. "
@@ -297,9 +297,7 @@ public class GenericBuildToolService {
         int exitCode = -1;
         String fullOutput;
 
-        Path logFile = null;
         try {
-            logFile = prepareBuildLogFile();
             ContainerExecResult result = buildContainerService.executeCommand(projectService.getCurrentProjectRoot(),
                     containerConfig, env, command);
             fullOutput = result.combinedOutput();
@@ -326,15 +324,14 @@ public class GenericBuildToolService {
         }
     }
 
-    private BuildResult execute(String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
+    private BuildResult execute(String command, Map<String, String> env, Path logFile, String errorRegex,
+            String testFailureRegex) {
         log.info("Executing build command: {}", command);
         List<String> errors = new ArrayList<>();
         int exitCode = -1;
         String fullOutput = "";
-        Path logFile = null;
 
         try {
-            logFile = prepareBuildLogFile();
             List<String> shellCommand;
             if (SystemUtils.IS_OS_WINDOWS) {
                 shellCommand = List.of("cmd.exe", "/c", command);
@@ -367,38 +364,18 @@ public class GenericBuildToolService {
         errors.addAll(extractWithRipGrep(errorRegex, logFile, "errors"));
         List<String> failedTests = new ArrayList<>(extractWithRipGrep(testFailureRegex, logFile, "test failures"));
         boolean success = exitCode == 0 && errors.isEmpty() && failedTests.isEmpty();
-        String tailOutput = getLogTail(logFile, fullOutput);
+        String tailOutput = getLogTail(fullOutput);
         return new BuildResult(success, exitCode, tailOutput, errors, failedTests);
     }
 
-    static String getLogTail(Path logFile, String fallbackOutput) {
-        if (logFile == null || !Files.exists(logFile)) {
-            if (fallbackOutput != null) {
-                return fallbackOutput;
-            }
+    static String getLogTail(String fullOutput) {
+        if (fullOutput == null || fullOutput.isEmpty()) {
             return "";
         }
-        try {
-            long size = Files.size(logFile);
-            if (size == 0 && fallbackOutput != null && !fallbackOutput.isEmpty()) {
-                return fallbackOutput;
-            }
-            if (size <= MAX_LOG_TAIL_BYTES) {
-                return Files.readString(logFile, StandardCharsets.UTF_8);
-            }
-            try (RandomAccessFile raf = new RandomAccessFile(logFile.toFile(), "r")) {
-                raf.seek(size - MAX_LOG_TAIL_BYTES);
-                byte[] bytes = new byte[MAX_LOG_TAIL_BYTES];
-                raf.readFully(bytes);
-                return LOG_TRUNCATED_PREFIX + new String(bytes, StandardCharsets.UTF_8);
-            }
-        } catch (IOException e) {
-            log.warn("Failed to read build log tail from {}", logFile, e);
-            if (fallbackOutput != null) {
-                return fallbackOutput;
-            }
-            return "";
+        if (fullOutput.length() <= MAX_LOG_TAIL_BYTES) {
+            return fullOutput;
         }
+        return LOG_TRUNCATED_PREFIX + fullOutput.substring(fullOutput.length() - MAX_LOG_TAIL_BYTES);
     }
 
     List<String> extractWithRipGrep(String regex, Path logFile, String patternType) {

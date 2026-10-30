@@ -66,12 +66,12 @@ class GitServiceTest {
 
         String headDiffOut = String.join("\n", "diff --git a/Tracked.java b/Tracked.java", "--- a/Tracked.java",
                 "+++ b/Tracked.java", "@@ -1,2 +1,2 @@", "+line 1 staged", "+line 2 unstaged");
-        String nul = String.valueOf((char) 0);
-        String statusOut = String.join(nul, "MM Tracked.java", "R  Renamed.java", "OldName.java",
-                "?? src/NewFeature.java") + nul;
-        String noIndexDiffOut = String.join("\n", "diff --git a//dev/null b/src/NewFeature.java",
-                "new file mode 100644", "index 0000000..1111111", "--- /dev/null", "+++ b/src/NewFeature.java",
-                "@@ -0,0 +1,2 @@", "+package src;", "+public class NewFeature {}");
+        String nl = String.valueOf((char) 10);
+        String statusOut = String.join(nl, "MM Tracked.java", "R  OldName.java -> Renamed.java",
+                "?? src/NewFeature.java");
+        String noIndexDiffOut = String.join(nl, "diff --git a//dev/null b/src/NewFeature.java", "new file mode 100644",
+                "index 0000000..1111111", "--- /dev/null", "+++ b/src/NewFeature.java", "@@ -0,0 +1,2 @@",
+                "+package src;", "+public class NewFeature {}");
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             stubGit(runner, 0, headDiffOut, "git", "diff", "HEAD");
             stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard");
@@ -80,7 +80,7 @@ class GitServiceTest {
             stubGit(runner, 0, "", "git", "diff", "HEAD", "--", "src/NewFeature.java");
             stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard", "--",
                     "src/NewFeature.java");
-            stubGit(runner, 0, statusOut, "git", "status", "--porcelain", "-z", "-uall");
+            stubGit(runner, 0, statusOut, "git", "-c", "core.quotePath=false", "status", "--porcelain=v1", "-uall");
             SwingTestUtils.assertContainsAll(gitService.getDiff(), "+line 1 staged", "+line 2 unstaged",
                     "diff --git a/src/NewFeature.java b/src/NewFeature.java", "+++ b/src/NewFeature.java",
                     "@@ -0,0 +1,2 @@", "+public class NewFeature {}");
@@ -97,24 +97,20 @@ class GitServiceTest {
 
             assertEquals(List.of("Tracked.java", "Renamed.java", "src/NewFeature.java"), gitService.getChangedFiles());
         }
-        assertEquals(
-                "diff --git a/bin/logo.png b/bin/logo.png\nnew file mode 100644\nBinary files /dev/null and b/bin/logo.png differ",
-                GitService.normalizeUntrackedNoIndexDiff("bin/logo.png",
-                        "diff --git a//dev/null b/bin/logo.png\nnew file mode 100644\nBinary files /dev/null and b/bin/logo.png differ\n"));
     }
 
     @Test
-    void testGetChangedFilesPreservesFirstLineLeadingSpaceAndHandlesNulDelimitedPaths() {
+    void testGetChangedFilesPreservesFirstLineLeadingSpaceAndHandlesPorcelainV1Paths() {
         GitService gitService = new GitService(createActiveProjectService());
         char dq = (char) 34;
         char bs = (char) 92;
-        String nul = String.valueOf((char) 0);
-        String statusOut = String.join(nul, " M FirstUnstaged.java",
-                "?? dir with spaces/quote" + dq + "file" + bs + "name.txt", "R  new name.txt", "old name.txt",
-                "?? café_über_файл.java") + nul;
+        String nl = String.valueOf((char) 10);
+        String statusOut = String.join(nl, " M FirstUnstaged.java",
+                "?? dir with spaces/quote" + dq + "file" + bs + "name.txt", "R  old name.txt -> new name.txt",
+                "?? café_über_файл.java");
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            stubGit(runner, 0, statusOut, "git", "status", "--porcelain", "-z", "-uall");
+            stubGit(runner, 0, statusOut, "git", "-c", "core.quotePath=false", "status", "--porcelain=v1", "-uall");
             assertEquals(List.of("FirstUnstaged.java", "dir with spaces/quote" + dq + "file/name.txt", "new name.txt",
                     "café_über_файл.java"), gitService.getChangedFiles());
         }

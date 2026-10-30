@@ -329,39 +329,41 @@ public class MemoryService {
         if (StringUtils.isBlank(query)) {
             return allEntries;
         }
-        if (allEntries.isEmpty()) {
+        if (allEntries.isEmpty() || archiveDir == null) {
             return List.of();
         }
         String trimmedQuery = query.trim();
+        Map<String, String> snippetsByFile = new LinkedHashMap<>();
+        if (Files.isDirectory(archiveDir)) {
+            List<String> command = List.of("rg", "--color=never", "-i", "--no-heading", "--with-filename", "-m", "1",
+                    "-F", "--", trimmedQuery, ".");
+            List<String> rgLines = GrepService.runRipGrepLines(command, archiveDir, false);
+            for (String line : rgLines) {
+                int colonIdx = line.indexOf(':');
+                if (colonIdx <= 0) {
+                    continue;
+                }
+                String filePart = line.substring(0, colonIdx).trim();
+                if (filePart.startsWith("./") || filePart.startsWith("." + (char) 92)) {
+                    filePart = filePart.substring(2);
+                }
+                String snippetPart = line.substring(colonIdx + 1).trim();
+                if (!filePart.isEmpty() && !snippetPart.isEmpty()) {
+                    snippetsByFile.putIfAbsent(filePart, snippetPart);
+                }
+            }
+        }
         List<ArchiveEntrySummary> matched = new ArrayList<>();
         for (ArchiveEntrySummary entry : allEntries) {
             boolean metaMatch = StringUtils.containsIgnoreCase(entry.title(), trimmedQuery)
                     || StringUtils.containsIgnoreCase(entry.filename(), trimmedQuery)
                     || StringUtils.containsIgnoreCase(entry.createdBy(), trimmedQuery);
-            String snippet = findFirstBodyLineMatch(archiveDir, entry.filename(), trimmedQuery);
+            String snippet = snippetsByFile.getOrDefault(entry.filename(), "").trim();
             if (metaMatch || !snippet.isEmpty()) {
-                if (!snippet.isEmpty()) {
-                    matched.add(entry.withMatchSnippet(snippet));
-                } else {
-                    matched.add(entry);
-                }
+                matched.add(entry.withMatchSnippet(snippet));
             }
         }
         return List.copyOf(matched);
-    }
-
-    private static String findFirstBodyLineMatch(Path archiveDir, String filename, String trimmedQuery) {
-        if (archiveDir == null || StringUtils.isBlank(filename)) {
-            return "";
-        }
-        String body = FrontmatterUtils.stripFrontmatter(readFileIfExists(archiveDir.resolve(filename)));
-        for (String line : body.lines().toList()) {
-            String trimmedLine = line.trim();
-            if (!trimmedLine.isEmpty() && StringUtils.containsIgnoreCase(trimmedLine, trimmedQuery)) {
-                return trimmedLine;
-            }
-        }
-        return "";
     }
 
     @AgentDoc(value = "Searches across Global Memory (~/.roxycode/memory/), Project Memory (<projectDataDir>/memory/), Archived Plans (<projectDataDir>/archive/plans/), and Archived Topics (<projectDataDir>/archive/topics/) using RipGrep.", examples = "memoryService.search('swing')")

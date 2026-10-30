@@ -196,8 +196,7 @@ class SymbolServiceTest {
                         tagJson("beta", null, 4, 5, "method", "Batch", "()")), "", false));
 
         assertTrue(symbolService.readSymbols("Batch.java", (String[]) null).isEmpty());
-        assertTrue(symbolService.readSymbols("Batch.java", (List<String>) null).isEmpty());
-        assertTrue(symbolService.readSymbols("Batch.java", List.of()).isEmpty());
+        assertTrue(symbolService.readSymbols("Batch.java").isEmpty());
 
         String originalContent = Files.readString(file);
         clearInvocations(projectService);
