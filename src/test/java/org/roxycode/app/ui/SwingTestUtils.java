@@ -9,6 +9,8 @@ import com.formdev.flatlaf.FlatLightLaf;
 import java.awt.Component;
 import java.awt.Container;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
@@ -46,9 +48,22 @@ public final class SwingTestUtils {
     }
 
     static void flushEdt() {
-        org.roxycode.app.util.Edt.awaitAsyncTasks();
         runOnEdt(() -> {
         });
+    }
+
+    static <T> T awaitFuture(CompletableFuture<T> future) {
+        if (future == null) {
+            flushEdt();
+            return null;
+        }
+        try {
+            T result = future.get(5, TimeUnit.SECONDS);
+            flushEdt();
+            return result;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static void invokeUnchecked(ThrowingRunnable action) {

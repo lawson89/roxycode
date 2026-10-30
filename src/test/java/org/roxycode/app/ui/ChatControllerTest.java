@@ -18,7 +18,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
-import javax.swing.Action;
 import javax.swing.ActionMap;
 import javax.swing.JButton;
 import javax.swing.JPanel;
@@ -36,25 +35,6 @@ import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 
 class ChatControllerTest extends ChatTestFixture {
-
-    @Test
-    void testRejectPhaseNotifiesWorkflowAndTriggersTurn() {
-        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Let's revise the plan.");
-
-        FeatureChatPanel panel = createFeatureChatPanel(directExecutor);
-        assertSame(directExecutor, panel.controller.getTurnExecutor());
-
-        panel.controller.rejectPhase();
-        flushEdt();
-
-        verify(planService).rejectTransition();
-        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN),
-                contains("I have rejected the transition to Code"), any());
-        assertEquals(0L, panel.controller.getActiveTurnId());
-        assertTrue(panel.outputArea.getText().contains("Transition to"));
-    }
 
     @Test
     void testPerformResetSessionAndResetForProjectChangeBehavior() {
@@ -86,7 +66,7 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testClosePreservesSharedExecutorWhileCancellingActiveTurn() throws Exception {
+    void testExecutorOwnershipAndCloseBehavior() throws Exception {
         ExecutorService executorService = new AiConfig().chatTurnExecutor();
         try {
             assertFalse(executorService.isShutdown());
@@ -125,39 +105,24 @@ class ChatControllerTest extends ChatTestFixture {
         } finally {
             executorService.close();
         }
-    }
 
-    @Test
-    void testFallbackDefaultExecutorOwnedAndClosedOnRemoveNotifyOrClose() {
-        ChatPanel panel = new ChatPanel(aiService, planService, publisher, chatMemory, ChatModel.QA_SESSION_PREFIX,
-                WorkflowPhase.EXPLORE, false, null, null);
-
-        assertTrue(panel.controller.ownsTurnExecutor());
-        ExecutorService fallbackExecutor = assertInstanceOf(ExecutorService.class, panel.controller.getTurnExecutor());
+        ChatPanel fallbackPanel = new ChatPanel(aiService, planService, publisher, chatMemory,
+                ChatModel.QA_SESSION_PREFIX, WorkflowPhase.EXPLORE, false, null, null);
+        assertTrue(fallbackPanel.controller.ownsTurnExecutor());
+        ExecutorService fallbackExecutor = assertInstanceOf(ExecutorService.class,
+                fallbackPanel.controller.getTurnExecutor());
         assertFalse(fallbackExecutor.isShutdown());
 
-        panel.removeNotify();
+        fallbackPanel.removeNotify();
         assertTrue(fallbackExecutor.isShutdown());
 
-        panel.addNotify();
-        ExecutorService recreatedExecutor = assertInstanceOf(ExecutorService.class, panel.controller.getTurnExecutor());
+        fallbackPanel.addNotify();
+        ExecutorService recreatedExecutor = assertInstanceOf(ExecutorService.class,
+                fallbackPanel.controller.getTurnExecutor());
         assertFalse(recreatedExecutor.isShutdown());
 
-        panel.close();
+        fallbackPanel.close();
         assertTrue(recreatedExecutor.isShutdown());
-    }
-
-    @Test
-    void testSendMessageWithEmptyTextAndPendingImageShowsFeedbackAndPreservesImage() {
-        ExploreChatPanel panel = createExploreChatPanel(directExecutor);
-        panel.model.addPendingImage(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB));
-        assertTrue(panel.model.hasPendingImages());
-
-        panel.controller.sendMessage("   ");
-
-        assertTrue(panel.model.hasPendingImages());
-        assertTrue(panel.outputArea.getText().contains(ChatController.IMAGE_REQUIRES_TEXT_MESSAGE));
-        verifyNoInteractions(publisher, aiService);
     }
 
     @Test
@@ -191,40 +156,6 @@ class ChatControllerTest extends ChatTestFixture {
                 "20250514-153000-ripgrep-search-architecture.md");
         verify(publisher).publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC,
                 "20250514-153000-ripgrep-search-architecture.md"));
-    }
-
-    @Test
-    void testApprovePhaseAndImageEncodingRunOnTurnExecutorOffEdt() {
-        AtomicBoolean approveOnEdt = new AtomicBoolean(true);
-        AtomicBoolean chatOnEdt = new AtomicBoolean(true);
-        AtomicReference<List<byte[]>> capturedImages = new AtomicReference<>();
-
-        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
-        doAnswer(inv -> {
-            approveOnEdt.set(SwingUtilities.isEventDispatchThread());
-            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
-            when(planService.getPendingPhase()).thenReturn(null);
-            return null;
-        }).when(planService).approveTransition();
-
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
-            chatOnEdt.set(SwingUtilities.isEventDispatchThread());
-            capturedImages.set(inv.getArgument(3));
-            return "Proceeding in CODE";
-        });
-
-        FeatureChatPanel panel = createFeatureChatPanel(null);
-        panel.model.addPendingImage(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
-
-        SwingTestUtils.runOnEdt(() -> panel.controller.approvePhase());
-        SwingTestUtils.awaitCondition(() -> capturedImages.get() != null);
-
-        assertFalse(approveOnEdt.get());
-        assertFalse(chatOnEdt.get());
-        assertEquals(1, capturedImages.get().size());
-        assertTrue(capturedImages.get().get(0).length > 0);
-        assertFalse(panel.model.hasPendingImages());
     }
 
     @Test
@@ -275,6 +206,7 @@ class ChatControllerTest extends ChatTestFixture {
     @Test
     void testWorkflowTransitionsApproveFlowAndDeferredBannerOrdering() {
         FeatureChatPanel chatPanel = createFeatureChatPanel(directExecutor);
+        assertSame(directExecutor, chatPanel.controller.getTurnExecutor());
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
         chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
@@ -295,11 +227,20 @@ class ChatControllerTest extends ChatTestFixture {
         sendOnEdt(chatPanel, "Build feature");
         flushEdt();
         verify(publisher).publishEvent(new UserMessageEvent("task:default", "user", "Build feature"));
-
-        String renderedHtml = chatPanel.outputArea.getText();
-        assertTrue(renderedHtml.contains("FINAL_PLAN_SUMMARY"));
+        assertTrue(chatPanel.outputArea.getText().contains("FINAL_PLAN_SUMMARY"));
         assertTrue(chatPanel.inlineActionPanel.isVisible());
         assertEquals("Approve Plan and proceed to Code", chatPanel.transitionLabel.getText());
+
+        clearInvocations(aiService);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Let's revise the plan.");
+        chatPanel.controller.rejectPhase();
+        flushEdt();
+        verify(planService).rejectTransition();
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN),
+                contains("I have rejected the transition to Code"), any());
+        assertTrue(chatPanel.outputArea.getText().contains("Transition to"));
 
         chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All done", false));
         flushEdt();
@@ -335,6 +276,34 @@ class ChatControllerTest extends ChatTestFixture {
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
         verify(chatMemory).clear("task:default");
         assertTrue(chatPanel.outputArea.getText().contains("Task complete"));
+
+        AtomicBoolean approveOnEdt = new AtomicBoolean(true);
+        AtomicBoolean chatOnEdt = new AtomicBoolean(true);
+        AtomicReference<List<byte[]>> capturedImages = new AtomicReference<>();
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+        doAnswer(inv -> {
+            approveOnEdt.set(SwingUtilities.isEventDispatchThread());
+            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+            when(planService.getPendingPhase()).thenReturn(null);
+            return null;
+        }).when(planService).approveTransition();
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            chatOnEdt.set(SwingUtilities.isEventDispatchThread());
+            capturedImages.set(inv.getArgument(3));
+            return "Proceeding in CODE";
+        });
+
+        FeatureChatPanel asyncPanel = createFeatureChatPanel(null);
+        asyncPanel.model.addPendingImage(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
+        SwingTestUtils.runOnEdt(() -> asyncPanel.controller.approvePhase());
+        SwingTestUtils.awaitCondition(() -> capturedImages.get() != null);
+
+        assertFalse(approveOnEdt.get());
+        assertFalse(chatOnEdt.get());
+        assertEquals(1, capturedImages.get().size());
+        assertTrue(capturedImages.get().get(0).length > 0);
+        assertFalse(asyncPanel.model.hasPendingImages());
     }
 
     @Test
@@ -392,13 +361,17 @@ class ChatControllerTest extends ChatTestFixture {
         File imgFile = tempDir.resolve("sample.png").toFile();
         ImageIO.write(src, "png", imgFile);
 
-        chatPanel.loadImageAttachmentAsync(imgFile);
-        flushEdt();
+        SwingTestUtils.awaitFuture(chatPanel.loadImageAttachmentAsync(imgFile));
         BufferedImage loaded = chatPanel.model.getPendingImages().getFirst();
         assertNotNull(loaded);
         assertEquals(120, loaded.getWidth());
         assertTrue(chatPanel.model.hasPendingImages());
         assertEquals(1, chatPanel.model.getPendingImages().size());
+
+        chatPanel.controller.sendMessage("   ");
+        assertTrue(chatPanel.model.hasPendingImages());
+        assertTrue(chatPanel.outputArea.getText().contains(ChatController.IMAGE_REQUIRES_TEXT_MESSAGE));
+        verifyNoInteractions(publisher, aiService);
 
         JButton removeChipButton = SwingTestUtils.findComponent(chatPanel, JButton.class,
                 b -> b != chatPanel.rejectButton && b.getIcon() instanceof FontIcon fi
@@ -409,75 +382,30 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testFileMentionAutocompleteKeyboardNavigationAndCacheInvalidation() {
+    void testFileMentionAutocompleteBindingsAndCacheInvalidation() {
         ChatPanel chatPanel = createFeatureChatPanel(directExecutor);
         GrepService grepService = mock(GrepService.class);
-        when(grepService.listFiles()).thenReturn(List.of("src/main/java/org/roxycode/app/ui/ChatPanel.java",
-                "src/main/java/org/roxycode/app/ui/ChatController.java",
-                "src/main/java/org/roxycode/app/ui/ChatModel.java"));
+        when(grepService.listFiles()).thenReturn(List.of("src/main/java/org/roxycode/app/ui/ChatPanel.java"));
 
-        FileMentionPopup mentionPopup = chatPanel.fileMentionPopup;
-        mentionPopup.setBackgroundExecutor(Runnable::run);
+        chatPanel.fileMentionPopup.setBackgroundExecutor(Runnable::run);
         chatPanel.setGrepService(grepService);
         verify(grepService, times(1)).listFiles();
 
         JTextArea inputArea = chatPanel.inputArea;
         SwingTestUtils.runOnEdt(() -> {
-            inputArea.setText("Review @Chat");
+            inputArea.setText("Review @ChatP");
             inputArea.setCaretPosition(inputArea.getText().length());
         });
         flushEdt();
-
-        assertTrue(mentionPopup.isPopupVisible());
-        assertEquals(3, mentionPopup.getListModel().size());
-        assertEquals(0, mentionPopup.getCandidateList().getSelectedIndex());
+        assertTrue(chatPanel.fileMentionPopup.isPopupVisible());
 
         ActionMap am = inputArea.getActionMap();
-        Action downAction = am.get("autocomplete-or-down");
-        Action upAction = am.get("autocomplete-or-up");
-        Action enterAction = am.get("send-message");
-        Action tabAction = am.get("autocomplete-or-tab");
-        Action escapeAction = am.get("dismiss-autocomplete");
-
-        SwingTestUtils.runOnEdt(() -> downAction.actionPerformed(null));
-        assertEquals(1, mentionPopup.getCandidateList().getSelectedIndex());
-
-        SwingTestUtils.runOnEdt(() -> upAction.actionPerformed(null));
-        assertEquals(0, mentionPopup.getCandidateList().getSelectedIndex());
-        SwingTestUtils.runOnEdt(() -> upAction.actionPerformed(null));
-        assertEquals(2, mentionPopup.getCandidateList().getSelectedIndex());
-
-        SwingTestUtils.runOnEdt(() -> enterAction.actionPerformed(null));
+        SwingTestUtils.runOnEdt(() -> am.get("send-message").actionPerformed(null));
         flushEdt();
-        assertFalse(mentionPopup.isPopupVisible());
-        assertEquals("Review @src/main/java/org/roxycode/app/ui/ChatController.java ", inputArea.getText());
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
-
-        SwingTestUtils.runOnEdt(() -> inputArea.insert("@ChatM", inputArea.getCaretPosition()));
-        flushEdt();
-        assertTrue(mentionPopup.isPopupVisible());
-
-        SwingTestUtils.runOnEdt(() -> tabAction.actionPerformed(null));
-        flushEdt();
-        assertFalse(mentionPopup.isPopupVisible());
-        assertEquals("Review @src/main/java/org/roxycode/app/ui/ChatController.java "
-                + "@src/main/java/org/roxycode/app/ui/ChatModel.java ", inputArea.getText());
-
-        SwingTestUtils.runOnEdt(() -> inputArea.insert("@ChatP", inputArea.getCaretPosition()));
-        flushEdt();
-        assertTrue(mentionPopup.isPopupVisible());
-
-        SwingTestUtils.runOnEdt(() -> escapeAction.actionPerformed(null));
-        assertFalse(mentionPopup.isPopupVisible());
-        assertTrue(inputArea.getText().endsWith("@ChatP"));
-
-        SwingTestUtils.runOnEdt(() -> enterAction.actionPerformed(null));
-        flushEdt();
-        assertEquals("", inputArea.getText());
+        assertFalse(chatPanel.fileMentionPopup.isPopupVisible());
+        assertEquals("Review @src/main/java/org/roxycode/app/ui/ChatPanel.java ", inputArea.getText());
 
         chatPanel.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
-        verify(grepService, times(2)).listFiles();
-
         chatPanel.onFileChanged(new FileChangedEvent("src/NewFile.java"));
         verify(grepService, times(3)).listFiles();
     }

@@ -1,6 +1,7 @@
 package org.roxycode.app.ui;
 
 import java.awt.*;
+import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -34,6 +35,7 @@ public final class PlanPanel extends JPanel {
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
     private volatile String lastGitStatus = "";
+    CompletableFuture<String> lastRefreshFuture = CompletableFuture.completedFuture("");
 
     public PlanPanel(PlanService planManagerService, GitService gitService) {
         this.planManagerService = planManagerService;
@@ -57,8 +59,8 @@ public final class PlanPanel extends JPanel {
         refresh();
     }
 
-    public void refresh() {
-        updateDisplay(planManagerService.getCurrentPlan());
+    public CompletableFuture<String> refresh() {
+        return updateDisplay(planManagerService.getCurrentPlan());
     }
 
     @EventListener
@@ -131,8 +133,8 @@ public final class PlanPanel extends JPanel {
         return gitService != null ? gitService.getStatus() : null;
     }
 
-    private void updateDisplay(ImplementationPlan plan) {
-        Edt.supplyAsync(this::getGitStatusText, status -> {
+    CompletableFuture<String> updateDisplay(ImplementationPlan plan) {
+        CompletableFuture<String> future = Edt.supplyAsync(this::getGitStatusText, status -> {
             String normalized = "";
             if (status != null) {
                 normalized = status;
@@ -143,6 +145,8 @@ public final class PlanPanel extends JPanel {
             log.debug("Failed to refresh git status for plan panel", e);
             applyDisplayOnEdt(plan, lastGitStatus);
         });
+        this.lastRefreshFuture = future;
+        return future;
     }
 
     private void applyDisplayOnEdt(ImplementationPlan plan, String gitStatus) {

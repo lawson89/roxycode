@@ -7,6 +7,7 @@ import java.awt.Component;
 import java.awt.FlowLayout;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -94,6 +95,8 @@ public final class ArchiveBrowserPanel extends JPanel {
     private String currentRawMarkdown = "";
     String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
+    CompletableFuture<String> lastSelectionFuture = CompletableFuture.completedFuture("");
+    CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     public ArchiveBrowserPanel(MemoryService memoryService, ArchiveMode mode) {
         super(new BorderLayout());
@@ -172,24 +175,26 @@ public final class ArchiveBrowserPanel extends JPanel {
         searchDebounceTimer.restart();
     }
 
-    public void refresh() {
+    public CompletableFuture<?> refresh() {
         if (searchDebounceTimer != null && searchDebounceTimer.isRunning()) {
             searchDebounceTimer.stop();
         }
-        executeSearchAsync();
+        return executeSearchAsync();
     }
 
-    void executeSearchAsync() {
+    CompletableFuture<?> executeSearchAsync() {
         String query = "";
         if (searchField != null) {
             query = searchField.getText();
         }
         final String searchQuery = query;
-        Edt.supplyAsync(() -> loadEntriesForQuery(searchQuery), results -> applySearchResults(results, searchQuery),
-                e -> {
+        CompletableFuture<?> future = Edt.supplyAsync(() -> loadEntriesForQuery(searchQuery),
+                results -> applySearchResults(results, searchQuery), e -> {
                     log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
                     applySearchResults(List.of(), searchQuery);
-                });
+                }).thenCompose(results -> lastSelectionFuture);
+        this.lastAsyncFuture = future;
+        return future;
     }
 
     private List<ArchiveEntrySummary> loadEntriesForQuery(String query) {
@@ -228,27 +233,36 @@ public final class ArchiveBrowserPanel extends JPanel {
             detailSummaryLabel.setText("");
             copyMarkdownButton.setEnabled(false);
             renderEmptyState(query != null && !query.isBlank());
+            lastSelectionFuture = CompletableFuture.completedFuture("");
         } else {
-            entryList.setSelectedIndex(Math.max(0, indexToSelect));
+            lastSelectionFuture = CompletableFuture.completedFuture("");
+            int targetIndex = Math.max(0, indexToSelect);
+            entryList.setSelectedIndex(targetIndex);
         }
     }
 
-    private void onEntrySelected(ArchiveEntrySummary entry) {
+    CompletableFuture<String> onEntrySelected(ArchiveEntrySummary entry) {
         currentSelectedEntry = entry;
         if (entry == null) {
             currentRawMarkdown = "";
             detailSummaryLabel.setText("");
             copyMarkdownButton.setEnabled(false);
             renderEmptyState(searchField != null && !searchField.getText().isBlank());
-            return;
+            CompletableFuture<String> done = CompletableFuture.completedFuture("");
+            lastSelectionFuture = done;
+            lastAsyncFuture = done;
+            return done;
         }
 
         detailSummaryLabel.setText(entry.title());
-        Edt.supplyAsync(() -> readEntryMarkdown(entry.filename()), normalized -> applyDetailContent(entry, normalized),
-                e -> {
+        CompletableFuture<String> future = Edt.supplyAsync(() -> readEntryMarkdown(entry.filename()),
+                normalized -> applyDetailContent(entry, normalized), e -> {
                     log.warn("Failed to read archived markdown {}: {}", entry.filename(), e.getMessage());
                     applyDetailContent(entry, "");
                 });
+        lastSelectionFuture = future;
+        lastAsyncFuture = future;
+        return future;
     }
 
     private String readEntryMarkdown(String filename) {

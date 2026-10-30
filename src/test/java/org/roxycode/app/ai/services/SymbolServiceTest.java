@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,8 +16,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.AiConfig;
-import org.roxycode.app.ai.JexlServiceRegistry;
-import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 
@@ -124,22 +121,23 @@ class SymbolServiceTest {
         assertEquals("secondTest", outline.get(3).name());
         assertEquals(8, outline.get(3).startLine());
         assertEquals(11, outline.get(3).endLine());
-    }
-
-    @Test
-    void testGetFileOutlineErrorAndFallbackCases() throws IOException {
-        Path file = tempDir.resolve("EmptyOutline.java");
-        Files.writeString(file, "class EmptyOutline {}");
 
         symbolService.setCtagsRunner(cmd -> new ProcessResult(0, "", "", true));
-        assertTrue(symbolService.getFileOutline("EmptyOutline.java").isEmpty());
+        assertTrue(symbolService.getFileOutline("ServiceTest.java").isEmpty());
 
         symbolService.setCtagsRunner(cmd -> new ProcessResult(-1, "", "ctags not found", false));
-        assertTrue(symbolService.getFileOutline("EmptyOutline.java").isEmpty());
+        assertTrue(symbolService.getFileOutline("ServiceTest.java").isEmpty());
 
         assertThrows(IllegalArgumentException.class, () -> symbolService.getFileOutline("Missing.java"));
         Files.createDirectory(tempDir.resolve("adir"));
         assertThrows(IllegalArgumentException.class, () -> symbolService.getFileOutline("adir"));
+
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(CancellationException.class, () -> symbolService.getFileOutline("ServiceTest.java"));
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test
@@ -167,7 +165,6 @@ class SymbolServiceTest {
                 + String.join(NL, "15:     // Overloaded add", "16:     public double add(double a, double b) {",
                         "17:         return a + b;", "18:     }");
         assertEquals(expectedAdd, addOutput);
-
         assertEquals(expectedAdd, symbolService.readSymbol("Calculator.java", "Calculator.add"));
 
         String ctorOnly = symbolService.readSymbol("Calculator.java", "Calculator.Calculator");
@@ -181,9 +178,7 @@ class SymbolServiceTest {
 
         String innerCompute = symbolService.readSymbol("Calculator.java", "Inner.compute");
         assertEquals(String.join(NL, "21:         void compute() {", "22:         }"), innerCompute);
-
-        String fullInnerCompute = symbolService.readSymbol("Calculator.java", "Calculator.Inner.compute");
-        assertEquals(innerCompute, fullInnerCompute);
+        assertEquals(innerCompute, symbolService.readSymbol("Calculator.java", "Calculator.Inner.compute"));
 
         assertTrue(symbolService.readSymbol("Calculator.java", "nonExistent")
                 .startsWith("Error: Symbol 'nonExistent' not found"));
@@ -228,14 +223,6 @@ class SymbolServiceTest {
         Map<String, String> missingFileBatch = symbolService.readSymbols("NoSuchFile.java", "alpha", "beta");
         assertTrue(missingFileBatch.get("alpha").startsWith("Error:"));
         assertTrue(missingFileBatch.get("beta").startsWith("Error:"));
-
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        registry.register(symbolService);
-        JexlTool jexlTool = new JexlTool(registry, null, null, null);
-        JsonNode jexlNode = AiConfig.SHARED_OBJECT_MAPPER
-                .readTree(jexlTool.executeJexl("symbolService.readSymbols('Batch.java', ['alpha', 'beta'])"));
-        assertEquals(String.join(NL, "2:     void alpha() {", "3:     }"), jexlNode.get("alpha").asText());
-        assertEquals(String.join(NL, "4:     void beta() {", "5:     }"), jexlNode.get("beta").asText());
     }
 
     @Test
@@ -285,15 +272,5 @@ class SymbolServiceTest {
         assertTrue(symbolService.findSymbol("   ").isEmpty());
         when(projectService.hasActiveProject()).thenReturn(false);
         assertTrue(symbolService.findSymbol("targetMethod").isEmpty());
-    }
-
-    @Test
-    void testCancellationPropagation() {
-        Thread.currentThread().interrupt();
-        try {
-            assertThrows(CancellationException.class, () -> symbolService.getFileOutline("Any.java"));
-        } finally {
-            Thread.interrupted();
-        }
     }
 }

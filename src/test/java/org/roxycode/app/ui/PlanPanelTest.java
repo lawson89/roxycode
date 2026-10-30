@@ -17,7 +17,7 @@ import org.roxycode.app.model.ImplementationPlan;
 class PlanPanelTest {
 
     private static void awaitRefresh(PlanPanel panel) {
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.lastRefreshFuture);
     }
 
     private static ImplementationPlan createPlan(List<ImplementationPlan.TechStep> steps,

@@ -7,6 +7,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -109,6 +110,8 @@ public final class ContextManagerPanel extends JPanel {
 
         final DefaultListModel<ContextFileItem> fileListModel = new DefaultListModel<>();
         final JList<ContextFileItem> fileList = new JList<>(fileListModel);
+        CompletableFuture<FolderAndFilesData> lastRefreshFuture = CompletableFuture
+                .completedFuture(new FolderAndFilesData(List.of(), List.of()));
 
         record FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {
         }
@@ -266,8 +269,8 @@ public final class ContextManagerPanel extends JPanel {
             }
         }
 
-        void addFolderAsync(String folderPath) {
-            Edt.runAsync(() -> {
+        CompletableFuture<FolderAndFilesData> addFolderAsync(String folderPath) {
+            CompletableFuture<FolderAndFilesData> future = Edt.runAsync(() -> {
                 if (folderPath == null || folderPath.isBlank()) {
                     throw new IllegalArgumentException("Folder path must not be blank");
                 }
@@ -277,39 +280,62 @@ public final class ContextManagerPanel extends JPanel {
                     updated.add(trimmed);
                 }
                 saveConfiguredFolders(updated);
-            }, this::refreshFoldersAndFiles, ex -> {
+            }, null, ex -> {
                 log.warn("Failed to add context folder {}: {}", folderPath, ex.getMessage());
                 Throwable root = ExceptionUtils.getRootCause(ex);
                 if (errorReporter != null) {
-                    errorReporter.accept("Error adding context folder " + folderPath + ": "
-                            + (root != null ? root.getMessage() : ex.getMessage()));
+                    String message;
+                    if (root != null) {
+                        message = root.getMessage();
+                    } else {
+                        message = ex.getMessage();
+                    }
+                    errorReporter.accept("Error adding context folder " + folderPath + ": " + message);
                 }
-            });
+            }).thenCompose(v -> refreshFoldersAndFiles());
+            lastRefreshFuture = future;
+            return future;
         }
 
-        void removeFolderAsync(String folderPath) {
-            Edt.runAsync(() -> {
+        CompletableFuture<FolderAndFilesData> removeFolderAsync(String folderPath) {
+            CompletableFuture<FolderAndFilesData> future = Edt.runAsync(() -> {
                 List<String> updated = new ArrayList<>(loadConfiguredFolders());
                 updated.remove(folderPath);
                 saveConfiguredFolders(updated);
-            }, () -> {
-                clearSelection();
-                refreshFoldersAndFiles();
-            }, ex -> {
+            }, this::clearSelection, ex -> {
                 log.warn("Failed to remove context folder {}: {}", folderPath, ex.getMessage());
                 Throwable root = ExceptionUtils.getRootCause(ex);
                 if (errorReporter != null) {
-                    errorReporter.accept("Error removing context folder " + folderPath + ": "
-                            + (root != null ? root.getMessage() : ex.getMessage()));
+                    String message;
+                    if (root != null) {
+                        message = root.getMessage();
+                    } else {
+                        message = ex.getMessage();
+                    }
+                    errorReporter.accept("Error removing context folder " + folderPath + ": " + message);
                 }
-            });
+            }).thenCompose(v -> refreshFoldersAndFiles());
+            lastRefreshFuture = future;
+            return future;
         }
 
-        void refreshFoldersAndFiles() {
-            Edt.supplyAsync(() -> {
+        CompletableFuture<FolderAndFilesData> refreshFoldersAndFiles() {
+            CompletableFuture<FolderAndFilesData> future = Edt.supplyAsync(() -> {
                 List<String> folders = loadConfiguredFolders();
                 List<ContextFileItem> files = loadDiscoveredFiles();
-                return new FolderAndFilesData(folders != null ? folders : List.of(), files != null ? files : List.of());
+                List<String> safeFolders;
+                if (folders != null) {
+                    safeFolders = folders;
+                } else {
+                    safeFolders = List.of();
+                }
+                List<ContextFileItem> safeFiles;
+                if (files != null) {
+                    safeFiles = files;
+                } else {
+                    safeFiles = List.of();
+                }
+                return new FolderAndFilesData(safeFolders, safeFiles);
             }, data -> {
                 folderListModel.clear();
                 data.folders().forEach(folderListModel::addElement);
@@ -319,6 +345,8 @@ public final class ContextManagerPanel extends JPanel {
             }, ex -> {
                 log.warn("Failed to refresh context folders and files: {}", ex.getMessage());
             });
+            lastRefreshFuture = future;
+            return future;
         }
 
         private List<String> loadConfiguredFolders() {

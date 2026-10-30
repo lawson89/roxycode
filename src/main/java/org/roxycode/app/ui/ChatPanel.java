@@ -11,6 +11,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import javax.imageio.ImageIO;
@@ -381,11 +382,11 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
-    void loadImageAttachmentAsync(File file) {
+    CompletableFuture<BufferedImage> loadImageAttachmentAsync(File file) {
         if (file == null) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
-        Edt.supplyAsync(() -> {
+        return Edt.supplyAsync(() -> {
             try {
                 return ImageIO.read(file);
             } catch (Exception ex) {

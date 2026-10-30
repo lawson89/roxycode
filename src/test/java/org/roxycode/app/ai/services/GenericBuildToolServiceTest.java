@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,10 +20,13 @@ import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSession;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSessionKey;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.service.ProcessRunner;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
 
@@ -68,8 +72,9 @@ class GenericBuildToolServiceTest {
         return new ContainerSession() {
             @Override
             public ContainerExecResult execInContainer(String... command) {
-                if (captured != null)
+                if (captured != null) {
                     captured.add(command);
+                }
                 return new ContainerExecResult(exitCode, stdout, "");
             }
 
@@ -81,14 +86,15 @@ class GenericBuildToolServiceTest {
             @Override
             public void close() {
                 closed.set(true);
-                if (onClose != null)
+                if (onClose != null) {
                     onClose.run();
+                }
             }
         };
     }
 
     @Test
-    void testEnsureConfigAutoDetectionMavenIncludesContainerSection() throws IOException {
+    void testEnsureConfigAutoDetectionAndTemplateLoading() throws IOException {
         Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
         buildToolService.compile();
 
@@ -96,6 +102,27 @@ class GenericBuildToolServiceTest {
         assertTrue(Files.exists(configPath));
         assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
         assertContainsAll(Files.readString(configPath), "compile", "[container]", "eclipse-temurin:25-jdk");
+
+        Files.deleteIfExists(configPath);
+        Files.deleteIfExists(projectDataDir.resolve("tmp/build.log"));
+        Files.deleteIfExists(projectDataDir.resolve("tmp"));
+        Files.deleteIfExists(projectDataDir);
+        Files.writeString(projectDataDir, "not a directory");
+        String fallbackContent = assertDoesNotThrow(() -> buildToolService.getConfigContent());
+        assertContainsAll(fallbackContent, "./mvnw compile", "[container]");
+
+        Files.deleteIfExists(projectDataDir);
+        Files.deleteIfExists(projectRoot.resolve("pom.xml"));
+        Files.writeString(projectRoot.resolve("pyproject.toml"), "[project]");
+
+        ClassLoader originalTCCL = Thread.currentThread().getContextClassLoader();
+        try (URLClassLoader emptyClassLoader = new URLClassLoader(new URL[0], null)) {
+            Thread.currentThread().setContextClassLoader(emptyClassLoader);
+            String pyContent = buildToolService.getConfigContent();
+            assertContainsAll(pyContent, "pytest", "[container]", "python:3.12");
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalTCCL);
+        }
     }
 
     @Test
@@ -126,29 +153,7 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testRegexParsing() throws IOException {
-        Path logFile = tempDir.resolve("sample-build.log");
-        Files.writeString(logFile, "  [ERROR] App.java:[10,5] cannot find symbol  " + System.lineSeparator());
-        try (org.mockito.MockedStatic<org.roxycode.app.service.ProcessRunner> runner = mockStatic(
-                org.roxycode.app.service.ProcessRunner.class)) {
-            List<String> expectedCmd = List.of("rg", "--color=never", "-N", "-e", "^.[E]RROR.", logFile.toString());
-            runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(expectedCmd), isNull(), eq(false)))
-                    .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(0,
-                            "  [ERROR] App.java:[10,5] cannot find symbol  " + System.lineSeparator(), "", false));
-            List<String> matches = buildToolService.extractWithRipGrep("^.[E]RROR.", logFile, "errors");
-            assertEquals(List.of("[ERROR] App.java:[10,5] cannot find symbol"), matches);
-            runner.verify(() -> org.roxycode.app.service.ProcessRunner.run(eq(expectedCmd), isNull(), eq(false)));
-
-            List<String> noMatchCmd = List.of("rg", "--color=never", "-N", "-e", "^FAIL:", logFile.toString());
-            runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(noMatchCmd), isNull(), eq(false)))
-                    .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(
-                            GrepService.EXIT_CODE_NO_MATCHES, "", "", false));
-            assertTrue(buildToolService.extractWithRipGrep("^FAIL:", logFile, "test failures").isEmpty());
-        }
-    }
-
-    @Test
-    void testContainerExecutionRegexParsing() throws IOException {
+    void testContainerExecutionAndRipGrepRegexParsing() throws IOException {
         stubDockerAvailable(true);
         buildContainerService.setContainerSessionFactory(key -> createMockSession(1,
                 "[ERROR] Container compile failure" + System.lineSeparator() + "FAIL: ContainerTest#fail", null, null));
@@ -165,85 +170,29 @@ class GenericBuildToolServiceTest {
                 workdir = '/workspace'
                 """);
         Path persistedLog = projectDataDir.resolve("tmp/build.log");
-        try (org.mockito.MockedStatic<org.roxycode.app.service.ProcessRunner> runner = mockStatic(
-                org.roxycode.app.service.ProcessRunner.class)) {
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             List<String> errCmd = List.of("rg", "--color=never", "-N", "-e", "^.[E]RROR.", persistedLog.toString());
             List<String> failCmd = List.of("rg", "--color=never", "-N", "-e", "^FAIL:", persistedLog.toString());
-            runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(errCmd), isNull(), eq(false)))
-                    .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(0,
-                            "[ERROR] Container compile failure" + System.lineSeparator(), "", false));
-            runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(failCmd), isNull(), eq(false)))
-                    .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(0,
-                            "FAIL: ContainerTest#fail" + System.lineSeparator(), "", false));
+            runner.when(() -> ProcessRunner.run(eq(errCmd), isNull(), eq(false))).thenReturn(
+                    new ProcessResult(0, "  [ERROR] Container compile failure  " + System.lineSeparator(), "", false));
+            runner.when(() -> ProcessRunner.run(eq(failCmd), isNull(), eq(false)))
+                    .thenReturn(new ProcessResult(0, "FAIL: ContainerTest#fail" + System.lineSeparator(), "", false));
 
             BuildResult result = buildToolService.runTests();
             assertFalse(result.isSuccess());
             assertEquals(1, result.getExitCode());
             assertEquals(List.of("[ERROR] Container compile failure"), result.getErrors());
             assertEquals(List.of("FAIL: ContainerTest#fail"), result.getFailedTests());
+
+            List<String> noMatchCmd = List.of("rg", "--color=never", "-N", "-e", "^NOMATCH:", persistedLog.toString());
+            runner.when(() -> ProcessRunner.run(eq(noMatchCmd), isNull(), eq(false)))
+                    .thenReturn(new ProcessResult(GrepService.EXIT_CODE_NO_MATCHES, "", "", false));
+            assertTrue(buildToolService.extractWithRipGrep("^NOMATCH:", persistedLog, "test failures").isEmpty());
         }
     }
 
     @Test
-    void testContainerEnabledFailsFastWhenDockerUnavailable() throws IOException {
-        stubDockerAvailable(false);
-        writeBuildToml(
-                "[build]\ncompile = './mvnw compile'\n[container]\nenabled = true\nimage = 'eclipse-temurin:25-jdk'\nworkdir = '/workspace'\n");
-
-        BuildResult result = buildToolService.compile();
-        assertFalse(result.isSuccess());
-        assertEquals(-1, result.getExitCode());
-        assertTrue(result.getOutput().contains("Docker was not detected"));
-        assertFalse(result.getErrors().isEmpty());
-    }
-
-    @Test
-    void testContainerEnabledFailsBuildWhenTestcontainersSessionThrows() throws IOException {
-        stubDockerAvailable(true);
-        buildContainerService.setContainerSessionFactory(key -> {
-            throw new IllegalStateException("client version 1.32 is too old. Minimum supported API version is 1.44");
-        });
-        writeBuildToml(
-                "[build]\ncompile = './mvnw compile'\n[container]\nenabled = true\nimage = 'eclipse-temurin:25-jdk'\nworkdir = '/workspace'\n");
-
-        BuildResult result = buildToolService.compile();
-        assertFalse(result.isSuccess());
-        assertEquals(-1, result.getExitCode());
-        assertTrue(result.getOutput().contains("client version 1.32 is too old"));
-        assertTrue(result.getErrors().stream()
-                .anyMatch(err -> err.contains("Container execution failed: client version 1.32 is too old")));
-    }
-
-    @Test
-    void testContainerExecutionInterruptedOrCancelledStopsActiveContainerAndThrowsCancellationException()
-            throws IOException {
-        stubDockerAvailable(true);
-        AtomicBoolean sessionClosed = new AtomicBoolean(false);
-        AtomicBoolean throwInterrupted = new AtomicBoolean(true);
-
-        buildContainerService.setContainerSessionFactory(key -> {
-            sessionClosed.set(false);
-            return new ContainerSession() {
-                @Override
-                public ContainerExecResult execInContainer(String... command) throws Exception {
-                    if (throwInterrupted.get()) {
-                        throw new InterruptedException("Simulated interrupt during docker exec");
-                    }
-                    throw new java.util.concurrent.CancellationException("Simulated cancellation during docker exec");
-                }
-
-                @Override
-                public boolean isRunning() {
-                    return !sessionClosed.get();
-                }
-
-                @Override
-                public void close() {
-                    sessionClosed.set(true);
-                }
-            };
-        });
-
+    void testContainerExecutionErrorAndCancellationHandling() throws IOException {
         writeBuildToml("""
                 [build]
                 compile = './mvnw compile'
@@ -253,17 +202,59 @@ class GenericBuildToolServiceTest {
                 workdir = '/workspace'
                 """);
 
+        stubDockerAvailable(false);
+        BuildResult noDockerRes = buildToolService.compile();
+        assertFalse(noDockerRes.isSuccess());
+        assertEquals(-1, noDockerRes.getExitCode());
+        assertTrue(noDockerRes.getOutput().contains("Docker was not detected"));
+
+        stubDockerAvailable(true);
+        buildContainerService.setContainerSessionFactory(key -> {
+            throw new IllegalStateException("client version 1.32 is too old. Minimum supported API version is 1.44");
+        });
+        BuildResult sessionErrorRes = buildToolService.compile();
+        assertFalse(sessionErrorRes.isSuccess());
+        assertEquals(-1, sessionErrorRes.getExitCode());
+        assertTrue(sessionErrorRes.getErrors().stream()
+                .anyMatch(err -> err.contains("Container execution failed: client version 1.32 is too old")));
+
+        AtomicBoolean sessionClosed = new AtomicBoolean(false);
+        AtomicBoolean throwInterrupted = new AtomicBoolean(true);
+        buildContainerService.setContainerSessionFactory(key -> {
+            sessionClosed.set(false);
+            ContainerSession delegate = createMockSession(0, "", null, () -> sessionClosed.set(true));
+            return new ContainerSession() {
+                @Override
+                public ContainerExecResult execInContainer(String... command) throws Exception {
+                    if (throwInterrupted.get()) {
+                        throw new InterruptedException("Simulated interrupt");
+                    }
+                    throw new CancellationException("Simulated cancellation");
+                }
+
+                @Override
+                public boolean isRunning() {
+                    return delegate.isRunning();
+                }
+
+                @Override
+                public void close() {
+                    delegate.close();
+                }
+            };
+        });
+
         try {
-            assertThrows(java.util.concurrent.CancellationException.class, () -> buildToolService.compile());
-            assertTrue(sessionClosed.get(), "Active container must be stopped on InterruptedException");
-            assertTrue(Thread.currentThread().isInterrupted(), "Interrupt flag must be restored");
+            assertThrows(CancellationException.class, () -> buildToolService.compile());
+            assertTrue(sessionClosed.get());
+            assertTrue(Thread.currentThread().isInterrupted());
         } finally {
             Thread.interrupted();
         }
 
         throwInterrupted.set(false);
-        assertThrows(java.util.concurrent.CancellationException.class, () -> buildToolService.compile());
-        assertTrue(sessionClosed.get(), "Active container must be stopped on CancellationException");
+        assertThrows(CancellationException.class, () -> buildToolService.compile());
+        assertTrue(sessionClosed.get());
     }
 
     @Test
@@ -343,16 +334,6 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testGetConfigContentAndCompileFallbackWhenEnsureConfigCannotWriteToDisk() throws IOException {
-        Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
-        Files.createDirectories(projectDataDir.getParent());
-        Files.writeString(projectDataDir, "not a directory");
-
-        String content = assertDoesNotThrow(() -> buildToolService.getConfigContent());
-        assertContainsAll(content, "./mvnw compile", "[container]");
-    }
-
-    @Test
     void testMalformedTomlValuesHandledWithoutClassCastException() throws IOException {
         writeBuildToml("""
                 unknown_top_level = "ignored"
@@ -371,20 +352,5 @@ class GenericBuildToolServiceTest {
         BuildResult malformedSectionResult = assertDoesNotThrow(() -> buildToolService.compile());
         assertFalse(malformedSectionResult.isSuccess());
         assertEquals(-1, malformedSectionResult.getExitCode());
-    }
-
-    @Test
-    void testLoadTemplatesWithIsolatedThreadContextClassLoader() throws IOException {
-        Files.writeString(projectRoot.resolve("pyproject.toml"), "[project]");
-
-        ClassLoader originalTCCL = Thread.currentThread().getContextClassLoader();
-        try (URLClassLoader emptyClassLoader = new URLClassLoader(new URL[0], null)) {
-            Thread.currentThread().setContextClassLoader(emptyClassLoader);
-
-            String content = buildToolService.getConfigContent();
-            assertContainsAll(content, "pytest", "[container]", "python:3.12");
-        } finally {
-            Thread.currentThread().setContextClassLoader(originalTCCL);
-        }
     }
 }

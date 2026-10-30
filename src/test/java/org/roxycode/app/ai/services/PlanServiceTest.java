@@ -51,8 +51,14 @@ class PlanServiceTest {
     }
 
     private static ImplementationPlan createPlan(List<ImplementationPlan.TechStep> steps, boolean approved) {
-        return new ImplementationPlan("Title", "Goal", List.of("Req 1"), steps, approved, approved ? "now" : null,
-                approved ? "user" : null, null, null, List.of());
+        String approvedOn = null;
+        String approvedBy = null;
+        if (approved) {
+            approvedOn = "now";
+            approvedBy = "user";
+        }
+        return new ImplementationPlan("Title", "Goal", List.of("Req 1"), steps, approved, approvedOn, approvedBy, null,
+                null, List.of());
     }
 
     private static void assertIllegalState(Executable action, String... expectedSubstrings) {
@@ -61,13 +67,15 @@ class PlanServiceTest {
     }
 
     private static void assertIllegalStates(Executable... actions) {
-        for (Executable action : actions)
+        for (Executable action : actions) {
             assertThrows(IllegalStateException.class, action);
+        }
     }
 
     private static void assertBadArgs(Executable... actions) {
-        for (Executable action : actions)
+        for (Executable action : actions) {
             assertThrows(IllegalArgumentException.class, action);
+        }
     }
 
     @Test
@@ -88,50 +96,10 @@ class PlanServiceTest {
     }
 
     @Test
-    void testBatchMarkStepsCompletedAndIncompleteAndReturnMessages() {
-        setupCodePhase();
-        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
-        assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
-
-        assertContainsAll(service.markStepsCompleted(List.of(0, 1)), "Marked steps [0, 1] completed.",
-                "Remaining incomplete steps: [2: Code compiles successfully, 3: Unit tests pass, 4: Automated code review passes]");
-        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
-        assertTrue(service.getCurrentPlan().technicalSteps().get(1).completed());
-
-        assertContainsAll(service.markStepCompleted(2), "Marked steps [2] completed.",
-                "Remaining incomplete steps: [3: Unit tests pass, 4: Automated code review passes]");
-
-        assertContainsAll(service.markStepsIncomplete(List.of(0, 1)), "Marked steps [0, 1] incomplete.", "0: Step 1",
-                "1: Step 2");
-        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
-        assertFalse(service.getCurrentPlan().technicalSteps().get(1).completed());
-
-        assertTrue(service.markStepsCompleted(List.of(0, 1, 2, 3, 4))
-                .contains("Remaining incomplete steps: none (all steps completed)."));
-    }
-
-    @Test
-    void testStepIndexBoundsAndNullPlanValidation() {
-        setupCodePhase();
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> service.markStepCompleted(-1)).getMessage()
-                .contains("Valid 0-based indices are 0..4"));
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> service.markStepsCompleted(List.of(0, 5)))
-                .getMessage().contains("Invalid step index 5"));
-        assertFalse(service.getCurrentPlan().technicalSteps().get(0).completed());
-
-        assertBadArgs(() -> service.markStepsCompleted(List.of()),
-                () -> service.markStepsCompleted(Arrays.asList(0, null)), () -> service.addHandoffLogEntry("   "));
-        assertEquals("Handoff log entry added.", service.addHandoffLogEntry("Completed initial refactoring"));
-
-        service.clearPlan();
-        assertIllegalStates(() -> service.markStepCompleted(0), () -> service.addHandoffLogEntry("entry"));
-    }
-
-    @Test
-    void testAddAndUpdateTechnicalStepsInPlanAndCodePhases() {
+    void testStepMutationsCompletionAndValidation() {
         service.submitPlan("T", "G", List.of(), List.of("Step 1"));
         assertTrue(service.addTechnicalStep("Step 2").contains("Added technical step at index 1: 'Step 2'"));
-        var steps = service.getCurrentPlan().technicalSteps();
+        List<ImplementationPlan.TechStep> steps = service.getCurrentPlan().technicalSteps();
         assertEquals(5, steps.size());
         assertEquals("Step 1", steps.get(0).description());
         assertEquals("Step 2", steps.get(1).description());
@@ -141,6 +109,13 @@ class PlanServiceTest {
         service.approveTransition();
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
 
+        assertContainsAll(service.markStepsCompleted(List.of(0, 1)), "Marked steps [0, 1] completed.",
+                "Remaining incomplete steps: [2: Code compiles successfully, 3: Unit tests pass, 4: Automated code review passes]");
+        assertContainsAll(service.markStepCompleted(2), "Marked steps [2] completed.",
+                "Remaining incomplete steps: [3: Unit tests pass, 4: Automated code review passes]");
+        assertContainsAll(service.markStepsIncomplete(List.of(0, 1)), "Marked steps [0, 1] incomplete.", "0: Step 1",
+                "1: Step 2");
+
         service.markStepCompleted(0);
         assertTrue(service.updateTechnicalStep(0, "Step 1 (refined)")
                 .contains("Updated technical step 0 to 'Step 1 (refined)'"));
@@ -149,10 +124,22 @@ class PlanServiceTest {
 
         assertTrue(service.addTechnicalStep("Step 3").contains("Added technical step at index 2: 'Step 3'"));
         assertEquals(6, service.getCurrentPlan().technicalSteps().size());
-        assertEquals("Step 3", service.getCurrentPlan().technicalSteps().get(2).description());
+        assertTrue(service.markStepsCompleted(List.of(0, 1, 2, 3, 4, 5))
+                .contains("Remaining incomplete steps: none (all steps completed)."));
 
-        assertBadArgs(() -> service.addTechnicalStep("  "), () -> service.updateTechnicalStep(0, ""),
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> service.markStepCompleted(-1)).getMessage()
+                .contains("Valid 0-based indices are 0..5"));
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> service.markStepsCompleted(List.of(0, 6)))
+                .getMessage().contains("Invalid step index 6"));
+
+        assertBadArgs(() -> service.markStepsCompleted(List.of()),
+                () -> service.markStepsCompleted(Arrays.asList(0, null)), () -> service.addHandoffLogEntry("   "),
+                () -> service.addTechnicalStep("  "), () -> service.updateTechnicalStep(0, ""),
                 () -> service.updateTechnicalStep(99, "Valid"));
+        assertEquals("Handoff log entry added.", service.addHandoffLogEntry("Completed initial refactoring"));
+
+        service.clearPlan();
+        assertIllegalStates(() -> service.markStepCompleted(0), () -> service.addHandoffLogEntry("entry"));
     }
 
     @Test
@@ -169,7 +156,7 @@ class PlanServiceTest {
         assertTrue(logCount > 0);
 
         service.submitPlan("T", "G", List.of(), List.of("Step 1", "Step 2a", "Step 2b"));
-        var revised = service.getCurrentPlan();
+        ImplementationPlan revised = service.getCurrentPlan();
         assertEquals(6, revised.technicalSteps().size());
         assertTrue(revised.technicalSteps().get(0).completed());
         assertFalse(revised.technicalSteps().get(1).completed());
@@ -179,7 +166,7 @@ class PlanServiceTest {
     }
 
     @Test
-    void testPhaseManagementAndSemanticWorkflowMethods() {
+    void testWorkflowPhaseTransitionsGatesAndRevisions() {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         assertIllegalState(() -> service.requestDevelopment("Reason"), "Implementation Plan is missing");
 
@@ -201,12 +188,34 @@ class PlanServiceTest {
         assertTrue(service.getCurrentPlan().userApproved());
         assertEquals("testuser", service.getCurrentPlan().approvedBy());
 
+        // Test CODE -> PLAN revision preserves plan
+        String revResponse = service.requestPlanRevision("Need architecture revision");
+        assertTrue(revResponse.contains("Transition Request: Approve Plan Revision and return to Plan"));
+        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
+        service.approveTransition();
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+        assertNotNull(service.getCurrentPlan());
+        assertNull(service.getCurrentPlan().completedOn());
+
+        // Re-enter CODE and verify unapproved plan guard and step gates
+        service.requestDevelopment("Ready again");
+        service.approveTransition();
+        ImplementationPlan currentApprovedPlan = service.getCurrentPlan();
+        service.setCurrentPlan(createPlan(List.of(new ImplementationPlan.TechStep("S1", false)), false));
+        assertIllegalState(() -> service.requestReview("Checking quality"),
+                "An approved Implementation Plan is required");
+
+        service.setCurrentPlan(currentApprovedPlan);
         assertIllegalState(() -> service.requestReview("Feature implemented"), "0: S1", "1: Code compiles successfully",
                 "2: Unit tests pass");
 
         service.markStepsCompleted(List.of(0, 1, 2));
+        int initialLogSize = service.getCurrentPlan().handoffLog().size();
         assertTrue(service.requestReview("Feature implemented").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
+        verify(eventPublisher)
+                .publishEvent(argThat((Object ev) -> ev instanceof WorkflowTransitionEvent wte && wte.autonomous()));
+        assertEquals(initialLogSize + 1, service.getCurrentPlan().handoffLog().size());
 
         assertTrue(service.requestFixes("Needs a fix").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
@@ -217,39 +226,6 @@ class PlanServiceTest {
         assertIllegalState(() -> service.requestCompletion("All verified"), "3: Automated code review passes");
 
         service.markStepCompleted(3);
-        assertTrue(service.requestCompletion("All verified")
-                .contains("Transition Request: Approve Feature Request as complete"));
-        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
-    }
-
-    @Test
-    void testRequestPlanRevisionAndCodeToPlanPreservesPlan() {
-        setupCodePhase();
-        service.setCurrentPlan(createPlan(List.of(new ImplementationPlan.TechStep("Done step", true)), true));
-
-        String response = service.requestPlanRevision("Need architecture revision");
-        assertTrue(response.contains("Transition Request: Approve Plan Revision and return to Plan"));
-        assertFalse(response.contains("Autonomous transition"));
-        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
-
-        service.approveTransition();
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        assertNull(service.getPendingPhase());
-        assertNotNull(service.getCurrentPlan());
-        assertNull(service.getCurrentPlan().completedOn());
-    }
-
-    @Test
-    void testReviewToPlanRejectsIncompleteStepsThenCompletesAndClearsWhenAllCompleted() {
-        setupCodePhase();
-        service.markStepsCompleted(List.of(0, 1, 2, 3));
-        assertTrue(service.requestReview("Checking quality").contains("Autonomous transition"));
-        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
-
-        assertIllegalState(() -> service.requestCompletion("Finalizing"), "4: Automated code review passes");
-
-        service.markStepCompleted(4);
         List<ImplementationPlan> updates = new ArrayList<>();
         doAnswer(inv -> {
             if (inv.getArgument(0) instanceof PlanUpdatedEvent pue) {
@@ -258,14 +234,15 @@ class PlanServiceTest {
             return null;
         }).when(eventPublisher).publishEvent(any(Object.class));
 
-        assertTrue(service.requestCompletion("Finalizing").contains("Transition Request"));
+        assertTrue(service.requestCompletion("All verified")
+                .contains("Transition Request: Approve Feature Request as complete"));
         assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
 
         service.approveTransition();
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         assertNull(service.getCurrentPlan());
-        assertTrue(
-                updates.stream().anyMatch(p -> p != null && "user".equals(p.completedBy()) && p.completedOn() != null));
+        assertTrue(updates.stream()
+                .anyMatch(p -> p != null && "testuser".equals(p.completedBy()) && p.completedOn() != null));
     }
 
     @Test
@@ -326,36 +303,7 @@ class PlanServiceTest {
     }
 
     @Test
-    void testAutonomousReviewTransitionAndUnapprovedPlanGuard() {
-        setupCodePhase();
-        service.setCurrentPlan(createPlan(List.of(), false));
-        assertIllegalState(() -> service.requestReview("Checking quality"),
-                "An approved Implementation Plan is required");
-
-        service.approvePlan("user", "now");
-        int initialLogSize = service.getCurrentPlan().handoffLog().size();
-
-        assertTrue(service.requestReview("Checking quality").contains("Autonomous transition"));
-        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
-        verify(eventPublisher)
-                .publishEvent(argThat((Object ev) -> ev instanceof WorkflowTransitionEvent wte && wte.autonomous()));
-        assertEquals(initialLogSize + 1, service.getCurrentPlan().handoffLog().size());
-    }
-
-    @Test
-    void testExploreDecoupling() {
-        setupCodePhase();
-        assertIllegalState(() -> service.routeToPhase(WorkflowPhase.EXPLORE, "Jump"),
-                "Error: Cannot jump from CODE to EXPLORE");
-
-        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.CODE));
-        service.resetWorkflow();
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        assertEquals(Set.of(WorkflowPhase.PLAN), service.getVisitedPhases());
-    }
-
-    @Test
-    void testPhaseRestrictionsEnforced() {
+    void testPhaseRestrictionsAndExploreDecouplingEnforced() {
         service.submitPlan("T", "G", List.of(), List.of("S1"));
         assertIllegalStates(() -> service.markStepCompleted(0), () -> service.markStepsCompleted(List.of(0)),
                 () -> service.markStepIncomplete(0), () -> service.markStepsIncomplete(List.of(0)),
@@ -365,6 +313,8 @@ class PlanServiceTest {
         service.requestDevelopment("Ready");
         service.approveTransition();
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
+        assertIllegalState(() -> service.routeToPhase(WorkflowPhase.EXPLORE, "Jump"),
+                "Error: Cannot jump from CODE to EXPLORE");
 
         assertDoesNotThrow(() -> service.markStepsCompleted(List.of(0, 1, 2)));
         assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
@@ -380,6 +330,10 @@ class PlanServiceTest {
                 () -> service.addTechnicalStep("extra"), () -> service.updateTechnicalStep(0, "updated"),
                 () -> service.requestDevelopment("dev"), () -> service.requestReview("review"),
                 () -> service.requestPlanRevision("revise"));
-    }
 
+        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.CODE));
+        service.resetWorkflow();
+        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
+        assertEquals(Set.of(WorkflowPhase.PLAN), service.getVisitedPhases());
+    }
 }

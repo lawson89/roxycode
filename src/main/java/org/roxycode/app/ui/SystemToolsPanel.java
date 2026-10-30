@@ -122,14 +122,14 @@ public final class SystemToolsPanel extends JPanel {
         } else {
             effectiveFuture = CompletableFuture.completedFuture(List.of());
         }
-        return effectiveFuture.whenComplete((tools, ex) -> Edt.run(() -> {
+        return effectiveFuture.whenCompleteAsync((tools, ex) -> {
             if (future != null && ex == null && tools != null) {
                 populateCards(tools);
             }
             progressBar.setIndeterminate(false);
             progressBar.setVisible(false);
             refreshBtn.setEnabled(true);
-        }));
+        }, Edt.EXECUTOR);
     }
 
     @EventListener

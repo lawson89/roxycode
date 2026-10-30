@@ -35,8 +35,7 @@ class ArchiveBrowserPanelTest {
         assertEquals("0 topics", panel.countLabel.getText());
         assertFalse(panel.copyMarkdownButton.isEnabled());
 
-        panel.refresh();
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.refresh());
 
         assertEquals(2, panel.listModel.getSize());
         assertEquals("2 topics", panel.countLabel.getText());
@@ -57,8 +56,7 @@ class ArchiveBrowserPanelTest {
         assertEquals("Copied!", panel.copyMarkdownButton.getText());
 
         panel.searchField.setText("Second");
-        panel.executeSearchAsync();
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.executeSearchAsync());
 
         assertEquals(1, panel.listModel.getSize());
         assertEquals("1 topic", panel.countLabel.getText());
@@ -66,8 +64,7 @@ class ArchiveBrowserPanelTest {
         assertTrue(panel.displayArea.getText().contains("Matched line in second topic"));
 
         panel.searchField.setText("NoMatch");
-        panel.executeSearchAsync();
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.executeSearchAsync());
         assertEquals(0, panel.listModel.getSize());
         assertEquals("0 topics", panel.countLabel.getText());
         assertFalse(panel.copyMarkdownButton.isEnabled());
@@ -90,8 +87,7 @@ class ArchiveBrowserPanelTest {
         ArchiveBrowserPanel panel = new ArchiveBrowserPanel(memoryService, ArchiveMode.PLANS);
         assertEquals(ArchiveMode.PLANS, panel.mode);
 
-        panel.refresh();
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.refresh());
         assertEquals(1, panel.listModel.getSize());
         assertEquals("1 plan", panel.countLabel.getText());
         assertEquals("Feature Plan Alpha", panel.detailSummaryLabel.getText());

@@ -57,7 +57,7 @@ class BuildConfigPanelTest {
     private BuildConfigPanel createPanelOnEdt() {
         BuildConfigPanel panel = SwingTestUtils.callOnEdt(
                 () -> new BuildConfigPanel(buildToolService, settingsService, systemToolService, projectService));
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         return panel;
     }
 
@@ -104,7 +104,7 @@ class BuildConfigPanelTest {
             panel.textArea.setText(updatedToml);
             panel.saveButton.doClick();
         });
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertFalse(saveCalledOnEdt.get());
         assertFalse(modelSaveCalledOnEdt.get());
@@ -115,7 +115,7 @@ class BuildConfigPanelTest {
 
         when(projectService.getProjectGeminiModel()).thenReturn("gemini-3.5-pro");
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         assertEquals("gemini-3.5-pro", ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
 
         AtomicReference<String> errorMsg = new AtomicReference<>();
@@ -123,6 +123,7 @@ class BuildConfigPanelTest {
         doThrow(new IOException("Disk full")).when(buildToolService).saveConfigContent(anyString());
 
         SwingTestUtils.clickOnEdt(panel.saveButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertTrue(panel.saveButton.isEnabled());
         assertEquals("Error saving config: Disk full", errorMsg.get());
@@ -184,7 +185,7 @@ class BuildConfigPanelTest {
         });
 
         pendingRecheck.complete(true);
-        SwingTestUtils.flushEdt();
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertTrue(panel.recheckDockerButton.isEnabled());
         assertEquals(BuildConfigPanel.RECHECK_DOCKER_TEXT, panel.recheckDockerButton.getText());

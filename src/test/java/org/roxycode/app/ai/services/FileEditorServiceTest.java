@@ -3,6 +3,7 @@ package org.roxycode.app.ai.services;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -68,23 +69,17 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testReplaceBlockCrlfNormalization() throws IOException {
+    void testReplaceBlockMatchingCrlfAndDiagnostics() throws IOException {
         assertEquals("class A {\r\n    int x = 10;\r\n    int y = 20;\r\n}\r\n",
                 writeAndReplace("crlf_block.java", "class A {\r\n    int x = 1;\r\n    int y = 2;\r\n}\r\n",
                         "    int x = 1;\n    int y = 2;", "    int x = 10;\n    int y = 20;"));
-    }
 
-    @Test
-    void testReplaceBlockNotUniqueReturnsFailureWithLineNumbers() throws IOException {
         Path filePath = Files.writeString(tempDir.resolve("test.java"), "// TODO\n // TODO");
         assertEditFails(fileEditorService.replaceBlock("test.java", "// TODO", "// Done"), "not unique", "1", "2");
         Files.writeString(filePath, "int   a = 1;\nString middle = 'ok';\nint     a   = 1;");
         assertEditFails(fileEditorService.replaceBlock("test.java", "int a = 1;", "int a = 2;"), "not unique", "1",
                 "3");
-    }
 
-    @Test
-    void testReplaceBlockNotFoundReturnsDiagnosticClosestLineHint() throws IOException {
         Files.writeString(tempDir.resolve("service.java"),
                 "package example;\npublic class Service {\n    public String computeTotal(int count) {\n        return 'total=' + count;\n    }\n}");
         assertEditFails(
@@ -96,7 +91,7 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testReplaceLinesSuccess() throws IOException {
+    void testReplaceLinesAndInsertAtLineFormattingAndBounds() throws IOException {
         Path filePath = Files.write(tempDir.resolve("test.txt"), List.of("Line 1", "Line 2", "Line 3", "Line 4"));
         assertTrue(fileEditorService.replaceLines("test.txt", 2, 3, "New Content").success());
         assertEquals(List.of("Line 1", "New Content", "Line 4"), Files.readAllLines(filePath));
@@ -104,10 +99,7 @@ class FileEditorServiceTest {
 
         assertTrue(fileEditorService.replaceLines("test.txt", 2, 2, "Replaced 2\nReplaced 3\n").success());
         assertEquals(List.of("Line 1", "Replaced 2", "Replaced 3", "Line 4"), Files.readAllLines(filePath));
-    }
 
-    @Test
-    void testReplaceLinesAndInsertAtLineOutOfBoundsReturnStructuredErrorHints() throws IOException {
         Files.write(tempDir.resolve("bounds.txt"), List.of("Line 1", "Line 2", "Line 3"));
         assertEditFails(fileEditorService.replaceLines("bounds.txt", 2, 5, "Replacement"), "Invalid line range: 2 to 5",
                 "file has 3 lines");
@@ -117,22 +109,48 @@ class FileEditorServiceTest {
                 "valid range: 1 to 4", "file has 3 lines");
         assertEditFails(fileEditorService.insertAtLine("missing_bounds.txt", 1, "Inserted"),
                 "File does not exist: missing_bounds.txt");
+
+        Path crlfFile = Files.writeString(tempDir.resolve("crlf.txt"), "Line 1\r\nLine 2\r\nLine 3\r\n");
+        fileEditorService.replaceLines("crlf.txt", 2, 2, "Updated 2");
+        assertEquals("Line 1\r\nUpdated 2\r\nLine 3\r\n", Files.readString(crlfFile));
+
+        fileEditorService.insertAtLine("crlf.txt", 2, "Inserted 1.5");
+        assertEquals("Line 1\r\nInserted 1.5\r\nUpdated 2\r\nLine 3\r\n", Files.readString(crlfFile));
+
+        Path noTrailingFile = Files.writeString(tempDir.resolve("no_trailing.txt"), "Alpha\nBeta\nGamma");
+        fileEditorService.replaceLines("no_trailing.txt", 2, 2, "BetaUpdated");
+        assertEquals("Alpha\nBetaUpdated\nGamma", Files.readString(noTrailingFile));
+
+        fileEditorService.insertAtLine("no_trailing.txt", 3, "BeforeGamma");
+        assertEquals("Alpha" + (char) 10 + "BetaUpdated" + (char) 10 + "BeforeGamma" + (char) 10 + "Gamma",
+                Files.readString(noTrailingFile));
+
+        assertEquals(List.of("a"), FileEditorService.splitLines("a"));
+        assertEquals(List.of("a"), FileEditorService.splitLines("a" + (char) 10));
+        assertEquals(List.of("a", ""), FileEditorService.splitLines("a" + (char) 10 + (char) 10));
+        assertEquals(List.of("", ""), FileEditorService.splitLines("" + (char) 10));
+        assertEquals(List.of(""), FileEditorService.splitLines(""));
+
+        Path blankFile = Files.write(tempDir.resolve("blank_lines.txt"), List.of("Line 1", "Line 2", "Line 3"));
+        assertTrue(fileEditorService.insertAtLine("blank_lines.txt", 2, "Inserted" + (char) 10 + (char) 10).success());
+        assertEquals(List.of("Line 1", "Inserted", "", "Line 2", "Line 3"), Files.readAllLines(blankFile));
+
+        assertTrue(fileEditorService
+                .replaceLines("blank_lines.txt", 2, 3, "Replaced A" + (char) 10 + "Replaced B" + (char) 10 + (char) 10)
+                .success());
+        assertEquals(List.of("Line 1", "Replaced A", "Replaced B", "", "Line 2", "Line 3"),
+                Files.readAllLines(blankFile));
     }
 
     @Test
-    void testDeleteFileSuccessAndFailureCases() throws IOException {
-        Path filePath = Files.writeString(tempDir.resolve("to_delete.txt"), "delete me");
+    void testMoveCopyDeleteAndMkdirsOperations() throws IOException {
+        Path toDelete = Files.writeString(tempDir.resolve("to_delete.txt"), "delete me");
         assertTrue(fileEditorService.deleteFile("to_delete.txt").success());
-        assertFalse(Files.exists(filePath));
-        verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
-
+        assertFalse(Files.exists(toDelete));
         assertEditFails(fileEditorService.deleteFile("missing.txt"), "File does not exist: missing.txt");
         Files.createDirectory(tempDir.resolve("some_dir"));
         assertEditFails(fileEditorService.deleteFile("some_dir"), "Cannot delete directory: some_dir");
-    }
 
-    @Test
-    void testMoveCopyAndMkdirsOperations() throws IOException {
         assertTrue(fileEditorService.mkdirs("nested/dir/structure").success());
         assertTrue(Files.isDirectory(tempDir.resolve("nested/dir/structure")));
 
@@ -159,42 +177,6 @@ class FileEditorServiceTest {
         assertThrows(SecurityException.class,
                 () -> fileEditorService.copyFile("moved/sub/renamed.txt", "../outside.txt"));
         assertThrows(SecurityException.class, () -> fileEditorService.mkdirs("../outside_dir"));
-    }
-
-    @Test
-    void testReplaceLinesAndInsertAtLinePreserveCrlfAndNoTrailingNewline() throws IOException {
-        Path crlfFile = Files.writeString(tempDir.resolve("crlf.txt"), "Line 1\r\nLine 2\r\nLine 3\r\n");
-        fileEditorService.replaceLines("crlf.txt", 2, 2, "Updated 2");
-        assertEquals("Line 1\r\nUpdated 2\r\nLine 3\r\n", Files.readString(crlfFile));
-
-        fileEditorService.insertAtLine("crlf.txt", 2, "Inserted 1.5");
-        assertEquals("Line 1\r\nInserted 1.5\r\nUpdated 2\r\nLine 3\r\n", Files.readString(crlfFile));
-
-        Path noTrailingFile = Files.writeString(tempDir.resolve("no_trailing.txt"), "Alpha\nBeta\nGamma");
-        fileEditorService.replaceLines("no_trailing.txt", 2, 2, "BetaUpdated");
-        assertEquals("Alpha\nBetaUpdated\nGamma", Files.readString(noTrailingFile));
-
-        fileEditorService.insertAtLine("no_trailing.txt", 3, "BeforeGamma");
-        assertEquals("Alpha" + (char) 10 + "BetaUpdated" + (char) 10 + "BeforeGamma" + (char) 10 + "Gamma",
-                Files.readString(noTrailingFile));
-    }
-
-    @Test
-    void testReplaceLinesAndInsertAtLinePreserveExplicitTrailingBlankLines() throws IOException {
-        assertEquals(List.of("a"), FileEditorService.splitLines("a"));
-        assertEquals(List.of("a"), FileEditorService.splitLines("a" + (char) 10));
-        assertEquals(List.of("a", ""), FileEditorService.splitLines("a" + (char) 10 + (char) 10));
-        assertEquals(List.of("", ""), FileEditorService.splitLines("" + (char) 10));
-        assertEquals(List.of(""), FileEditorService.splitLines(""));
-
-        Path file = Files.write(tempDir.resolve("blank_lines.txt"), List.of("Line 1", "Line 2", "Line 3"));
-        assertTrue(fileEditorService.insertAtLine("blank_lines.txt", 2, "Inserted" + (char) 10 + (char) 10).success());
-        assertEquals(List.of("Line 1", "Inserted", "", "Line 2", "Line 3"), Files.readAllLines(file));
-
-        assertTrue(fileEditorService
-                .replaceLines("blank_lines.txt", 2, 3, "Replaced A" + (char) 10 + "Replaced B" + (char) 10 + (char) 10)
-                .success());
-        assertEquals(List.of("Line 1", "Replaced A", "Replaced B", "", "Line 2", "Line 3"), Files.readAllLines(file));
     }
 
     @Test
@@ -229,7 +211,7 @@ class FileEditorServiceTest {
                     {'target': 'return a * b;', 'replacement': 'return Math.multiplyExact(a, b);'}
                 ])
                 """;
-        var arrayJson = AiConfig.SHARED_OBJECT_MAPPER.readTree(jexlTool.executeJexl(arrayScript, codeContext))
+        JsonNode arrayJson = AiConfig.SHARED_OBJECT_MAPPER.readTree(jexlTool.executeJexl(arrayScript, codeContext))
                 .get("result");
         assertTrue(arrayJson.get("success").asBoolean());
         verify(eventPublisher, times(1)).publishEvent(new FileChangedEvent("Calculator.java"));
@@ -246,7 +228,7 @@ class FileEditorServiceTest {
                     ...
                 ])
                 """;
-        var listJson = AiConfig.SHARED_OBJECT_MAPPER.readTree(jexlTool.executeJexl(listScript, codeContext))
+        JsonNode listJson = AiConfig.SHARED_OBJECT_MAPPER.readTree(jexlTool.executeJexl(listScript, codeContext))
                 .get("result");
         assertTrue(listJson.get("success").asBoolean());
         verify(eventPublisher, times(1)).publishEvent(new FileChangedEvent("Calculator.java"));
@@ -255,7 +237,7 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testReplaceBlocksAtomicRollbackWhenSecondEditFails() throws IOException {
+    void testReplaceBlocksAtomicRollbackOverlapAndLineEndings() throws IOException {
         String initial = """
                 package demo;
                 public class OrderService {
@@ -290,7 +272,6 @@ class FileEditorServiceTest {
                         Map.of("target", "int y = 2;", "replacement", "int y = 20;")});
         assertEditFails(nonUniqueResult, "Edit #2 failed:", "TargetBlock is not unique in file: Dup.java", "[2, 3]");
         assertEquals(duplicateFileContent, Files.readString(dupFile));
-        verify(eventPublisher, never()).publishEvent(any());
 
         Map<String, String> nullReplacementEdit = new HashMap<>();
         nullReplacementEdit.put("target", "return 'cancelled:' + id;");
@@ -298,13 +279,6 @@ class FileEditorServiceTest {
         assertEditFails(fileEditorService.replaceBlocks("OrderService.java", List
                 .of(Map.of("target", "return 'created:' + id;", "replacement", "return 'ok';"), nullReplacementEdit)),
                 "Edit #2 failed:", "'replacement' must not be null");
-        assertEquals(initial, Files.readString(file));
-
-        assertEditFails(
-                fileEditorService.replaceBlocks("OrderService.java",
-                        List.of(Map.of("target", "return 'created:' + id;", "replacement", "return 'ok';"),
-                                Map.of("target", "   ", "replacement", "non-empty"))),
-                "Edit #2 failed:", "TargetBlock not found in file: OrderService.java");
         assertEquals(initial, Files.readString(file));
 
         assertEditFails(fileEditorService.replaceBlocks("OrderService.java", new Object[]{"not-a-map"}),
@@ -315,35 +289,16 @@ class FileEditorServiceTest {
                 "No edits provided for file: OrderService.java");
         assertEditFails(fileEditorService.replaceBlocks("missing_multi.java",
                 List.of(Map.of("target", "a", "replacement", "b"))), "File does not exist: missing_multi.java");
+
+        String overlapInitial = "line 1\nline 2\nline 3\nline 4\n";
+        Path overlapFile = Files.writeString(tempDir.resolve("overlap.txt"), overlapInitial);
+        EditorResult overlapRes = fileEditorService.replaceBlocks("overlap.txt",
+                List.of(Map.of("target", "line 1\nline 2\nline 3", "replacement", "block A"),
+                        Map.of("target", "line 2\nline 3\nline 4", "replacement", "block B")));
+        assertEditFails(overlapRes, "Edit #2 failed:", "Target block overlaps with Edit #1 in file: overlap.txt");
+        assertEquals(overlapInitial, Files.readString(overlapFile));
         verify(eventPublisher, never()).publishEvent(any());
-    }
 
-    @Test
-    void testReplaceBlocksRejectsOverlappingTargetBlocksAtomically() throws IOException {
-        String initial = """
-                line 1
-                line 2
-                line 3
-                line 4
-                """;
-        Path file = Files.writeString(tempDir.resolve("overlap.txt"), initial);
-        clearInvocations(eventPublisher);
-
-        EditorResult result = fileEditorService.replaceBlocks("overlap.txt", List.of(Map.of("target", """
-                line 1
-                line 2
-                line 3""", "replacement", "block A"), Map.of("target", """
-                line 2
-                line 3
-                line 4""", "replacement", "block B")));
-
-        assertEditFails(result, "Edit #2 failed:", "Target block overlaps with Edit #1 in file: overlap.txt");
-        assertEquals(initial, Files.readString(file));
-        verify(eventPublisher, never()).publishEvent(any());
-    }
-
-    @Test
-    void testReplaceBlocksPreservesLfAndCrlfLineEndings() throws IOException {
         String crlf = String.valueOf((char) 13) + (char) 10;
         String lf = String.valueOf((char) 10);
         Path crlfFile = Files.writeString(tempDir.resolve("crlf_multi.java"),

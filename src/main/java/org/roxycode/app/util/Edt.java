@@ -2,14 +2,17 @@ package org.roxycode.app.util;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
 
 public final class Edt {
 
-    private static final AtomicInteger activeTasks = new AtomicInteger(0);
-    private static final Object lock = new Object();
+    public static final Executor EXECUTOR = Edt::run;
+    private static final Executor VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private Edt() {
     }
@@ -50,76 +53,59 @@ public final class Edt {
         }
     }
 
-    public static <T> void supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess) {
-        supplyAsync(backgroundTask, onEdtSuccess, null);
+    public static <T> CompletableFuture<T> supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess) {
+        return supplyAsync(backgroundTask, onEdtSuccess, null);
     }
 
-    public static <T> void supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess,
+    public static <T> CompletableFuture<T> supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess,
             Consumer<Exception> onEdtError) {
-        activeTasks.incrementAndGet();
-        try {
-            Thread.ofVirtual().start(() -> {
-                boolean callbackDispatched = false;
-                try {
-                    T result = null;
-                    if (backgroundTask != null) {
-                        result = backgroundTask.call();
-                    }
-                    final T finalResult = result;
-                    if (onEdtSuccess != null) {
-                        callbackDispatched = true;
-                        Edt.run(() -> {
-                            try {
-                                onEdtSuccess.accept(finalResult);
-                            } finally {
-                                completeAsyncTask();
-                            }
-                        });
-                    }
-                } catch (Exception e) {
-                    if (onEdtError != null) {
-                        callbackDispatched = true;
-                        Edt.run(() -> {
-                            try {
-                                onEdtError.accept(e);
-                            } finally {
-                                completeAsyncTask();
-                            }
-                        });
-                    }
-                } finally {
-                    if (!callbackDispatched) {
-                        completeAsyncTask();
-                    }
+        return CompletableFuture.supplyAsync(() -> {
+            if (backgroundTask == null) {
+                return null;
+            }
+            try {
+                return backgroundTask.call();
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        }, VIRTUAL_EXECUTOR).handleAsync((result, ex) -> {
+            if (ex == null) {
+                if (onEdtSuccess != null) {
+                    onEdtSuccess.accept(result);
                 }
-            });
-        } catch (Throwable t) {
-            // Safeguard: Decrement if the virtual thread fails to start entirely
-            completeAsyncTask();
-            if (t instanceof RuntimeException re) {
-                throw re;
+                return result;
             }
-            if (t instanceof Error e) {
-                throw e;
+            Throwable cause = ex;
+            if (ex instanceof CompletionException && ex.getCause() != null) {
+                cause = ex.getCause();
             }
-            throw new RuntimeException("Failed to start virtual thread", t);
-        }
+            if (onEdtError != null) {
+                Exception exceptionToReport;
+                if (cause instanceof Exception exception) {
+                    exceptionToReport = exception;
+                } else {
+                    exceptionToReport = new RuntimeException(cause);
+                }
+                onEdtError.accept(exceptionToReport);
+                return null;
+            }
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new CompletionException(cause);
+        }, EXECUTOR);
     }
 
-    private static void completeAsyncTask() {
-        if (activeTasks.decrementAndGet() == 0) {
-            synchronized (lock) {
-                lock.notifyAll();
-            }
-        }
+    public static CompletableFuture<Void> runAsync(Runnable backgroundTask, Runnable onEdtSuccess) {
+        return runAsync(backgroundTask, onEdtSuccess, null);
     }
 
-    public static void runAsync(Runnable backgroundTask, Runnable onEdtSuccess) {
-        runAsync(backgroundTask, onEdtSuccess, null);
-    }
-
-    public static void runAsync(Runnable backgroundTask, Runnable onEdtSuccess, Consumer<Exception> onEdtError) {
-        supplyAsync(() -> {
+    public static CompletableFuture<Void> runAsync(Runnable backgroundTask, Runnable onEdtSuccess,
+            Consumer<Exception> onEdtError) {
+        return supplyAsync(() -> {
             if (backgroundTask != null) {
                 backgroundTask.run();
             }
@@ -129,29 +115,5 @@ public final class Edt {
                 onEdtSuccess.run();
             }
         }, onEdtError);
-    }
-
-    /**
-     * Waits for all in-flight background tasks to complete. Used primarily for testing.
-     */
-    public static void awaitAsyncTasks() {
-        long startTime = System.currentTimeMillis();
-        long timeoutMs = 8000; // Hard timeout prevents CI deadlocks
-
-        synchronized (lock) {
-            while (activeTasks.get() > 0) {
-                if (System.currentTimeMillis() - startTime > timeoutMs) {
-                    throw new IllegalStateException(
-                            "Timeout waiting for background tasks to complete. Active tasks leaked: "
-                                    + activeTasks.get());
-                }
-                try {
-                    lock.wait(50);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        }
     }
 }

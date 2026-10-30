@@ -3,11 +3,13 @@ package org.roxycode.app.ui;
 import java.awt.*;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.PlainDocument;
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.ContextChangedEvent;
@@ -146,8 +148,8 @@ public final class CodebaseCachePanel extends JPanel {
         return new JTextArea[]{repoMapArea, stableContextArea, sessionContextArea};
     }
 
-    void refreshStatus() {
-        Edt.supplyAsync(() -> {
+    CompletableFuture<CacheStatusData> refreshStatus() {
+        return Edt.supplyAsync(() -> {
             Optional<ProjectCacheMeta> meta = Optional.empty();
             Optional<String> packed = Optional.empty();
             if (metaService != null) {
@@ -212,17 +214,22 @@ public final class CodebaseCachePanel extends JPanel {
         return sessionContextArea;
     }
 
-    private void runPack() {
+    CompletableFuture<EditorResult> runPack() {
         packButton.setEnabled(false);
         progressBar.setVisible(true);
         progressBar.setIndeterminate(true);
         statusLabel.setText("Generating Repo Map...");
 
-        Edt.supplyAsync(packerService::forceRegenerateRepoMap, result -> {
+        return Edt.supplyAsync(packerService::forceRegenerateRepoMap, result -> {
             if (result != null && result.success()) {
                 statusLabel.setText("Repo Map updated successfully.");
             } else {
-                String hint = result != null ? result.errorHint() : "Unknown error";
+                String hint;
+                if (result != null) {
+                    hint = result.errorHint();
+                } else {
+                    hint = "Unknown error";
+                }
                 statusLabel.setText("Failed: " + hint);
             }
             refreshStatus();

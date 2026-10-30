@@ -2,7 +2,7 @@ package org.roxycode.app.util;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -16,18 +16,16 @@ class EdtTest {
         AtomicBoolean taskRanOnEdt = new AtomicBoolean(true);
         AtomicBoolean callbackRanOnEdt = new AtomicBoolean(false);
         AtomicReference<String> callbackResult = new AtomicReference<>();
-        CountDownLatch callbackLatch = new CountDownLatch(1);
 
-        Edt.supplyAsync(() -> {
+        CompletableFuture<String> future = Edt.supplyAsync(() -> {
             taskRanOnEdt.set(SwingUtilities.isEventDispatchThread());
             return "computed-value";
         }, result -> {
             callbackRanOnEdt.set(SwingUtilities.isEventDispatchThread());
             callbackResult.set(result);
-            callbackLatch.countDown();
         });
 
-        assertTrue(callbackLatch.await(5, TimeUnit.SECONDS));
+        assertEquals("computed-value", future.get(5, TimeUnit.SECONDS));
         assertFalse(taskRanOnEdt.get(), "Background task must run off the EDT");
         assertTrue(callbackRanOnEdt.get(), "Success callback must run on the EDT");
         assertEquals("computed-value", callbackResult.get());
@@ -38,17 +36,15 @@ class EdtTest {
         AtomicBoolean errorRanOnEdt = new AtomicBoolean(false);
         AtomicReference<Exception> capturedError = new AtomicReference<>();
         AtomicBoolean successCalled = new AtomicBoolean(false);
-        CountDownLatch errorLatch = new CountDownLatch(1);
 
-        Edt.supplyAsync(() -> {
+        CompletableFuture<Object> future = Edt.supplyAsync(() -> {
             throw new IllegalStateException("boom");
         }, result -> successCalled.set(true), ex -> {
             errorRanOnEdt.set(SwingUtilities.isEventDispatchThread());
             capturedError.set(ex);
-            errorLatch.countDown();
         });
 
-        assertTrue(errorLatch.await(5, TimeUnit.SECONDS));
+        assertNull(future.get(5, TimeUnit.SECONDS));
         assertFalse(successCalled.get());
         assertTrue(errorRanOnEdt.get(), "Error callback must run on the EDT");
         assertNotNull(capturedError.get());
@@ -59,32 +55,11 @@ class EdtTest {
     void testRunAsync() throws Exception {
         AtomicBoolean taskRan = new AtomicBoolean(false);
         AtomicBoolean successRan = new AtomicBoolean(false);
-        CountDownLatch latch = new CountDownLatch(1);
 
-        Edt.runAsync(() -> taskRan.set(true), () -> {
-            successRan.set(true);
-            latch.countDown();
-        });
+        CompletableFuture<Void> future = Edt.runAsync(() -> taskRan.set(true), () -> successRan.set(true));
 
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        future.get(5, TimeUnit.SECONDS);
         assertTrue(taskRan.get());
         assertTrue(successRan.get());
-    }
-
-    @Test
-    void testAwaitAsyncTasks() throws Exception {
-        AtomicBoolean taskDone = new AtomicBoolean(false);
-
-        Edt.runAsync(() -> {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            taskDone.set(true);
-        }, null);
-
-        Edt.awaitAsyncTasks();
-        assertTrue(taskDone.get(), "awaitAsyncTasks must wait for background work");
     }
 }
