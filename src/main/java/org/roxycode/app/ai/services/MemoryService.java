@@ -47,6 +47,9 @@ public class MemoryService {
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
     private static final String MD_EXTENSION = ".md";
+    private static final List<String> FRONTMATTER_PREFIXES = List.of("---", "id:", "type:", "project:", "projectpath:",
+            "title:", "createdby:", "created_by:", "approvedby:", "approvaltimestamp:", "completedby:", "completedon:",
+            "archivedon:", "timestamp:", "messagecount:", "userapproved:");
 
     private record PrefixLabel(String prefix, String label) {
     }
@@ -352,16 +355,14 @@ public class MemoryService {
         }
         String trimmedQuery = query.trim();
         String lowerQuery = trimmedQuery.toLowerCase(Locale.ROOT);
+        Map<String, String> snippetsByFile = findArchiveSnippetsWithRipGrep(archiveDir, trimmedQuery);
 
         List<ArchiveEntrySummary> matched = new ArrayList<>();
         for (ArchiveEntrySummary entry : allEntries) {
             boolean metaMatch = containsIgnoreCase(entry.title(), lowerQuery)
                     || containsIgnoreCase(entry.filename(), lowerQuery)
                     || containsIgnoreCase(entry.createdBy(), lowerQuery);
-            String snippet = null;
-            if (archiveDir != null) {
-                snippet = findArchiveMatchSnippet(archiveDir.resolve(entry.filename()), lowerQuery);
-            }
+            String snippet = snippetsByFile.get(entry.filename());
             if (metaMatch || snippet != null) {
                 if (snippet != null && !snippet.isBlank()) {
                     matched.add(entry.withMatchSnippet(snippet));
@@ -373,23 +374,54 @@ public class MemoryService {
         return List.copyOf(matched);
     }
 
-    private static String findArchiveMatchSnippet(Path file, String lowerQuery) {
-        String rawMarkdown = readFileIfExists(file);
-        if (rawMarkdown.isBlank()) {
-            return null;
+    static Map<String, String> findArchiveSnippetsWithRipGrep(Path archiveDir, String trimmedQuery) {
+        if (archiveDir == null || !Files.isDirectory(archiveDir) || trimmedQuery == null || trimmedQuery.isEmpty()) {
+            return Map.of();
         }
-        String body = FrontmatterUtils.stripFrontmatter(rawMarkdown);
-        if (body.isBlank()) {
-            return null;
+        List<String> command = List.of("rg", "-i", "-F", "--no-heading", "--with-filename", "--no-line-number",
+                "--color=never", "--", trimmedQuery, archiveDir.toString());
+        List<String> rgLines = GrepService.runRipGrepLines(command, null, false);
+        if (rgLines.isEmpty()) {
+            return Map.of();
         }
-        List<String> lines = body.lines().toList();
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (!trimmed.isEmpty() && trimmed.toLowerCase(Locale.ROOT).contains(lowerQuery)) {
-                return trimmed;
+        Map<String, String> snippets = new LinkedHashMap<>();
+        for (String rawLine : rgLines) {
+            int sepIdx = findRipGrepPathSeparatorIndex(rawLine);
+            if (sepIdx <= 0) {
+                continue;
+            }
+            String filename = PathUtils.getFileName(rawLine.substring(0, sepIdx));
+            if (filename.isEmpty() || snippets.containsKey(filename)) {
+                continue;
+            }
+            String matchedText = rawLine.substring(sepIdx + 1).trim();
+            if (!matchedText.isEmpty() && !isFrontmatterLine(matchedText)) {
+                snippets.put(filename, matchedText);
             }
         }
-        return null;
+        return snippets;
+    }
+
+    private static int findRipGrepPathSeparatorIndex(String line) {
+        if (line == null || line.isEmpty()) {
+            return -1;
+        }
+        int startSearch = 0;
+        if (line.length() >= 3 && Character.isLetter(line.charAt(0)) && line.charAt(1) == ':'
+                && (line.charAt(2) == '/' || line.charAt(2) == 92)) {
+            startSearch = 2;
+        }
+        return line.indexOf(':', startSearch);
+    }
+
+    private static boolean isFrontmatterLine(String trimmedLine) {
+        String lower = trimmedLine.toLowerCase(Locale.ROOT);
+        for (String prefix : FRONTMATTER_PREFIXES) {
+            if (lower.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean containsIgnoreCase(String value, String lowerQuery) {

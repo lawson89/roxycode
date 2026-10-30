@@ -75,7 +75,8 @@ class GitServiceTest {
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             stubGit(runner, 0, headDiffOut, "git", "diff", "HEAD");
             stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard");
-            stubGit(runner, 1, noIndexDiffOut, "git", "diff", "--no-index", "--", "/dev/null", "src/NewFeature.java");
+            stubGit(runner, 1, noIndexDiffOut, "git", "diff", "--no-index", "--src-prefix=a/", "--dst-prefix=b/", "--",
+                    "/dev/null", "src/NewFeature.java");
             stubGit(runner, 0, "", "git", "diff", "HEAD", "--", "src/NewFeature.java");
             stubGit(runner, 0, "src/NewFeature.java", "git", "ls-files", "--others", "--exclude-standard", "--",
                     "src/NewFeature.java");

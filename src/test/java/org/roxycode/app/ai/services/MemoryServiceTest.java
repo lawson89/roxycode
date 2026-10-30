@@ -309,29 +309,54 @@ class MemoryServiceTest {
         assertEquals(2, memoryService.searchArchivedTopics("").size());
         assertEquals(2, memoryService.searchArchivedPlans("   ").size());
 
-        List<MemoryService.ArchiveEntrySummary> metaMatched = memoryService.searchArchivedTopics("alice");
-        assertEquals(1, metaMatched.size());
-        assertEquals("First Q&A Topic", metaMatched.get(0).title());
-
-        List<MemoryService.ArchiveEntrySummary> planMatched = memoryService.searchArchivedPlans("UniqueBodyMatchToken");
-        assertEquals(1, planMatched.size());
-        assertEquals("Archive Browser Feature", planMatched.get(0).title());
-        assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
-
-        String dq = String.valueOf('"');
         Path planWithSnippet = plansDir.resolve("20250515-100000-extra.md");
         Files.writeString(planWithSnippet, """
                 ---
                 title: "Extra Plan"
+                created_by: "ExtraUser"
+                timestamp: "2025-05-15T10:00:00Z"
                 ---
 
                 # Plan
-                title: "BodyExampleTitle"
+                BodyExampleMatchLine in body after frontmatter
                 """, StandardCharsets.UTF_8);
 
-        List<MemoryService.ArchiveEntrySummary> bodyKeyMatched = memoryService.searchArchivedPlans("BodyExampleTitle");
-        assertEquals(1, bodyKeyMatched.size());
-        assertEquals("title: " + dq + "BodyExampleTitle" + dq, bodyKeyMatched.get(0).matchSnippet());
+        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(1, "", "", false));
+            List<MemoryService.ArchiveEntrySummary> metaMatched = memoryService.searchArchivedTopics("alice");
+            assertEquals(1, metaMatched.size());
+            assertEquals("First Q&A Topic", metaMatched.get(0).title());
+
+            String planRgOut = planFile.toAbsolutePath().normalize() + ":UniqueBodyMatchToken in plan steps\n";
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, planRgOut, "", false));
+            List<MemoryService.ArchiveEntrySummary> planMatched = memoryService
+                    .searchArchivedPlans("UniqueBodyMatchToken");
+            assertEquals(1, planMatched.size());
+            assertEquals("Archive Browser Feature", planMatched.get(0).title());
+            assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
+
+            String extraRgOut = planWithSnippet.toAbsolutePath().normalize() + ":---\n"
+                    + planWithSnippet.toAbsolutePath().normalize() + ":title: " + '"' + "Extra Plan" + '"' + "\n"
+                    + planWithSnippet.toAbsolutePath().normalize() + ":created_by: " + '"' + "ExtraUser" + '"' + "\n"
+                    + planWithSnippet.toAbsolutePath().normalize()
+                    + ":  BodyExampleMatchLine in body after frontmatter  \n";
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, extraRgOut, "", false));
+            List<MemoryService.ArchiveEntrySummary> bodyKeyMatched = memoryService
+                    .searchArchivedPlans("BodyExampleMatchLine");
+            assertEquals(1, bodyKeyMatched.size());
+            assertEquals("BodyExampleMatchLine in body after frontmatter", bodyKeyMatched.get(0).matchSnippet());
+
+            String fmOnlyRgOut = planWithSnippet.toAbsolutePath().normalize() + ":title: " + '"' + "Extra Plan" + '"'
+                    + "\n";
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, fmOnlyRgOut, "", false));
+            List<MemoryService.ArchiveEntrySummary> fmKeyIgnored = memoryService.searchArchivedPlans("Extra Plan");
+            assertEquals(1, fmKeyIgnored.size());
+            assertEquals("", fmKeyIgnored.get(0).matchSnippet());
+        }
 
         assertEquals(6, FrontmatterUtils.findFrontmatterEndLine(planFile));
         assertEquals(0, FrontmatterUtils.findFrontmatterEndLine(fallbackPlanFile));

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class ExceptionUtilsTest {
 
     @Test
-    void testFindCauseAndGetRootCause() {
+    void testCauseResolutionAndCancellationHandling() {
         IOException root = new IOException("disk full");
         IllegalStateException mid = new IllegalStateException("state error", root);
         RuntimeException top = new RuntimeException("top error", mid);
@@ -21,35 +21,20 @@ class ExceptionUtilsTest {
         assertSame(root, ExceptionUtils.getRootCause(top));
         assertSame(root, ExceptionUtils.getRootCause(root));
         assertNull(ExceptionUtils.getRootCause(null));
-    }
 
-    @Test
-    void testIsCancellationAndRethrowIfCancelled() {
-        assertFalse(ExceptionUtils.isCancellation(new IOException("regular io error")));
-        assertDoesNotThrow(
-                () -> ExceptionUtils.rethrowIfCancelled(new IOException("regular io error"), "Should not throw"));
+        assertFalse(ExceptionUtils.isCancellation(root));
+        assertDoesNotThrow(() -> ExceptionUtils.rethrowIfCancelled(root, "Should not throw"));
+        assertDoesNotThrow(() -> ExceptionUtils.checkInterrupted("Not interrupted"));
 
-        RuntimeException wrappedInterrupt = new RuntimeException(new InterruptedException("sleep interrupted"));
-        assertTrue(ExceptionUtils.isCancellation(wrappedInterrupt));
+        assertTrue(ExceptionUtils.isCancellation(new RuntimeException(new InterruptedException("sleep interrupted"))));
 
         try {
             CancellationException thrown = assertThrows(CancellationException.class,
                     () -> ExceptionUtils.rethrowIfCancelled(new ClosedByInterruptException(), "Channel cancelled"));
             assertEquals("Channel cancelled", thrown.getMessage());
             assertInstanceOf(ClosedByInterruptException.class, thrown.getCause());
-            assertTrue(Thread.currentThread().isInterrupted(),
-                    "Interrupt flag should be restored by rethrowIfCancelled");
-        } finally {
-            Thread.interrupted();
-        }
-    }
+            assertTrue(Thread.currentThread().isInterrupted());
 
-    @Test
-    void testCheckInterrupted() {
-        assertDoesNotThrow(() -> ExceptionUtils.checkInterrupted("Not interrupted"));
-
-        Thread.currentThread().interrupt();
-        try {
             CancellationException ex = assertThrows(CancellationException.class,
                     () -> ExceptionUtils.checkInterrupted("Thread was interrupted"));
             assertEquals("Thread was interrupted", ex.getMessage());

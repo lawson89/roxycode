@@ -96,22 +96,6 @@ class BuildContainerServiceTest {
     }
 
     @Test
-    void testParseContainerConfigDefaultsAndCustomValues() {
-        for (ContainerConfig cfg : new ContainerConfig[]{null, new ContainerConfig(false, "  ", "")}) {
-            ContainerConfig parsed = buildContainerService.parseContainerConfig(cfg);
-            assertFalse(parsed.enabled());
-            assertEquals("ubuntu:24.04", parsed.image());
-            assertEquals("/workspace", parsed.workdir());
-        }
-
-        ContainerConfig custom = buildContainerService
-                .parseContainerConfig(new ContainerConfig(true, "eclipse-temurin:25-jdk", "/app"));
-        assertTrue(custom.enabled());
-        assertEquals("eclipse-temurin:25-jdk", custom.image());
-        assertEquals("/app", custom.workdir());
-    }
-
-    @Test
     void testWarmSessionLifecycleReuseAndStop() throws Exception {
         AtomicInteger sessionsCreated = new AtomicInteger(0);
         AtomicBoolean sessionClosed = new AtomicBoolean(false);

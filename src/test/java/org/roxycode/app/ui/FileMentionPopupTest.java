@@ -19,7 +19,7 @@ import org.roxycode.app.ui.FileMentionPopup.MentionToken;
 class FileMentionPopupTest {
 
     @Test
-    void testExtractMentionTokenAtStartAfterWhitespaceAndMidSentence() {
+    void testExtractMentionTokenAndRejectInvalidCases() {
         assertEquals(new MentionToken(0, 1, ""), FileMentionPopup.extractMentionToken("@", 1));
         assertEquals(new MentionToken(0, 6, "ChatP"), FileMentionPopup.extractMentionToken("@ChatP", 6));
 
@@ -31,10 +31,7 @@ class FileMentionPopupTest {
         String multiLine = "First line\n@Pom";
         assertEquals(new MentionToken(11, multiLine.length(), "Pom"),
                 FileMentionPopup.extractMentionToken(multiLine, multiLine.length()));
-    }
 
-    @Test
-    void testExtractMentionTokenRejectsEmailsWhitespaceAndInvalidOffsets() {
         assertNull(FileMentionPopup.extractMentionToken("user@example.com", 16));
         assertNull(FileMentionPopup.extractMentionToken("contact user@domain", 19));
         assertNull(FileMentionPopup.extractMentionToken("@@double", 8));
@@ -46,8 +43,9 @@ class FileMentionPopupTest {
     }
 
     @Test
-    void testFileCandidateFromPathNormalizesSlashesAndExtractsParent() {
-        String winPath = ".\\src\\main\\java\\org\\roxycode\\ChatPanel.java";
+    void testFileCandidateNormalizationMultiTierRankingAndResultCap() {
+        String winPath = "." + (char) 92 + "src" + (char) 92 + "main" + (char) 92 + "java" + (char) 92 + "org"
+                + (char) 92 + "roxycode" + (char) 92 + "ChatPanel.java";
         assertEquals("src/main/java/org/roxycode/chatpanel.java", FileCandidate.fromPath(winPath).pathLower());
 
         FileCandidate rootFile = FileCandidate.fromPath("/pom.xml");
@@ -55,10 +53,7 @@ class FileMentionPopupTest {
         assertEquals("pom.xml", rootFile.fileName());
         assertEquals("", rootFile.parentDir());
         assertEquals("pom.xml", rootFile.fileNameLower());
-    }
 
-    @Test
-    void testMultiTierRankingOrderAndTieBreaking() {
         List<FileCandidate> index = List.of(FileCandidate.fromPath("docs/chat_notes/guide.md"),
                 FileCandidate.fromPath("src/ui/MyChatView.java"), FileCandidate.fromPath("src/ui/WechatHelper.java"),
                 FileCandidate.fromPath("src/ui/ChatPanelTest.java"), FileCandidate.fromPath("src/ui/ChatPanel.java"),
@@ -68,10 +63,7 @@ class FileMentionPopupTest {
                 List.of("src/ui/ChatPanel.java", "src/ui/ChatPanelTest.java", "src/ui/MyChatView.java",
                         "src/ui/WechatHelper.java", "docs/chat_notes/guide.md"),
                 FileMentionPopup.rankCandidates(index, "chat").stream().map(FileCandidate::relativePath).toList());
-    }
 
-    @Test
-    void testEmptyQueryReturnsFirst15SortedAndCapsResults() {
         List<FileCandidate> manyFiles = new ArrayList<>();
         for (int i = 25; i >= 1; i--) {
             manyFiles.add(FileCandidate.fromPath(String.format("src/File%02d.java", i)));

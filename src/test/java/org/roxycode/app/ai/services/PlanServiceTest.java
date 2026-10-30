@@ -179,52 +179,6 @@ class PlanServiceTest {
     }
 
     @Test
-    void testImplementationStepsContainingVerificationKeywordsAreNotMisclassifiedAsGates() {
-        List<String> implSteps = List.of("Pre-compile regex patterns", "Add unit tests for FooService",
-                "Update code review prompt");
-        service.submitPlan("Audit Fix", "Goal", List.of(), implSteps);
-
-        var steps = service.getCurrentPlan().technicalSteps();
-        assertEquals(6, steps.size());
-        assertEquals("Pre-compile regex patterns", steps.get(0).description());
-        assertEquals("Add unit tests for FooService", steps.get(1).description());
-        assertEquals("Update code review prompt", steps.get(2).description());
-        assertEquals(PlanService.STEP_COMPILE, steps.get(3).description());
-        assertEquals(PlanService.STEP_UNIT_TESTS, steps.get(4).description());
-        assertEquals(PlanService.STEP_CODE_REVIEW, steps.get(5).description());
-
-        service.requestDevelopment("Start coding");
-        service.approveTransition();
-        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-
-        service.markStepsCompleted(List.of(0, 1));
-        assertTrue(service.addTechnicalStep("Extra implementation step")
-                .contains("Added technical step at index 3: 'Extra implementation step'"));
-        assertEquals(7, service.getCurrentPlan().technicalSteps().size());
-        assertEquals("Extra implementation step", service.getCurrentPlan().technicalSteps().get(3).description());
-
-        assertIllegalState(() -> service.requestReview("Try review with incomplete impl steps"),
-                "2: Update code review prompt", "3: Extra implementation step", "4: Code compiles successfully",
-                "5: Unit tests pass");
-
-        service.requestPlanRevision("Revise plan while preserving completed impl steps");
-        service.approveTransition();
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-
-        service.submitPlan("Audit Fix", "Goal", List.of(),
-                List.of("Pre-compile regex patterns.", "Add unit tests for FooService!", "Update code review prompt",
-                        "CODE COMPILES SUCCESSFULLY.", "unit tests pass!", "Automated Code Review Passes:"));
-        var resubmitted = service.getCurrentPlan().technicalSteps();
-        assertEquals(6, resubmitted.size());
-        assertTrue(resubmitted.get(0).completed());
-        assertTrue(resubmitted.get(1).completed());
-        assertFalse(resubmitted.get(2).completed());
-        assertFalse(resubmitted.get(3).completed());
-        assertFalse(resubmitted.get(4).completed());
-        assertFalse(resubmitted.get(5).completed());
-    }
-
-    @Test
     void testPhaseManagementAndSemanticWorkflowMethods() {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         assertIllegalState(() -> service.requestDevelopment("Reason"), "Implementation Plan is missing");

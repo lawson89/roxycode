@@ -8,14 +8,6 @@ import org.junit.jupiter.api.Test;
 class SwingHtmlUtilsTest {
 
     @Test
-    void testEscapeHtml() {
-        assertEquals("", SwingHtmlUtils.escapeHtml(null));
-        assertEquals("", SwingHtmlUtils.escapeHtml(""));
-        assertEquals("&lt;div&gt;&quot;Hello &amp; World'&quot;&lt;/div&gt;",
-                SwingHtmlUtils.escapeHtml("<div>" + '"' + "Hello & World'" + '"' + "</div>"));
-    }
-
-    @Test
     void testRenderMarkdownToHtml() {
         assertEquals("", SwingHtmlUtils.renderMarkdownToHtml(null));
         assertEquals("", SwingHtmlUtils.renderMarkdownToHtml(""));

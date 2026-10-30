@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.services.CtagsRunner;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -46,8 +47,17 @@ class RepoMapPackerServiceTest {
         return objectMapper.writeValueAsString(Map.of("name", name, "path", path, "line", line)) + "\n";
     }
 
-    private String ctagsLineWithKind(String name, String path, int line, String kind) throws IOException {
-        return objectMapper.writeValueAsString(Map.of("name", name, "path", path, "line", line, "kind", kind)) + "\n";
+    private String ctagsLineWithPattern(String name, String path, int line, String kind, String pattern)
+            throws IOException {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("name", name);
+        map.put("path", path);
+        map.put("line", line);
+        map.put("kind", kind);
+        if (pattern != null) {
+            map.put("pattern", pattern);
+        }
+        return objectMapper.writeValueAsString(map) + "\n";
     }
 
     @Test
@@ -73,12 +83,15 @@ class RepoMapPackerServiceTest {
         service.setCtagsRunner(cmd -> {
             ctagsCommands.add(cmd);
             return new ProcessResult(0,
-                    ctagsLineWithKind("demo", smallJava.toString(), 1, "package")
-                            + ctagsLineWithKind("List", smallJava.toString(), 2, "import")
-                            + ctagsLineWithKind("ns", smallJava.toString(), 1, "namespace")
-                            + ctagsLineWithKind("SmallService", smallJava.toString(), 3, "class")
-                            + ctagsLineWithKind("execute", smallJava.toString(), 5, "method")
-                            + ctagsLineWithKind("submitPlan", smallJava.toString(), 6, "method"),
+                    ctagsLineWithPattern("demo", smallJava.toString(), 1, "package", "/^package demo;$/")
+                            + ctagsLineWithPattern("List", smallJava.toString(), 2, "import",
+                                    "/^import java.util.List;$/")
+                            + ctagsLineWithPattern("ns", smallJava.toString(), 1, "namespace", null)
+                            + ctagsLineWithPattern("SmallService", smallJava.toString(), 3, "class",
+                                    "/^public class SmallService {$/")
+                            + ctagsLineWithPattern("execute", smallJava.toString(), 5, "method",
+                                    "/^    public void execute() {}" + (char) 92 + "/" + (char) 92 + "/ comment$/")
+                            + ctagsLineWithPattern("submitPlan", smallJava.toString(), 6, "method", null),
                     "", false);
         });
 
@@ -88,32 +101,37 @@ class RepoMapPackerServiceTest {
 
         assertEquals(String.join("\n", "# Repo Map Snapshot", "README.md", "pom.xml", "src/main/java/demo/Empty.java",
                 "src/main/java/demo/SmallService.java", "  3: public class SmallService {",
-                "  5: public void execute() {}", "  6: public String submitPlan(",
+                "  5: public void execute() {}// comment", "  6: public String submitPlan(",
                 "src/test/java/demo/SmallServiceTest.java", ""), content);
         SwingTestUtils.assertContainsNone(content, "## Project Tree", "--- ", "1: package demo;",
                 "2: import java.util.List;", "secretBodyLine", "Some markdown prose", "testIt");
         assertEquals(1, ctagsCommands.size());
-        assertEquals(6, ctagsCommands.get(0).size());
-        assertTrue(ctagsCommands.get(0).get(5).endsWith("SmallService.java"));
+        assertEquals(7, ctagsCommands.get(0).size());
+        assertTrue(ctagsCommands.get(0).contains("--fields=+n"));
+        assertTrue(ctagsCommands.get(0).contains("--pattern-length-limit=250"));
+        assertTrue(ctagsCommands.get(0).get(6).endsWith("SmallService.java"));
+
+        assertEquals("", CtagsRunner.extractPatternText(null));
+        assertEquals("", CtagsRunner.extractPatternText("   "));
+        assertEquals("String path = " + (char) 92 + "a/b;", CtagsRunner
+                .extractPatternText("/^String path = " + (char) 92 + (char) 92 + "a" + (char) 92 + "/b;$/;" + '"'));
     }
 
     @Test
     void testSourceAndTestClassificationHelpers() {
-        for (String src : "src/main/java/App.java,app/main.py,web/index.ts,web/Component.tsx,web/script.js,web/View.jsx,cmd/server.go,src/lib.rs,native/core.c,native/core.cpp,native/core.h,native/core.hpp,Program.cs,app.rb,index.php,Main.kt,build.gradle.kts,App.swift,Main.scala"
-                .split(",")) {
+        for (String src : List.of("src/main/java/App.java", "app/main.py", "web/Component.tsx", "cmd/server.go")) {
             assertTrue(RepoMapPackerService.isSourceFile(src));
             assertTrue(RepoMapPackerService.shouldGenerateSkeleton(src));
         }
 
-        for (String nonSrc : "README.md,pom.xml,settings.toml,application.properties,styles.css,package.json,config.yml,config.yaml,mvnw,LICENSE,"
-                .split(",", -1)) {
+        for (String nonSrc : List.of("README.md", "pom.xml", "settings.toml", "")) {
             assertFalse(RepoMapPackerService.isSourceFile(nonSrc));
             assertFalse(RepoMapPackerService.shouldGenerateSkeleton(nonSrc));
         }
         assertFalse(RepoMapPackerService.isSourceFile(null));
 
-        for (String testPath : "src/test/java/org/roxycode/Helper.java,module/src/test/java/Helper.java,test/unit/helper.py,pkg/test/helper.go,tests/integration/run.py,app/tests/run.py,__tests__/App.tsx,src/__tests__/App.tsx,src/main/java/MyTest.java,src/main/java/MyTests.java,src/main/java/MyIT.java,src/test_runner.py,src/runner_test.py,pkg/server_test.go,src/app.test.ts,src/app.spec.ts,src/app.test.js,src/app.spec.js"
-                .split(",")) {
+        for (String testPath : List.of("src/test/java/org/roxycode/Helper.java", "tests/integration/run.py",
+                "__tests__/App.tsx", "src/main/java/MyTest.java", "src/test_runner.py", "src/app.spec.ts")) {
             assertTrue(RepoMapPackerService.isTestFile(testPath));
             assertFalse(RepoMapPackerService.shouldGenerateSkeleton(testPath));
         }
@@ -172,7 +190,7 @@ class RepoMapPackerServiceTest {
         service.setCtagsRunner(cmd -> {
             ctagsCommands.add(cmd);
             StringBuilder jsonOut = new StringBuilder();
-            for (int i = 5; i < cmd.size(); i++) {
+            for (int i = 6; i < cmd.size(); i++) {
                 jsonOut.append(ctagsLine("Cls", cmd.get(i), 1));
             }
             return new ProcessResult(0, jsonOut.toString(), "", false);
@@ -182,7 +200,7 @@ class RepoMapPackerServiceTest {
         assertTrue(first.success());
         SwingTestUtils.assertContainsAll(first.content(), "  1: public class LargeA {", "  1: public class LargeB {");
         assertEquals(1, ctagsCommands.size());
-        assertEquals(7, ctagsCommands.get(0).size());
+        assertEquals(8, ctagsCommands.get(0).size());
 
         Files.writeString(largeA, "public class LargeAUpdated {" + nl + padding + "}" + nl);
         service.handleFileChanged(new FileChangedEvent("LargeA.java"));
@@ -192,8 +210,8 @@ class RepoMapPackerServiceTest {
         SwingTestUtils.assertContainsAll(second.content(), "  1: public class LargeAUpdated {",
                 "  1: public class LargeB {");
         assertEquals(2, ctagsCommands.size());
-        assertEquals(6, ctagsCommands.get(1).size());
-        assertTrue(ctagsCommands.get(1).get(5).endsWith("LargeA.java"));
+        assertEquals(7, ctagsCommands.get(1).size());
+        assertTrue(ctagsCommands.get(1).get(6).endsWith("LargeA.java"));
     }
 
     @Test

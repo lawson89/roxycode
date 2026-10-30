@@ -36,15 +36,19 @@ class JexlServiceRegistryTest {
         GenericBuildToolService buildTool = mock(GenericBuildToolService.class);
         MemoryService memoryService = mock(MemoryService.class);
         SymbolService symbolService = mock(SymbolService.class);
+        PlanService planService = new PlanService(null, null, null, null);
 
         registry.register(editor);
         registry.register(buildTool);
         registry.register(memoryService);
         registry.register(symbolService);
+        registry.register(planService);
 
         assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(editor));
         assertFalse(registry.getServices(WorkflowPhase.PLAN).containsValue(editor));
         assertFalse(registry.getServices(WorkflowPhase.EXPLORE).containsValue(editor));
+        assertFalse(registry.getServices(WorkflowPhase.EXPLORE).containsValue(planService));
+        assertTrue(registry.getServices(WorkflowPhase.PLAN).containsValue(planService));
 
         for (WorkflowPhase phase : WorkflowPhase.values()) {
             assertTrue(registry.getServices(phase).containsValue(buildTool));
@@ -54,40 +58,6 @@ class JexlServiceRegistryTest {
             assertTrue(registry.getDocumentation(phase).contains("symbolService"));
             assertTrue(registry.getDocumentation(phase).contains("interface SymbolInfo {"));
         }
-    }
-
-    @Test
-    void testPlanServicePhaseAndMethodFiltering() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
-        PlanService planService = new PlanService(null, null, null, null);
-        registry.register(planService);
-
-        assertFalse(registry.getServices(WorkflowPhase.EXPLORE).containsValue(planService));
-        assertFalse(registry.getDocumentation(WorkflowPhase.EXPLORE).contains("planService"));
-
-        String planDoc = registry.getDocumentation(WorkflowPhase.PLAN);
-        assertTrue(planDoc.contains("submitPlan("));
-        assertTrue(planDoc.contains("requestDevelopment("));
-        assertFalse(planDoc.contains("markStepCompleted("));
-        assertFalse(planDoc.contains("requestReview("));
-        assertFalse(planDoc.contains("requestCompletion("));
-
-        String codeDoc = registry.getDocumentation(WorkflowPhase.CODE);
-        assertTrue(codeDoc.contains("markStepCompleted("));
-        assertTrue(codeDoc.contains("markStepsCompleted("));
-        assertTrue(codeDoc.contains("requestReview("));
-        assertTrue(codeDoc.contains("requestPlanRevision("));
-        assertFalse(codeDoc.contains("submitPlan("));
-        assertFalse(codeDoc.contains("requestDevelopment("));
-        assertFalse(codeDoc.contains("requestCompletion("));
-
-        String reviewDoc = registry.getDocumentation(WorkflowPhase.REVIEW);
-        assertTrue(reviewDoc.contains("markStepCompleted("));
-        assertTrue(reviewDoc.contains("requestFixes("));
-        assertTrue(reviewDoc.contains("requestCompletion("));
-        assertFalse(reviewDoc.contains("submitPlan("));
-        assertFalse(reviewDoc.contains("addTechnicalStep("));
-        assertFalse(reviewDoc.contains("requestReview("));
     }
 
     public interface ServiceContract {

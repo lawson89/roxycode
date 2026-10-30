@@ -32,28 +32,54 @@ public interface CtagsRunner {
     int SINGLE_FILE_COUNT = 1;
     int MIN_LINE_NUMBER = 1;
     String TAG_TYPE = "tag";
+    char BACKSLASH_CHAR = 92;
+    char DQUOTE_CHAR = 34;
+    String END_ANCHOR_COMMENT = "$/;" + DQUOTE_CHAR;
+    String END_COMMENT = "/;" + DQUOTE_CHAR;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record CtagsEntry(@JsonProperty("_type") String type, String name, String path, String kind, int line, int end,
-            String scope, String signature) {
+            String scope, String signature, String pattern) {
     }
 
     ProcessResult run(List<String> command) throws IOException;
 
     default Map<Path, List<CtagsEntry>> runAndParse(List<Path> files, String fieldsArg, ObjectMapper objectMapper,
             String cancelMessage) {
+        List<String> flags = List.of();
+        if (fieldsArg != null && !fieldsArg.isBlank()) {
+            flags = List.of(fieldsArg);
+        }
+        return runAndParse(files, flags, objectMapper, cancelMessage);
+    }
+
+    default Map<Path, List<CtagsEntry>> runAndParse(List<Path> files, List<String> extraFlags,
+            ObjectMapper objectMapper, String cancelMessage) {
         Map<Path, List<CtagsEntry>> results = new LinkedHashMap<>();
         if (files == null || files.isEmpty()) {
             return results;
         }
-        ObjectMapper mapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
+        ObjectMapper mapper = AiConfig.SHARED_OBJECT_MAPPER;
+        if (objectMapper != null) {
+            mapper = objectMapper;
+        }
         try {
-            List<String> command = new ArrayList<>(files.size() + 5);
+            int flagCount = 0;
+            if (extraFlags != null) {
+                flagCount = extraFlags.size();
+            }
+            List<String> command = new ArrayList<>(files.size() + flagCount + 4);
             command.add("ctags");
             command.add("-f");
             command.add("-");
             command.add("--output-format=json");
-            command.add(fieldsArg);
+            if (extraFlags != null) {
+                for (String flag : extraFlags) {
+                    if (flag != null && !flag.isBlank()) {
+                        command.add(flag);
+                    }
+                }
+            }
             for (Path file : files) {
                 command.add(file.toString());
             }
@@ -77,6 +103,41 @@ public interface CtagsRunner {
             LOG.warn("Universal Ctags execution failed: {}", e.getMessage());
         }
         return results;
+    }
+
+    static String extractPatternText(String rawPattern) {
+        if (rawPattern == null || rawPattern.isBlank()) {
+            return "";
+        }
+        String text = rawPattern.trim();
+        if (text.startsWith("/^")) {
+            text = text.substring(2);
+        } else if (text.startsWith("/")) {
+            text = text.substring(1);
+        }
+        if (text.endsWith(END_ANCHOR_COMMENT)) {
+            text = text.substring(0, text.length() - 4);
+        } else if (text.endsWith(END_COMMENT)) {
+            text = text.substring(0, text.length() - 3);
+        } else if (text.endsWith("$/")) {
+            text = text.substring(0, text.length() - 2);
+        } else if (text.endsWith("/")) {
+            text = text.substring(0, text.length() - 1);
+        }
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch == BACKSLASH_CHAR && i + 1 < text.length()) {
+                char next = text.charAt(i + 1);
+                if (next == '/' || next == BACKSLASH_CHAR) {
+                    sb.append(next);
+                    i++;
+                    continue;
+                }
+            }
+            sb.append(ch);
+        }
+        return sb.toString();
     }
 
     private static void parseJsonLine(String line, List<Path> files, ObjectMapper mapper, String cancelMessage,
@@ -107,6 +168,9 @@ public interface CtagsRunner {
         if (rawPath != null && !rawPath.isBlank()) {
             return Path.of(rawPath).toAbsolutePath().normalize();
         }
-        return files.size() == SINGLE_FILE_COUNT ? files.get(0) : null;
+        if (files.size() == SINGLE_FILE_COUNT) {
+            return files.get(0);
+        }
+        return null;
     }
 }

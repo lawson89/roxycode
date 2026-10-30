@@ -201,7 +201,8 @@ public class GitService {
             return "";
         }
         try {
-            List<String> command = List.of("git", GIT_DIFF, "--no-index", "--", "/dev/null", relFile);
+            List<String> command = List.of("git", GIT_DIFF, "--no-index", "--src-prefix=a/", "--dst-prefix=b/", "--",
+                    "/dev/null", relFile);
             ProcessResult result = ProcessRunner.run(command, projectService.getCurrentProjectRoot(),
                     Map.of("GIT_TERMINAL_PROMPT", "0"));
             if (result == null || result.timedOut() || (result.exitCode() != 0 && result.exitCode() != 1)) {
@@ -218,27 +219,12 @@ public class GitService {
         if (rawDiff == null || rawDiff.isBlank()) {
             return "";
         }
-        List<String> lines = rawDiff.trim().lines().toList();
-        if (lines.isEmpty()) {
-            return "";
+        String trimmed = rawDiff.trim();
+        String headerPrefix = "diff --git a//dev/null b/" + relFile;
+        if (trimmed.startsWith(headerPrefix)) {
+            return "diff --git a/" + relFile + " b/" + relFile + trimmed.substring(headerPrefix.length());
         }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < lines.size(); i++) {
-            if (i > 0) {
-                sb.append(NL);
-            }
-            String line = lines.get(i);
-            if (i == 0 && line.startsWith("diff --git ")) {
-                sb.append("diff --git a/").append(relFile).append(" b/").append(relFile);
-            } else if (line.startsWith("+++ ") && !line.equals("+++ b/" + relFile)) {
-                sb.append("+++ b/").append(relFile);
-            } else if (line.startsWith("Binary files ") && line.endsWith(" differ")) {
-                sb.append("Binary files /dev/null and b/").append(relFile).append(" differ");
-            } else {
-                sb.append(line);
-            }
-        }
-        return sb.toString();
+        return trimmed;
     }
 
     private static boolean isGitError(String output) {

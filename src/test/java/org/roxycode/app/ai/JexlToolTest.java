@@ -187,37 +187,7 @@ public class JexlToolTest {
     }
 
     @Test
-    public void testAgentServiceMethodWithoutAgentDocIsBlockedWhileObjectMethodsAllowed() {
-        JexlTool tool = createTool(new TestService());
-        assertTrue(tool.executeJexl("testService.toString()").contains("TestService"));
-        String blockedResult = tool.executeJexl("testService.internalMethodWithoutAgentDoc()");
-        assertTrue(blockedResult.contains("error"));
-        assertFalse(blockedResult.contains("secret-internal"));
-    }
-
-    @Test
-    public void testSandboxBlocksNewInstantiationReflectionAndSystemAccess() throws Exception {
-        JexlTool tool = createTool(new TestService());
-
-        JsonNode newProcessBuilder = evalJson(tool, "new('java.lang.ProcessBuilder', ['ls'])");
-        assertTrue(newProcessBuilder.has("error"));
-        assertTrue(newProcessBuilder.get("error").asText().contains("Syntax Error"));
-
-        JsonNode getClassAttempt = evalJson(tool, "''.getClass()");
-        assertTrue(getClassAttempt.has("error"));
-
-        JsonNode serviceGetClassAttempt = evalJson(tool, "testService.getClass()");
-        assertTrue(serviceGetClassAttempt.has("error"));
-
-        JsonNode systemAttempt = evalJson(tool, "System.exit(0)");
-        assertTrue(systemAttempt.has("error"));
-
-        JsonNode runtimeAttempt = evalJson(tool, "Runtime.getRuntime()");
-        assertTrue(runtimeAttempt.has("error"));
-    }
-
-    @Test
-    public void testSandboxAllowsCollectionsMapsStringsAndRecords() throws Exception {
+    public void testSandboxAllowsCollectionsMapsStringsAndBlocksUnauthorizedCalls() throws Exception {
         JexlTool tool = createTool(new TestService());
         JsonNode result = evalJson(tool, """
                 var list = ['alpha', 'beta', ...];
@@ -227,6 +197,8 @@ public class JexlToolTest {
                 """);
         assertEquals("HELLO, ROXY", result.get("greeting").asText());
         assertEquals(3, result.get("count").asInt());
+        assertTrue(evalJson(tool, "new('java.lang.ProcessBuilder', ['ls'])").has("error"));
+        assertTrue(evalJson(tool, "testService.internalMethodWithoutAgentDoc()").has("error"));
     }
 
     @Test

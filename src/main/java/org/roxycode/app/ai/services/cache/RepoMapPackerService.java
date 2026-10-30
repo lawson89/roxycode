@@ -33,6 +33,8 @@ public class RepoMapPackerService {
     static final int CTAGS_BATCH_SIZE = 100;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
     private static final String CTAGS_SKELETON_FIELDS = "--fields=+n";
+    private static final String CTAGS_PATTERN_LIMIT_FLAG = "--pattern-length-limit=250";
+    private static final List<String> CTAGS_SKELETON_FLAGS = List.of(CTAGS_SKELETON_FIELDS, CTAGS_PATTERN_LIMIT_FLAG);
     private static final char LF = 10;
     static final int MAX_SIGNATURE_CHARS = 240;
 
@@ -237,7 +239,7 @@ public class RepoMapPackerService {
             return;
         }
         List<Path> paths = batch.stream().map(FileStat::path).toList();
-        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(paths, CTAGS_SKELETON_FIELDS, objectMapper,
+        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(paths, CTAGS_SKELETON_FLAGS, objectMapper,
                 CANCELLED_MSG);
         for (FileStat stat : batch) {
             String skeleton = formatSkeletonLines(stat.path(), entriesByPath.get(stat.path()));
@@ -287,20 +289,28 @@ public class RepoMapPackerService {
         }
         try {
             tags.sort(Comparator.comparingInt(CtagsEntry::line));
-            List<String> lines = Files.readAllLines(filePath);
+            List<String> fallbackLines = null;
             StringBuilder skeleton = new StringBuilder();
             int lastLine = 0;
             for (CtagsEntry tag : tags) {
                 int tagLine = tag.line();
-                if (tagLine > lastLine && tagLine <= lines.size()) {
-                    String lineText = lines.get(tagLine - 1);
-                    String normalized = StringUtils.abbreviate(StringUtils.normalizeSpace(lineText),
-                            MAX_SIGNATURE_CHARS);
-                    if (!normalized.isEmpty()) {
-                        skeleton.append("  ").append(tagLine).append(": ").append(normalized).append(LF);
-                    }
-                    lastLine = tagLine;
+                if (tagLine <= lastLine) {
+                    continue;
                 }
+                String lineText = CtagsRunner.extractPatternText(tag.pattern());
+                if (lineText.isEmpty() && filePath != null) {
+                    if (fallbackLines == null) {
+                        fallbackLines = Files.readAllLines(filePath);
+                    }
+                    if (tagLine <= fallbackLines.size()) {
+                        lineText = fallbackLines.get(tagLine - 1);
+                    }
+                }
+                String normalized = StringUtils.abbreviate(StringUtils.normalizeSpace(lineText), MAX_SIGNATURE_CHARS);
+                if (!normalized.isEmpty()) {
+                    skeleton.append("  ").append(tagLine).append(": ").append(normalized).append(LF);
+                }
+                lastLine = tagLine;
             }
             return skeleton.toString();
         } catch (Exception e) {
