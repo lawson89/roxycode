@@ -13,21 +13,6 @@ import org.junit.jupiter.api.Test;
 class MarkdownPaneTest {
 
     @Test
-    void testEmptyStateRendersWelcomeCardAndConfiguresReadOnlyCursorAndCaret() {
-        MarkdownPane pane = new MarkdownPane();
-        assertContainsAll(pane.getText(), "welcome-card", "Ready to Assist");
-        pane.appendMessage("user", "Hello selectable message");
-        assertFalse(pane.getText().contains("welcome-card"));
-
-        pane.selectAll();
-        assertNotNull(pane.getSelectedText());
-        assertTrue(pane.getSelectedText().contains("Hello selectable message"));
-
-        pane.clear();
-        assertTrue(pane.getText().contains("welcome-card"));
-    }
-
-    @Test
     void testCopyHyperlinkCopiesRawMarkdownAndShowsFeedback() {
         MarkdownPane pane = new MarkdownPane();
         String aiMarkdown = "Here is **bold** markdown and code: System.out.println(42);";

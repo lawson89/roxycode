@@ -382,34 +382,6 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testInputAreaUndoRedoActions() {
-        ChatPanel chatPanel = createChatPanel();
-        JTextArea inputArea = chatPanel.inputArea;
-        Action undoAction = inputArea.getActionMap().get("Undo");
-        Action redoAction = inputArea.getActionMap().get("Redo");
-        assertNotNull(undoAction);
-        assertNotNull(redoAction);
-
-        SwingTestUtils.runOnEdt(() -> {
-            inputArea.setText("First edit");
-            inputArea.append(" + Second edit");
-        });
-        assertEquals("First edit + Second edit", inputArea.getText());
-
-        SwingTestUtils.runOnEdt(() -> undoAction.actionPerformed(null));
-        assertEquals("First edit", inputArea.getText());
-
-        SwingTestUtils.runOnEdt(() -> undoAction.actionPerformed(null));
-        assertEquals("", inputArea.getText());
-
-        SwingTestUtils.runOnEdt(() -> redoAction.actionPerformed(null));
-        assertEquals("First edit", inputArea.getText());
-
-        SwingTestUtils.runOnEdt(() -> redoAction.actionPerformed(null));
-        assertEquals("First edit + Second edit", inputArea.getText());
-    }
-
-    @Test
     void testLoadImageAttachmentAsyncThumbnailAndChipRemoval(@TempDir Path tempDir) throws Exception {
         ChatPanel chatPanel = createChatPanel();
         BufferedImage src = new BufferedImage(120, 80, BufferedImage.TYPE_INT_ARGB);

@@ -22,27 +22,20 @@ class ProjectServiceTest {
     @Test
     void testProjectPersistence() {
         SettingsService settingsService = createSettingsService();
-        ProjectService projectService = new ProjectService(settingsService, null);
+        AtomicReference<Path> notifiedPath = new AtomicReference<>();
+        ProjectService projectService = new ProjectService(settingsService, event -> {
+            if (event instanceof ProjectChangedEvent pce) {
+                notifiedPath.set(pce.projectRoot());
+            }
+        });
         Path projectPath = tempDir.resolve("my-project");
         projectService.setCurrentProjectRoot(projectPath);
+        assertEquals(projectPath, notifiedPath.get());
 
         ProjectService projectService2 = new ProjectService(settingsService, null);
         assertEquals(projectPath.toAbsolutePath().toString(),
                 projectService2.getCurrentProjectRoot().toAbsolutePath().toString());
         assertEquals("my-project", projectService2.getProjectName());
-    }
-
-    @Test
-    void testProjectListener() {
-        AtomicReference<Path> notifiedPath = new AtomicReference<>();
-        ProjectService projectService = new ProjectService(createSettingsService(), event -> {
-            if (event instanceof ProjectChangedEvent pce) {
-                notifiedPath.set(pce.projectRoot());
-            }
-        });
-        Path projectPath = tempDir.resolve("new-project");
-        projectService.setCurrentProjectRoot(projectPath);
-        assertEquals(projectPath, notifiedPath.get());
     }
 
     @Test

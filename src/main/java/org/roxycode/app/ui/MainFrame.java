@@ -11,6 +11,8 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -52,7 +54,6 @@ public final class MainFrame extends JPanel {
     private final HeaderPanel header;
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
-    private final SettingsPanel settingsPanel;
     private SidebarPanel sidebar;
     private String title = "";
     private String currentCard = QA_VIEW;
@@ -74,7 +75,6 @@ public final class MainFrame extends JPanel {
         this.header = header;
         this.qaWorkspacePanel = qaWorkspacePanel;
         this.taskWorkspacePanel = taskWorkspacePanel;
-        this.settingsPanel = settingsPanel;
         if (GraphicsEnvironment.isHeadless()) {
             this.hostFrame = null;
         } else {
@@ -101,6 +101,27 @@ public final class MainFrame extends JPanel {
             }
             chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
             chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
+        });
+    }
+
+    @EventListener
+    public void onSettingsChanged(SettingsChangedEvent event) {
+        Edt.run(() -> {
+            if (sidebar != null && settingsService != null) {
+                sidebar.setSettingsAttentionNeeded(!settingsService.hasConfiguredApiKey());
+            }
+        });
+    }
+
+    @EventListener
+    public void onSystemToolsUpdated(SystemToolsUpdatedEvent event) {
+        if (event == null || event.tools() == null) {
+            return;
+        }
+        Edt.run(() -> {
+            if (sidebar != null) {
+                sidebar.setToolsAttentionNeeded(!SystemToolService.areAllRequiredToolsDetected(event.tools()));
+            }
         });
     }
 
@@ -139,8 +160,6 @@ public final class MainFrame extends JPanel {
     void onWindowOpened() {
         if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null) {
             qaWorkspacePanel.focusChatInput();
-        } else if (SETTINGS_VIEW.equals(currentCard) && settingsPanel != null) {
-            settingsPanel.getGeminiApiKeyField().requestFocusInWindow();
         }
         if (pendingMissingApiKeyAlert) {
             pendingMissingApiKeyAlert = false;
@@ -211,12 +230,15 @@ public final class MainFrame extends JPanel {
     }
 
     void handleStartupSettingsCheck() {
-        if (settingsService == null || settingsService.hasConfiguredApiKey()) {
+        if (settingsService == null) {
             return;
         }
-        showCard(SETTINGS_VIEW);
-        if (settingsPanel != null) {
-            settingsPanel.getGeminiApiKeyField().requestFocusInWindow();
+        boolean missingKey = !settingsService.hasConfiguredApiKey();
+        if (sidebar != null) {
+            sidebar.setSettingsAttentionNeeded(missingKey);
+        }
+        if (!missingKey) {
+            return;
         }
         lastMissingApiKeyMessage = MISSING_API_KEY_MESSAGE;
         if (missingApiKeyDialogPresenter != null) {
@@ -257,10 +279,16 @@ public final class MainFrame extends JPanel {
     }
 
     void handleStartupToolsCheck(List<SystemTool> tools) {
-        if (tools == null || tools.isEmpty() || SystemToolService.areAllRequiredToolsDetected(tools)) {
+        if (tools == null || tools.isEmpty()) {
             return;
         }
-        showCard(TOOLS_VIEW);
+        boolean missingTools = !SystemToolService.areAllRequiredToolsDetected(tools);
+        if (sidebar != null) {
+            sidebar.setToolsAttentionNeeded(missingTools);
+        }
+        if (!missingTools) {
+            return;
+        }
         lastMissingToolsMessage = MISSING_REQUIRED_TOOLS_MESSAGE;
         if (missingToolsDialogPresenter != null) {
             missingToolsDialogPresenter.accept(MISSING_REQUIRED_TOOLS_MESSAGE);

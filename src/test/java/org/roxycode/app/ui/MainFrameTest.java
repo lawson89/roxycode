@@ -9,6 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.kordamp.ikonli.codicons.Codicons;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GenericBuildToolService;
@@ -16,6 +17,8 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
@@ -77,7 +80,7 @@ class MainFrameTest {
     }
 
     @Test
-    void testStartupWithMissingOrBlankApiKeyNavigatesToSettingsAndNotifiesUser() throws Exception {
+    void testStartupWithMissingApiKeyStaysOnQaViewSetsSettingsBellAndClearsOnEvent() throws Exception {
         SettingsService settingsService = new SettingsService(null, null);
         Path missingSettingsFile = tempDir.resolve("missing-roxy").resolve("settings.toml");
         settingsService.setSettingsPathOverride(missingSettingsFile);
@@ -89,8 +92,15 @@ class MainFrameTest {
         MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
         try {
             SwingTestUtils.flushEdt();
-            assertEquals(MainFrame.SETTINGS_VIEW, frame.getCurrentCard());
+            assertEquals(MainFrame.QA_VIEW, frame.getCurrentCard());
             assertEquals(MainFrame.MISSING_API_KEY_MESSAGE, frame.getLastMissingApiKeyMessage());
+            assertTrue(frame.getSidebar().isSettingsAttentionNeeded());
+            assertFalse(frame.getSidebar().isToolsAttentionNeeded());
+
+            NavButton settingsBtn = frame.getSidebar().getCardButton(MainFrame.SETTINGS_VIEW);
+            assertNotNull(settingsBtn);
+            assertEquals(Codicons.BELL_DOT, settingsBtn.getStatusIcon().getIkon());
+            assertEquals(SidebarPanel.SETTINGS_ATTENTION_TOOLTIP, settingsBtn.getToolTipText());
 
             // Verify custom presenter hook with blank key in existing settings file
             settingsService.getSettings().setGeminiApiKey("   ");
@@ -98,37 +108,70 @@ class MainFrameTest {
             assertTrue(settingsService.hasSettingsFile());
             assertFalse(settingsService.hasConfiguredApiKey());
 
-            frame.showCard(MainFrame.QA_VIEW);
-            assertEquals(MainFrame.QA_VIEW, frame.getCurrentCard());
-
             AtomicReference<String> presentedMessage = new AtomicReference<>();
             frame.setMissingApiKeyDialogPresenter(presentedMessage::set);
             frame.handleStartupSettingsCheck();
 
-            assertEquals(MainFrame.SETTINGS_VIEW, frame.getCurrentCard());
+            assertEquals(MainFrame.QA_VIEW, frame.getCurrentCard());
             assertEquals(MainFrame.MISSING_API_KEY_MESSAGE, presentedMessage.get());
+            assertTrue(frame.getSidebar().isSettingsAttentionNeeded());
+
+            // Saving a valid API key and firing SettingsChangedEvent clears the bell indicator
+            settingsService.getSettings().setGeminiApiKey("valid-api-key");
+            frame.onSettingsChanged(new SettingsChangedEvent(settingsService.getSettings()));
+            SwingTestUtils.flushEdt();
+
+            assertFalse(frame.getSidebar().isSettingsAttentionNeeded());
+            assertNull(settingsBtn.getStatusIcon());
+            assertNull(settingsBtn.getToolTipText());
         } finally {
             frame.dispose();
         }
     }
 
     @Test
-    void testStartupWithConfiguredApiKeyStaysOnQaView() throws Exception {
+    void testStartupWithMissingRequiredToolsStaysOnQaViewSetsToolsBellAndClearsOnEvent() throws Exception {
         SettingsService settingsService = new SettingsService(null, null);
         Path configuredSettingsFile = tempDir.resolve("configured-roxy").resolve("settings.toml");
         settingsService.setSettingsPathOverride(configuredSettingsFile);
         settingsService.getSettings().setGeminiApiKey("valid-gemini-key");
         settingsService.saveSettings();
 
-        List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
+        List<SystemTool> missingCtagsTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
                 SystemTool.ofKnownTool("Git", "2.43.0", "Detected"),
-                SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected"));
+                SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing"));
 
-        MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
+        MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(missingCtagsTools));
         try {
             SwingTestUtils.flushEdt();
             assertEquals(MainFrame.QA_VIEW, frame.getCurrentCard());
             assertNull(frame.getLastMissingApiKeyMessage());
+            assertEquals(MainFrame.MISSING_REQUIRED_TOOLS_MESSAGE, frame.getLastMissingToolsMessage());
+            assertFalse(frame.getSidebar().isSettingsAttentionNeeded());
+            assertTrue(frame.getSidebar().isToolsAttentionNeeded());
+
+            NavButton toolsBtn = frame.getSidebar().getCardButton(MainFrame.TOOLS_VIEW);
+            assertNotNull(toolsBtn);
+            assertEquals(Codicons.BELL_DOT, toolsBtn.getStatusIcon().getIkon());
+            assertEquals(SidebarPanel.TOOLS_ATTENTION_TOOLTIP, toolsBtn.getToolTipText());
+
+            // Verify custom presenter hook for missing tools
+            AtomicReference<String> presentedToolsMsg = new AtomicReference<>();
+            frame.setMissingToolsDialogPresenter(presentedToolsMsg::set);
+            frame.handleStartupToolsCheck(missingCtagsTools);
+            assertEquals(MainFrame.QA_VIEW, frame.getCurrentCard());
+            assertEquals(MainFrame.MISSING_REQUIRED_TOOLS_MESSAGE, presentedToolsMsg.get());
+
+            // Firing SystemToolsUpdatedEvent with all required tools detected clears the bell indicator
+            List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
+                    SystemTool.ofKnownTool("Git", "2.43.0", "Detected"),
+                    SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected"));
+            frame.onSystemToolsUpdated(new SystemToolsUpdatedEvent(allDetectedTools, false));
+            SwingTestUtils.flushEdt();
+
+            assertFalse(frame.getSidebar().isToolsAttentionNeeded());
+            assertNull(toolsBtn.getStatusIcon());
+            assertNull(toolsBtn.getToolTipText());
         } finally {
             frame.dispose();
         }

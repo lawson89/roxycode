@@ -20,6 +20,10 @@ import org.junit.jupiter.api.Assertions;
 
 public final class SwingTestUtils {
 
+    static {
+        SwingHtmlUtils.setTestMode(true);
+    }
+
     @FunctionalInterface
     public interface ThrowingRunnable {
         void run() throws Exception;

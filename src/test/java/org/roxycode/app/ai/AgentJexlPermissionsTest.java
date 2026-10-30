@@ -46,42 +46,28 @@ class AgentJexlPermissionsTest {
     }
 
     @Test
-    void testConstructorsAreAlwaysDenied() throws Exception {
+    void testAgentJexlPermissionsEnforcesAnnotationsSafeJdkTypesAndBlocksReflectionAndConstructors() throws Exception {
         AgentJexlPermissions permissions = AgentJexlPermissions.INSTANCE;
+
         assertFalse(permissions.allow(String.class.getConstructor()));
         assertFalse(permissions.allow(ArrayList.class.getConstructor()));
         assertFalse(permissions.allow(ProcessBuilder.class.getConstructor(String[].class)));
         assertFalse(permissions.allow(PlainHelper.class.getDeclaredConstructor()));
-    }
 
-    @Test
-    void testAgentServiceMethodRequiresAgentDoc() throws Exception {
-        AgentJexlPermissions permissions = AgentJexlPermissions.INSTANCE;
         Method documented = BaseAgentService.class.getMethod("documentedMethod");
         Method undocumented = BaseAgentService.class.getMethod("undocumentedMethod");
-
         assertTrue(permissions.allow(documented));
         assertTrue(permissions.allow(BaseAgentService.class, documented));
-
         assertFalse(permissions.allow(undocumented));
         assertFalse(permissions.allow(BaseAgentService.class, undocumented));
-    }
 
-    @Test
-    void testSubclassAndInheritedAnnotationsSupportedViaSpringAnnotationUtils() throws Exception {
-        AgentJexlPermissions permissions = AgentJexlPermissions.INSTANCE;
         Method overriddenDocumented = SubclassAgentService.class.getMethod("documentedMethod");
         Method subUndocumented = SubclassAgentService.class.getMethod("subclassUndocumentedMethod");
-
         assertTrue(AgentJexlPermissions.isAgentServiceClass(SubclassAgentService.class));
         assertTrue(AgentJexlPermissions.hasAgentDoc(overriddenDocumented));
         assertTrue(permissions.allow(SubclassAgentService.class, overriddenDocumented));
         assertFalse(permissions.allow(SubclassAgentService.class, subUndocumented));
-    }
 
-    @Test
-    void testObjectGetClassIsDeniedWhileSafeObjectAndAppMethodsAllowed() throws Exception {
-        AgentJexlPermissions permissions = AgentJexlPermissions.INSTANCE;
         Method toStringMethod = Object.class.getMethod("toString");
         Method getClassMethod = Object.class.getMethod("getClass");
         Method plainMethod = PlainHelper.class.getMethod("helperMethod");
@@ -97,11 +83,6 @@ class AgentJexlPermissionsTest {
         assertTrue(permissions.allow(plainMethod));
         assertTrue(permissions.allow(BuildResult.class, buildSuccess));
         assertTrue(permissions.allow(EditorResult.class, editorContent));
-    }
-
-    @Test
-    void testSafeJdkValueAndCollectionTypesAllowed() throws Exception {
-        AgentJexlPermissions permissions = AgentJexlPermissions.INSTANCE;
 
         assertTrue(permissions.allow(String.class, String.class.getMethod("trim")));
         assertTrue(permissions.allow(Integer.class, Integer.class.getMethod("intValue")));
@@ -109,11 +90,6 @@ class AgentJexlPermissionsTest {
         assertTrue(permissions.allow(ArrayList.class, List.class.getMethod("size")));
         assertTrue(permissions.allow(HashMap.class, Map.class.getMethod("get", Object.class)));
         assertTrue(permissions.allow(WorkflowPhase.class, Enum.class.getMethod("name")));
-    }
-
-    @Test
-    void testDangerousJdkClassesAreDenied() throws Exception {
-        AgentJexlPermissions permissions = AgentJexlPermissions.INSTANCE;
 
         assertFalse(permissions.allow(ProcessBuilder.class, ProcessBuilder.class.getMethod("start")));
         assertFalse(permissions.allow(Runtime.class, Runtime.class.getMethod("getRuntime")));

@@ -18,11 +18,15 @@ public final class SidebarPanel extends JPanel {
     private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
     static final int LOGO_SIZE = 88;
     static final String SUBTITLE_BADGE_TEXT = "AI Workspace";
+    static final String SETTINGS_ATTENTION_TOOLTIP = "Gemini API Key required in Global Settings";
+    static final String TOOLS_ATTENTION_TOOLTIP = "Required system tools are missing";
     private final Consumer<String> navigationAction;
     private final List<NavButton> navButtons = new ArrayList<>();
     private final Map<String, NavButton> cardButtons = new LinkedHashMap<>();
     private NavButton qaBtn;
     private NavButton taskBtn;
+    private NavButton toolsBtn;
+    private NavButton settingsBtn;
 
     public SidebarPanel(Consumer<String> navigationAction) {
         this.navigationAction = navigationAction;
@@ -48,9 +52,13 @@ public final class SidebarPanel extends JPanel {
         add(createNavButton("API", "API", Codicons.CODE));
 
         add(createSectionHeader("CONFIG"), "gaptop 15");
-        add(createNavButton("System Tools", "TOOLS", Codicons.TOOLS));
+        toolsBtn = createNavButton("System Tools", MainFrame.TOOLS_VIEW, Codicons.TOOLS);
+        toolsBtn.setAttentionTooltip(TOOLS_ATTENTION_TOOLTIP);
+        add(toolsBtn);
         add(createNavButton("Project Settings", "BUILD_CONFIG", Codicons.PACKAGE));
-        add(createNavButton("Global Settings", "SETTINGS", Codicons.SETTINGS_GEAR));
+        settingsBtn = createNavButton("Global Settings", MainFrame.SETTINGS_VIEW, Codicons.SETTINGS_GEAR);
+        settingsBtn.setAttentionTooltip(SETTINGS_ATTENTION_TOOLTIP);
+        add(settingsBtn);
 
         updateSelection(qaBtn);
     }
@@ -112,6 +120,30 @@ public final class SidebarPanel extends JPanel {
 
     public boolean isTaskWaitingApproval() {
         return taskBtn != null && taskBtn.isWaitingApproval();
+    }
+
+    public void setSettingsAttentionNeeded(boolean attentionNeeded) {
+        if (settingsBtn != null) {
+            settingsBtn.setWaitingApproval(attentionNeeded);
+        }
+    }
+
+    public boolean isSettingsAttentionNeeded() {
+        return settingsBtn != null && settingsBtn.isWaitingApproval();
+    }
+
+    public void setToolsAttentionNeeded(boolean attentionNeeded) {
+        if (toolsBtn != null) {
+            toolsBtn.setWaitingApproval(attentionNeeded);
+        }
+    }
+
+    public boolean isToolsAttentionNeeded() {
+        return toolsBtn != null && toolsBtn.isWaitingApproval();
+    }
+
+    NavButton getCardButton(String cardName) {
+        return cardButtons.get(cardName);
     }
 
     private void updateSelection(NavButton selectedBtn) {

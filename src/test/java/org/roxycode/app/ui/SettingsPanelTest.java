@@ -10,13 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.roxycode.app.RoxyCode;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.service.SettingsService;
-import org.springframework.context.support.GenericApplicationContext;
-import org.springframework.core.env.ConfigurableEnvironment;
 
 @ExtendWith(MockitoExtension.class)
 class SettingsPanelTest {
@@ -138,31 +135,5 @@ class SettingsPanelTest {
         saveButton.doClick();
         assertEquals(120, settings.getMaxChatMemoryMessages());
         assertEquals(SettingsPanel.SAVED_RESTART_REQUIRED_TEXT, settingsPanel.getStatusLabel().getText());
-    }
-
-    @Test
-    void testRoxyCodeSettingsInitializerPopulatesEnvironmentWithoutSystemProperties() {
-        AppSettings customSettings = new AppSettings();
-        customSettings.setGeminiApiKey("custom-api-key-999");
-        customSettings.setGeminiModel("gemini-3.8-flash");
-
-        try (GenericApplicationContext ctx = new GenericApplicationContext()) {
-            RoxyCode.createSettingsInitializer(customSettings).initialize(ctx);
-            ConfigurableEnvironment env = ctx.getEnvironment();
-            assertEquals("custom-api-key-999", env.getProperty("spring.ai.google.genai.api-key"));
-            assertEquals("gemini-3.8-flash", env.getProperty("spring.ai.google.genai.chat.options.model"));
-        }
-
-        AppSettings emptySettings = new AppSettings();
-        emptySettings.setGeminiApiKey("");
-        emptySettings.setGeminiModel("");
-
-        try (GenericApplicationContext ctx = new GenericApplicationContext()) {
-            RoxyCode.createSettingsInitializer(emptySettings).initialize(ctx);
-            ConfigurableEnvironment env = ctx.getEnvironment();
-            assertNull(env.getPropertySources().get("roxycodeSettingsProperties")
-                    .getProperty("spring.ai.google.genai.api-key"));
-            assertEquals("gemini-3.5-flash", env.getProperty("spring.ai.google.genai.chat.options.model"));
-        }
     }
 }

@@ -26,6 +26,7 @@ public final class NavButton extends JButton {
     private final transient HourglassAnimator hourglassAnimator = new HourglassAnimator(this::repaint);
     private boolean busy;
     private boolean waitingApproval;
+    private String attentionTooltip = WAITING_APPROVAL_TOOLTIP;
     private transient FontIcon statusIcon;
 
     public NavButton(String text, Icon icon) {
@@ -61,6 +62,17 @@ public final class NavButton extends JButton {
         return waitingApproval;
     }
 
+    public void setAttentionTooltip(String tooltip) {
+        if (tooltip == null || tooltip.isBlank()) {
+            this.attentionTooltip = WAITING_APPROVAL_TOOLTIP;
+        } else {
+            this.attentionTooltip = tooltip;
+        }
+        if (!busy && waitingApproval) {
+            setToolTipText(this.attentionTooltip);
+        }
+    }
+
     FontIcon getStatusIcon() {
         return statusIcon;
     }
@@ -91,7 +103,7 @@ public final class NavButton extends JButton {
         } else if (waitingApproval) {
             hourglassAnimator.stop();
             statusIcon = FontIcon.of(Codicons.BELL_DOT, 14);
-            setToolTipText(WAITING_APPROVAL_TOOLTIP);
+            setToolTipText(attentionTooltip);
         } else {
             hourglassAnimator.stop();
             statusIcon = null;

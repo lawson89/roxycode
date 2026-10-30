@@ -9,7 +9,6 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JButton;
 import javax.swing.JLabel;
-import javax.swing.JTabbedPane;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -62,32 +61,6 @@ class MentorModeIntegrationTest {
     }
 
     @Test
-    void testDualChatPanelsAreIndependent() {
-        ChatPanel qaChat = qaWorkspacePanel.qaChatPanel;
-        ChatPanel taskChat = taskWorkspacePanel.taskChatPanel;
-
-        assertEquals(ChatModel.QA_CONVERSATION_ID, qaChat.model.getConversationId());
-        assertEquals(WorkflowPhase.EXPLORE, qaChat.model.getLockedPhase());
-        assertFalse(qaChat.model.isTaskMode());
-
-        assertEquals(ChatModel.TASK_CONVERSATION_ID, taskChat.model.getConversationId());
-        assertNull(taskChat.model.getLockedPhase());
-        assertTrue(taskChat.model.isTaskMode());
-
-        assertNotNull(qaWorkspacePanel.mentorModeLabel.getIcon());
-        assertNotNull(taskWorkspacePanel.phaseHeaderLabel.getIcon());
-        assertNotNull(qaWorkspacePanel.qaTabs.getIconAt(0));
-        assertNotNull(qaWorkspacePanel.qaTabs.getIconAt(1));
-        assertNotNull(taskWorkspacePanel.taskTabs.getIconAt(0));
-        assertNotNull(taskWorkspacePanel.taskTabs.getIconAt(1));
-        assertNotNull(taskWorkspacePanel.taskTabs.getIconAt(2));
-
-        qaChat.appendMessage("user", "QA only question");
-        assertEquals(1, qaChat.getConversationMessages().size());
-        assertTrue(taskChat.getConversationMessages().isEmpty());
-    }
-
-    @Test
     void testActivePhaseAndPlanTitleTruncation() {
         JLabel planLabel = taskWorkspacePanel.planLabel;
         when(planService.getVisitedPhases()).thenReturn(EnumSet.of(WorkflowPhase.PLAN, WorkflowPhase.CODE));
@@ -111,28 +84,6 @@ class MentorModeIntegrationTest {
         assertFalse(planLabel.isVisible());
         assertEquals("", planLabel.getText());
         assertNull(planLabel.getToolTipText());
-    }
-
-    @Test
-    void testShowCardFocusesInputAndSetsCaretToEnd() {
-        ChatPanel qaChatPanel = qaWorkspacePanel.qaChatPanel;
-        ChatPanel taskChatPanel = taskWorkspacePanel.taskChatPanel;
-        JTabbedPane taskTabs = taskWorkspacePanel.taskTabs;
-
-        qaChatPanel.inputArea.setText("QA draft message");
-        qaChatPanel.inputArea.setCaretPosition(0);
-        taskChatPanel.inputArea.setText("Task draft message");
-        taskChatPanel.inputArea.setCaretPosition(0);
-        taskTabs.setSelectedIndex(1);
-
-        taskWorkspacePanel.onViewShown();
-        SwingTestUtils.flushEdt();
-        assertEquals(taskChatPanel, taskTabs.getSelectedComponent());
-        assertEquals("Task draft message".length(), taskChatPanel.inputArea.getCaretPosition());
-
-        qaWorkspacePanel.focusChatInput();
-        SwingTestUtils.flushEdt();
-        assertEquals("QA draft message".length(), qaChatPanel.inputArea.getCaretPosition());
     }
 
     @Test

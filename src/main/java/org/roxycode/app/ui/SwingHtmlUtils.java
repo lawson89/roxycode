@@ -49,6 +49,7 @@ public final class SwingHtmlUtils {
     private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
     private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
     private static final Color TRANSPARENT_CARET_COLOR = new Color(0, 0, 0, 0);
+    private static volatile boolean testMode = Boolean.getBoolean("roxycode.testMode");
 
     private SwingHtmlUtils() {
     }
@@ -262,9 +263,18 @@ public final class SwingHtmlUtils {
         });
     }
 
+    public static void setTestMode(boolean enabled) {
+        testMode = enabled;
+    }
+
+    public static boolean isTestMode() {
+        return testMode;
+    }
+
     public static void copyToClipboard(String text) {
-        if (text == null)
+        if (text == null || testMode) {
             return;
+        }
         try {
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
         } catch (Exception ignored) {

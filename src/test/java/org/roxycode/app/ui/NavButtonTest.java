@@ -42,6 +42,11 @@ class NavButtonTest {
         assertEquals(Codicons.BELL_DOT, btn.getStatusIcon().getIkon());
         assertEquals(NavButton.WAITING_APPROVAL_TOOLTIP, btn.getToolTipText());
 
+        btn.setAttentionTooltip("Custom attention message");
+        assertEquals("Custom attention message", btn.getToolTipText());
+        btn.setAttentionTooltip("   ");
+        assertEquals(NavButton.WAITING_APPROVAL_TOOLTIP, btn.getToolTipText());
+
         btn.setWaitingApproval(false);
         assertFalse(btn.isWaitingApproval());
         assertNull(btn.getStatusIcon());

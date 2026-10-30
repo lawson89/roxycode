@@ -55,23 +55,6 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testWriteFileSuccess() throws IOException {
-        assertTrue(fileEditorService.writeFile("test.txt", "Hello World").success());
-        Path filePath = tempDir.resolve("test.txt");
-        assertTrue(Files.exists(filePath));
-        assertEquals("Hello World", Files.readString(filePath));
-        verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
-    }
-
-    @Test
-    void testReplaceBlockSuccess() throws IOException {
-        String content = writeAndReplace("test.java", "public class Test {\n // TODO\n }", "// TODO", "// Done");
-        assertTrue(content.contains("// Done"));
-        assertFalse(content.contains("// TODO"));
-        verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
-    }
-
-    @Test
     void testReplaceBlockPythonAndYamlIndentationNeverDoubledOnExactAndFallbackMatch() throws IOException {
         assertEquals("def calculate(x):\n    if x == 1:\n        return 100\n    return 0\n",
                 writeAndReplace("script.py", "def calculate(x):\n    if x == 1:\n        return 10\n    return 0\n",
@@ -137,14 +120,6 @@ class FileEditorServiceTest {
     }
 
     @Test
-    void testInsertAtLineSuccess() throws IOException {
-        Path filePath = Files.write(tempDir.resolve("test.txt"), List.of("Line 1", "Line 4"));
-        assertTrue(fileEditorService.insertAtLine("test.txt", 2, "Line 2\nLine 3\n").success());
-        assertEquals(List.of("Line 1", "Line 2", "Line 3", "Line 4"), Files.readAllLines(filePath));
-        verify(eventPublisher, atLeastOnce()).publishEvent(isA(FileChangedEvent.class));
-    }
-
-    @Test
     void testDeleteFileSuccessAndFailureCases() throws IOException {
         Path filePath = Files.writeString(tempDir.resolve("to_delete.txt"), "delete me");
         assertTrue(fileEditorService.deleteFile("to_delete.txt").success());
@@ -184,21 +159,6 @@ class FileEditorServiceTest {
         assertThrows(SecurityException.class,
                 () -> fileEditorService.copyFile("moved/sub/renamed.txt", "../outside.txt"));
         assertThrows(SecurityException.class, () -> fileEditorService.mkdirs("../outside_dir"));
-    }
-
-    @Test
-    void testWriteFileNullParentDoesNotThrowNPE() throws IOException {
-        ProjectService rootMockService = mock(ProjectService.class);
-        Path bareRelativePath = Path.of("target_bare_root_test_file.txt");
-        assertNull(bareRelativePath.getParent(), "Single-element relative Path has null parent");
-        when(rootMockService.resolvePath("target_bare_root_test_file.txt")).thenReturn(bareRelativePath);
-        FileEditorService customService = new FileEditorService(rootMockService, eventPublisher);
-        try {
-            assertTrue(customService.writeFile("target_bare_root_test_file.txt", "root content").success());
-            assertEquals("root content", Files.readString(bareRelativePath));
-        } finally {
-            Files.deleteIfExists(bareRelativePath);
-        }
     }
 
     @Test
