@@ -216,16 +216,13 @@ class MemoryServiceTest {
 
             EditorResult searchRes = memoryService.search("UniqueCrossScopeToken");
             assertTrue(searchRes.success());
-            assertContainsAll(searchRes.content(), "[GLOBAL] notes/foo.md:12:UniqueCrossScopeToken alpha",
-                    "[PROJECT] notes/bar.md:5:UniqueCrossScopeToken beta",
-                    "[ARCHIVE] plans/20250514-baz.md:8:UniqueCrossScopeToken gamma",
-                    "[ARCHIVE] topics/20250514-topic.md:15:UniqueCrossScopeToken delta");
+            assertContainsAll(searchRes.content(), "foo.md:12:UniqueCrossScopeToken alpha",
+                    "bar.md:5:UniqueCrossScopeToken beta", "20250514-baz.md:8:UniqueCrossScopeToken gamma",
+                    "20250514-topic.md:15:UniqueCrossScopeToken delta");
 
             EditorResult caseInsensitiveRes = memoryService.searchIgnoreCase("uniquecrossscopetoken");
             assertTrue(caseInsensitiveRes.success());
-            assertContainsAll(caseInsensitiveRes.content(), "[GLOBAL] notes/foo.md:12:", "[PROJECT] notes/bar.md:5:",
-                    "[ARCHIVE] plans/20250514-baz.md:8:");
-
+            assertContainsAll(caseInsensitiveRes.content(), "foo.md:12:", "bar.md:5:", "20250514-baz.md:8:");
             runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
                     .thenReturn(new ProcessResult(1, "", "", false));
             EditorResult noMatchRes = memoryService.search("DEFINITELY_NOT_FOUND_99999");
@@ -321,70 +318,42 @@ class MemoryServiceTest {
                 BodyExampleMatchLine in body after frontmatter
                 """, StandardCharsets.UTF_8);
 
-        try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(1, "", "", false));
-            List<MemoryService.ArchiveEntrySummary> metaMatched = memoryService.searchArchivedTopics("alice");
-            assertEquals(1, metaMatched.size());
-            assertEquals("First Q&A Topic", metaMatched.get(0).title());
+        List<MemoryService.ArchiveEntrySummary> metaMatched = memoryService.searchArchivedTopics("alice");
+        assertEquals(1, metaMatched.size());
+        assertEquals("First Q&A Topic", metaMatched.get(0).title());
 
-            String planRgOut = planFile.toAbsolutePath().normalize() + ":UniqueBodyMatchToken in plan steps\n";
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, planRgOut, "", false));
-            List<MemoryService.ArchiveEntrySummary> planMatched = memoryService
-                    .searchArchivedPlans("UniqueBodyMatchToken");
-            assertEquals(1, planMatched.size());
-            assertEquals("Archive Browser Feature", planMatched.get(0).title());
-            assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
+        List<MemoryService.ArchiveEntrySummary> planMatched = memoryService.searchArchivedPlans("UniqueBodyMatchToken");
+        assertEquals(1, planMatched.size());
+        assertEquals("Archive Browser Feature", planMatched.get(0).title());
+        assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
 
-            String extraRgOut = planWithSnippet.toAbsolutePath().normalize() + ":---\n"
-                    + planWithSnippet.toAbsolutePath().normalize() + ":title: " + '"' + "Extra Plan" + '"' + "\n"
-                    + planWithSnippet.toAbsolutePath().normalize() + ":created_by: " + '"' + "ExtraUser" + '"' + "\n"
-                    + planWithSnippet.toAbsolutePath().normalize()
-                    + ":  BodyExampleMatchLine in body after frontmatter  \n";
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, extraRgOut, "", false));
-            List<MemoryService.ArchiveEntrySummary> bodyKeyMatched = memoryService
-                    .searchArchivedPlans("BodyExampleMatchLine");
-            assertEquals(1, bodyKeyMatched.size());
-            assertEquals("BodyExampleMatchLine in body after frontmatter", bodyKeyMatched.get(0).matchSnippet());
+        List<MemoryService.ArchiveEntrySummary> bodyKeyMatched = memoryService
+                .searchArchivedPlans("BodyExampleMatchLine");
+        assertEquals(1, bodyKeyMatched.size());
+        assertEquals("BodyExampleMatchLine in body after frontmatter", bodyKeyMatched.get(0).matchSnippet());
 
-            String fmOnlyRgOut = planWithSnippet.toAbsolutePath().normalize() + ":title: " + '"' + "Extra Plan" + '"'
-                    + "\n";
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
-                    .thenReturn(new ProcessResult(0, fmOnlyRgOut, "", false));
-            List<MemoryService.ArchiveEntrySummary> fmKeyIgnored = memoryService.searchArchivedPlans("Extra Plan");
-            assertEquals(1, fmKeyIgnored.size());
-            assertEquals("", fmKeyIgnored.get(0).matchSnippet());
-        }
+        List<MemoryService.ArchiveEntrySummary> fmKeyIgnored = memoryService.searchArchivedPlans("Extra Plan");
+        assertEquals(1, fmKeyIgnored.size());
+        assertEquals("", fmKeyIgnored.get(0).matchSnippet());
 
-        assertEquals(6, FrontmatterUtils.findFrontmatterEndLine(planFile));
-        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine(fallbackPlanFile));
-        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine((Path) null));
-        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine((List<String>) null));
+        assertEquals(6, FrontmatterUtils.findFrontmatterEndLine(FrontmatterUtils.readFrontmatterLines(planFile)));
+        assertEquals(0,
+                FrontmatterUtils.findFrontmatterEndLine(FrontmatterUtils.readFrontmatterLines(fallbackPlanFile)));
+        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine(null));
         assertTrue(FrontmatterUtils.parseFrontmatter(fallbackPlanFile).isEmpty());
         assertTrue(FrontmatterUtils.parseFrontmatter(null).isEmpty());
 
         Path unclosedFrontmatterFile = plansDir.resolve("20250511-080000-unclosed.md");
         Files.writeString(unclosedFrontmatterFile, """
                 ---
-                title: "Unclosed \\"Quote\\" Plan"
+                title: 'Unclosed "Quote" Plan'
                 created_by: "Dave"
                 # Missing closing delimiter
                 """, StandardCharsets.UTF_8);
-        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine(unclosedFrontmatterFile));
+        assertEquals(0, FrontmatterUtils
+                .findFrontmatterEndLine(FrontmatterUtils.readFrontmatterLines(unclosedFrontmatterFile)));
         assertEquals("Unclosed " + '"' + "Quote" + '"' + " Plan",
                 FrontmatterUtils.parseFrontmatter(unclosedFrontmatterFile).get("title"));
-    }
-
-    @Test
-    void testWindowsDriveLetterCaseAndColonHandlingInArchiveAndSearchOutput() {
-        assertTrue(MemoryService.startsWithSlashPrefix("c:/Users/dev/.roxycode/archive/plans/plan.md:8:text",
-                "C:/Users/dev/.roxycode/archive/plans/"));
-        assertTrue(MemoryService.startsWithSlashPrefix("C:/Users/dev/.roxycode/archive/plans/plan.md:8:text",
-                "c:/Users/dev/.roxycode/archive/plans/"));
-        assertFalse(MemoryService.startsWithSlashPrefix("d:/Users/dev/.roxycode/archive/plans/plan.md:8:text",
-                "C:/Users/dev/.roxycode/archive/plans/"));
     }
 
     @Test

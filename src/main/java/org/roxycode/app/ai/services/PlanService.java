@@ -436,7 +436,8 @@ public class PlanService {
         try {
             Path archiveDir = projectService.resolveProjectDataPath(ARCHIVE_PLANS_SUBDIR);
             Files.createDirectories(archiveDir);
-            String baseId = formatArchiveTimestamp(timestamp) + "-" + sanitizePlanTitle(plan.title());
+            String baseId = PathUtils.formatArchiveTimestamp(timestamp) + "-"
+                    + PathUtils.sanitizeSlug(plan.title(), MAX_PLAN_SLUG_LENGTH, "plan");
             PathUtils.ArchiveFileTarget archiveTarget = PathUtils.resolveUniqueArchiveFile(archiveDir, baseId);
 
             Path projectRoot = projectService.getCurrentProjectRoot();
@@ -462,14 +463,6 @@ public class PlanService {
             log.debug("Failed to retrieve git status for archived plan", e);
             return null;
         }
-    }
-
-    static String formatArchiveTimestamp(String isoTimestamp) {
-        return PathUtils.formatArchiveTimestamp(isoTimestamp);
-    }
-
-    static String sanitizePlanTitle(String title) {
-        return PathUtils.sanitizeSlug(title, MAX_PLAN_SLUG_LENGTH, "plan");
     }
 
     public WorkflowPhase getCurrentPhase() {

@@ -35,14 +35,6 @@ public final class PathUtils {
         return StringUtils.removeStart(FilenameUtils.separatorsToUnix(path), "./");
     }
 
-    public static String toSlashPrefix(Path dir) {
-        if (dir == null) {
-            return "";
-        }
-        String normalized = FilenameUtils.separatorsToUnix(dir.toAbsolutePath().normalize().toString());
-        return normalized.endsWith("/") ? normalized : normalized + "/";
-    }
-
     public static String getFileName(String path) {
         if (StringUtils.isBlank(path)) {
             return "";

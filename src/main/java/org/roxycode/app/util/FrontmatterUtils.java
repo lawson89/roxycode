@@ -9,11 +9,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import com.vladsch.flexmark.ext.yaml.front.matter.AbstractYamlFrontMatterVisitor;
-import com.vladsch.flexmark.ext.yaml.front.matter.YamlFrontMatterExtension;
-import com.vladsch.flexmark.parser.Parser;
-import com.vladsch.flexmark.util.ast.Node;
-import com.vladsch.flexmark.util.data.MutableDataSet;
 import org.apache.commons.text.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,11 +23,10 @@ public final class FrontmatterUtils {
     private static final char BACKSLASH = 92;
     private static final char LF = 10;
     private static final char CR = 13;
+    private static final String NL = String.valueOf(LF);
     private static final String CRLF = String.valueOf(CR) + LF;
     private static final String DQUOTE_STR = String.valueOf(DQUOTE);
     private static final String ESCAPED_DQUOTE = String.valueOf(BACKSLASH) + DQUOTE;
-    private static final Parser FRONTMATTER_PARSER = Parser
-            .builder(new MutableDataSet().set(Parser.EXTENSIONS, List.of(YamlFrontMatterExtension.create()))).build();
 
     private FrontmatterUtils() {
     }
@@ -50,7 +44,10 @@ public final class FrontmatterUtils {
         while (startIdx < lines.size() && lines.get(startIdx).isBlank()) {
             startIdx++;
         }
-        return startIdx >= lines.size() ? "" : String.join("\n", lines.subList(startIdx, lines.size()));
+        if (startIdx >= lines.size()) {
+            return "";
+        }
+        return String.join(NL, lines.subList(startIdx, lines.size()));
     }
 
     public static int findFrontmatterEndLine(List<String> lines) {
@@ -63,10 +60,6 @@ public final class FrontmatterUtils {
             }
         }
         return 0;
-    }
-
-    public static int findFrontmatterEndLine(Path file) {
-        return findFrontmatterEndLine(readFrontmatterLines(file));
     }
 
     public static List<String> readFrontmatterLines(Path file) {
@@ -98,25 +91,29 @@ public final class FrontmatterUtils {
     public static Map<String, String> parseFrontmatter(Path file) {
         Map<String, String> map = new LinkedHashMap<>();
         List<String> lines = readFrontmatterLines(file);
-        if (lines.isEmpty()) {
-            return map;
-        }
-        String yamlBlock = String.join("\n", lines)
-                + (findFrontmatterEndLine(lines) > 0 ? "\n" : "\n" + FRONTMATTER_DELIMITER + "\n");
-        Node doc = FRONTMATTER_PARSER.parse(yamlBlock);
-        AbstractYamlFrontMatterVisitor visitor = new AbstractYamlFrontMatterVisitor();
-        visitor.visit(doc);
-        for (Map.Entry<String, List<String>> entry : visitor.getData().entrySet()) {
-            List<String> values = entry.getValue();
-            String rawVal = (values == null || values.isEmpty()) ? "" : String.join(", ", values).trim();
-            map.put(entry.getKey().trim(), normalizeFrontmatterValue(rawVal));
+        for (int i = 1; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (FRONTMATTER_DELIMITER.equals(line.trim())) {
+                break;
+            }
+            int colonIdx = line.indexOf(':');
+            if (colonIdx > 0) {
+                String key = line.substring(0, colonIdx).trim();
+                String val = normalizeFrontmatterValue(line.substring(colonIdx + 1).trim());
+                if (!key.isEmpty()) {
+                    map.put(key, val);
+                }
+            }
         }
         return map;
     }
 
     public static String normalizeFrontmatterValue(String val) {
         if (val == null || val.length() < 2) {
-            return val != null ? val : "";
+            if (val != null) {
+                return val;
+            }
+            return "";
         }
         if (val.charAt(0) == DQUOTE && val.charAt(val.length() - 1) == DQUOTE) {
             return StringEscapeUtils.unescapeJava(val.substring(1, val.length() - 1));
@@ -137,8 +134,11 @@ public final class FrontmatterUtils {
                 if (val instanceof Boolean || val instanceof Number) {
                     sb.append(val);
                 } else {
-                    sb.append(DQUOTE).append(escapeFrontmatterValue(val != null ? val.toString() : null))
-                            .append(DQUOTE);
+                    String rawStr = null;
+                    if (val != null) {
+                        rawStr = val.toString();
+                    }
+                    sb.append(DQUOTE).append(escapeFrontmatterValue(rawStr)).append(DQUOTE);
                 }
                 sb.append(LF);
             }

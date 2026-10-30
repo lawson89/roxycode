@@ -256,10 +256,6 @@ public final class ChatController implements AutoCloseable {
                         : "Started a new topic."));
     }
 
-    static String buildTranscriptExcerpt(List<ChatTranscriptEntry> entries) {
-        return MemoryService.buildTranscriptExcerpt(entries);
-    }
-
     private void resetSessionState(boolean clearMemory, String systemNotice) {
         cancelActiveTurnState(false);
         if (model.isTaskMode() && planService != null) {

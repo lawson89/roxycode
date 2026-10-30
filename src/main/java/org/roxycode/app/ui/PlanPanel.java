@@ -153,19 +153,16 @@ public final class PlanPanel extends JPanel {
         displayArea.setCaretPosition(0);
     }
 
-    static String formatChangesText(String gitStatus) {
-        return ImplementationPlan.formatChangesText(gitStatus);
-    }
-
     static String buildPlanMarkdown(ImplementationPlan plan) {
         return buildPlanMarkdown(plan, null);
     }
 
     static String buildPlanMarkdown(ImplementationPlan plan, String gitStatus) {
-        if (plan == null)
+        if (plan == null) {
             return "";
+        }
         StringBuilder sb = new StringBuilder(plan.toMarkdown(true));
-        ImplementationPlan.appendChangesMarkdown(sb, formatChangesText(gitStatus));
+        ImplementationPlan.appendChangesMarkdown(sb, ImplementationPlan.formatChangesText(gitStatus));
         return sb.toString();
     }
 

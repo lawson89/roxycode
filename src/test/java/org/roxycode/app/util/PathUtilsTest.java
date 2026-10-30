@@ -57,8 +57,6 @@ class PathUtilsTest {
         assertEquals("", PathUtils.normalizeRelativePath(null));
         assertEquals("src/main/ChatPanel.java", PathUtils.normalizeRelativePath("." + (char) 92 + winPath));
         assertEquals("src/main/ChatPanel.java", PathUtils.normalizeRelativePath("./src/main/ChatPanel.java"));
-        assertEquals("", PathUtils.toSlashPrefix(null));
-        assertTrue(PathUtils.toSlashPrefix(tempDir).endsWith("/"));
     }
 
     @Test
