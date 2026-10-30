@@ -20,7 +20,9 @@ import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
-import org.roxycode.app.util.AsyncRefreshCache;
+import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.util.concurrent.TimeUnit;
 import org.roxycode.app.util.ExceptionUtils;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -52,7 +54,22 @@ public class SystemToolService {
     public record DockerVersionInfo(String version, String apiVersion) {
     }
 
-    public record SystemToolsCache(List<SystemTool> tools) {
+    public static class SystemToolsCache {
+        private List<SystemTool> tools;
+        public SystemToolsCache() {
+        }
+
+        public SystemToolsCache(List<SystemTool> tools) {
+            this.tools = tools;
+        }
+
+        public List<SystemTool> getTools() {
+            return tools;
+        }
+
+        public void setTools(List<SystemTool> tools) {
+            this.tools = tools;
+        }
     }
 
     @FunctionalInterface
@@ -66,7 +83,7 @@ public class SystemToolService {
     private final DockerProbe dockerProbe;
     private final BooleanSupplier dockerCliPresentSupplier;
     private Supplier<List<SystemTool>> toolProber;
-    private final AsyncRefreshCache<List<SystemTool>> toolsCache = new AsyncRefreshCache<>(List.of());
+    private final AsyncLoadingCache<String, List<SystemTool>> toolsCache;
 
     @Autowired
     public SystemToolService(SettingsService settingsService, TomlMapper mapper,
@@ -89,6 +106,23 @@ public class SystemToolService {
         this.dockerProbe = dockerProbe;
         this.dockerCliPresentSupplier = dockerCliPresentSupplier;
         this.toolProber = this::probeAllTools;
+        this.toolsCache = Caffeine.newBuilder().expireAfterWrite(5, TimeUnit.MINUTES)
+                .buildAsync((key, executor) -> CompletableFuture.supplyAsync(this::probeAndPublish, executor));
+    }
+
+    private List<SystemTool> loadOrProbe() {
+        List<SystemTool> loaded = loadFromDisk();
+        if (!loaded.isEmpty()) {
+            return loaded;
+        }
+        return probeAndPublish();
+    }
+
+    private List<SystemTool> probeAndPublish() {
+        List<SystemTool> detected = List.copyOf(toolProber.get());
+        saveToDisk(detected);
+        eventPublisher.publishEvent(new SystemToolsUpdatedEvent(detected, isDockerDetected(detected)));
+        return detected;
     }
 
     void setToolProber(Supplier<List<SystemTool>> toolProber) {
@@ -137,40 +171,40 @@ public class SystemToolService {
         return ProcessRunner.run(List.of("docker", ARG_VERSION)).isSuccess();
     }
 
-    public synchronized boolean hasCachedTools() {
-        return !getCachedTools().isEmpty();
+    public boolean hasCachedTools() {
+        CompletableFuture<List<SystemTool>> future = toolsCache.getIfPresent("all");
+        return future != null && future.isDone() && !future.getNow(List.of()).isEmpty();
     }
 
-    public synchronized List<SystemTool> getCachedTools() {
-        List<SystemTool> cached = toolsCache.get();
-        if (!cached.isEmpty()) {
-            return cached;
+    public List<SystemTool> getCachedTools() {
+        CompletableFuture<List<SystemTool>> future = toolsCache.getIfPresent("all");
+        if (future != null && future.isDone()) {
+            return future.getNow(List.of());
         }
         if (SwingUtilities.isEventDispatchThread()) {
             return List.of();
         }
         List<SystemTool> loaded = loadFromDisk();
         if (!loaded.isEmpty()) {
-            toolsCache.set(loaded);
+            toolsCache.synchronous().put("all", loaded);
+            return loaded;
         }
-        return loaded;
+        return List.of();
     }
 
     public CompletableFuture<List<SystemTool>> detectTools() {
-        List<SystemTool> cached = toolsCache.get();
+        List<SystemTool> cached = getCachedTools();
         if (!cached.isEmpty()) {
             return CompletableFuture.completedFuture(cached);
         }
-        return CompletableFuture.supplyAsync(this::getCachedTools)
-                .thenCompose(tools -> !tools.isEmpty() ? CompletableFuture.completedFuture(tools) : refreshTools());
+        return toolsCache.get("all");
     }
 
-    public synchronized CompletableFuture<List<SystemTool>> refreshTools() {
-        return toolsCache.refreshAsync(true, () -> CompletableFuture.supplyAsync(() -> {
-            List<SystemTool> detected = List.copyOf(toolProber.get());
+    public CompletableFuture<List<SystemTool>> refreshTools() {
+        return toolsCache.synchronous().refresh("all").thenApply(detected -> {
             updateCacheAndPublish(detected);
             return detected;
-        }));
+        });
     }
 
     public CompletableFuture<Boolean> isDockerAvailable() {
@@ -222,10 +256,8 @@ public class SystemToolService {
     }
 
     private void updateCacheAndPublish(List<SystemTool> detected) {
-        synchronized (this) {
-            toolsCache.set(detected);
-            saveToDisk(detected);
-        }
+        toolsCache.synchronous().put("all", detected);
+        saveToDisk(detected);
         eventPublisher.publishEvent(new SystemToolsUpdatedEvent(detected, isDockerDetected(detected)));
     }
 

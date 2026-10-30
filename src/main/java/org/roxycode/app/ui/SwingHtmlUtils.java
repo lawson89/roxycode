@@ -8,6 +8,7 @@ import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
 import com.vladsch.flexmark.ext.tables.TableBlock;
 import com.vladsch.flexmark.ext.tables.TableCell;
 import com.vladsch.flexmark.ext.tables.TablesExtension;
+import com.vladsch.flexmark.ext.yaml.front.matter.YamlFrontMatterExtension;
 import com.vladsch.flexmark.html.AttributeProvider;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.html.IndependentAttributeProviderFactory;
@@ -56,8 +57,9 @@ public final class SwingHtmlUtils {
 
     private static final Logger log = LoggerFactory.getLogger(SwingHtmlUtils.class);
 
-    private static final DataHolder FLEXMARK_OPTIONS = new MutableDataSet().set(Parser.EXTENSIONS, Arrays
-            .asList(TablesExtension.create(), StrikethroughExtension.create(), new MarkdownTableAttributeExtension()))
+    private static final DataHolder FLEXMARK_OPTIONS = new MutableDataSet()
+            .set(Parser.EXTENSIONS, Arrays.asList(TablesExtension.create(), StrikethroughExtension.create(),
+                    YamlFrontMatterExtension.create(), new MarkdownTableAttributeExtension()))
             .toImmutable();
     private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
     private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
@@ -128,6 +130,10 @@ public final class SwingHtmlUtils {
             return "";
         }
         return JexlToHtmlConverter.highlightCodeBlocks(MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
+    }
+
+    public static Parser getMarkdownParser() {
+        return MARKDOWN_PARSER;
     }
 
     public static JEditorPane createHtmlEditorPane() {

@@ -207,12 +207,8 @@ class MemoryServiceTest {
         assertEquals(1, fmKeyIgnored.size());
         assertEquals("", fmKeyIgnored.get(0).matchSnippet());
 
-        assertEquals(6, FrontmatterUtils.findFrontmatterEndLine(FrontmatterUtils.readFrontmatterLines(planFile)));
-        assertEquals(0,
-                FrontmatterUtils.findFrontmatterEndLine(FrontmatterUtils.readFrontmatterLines(fallbackPlanFile)));
-        assertEquals(0, FrontmatterUtils.findFrontmatterEndLine(null));
         assertTrue(FrontmatterUtils.parseFrontmatter(fallbackPlanFile).isEmpty());
-        assertTrue(FrontmatterUtils.parseFrontmatter(null).isEmpty());
+        assertTrue(FrontmatterUtils.parseFrontmatter((Path) null).isEmpty());
 
         Path unclosedFrontmatterFile = plansDir.resolve("20250511-080000-unclosed.md");
         Files.writeString(unclosedFrontmatterFile, """
@@ -221,10 +217,8 @@ class MemoryServiceTest {
                 created_by: "Dave"
                 # Missing closing delimiter
                 """, StandardCharsets.UTF_8);
-        assertEquals(0, FrontmatterUtils
-                .findFrontmatterEndLine(FrontmatterUtils.readFrontmatterLines(unclosedFrontmatterFile)));
-        assertEquals("Unclosed " + '"' + "Quote" + '"' + " Plan",
-                FrontmatterUtils.parseFrontmatter(unclosedFrontmatterFile).get("title"));
+        // Flexmark requires a closing --- to recognize a YamlFrontMatterBlock
+        assertTrue(FrontmatterUtils.parseFrontmatter(unclosedFrontmatterFile).isEmpty());
     }
 
     @Test

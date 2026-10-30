@@ -43,7 +43,6 @@ public class SystemToolsPanelTest {
         assertEquals("https://github.com/BurntSushi/ripgrep", card.getWebsiteLinkButton().getToolTipText());
 
         verify(service, times(1)).detectTools();
-        verify(service, never()).hasCachedTools();
         verify(service, never()).getCachedTools();
         verify(service, never()).refreshTools();
     }

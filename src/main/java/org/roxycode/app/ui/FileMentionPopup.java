@@ -38,7 +38,9 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GrepService;
 import org.apache.commons.io.FilenameUtils;
-import org.roxycode.app.util.AsyncRefreshCache;
+import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.util.concurrent.TimeUnit;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -100,8 +102,7 @@ public final class FileMentionPopup {
 
     private volatile GrepService grepService;
     private volatile Executor backgroundExecutor = ForkJoinPool.commonPool();
-    private final AsyncRefreshCache<List<FileCandidate>> candidateCache = new AsyncRefreshCache<>(List.of(),
-            STALE_CACHE_TTL_MS);
+    private final AsyncLoadingCache<String, List<FileCandidate>> candidateCache;
 
     private boolean popupActive = false;
     private boolean updatingInputText = false;
@@ -111,6 +112,8 @@ public final class FileMentionPopup {
     public FileMentionPopup(JTextArea inputArea, JScrollPane inputScrollPane) {
         this.inputArea = inputArea;
         this.inputScrollPane = inputScrollPane;
+        this.candidateCache = Caffeine.newBuilder().expireAfterWrite(STALE_CACHE_TTL_MS, TimeUnit.MILLISECONDS)
+                .buildAsync((key, executor) -> CompletableFuture.supplyAsync(this::performFileIndexing, executor));
 
         this.listModel = new DefaultListModel<>();
         this.candidateList = new JList<>(listModel);
@@ -233,7 +236,7 @@ public final class FileMentionPopup {
         if (grepService != null) {
             refreshIndexAsync(true);
         } else {
-            candidateCache.clear();
+            candidateCache.synchronous().invalidateAll();
         }
     }
 
@@ -250,37 +253,41 @@ public final class FileMentionPopup {
     }
 
     public void invalidateCache() {
+        candidateCache.synchronous().invalidateAll();
         refreshIndexAsync(true);
+    }
+
+    private List<FileCandidate> performFileIndexing() {
+        GrepService service = this.grepService;
+        if (service == null) {
+            return List.of();
+        }
+        try {
+            List<String> rawFiles = service.listFiles();
+            if (rawFiles == null || rawFiles.isEmpty()) {
+                return List.of();
+            }
+            return rawFiles.stream().filter(StringUtils::isNotBlank).map(FileCandidate::fromPath)
+                    .sorted(DEFAULT_CANDIDATE_COMPARATOR).toList();
+        } catch (Exception e) {
+            log.debug("Failed to perform file indexing", e);
+            return List.of();
+        }
     }
 
     public CompletableFuture<List<FileCandidate>> refreshIndexAsync() {
         return refreshIndexAsync(true);
     }
 
-    synchronized CompletableFuture<List<FileCandidate>> refreshIndexAsync(boolean force) {
-        GrepService service = this.grepService;
-        if (service == null) {
-            return CompletableFuture.completedFuture(candidateCache.get());
-        }
-        return candidateCache.refreshAsync(force, () -> CompletableFuture.supplyAsync(() -> {
-            List<String> rawFiles = service.listFiles();
-            if (rawFiles == null || rawFiles.isEmpty()) {
-                return List.<FileCandidate>of();
+    public CompletableFuture<List<FileCandidate>> refreshIndexAsync(boolean force) {
+        if (force) {
+            CompletableFuture<List<FileCandidate>> future = candidateCache.synchronous().refresh("files");
+            if (!SwingUtilities.isEventDispatchThread()) {
+                future.join();
             }
-            return rawFiles.stream().filter(StringUtils::isNotBlank).map(FileCandidate::fromPath)
-                    .sorted(DEFAULT_CANDIDATE_COMPARATOR).toList();
-        }, backgroundExecutor).exceptionally(ex -> {
-            log.debug("Failed to refresh file mention index", ex);
-            return candidateCache.get();
-        }).thenApply(candidates -> {
-            candidateCache.set(candidates);
-            Edt.run(() -> {
-                if (activeToken != null) {
-                    evaluateCurrentInput();
-                }
-            });
-            return candidates;
-        }));
+            return future;
+        }
+        return candidateCache.get("files");
     }
 
     void evaluateCurrentInput() {
@@ -297,7 +304,7 @@ public final class FileMentionPopup {
 
         refreshIndexAsync(false);
 
-        List<FileCandidate> matches = rankCandidates(candidateCache.get(), token.query());
+        List<FileCandidate> matches = rankCandidates(candidateCache.get("files").getNow(List.of()), token.query());
         if (matches.isEmpty()) {
             popupActive = false;
             listModel.clear();
@@ -490,7 +497,7 @@ public final class FileMentionPopup {
     }
 
     List<FileCandidate> getCachedCandidates() {
-        return candidateCache.get();
+        return candidateCache.get("files").getNow(List.of());
     }
 
     static Codicons resolveFileIcon(String fileNameLower) {

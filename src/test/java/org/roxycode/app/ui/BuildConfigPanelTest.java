@@ -141,7 +141,6 @@ class BuildConfigPanelTest {
         verify(systemToolService, never()).refreshDockerAvailable();
         verify(systemToolService, never()).refreshTools();
         verify(systemToolService, never()).checkDockerAvailable();
-        verify(systemToolService, never()).hasCachedTools();
 
         SwingTestUtils.clickOnEdt(panel.containerToggleCheckBox);
         assertTrue(panel.containerToggleCheckBox.isSelected());

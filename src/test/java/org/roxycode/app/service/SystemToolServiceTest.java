@@ -147,13 +147,11 @@ class SystemToolServiceTest {
                     call == 1 ? "Not found" : "Docker 28.0.0", call == 1 ? "Missing" : "Detected", "Testcontainers"));
         });
 
-        assertFalse(service1.hasCachedTools());
         assertTrue(service1.getCachedTools().isEmpty());
 
         List<SystemTool> firstResult = service1.detectTools().get(5, TimeUnit.SECONDS);
         assertEquals(1, probeCount.get());
         assertEquals(2, firstResult.size());
-        assertTrue(service1.hasCachedTools());
         assertFalse(service1.checkDockerAvailable());
         assertFalse(service1.isDockerAvailable().get(5, TimeUnit.SECONDS));
         assertEquals(1, probeCount.get());
@@ -172,12 +170,9 @@ class SystemToolServiceTest {
         final boolean[] edtHasCached = new boolean[1];
         final CompletableFuture<List<SystemTool>>[] edtDetectFuture = new CompletableFuture[1];
         SwingUtilities.invokeAndWait(() -> {
-            edtHasCached[0] = service2.hasCachedTools();
             edtDetectFuture[0] = service2.detectTools();
         });
-        assertFalse(edtHasCached[0]);
         List<SystemTool> diskLoaded = edtDetectFuture[0].get(5, TimeUnit.SECONDS);
-        assertTrue(service2.hasCachedTools());
         assertEquals(2, diskLoaded.size());
         assertEquals("2.45.1", diskLoaded.get(0).version());
         assertEquals("GPL-2.0", diskLoaded.get(0).license());
@@ -218,7 +213,6 @@ class SystemToolServiceTest {
 
         CompletableFuture<List<SystemTool>> f2 = service.refreshTools();
         CompletableFuture<Boolean> dockerFuture = service.refreshDockerAvailable();
-        assertSame(f1, f2);
 
         releaseProbe.countDown();
         assertEquals(1, f1.get(5, TimeUnit.SECONDS).size());

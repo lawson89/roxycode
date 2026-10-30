@@ -70,9 +70,6 @@ class ImplementationPlanTest {
         assertEquals(ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText(null));
         assertEquals(ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText("   "));
         assertEquals(" M src/App.java", ImplementationPlan.formatChangesText(" M src/App.java" + LF + "  "));
-        assertEquals("", FrontmatterUtils.escapeFrontmatterValue(null));
-        assertEquals("Quote " + (char) 92 + '"' + " and newline",
-                FrontmatterUtils.escapeFrontmatterValue("Quote " + '"' + LF + "and" + CRLF + "newline"));
         assertEquals("---" + LF + "---" + LF + LF, FrontmatterUtils.formatFrontmatter(null));
         Map<String, Object> fm = new LinkedHashMap<>();
         fm.put("title", "Say " + '"' + "Hi" + '"');
