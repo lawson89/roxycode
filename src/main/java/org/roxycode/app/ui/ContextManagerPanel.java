@@ -7,8 +7,6 @@ import java.awt.GraphicsEnvironment;
 import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -23,7 +21,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
-import javax.swing.SwingWorker;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -112,7 +109,6 @@ public final class ContextManagerPanel extends JPanel {
 
         final DefaultListModel<ContextFileItem> fileListModel = new DefaultListModel<>();
         final JList<ContextFileItem> fileList = new JList<>(fileListModel);
-        private final transient AtomicReference<SwingWorker<FolderAndFilesData, Void>> activeRefreshWorker = new AtomicReference<>();
 
         record FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {
         }
@@ -270,20 +266,8 @@ public final class ContextManagerPanel extends JPanel {
             }
         }
 
-        private <T> SwingWorker<T, Void> executeOperationAsync(AtomicReference<SwingWorker<T, Void>> activeWorkerRef,
-                Callable<T> backgroundTask, Consumer<T> onSuccess, String logVerb, String errorVerb, String target) {
-            return Edt.supplyAsync(activeWorkerRef, backgroundTask, onSuccess, ex -> {
-                log.warn("Failed to {} {}: {}", logVerb, target, ex.getMessage());
-                Throwable root = ExceptionUtils.getRootCause(ex);
-                if (errorReporter != null && errorVerb != null) {
-                    errorReporter.accept("Error " + errorVerb + " " + target + ": "
-                            + (root != null ? root.getMessage() : ex.getMessage()));
-                }
-            });
-        }
-
-        SwingWorker<Void, Void> addFolderAsync(String folderPath) {
-            return executeOperationAsync(null, () -> {
+        void addFolderAsync(String folderPath) {
+            Edt.runAsync(() -> {
                 if (folderPath == null || folderPath.isBlank()) {
                     throw new IllegalArgumentException("Folder path must not be blank");
                 }
@@ -293,24 +277,36 @@ public final class ContextManagerPanel extends JPanel {
                     updated.add(trimmed);
                 }
                 saveConfiguredFolders(updated);
-                return null;
-            }, v -> refreshFoldersAndFiles(), "add context folder", "adding context folder", folderPath);
+            }, this::refreshFoldersAndFiles, ex -> {
+                log.warn("Failed to add context folder {}: {}", folderPath, ex.getMessage());
+                Throwable root = ExceptionUtils.getRootCause(ex);
+                if (errorReporter != null) {
+                    errorReporter.accept("Error adding context folder " + folderPath + ": "
+                            + (root != null ? root.getMessage() : ex.getMessage()));
+                }
+            });
         }
 
-        SwingWorker<Void, Void> removeFolderAsync(String folderPath) {
-            return executeOperationAsync(null, () -> {
+        void removeFolderAsync(String folderPath) {
+            Edt.runAsync(() -> {
                 List<String> updated = new ArrayList<>(loadConfiguredFolders());
                 updated.remove(folderPath);
                 saveConfiguredFolders(updated);
-                return null;
-            }, v -> {
+            }, () -> {
                 clearSelection();
                 refreshFoldersAndFiles();
-            }, "remove context folder", "removing context folder", folderPath);
+            }, ex -> {
+                log.warn("Failed to remove context folder {}: {}", folderPath, ex.getMessage());
+                Throwable root = ExceptionUtils.getRootCause(ex);
+                if (errorReporter != null) {
+                    errorReporter.accept("Error removing context folder " + folderPath + ": "
+                            + (root != null ? root.getMessage() : ex.getMessage()));
+                }
+            });
         }
 
-        SwingWorker<FolderAndFilesData, Void> refreshFoldersAndFiles() {
-            return executeOperationAsync(activeRefreshWorker, () -> {
+        void refreshFoldersAndFiles() {
+            Edt.supplyAsync(() -> {
                 List<String> folders = loadConfiguredFolders();
                 List<ContextFileItem> files = loadDiscoveredFiles();
                 return new FolderAndFilesData(folders != null ? folders : List.of(), files != null ? files : List.of());
@@ -320,7 +316,9 @@ public final class ContextManagerPanel extends JPanel {
                 fileListModel.clear();
                 data.files().forEach(fileListModel::addElement);
                 btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
-            }, "refresh context folders and files", null, "context");
+            }, ex -> {
+                log.warn("Failed to refresh context folders and files: {}", ex.getMessage());
+            });
         }
 
         private List<String> loadConfiguredFolders() {

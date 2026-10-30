@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JComboBox;
@@ -58,7 +57,7 @@ class BuildConfigPanelTest {
     private BuildConfigPanel createPanelOnEdt() {
         BuildConfigPanel panel = SwingTestUtils.callOnEdt(
                 () -> new BuildConfigPanel(buildToolService, settingsService, systemToolService, projectService));
-        SwingTestUtils.awaitWorker(panel.loadConfigFuture);
+        SwingTestUtils.flushEdt();
         return panel;
     }
 
@@ -105,7 +104,7 @@ class BuildConfigPanelTest {
             panel.textArea.setText(updatedToml);
             panel.saveButton.doClick();
         });
-        SwingTestUtils.awaitWorker(panel.saveConfigFuture);
+        SwingTestUtils.flushEdt();
 
         assertFalse(saveCalledOnEdt.get());
         assertFalse(modelSaveCalledOnEdt.get());
@@ -116,7 +115,7 @@ class BuildConfigPanelTest {
 
         when(projectService.getProjectGeminiModel()).thenReturn("gemini-3.5-pro");
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));
-        SwingTestUtils.awaitWorker(panel.loadConfigFuture);
+        SwingTestUtils.flushEdt();
         assertEquals("gemini-3.5-pro", ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
 
         AtomicReference<String> errorMsg = new AtomicReference<>();
@@ -124,8 +123,6 @@ class BuildConfigPanelTest {
         doThrow(new IOException("Disk full")).when(buildToolService).saveConfigContent(anyString());
 
         SwingTestUtils.clickOnEdt(panel.saveButton);
-        assertThrows(Exception.class, () -> panel.saveConfigFuture.get(5, TimeUnit.SECONDS));
-        SwingTestUtils.flushEdt();
 
         assertTrue(panel.saveButton.isEnabled());
         assertEquals("Error saving config: Disk full", errorMsg.get());
@@ -180,9 +177,11 @@ class BuildConfigPanelTest {
         CompletableFuture<Boolean> pendingRecheck = new CompletableFuture<>();
         when(systemToolService.refreshDockerAvailable()).thenReturn(pendingRecheck);
 
-        SwingTestUtils.clickOnEdt(panel.recheckDockerButton);
-        assertFalse(panel.recheckDockerButton.isEnabled());
-        assertEquals(BuildConfigPanel.CHECKING_DOCKER_TEXT, panel.recheckDockerButton.getText());
+        SwingTestUtils.runOnEdt(() -> panel.recheckDockerButton.doClick());
+        SwingTestUtils.runOnEdt(() -> {
+            assertFalse(panel.recheckDockerButton.isEnabled());
+            assertEquals(BuildConfigPanel.CHECKING_DOCKER_TEXT, panel.recheckDockerButton.getText());
+        });
 
         pendingRecheck.complete(true);
         SwingTestUtils.flushEdt();

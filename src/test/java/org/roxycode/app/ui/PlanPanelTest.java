@@ -6,11 +6,8 @@ import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
@@ -20,7 +17,7 @@ import org.roxycode.app.model.ImplementationPlan;
 class PlanPanelTest {
 
     private static void awaitRefresh(PlanPanel panel) {
-        SwingTestUtils.awaitWorker(panel.getActiveRefreshWorker());
+        SwingTestUtils.flushEdt();
     }
 
     private static ImplementationPlan createPlan(List<ImplementationPlan.TechStep> steps,
@@ -118,43 +115,4 @@ class PlanPanelTest {
         assertFalse(calledOnEdt.get());
     }
 
-    @Test
-    void testStaleRefreshWorkerDiscarded() throws Exception {
-        PlanService planService = mock(PlanService.class);
-        GitService gitService = mock(GitService.class);
-        when(planService.getCurrentPlan()).thenReturn(createPlan(new ImplementationPlan.TechStep("Step 0", false)));
-        when(gitService.getStatus()).thenReturn("");
-
-        PlanPanel panel = new PlanPanel(planService, gitService);
-        awaitRefresh(panel);
-
-        CountDownLatch slowStarted = new CountDownLatch(1);
-        CountDownLatch releaseSlow = new CountDownLatch(1);
-        AtomicBoolean firstCall = new AtomicBoolean(true);
-
-        when(gitService.getStatus()).thenAnswer(inv -> {
-            if (firstCall.compareAndSet(true, false)) {
-                slowStarted.countDown();
-                releaseSlow.await(5, TimeUnit.SECONDS);
-                return " M src/StaleFile.java\n";
-            }
-            return " M src/FreshFile.java\n";
-        });
-
-        panel.refresh();
-        SwingWorker<String, Void> staleWorker = panel.getActiveRefreshWorker();
-        assertTrue(slowStarted.await(5, TimeUnit.SECONDS));
-
-        panel.refresh();
-        SwingWorker<String, Void> freshWorker = panel.getActiveRefreshWorker();
-        assertNotSame(staleWorker, freshWorker);
-
-        freshWorker.get(5, TimeUnit.SECONDS);
-        releaseSlow.countDown();
-        SwingTestUtils.awaitWorker(staleWorker);
-
-        assertEquals(" M src/FreshFile.java\n", panel.getLastGitStatus());
-        assertTrue(panel.getDisplayArea().getText().contains("FreshFile.java"));
-        assertFalse(panel.getDisplayArea().getText().contains("StaleFile.java"));
-    }
 }

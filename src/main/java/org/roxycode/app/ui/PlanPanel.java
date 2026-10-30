@@ -2,7 +2,6 @@ package org.roxycode.app.ui;
 
 import java.awt.*;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.*;
 import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -37,7 +36,6 @@ public final class PlanPanel extends JPanel {
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
     private volatile String lastGitStatus = "";
-    private final transient AtomicReference<SwingWorker<String, Void>> activeRefreshWorker = new AtomicReference<>();
 
     public PlanPanel(PlanService planManagerService, GitService gitService) {
         this.planManagerService = planManagerService;
@@ -116,10 +114,6 @@ public final class PlanPanel extends JPanel {
         return lastGitStatus;
     }
 
-    SwingWorker<String, Void> getActiveRefreshWorker() {
-        return activeRefreshWorker.get();
-    }
-
     @Override
     public void updateUI() {
         super.updateUI();
@@ -140,19 +134,17 @@ public final class PlanPanel extends JPanel {
     }
 
     private void updateDisplay(ImplementationPlan plan) {
-        Edt.supplyAsync(activeRefreshWorker, this::getGitStatusText, status -> applyWorkerResult(plan, status), e -> {
+        Edt.supplyAsync(this::getGitStatusText, status -> {
+            String normalized = "";
+            if (status != null) {
+                normalized = status;
+            }
+            lastGitStatus = normalized;
+            applyDisplayOnEdt(plan, normalized);
+        }, e -> {
             log.debug("Failed to refresh git status for plan panel", e);
-            applyWorkerResult(plan, lastGitStatus);
+            applyDisplayOnEdt(plan, lastGitStatus);
         });
-    }
-
-    private void applyWorkerResult(ImplementationPlan plan, String status) {
-        String normalized = "";
-        if (status != null) {
-            normalized = status;
-        }
-        lastGitStatus = normalized;
-        applyDisplayOnEdt(plan, normalized);
     }
 
     private void applyDisplayOnEdt(ImplementationPlan plan, String gitStatus) {

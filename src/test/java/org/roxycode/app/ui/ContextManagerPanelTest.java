@@ -32,9 +32,11 @@ class ContextManagerPanelTest {
         ContextManagerPanel panel = new ContextManagerPanel(promptService);
         var globalCol = panel.globalColumn;
         var projCol = panel.projectColumn;
-        SwingTestUtils
-                .awaitCondition(() -> globalCol.folderListModel.getSize() == 1 && globalCol.fileListModel.getSize() == 1
-                        && projCol.folderListModel.getSize() == 1 && projCol.fileListModel.getSize() == 1);
+        SwingTestUtils.flushEdt();
+        assertEquals(1, globalCol.folderListModel.getSize());
+        assertEquals(1, globalCol.fileListModel.getSize());
+        assertEquals(1, projCol.folderListModel.getSize());
+        assertEquals(1, projCol.fileListModel.getSize());
 
         assertEquals("/global", globalCol.folderListModel.getElementAt(0));
         assertEquals("rules.yaml", globalCol.fileListModel.getElementAt(0).fileName());
@@ -57,7 +59,8 @@ class ContextManagerPanelTest {
                 .thenReturn(List.of(new ContextFileItem("/tmp/new", "new1.java", Path.of("/tmp/new/new1.java")),
                         new ContextFileItem("/tmp/new", "new2.json", Path.of("/tmp/new/new2.json"))));
 
-        SwingTestUtils.awaitWorker(projCol.addFolderAsync("/tmp/new"));
+        projCol.addFolderAsync("/tmp/new");
+        SwingTestUtils.flushEdt();
         verify(promptService).setProjectContextFolders(List.of("/tmp/docs", "/tmp/new"));
 
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
@@ -66,12 +69,14 @@ class ContextManagerPanelTest {
         assertEquals("new2.json", projCol.fileListModel.getElementAt(1).fileName());
 
         when(promptService.getGlobalContextFolders()).thenReturn(List.of("/global", "/global2"));
-        SwingTestUtils.awaitWorker(globalCol.addFolderAsync("/global2"));
+        globalCol.addFolderAsync("/global2");
+        SwingTestUtils.flushEdt();
         verify(promptService).setGlobalContextFolders(List.of("/global", "/global2"));
 
         when(promptService.getGlobalContextFolders()).thenReturn(List.of());
         when(promptService.listGlobalContextFiles()).thenReturn(List.of());
-        SwingTestUtils.awaitWorker(globalCol.removeFolderAsync("/global"));
+        globalCol.removeFolderAsync("/global");
+        SwingTestUtils.flushEdt();
 
         panel.onSettingsChanged(new SettingsChangedEvent(new AppSettings()));
         SwingTestUtils.awaitCondition(() -> globalCol.folderListModel.isEmpty() && globalCol.fileListModel.isEmpty());
@@ -87,7 +92,8 @@ class ContextManagerPanelTest {
         panel.setErrorDialogPresenter(errors::add);
 
         try {
-            SwingTestUtils.awaitWorker(panel.projectColumn.addFolderAsync("/tmp/folder"));
+            panel.projectColumn.addFolderAsync("/tmp/folder");
+            SwingTestUtils.flushEdt();
         } catch (Exception ignored) {
         }
         SwingTestUtils.awaitCondition(() -> !errors.isEmpty());

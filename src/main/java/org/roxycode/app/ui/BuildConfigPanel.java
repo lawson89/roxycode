@@ -5,7 +5,6 @@ import java.awt.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
@@ -73,8 +72,6 @@ public final class BuildConfigPanel extends JPanel {
 
     boolean dockerAvailable = false;
     private boolean updatingTextProgrammatically = false;
-    transient volatile CompletableFuture<String> loadConfigFuture = CompletableFuture.completedFuture("");
-    transient volatile CompletableFuture<Void> saveConfigFuture = CompletableFuture.completedFuture(null);
     private transient Consumer<String> errorDialogPresenter;
 
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
@@ -255,40 +252,37 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     private void loadInitialDockerStatus() {
-        CompletableFuture<Boolean> future = null;
-        if (systemToolService != null) {
-            future = systemToolService.isDockerAvailable();
-        }
-        if (future == null) {
+        if (systemToolService == null) {
             setDockerAvailable(false);
             return;
         }
-        future.thenAccept(available -> Edt.run(() -> setDockerAvailable(Boolean.TRUE.equals(available))));
+        Edt.supplyAsync(() -> {
+            try {
+                return systemToolService.isDockerAvailable().get();
+            } catch (Exception e) {
+                return false;
+            }
+        }, available -> setDockerAvailable(Boolean.TRUE.equals(available)));
     }
 
-    public CompletableFuture<Boolean> refreshDockerStatus() {
+    public void refreshDockerStatus() {
         if (systemToolService == null) {
             setDockerAvailable(false);
-            return CompletableFuture.completedFuture(false);
+            return;
         }
-        Edt.run(() -> {
-            recheckDockerButton.setEnabled(false);
-            recheckDockerButton.setText(CHECKING_DOCKER_TEXT);
-        });
-        CompletableFuture<Boolean> future = systemToolService.refreshDockerAvailable();
-        if (future == null) {
-            future = systemToolService.isDockerAvailable();
-        }
-        if (future == null) {
-            future = CompletableFuture.completedFuture(false);
-        }
-        return future.whenComplete((available, ex) -> Edt.run(() -> {
-            if (ex == null) {
-                setDockerAvailable(Boolean.TRUE.equals(available));
+        recheckDockerButton.setEnabled(false);
+        recheckDockerButton.setText(CHECKING_DOCKER_TEXT);
+        Edt.supplyAsync(() -> {
+            try {
+                return systemToolService.refreshDockerAvailable().get();
+            } catch (Exception e) {
+                return false;
             }
+        }, available -> {
+            setDockerAvailable(Boolean.TRUE.equals(available));
             recheckDockerButton.setText(RECHECK_DOCKER_TEXT);
             recheckDockerButton.setEnabled(true);
-        })).thenApply(Boolean.TRUE::equals);
+        });
     }
 
     void setDockerAvailable(boolean available) {
@@ -370,12 +364,11 @@ public final class BuildConfigPanel extends JPanel {
         updateBannerState();
     }
 
-    @SuppressWarnings("PMD.UnusedAssignment")
-    CompletableFuture<String> loadConfig() {
+    void loadConfig() {
         if (buildToolService == null) {
-            return CompletableFuture.completedFuture("");
+            return;
         }
-        CompletableFuture<String> completed = CompletableFuture.supplyAsync(() -> {
+        Edt.supplyAsync(() -> {
             try {
                 String content = buildToolService.getConfigContent();
                 if (content != null) {
@@ -386,27 +379,21 @@ public final class BuildConfigPanel extends JPanel {
                 log.error("Failed to load build config", e);
                 return "# Error loading config: " + e.getMessage();
             }
-        }).whenComplete((content, ex) -> {
-            if (ex == null) {
-                Edt.run(() -> {
-                    updatingTextProgrammatically = true;
-                    try {
-                        textArea.setText(content);
-                        textArea.setCaretPosition(0);
-                    } finally {
-                        updatingTextProgrammatically = false;
-                    }
-                    updateBannerState();
-                });
+        }, content -> {
+            updatingTextProgrammatically = true;
+            try {
+                textArea.setText(content);
+                textArea.setCaretPosition(0);
+            } finally {
+                updatingTextProgrammatically = false;
             }
+            updateBannerState();
         });
-        this.loadConfigFuture = completed;
-        return completed;
     }
 
-    CompletableFuture<Void> saveConfig() {
+    void saveConfig() {
         if (buildToolService == null && projectService == null) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
         String contentToSave = textArea.getText();
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
@@ -414,9 +401,9 @@ public final class BuildConfigPanel extends JPanel {
         if (selectedModel != null && selectedModel.apiName() != null) {
             selectedModelApiName = selectedModel.apiName();
         }
-        String modelOverrideToSave = selectedModelApiName;
-        Edt.run(() -> saveButton.setEnabled(false));
-        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+        final String modelOverrideToSave = selectedModelApiName;
+        saveButton.setEnabled(false);
+        Edt.runAsync(() -> {
             try {
                 if (projectService != null && projectService.hasActiveProject()) {
                     projectService.setProjectGeminiModel(modelOverrideToSave);
@@ -427,20 +414,17 @@ public final class BuildConfigPanel extends JPanel {
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
-        }).whenComplete((unused, ex) -> Edt.run(() -> {
+        }, () -> {
             saveButton.setEnabled(true);
-            if (ex == null) {
-                updateBannerState();
-                statusLabel.setText("Configuration saved successfully!");
-                statusTimer.restart();
-            } else {
-                Throwable cause = ExceptionUtils.getRootCause(ex);
-                log.error("Failed to save build config: {}", cause.getMessage());
-                showSaveErrorDialog(cause.getMessage());
-            }
-        }));
-        this.saveConfigFuture = future;
-        return future;
+            updateBannerState();
+            statusLabel.setText("Configuration saved successfully!");
+            statusTimer.restart();
+        }, ex -> {
+            saveButton.setEnabled(true);
+            Throwable cause = ExceptionUtils.getRootCause(ex);
+            log.error("Failed to save build config: {}", cause.getMessage());
+            showSaveErrorDialog(cause.getMessage());
+        });
     }
 
     private void showSaveErrorDialog(String message) {

@@ -9,7 +9,6 @@ import com.formdev.flatlaf.FlatLightLaf;
 import java.awt.Component;
 import java.awt.Container;
 import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
@@ -47,6 +46,7 @@ public final class SwingTestUtils {
     }
 
     static void flushEdt() {
+        org.roxycode.app.util.Edt.awaitAsyncTasks();
         runOnEdt(() -> {
         });
     }
@@ -78,15 +78,6 @@ public final class SwingTestUtils {
     static void clickOnEdt(AbstractButton button) {
         runOnEdt(button::doClick);
         flushEdt();
-    }
-
-    static <T> T awaitWorker(Future<T> worker) {
-        AtomicReference<T> ref = new AtomicReference<>();
-        invokeUnchecked(() -> {
-            ref.set(worker != null ? worker.get() : null);
-            flushEdt();
-        });
-        return ref.get();
     }
 
     static void awaitCondition(BooleanSupplier condition) {

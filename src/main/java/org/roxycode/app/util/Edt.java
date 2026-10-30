@@ -2,19 +2,22 @@ package org.roxycode.app.util;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
 
 public final class Edt {
+
+    private static final AtomicInteger activeTasks = new AtomicInteger(0);
+    private static final Object lock = new Object();
 
     private Edt() {
     }
 
     public static void run(Runnable action) {
-        if (action == null)
+        if (action == null) {
             return;
+        }
         if (SwingUtilities.isEventDispatchThread()) {
             action.run();
         } else {
@@ -24,8 +27,9 @@ public final class Edt {
 
     @SuppressWarnings("PMD.PreserveStackTrace")
     public static void runAndWait(Runnable action) {
-        if (action == null)
+        if (action == null) {
             return;
+        }
         if (SwingUtilities.isEventDispatchThread()) {
             action.run();
             return;
@@ -36,70 +40,118 @@ public final class Edt {
             Thread.currentThread().interrupt();
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException runtimeException)
+            if (cause instanceof RuntimeException runtimeException) {
                 throw runtimeException;
-            if (cause instanceof Error error)
+            }
+            if (cause instanceof Error error) {
                 throw error;
+            }
             throw new IllegalStateException("Failed to execute action on EDT", cause);
         }
     }
 
-    public static <T> SwingWorker<T, Void> supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess) {
-        return supplyAsync(null, backgroundTask, onEdtSuccess, null);
+    public static <T> void supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess) {
+        supplyAsync(backgroundTask, onEdtSuccess, null);
     }
 
-    public static <T> SwingWorker<T, Void> supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess,
+    public static <T> void supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess,
             Consumer<Exception> onEdtError) {
-        return supplyAsync(null, backgroundTask, onEdtSuccess, onEdtError);
-    }
-
-    public static <T> SwingWorker<T, Void> supplyAsync(AtomicReference<SwingWorker<T, Void>> activeWorkerRef,
-            Callable<T> backgroundTask, Consumer<T> onEdtSuccess) {
-        return supplyAsync(activeWorkerRef, backgroundTask, onEdtSuccess, null);
-    }
-
-    public static <T> SwingWorker<T, Void> supplyAsync(AtomicReference<SwingWorker<T, Void>> activeWorkerRef,
-            Callable<T> backgroundTask, Consumer<T> onEdtSuccess, Consumer<Exception> onEdtError) {
-        SwingWorker<T, Void> worker = new SwingWorker<>() {
-            private boolean isActive() {
-                if (isCancelled()) {
-                    return false;
-                }
-                return activeWorkerRef == null || activeWorkerRef.get() == this;
-            }
-
-            @Override
-            protected T doInBackground() throws Exception {
+        activeTasks.incrementAndGet();
+        try {
+            Thread.ofVirtual().start(() -> {
+                boolean callbackDispatched = false;
                 try {
                     T result = null;
                     if (backgroundTask != null) {
                         result = backgroundTask.call();
                     }
                     final T finalResult = result;
-                    if (isActive() && onEdtSuccess != null) {
+                    if (onEdtSuccess != null) {
+                        callbackDispatched = true;
                         Edt.run(() -> {
-                            if (isActive()) {
+                            try {
                                 onEdtSuccess.accept(finalResult);
+                            } finally {
+                                completeAsyncTask();
                             }
                         });
                     }
-                    return result;
                 } catch (Exception e) {
-                    if (isActive() && onEdtError != null) {
+                    if (onEdtError != null) {
+                        callbackDispatched = true;
                         Edt.run(() -> {
-                            if (isActive()) {
+                            try {
                                 onEdtError.accept(e);
+                            } finally {
+                                completeAsyncTask();
                             }
                         });
                     }
-                    throw e;
+                } finally {
+                    if (!callbackDispatched) {
+                        completeAsyncTask();
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            // Safeguard: Decrement if the virtual thread fails to start entirely
+            completeAsyncTask();
+            if (t instanceof RuntimeException re) {
+                throw re;
+            }
+            if (t instanceof Error e) {
+                throw e;
+            }
+            throw new RuntimeException("Failed to start virtual thread", t);
+        }
+    }
+
+    private static void completeAsyncTask() {
+        if (activeTasks.decrementAndGet() == 0) {
+            synchronized (lock) {
+                lock.notifyAll();
+            }
+        }
+    }
+
+    public static void runAsync(Runnable backgroundTask, Runnable onEdtSuccess) {
+        runAsync(backgroundTask, onEdtSuccess, null);
+    }
+
+    public static void runAsync(Runnable backgroundTask, Runnable onEdtSuccess, Consumer<Exception> onEdtError) {
+        supplyAsync(() -> {
+            if (backgroundTask != null) {
+                backgroundTask.run();
+            }
+            return null;
+        }, result -> {
+            if (onEdtSuccess != null) {
+                onEdtSuccess.run();
+            }
+        }, onEdtError);
+    }
+
+    /**
+     * Waits for all in-flight background tasks to complete. Used primarily for testing.
+     */
+    public static void awaitAsyncTasks() {
+        long startTime = System.currentTimeMillis();
+        long timeoutMs = 8000; // Hard timeout prevents CI deadlocks
+
+        synchronized (lock) {
+            while (activeTasks.get() > 0) {
+                if (System.currentTimeMillis() - startTime > timeoutMs) {
+                    throw new IllegalStateException(
+                            "Timeout waiting for background tasks to complete. Active tasks leaked: "
+                                    + activeTasks.get());
+                }
+                try {
+                    lock.wait(50);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
-        };
-        if (activeWorkerRef != null) {
-            activeWorkerRef.set(worker);
         }
-        worker.execute();
-        return worker;
     }
 }

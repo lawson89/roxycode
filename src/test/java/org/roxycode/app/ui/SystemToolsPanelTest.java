@@ -61,10 +61,12 @@ public class SystemToolsPanelTest {
         assertFalse(panel.getProgressBar().isVisible());
         assertTrue(panel.getRefreshButton().isEnabled());
 
-        SwingTestUtils.clickOnEdt(panel.getRefreshButton());
-        assertFalse(panel.getRefreshButton().isEnabled());
-        assertTrue(panel.getProgressBar().isVisible());
-        assertTrue(panel.getProgressBar().isIndeterminate());
+        SwingTestUtils.runOnEdt(() -> panel.getRefreshButton().doClick());
+        SwingTestUtils.runOnEdt(() -> {
+            assertFalse(panel.getRefreshButton().isEnabled());
+            assertTrue(panel.getProgressBar().isVisible());
+            assertTrue(panel.getProgressBar().isIndeterminate());
+        });
 
         pendingRefresh.complete(List
                 .of(new SystemTool("Test Tool", "1.0", "Detected", "Description", "MIT", "https://example.com/tool/")));

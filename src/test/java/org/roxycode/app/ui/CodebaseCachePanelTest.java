@@ -91,7 +91,7 @@ class CodebaseCachePanelTest {
         when(promptService.getStableContext()).thenReturn("stable prompt");
         when(promptService.getSessionContext()).thenReturn("session prompt");
 
-        SwingTestUtils.awaitWorker(panel.refreshStatus());
+        panel.refreshStatus();
         SwingTestUtils.awaitCondition(() -> "session prompt".equals(panel.getSessionContextArea().getText()));
 
         assertTrue(panel.getStatusLabel().getText().contains("Total: 503"));
@@ -101,7 +101,7 @@ class CodebaseCachePanelTest {
 
         when(metaService.loadRepoCache())
                 .thenReturn(Optional.of("R".repeat(CodebaseCachePanel.MAX_DISPLAY_CHARS + 12_345)));
-        SwingTestUtils.awaitWorker(panel.refreshStatus());
+        panel.refreshStatus();
         SwingTestUtils.awaitCondition(() -> panel.getRepoMapArea().getText()
                 .contains("[Display truncated at 200,000 characters for UI responsiveness;"));
         assertEquals(0, panel.getRepoMapArea().getCaretPosition());
@@ -129,12 +129,12 @@ class CodebaseCachePanelTest {
 
         when(metaService.loadMeta()).thenReturn(Optional.empty());
         when(metaService.loadRepoCache()).thenReturn(Optional.of("local only repo map"));
-        SwingTestUtils.awaitWorker(panel.refreshStatus());
+        panel.refreshStatus();
         SwingTestUtils.awaitCondition(() -> "local only repo map".equals(panel.getRepoMapArea().getText()));
         assertEquals("Status: Repo Map available locally.", panel.getStatusLabel().getText());
 
         when(metaService.loadRepoCache()).thenReturn(Optional.empty());
-        SwingTestUtils.awaitWorker(panel.refreshStatus());
+        panel.refreshStatus();
         SwingTestUtils
                 .awaitCondition(() -> "Status: No implicit cache found.".equals(panel.getStatusLabel().getText()));
         assertEquals("Repo Map will appear here after generation.", panel.getRepoMapArea().getText());

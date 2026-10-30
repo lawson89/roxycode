@@ -392,8 +392,9 @@ class ChatControllerTest extends ChatTestFixture {
         File imgFile = tempDir.resolve("sample.png").toFile();
         ImageIO.write(src, "png", imgFile);
 
-        BufferedImage loaded = SwingTestUtils.awaitWorker(chatPanel.loadImageAttachmentAsync(imgFile));
+        chatPanel.loadImageAttachmentAsync(imgFile);
         flushEdt();
+        BufferedImage loaded = chatPanel.model.getPendingImages().getFirst();
         assertNotNull(loaded);
         assertEquals(120, loaded.getWidth());
         assertTrue(chatPanel.model.hasPendingImages());

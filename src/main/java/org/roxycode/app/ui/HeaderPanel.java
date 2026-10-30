@@ -5,7 +5,6 @@ import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
 import java.io.File;
 import java.nio.file.Path;
-import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -245,8 +244,8 @@ public final class HeaderPanel extends JPanel {
         return button;
     }
 
-    SwingWorker<String, Void> updateBranchLabel() {
-        return Edt.supplyAsync(gitService::getCurrentBranch, branch -> {
+    void updateBranchLabel() {
+        Edt.supplyAsync(gitService::getCurrentBranch, branch -> {
             boolean valid = branch != null && !branch.isEmpty() && !branch.startsWith("Error")
                     && !"Not a git repository".equals(branch);
             if (valid) {
@@ -308,7 +307,7 @@ public final class HeaderPanel extends JPanel {
         }
     }
 
-    CompletableFuture<Void> switchProjectAsync(Path projectPath) {
-        return CompletableFuture.runAsync(() -> projectService.setCurrentProjectRoot(projectPath));
+    void switchProjectAsync(Path projectPath) {
+        Edt.runAsync(() -> projectService.setCurrentProjectRoot(projectPath), null);
     }
 }

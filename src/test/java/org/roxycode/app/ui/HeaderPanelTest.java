@@ -41,7 +41,8 @@ class HeaderPanelTest {
         when(gitService.getCurrentBranch()).thenReturn("feature/async-branch");
 
         HeaderPanel header = new HeaderPanel(ps, gitService, ss);
-        SwingTestUtils.awaitWorker(header.updateBranchLabel());
+        header.updateBranchLabel();
+        SwingTestUtils.flushEdt();
         SwingTestUtils.awaitCondition(() -> "feature/async-branch".equals(header.getBranchLabel().getText()));
         assertTrue(header.getBranchLabel().isVisible());
 
@@ -119,7 +120,8 @@ class HeaderPanelTest {
             return inv.callRealMethod();
         }).when(ps).setCurrentProjectRoot(any());
         Path chosen = tempDir.resolve("chosen-project");
-        SwingTestUtils.awaitWorker(SwingTestUtils.callOnEdt(() -> header.switchProjectAsync(chosen)));
+        SwingTestUtils.runOnEdt(() -> header.switchProjectAsync(chosen));
+        SwingTestUtils.flushEdt();
         assertFalse(calledOnEdt.get());
     }
 }

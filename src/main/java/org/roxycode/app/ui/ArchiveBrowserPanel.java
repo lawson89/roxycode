@@ -7,7 +7,6 @@ import java.awt.Component;
 import java.awt.FlowLayout;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -20,7 +19,6 @@ import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
-import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
@@ -96,8 +94,6 @@ public final class ArchiveBrowserPanel extends JPanel {
     private String currentRawMarkdown = "";
     String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
-    final transient AtomicReference<SwingWorker<List<ArchiveEntrySummary>, Void>> activeSearchWorker = new AtomicReference<>();
-    final transient AtomicReference<SwingWorker<String, Void>> activeReadWorker = new AtomicReference<>();
 
     public ArchiveBrowserPanel(MemoryService memoryService, ArchiveMode mode) {
         super(new BorderLayout());
@@ -176,21 +172,21 @@ public final class ArchiveBrowserPanel extends JPanel {
         searchDebounceTimer.restart();
     }
 
-    public SwingWorker<List<ArchiveEntrySummary>, Void> refresh() {
+    public void refresh() {
         if (searchDebounceTimer != null && searchDebounceTimer.isRunning()) {
             searchDebounceTimer.stop();
         }
-        return executeSearchAsync();
+        executeSearchAsync();
     }
 
-    SwingWorker<List<ArchiveEntrySummary>, Void> executeSearchAsync() {
+    void executeSearchAsync() {
         String query = "";
         if (searchField != null) {
             query = searchField.getText();
         }
         final String searchQuery = query;
-        return Edt.supplyAsync(activeSearchWorker, () -> loadEntriesForQuery(searchQuery),
-                results -> applySearchResults(results, searchQuery), e -> {
+        Edt.supplyAsync(() -> loadEntriesForQuery(searchQuery), results -> applySearchResults(results, searchQuery),
+                e -> {
                     log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
                     applySearchResults(List.of(), searchQuery);
                 });
@@ -248,8 +244,8 @@ public final class ArchiveBrowserPanel extends JPanel {
         }
 
         detailSummaryLabel.setText(entry.title());
-        Edt.supplyAsync(activeReadWorker, () -> readEntryMarkdown(entry.filename()),
-                normalized -> applyDetailContent(entry, normalized), e -> {
+        Edt.supplyAsync(() -> readEntryMarkdown(entry.filename()), normalized -> applyDetailContent(entry, normalized),
+                e -> {
                     log.warn("Failed to read archived markdown {}: {}", entry.filename(), e.getMessage());
                     applyDetailContent(entry, "");
                 });

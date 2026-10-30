@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import java.awt.*;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
@@ -40,7 +39,6 @@ public final class CodebaseCachePanel extends JPanel {
     private final JTextArea repoMapArea = new JTextArea();
     private final JTextArea stableContextArea = new JTextArea();
     private final JTextArea sessionContextArea = new JTextArea();
-    private final transient AtomicReference<SwingWorker<CacheStatusData, Void>> activeRefreshWorker = new AtomicReference<>();
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     record CacheStatusData(Optional<ProjectCacheMeta> meta, Optional<String> packed, long stableTokens,
@@ -148,8 +146,8 @@ public final class CodebaseCachePanel extends JPanel {
         return new JTextArea[]{repoMapArea, stableContextArea, sessionContextArea};
     }
 
-    SwingWorker<CacheStatusData, Void> refreshStatus() {
-        return Edt.supplyAsync(activeRefreshWorker, () -> {
+    void refreshStatus() {
+        Edt.supplyAsync(() -> {
             Optional<ProjectCacheMeta> meta = Optional.empty();
             Optional<String> packed = Optional.empty();
             if (metaService != null) {
