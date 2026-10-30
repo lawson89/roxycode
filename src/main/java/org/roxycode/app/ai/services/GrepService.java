@@ -1,6 +1,5 @@
 package org.roxycode.app.ai.services;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -189,10 +188,12 @@ public class GrepService {
         }
         command.addAll(List.of("--no-heading", COLOR_NEVER_ARG));
 
-        if (fixedStrings)
+        if (fixedStrings) {
             command.add("-F");
-        if (ignoreCase)
+        }
+        if (ignoreCase) {
             command.add("-i");
+        }
         if (filePattern != null && !filePattern.isBlank()) {
             command.addAll(List.of(GLOB_FLAG, filePattern));
         }
@@ -203,44 +204,42 @@ public class GrepService {
     }
 
     static List<String> runRipGrepLines(List<String> command, Path workingDir, boolean redirectErrorStream) {
-        try {
-            ProcessResult result = ProcessRunner.run(command, workingDir, redirectErrorStream);
-            if (result.timedOut()) {
-                log.warn("RipGrep command timed out in {}: {}", workingDir, command);
-                return List.of();
-            }
-            if (result.exitCode() == 0 && result.output() != null && !result.output().isEmpty()) {
-                return result.output().lines().filter(line -> !line.isBlank()).toList();
-            }
-        } catch (IOException e) {
-            log.warn("Failed to execute RipGrep command {}: {}", command, e.getMessage());
+        ProcessResult result = ProcessRunner.run(command, workingDir, redirectErrorStream);
+        if (result.timedOut()) {
+            log.warn("RipGrep command timed out in {}: {}", workingDir, command);
+            return List.of();
+        }
+        if (result.isSuccess()) {
+            return result.outputLines().stream().filter(line -> !line.isBlank()).toList();
         }
         return List.of();
     }
 
     static EditorResult runRipGrepSearch(List<String> command, Path workingDir,
             UnaryOperator<String> outputNormalizer) {
-        try {
-            ProcessResult result = ProcessRunner.run(command, workingDir, true);
-            if (result.timedOut()) {
-                log.warn("RipGrep timed out: {}", command);
-                return new EditorResult(false, "", "RipGrep timed out");
-            }
-            int exitCode = result.exitCode();
-            if (exitCode == EXIT_CODE_NO_MATCHES) {
-                return new EditorResult(true, "", null);
-            }
-            String trimmedOutput = result.output() != null ? result.output().trim() : "";
-            if (exitCode != 0) {
-                log.warn("RipGrep failed with exit code {}: {}", exitCode, trimmedOutput);
-                return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + trimmedOutput);
-            }
-            String normalized = outputNormalizer.apply(trimmedOutput);
-            return new EditorResult(true, capOutputLines(normalized, MAX_OUTPUT_LINES), null);
-        } catch (IOException e) {
-            log.warn("Failed to execute RipGrep: {}", e.getMessage());
-            return new EditorResult(false, "", "Error executing RipGrep: " + e.getMessage());
+        ProcessResult result = ProcessRunner.run(command, workingDir, true);
+        if (result.timedOut()) {
+            log.warn("RipGrep timed out: {}", command);
+            return new EditorResult(false, "", "RipGrep timed out");
         }
+        int exitCode = result.exitCode();
+        if (exitCode == EXIT_CODE_NO_MATCHES) {
+            return new EditorResult(true, "", null);
+        }
+        String trimmedOutput = "";
+        if (result.output() != null) {
+            trimmedOutput = result.output().trim();
+        }
+        if (exitCode != 0) {
+            String errorDetail = trimmedOutput;
+            if (errorDetail.isEmpty() && result.errorOutput() != null) {
+                errorDetail = result.errorOutput().trim();
+            }
+            log.warn("RipGrep failed with exit code {}: {}", exitCode, errorDetail);
+            return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + errorDetail);
+        }
+        String normalized = outputNormalizer.apply(trimmedOutput);
+        return new EditorResult(true, capOutputLines(normalized, MAX_OUTPUT_LINES), null);
     }
 
     static String capOutputLines(String rawOutput, int maxLines) {

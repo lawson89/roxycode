@@ -1,6 +1,5 @@
 package org.roxycode.app.ai.services;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -200,19 +199,12 @@ public class GitService {
         if (!Files.isRegularFile(filePath)) {
             return "";
         }
-        try {
-            List<String> command = List.of("git", GIT_DIFF, "--no-index", "--src-prefix=a/", "--dst-prefix=b/", "--",
-                    "/dev/null", relFile);
-            ProcessResult result = ProcessRunner.run(command, projectService.getCurrentProjectRoot(),
-                    Map.of("GIT_TERMINAL_PROMPT", "0"));
-            if (result == null || result.timedOut() || (result.exitCode() != 0 && result.exitCode() != 1)) {
-                return "";
-            }
-            return normalizeUntrackedNoIndexDiff(relFile, result.output());
-        } catch (IOException e) {
-            log.warn("Failed to run git diff --no-index for untracked file {}: {}", relFile, e.getMessage());
+        ProcessResult result = runGitProcess(projectService.getCurrentProjectRoot(), GIT_DIFF, "--no-index",
+                "--src-prefix=a/", "--dst-prefix=b/", "--", "/dev/null", relFile);
+        if (result == null || result.timedOut() || (result.exitCode() != 0 && result.exitCode() != 1)) {
             return "";
         }
+        return normalizeUntrackedNoIndexDiff(relFile, result.output());
     }
 
     static String normalizeUntrackedNoIndexDiff(String relFile, String rawDiff) {
@@ -244,34 +236,38 @@ public class GitService {
         return executeGitCommand(true, args);
     }
 
+    private ProcessResult runGitProcess(Path root, String... args) {
+        List<String> command = new ArrayList<>(args.length + 1);
+        command.add("git");
+        command.addAll(Arrays.asList(args));
+        return ProcessRunner.run(command, root, Map.of("GIT_TERMINAL_PROMPT", "0"));
+    }
+
     private String executeGitCommand(boolean trimLeadingWhitespace, String... args) {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
-        try {
-            List<String> command = new ArrayList<>();
-            command.add("git");
-            command.addAll(Arrays.asList(args));
-
-            ProcessResult result = ProcessRunner.run(command, projectService.getCurrentProjectRoot(),
-                    Map.of("GIT_TERMINAL_PROMPT", "0"));
-            if (result.timedOut()) {
-                log.warn("Git command {} timed out", String.join(" ", args));
-                return "Error executing git command: Command timed out";
-            }
-            int exitCode = result.exitCode();
-            String out = result.output();
-            if (exitCode != 0) {
-                if (out.contains("not a git repository")) {
-                    return NOT_A_GIT_REPOSITORY;
-                }
-                log.warn("Git command {} failed with exit code {}: {}", String.join(" ", args), exitCode, out.trim());
-                return "Error (" + exitCode + "): " + out.trim();
-            }
-            return trimLeadingWhitespace ? out.trim() : out.stripTrailing();
-        } catch (IOException e) {
-            log.warn("Failed to execute git command {}: {}", String.join(" ", args), e.getMessage());
-            return "Error executing git command: " + e.getMessage();
+        ProcessResult result = runGitProcess(projectService.getCurrentProjectRoot(), args);
+        if (result.timedOut()) {
+            log.warn("Git command {} timed out", String.join(" ", args));
+            return "Error executing git command: Command timed out";
         }
+        int exitCode = result.exitCode();
+        String out = result.output();
+        if (exitCode < 0) {
+            log.warn("Failed to execute git command {}: {}", String.join(" ", args), result.errorOutput());
+            return "Error executing git command: " + result.errorOutput();
+        }
+        if (exitCode != 0) {
+            if (out.contains("not a git repository")) {
+                return NOT_A_GIT_REPOSITORY;
+            }
+            log.warn("Git command {} failed with exit code {}: {}", String.join(" ", args), exitCode, out.trim());
+            return "Error (" + exitCode + "): " + out.trim();
+        }
+        if (trimLeadingWhitespace) {
+            return out.trim();
+        }
+        return out.stripTrailing();
     }
 }

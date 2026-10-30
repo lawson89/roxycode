@@ -3,7 +3,6 @@ package org.roxycode.app.ai.services;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,7 +41,7 @@ public interface CtagsRunner {
             String scope, String signature, String pattern) {
     }
 
-    ProcessResult run(List<String> command) throws IOException;
+    ProcessResult run(List<String> command);
 
     default Map<Path, List<CtagsEntry>> runAndParse(List<Path> files, String fieldsArg, ObjectMapper objectMapper,
             String cancelMessage) {
@@ -63,44 +62,38 @@ public interface CtagsRunner {
         if (objectMapper != null) {
             mapper = objectMapper;
         }
-        try {
-            int flagCount = 0;
-            if (extraFlags != null) {
-                flagCount = extraFlags.size();
-            }
-            List<String> command = new ArrayList<>(files.size() + flagCount + 4);
-            command.add("ctags");
-            command.add("-f");
-            command.add("-");
-            command.add("--output-format=json");
-            if (extraFlags != null) {
-                for (String flag : extraFlags) {
-                    if (flag != null && !flag.isBlank()) {
-                        command.add(flag);
-                    }
+        int flagCount = 0;
+        if (extraFlags != null) {
+            flagCount = extraFlags.size();
+        }
+        List<String> command = new ArrayList<>(files.size() + flagCount + 4);
+        command.add("ctags");
+        command.add("-f");
+        command.add("-");
+        command.add("--output-format=json");
+        if (extraFlags != null) {
+            for (String flag : extraFlags) {
+                if (flag != null && !flag.isBlank()) {
+                    command.add(flag);
                 }
             }
-            for (Path file : files) {
-                command.add(file.toString());
-            }
+        }
+        for (Path file : files) {
+            command.add(file.toString());
+        }
 
-            ProcessResult procResult = run(command);
-            if (procResult.timedOut()) {
-                LOG.warn("Universal Ctags timed out for {} file(s)", files.size());
-                return results;
+        ProcessResult procResult = run(command);
+        if (procResult.timedOut()) {
+            LOG.warn("Universal Ctags timed out for {} file(s)", files.size());
+            return results;
+        }
+        if (procResult.exitCode() != 0 && !procResult.errorOutput().isBlank()) {
+            LOG.warn("Universal Ctags execution failed: {}", procResult.errorOutput());
+        }
+        for (String line : procResult.outputLines()) {
+            if (!line.isBlank()) {
+                parseJsonLine(line, files, mapper, cancelMessage, results);
             }
-            String output = procResult.output();
-            if (output == null || output.isBlank()) {
-                return results;
-            }
-            for (String line : output.lines().toList()) {
-                if (!line.isBlank()) {
-                    parseJsonLine(line, files, mapper, cancelMessage, results);
-                }
-            }
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, cancelMessage);
-            LOG.warn("Universal Ctags execution failed: {}", e.getMessage());
         }
         return results;
     }

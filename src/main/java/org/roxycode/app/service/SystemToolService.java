@@ -10,7 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
@@ -135,14 +134,7 @@ public class SystemToolService {
     }
 
     static boolean isDockerCliInstalled() {
-        try {
-            ProcessResult versionResult = ProcessRunner.run(List.of("docker", ARG_VERSION), null, true);
-            return !versionResult.timedOut() && versionResult.exitCode() == 0;
-        } catch (CancellationException e) {
-            throw e;
-        } catch (Exception e) {
-            return false;
-        }
+        return ProcessRunner.run(List.of("docker", ARG_VERSION)).isSuccess();
     }
 
     public synchronized boolean hasCachedTools() {
@@ -317,17 +309,11 @@ public class SystemToolService {
     }
 
     private SystemTool detectTool(String name, String command, String versionArg) {
-        try {
-            ProcessResult result = ProcessRunner.run(List.of(command, versionArg), null, true);
-            if (!result.timedOut() && result.exitCode() == 0) {
-                return SystemTool.ofKnownTool(name, parseVersion(result.output()), STATUS_DETECTED);
-            }
-            log.warn("Tool {} detection failed with exit code {}", name, result.exitCode());
-        } catch (CancellationException e) {
-            throw e;
-        } catch (Exception e) {
-            log.debug("Tool {} not detected: {}", name, e.getMessage());
+        ProcessResult result = ProcessRunner.run(List.of(command, versionArg));
+        if (result.isSuccess()) {
+            return SystemTool.ofKnownTool(name, parseVersion(result.output()), STATUS_DETECTED);
         }
+        log.warn("Tool {} detection failed with exit code {}", name, result.exitCode());
         return SystemTool.ofKnownTool(name, VERSION_NOT_FOUND, STATUS_MISSING);
     }
 

@@ -43,21 +43,28 @@ class RepoMapPackerServiceTest {
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
     }
 
-    private String ctagsLine(String name, String path, int line) throws IOException {
-        return objectMapper.writeValueAsString(Map.of("name", name, "path", path, "line", line)) + "\n";
+    private String ctagsLine(String name, String path, int line) {
+        try {
+            return objectMapper.writeValueAsString(Map.of("name", name, "path", path, "line", line)) + "\n";
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
-    private String ctagsLineWithPattern(String name, String path, int line, String kind, String pattern)
-            throws IOException {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("name", name);
-        map.put("path", path);
-        map.put("line", line);
-        map.put("kind", kind);
-        if (pattern != null) {
-            map.put("pattern", pattern);
+    private String ctagsLineWithPattern(String name, String path, int line, String kind, String pattern) {
+        try {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("name", name);
+            map.put("path", path);
+            map.put("line", line);
+            map.put("kind", kind);
+            if (pattern != null) {
+                map.put("pattern", pattern);
+            }
+            return objectMapper.writeValueAsString(map) + "\n";
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
         }
-        return objectMapper.writeValueAsString(map) + "\n";
     }
 
     @Test

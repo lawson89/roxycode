@@ -2,6 +2,7 @@ package org.roxycode.app.service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -10,12 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.apache.commons.io.output.NullOutputStream;
+import org.apache.commons.io.output.TeeOutputStream;
 import org.apache.commons.io.output.ThresholdingOutputStream;
-import org.zeroturnaround.exec.InvalidExitValueException;
-import org.zeroturnaround.exec.ProcessExecutor;
-import org.zeroturnaround.exec.ProcessInitException;
 
 public final class ProcessRunner {
 
@@ -28,72 +26,116 @@ public final class ProcessRunner {
 
     public record ProcessResult(int exitCode, String output, String errorOutput, boolean timedOut) {
 
+        public boolean isSuccess() {
+            return !timedOut && exitCode == 0;
+        }
+
+        public List<String> outputLines() {
+            if (output == null || output.isEmpty()) {
+                return List.of();
+            }
+            return output.lines().toList();
+        }
     }
 
-    public static ProcessResult run(List<String> command, Path workingDir, boolean redirectErrorStream)
-            throws IOException {
-        return run(command, workingDir, Map.of(), DEFAULT_TIMEOUT, redirectErrorStream);
+    public static ProcessResult run(List<String> command) {
+        return run(command, null, Map.of(), DEFAULT_TIMEOUT, true, null);
     }
 
-    public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env) throws IOException {
-        return run(command, workingDir, env, DEFAULT_TIMEOUT, true);
+    public static ProcessResult run(List<String> command, Path workingDir, boolean redirectErrorStream) {
+        return run(command, workingDir, Map.of(), DEFAULT_TIMEOUT, redirectErrorStream, null);
     }
 
-    public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout)
-            throws IOException {
-        return run(command, workingDir, env, timeout, true);
+    public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env) {
+        return run(command, workingDir, env, DEFAULT_TIMEOUT, true, null);
+    }
+
+    public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout) {
+        return run(command, workingDir, env, timeout, true, null);
     }
 
     public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout,
-            boolean redirectErrorStream) throws IOException {
+            boolean redirectErrorStream) {
         return run(command, workingDir, env, timeout, redirectErrorStream, null);
     }
 
-    @SuppressWarnings("PMD.PreserveStackTrace")
+    @SuppressWarnings({"PMD.CloseResource", "PMD.PreserveStackTrace"})
     public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout,
-            boolean redirectErrorStream, OutputStream extraOutputStream) throws IOException {
+            boolean redirectErrorStream, OutputStream outputMirror) {
         BoundedOutputStream stdoutStream = new BoundedOutputStream();
         BoundedOutputStream stderrStream = new BoundedOutputStream();
         OutputStream primaryOut = stdoutStream;
-        if (extraOutputStream != null) {
-            primaryOut = new org.apache.commons.io.output.TeeOutputStream(stdoutStream, extraOutputStream);
+        if (outputMirror != null) {
+            primaryOut = new TeeOutputStream(stdoutStream, outputMirror);
         }
         Duration effectiveTimeout = DEFAULT_TIMEOUT;
         if (timeout != null) {
             effectiveTimeout = timeout;
         }
 
-        ProcessExecutor executor = new ProcessExecutor().command(command).redirectErrorStream(redirectErrorStream)
-                .redirectOutput(primaryOut).timeout(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS)
-                .stopper(ProcessRunner::destroyProcessTree).destroyOnExit();
-
-        if (!redirectErrorStream) {
-            executor.redirectError(stderrStream);
-        }
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(redirectErrorStream);
         if (workingDir != null) {
-            executor.directory(workingDir.toFile());
+            pb.directory(workingDir.toFile());
         }
         if (env != null && !env.isEmpty()) {
-            executor.environment(env);
+            pb.environment().putAll(env);
         }
 
+        Process process = null;
         try {
-            org.zeroturnaround.exec.ProcessResult ztResult = executor.execute();
-            return new ProcessResult(ztResult.getExitValue(), stdoutStream.toString(), stderrStream.toString(), false);
-        } catch (TimeoutException e) {
-            return new ProcessResult(-1, stdoutStream.toString(), stderrStream.toString(), true);
+            process = pb.start();
+            OutputStream targetOut = primaryOut;
+            Process startedProcess = process;
+            Thread stdoutThread = Thread.ofVirtual()
+                    .start(() -> drainStream(startedProcess.getInputStream(), targetOut));
+            Thread stderrThread = null;
+            if (!redirectErrorStream) {
+                stderrThread = Thread.ofVirtual()
+                        .start(() -> drainStream(startedProcess.getErrorStream(), stderrStream));
+            }
+
+            boolean completed = process.waitFor(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!completed) {
+                destroyProcessTree(process);
+                joinQuietly(stdoutThread);
+                joinQuietly(stderrThread);
+                return new ProcessResult(-1, stdoutStream.toString(), stderrStream.toString(), true);
+            }
+
+            stdoutThread.join();
+            if (stderrThread != null) {
+                stderrThread.join();
+            }
+            return new ProcessResult(process.exitValue(), stdoutStream.toString(), stderrStream.toString(), false);
         } catch (InterruptedException e) {
+            destroyProcessTree(process);
             Thread.currentThread().interrupt();
             CancellationException ce = new CancellationException("Process execution interrupted");
             ce.initCause(e);
             throw ce;
-        } catch (ProcessInitException e) {
-            if (e.getCause() instanceof IOException ioEx) {
-                throw ioEx;
+        } catch (IOException e) {
+            destroyProcessTree(process);
+            String errorMsg;
+            if (e.getMessage() != null) {
+                errorMsg = e.getMessage();
+            } else {
+                errorMsg = e.getClass().getSimpleName();
             }
-            throw e;
-        } catch (InvalidExitValueException e) {
-            throw new IOException("Process execution failed", e);
+            return new ProcessResult(-1, "", errorMsg, false);
+        }
+    }
+
+    private static void drainStream(InputStream source, OutputStream target) {
+        try (InputStream in = source) {
+            in.transferTo(target);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static void joinQuietly(Thread thread) throws InterruptedException {
+        if (thread != null) {
+            thread.join(1000);
         }
     }
 

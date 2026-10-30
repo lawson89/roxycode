@@ -131,8 +131,7 @@ class GenericBuildToolServiceTest {
         Files.writeString(logFile, "  [ERROR] App.java:[10,5] cannot find symbol  " + System.lineSeparator());
         try (org.mockito.MockedStatic<org.roxycode.app.service.ProcessRunner> runner = mockStatic(
                 org.roxycode.app.service.ProcessRunner.class)) {
-            List<String> expectedCmd = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e",
-                    "^.[E]RROR.", logFile.toString());
+            List<String> expectedCmd = List.of("rg", "--color=never", "-N", "-e", "^.[E]RROR.", logFile.toString());
             runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(expectedCmd), isNull(), eq(false)))
                     .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(0,
                             "  [ERROR] App.java:[10,5] cannot find symbol  " + System.lineSeparator(), "", false));
@@ -140,8 +139,7 @@ class GenericBuildToolServiceTest {
             assertEquals(List.of("[ERROR] App.java:[10,5] cannot find symbol"), matches);
             runner.verify(() -> org.roxycode.app.service.ProcessRunner.run(eq(expectedCmd), isNull(), eq(false)));
 
-            List<String> noMatchCmd = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e", "^FAIL:",
-                    logFile.toString());
+            List<String> noMatchCmd = List.of("rg", "--color=never", "-N", "-e", "^FAIL:", logFile.toString());
             runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(noMatchCmd), isNull(), eq(false)))
                     .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(
                             GrepService.EXIT_CODE_NO_MATCHES, "", "", false));
@@ -169,10 +167,8 @@ class GenericBuildToolServiceTest {
         Path persistedLog = projectDataDir.resolve("tmp/build.log");
         try (org.mockito.MockedStatic<org.roxycode.app.service.ProcessRunner> runner = mockStatic(
                 org.roxycode.app.service.ProcessRunner.class)) {
-            List<String> errCmd = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e", "^.[E]RROR.",
-                    persistedLog.toString());
-            List<String> failCmd = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e", "^FAIL:",
-                    persistedLog.toString());
+            List<String> errCmd = List.of("rg", "--color=never", "-N", "-e", "^.[E]RROR.", persistedLog.toString());
+            List<String> failCmd = List.of("rg", "--color=never", "-N", "-e", "^FAIL:", persistedLog.toString());
             runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(errCmd), isNull(), eq(false)))
                     .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(0,
                             "[ERROR] Container compile failure" + System.lineSeparator(), "", false));

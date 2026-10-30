@@ -351,11 +351,11 @@ public class GenericBuildToolService {
             exitCode = result.exitCode();
             if (result.timedOut()) {
                 errors.add("Command timed out after 10 minutes");
+            } else if (exitCode < 0 && !result.errorOutput().isBlank()) {
+                errors.add(result.errorOutput());
             }
             return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
-        } catch (CancellationException e) {
-            throw e;
-        } catch (Exception e) {
+        } catch (IOException e) {
             log.error("Process execution failed", e);
             errors.add(ExceptionUtils.getStackTrace(e));
             return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
@@ -405,26 +405,9 @@ public class GenericBuildToolService {
         if (regex == null || regex.isBlank() || logFile == null || !Files.exists(logFile)) {
             return List.of();
         }
-        List<String> command = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e", regex,
-                logFile.toString());
-        try {
-            ProcessResult result = ProcessRunner.run(command, null, false);
-            if (result.timedOut()) {
-                log.warn("RipGrep command timed out for {}: {}", patternType, command);
-                return List.of();
-            }
-            if (result.exitCode() == 0 && result.output() != null && !result.output().isEmpty()) {
-                return result.output().lines().map(String::trim).filter(line -> !line.isEmpty()).toList();
-            }
-            if (result.exitCode() == GrepService.EXIT_CODE_NO_MATCHES) {
-                return List.of();
-            }
-            log.warn("RipGrep failed (exit {}) for {}: {}", result.exitCode(), patternType, result.errorOutput());
-            return List.of();
-        } catch (Exception e) {
-            log.warn("Failed to run RipGrep for {} with regex {}: {}", patternType, regex, e.getMessage());
-            return List.of();
-        }
+        List<String> command = List.of("rg", "--color=never", "-N", "-e", regex, logFile.toString());
+        return GrepService.runRipGrepLines(command, null, false).stream().map(String::trim)
+                .filter(line -> !line.isEmpty()).toList();
     }
 
     public String getConfigContent() throws IOException {

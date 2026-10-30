@@ -134,9 +134,7 @@ class SymbolServiceTest {
         symbolService.setCtagsRunner(cmd -> new ProcessResult(0, "", "", true));
         assertTrue(symbolService.getFileOutline("EmptyOutline.java").isEmpty());
 
-        symbolService.setCtagsRunner(cmd -> {
-            throw new IOException("ctags not found");
-        });
+        symbolService.setCtagsRunner(cmd -> new ProcessResult(-1, "", "ctags not found", false));
         assertTrue(symbolService.getFileOutline("EmptyOutline.java").isEmpty());
 
         assertThrows(IllegalArgumentException.class, () -> symbolService.getFileOutline("Missing.java"));
@@ -209,7 +207,11 @@ class SymbolServiceTest {
         String originalContent = Files.readString(file);
         clearInvocations(projectService);
         symbolService.setCtagsRunner(cmd -> {
-            Files.writeString(file, "corrupted on disk after initial read");
+            try {
+                Files.writeString(file, "corrupted on disk after initial read");
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
             return new ProcessResult(0, String.join(NL, tagJson("alpha", null, 2, 3, "method", "Batch", "()"),
                     tagJson("beta", null, 4, 5, "method", "Batch", "()")), "", false);
         });

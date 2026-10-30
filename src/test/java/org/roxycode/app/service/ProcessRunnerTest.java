@@ -30,21 +30,39 @@ class ProcessRunnerTest {
     }
 
     @Test
-    void testSuccessfulExecutionAndEnv() throws IOException {
-        String script = SystemUtils.IS_OS_WINDOWS ? "echo %TEST_VAR%" : "echo $TEST_VAR";
+    void testSuccessfulExecutionEnvAndProcessResultHelpers() {
+        String script;
+        if (SystemUtils.IS_OS_WINDOWS) {
+            script = "echo %TEST_VAR%";
+        } else {
+            script = "echo $TEST_VAR";
+        }
         ProcessResult result = ProcessRunner.run(shellCmd(script), tempDir, Map.of("TEST_VAR", "hello_roxy"),
                 Duration.ofSeconds(5));
 
+        assertTrue(result.isSuccess());
         assertFalse(result.timedOut());
         assertEquals(0, result.exitCode());
         assertTrue(result.output().trim().contains("hello_roxy"));
+        assertEquals(List.of("hello_roxy"), result.outputLines().stream().map(String::trim).toList());
+
+        ProcessResult emptyRes = new ProcessResult(0, "", "", false);
+        assertTrue(emptyRes.isSuccess());
+        assertTrue(emptyRes.outputLines().isEmpty());
+
+        ProcessResult failedRes = ProcessRunner.run(List.of("non_existent_command_xyz_12345"));
+        assertFalse(failedRes.isSuccess());
+        assertFalse(failedRes.timedOut());
+        assertEquals(-1, failedRes.exitCode());
+        assertFalse(failedRes.errorOutput().isBlank());
     }
 
     @Test
-    void testSeparateStdoutAndStderrDraining() throws IOException {
+    void testSeparateStdoutAndStderrDraining() {
         String script = "echo out_msg && echo err_msg >&2";
         ProcessResult result = ProcessRunner.run(shellCmd(script), tempDir, false);
 
+        assertTrue(result.isSuccess());
         assertFalse(result.timedOut());
         assertEquals(0, result.exitCode());
         assertTrue(result.output().contains("out_msg"));
@@ -53,9 +71,10 @@ class ProcessRunnerTest {
     }
 
     @Test
-    void testTimeoutDestroysProcessTree() throws IOException {
+    void testTimeoutDestroysProcessTree() {
         ProcessResult result = ProcessRunner.run(shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofMillis(200), true);
 
+        assertFalse(result.isSuccess());
         assertTrue(result.timedOut());
         assertEquals(-1, result.exitCode());
     }
@@ -90,7 +109,6 @@ class ProcessRunnerTest {
         BoundedOutputStream normalOut = new BoundedOutputStream(100);
         normalOut.write(normalBytes);
         assertEquals("hello world\nline two", normalOut.toString());
-
         BoundedOutputStream exactOut = new BoundedOutputStream(5);
         exactOut.write("12345".getBytes(StandardCharsets.UTF_8));
         assertEquals("12345", exactOut.toString());
