@@ -14,7 +14,17 @@ import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.html.IndependentAttributeProviderFactory;
 import com.vladsch.flexmark.html.renderer.LinkResolverContext;
 import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.ast.FencedCodeBlock;
+import com.vladsch.flexmark.ast.IndentedCodeBlock;
+import com.vladsch.flexmark.html.HtmlRenderer;
+import com.vladsch.flexmark.html.HtmlWriter;
+import com.vladsch.flexmark.html.renderer.NodeRenderer;
+import com.vladsch.flexmark.html.renderer.NodeRendererContext;
+import com.vladsch.flexmark.html.renderer.NodeRendererFactory;
+import com.vladsch.flexmark.html.renderer.NodeRenderingHandler;
+import com.vladsch.flexmark.util.ast.Block;
 import com.vladsch.flexmark.util.ast.Node;
+import java.util.Set;
 import com.vladsch.flexmark.util.data.DataHolder;
 import com.vladsch.flexmark.util.data.MutableDataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
@@ -57,9 +67,9 @@ public final class SwingHtmlUtils {
 
     private static final Logger log = LoggerFactory.getLogger(SwingHtmlUtils.class);
 
-    private static final DataHolder FLEXMARK_OPTIONS = new MutableDataSet()
-            .set(Parser.EXTENSIONS, Arrays.asList(TablesExtension.create(), StrikethroughExtension.create(),
-                    YamlFrontMatterExtension.create(), new MarkdownTableAttributeExtension()))
+    private static final DataHolder FLEXMARK_OPTIONS = new MutableDataSet().set(Parser.EXTENSIONS,
+            Arrays.asList(TablesExtension.create(), StrikethroughExtension.create(), YamlFrontMatterExtension.create(),
+                    new MarkdownTableAttributeExtension(), new SyntaxHighlightingExtension()))
             .toImmutable();
     private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
     private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
@@ -129,7 +139,7 @@ public final class SwingHtmlUtils {
         if (markdown == null || markdown.isEmpty()) {
             return "";
         }
-        return JexlToHtmlConverter.highlightCodeBlocks(MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
+        return MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown));
     }
 
     public static Parser getMarkdownParser() {
@@ -450,6 +460,41 @@ public final class SwingHtmlUtils {
             });
         } catch (UncheckedIOException e) {
             throw e.getCause();
+        }
+    }
+
+    private static final class SyntaxHighlightingExtension implements HtmlRenderer.HtmlRendererExtension {
+        @Override
+        public void rendererOptions(MutableDataHolder options) {
+        }
+
+        @Override
+        public void extend(HtmlRenderer.Builder htmlRendererBuilder, String rendererType) {
+            htmlRendererBuilder.nodeRendererFactory(new CodeBlockNodeRenderer.Factory());
+        }
+    }
+
+    private static final class CodeBlockNodeRenderer implements NodeRenderer {
+        @Override
+        public Set<NodeRenderingHandler<?>> getNodeRenderingHandlers() {
+            return Set.of(new NodeRenderingHandler<>(FencedCodeBlock.class, this::render),
+                    new NodeRenderingHandler<>(IndentedCodeBlock.class, this::render));
+        }
+
+        private void render(Node node, NodeRendererContext context, HtmlWriter html) {
+            String code = ((Block) node).getContentChars().toString();
+            String language = "";
+            if (node instanceof FencedCodeBlock fenced) {
+                language = fenced.getInfo().toString();
+            }
+            html.raw(JexlToHtmlConverter.highlight(code, language));
+        }
+
+        static class Factory implements NodeRendererFactory {
+            @Override
+            public NodeRenderer apply(DataHolder options) {
+                return new CodeBlockNodeRenderer();
+            }
         }
     }
 }

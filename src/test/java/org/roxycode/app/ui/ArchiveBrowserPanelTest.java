@@ -102,7 +102,7 @@ class ArchiveBrowserPanelTest {
         String markdownWithCode = "---\nid: '20250514-120000-code'\ntitle: 'Code Topic'\n---\n\n" + bt3
                 + "java\npublic class Demo {\n    int x = 1;\n}\n" + bt3 + "\n";
         String detailHtml = ArchiveBrowserPanel.buildDetailHtml(entry, markdownWithCode, ArchiveMode.TOPICS);
-        assertContainsAll(detailHtml, "<span class='tk-rw'>public</span>", "<span class='tk-nm'>1</span>");
+        assertContainsAll(detailHtml, "<span class='mtk-keyword'>public</span>", "<span class='mtk-number'>1</span>");
         assertFalse(detailHtml.contains("<span class=<span"));
     }
 }

@@ -30,10 +30,10 @@ code { font-family: monospace; background-color: #e2e8f0; color: #0f172a; }
 .spec-functional-header { color: #2196F3; }
 .spec-technical-header { color: #4CAF50; }
 
-.tk-rw { color: #cf222e; font-weight: bold; }
-.tk-st { color: #0a3069; }
-.tk-nm { color: #0550ae; }
-.tk-cm { color: #6e7781; font-style: italic; }
+.mtk-keyword { color: #cf222e; font-weight: bold; }
+.mtk-string { color: #0a3069; }
+.mtk-number { color: #0550ae; }
+.mtk-comment { color: #6e7781; font-style: italic; }
 .tool-result { font-family: sans-serif; font-size: 11px; color: #15803d; font-weight: bold; }
 .tool-error { font-family: sans-serif; font-size: 11px; color: #b91c1c; font-weight: bold; }
 .copy-action { font-family: sans-serif; font-size: 10px; color: #666666; text-decoration: none; }

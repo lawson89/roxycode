@@ -107,7 +107,7 @@ public class SystemToolService {
         this.dockerCliPresentSupplier = dockerCliPresentSupplier;
         this.toolProber = this::probeAllTools;
         this.toolsCache = Caffeine.newBuilder().expireAfterWrite(5, TimeUnit.MINUTES)
-                .buildAsync((key, executor) -> CompletableFuture.supplyAsync(this::probeAndPublish, executor));
+                .buildAsync((key, executor) -> CompletableFuture.supplyAsync(this::loadOrProbe, executor));
     }
 
     private List<SystemTool> loadOrProbe() {
@@ -201,10 +201,15 @@ public class SystemToolService {
     }
 
     public CompletableFuture<List<SystemTool>> refreshTools() {
-        return toolsCache.synchronous().refresh("all").thenApply(detected -> {
-            updateCacheAndPublish(detected);
-            return detected;
-        });
+        Path path = getCacheFilePath();
+        if (path != null) {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                log.debug("Failed to delete cache file for refresh", e);
+            }
+        }
+        return toolsCache.synchronous().refresh("all");
     }
 
     public CompletableFuture<Boolean> isDockerAvailable() {
@@ -272,7 +277,7 @@ public class SystemToolService {
             return List.of();
         try {
             SystemToolsCache cache = mapper.readValue(path.toFile(), SystemToolsCache.class);
-            return (cache != null && cache.tools() != null) ? List.copyOf(cache.tools()) : List.of();
+            return (cache != null && cache.getTools() != null) ? List.copyOf(cache.getTools()) : List.of();
         } catch (IOException e) {
             log.warn("Failed to load cached system tools from {}: {}", path, e.getMessage());
             return List.of();

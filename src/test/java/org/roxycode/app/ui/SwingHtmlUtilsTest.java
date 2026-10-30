@@ -24,7 +24,7 @@ class SwingHtmlUtilsTest {
                 ~~~
                 """);
         assertContainsAll(html, "<h1>Heading</h1>", "md-table", "cellpadding", "md-th", "md-td",
-                "<span class='tk-rw'>public</span>");
+                "<span class='mtk-keyword'>public</span>");
     }
 
     @Test
