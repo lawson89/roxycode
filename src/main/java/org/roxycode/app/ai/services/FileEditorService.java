@@ -8,12 +8,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.text.similarity.JaroWinklerSimilarity;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -29,10 +27,7 @@ import org.springframework.context.ApplicationEventPublisher;
 public class FileEditorService {
 
     private static final Logger log = LoggerFactory.getLogger(FileEditorService.class);
-    private static final int MAX_DIAGNOSTIC_LINES = 3;
     private static final int SINGLE_MATCH_COUNT = 1;
-    private static final double MIN_LINE_SIMILARITY = 0.6;
-    private static final JaroWinklerSimilarity JARO_WINKLER = new JaroWinklerSimilarity();
     private static final char LF = '\n';
     private static final String NL = "\n";
     private static final String CRLF = "\r\n";
@@ -71,7 +66,7 @@ public class FileEditorService {
 
         String content = Files.readString(path);
         if (targetBlock == null || targetBlock.isBlank()) {
-            return new EditorResult(false, "", buildTargetNotFoundHint(relativePath, content, targetBlock));
+            return new EditorResult(false, "", buildTargetNotFoundHint(relativePath, content));
         }
 
         BlockMatch match = findUniqueBlockMatch(SINGLE_MATCH_COUNT, relativePath, content, targetBlock,
@@ -84,15 +79,16 @@ public class FileEditorService {
 
     @AgentDoc(value = "Replaces multiple non-overlapping target blocks in a file atomically in a single write operation.", examples = "fileEditorService.replaceBlocks('src/Main.java', [{'target': 'old1', 'replacement': 'new1'}, {'target': 'old2', 'replacement': 'new2'}])")
     public EditorResult replaceBlocks(@AgentDoc("The file path relative to the project root") String relativePath,
-            @AgentDoc("List of maps with 'target' and 'replacement' keys") List<Map<String, String>> edits)
-            throws IOException {
-        return replaceBlocksInternal(relativePath, edits);
-    }
-
-    @AgentDoc(value = "Replaces multiple non-overlapping target blocks in a file atomically in a single write operation.", examples = "fileEditorService.replaceBlocks('src/Main.java', [{'target': 'old1', 'replacement': 'new1'}, {'target': 'old2', 'replacement': 'new2'}])")
-    public EditorResult replaceBlocks(@AgentDoc("The file path relative to the project root") String relativePath,
-            @AgentDoc("Array of maps with 'target' and 'replacement' keys") Object[] edits) throws IOException {
-        return replaceBlocksInternal(relativePath, edits == null ? null : Arrays.asList(edits));
+            @AgentDoc("Array of maps with 'target' and 'replacement' keys") Object... edits) throws IOException {
+        List<?> editList;
+        if (edits != null && edits.length == 1 && edits[0] instanceof List<?> list) {
+            editList = list;
+        } else if (edits != null) {
+            editList = Arrays.asList(edits);
+        } else {
+            editList = null;
+        }
+        return replaceBlocksInternal(relativePath, editList);
     }
 
     private EditorResult replaceBlocksInternal(String relativePath, List<?> edits) throws IOException {
@@ -124,7 +120,7 @@ public class FileEditorService {
 
             if (targetBlock == null || targetBlock.isBlank()) {
                 return new EditorResult(false, "",
-                        "Edit #" + editNum + " failed: " + buildTargetNotFoundHint(relativePath, content, targetBlock));
+                        "Edit #" + editNum + " failed: " + buildTargetNotFoundHint(relativePath, content));
             }
             if (replacementBlock == null) {
                 return new EditorResult(false, "",
@@ -192,7 +188,7 @@ public class FileEditorService {
         }
 
         if (regexMatches.isEmpty()) {
-            return new BlockMatch(editIndex, -1, -1, null, buildTargetNotFoundHint(relativePath, content, targetBlock));
+            return new BlockMatch(editIndex, -1, -1, null, buildTargetNotFoundHint(relativePath, content));
         }
         if (regexMatches.size() > SINGLE_MATCH_COUNT) {
             return new BlockMatch(editIndex, -1, -1, null,
@@ -377,45 +373,12 @@ public class FileEditorService {
         return 1 + StringUtils.countMatches(content.subSequence(0, limit), LF);
     }
 
-    private String buildTargetNotFoundHint(String relativePath, String content, String targetBlock) {
-        StringBuilder hint = new StringBuilder("TargetBlock not found in file: ").append(relativePath);
-        List<String> fileLines = content.lines().toList();
-        if (fileLines.isEmpty() || targetBlock == null || targetBlock.isBlank()) {
-            return hint.append(" (file has ").append(fileLines.size()).append(" lines)").toString();
+    private static String buildTargetNotFoundHint(String relativePath, String content) {
+        long lineCount = 0;
+        if (!content.isEmpty()) {
+            lineCount = content.lines().count();
         }
-
-        String firstTargetLine = targetBlock.lines().map(String::trim).filter(s -> !s.isEmpty()).findFirst().orElse("")
-                .toLowerCase(Locale.ROOT);
-
-        record ScoredLine(int lineNum, double score) {
-        }
-        List<ScoredLine> scoredLines = new ArrayList<>();
-        if (!firstTargetLine.isEmpty()) {
-            for (int i = 0; i < fileLines.size(); i++) {
-                String lineTrimmed = fileLines.get(i).trim().toLowerCase(Locale.ROOT);
-                if (lineTrimmed.isEmpty())
-                    continue;
-                double similarity = lineTrimmed.contains(firstTargetLine)
-                        ? 1.0
-                        : JARO_WINKLER.apply(firstTargetLine, lineTrimmed);
-                if (similarity >= MIN_LINE_SIMILARITY) {
-                    scoredLines.add(new ScoredLine(i + 1, similarity));
-                }
-            }
-        }
-
-        scoredLines.sort((a, b) -> Double.compare(b.score(), a.score()));
-        if (!scoredLines.isEmpty()) {
-            hint.append(". Closest matching lines (file has ").append(fileLines.size()).append(" lines):");
-            int count = Math.min(MAX_DIAGNOSTIC_LINES, scoredLines.size());
-            for (int i = 0; i < count; i++) {
-                int lineNum = scoredLines.get(i).lineNum();
-                hint.append(NL).append("Line ").append(lineNum).append(": ").append(fileLines.get(lineNum - 1));
-            }
-        } else {
-            hint.append(" (no similar lines found; file has ").append(fileLines.size()).append(" lines)");
-        }
-        return hint.toString();
+        return "TargetBlock not found in file: " + relativePath + " (file has " + lineCount + " lines)";
     }
 
     private static String normalizeLineEndings(String text, String lineSeparator) {

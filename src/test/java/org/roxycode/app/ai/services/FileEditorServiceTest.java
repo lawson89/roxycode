@@ -85,7 +85,7 @@ class FileEditorServiceTest {
         assertEditFails(
                 fileEditorService.replaceBlock("service.java", "public String computeTotal(double amount)",
                         "public String computeTotal(long amount)"),
-                "TargetBlock not found in file: service.java", "Line 3:     public String computeTotal(int count) {");
+                "TargetBlock not found in file: service.java (file has 6 lines)");
         assertEditFails(fileEditorService.replaceBlock("nonexistent.java", "foo", "bar"),
                 "File does not exist: nonexistent.java");
     }
@@ -256,8 +256,8 @@ class FileEditorServiceTest {
                 List.of(Map.of("target", "return 'created:' + id;", "replacement", "return 'ok:' + id;"),
                         Map.of("target", "public String cancelOrder(String orderCode)", "replacement",
                                 "public String cancelOrder(long id)")));
-        assertEditFails(notFoundResult, "Edit #2 failed:", "TargetBlock not found in file: OrderService.java",
-                "Line 6:     public String cancelOrder(int id) {");
+        assertEditFails(notFoundResult, "Edit #2 failed:",
+                "TargetBlock not found in file: OrderService.java (file has 9 lines)");
         assertEquals(initial, Files.readString(file));
         verify(eventPublisher, never()).publishEvent(any());
 

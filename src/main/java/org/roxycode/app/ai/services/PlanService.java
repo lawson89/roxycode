@@ -132,21 +132,9 @@ public class PlanService {
             @AgentDoc("Array of functional requirements") String[] requirements,
             @AgentDoc("Array of technical implementation steps") String[] technicalSteps) {
         requirePhase("submitPlan");
-        return submitPlan(title, goal, requirements != null ? Arrays.asList(requirements) : List.of(),
-                technicalSteps != null ? Arrays.asList(technicalSteps) : List.of());
-    }
-
-    @AgentDoc(value = "Submits a project plan covering both functional requirements and technical implementation steps.", phases = {
-            "PLAN"}, examples = {"planService.submitPlan('Add Feature', 'Goal description', ['Req 1'], ['Step 1'])"})
-    public synchronized String submitPlan(
-            @AgentDoc("The concise title of the project or feature plan (max 50 characters)") String title,
-            @AgentDoc("The high-level goal of the plan") String goal,
-            @AgentDoc("List of functional requirements") List<String> requirements,
-            @AgentDoc("List of technical implementation steps") List<String> technicalSteps) {
-        requirePhase("submitPlan");
-        List<String> safeRequirements = requirements != null ? List.copyOf(requirements) : List.of();
+        List<String> safeRequirements = requirements != null ? Arrays.asList(requirements) : List.of();
         List<ImplementationPlan.TechStep> steps = technicalSteps != null
-                ? technicalSteps.stream().map(s -> new ImplementationPlan.TechStep(s, false)).toList()
+                ? Arrays.stream(technicalSteps).map(s -> new ImplementationPlan.TechStep(s, false)).toList()
                 : List.of();
 
         return submitPlan(new ImplementationPlan(title != null ? title : "", goal != null ? goal : "", safeRequirements,
@@ -211,21 +199,13 @@ public class PlanService {
     public synchronized String markStepCompleted(
             @AgentDoc("The index of the step (0-based). Must be valid for the current plan") int index) {
         requirePhase("markStepCompleted");
-        return updateStepsStatus(List.of(index), true);
+        return updateStepsStatus(new int[]{index}, true);
     }
 
     @AgentDoc(value = "Marks multiple technical implementation steps as completed in a single batch call (0-based indices).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepsCompleted([0, 1])"})
     public synchronized String markStepsCompleted(
             @AgentDoc("Array of 0-based step indices to mark as completed") int... indices) {
-        requirePhase("markStepsCompleted");
-        return updateStepsStatus(toIntegerList(indices), true);
-    }
-
-    @AgentDoc(value = "Marks multiple technical implementation steps as completed using their 0-based indices. Call this immediately after a batch of steps is verified rather than deferring to the end of the phase.", phases = {
-            "CODE", "REVIEW"}, examples = {"planService.markStepsCompleted([0, 1])"})
-    public synchronized String markStepsCompleted(
-            @AgentDoc("List of 0-based step indices to mark as completed") List<Integer> indices) {
         requirePhase("markStepsCompleted");
         return updateStepsStatus(indices, true);
     }
@@ -234,7 +214,7 @@ public class PlanService {
             "REVIEW"}, examples = {"planService.markStepIncomplete(0)"})
     public synchronized String markStepIncomplete(@AgentDoc("The index of the step (0-based)") int index) {
         requirePhase("markStepIncomplete");
-        return updateStepsStatus(List.of(index), false);
+        return updateStepsStatus(new int[]{index}, false);
     }
 
     @AgentDoc(value = "Marks multiple technical implementation steps as incomplete in a single batch call (0-based indices).", phases = {
@@ -242,45 +222,23 @@ public class PlanService {
     public synchronized String markStepsIncomplete(
             @AgentDoc("Array of 0-based step indices to mark as incomplete") int... indices) {
         requirePhase("markStepsIncomplete");
-        return updateStepsStatus(toIntegerList(indices), false);
-    }
-
-    @AgentDoc(value = "Marks multiple technical implementation steps as incomplete using their 0-based indices.", phases = {
-            "CODE", "REVIEW"}, examples = {"planService.markStepsIncomplete([0, 1])"})
-    public synchronized String markStepsIncomplete(
-            @AgentDoc("List of 0-based step indices to mark as incomplete") List<Integer> indices) {
-        requirePhase("markStepsIncomplete");
         return updateStepsStatus(indices, false);
     }
 
-    private static List<Integer> toIntegerList(int... indices) {
-        if (indices == null) {
-            return null;
-        }
-        List<Integer> list = new ArrayList<>(indices.length);
-        for (int index : indices) {
-            list.add(index);
-        }
-        return list;
-    }
-
-    private synchronized String updateStepsStatus(List<Integer> indices, boolean completed) {
+    private synchronized String updateStepsStatus(int[] indices, boolean completed) {
         ensureActivePlan();
-        if (indices == null || indices.isEmpty()) {
+        if (indices == null || indices.length == 0) {
             throw new IllegalArgumentException("Error: Step indices cannot be null or empty.");
         }
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
-        for (Integer index : indices) {
-            if (index == null) {
-                throw new IllegalArgumentException("Error: Step index cannot be null.");
-            }
+        for (int index : indices) {
             validateStepIndex(index, steps.size());
         }
-        for (Integer index : indices) {
+        for (int index : indices) {
             steps.set(index, new ImplementationPlan.TechStep(steps.get(index).description(), completed));
         }
         setCurrentPlan(currentPlan.withTechnicalSteps(steps));
-        return String.format("Marked steps %s %s. %s", indices, completed ? "completed" : "incomplete",
+        return String.format("Marked steps %s %s. %s", Arrays.toString(indices), completed ? "completed" : "incomplete",
                 currentPlan.formatRemainingIncompleteSteps());
     }
 
