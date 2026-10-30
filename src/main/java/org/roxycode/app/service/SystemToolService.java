@@ -209,7 +209,10 @@ public class SystemToolService {
                 log.debug("Failed to delete cache file for refresh", e);
             }
         }
-        return toolsCache.synchronous().refresh("all");
+        return toolsCache.synchronous().refresh("all").thenApply(tools -> {
+            toolsCache.put("all", CompletableFuture.completedFuture(tools));
+            return tools;
+        });
     }
 
     public CompletableFuture<Boolean> isDockerAvailable() {

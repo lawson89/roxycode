@@ -19,7 +19,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
-import org.apache.commons.lang3.StringUtils;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JLabel;
@@ -34,13 +33,11 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import net.miginfocom.swing.MigLayout;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GrepService;
-import org.apache.commons.io.FilenameUtils;
-import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import java.util.concurrent.TimeUnit;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -54,7 +51,6 @@ public final class FileMentionPopup {
     static final int POPUP_VERTICAL_GAP = 4;
     static final int MIN_POPUP_WIDTH = 320;
     static final int MAX_POPUP_WIDTH = 520;
-    static final long STALE_CACHE_TTL_MS = 10_000L;
 
     static final int TIER_FILENAME_PREFIX = 1;
     static final int TIER_FILENAME_SUBSTRING = 2;
@@ -65,14 +61,6 @@ public final class FileMentionPopup {
     private static final Set<String> CODE_EXTENSIONS = Set.of(
             "java,kt,kts,groovy,scala,py,js,ts,tsx,jsx,c,cpp,h,hpp,rs,go,rb,php,cs,swift,sql,sh,bash,zsh,xml,json,yaml,yml,toml,properties,html,css,scss,md"
                     .split(","));
-
-    private static final Comparator<FileCandidate> PATH_TIE_BREAKER = Comparator
-            .comparingInt((FileCandidate c) -> c.relativePath().length()).thenComparing(FileCandidate::pathLower)
-            .thenComparing(FileCandidate::relativePath);
-
-    private static final Comparator<FileCandidate> DEFAULT_CANDIDATE_COMPARATOR = Comparator
-            .comparing(FileCandidate::fileNameLower).thenComparingInt(c -> c.fileName().length())
-            .thenComparing(PATH_TIE_BREAKER);
 
     public record FileCandidate(String relativePath, String fileName, String parentDir, String fileNameLower,
             String pathLower) {
@@ -90,9 +78,6 @@ public final class FileMentionPopup {
     public record MentionToken(int startOffset, int endOffset, String query) {
     }
 
-    private record ScoredCandidate(FileCandidate candidate, int tier) {
-    }
-
     private final JTextArea inputArea;
     private final JScrollPane inputScrollPane;
     private final JPopupMenu popupMenu;
@@ -102,7 +87,7 @@ public final class FileMentionPopup {
 
     private volatile GrepService grepService;
     private volatile Executor backgroundExecutor = ForkJoinPool.commonPool();
-    private final AsyncLoadingCache<String, List<FileCandidate>> candidateCache;
+    private volatile List<FileCandidate> cachedCandidates = List.of();
 
     private boolean popupActive = false;
     private boolean updatingInputText = false;
@@ -112,8 +97,6 @@ public final class FileMentionPopup {
     public FileMentionPopup(JTextArea inputArea, JScrollPane inputScrollPane) {
         this.inputArea = inputArea;
         this.inputScrollPane = inputScrollPane;
-        this.candidateCache = Caffeine.newBuilder().expireAfterWrite(STALE_CACHE_TTL_MS, TimeUnit.MILLISECONDS)
-                .buildAsync((key, executor) -> CompletableFuture.supplyAsync(this::performFileIndexing, executor));
 
         this.listModel = new DefaultListModel<>();
         this.candidateList = new JList<>(listModel);
@@ -182,39 +165,33 @@ public final class FileMentionPopup {
         return null;
     }
 
+    private static Comparator<FileCandidate> candidateComparator(String queryLower) {
+        return Comparator.comparingInt((FileCandidate c) -> computeMatchTier(c, queryLower)).thenComparingInt(c -> {
+            if (queryLower.isEmpty()) {
+                return 0;
+            }
+            return c.fileName().length();
+        }).thenComparing(FileCandidate::fileNameLower).thenComparingInt(c -> c.fileName().length())
+                .thenComparingInt(c -> c.relativePath().length()).thenComparing(FileCandidate::pathLower)
+                .thenComparing(FileCandidate::relativePath);
+    }
+
     public static List<FileCandidate> rankCandidates(List<FileCandidate> candidates, String query) {
         if (candidates == null || candidates.isEmpty()) {
             return List.of();
         }
-        String trimmedQuery = "";
-        if (query != null) {
-            trimmedQuery = query.trim();
-        }
-        if (trimmedQuery.isEmpty()) {
-            List<FileCandidate> sorted = new ArrayList<>(candidates);
-            sorted.sort(DEFAULT_CANDIDATE_COMPARATOR);
-            return List.copyOf(sorted.subList(0, Math.min(MAX_RESULTS, sorted.size())));
-        }
-
-        String queryLower = trimmedQuery.toLowerCase(Locale.ROOT);
-        List<ScoredCandidate> scored = new ArrayList<>();
+        String queryLower = StringUtils.trimToEmpty(query).toLowerCase(Locale.ROOT);
+        List<FileCandidate> sorted = new ArrayList<>();
         for (FileCandidate candidate : candidates) {
-            int tier = computeMatchTier(candidate, queryLower);
-            if (tier != TIER_NO_MATCH) {
-                scored.add(new ScoredCandidate(candidate, tier));
+            if (computeMatchTier(candidate, queryLower) != TIER_NO_MATCH) {
+                sorted.add(candidate);
             }
         }
-        if (scored.isEmpty()) {
+        if (sorted.isEmpty()) {
             return List.of();
         }
-
-        Comparator<FileCandidate> tieBreaker = Comparator.comparingInt((FileCandidate c) -> c.fileName().length())
-                .thenComparingInt(c -> c.relativePath().length()).thenComparing(FileCandidate::fileNameLower)
-                .thenComparing(FileCandidate::pathLower).thenComparing(FileCandidate::relativePath);
-        scored.sort(
-                Comparator.comparingInt(ScoredCandidate::tier).thenComparing(ScoredCandidate::candidate, tieBreaker));
-
-        return scored.stream().limit(MAX_RESULTS).map(ScoredCandidate::candidate).toList();
+        sorted.sort(candidateComparator(queryLower));
+        return List.copyOf(sorted.subList(0, Math.min(MAX_RESULTS, sorted.size())));
     }
 
     static int computeMatchTier(FileCandidate candidate, String queryLower) {
@@ -233,11 +210,7 @@ public final class FileMentionPopup {
 
     public synchronized void setGrepService(GrepService grepService) {
         this.grepService = grepService;
-        if (grepService != null) {
-            refreshIndexAsync(true);
-        } else {
-            candidateCache.synchronous().invalidateAll();
-        }
+        refreshIndexAsync();
     }
 
     GrepService getGrepService() {
@@ -253,8 +226,8 @@ public final class FileMentionPopup {
     }
 
     public void invalidateCache() {
-        candidateCache.synchronous().invalidateAll();
-        refreshIndexAsync(true);
+        cachedCandidates = List.of();
+        refreshIndexAsync();
     }
 
     private List<FileCandidate> performFileIndexing() {
@@ -268,7 +241,7 @@ public final class FileMentionPopup {
                 return List.of();
             }
             return rawFiles.stream().filter(StringUtils::isNotBlank).map(FileCandidate::fromPath)
-                    .sorted(DEFAULT_CANDIDATE_COMPARATOR).toList();
+                    .sorted(candidateComparator("")).toList();
         } catch (Exception e) {
             log.debug("Failed to perform file indexing", e);
             return List.of();
@@ -276,18 +249,19 @@ public final class FileMentionPopup {
     }
 
     public CompletableFuture<List<FileCandidate>> refreshIndexAsync() {
-        return refreshIndexAsync(true);
-    }
-
-    public CompletableFuture<List<FileCandidate>> refreshIndexAsync(boolean force) {
-        if (force) {
-            CompletableFuture<List<FileCandidate>> future = candidateCache.synchronous().refresh("files");
-            if (!SwingUtilities.isEventDispatchThread()) {
-                future.join();
-            }
-            return future;
+        if (grepService == null) {
+            cachedCandidates = List.of();
+            return CompletableFuture.completedFuture(List.of());
         }
-        return candidateCache.get("files");
+        CompletableFuture<List<FileCandidate>> future = CompletableFuture.supplyAsync(() -> {
+            List<FileCandidate> indexed = performFileIndexing();
+            cachedCandidates = indexed;
+            return indexed;
+        }, backgroundExecutor);
+        if (!SwingUtilities.isEventDispatchThread()) {
+            future.join();
+        }
+        return future;
     }
 
     void evaluateCurrentInput() {
@@ -302,9 +276,11 @@ public final class FileMentionPopup {
         }
         this.activeToken = token;
 
-        refreshIndexAsync(false);
+        if (cachedCandidates.isEmpty() && grepService != null) {
+            refreshIndexAsync();
+        }
 
-        List<FileCandidate> matches = rankCandidates(candidateCache.get("files").getNow(List.of()), token.query());
+        List<FileCandidate> matches = rankCandidates(cachedCandidates, token.query());
         if (matches.isEmpty()) {
             popupActive = false;
             listModel.clear();
@@ -346,7 +322,7 @@ public final class FileMentionPopup {
         popupScrollPane.setPreferredSize(null);
         Dimension listPref = popupScrollPane.getPreferredSize();
         int availableWidth = resolveAvailableBounds().width;
-        int targetWidth = Math.max(MIN_POPUP_WIDTH, Math.min(MAX_POPUP_WIDTH, listPref.width + 24));
+        int targetWidth = Math.clamp(listPref.width + 24, MIN_POPUP_WIDTH, MAX_POPUP_WIDTH);
         if (availableWidth > 0) {
             targetWidth = Math.min(targetWidth, availableWidth);
         }
@@ -369,13 +345,11 @@ public final class FileMentionPopup {
         if (visibleRect != null && visibleRect.width > 0) {
             return visibleRect;
         }
-        int width = 0;
-        if (inputArea.getWidth() > 0) {
-            width = inputArea.getWidth();
-        } else if (inputScrollPane != null && inputScrollPane.getWidth() > 0) {
-            width = inputScrollPane.getWidth();
+        int width = inputArea.getWidth();
+        if (width <= 0 && inputScrollPane != null) {
+            width = Math.max(0, inputScrollPane.getWidth());
         }
-        return new Rectangle(0, 0, width, 0);
+        return new Rectangle(0, 0, Math.max(0, width), 0);
     }
 
     Point computePopupLocation(int atTokenStartOffset, int popupWidth, int popupHeight) {
@@ -497,7 +471,7 @@ public final class FileMentionPopup {
     }
 
     List<FileCandidate> getCachedCandidates() {
-        return candidateCache.get("files").getNow(List.of());
+        return cachedCandidates;
     }
 
     static Codicons resolveFileIcon(String fileNameLower) {

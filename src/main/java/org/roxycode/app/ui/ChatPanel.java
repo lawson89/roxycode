@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -24,14 +25,19 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.PhaseChangedEvent;
+import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
+import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
@@ -39,10 +45,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 
 @SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
-public class ChatPanel extends JPanel implements AutoCloseable {
+public final class ChatPanel extends JPanel implements AutoCloseable {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
 
@@ -68,6 +77,43 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     private JPanel attachmentPanel;
     transient FileMentionPopup fileMentionPopup;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
+
+    @Configuration
+    static class ChatPanelBeans {
+        @Bean("exploreChatPanel")
+        @Lazy
+        ChatPanel exploreChatPanel(AiService aiService, PlanService planService,
+                ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
+                ExecutorService chatTurnExecutor, MemoryService memoryService, EnvironmentService environmentService) {
+            return createExplorePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
+                    chatTurnExecutor, memoryService, environmentService);
+        }
+
+        @Bean("featureChatPanel")
+        @Lazy
+        ChatPanel featureChatPanel(AiService aiService, PlanService planService,
+                ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
+                ExecutorService chatTurnExecutor) {
+            return createFeaturePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
+                    chatTurnExecutor);
+        }
+    }
+
+    public static ChatPanel createExplorePanel(AiService aiService, PlanService planService,
+            ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
+            Executor turnExecutor, MemoryService memoryService, EnvironmentService environmentService) {
+        ChatPanel panel = new ChatPanel(aiService, planService, eventPublisher, chatMemory, ChatModel.QA_SESSION_PREFIX,
+                WorkflowPhase.EXPLORE, false, settingsService, turnExecutor);
+        panel.controller.setTopicArchiveServices(memoryService, environmentService);
+        return panel;
+    }
+
+    public static ChatPanel createFeaturePanel(AiService aiService, PlanService planService,
+            ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
+            Executor turnExecutor) {
+        return new ChatPanel(aiService, planService, eventPublisher, chatMemory, ChatModel.TASK_SESSION_PREFIX, null,
+                true, settingsService, turnExecutor);
+    }
 
     public ChatPanel(AiService aiService, PlanService planService, ApplicationEventPublisher eventPublisher,
             ChatMemory chatMemory, String sessionPrefix, WorkflowPhase lockedPhase, boolean isTaskMode,
@@ -181,8 +227,16 @@ public class ChatPanel extends JPanel implements AutoCloseable {
                 "arc: 8; font: -1; foreground: $Label.disabledForeground", e -> chooseImageAttachment());
         attachImageButton.setToolTipText("Attach Image (or paste with Ctrl+V)");
 
-        resetSessionButton = createActionButton(isTaskMode ? RESET_SESSION_BUTTON_TEXT : NEW_TOPIC_BUTTON_TEXT,
-                isTaskMode ? Codicons.REFRESH : Codicons.COMMENT_DISCUSSION, new Insets(4, 8, 4, 8), true,
+        String resetText;
+        Codicons resetIcon;
+        if (isTaskMode) {
+            resetText = RESET_SESSION_BUTTON_TEXT;
+            resetIcon = Codicons.REFRESH;
+        } else {
+            resetText = NEW_TOPIC_BUTTON_TEXT;
+            resetIcon = Codicons.COMMENT_DISCUSSION;
+        }
+        resetSessionButton = createActionButton(resetText, resetIcon, new Insets(4, 8, 4, 8), true,
                 "arc: 8; font: -1; foreground: $Label.disabledForeground", e -> controller.resetSession());
         if (!isTaskMode) {
             resetSessionButton.setToolTipText(NEW_TOPIC_TOOLTIP);
@@ -317,6 +371,27 @@ public class ChatPanel extends JPanel implements AutoCloseable {
         fileMentionPopup.invalidateCache();
     }
 
+    @EventListener
+    public void onWorkflowTransition(WorkflowTransitionEvent event) {
+        if (model.isTaskMode()) {
+            controller.onWorkflowTransition(event);
+        }
+    }
+
+    @EventListener
+    public void onPhaseChanged(PhaseChangedEvent event) {
+        if (model.isTaskMode()) {
+            controller.onPhaseChanged(event);
+        }
+    }
+
+    @EventListener
+    public void onPlanUpdated(PlanUpdatedEvent event) {
+        if (model.isTaskMode()) {
+            controller.onPlanUpdated(event);
+        }
+    }
+
     void updateTurnLabel() {
         turnLabel.setText(controller.formatCurrentTurnStatus());
     }
@@ -358,10 +433,15 @@ public class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     boolean confirmResetSession() {
-        String message = model.isTaskMode()
-                ? "Reset session? This cancels active tasks and clears chat history."
-                : "Start a new topic? The current conversation will be archived.";
-        String title = model.isTaskMode() ? "Reset" : NEW_TOPIC_BUTTON_TEXT;
+        String message;
+        String title;
+        if (model.isTaskMode()) {
+            message = "Reset session? This cancels active tasks and clears chat history.";
+            title = "Reset";
+        } else {
+            message = "Start a new topic? The current conversation will be archived.";
+            title = NEW_TOPIC_BUTTON_TEXT;
+        }
         return JOptionPane.showConfirmDialog(this, message, title, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
     }
 
@@ -456,8 +536,13 @@ public class ChatPanel extends JPanel implements AutoCloseable {
             approveButton.setEnabled(enableDecision);
             rejectButton.setEnabled(enableDecision);
         }
-        SwingUtilities.invokeLater(loading ? stopButton::requestFocusInWindow : inputArea::requestFocusInWindow);
-        sendButton.setText(loading ? "Sending..." : "Send");
+        if (loading) {
+            SwingUtilities.invokeLater(stopButton::requestFocusInWindow);
+            sendButton.setText("Sending...");
+        } else {
+            SwingUtilities.invokeLater(inputArea::requestFocusInWindow);
+            sendButton.setText("Send");
+        }
         for (Consumer<Boolean> listener : loadingListeners) {
             listener.accept(loading);
         }
@@ -484,9 +569,12 @@ public class ChatPanel extends JPanel implements AutoCloseable {
 
         InputMap inputMap = inputArea.getInputMap();
         ActionMap actionMap = inputArea.getActionMap();
-        int menuShortcutMask = GraphicsEnvironment.isHeadless()
-                ? java.awt.event.InputEvent.CTRL_DOWN_MASK
-                : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        int menuShortcutMask;
+        if (GraphicsEnvironment.isHeadless()) {
+            menuShortcutMask = java.awt.event.InputEvent.CTRL_DOWN_MASK;
+        } else {
+            menuShortcutMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        }
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_Z, menuShortcutMask), "Undo");
         actionMap.put("Undo", createAction(() -> {
@@ -561,7 +649,12 @@ public class ChatPanel extends JPanel implements AutoCloseable {
             Runnable fallbackWhenNoDefault) {
         KeyStroke keyStroke = KeyStroke.getKeyStroke(keyCode, 0);
         Object existingKey = im.get(keyStroke);
-        Action defaultAction = existingKey != null ? am.get(existingKey) : null;
+        Action defaultAction;
+        if (existingKey != null) {
+            defaultAction = am.get(existingKey);
+        } else {
+            defaultAction = null;
+        }
         im.put(keyStroke, actionName);
         am.put(actionName, new AbstractAction() {
             private static final long serialVersionUID = 1L;

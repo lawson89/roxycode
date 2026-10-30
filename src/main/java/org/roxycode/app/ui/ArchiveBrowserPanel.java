@@ -144,15 +144,12 @@ public final class ArchiveBrowserPanel extends JPanel {
 
         JPanel actionRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         actionRight.setOpaque(false);
-        copyMarkdownButton = new JButton(COPY_BUTTON_TEXT, FontIcon.of(Codicons.CLIPPY, 14));
-        copyMarkdownButton.setEnabled(false);
-        copyMarkdownButton.addActionListener(e -> copyCurrentMarkdown());
+        copyMarkdownButton = UiComponents.createCopyButton(COPY_BUTTON_TEXT, false, this::copyCurrentMarkdown);
         actionRight.add(copyMarkdownButton);
         detailToolbar.add(actionRight, BorderLayout.EAST);
 
         displayArea = SwingHtmlUtils.createHtmlEditorPane();
-        JScrollPane detailScrollPane = new JScrollPane(displayArea);
-        detailScrollPane.setBorder(null);
+        JScrollPane detailScrollPane = UiComponents.createHtmlScrollPane(displayArea);
 
         detailPanel.add(detailToolbar, BorderLayout.NORTH);
         detailPanel.add(detailScrollPane, BorderLayout.CENTER);
@@ -198,23 +195,39 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     private List<ArchiveEntrySummary> loadEntriesForQuery(String query) {
-        if (memoryService == null)
+        if (memoryService == null) {
             return List.of();
-        String trimmed = query != null ? query.trim() : "";
-        if (mode == ArchiveMode.TOPICS) {
-            return trimmed.isEmpty()
-                    ? memoryService.listArchivedTopicSummaries()
-                    : memoryService.searchArchivedTopics(trimmed);
         }
-        return trimmed.isEmpty()
-                ? memoryService.listArchivedPlanSummaries()
-                : memoryService.searchArchivedPlans(trimmed);
+        String trimmed;
+        if (query != null) {
+            trimmed = query.trim();
+        } else {
+            trimmed = "";
+        }
+        if (mode == ArchiveMode.TOPICS) {
+            if (trimmed.isEmpty()) {
+                return memoryService.listArchivedTopicSummaries();
+            }
+            return memoryService.searchArchivedTopics(trimmed);
+        }
+        if (trimmed.isEmpty()) {
+            return memoryService.listArchivedPlanSummaries();
+        }
+        return memoryService.searchArchivedPlans(trimmed);
     }
 
     @SuppressWarnings("PMD.NullAssignment")
     private void applySearchResults(List<ArchiveEntrySummary> results, String query) {
-        List<ArchiveEntrySummary> safeResults = results != null ? results : List.of();
-        String previousFilename = currentSelectedEntry != null ? currentSelectedEntry.filename() : null;
+        List<ArchiveEntrySummary> safeResults;
+        if (results != null) {
+            safeResults = results;
+        } else {
+            safeResults = List.of();
+        }
+        String previousFilename = null;
+        if (currentSelectedEntry != null) {
+            previousFilename = currentSelectedEntry.filename();
+        }
 
         listModel.clear();
         int indexToSelect = -1;
@@ -266,8 +279,9 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     private String readEntryMarkdown(String filename) {
-        if (memoryService == null || filename == null || filename.isBlank())
+        if (memoryService == null || filename == null || filename.isBlank()) {
             return "";
+        }
         if (mode == ArchiveMode.TOPICS) {
             return memoryService.readArchivedTopic(filename);
         }
@@ -275,18 +289,34 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     private void applyDetailContent(ArchiveEntrySummary entry, String rawMarkdown) {
-        this.currentRawMarkdown = rawMarkdown != null ? rawMarkdown : "";
+        if (rawMarkdown != null) {
+            this.currentRawMarkdown = rawMarkdown;
+        } else {
+            this.currentRawMarkdown = "";
+        }
         copyMarkdownButton.setEnabled(!this.currentRawMarkdown.isBlank());
         displayArea.setText(buildDetailHtml(entry, this.currentRawMarkdown, mode));
         displayArea.setCaretPosition(0);
     }
 
     static String buildDetailHtml(ArchiveEntrySummary entry, String rawMarkdown, ArchiveMode archiveMode) {
-        if (entry == null)
+        if (entry == null) {
             return "<html><body></body></html>";
+        }
         String renderedBody = SwingHtmlUtils.renderMarkdownToHtml(FrontmatterUtils.stripFrontmatter(rawMarkdown));
         String formattedDate = formatTimestampDisplay(entry.timestamp());
         String author = StringUtils.defaultIfBlank(entry.createdBy(), "User");
+
+        String dateDisplay;
+        if (formattedDate.isEmpty()) {
+            dateDisplay = entry.filename();
+        } else {
+            dateDisplay = formattedDate;
+        }
+        String messageCountSuffix = "";
+        if (archiveMode == ArchiveMode.TOPICS && entry.messageCount() > 0) {
+            messageCountSuffix = " &nbsp;&bull;&nbsp; <b>Messages:</b> " + entry.messageCount();
+        }
 
         StringBuilder metaRows = new StringBuilder();
         metaRows.append("""
@@ -294,12 +324,8 @@ public final class ArchiveBrowserPanel extends JPanel {
                     <td valign='top' nowrap='nowrap' class='plan-muted'><b>%s:</b></td>
                     <td width='100%%'>%s &nbsp;&bull;&nbsp; <b>By:</b> %s%s</td>
                 </tr>
-                """.formatted(SwingHtmlUtils.escapeHtml(archiveMode.dateLabel),
-                SwingHtmlUtils.escapeHtml(formattedDate.isEmpty() ? entry.filename() : formattedDate),
-                SwingHtmlUtils.escapeHtml(author),
-                archiveMode == ArchiveMode.TOPICS && entry.messageCount() > 0
-                        ? " &nbsp;&bull;&nbsp; <b>Messages:</b> " + entry.messageCount()
-                        : ""));
+                """.formatted(SwingHtmlUtils.escapeHtml(archiveMode.dateLabel), SwingHtmlUtils.escapeHtml(dateDisplay),
+                SwingHtmlUtils.escapeHtml(author), messageCountSuffix));
 
         if (entry.matchSnippet() != null && !entry.matchSnippet().isBlank()) {
             metaRows.append("""
@@ -325,34 +351,45 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     private void renderEmptyState(boolean isSearchEmpty) {
-        String title = isSearchEmpty ? "No matching " + mode.pluralNoun + " found." : mode.emptyTitle;
-        String hint = isSearchEmpty ? "Try a different search term or clear the search box." : mode.emptyHint;
+        String title;
+        String hint;
+        if (isSearchEmpty) {
+            title = "No matching " + mode.pluralNoun + " found.";
+            hint = "Try a different search term or clear the search box.";
+        } else {
+            title = mode.emptyTitle;
+            hint = mode.emptyHint;
+        }
         displayArea.setText("<html><body><h3>%s</h3><p class='plan-muted'>%s</p></body></html>"
                 .formatted(SwingHtmlUtils.escapeHtml(title), SwingHtmlUtils.escapeHtml(hint)));
         displayArea.setCaretPosition(0);
     }
 
     private void copyCurrentMarkdown() {
-        if (currentRawMarkdown == null || currentRawMarkdown.isBlank())
+        if (currentRawMarkdown == null || currentRawMarkdown.isBlank()) {
             return;
+        }
         this.lastCopiedMarkdown = currentRawMarkdown;
-        SwingHtmlUtils.copyToClipboard(currentRawMarkdown);
-        copyFeedbackTimer = SwingHtmlUtils.showCopyButtonFeedback(copyMarkdownButton, copyFeedbackTimer, "Copied!",
-                FontIcon.of(Codicons.CHECK, 14), COPY_BUTTON_TEXT, FontIcon.of(Codicons.CLIPPY, 14),
-                COPY_FEEDBACK_DELAY_MS);
+        copyFeedbackTimer = UiComponents.copyWithFeedback(copyMarkdownButton, copyFeedbackTimer, currentRawMarkdown,
+                COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
     }
 
     private String formatCountText(int count) {
-        return count + " " + (count == 1 ? mode.singularNoun : mode.pluralNoun);
+        if (count == 1) {
+            return count + " " + mode.singularNoun;
+        }
+        return count + " " + mode.pluralNoun;
     }
 
     static String formatTimestampDisplay(String rawTimestamp) {
-        if (rawTimestamp == null || rawTimestamp.isBlank())
+        if (rawTimestamp == null || rawTimestamp.isBlank()) {
             return "";
+        }
         String trimmed = rawTimestamp.trim();
-        return trimmed.length() >= TIMESTAMP_PREFIX_LEN
-                ? trimmed.substring(0, TIMESTAMP_PREFIX_LEN).replace('T', ' ')
-                : trimmed;
+        if (trimmed.length() >= TIMESTAMP_PREFIX_LEN) {
+            return trimmed.substring(0, TIMESTAMP_PREFIX_LEN).replace('T', ' ');
+        }
+        return trimmed;
     }
 
     @Override
@@ -399,9 +436,21 @@ public final class ArchiveBrowserPanel extends JPanel {
         @Override
         public Component getListCellRendererComponent(JList<? extends ArchiveEntrySummary> list,
                 ArchiveEntrySummary value, int index, boolean isSelected, boolean cellHasFocus) {
-            Color bg = isSelected ? list.getSelectionBackground() : list.getBackground();
-            Color fg = isSelected ? list.getSelectionForeground() : list.getForeground();
-            Color muted = isSelected ? fg : SwingHtmlUtils.getMutedForegroundColor();
+            Color bg;
+            Color fg;
+            Color muted;
+            Color iconColor;
+            if (isSelected) {
+                bg = list.getSelectionBackground();
+                fg = list.getSelectionForeground();
+                muted = fg;
+                iconColor = fg;
+            } else {
+                bg = list.getBackground();
+                fg = list.getForeground();
+                muted = SwingHtmlUtils.getMutedForegroundColor();
+                iconColor = SwingHtmlUtils.getAccentColor();
+            }
 
             setBackground(bg);
             setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
@@ -409,13 +458,14 @@ public final class ArchiveBrowserPanel extends JPanel {
             if (value != null) {
                 titleLabel.setText(value.title());
                 titleLabel.setForeground(fg);
-                titleLabel.setIcon(FontIcon.of(mode.getIcon(), 14, isSelected ? fg : SwingHtmlUtils.getAccentColor()));
+                titleLabel.setIcon(FontIcon.of(mode.getIcon(), 14, iconColor));
 
                 String dateStr = formatTimestampDisplay(value.timestamp());
                 String author = StringUtils.defaultIfBlank(value.createdBy(), "User");
                 StringBuilder sub = new StringBuilder();
-                if (!dateStr.isEmpty())
+                if (!dateStr.isEmpty()) {
                     sub.append(dateStr).append("  •  ");
+                }
                 sub.append(author);
                 if (mode == ArchiveMode.TOPICS && value.messageCount() > 0) {
                     sub.append("  •  ").append(value.messageCount()).append(" msgs");
@@ -425,7 +475,11 @@ public final class ArchiveBrowserPanel extends JPanel {
 
                 String snippet = value.matchSnippet();
                 boolean hasSnippet = snippet != null && !snippet.isBlank();
-                snippetLabel.setText(hasSnippet ? StringUtils.abbreviate(snippet.trim(), MAX_SNIPPET_LENGTH) : "");
+                if (hasSnippet) {
+                    snippetLabel.setText(StringUtils.abbreviate(snippet.trim(), MAX_SNIPPET_LENGTH));
+                } else {
+                    snippetLabel.setText("");
+                }
                 snippetLabel.setForeground(muted);
                 snippetLabel.setVisible(hasSnippet);
                 setToolTipText(value.title() + " (" + value.filename() + ")");

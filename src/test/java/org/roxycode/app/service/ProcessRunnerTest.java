@@ -38,7 +38,7 @@ class ProcessRunnerTest {
             script = "echo $TEST_VAR";
         }
         ProcessResult result = ProcessRunner.run(shellCmd(script), tempDir, Map.of("TEST_VAR", "hello_roxy"),
-                Duration.ofSeconds(5));
+                Duration.ofSeconds(5), true, null);
 
         assertTrue(result.isSuccess());
         assertFalse(result.timedOut());
@@ -72,7 +72,8 @@ class ProcessRunnerTest {
 
     @Test
     void testTimeoutDestroysProcessTree() {
-        ProcessResult result = ProcessRunner.run(shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofMillis(200), true);
+        ProcessResult result = ProcessRunner.run(shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofMillis(200), true,
+                null);
 
         assertFalse(result.isSuccess());
         assertTrue(result.timedOut());
@@ -86,7 +87,7 @@ class ProcessRunnerTest {
 
         Thread worker = new Thread(() -> {
             try {
-                ProcessRunner.run(shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofSeconds(10), true);
+                ProcessRunner.run(shellCmd("sleep 10"), tempDir, Map.of(), Duration.ofSeconds(10), true, null);
             } catch (Throwable t) {
                 thrown.set(t);
                 interruptRestored.set(Thread.currentThread().isInterrupted());

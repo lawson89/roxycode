@@ -42,8 +42,9 @@ public final class HourglassAnimator {
     }
 
     public void stop() {
-        if (timer != null && timer.isRunning())
+        if (timer != null && timer.isRunning()) {
             timer.stop();
+        }
     }
 
     public boolean isRunning() {
@@ -57,8 +58,9 @@ public final class HourglassAnimator {
         }
         frameIndex = (frameIndex + 1) % HOURGLASS_FRAMES.length;
         icon.setIkon(HOURGLASS_FRAMES[frameIndex]);
-        if (onFrameChanged != null)
+        if (onFrameChanged != null) {
             onFrameChanged.run();
+        }
     }
 
     public FontIcon getIcon() {

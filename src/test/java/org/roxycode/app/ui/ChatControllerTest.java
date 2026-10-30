@@ -38,7 +38,7 @@ class ChatControllerTest extends ChatTestFixture {
 
     @Test
     void testPerformResetSessionAndResetForProjectChangeBehavior() {
-        FeatureChatPanel panel = createFeatureChatPanel(null);
+        ChatPanel panel = createFeatureChatPanel(null);
         panel.model.setCurrentTurn(3);
         panel.controller.performResetSession();
         flushEdt();
@@ -84,7 +84,7 @@ class ChatControllerTest extends ChatTestFixture {
                 return "done";
             });
 
-            ExploreChatPanel panel = createExploreChatPanel(executorService);
+            ChatPanel panel = createExploreChatPanel(executorService);
             assertFalse(panel.controller.ownsTurnExecutor());
 
             JPanel host = new JPanel();
@@ -127,7 +127,7 @@ class ChatControllerTest extends ChatTestFixture {
 
     @Test
     void testPerformResetSessionInQaModeArchivesNonEmptyTopicAndSkipsWhenEmpty() {
-        ExploreChatPanel panel = createExploreChatPanel(directExecutor);
+        ChatPanel panel = createExploreChatPanel(directExecutor);
         SwingTestUtils.runOnEdt(() -> panel.controller.performResetSession());
         flushEdt();
 
@@ -177,7 +177,7 @@ class ChatControllerTest extends ChatTestFixture {
             return "Late AI response";
         });
 
-        FeatureChatPanel chatPanel = createFeatureChatPanel(null);
+        ChatPanel chatPanel = createFeatureChatPanel(null);
         SwingTestUtils.runOnEdt(() -> {
             chatPanel.inputArea.setText("Start coding");
             chatPanel.sendButton.doClick();
@@ -205,7 +205,7 @@ class ChatControllerTest extends ChatTestFixture {
 
     @Test
     void testWorkflowTransitionsApproveFlowAndDeferredBannerOrdering() {
-        FeatureChatPanel chatPanel = createFeatureChatPanel(directExecutor);
+        ChatPanel chatPanel = createFeatureChatPanel(directExecutor);
         assertSame(directExecutor, chatPanel.controller.getTurnExecutor());
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
@@ -294,7 +294,7 @@ class ChatControllerTest extends ChatTestFixture {
             return "Proceeding in CODE";
         });
 
-        FeatureChatPanel asyncPanel = createFeatureChatPanel(null);
+        ChatPanel asyncPanel = createFeatureChatPanel(null);
         asyncPanel.model.addPendingImage(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
         SwingTestUtils.runOnEdt(() -> asyncPanel.controller.approvePhase());
         SwingTestUtils.awaitCondition(() -> capturedImages.get() != null);
@@ -312,7 +312,7 @@ class ChatControllerTest extends ChatTestFixture {
         appSettings.setMaxAgentToolTurns(5);
         when(settingsService.getSettings()).thenReturn(appSettings);
 
-        FeatureChatPanel chatPanel = createFeatureChatPanel(null);
+        ChatPanel chatPanel = createFeatureChatPanel(null);
         List<Boolean> loadingStates = new ArrayList<>();
         chatPanel.addLoadingListener(loadingStates::add);
 

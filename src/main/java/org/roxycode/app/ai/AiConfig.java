@@ -30,10 +30,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.retry.RetryException;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
-import org.springframework.core.retry.RetryState;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.core.retry.Retryable;
 import org.springframework.util.Assert;
@@ -68,8 +66,6 @@ public class AiConfig {
             "TOO MANY REQUESTS", "RATE LIMIT", "500 INTERNAL", "502 BAD GATEWAY", "503 SERVICE UNAVAILABLE",
             "504 GATEWAY TIMEOUT", "UNAVAILABLE", "DEADLINE_EXCEEDED", "SOCKET TIMEOUT", "READ TIMED OUT",
             "CONNECTION RESET");
-
-    private static final ThreadLocal<Throwable> HANDLED_TERMINAL_EXCEPTION = new ThreadLocal<>();
 
     public static final ObjectMapper SHARED_OBJECT_MAPPER = (ObjectMapper) new ObjectMapper().findAndRegisterModules();
 
@@ -139,7 +135,7 @@ public class AiConfig {
     public static RetryTemplate createRetryTemplate(int maxAttempts, Duration initialBackoff, double multiplier) {
         long maxRetries = Math.max(0, maxAttempts - 1L);
         RetryPolicy policy = RetryPolicy.builder().maxRetries(maxRetries).delay(initialBackoff).multiplier(multiplier)
-                .maxDelay(DEFAULT_MAX_BACKOFF).predicate(AiConfig::shouldRetryModelCall).build();
+                .maxDelay(DEFAULT_MAX_BACKOFF).predicate(AiConfig::isTransientAiError).build();
         RetryTemplate template = new RetryTemplate(policy);
         template.setRetryListener(new RetryListener() {
             @Override
@@ -147,61 +143,8 @@ public class AiConfig {
                 log.warn("Transient Gemini model call failed, will retry if attempts remain: {}",
                         throwable.getMessage());
             }
-
-            @Override
-            public void onRetryPolicyExhaustion(RetryPolicy retryPolicy, Retryable<?> retryable,
-                    RetryException exception) {
-                markHandledTerminalException(exception.getCause() != null ? exception.getCause() : exception);
-            }
-
-            @Override
-            public void onRetryPolicyInterruption(RetryPolicy retryPolicy, Retryable<?> retryable,
-                    RetryException exception) {
-                markHandledTerminalException(exception.getCause() != null ? exception.getCause() : exception);
-            }
-
-            @Override
-            public void onRetryPolicyTimeout(RetryPolicy retryPolicy, Retryable<?> retryable,
-                    RetryException exception) {
-                markHandledTerminalException(exception.getCause() != null ? exception.getCause() : exception);
-            }
-
-            @Override
-            public void onRetryableExecution(RetryPolicy retryPolicy, Retryable<?> retryable, RetryState retryState) {
-                if (!retryState.isSuccessful()) {
-                    Throwable lastException = retryState.getLastException();
-                    if (lastException != null && !isTransientAiError(lastException)) {
-                        markHandledTerminalException(lastException);
-                    }
-                }
-            }
         });
         return template;
-    }
-
-    public static void clearHandledRetryState() {
-        HANDLED_TERMINAL_EXCEPTION.remove();
-    }
-
-    public static void markHandledTerminalException(Throwable t) {
-        if (t != null) {
-            HANDLED_TERMINAL_EXCEPTION.set(t);
-        }
-    }
-
-    static boolean shouldRetryModelCall(Throwable t) {
-        if (t == null) {
-            return false;
-        }
-        Throwable handled = HANDLED_TERMINAL_EXCEPTION.get();
-        if (handled != null) {
-            for (Throwable curr = t; curr != null; curr = curr.getCause()) {
-                if (curr == handled) {
-                    return false;
-                }
-            }
-        }
-        return isTransientAiError(t);
     }
 
     public static boolean isTransientAiError(Throwable t) {
@@ -273,10 +216,18 @@ public class AiConfig {
         return exception -> {
             ExceptionUtils.rethrowIfCancelled(exception, "Tool execution cancelled");
             Throwable cause = ExceptionUtils.getRootCause(exception);
-            String rawMessage = cause != null && StringUtils.hasText(cause.getMessage())
-                    ? cause.getMessage()
-                    : exception.getMessage();
-            String message = StringUtils.hasText(rawMessage) ? rawMessage : "Tool execution failed";
+            String rawMessage;
+            if (cause != null && StringUtils.hasText(cause.getMessage())) {
+                rawMessage = cause.getMessage();
+            } else {
+                rawMessage = exception.getMessage();
+            }
+            String message;
+            if (StringUtils.hasText(rawMessage)) {
+                message = rawMessage;
+            } else {
+                message = "Tool execution failed";
+            }
             try {
                 return SHARED_OBJECT_MAPPER.writeValueAsString(Map.of("error", message));
             } catch (Exception e) {

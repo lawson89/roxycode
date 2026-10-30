@@ -306,11 +306,12 @@ class AiServiceTest {
 
     @Test
     void testChatRetryPolicyOnTransientNonRetryableAndInterruptedErrors() {
-        aiService.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0));
-        stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "Recovered Response", "STOP", null);
+        ChatModel mockChatModel = mock(ChatModel.class);
+        AiService realRetryService = createRealClientService(mockChatModel, toolCallingManager);
+        ChatResponse recoveredResponse = buildChatResponse("Recovered Response", "STOP", null);
 
         AtomicInteger attempts = new AtomicInteger();
-        when(requestSpec.call()).thenAnswer(inv -> {
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
             int attempt = attempts.incrementAndGet();
             if (attempt == 1) {
                 throw new RuntimeException("Failed to generate content",
@@ -319,52 +320,56 @@ class AiServiceTest {
             if (attempt == 2) {
                 throw new RuntimeException("Failed to generate content", new SocketTimeoutException("Read timed out"));
             }
-            return responseSpec;
+            return recoveredResponse;
         });
 
-        assertEquals("Recovered Response", aiService.chat("default", null, "Retry test", null));
+        assertEquals("Recovered Response", realRetryService.chat("default", WorkflowPhase.EXPLORE, "Retry test", null));
         assertEquals(3, attempts.get());
         assertEquals("Recovered Response", captureTurnCompleteEvent().result());
 
-        clearInvocations(requestSpec, eventPublisher);
-        when(requestSpec.call()).thenThrow(new ServerException(503, "Service Unavailable", "UNAVAILABLE"));
-        assertThrows(ServerException.class, () -> aiService.chat("default", null, "Fail all retries", null));
-        verify(requestSpec, times(3)).call();
+        clearInvocations(mockChatModel, eventPublisher);
+        when(mockChatModel.call(any(Prompt.class)))
+                .thenThrow(new ServerException(503, "Service Unavailable", "UNAVAILABLE"));
+        assertThrows(ServerException.class,
+                () -> realRetryService.chat("default", WorkflowPhase.EXPLORE, "Fail all retries", null));
+        verify(mockChatModel, times(3)).call(any(Prompt.class));
         verify(eventPublisher, never()).publishEvent(any(AgentTurnCompleteEvent.class));
 
         for (RuntimeException nonRetryable : List.of(new ClientException(400, "Bad Request", "INVALID_ARGUMENT"),
                 new ClientException(401, "Unauthorized", "UNAUTHENTICATED"),
                 new ClientException(403, "Forbidden", "PERMISSION_DENIED"), new NonTransientAiException("Bad request"),
                 new CancellationException("Cancelled by user"))) {
-            clearInvocations(requestSpec);
-            doThrow(nonRetryable).when(requestSpec).call();
+            clearInvocations(mockChatModel);
+            doThrow(nonRetryable).when(mockChatModel).call(any(Prompt.class));
             try {
-                assertThrows(RuntimeException.class, () -> aiService.chat("default", null, "Non-retryable", null));
-                verify(requestSpec, times(1)).call();
+                assertThrows(RuntimeException.class,
+                        () -> realRetryService.chat("default", WorkflowPhase.EXPLORE, "Non-retryable", null));
+                verify(mockChatModel, times(1)).call(any(Prompt.class));
             } finally {
                 Thread.interrupted();
             }
         }
 
-        clearInvocations(requestSpec);
+        clearInvocations(mockChatModel);
         doAnswer(inv -> {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Failed to generate content", new SocketTimeoutException("Interrupted I/O"));
-        }).when(requestSpec).call();
+        }).when(mockChatModel).call(any(Prompt.class));
         try {
-            assertThrows(CancellationException.class, () -> aiService.chat("default", null, "Interrupt test", null));
-            verify(requestSpec, times(1)).call();
+            assertThrows(CancellationException.class,
+                    () -> realRetryService.chat("default", WorkflowPhase.EXPLORE, "Interrupt test", null));
+            verify(mockChatModel, times(1)).call(any(Prompt.class));
         } finally {
             Thread.interrupted();
         }
 
-        doReturn(responseSpec).when(requestSpec).call();
-        when(responseSpec.chatResponse()).thenAnswer(inv -> {
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
             Thread.currentThread().interrupt();
             return buildChatResponse("Should be discarded due to interrupt", "STOP", null);
         });
         try {
-            assertThrows(CancellationException.class, () -> aiService.chat("default", null, "Run code", null));
+            assertThrows(CancellationException.class,
+                    () -> realRetryService.chat("default", WorkflowPhase.EXPLORE, "Run code", null));
             assertTrue(Thread.currentThread().isInterrupted());
         } finally {
             Thread.interrupted();

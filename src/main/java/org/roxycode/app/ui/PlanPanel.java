@@ -3,8 +3,6 @@ package org.roxycode.app.ui;
 import java.awt.*;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
-import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.FileChangedEvent;
@@ -44,16 +42,12 @@ public final class PlanPanel extends JPanel {
 
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         toolbar.setOpaque(false);
-        copyMarkdownButton = new JButton(COPY_BUTTON_TEXT, FontIcon.of(Codicons.CLIPPY, 14));
-        copyMarkdownButton.setEnabled(false);
-        copyMarkdownButton.addActionListener(e -> copyPlanAsMarkdown());
+        copyMarkdownButton = UiComponents.createCopyButton(COPY_BUTTON_TEXT, false, this::copyPlanAsMarkdown);
         toolbar.add(copyMarkdownButton);
         add(toolbar, BorderLayout.NORTH);
 
         displayArea = SwingHtmlUtils.createHtmlEditorPane();
-        JScrollPane scrollPane = new JScrollPane(displayArea);
-        scrollPane.setBorder(null);
-        add(scrollPane, BorderLayout.CENTER);
+        add(UiComponents.createHtmlScrollPane(displayArea), BorderLayout.CENTER);
 
         updateTheme();
         refresh();
@@ -86,16 +80,19 @@ public final class PlanPanel extends JPanel {
 
     private void copyPlanAsMarkdown() {
         ImplementationPlan plan = planManagerService.getCurrentPlan();
-        if (plan == null)
+        if (plan == null) {
             return;
-        String gitStatus = SwingUtilities.isEventDispatchThread() ? lastGitStatus : getGitStatusText();
+        }
+        String gitStatus;
+        if (SwingUtilities.isEventDispatchThread()) {
+            gitStatus = lastGitStatus;
+        } else {
+            gitStatus = getGitStatusText();
+        }
         String markdown = buildPlanMarkdown(plan, gitStatus);
         this.lastCopiedMarkdown = markdown;
-        SwingHtmlUtils.copyToClipboard(markdown);
-
-        copyFeedbackTimer = SwingHtmlUtils.showCopyButtonFeedback(copyMarkdownButton, copyFeedbackTimer, "Copied!",
-                FontIcon.of(Codicons.CHECK, 14), COPY_BUTTON_TEXT, FontIcon.of(Codicons.CLIPPY, 14),
-                COPY_FEEDBACK_DELAY_MS);
+        copyFeedbackTimer = UiComponents.copyWithFeedback(copyMarkdownButton, copyFeedbackTimer, markdown,
+                COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
     }
 
     JEditorPane getDisplayArea() {
@@ -130,7 +127,10 @@ public final class PlanPanel extends JPanel {
     }
 
     private String getGitStatusText() {
-        return gitService != null ? gitService.getStatus() : null;
+        if (gitService != null) {
+            return gitService.getStatus();
+        }
+        return null;
     }
 
     CompletableFuture<String> updateDisplay(ImplementationPlan plan) {

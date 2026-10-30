@@ -81,7 +81,7 @@ public final class SidebarPanel extends JPanel {
         JLabel subtitleBadge = new JLabel(SUBTITLE_BADGE_TEXT);
         subtitleBadge.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -2; foreground: $Label.disabledForeground; background: darken($Panel.background, 5%); arc: 8; border: 2,8,2,8");
-        brandingPanel.add(new RoundedImagePanel(LOGO_RESOURCE_PATH, LOGO_SIZE, 22),
+        brandingPanel.add(UiComponents.createRoundedImagePanel(LOGO_RESOURCE_PATH, LOGO_SIZE, 20),
                 "w " + LOGO_SIZE + "!, h " + LOGO_SIZE + "!");
         brandingPanel.add(titleLabel);
         brandingPanel.add(subtitleBadge);
@@ -96,8 +96,9 @@ public final class SidebarPanel extends JPanel {
     }
 
     public void setQaBusy(boolean busy) {
-        if (qaBtn != null)
+        if (qaBtn != null) {
             qaBtn.setBusy(busy);
+        }
     }
 
     public boolean isQaBusy() {
@@ -105,8 +106,9 @@ public final class SidebarPanel extends JPanel {
     }
 
     public void setTaskBusy(boolean busy) {
-        if (taskBtn != null)
+        if (taskBtn != null) {
             taskBtn.setBusy(busy);
+        }
     }
 
     public boolean isTaskBusy() {
@@ -114,8 +116,9 @@ public final class SidebarPanel extends JPanel {
     }
 
     public void setTaskWaitingApproval(boolean waitingApproval) {
-        if (taskBtn != null)
+        if (taskBtn != null) {
             taskBtn.setWaitingApproval(waitingApproval);
+        }
     }
 
     public boolean isTaskWaitingApproval() {
@@ -147,8 +150,9 @@ public final class SidebarPanel extends JPanel {
     }
 
     private void updateSelection(NavButton selectedBtn) {
-        for (NavButton btn : navButtons)
+        for (NavButton btn : navButtons) {
             btn.setSelected(btn.equals(selectedBtn));
+        }
     }
 
     private JLabel createSectionHeader(String text) {

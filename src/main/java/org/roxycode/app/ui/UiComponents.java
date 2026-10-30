@@ -2,34 +2,143 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.LayoutManager;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.geom.RoundRectangle2D;
+import java.io.IOException;
+import java.net.URL;
+import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
+import javax.swing.Timer;
 import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 
 /**
  * Shared Swing UI component builders and FlatLaf style helpers to reduce boilerplate.
  */
 final class UiComponents {
+    private static final Logger log = LoggerFactory.getLogger(UiComponents.class);
 
     private UiComponents() {
+    }
+
+    /**
+     * Loads an image from a classpath resource, returning null if unavailable.
+     */
+    static Image loadClasspathImage(String resourcePath) {
+        try {
+            URL url = UiComponents.class.getResource(resourcePath);
+            if (url != null) {
+                return ImageIO.read(url);
+            }
+        } catch (IOException e) {
+            log.warn("Failed to load image resource {}: {}", resourcePath, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Creates a rounded image panel from a classpath resource path.
+     */
+    static JPanel createRoundedImagePanel(String resourcePath, int size, int arc) {
+        return createRoundedImagePanel(loadClasspathImage(resourcePath), size, arc);
+    }
+
+    /**
+     * Creates a rounded image panel that clips and renders the image directly.
+     */
+    static JPanel createRoundedImagePanel(@Nullable Image image, int size, int arc) {
+        JPanel panel = new JPanel() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                int w = getWidth();
+                int h = getHeight();
+                if (w <= 4 || h <= 4) {
+                    return;
+                }
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                    RoundRectangle2D.Float clipShape = new RoundRectangle2D.Float(2, 2, w - 4, h - 4, arc, arc);
+                    if (image != null) {
+                        Shape oldClip = g2.getClip();
+                        g2.clip(clipShape);
+                        g2.drawImage(image, 0, 0, w, h, null);
+                        g2.setClip(oldClip);
+                    } else {
+                        g2.setColor(SwingHtmlUtils.getUiColor(new Color(100, 100, 255), "Component.accentColor"));
+                        g2.fill(clipShape);
+                    }
+                    g2.setColor(SwingHtmlUtils.getUiColor(new Color(80, 80, 80), "Component.borderColor"));
+                    g2.setStroke(new BasicStroke(1.5f));
+                    g2.drawRoundRect(2, 2, w - 5, h - 5, arc, arc);
+                } finally {
+                    g2.dispose();
+                }
+            }
+        };
+        panel.setPreferredSize(new Dimension(size, size));
+        panel.setOpaque(false);
+        return panel;
+    }
+
+    /**
+     * Wraps a JEditorPane in a borderless JScrollPane.
+     */
+    static JScrollPane createHtmlScrollPane(JEditorPane editorPane) {
+        JScrollPane scrollPane = new JScrollPane(editorPane);
+        scrollPane.setBorder(null);
+        return scrollPane;
+    }
+
+    /**
+     * Creates a copy button with the standard clippy icon.
+     */
+    static JButton createCopyButton(String text, boolean enabled, Runnable onCopy) {
+        JButton button = new JButton(text, FontIcon.of(Codicons.CLIPPY, 14));
+        button.setEnabled(enabled);
+        button.addActionListener(e -> onCopy.run());
+        return button;
+    }
+
+    /**
+     * Copies text to the clipboard and triggers temporary "Copied!" button feedback.
+     */
+    static Timer copyWithFeedback(JButton button, @Nullable Timer existingTimer, String content, String originalText,
+            int delayMs) {
+        SwingHtmlUtils.copyToClipboard(content);
+        return SwingHtmlUtils.showCopyButtonFeedback(button, existingTimer, "Copied!", FontIcon.of(Codicons.CHECK, 14),
+                originalText, FontIcon.of(Codicons.CLIPPY, 14), delayMs);
     }
 
     /**

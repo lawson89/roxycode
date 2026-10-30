@@ -14,11 +14,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.services.EditorResult;
-import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
 import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
-import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.PromptService;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,17 +27,14 @@ class CodebaseCachePanelTest {
     private PromptService promptService;
     @Mock
     private RepoMapPackerService packerService;
-    @Mock
-    private ProjectCacheMetaService metaService;
     private CodebaseCachePanel panel;
 
     @BeforeEach
     void setUp() {
         lenient().when(packerService.forceRegenerateRepoMap())
                 .thenReturn(new EditorResult(true, "# Initial Repo Map", null));
-        lenient().when(metaService.loadMeta()).thenReturn(Optional.empty());
-        lenient().when(metaService.loadRepoCache()).thenReturn(Optional.empty());
-        panel = new CodebaseCachePanel(packerService, metaService, promptService);
+        lenient().when(packerService.getCachedSnapshot()).thenReturn(Optional.empty());
+        panel = new CodebaseCachePanel(packerService, promptService);
     }
 
     @Test
@@ -49,8 +45,10 @@ class CodebaseCachePanelTest {
                 && "Status: No implicit cache found.".equals(panel.getStatusLabel().getText()));
         verify(packerService, times(1)).forceRegenerateRepoMap();
 
+        RepoMapSnapshot forcedSnap = new RepoMapSnapshot("roxycode", "# Forced Repo Map",
+                LocalDateTime.of(2026, 1, 1, 12, 0), 4L);
         when(packerService.forceRegenerateRepoMap()).thenReturn(new EditorResult(true, "# Forced Repo Map", null));
-        when(metaService.loadRepoCache()).thenReturn(Optional.of("# Forced Repo Map"));
+        when(packerService.getCachedSnapshot()).thenReturn(Optional.of(forcedSnap));
 
         SwingTestUtils.clickOnEdt(packButton);
 
@@ -85,9 +83,9 @@ class CodebaseCachePanelTest {
                 && "Status: No implicit cache found.".equals(panel.getStatusLabel().getText()));
         verify(packerService, times(1)).forceRegenerateRepoMap();
 
-        ProjectCacheMeta meta = new ProjectCacheMeta("roxycode", LocalDateTime.of(2026, 1, 1, 12, 0), 500L);
-        when(metaService.loadMeta()).thenReturn(Optional.of(meta));
-        when(metaService.loadRepoCache()).thenReturn(Optional.of("cached repo map"));
+        RepoMapSnapshot snapshot = new RepoMapSnapshot("roxycode", "cached repo map",
+                LocalDateTime.of(2026, 1, 1, 12, 0), 500L);
+        when(packerService.getCachedSnapshot()).thenReturn(Optional.of(snapshot));
         when(promptService.getStableContext()).thenReturn("stable prompt");
         when(promptService.getSessionContext()).thenReturn("session prompt");
 
@@ -98,14 +96,17 @@ class CodebaseCachePanelTest {
         assertEquals("stable prompt", panel.getStableContextArea().getText());
         assertEquals("session prompt", panel.getSessionContextArea().getText());
 
-        when(metaService.loadRepoCache())
-                .thenReturn(Optional.of("R".repeat(CodebaseCachePanel.MAX_DISPLAY_CHARS + 12_345)));
+        RepoMapSnapshot oversizedSnapshot = new RepoMapSnapshot("roxycode",
+                "R".repeat(CodebaseCachePanel.MAX_DISPLAY_CHARS + 12_345), LocalDateTime.of(2026, 1, 1, 12, 0), 500L);
+        when(packerService.getCachedSnapshot()).thenReturn(Optional.of(oversizedSnapshot));
         SwingTestUtils.awaitFuture(panel.refreshStatus());
         assertTrue(panel.getRepoMapArea().getText()
                 .contains("[Display truncated at 200,000 characters for UI responsiveness;"));
         assertEquals(0, panel.getRepoMapArea().getCaretPosition());
 
-        when(metaService.loadRepoCache()).thenReturn(Optional.of("new project repo map"));
+        RepoMapSnapshot newProjectSnapshot = new RepoMapSnapshot("roxycode", "new project repo map",
+                LocalDateTime.of(2026, 1, 1, 12, 0), 500L);
+        when(packerService.getCachedSnapshot()).thenReturn(Optional.of(newProjectSnapshot));
         assertFalse(SwingUtilities.isEventDispatchThread());
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp")));
         SwingTestUtils.awaitCondition(
@@ -126,13 +127,7 @@ class CodebaseCachePanelTest {
                         && packButton.isEnabled());
         verify(packerService, times(4)).forceRegenerateRepoMap();
 
-        when(metaService.loadMeta()).thenReturn(Optional.empty());
-        when(metaService.loadRepoCache()).thenReturn(Optional.of("local only repo map"));
-        SwingTestUtils.awaitFuture(panel.refreshStatus());
-        assertEquals("local only repo map", panel.getRepoMapArea().getText());
-        assertEquals("Status: Repo Map available locally.", panel.getStatusLabel().getText());
-
-        when(metaService.loadRepoCache()).thenReturn(Optional.empty());
+        when(packerService.getCachedSnapshot()).thenReturn(Optional.empty());
         SwingTestUtils.awaitFuture(panel.refreshStatus());
         assertEquals("Status: No implicit cache found.", panel.getStatusLabel().getText());
         assertEquals("Repo Map will appear here after generation.", panel.getRepoMapArea().getText());

@@ -45,11 +45,11 @@ class MentorModeIntegrationTest {
         ApplicationEventPublisher pub = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
-        qaWorkspacePanel = new QaWorkspacePanel(
-                new ExploreChatPanel(aiService, planService, pub, chatMemory, settingsService, null, null, null), null);
+        qaWorkspacePanel = new QaWorkspacePanel(ChatPanel.createExplorePanel(aiService, planService, pub, chatMemory,
+                settingsService, null, null, null), null);
         taskWorkspacePanel = new TaskWorkspacePanel(
-                new FeatureChatPanel(aiService, planService, pub, chatMemory, settingsService, null), planService,
-                new PlanPanel(planService, gitService), null);
+                ChatPanel.createFeaturePanel(aiService, planService, pub, chatMemory, settingsService, null),
+                planService, new PlanPanel(planService, gitService), null);
 
         sidebar = new SidebarPanel(selectedCard::set);
         qaWorkspacePanel.bindSidebar(sidebar);

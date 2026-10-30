@@ -26,7 +26,7 @@ public final class SplashScreenWindow extends JWindow {
     }
 
     private void initComponents() {
-        logoImage = RoundedImagePanel.loadClasspathImage(LOGO_RESOURCE_PATH);
+        logoImage = UiComponents.loadClasspathImage(LOGO_RESOURCE_PATH);
         JPanel rootPanel = new JPanel(
                 new MigLayout("fill, insets 24 32 24 32, wrap 1", "[grow, center]", "[]12[]4[]16[]8[]"));
         rootPanel.setBorder(BorderFactory
@@ -43,7 +43,7 @@ public final class SplashScreenWindow extends JWindow {
         statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
         progressBar.setIndeterminate(true);
 
-        rootPanel.add(new RoundedImagePanel(logoImage, 80, 22), "w 80!, h 80!, center");
+        rootPanel.add(UiComponents.createRoundedImagePanel(logoImage, 96, 20), "w 80!, h 80!, center");
         rootPanel.add(titleLabel, "center");
         rootPanel.add(subtitleLabel, "center");
         rootPanel.add(statusLabel, "center");

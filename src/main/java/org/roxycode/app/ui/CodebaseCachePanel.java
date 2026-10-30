@@ -5,16 +5,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.Document;
-import javax.swing.text.PlainDocument;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.ai.services.EditorResult;
-import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
 import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
-import org.roxycode.app.model.ProjectCacheMeta;
 import org.roxycode.app.service.PromptService;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.TokenUtils;
@@ -30,7 +26,6 @@ public final class CodebaseCachePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
     static final int MAX_DISPLAY_CHARS = 200_000;
-    private final transient ProjectCacheMetaService metaService;
     private final transient RepoMapPackerService packerService;
     private final transient PromptService promptService;
 
@@ -43,14 +38,12 @@ public final class CodebaseCachePanel extends JPanel {
     private final JTextArea sessionContextArea = new JTextArea();
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    record CacheStatusData(Optional<ProjectCacheMeta> meta, Optional<String> packed, long stableTokens,
-            Document repoMapDoc, Document stableContextDoc, Document sessionContextDoc) {
+    record CacheStatusData(Optional<RepoMapSnapshot> snapshot, long stableTokens, String repoMapText,
+            String stableContextText, String sessionContextText) {
     }
 
-    public CodebaseCachePanel(RepoMapPackerService packerService, ProjectCacheMetaService metaService,
-            PromptService promptService) {
+    public CodebaseCachePanel(RepoMapPackerService packerService, PromptService promptService) {
         this.packerService = packerService;
-        this.metaService = metaService;
         this.promptService = promptService;
         initComponents();
         runPack();
@@ -67,29 +60,18 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     static String truncateForDisplay(String text) {
-        if (text == null)
+        if (text == null) {
             return "";
-        if (text.length() <= MAX_DISPLAY_CHARS)
+        }
+        if (text.length() <= MAX_DISPLAY_CHARS) {
             return text;
+        }
         return text.substring(0, MAX_DISPLAY_CHARS)
                 + """
 
 
                         ... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]"""
                         .formatted(text.length());
-    }
-
-    private static Document createDisplayDocument(String text) {
-        PlainDocument doc = new PlainDocument();
-        String display = truncateForDisplay(text);
-        if (!display.isEmpty()) {
-            try {
-                doc.insertString(0, display, null);
-            } catch (BadLocationException e) {
-                log.warn("Failed to populate display document", e);
-            }
-        }
-        return doc;
     }
 
     private void initComponents() {
@@ -150,52 +132,54 @@ public final class CodebaseCachePanel extends JPanel {
 
     CompletableFuture<CacheStatusData> refreshStatus() {
         return Edt.supplyAsync(() -> {
-            Optional<ProjectCacheMeta> meta = Optional.empty();
-            Optional<String> packed = Optional.empty();
-            if (metaService != null) {
-                meta = metaService.loadMeta();
-                packed = metaService.loadRepoCache();
+            Optional<RepoMapSnapshot> snapshot = Optional.empty();
+            if (packerService != null) {
+                snapshot = packerService.getCachedSnapshot();
             }
-            if (meta.isPresent()) {
+            if (snapshot.isPresent()) {
+                RepoMapSnapshot snap = snapshot.get();
                 String stableContext = getStableContextString();
-                return new CacheStatusData(meta, packed, TokenUtils.estimateTokens(stableContext),
-                        createDisplayDocument(packed.orElse("Content not found on disk.")),
-                        createDisplayDocument(stableContext), createDisplayDocument(getSessionContextString()));
+                return new CacheStatusData(snapshot, TokenUtils.estimateTokens(stableContext),
+                        truncateForDisplay(snap.content()), truncateForDisplay(stableContext),
+                        truncateForDisplay(getSessionContextString()));
             }
-            return new CacheStatusData(meta, packed, 0,
-                    createDisplayDocument(packed.orElse("Repo Map will appear here after generation.")),
-                    createDisplayDocument(""), createDisplayDocument(""));
+            return new CacheStatusData(snapshot, 0, truncateForDisplay("Repo Map will appear here after generation."),
+                    truncateForDisplay(""), truncateForDisplay(""));
         }, this::applyStatusDataOnEdt, e -> log.error("Failed to refresh codebase cache status", e));
     }
 
-    private static void setAreaDocument(JTextArea area, Document doc) {
-        area.setDocument(doc);
-        area.setCaretPosition(0);
-    }
-
     private void applyStatusDataOnEdt(CacheStatusData data) {
-        setAreaDocument(repoMapArea, data.repoMapDoc());
-        if (data.meta().isPresent()) {
-            ProjectCacheMeta m = data.meta().get();
+        repoMapArea.setText(data.repoMapText());
+        repoMapArea.setCaretPosition(0);
+        if (data.snapshot().isPresent()) {
+            RepoMapSnapshot snap = data.snapshot().get();
             statusLabel.setText(String.format("Status: Last updated on %s | Stable: %,d | Repo Map: %,d | Total: %,d",
-                    m.lastUpdated().format(DATE_FORMATTER), data.stableTokens(), m.estimatedTokens(),
-                    data.stableTokens() + m.estimatedTokens()));
-            setAreaDocument(stableContextArea, data.stableContextDoc());
-            setAreaDocument(sessionContextArea, data.sessionContextDoc());
+                    snap.lastUpdated().format(DATE_FORMATTER), data.stableTokens(), snap.estimatedTokens(),
+                    data.stableTokens() + snap.estimatedTokens()));
+            stableContextArea.setText(data.stableContextText());
+            stableContextArea.setCaretPosition(0);
+            sessionContextArea.setText(data.sessionContextText());
+            sessionContextArea.setCaretPosition(0);
         } else {
-            statusLabel.setText(data.packed().isPresent()
-                    ? "Status: Repo Map available locally."
-                    : "Status: No implicit cache found.");
+            statusLabel.setText("Status: No implicit cache found.");
         }
     }
 
     private String getStableContextString() {
-        return promptService != null ? promptService.getStableContext() : "";
+        if (promptService != null) {
+            return promptService.getStableContext();
+        }
+        return "";
     }
 
     private String getSessionContextString() {
-        String session = promptService != null ? promptService.getSessionContext() : null;
-        return session != null ? session.trim() : "";
+        if (promptService != null) {
+            String session = promptService.getSessionContext();
+            if (session != null) {
+                return session.trim();
+            }
+        }
+        return "";
     }
 
     JLabel getStatusLabel() {

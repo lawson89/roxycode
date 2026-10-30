@@ -15,8 +15,8 @@ public final class JexlApiPanel extends JPanel {
     static final String COPIED_BUTTON_TEXT = "Copied!";
 
     private final transient JexlServiceRegistry registry;
-    private final JTextPane textPane = new JTextPane();
-    private final JButton copyBtn = new JButton(COPY_BUTTON_TEXT);
+    private final JEditorPane textPane = SwingHtmlUtils.createHtmlEditorPane();
+    private final JButton copyBtn;
     private Timer copyFeedbackTimer;
     private String lastCopiedDocumentation;
 
@@ -24,18 +24,14 @@ public final class JexlApiPanel extends JPanel {
         this.registry = registry;
         setLayout(new BorderLayout());
 
-        textPane.setEditable(false);
-        textPane.setContentType("text/html");
-        textPane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
-        SwingHtmlUtils.installTextContextMenu(textPane);
+        copyBtn = UiComponents.createCopyButton(COPY_BUTTON_TEXT, true, this::copyDocumentation);
         updateTheme();
-        add(new JScrollPane(textPane), BorderLayout.CENTER);
+        add(UiComponents.createHtmlScrollPane(textPane), BorderLayout.CENTER);
 
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         toolbar.setOpaque(false);
         JButton refreshBtn = new JButton("Refresh");
         refreshBtn.addActionListener(e -> refresh());
-        copyBtn.addActionListener(e -> copyDocumentation());
 
         toolbar.add(copyBtn);
         toolbar.add(refreshBtn);
@@ -45,16 +41,15 @@ public final class JexlApiPanel extends JPanel {
     private void copyDocumentation() {
         String doc = registry.getDocumentation(null);
         this.lastCopiedDocumentation = doc;
-        SwingHtmlUtils.copyToClipboard(doc);
-        copyFeedbackTimer = SwingHtmlUtils.showCopyButtonFeedback(copyBtn, copyFeedbackTimer, COPIED_BUTTON_TEXT, null,
-                COPY_BUTTON_TEXT, null, COPY_FEEDBACK_DELAY_MS);
+        copyFeedbackTimer = UiComponents.copyWithFeedback(copyBtn, copyFeedbackTimer, doc, COPY_BUTTON_TEXT,
+                COPY_FEEDBACK_DELAY_MS);
     }
 
     JButton getCopyButton() {
         return copyBtn;
     }
 
-    JTextPane getTextPane() {
+    JEditorPane getTextPane() {
         return textPane;
     }
 

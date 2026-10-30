@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -28,7 +29,6 @@ class RepoMapPackerServiceTest {
     private ProjectService projectService;
     private ObjectMapper objectMapper;
     private GrepService grepService;
-    private ProjectCacheMetaService metaService;
     private RepoMapPackerService service;
 
     @BeforeEach
@@ -36,10 +36,10 @@ class RepoMapPackerServiceTest {
         projectService = mock(ProjectService.class);
         objectMapper = new ObjectMapper();
         grepService = mock(GrepService.class);
-        metaService = mock(ProjectCacheMetaService.class);
-        service = new RepoMapPackerService(projectService, objectMapper, grepService, metaService);
+        service = new RepoMapPackerService(projectService, objectMapper, grepService);
         lenient().when(projectService.hasActiveProject()).thenReturn(true);
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        lenient().when(projectService.getProjectName()).thenReturn("test-project");
     }
 
     private String ctagsLine(String name, String path, int line) {
@@ -113,6 +113,12 @@ class RepoMapPackerServiceTest {
         assertTrue(ctagsCommands.get(0).contains("--fields=+n"));
         assertTrue(ctagsCommands.get(0).contains("--pattern-length-limit=0"));
         assertTrue(ctagsCommands.get(0).get(6).endsWith("SmallService.java"));
+
+        Optional<RepoMapSnapshot> snapshot = service.getCachedSnapshot();
+        assertTrue(snapshot.isPresent());
+        assertEquals("test-project", snapshot.get().projectName());
+        assertEquals(content, snapshot.get().content());
+        assertTrue(snapshot.get().estimatedTokens() > 0);
     }
 
     @Test
@@ -153,6 +159,7 @@ class RepoMapPackerServiceTest {
         verify(grepService, times(1)).listFiles(null);
 
         service.handleFileChanged(new FileChangedEvent("Fresh.java"));
+        assertTrue(service.getCachedSnapshot().isEmpty());
         EditorResult secondResult = service.generateRepoMap();
         assertTrue(secondResult.success());
         assertTrue(secondResult.content().contains("Fresh.java\n  1: public class FreshUpdated {}"));
@@ -160,7 +167,7 @@ class RepoMapPackerServiceTest {
 
         Files.writeString(testFile, "public class FreshAfterProjectChange {}\n");
         service.handleProjectChanged(new ProjectChangedEvent(tempDir));
-        verify(metaService, times(1)).deleteRepoCache();
+        assertTrue(service.getCachedSnapshot().isEmpty());
         EditorResult projectChangeResult = service.generateRepoMap();
         assertTrue(projectChangeResult.success());
         assertTrue(projectChangeResult.content().contains("Fresh.java\n  1: public class FreshAfterProjectChange {}"));
@@ -170,13 +177,12 @@ class RepoMapPackerServiceTest {
         EditorResult forcedResult = service.forceRegenerateRepoMap();
         assertTrue(forcedResult.success());
         assertTrue(forcedResult.content().contains("Fresh.java\n  1: public class FreshForced {}"));
-        verify(metaService, times(2)).deleteRepoCache();
+        assertTrue(service.getCachedSnapshot().isPresent());
         verify(grepService, times(4)).listFiles(null);
     }
 
     @Test
     void testBatchedCtagsExecutionAndPerFileSkeletonCache() throws IOException {
-        when(metaService.loadRepoCache()).thenReturn(Optional.empty());
         String nl = System.lineSeparator();
         String padding = "// " + "x".repeat(2200) + nl;
         Path largeA = Files.writeString(tempDir.resolve("LargeA.java"),
@@ -228,7 +234,7 @@ class RepoMapPackerServiceTest {
         EditorResult firstResult = service.generateRepoMap();
         assertTrue(firstResult.success());
         assertTrue(firstResult.content().contains("  1: public class Version1 {}"));
-        verify(metaService, never()).saveRepoCache(anyString());
+        assertTrue(service.getCachedSnapshot().isEmpty());
 
         Files.writeString(testFile, "public class Version2 {}\n");
         service.handleFileChanged(new FileChangedEvent("Versioned.java"));
@@ -236,7 +242,8 @@ class RepoMapPackerServiceTest {
         assertTrue(secondResult.success());
         assertTrue(secondResult.content().contains("  1: public class Version2 {}"));
         verify(grepService, times(2)).listFiles(null);
-        verify(metaService, times(1)).saveRepoCache(secondResult.content());
+        assertTrue(service.getCachedSnapshot().isPresent());
+        assertEquals(secondResult.content(), service.getCachedSnapshot().get().content());
 
         EditorResult thirdResult = service.generateRepoMap();
         assertTrue(thirdResult.success());

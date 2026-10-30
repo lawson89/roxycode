@@ -6,6 +6,7 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
@@ -25,6 +26,7 @@ import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
 import org.roxycode.app.util.Edt;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -40,7 +42,7 @@ public final class TaskWorkspacePanel extends JPanel {
 
     private final transient PlanService planService;
     final PlanPanel planPanel;
-    final FeatureChatPanel taskChatPanel;
+    final ChatPanel taskChatPanel;
     final ArchiveBrowserPanel pastPlansPanel;
     final JTabbedPane taskTabs;
     final JPanel topBar;
@@ -50,8 +52,8 @@ public final class TaskWorkspacePanel extends JPanel {
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
     private SidebarPanel sidebar;
 
-    public TaskWorkspacePanel(FeatureChatPanel taskChatPanel, PlanService planService, PlanPanel planPanel,
-            MemoryService memoryService) {
+    public TaskWorkspacePanel(@Qualifier("featureChatPanel") ChatPanel taskChatPanel, PlanService planService,
+            PlanPanel planPanel, MemoryService memoryService) {
         super(new BorderLayout());
         this.planService = planService;
         this.planPanel = planPanel;
@@ -100,8 +102,9 @@ public final class TaskWorkspacePanel extends JPanel {
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        if (pastPlansPanel != null)
+        if (pastPlansPanel != null) {
             pastPlansPanel.refresh();
+        }
     }
 
     @EventListener
@@ -117,8 +120,9 @@ public final class TaskWorkspacePanel extends JPanel {
         if (planLabel != null) {
             applyPhaseTrackerStyling();
             applyPlanBadgeStyling();
-            if (planService != null)
+            if (planService != null) {
                 updateActivePhase(planService.getCurrentPhase());
+            }
         }
     }
 
@@ -176,8 +180,9 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     public void onViewShown() {
-        if (planPanel != null)
+        if (planPanel != null) {
             planPanel.refresh();
+        }
         if (taskChatPanel != null) {
             taskTabs.setSelectedComponent(taskChatPanel);
             SwingUtilities.invokeLater(taskChatPanel::focusInput);
@@ -185,22 +190,28 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     static String formatPlanTitleDisplay(String rawTitle) {
-        return StringUtils.isBlank(rawTitle)
-                ? ""
-                : StringUtils.abbreviate(rawTitle.trim().toUpperCase(Locale.ROOT), MAX_PLAN_TITLE_LENGTH);
+        if (StringUtils.isBlank(rawTitle)) {
+            return "";
+        }
+        return StringUtils.abbreviate(rawTitle.trim().toUpperCase(Locale.ROOT), MAX_PLAN_TITLE_LENGTH);
     }
 
     void updateActivePhase(WorkflowPhase currentPhase) {
         ImplementationPlan plan = planService.getCurrentPlan();
         boolean hasTitle = plan != null && plan.title() != null && !plan.title().isBlank();
-        String trimmedTitle = hasTitle ? plan.title().trim() : "";
-        planLabel.setText(hasTitle ? formatPlanTitleDisplay(trimmedTitle) : "");
-        planLabel.setToolTipText(hasTitle ? trimmedTitle : null);
+        if (hasTitle) {
+            String trimmedTitle = plan.title().trim();
+            planLabel.setText(formatPlanTitleDisplay(trimmedTitle));
+            planLabel.setToolTipText(trimmedTitle);
+        } else {
+            planLabel.setText("");
+            planLabel.setToolTipText(null);
+        }
         planLabel.setVisible(hasTitle);
 
         progressTracker.removeAll();
         progressTracker.add(phaseHeaderLabel, "gapright 4, center");
-        var visitedPhases = planService.getVisitedPhases();
+        Set<WorkflowPhase> visitedPhases = planService.getVisitedPhases();
         for (int i = 0; i < indicators.size(); i++) {
             WorkflowPhaseIndicator indicator = indicators.get(i);
             boolean isActive = indicator.getPhase() == currentPhase;
@@ -221,9 +232,12 @@ public final class TaskWorkspacePanel extends JPanel {
     }
 
     private JLabel createConnectorIcon(boolean reached) {
-        Color color = reached
-                ? SwingHtmlUtils.getAccentColor()
-                : SwingHtmlUtils.getUiColor(Color.GRAY, "Label.disabledForeground", "Component.borderColor");
+        Color color;
+        if (reached) {
+            color = SwingHtmlUtils.getAccentColor();
+        } else {
+            color = SwingHtmlUtils.getUiColor(Color.GRAY, "Label.disabledForeground", "Component.borderColor");
+        }
         return new JLabel(FontIcon.of(Codicons.CHEVRON_RIGHT, 12, color));
     }
 }

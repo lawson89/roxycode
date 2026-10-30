@@ -17,6 +17,7 @@ import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +35,6 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.retry.RetryUtils;
-import org.roxycode.app.model.AppSettings;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.Ordered;
@@ -147,11 +147,15 @@ public class AiService {
     }
 
     public String generateTopicTitle(String conversationExcerpt) {
-        if (StringUtils.isBlank(conversationExcerpt))
+        if (StringUtils.isBlank(conversationExcerpt)) {
             return DEFAULT_TOPIC_TITLE;
-        String excerpt = conversationExcerpt.length() > MAX_EXCERPT_LENGTH
-                ? conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH)
-                : conversationExcerpt;
+        }
+        String excerpt;
+        if (conversationExcerpt.length() > MAX_EXCERPT_LENGTH) {
+            excerpt = conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH);
+        } else {
+            excerpt = conversationExcerpt;
+        }
         String activeModel = resolveEffectiveGeminiModel();
         Future<ChatResponse> future = TITLE_TIMEOUT_EXECUTOR
                 .submit(() -> statelessChatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT).user(u -> u.text(excerpt))
@@ -160,8 +164,9 @@ public class AiService {
             ChatResponse response = future.get(Math.max(1L, topicTitleTimeout.toMillis()), TimeUnit.MILLISECONDS);
             String rawTitle = extractResponseText(response);
             String sanitized = sanitizeTopicTitle(rawTitle);
-            if (!sanitized.isEmpty())
+            if (!sanitized.isEmpty()) {
                 return sanitized;
+            }
         } catch (Exception e) {
             future.cancel(true);
             if (e instanceof InterruptedException) {
@@ -173,36 +178,45 @@ public class AiService {
     }
 
     static String sanitizeTopicTitle(String rawTitle) {
-        if (StringUtils.isBlank(rawTitle))
+        if (StringUtils.isBlank(rawTitle)) {
             return "";
+        }
         String firstLine = rawTitle.lines().map(String::trim).filter(line -> !line.isEmpty()).findFirst().orElse("");
-        if (firstLine.isEmpty())
+        if (firstLine.isEmpty()) {
             return "";
+        }
         String cleaned = firstLine.replaceAll(STRIP_TITLE_CHARS_REGEX, " ").replaceAll("\\s+", " ")
                 .replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "").trim();
-        return cleaned.length() > MAX_TOPIC_TITLE_LENGTH
-                ? cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH).replaceAll("[^a-zA-Z0-9]+$", "").trim()
-                : cleaned;
+        if (cleaned.length() > MAX_TOPIC_TITLE_LENGTH) {
+            return cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH).replaceAll("[^a-zA-Z0-9]+$", "").trim();
+        }
+        return cleaned;
     }
 
     public static String deriveFallbackTopicTitle(String conversationExcerpt) {
-        if (StringUtils.isBlank(conversationExcerpt))
+        if (StringUtils.isBlank(conversationExcerpt)) {
             return DEFAULT_TOPIC_TITLE;
+        }
         for (String rawLine : conversationExcerpt.lines().toList()) {
             String line = rawLine.trim();
-            if (line.isEmpty())
+            if (line.isEmpty()) {
                 continue;
+            }
             if (line.regionMatches(true, 0, "User:", 0, 5)) {
                 line = line.substring(5).trim();
             } else if (line.regionMatches(true, 0, "Roxy:", 0, 5) || line.regionMatches(true, 0, "AI:", 0, 3)) {
                 continue;
             }
             String sanitized = sanitizeTopicTitle(line);
-            if (!sanitized.isEmpty())
+            if (!sanitized.isEmpty()) {
                 return sanitized;
+            }
         }
         String fallback = sanitizeTopicTitle(conversationExcerpt);
-        return fallback.isEmpty() ? DEFAULT_TOPIC_TITLE : fallback;
+        if (fallback.isEmpty()) {
+            return DEFAULT_TOPIC_TITLE;
+        }
+        return fallback;
     }
 
     public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
@@ -225,12 +239,11 @@ public class AiService {
             callerThread.interrupt();
         }, turnTimeoutSeconds, TimeUnit.SECONDS);
 
-        AiConfig.clearHandledRetryState();
         try {
             ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, additionalInstructions,
                     images);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-            ChatResponse chatResponse = executeChatCall(promptSpec, convId, turnContext);
+            ChatResponse chatResponse = executeChatCall(promptSpec, convId);
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
             String content = formatChatResponse(chatResponse, turnContext);
             publishTurnComplete(convId, turnContext.turnCounter().get(), content);
@@ -243,23 +256,11 @@ public class AiService {
             throw new RuntimeException("Unexpected error during chat turn", e);
         } finally {
             timeoutTask.cancel(false);
-            AiConfig.clearHandledRetryState();
         }
     }
 
-    private ChatResponse executeChatCall(ChatClient.ChatClientRequestSpec promptSpec, String convId,
-            TurnToolContext turnContext) {
-        return RetryUtils.execute(retryTemplate, () -> {
-            ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-            try {
-                return promptSpec.advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId)).call().chatResponse();
-            } catch (Throwable t) {
-                if (turnContext.turnCounter().get() > 0) {
-                    AiConfig.markHandledTerminalException(t);
-                }
-                throw t;
-            }
-        });
+    private ChatResponse executeChatCall(ChatClient.ChatClientRequestSpec promptSpec, String convId) {
+        return promptSpec.advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId)).call().chatResponse();
     }
 
     private final class ModelCallRetryAdvisor implements CallAdvisor {
@@ -285,9 +286,10 @@ public class AiService {
     String formatChatResponse(ChatResponse chatResponse, TurnToolContext turnContext) {
         String content = extractResponseText(chatResponse);
         String finishReason = extractFinishReason(chatResponse);
-        Usage usage = (chatResponse != null && chatResponse.getMetadata() != null)
-                ? chatResponse.getMetadata().getUsage()
-                : null;
+        Usage usage = null;
+        if (chatResponse != null && chatResponse.getMetadata() != null) {
+            usage = chatResponse.getMetadata().getUsage();
+        }
         String usageSummary = formatUsageSummary(usage);
         int toolTurns = turnContext.turnCounter().get();
         boolean hasVisibleContent = StringUtils.isNotBlank(content);
@@ -306,7 +308,10 @@ public class AiService {
             return null;
         }
         Generation result = chatResponse.getResult();
-        return result.getOutput() != null ? result.getOutput().getText() : null;
+        if (result.getOutput() != null) {
+            return result.getOutput().getText();
+        }
+        return null;
     }
 
     static String extractFinishReason(ChatResponse chatResponse) {
@@ -348,9 +353,13 @@ public class AiService {
             sb.append("Generation was blocked or aborted by the model (").append(finishReason).append(").");
         }
         appendDiagnosticMetadata(sb, finishReason, toolTurns, usageSummary);
-        sb.append(normalStop
-                ? "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response."
-                : "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
+        if (normalStop) {
+            sb.append(
+                    "\n\nPlease reply (e.g., *'Please continue and summarize your findings'*) so Roxy can provide the final response.");
+        } else {
+            sb.append(
+                    "\n\nPlease review the last step or ask Roxy to continue with a rephrased request or simpler tool call.");
+        }
         return sb.toString();
     }
 
@@ -358,13 +367,15 @@ public class AiService {
             String usageSummary) {
         sb.append("\n- **Finish reason:** ").append(finishReason).append("\n- **Tool turns executed:** ")
                 .append(toolTurns);
-        if (!usageSummary.isEmpty())
+        if (!usageSummary.isEmpty()) {
             sb.append("\n- **Token usage:** ").append(usageSummary);
+        }
     }
 
     public static boolean isAutoNudgeableResponse(String response, boolean hadToolTurns) {
-        if (StringUtils.isBlank(response))
+        if (StringUtils.isBlank(response)) {
             return false;
+        }
         if (response.startsWith(JexlTool.MAX_TURNS_EXCEEDED_PREFIX) || response.contains(TRUNCATED_MARKER)
                 || response.contains(NO_VISIBLE_RESPONSE_MARKER)) {
             return true;
@@ -380,13 +391,23 @@ public class AiService {
         if (usage == null) {
             return "";
         }
-        int promptTokens = usage.getPromptTokens() != null ? usage.getPromptTokens() : 0;
-        int completionTokens = usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
-        int totalTokens = usage.getTotalTokens() != null ? usage.getTotalTokens() : 0;
-        return (promptTokens <= 0 && completionTokens <= 0 && totalTokens <= 0)
-                ? ""
-                : String.format("promptTokens=%d, completionTokens=%d, totalTokens=%d", promptTokens, completionTokens,
-                        totalTokens);
+        int promptTokens = 0;
+        if (usage.getPromptTokens() != null) {
+            promptTokens = usage.getPromptTokens();
+        }
+        int completionTokens = 0;
+        if (usage.getCompletionTokens() != null) {
+            completionTokens = usage.getCompletionTokens();
+        }
+        int totalTokens = 0;
+        if (usage.getTotalTokens() != null) {
+            totalTokens = usage.getTotalTokens();
+        }
+        if (promptTokens <= 0 && completionTokens <= 0 && totalTokens <= 0) {
+            return "";
+        }
+        return String.format("promptTokens=%d, completionTokens=%d, totalTokens=%d", promptTokens, completionTokens,
+                totalTokens);
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(TurnToolContext turnContext, String message,

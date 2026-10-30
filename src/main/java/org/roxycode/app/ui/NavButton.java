@@ -115,9 +115,10 @@ public final class NavButton extends JButton {
     }
 
     private void updatePaddingBorder() {
-        int rightPadding = statusIcon != null
-                ? HORIZONTAL_PADDING + statusIcon.getIconWidth() + STATUS_ICON_GAP
-                : HORIZONTAL_PADDING;
+        int rightPadding = HORIZONTAL_PADDING;
+        if (statusIcon != null) {
+            rightPadding = HORIZONTAL_PADDING + statusIcon.getIconWidth() + STATUS_ICON_GAP;
+        }
         setBorder(
                 BorderFactory.createEmptyBorder(VERTICAL_PADDING, HORIZONTAL_PADDING, VERTICAL_PADDING, rightPadding));
     }
@@ -126,10 +127,12 @@ public final class NavButton extends JButton {
     public void setSelected(boolean b) {
         super.setSelected(b);
         if (b) {
-            putClientProperty(FlatClientProperties.STYLE,
-                    FlatLaf.isLafDark()
-                            ? "background: $Component.accentColor; foreground: $Component.accentForeground"
-                            : "background: #0d6efd; foreground: #ffffff");
+            if (FlatLaf.isLafDark()) {
+                putClientProperty(FlatClientProperties.STYLE,
+                        "background: $Component.accentColor; foreground: $Component.accentForeground");
+            } else {
+                putClientProperty(FlatClientProperties.STYLE, "background: #0d6efd; foreground: #ffffff");
+            }
             setContentAreaFilled(true);
         } else {
             putClientProperty(FlatClientProperties.STYLE, "");
@@ -155,13 +158,21 @@ public final class NavButton extends JButton {
         updateIconColor();
         boolean highlightWaiting = !isSelected() && !busy && waitingApproval;
         boolean dark = FlatLaf.isLafDark();
-        Color amberAccent = dark ? AMBER_DARK : AMBER_LIGHT;
+        Color amberAccent;
+        Color amberTint;
+        if (dark) {
+            amberAccent = AMBER_DARK;
+            amberTint = AMBER_TINT_DARK;
+        } else {
+            amberAccent = AMBER_LIGHT;
+            amberTint = AMBER_TINT_LIGHT;
+        }
 
         if (highlightWaiting && g instanceof Graphics2D) {
             Graphics2D g2 = (Graphics2D) g.create();
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(dark ? AMBER_TINT_DARK : AMBER_TINT_LIGHT);
+                g2.setColor(amberTint);
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), ROW_ARC, ROW_ARC);
                 g2.setColor(amberAccent);
                 g2.fillRoundRect(0, 2, ACCENT_PILL_WIDTH, Math.max(0, getHeight() - 4), ACCENT_PILL_WIDTH,
@@ -178,8 +189,9 @@ public final class NavButton extends JButton {
             int y = (getHeight() - statusIcon.getIconHeight()) / 2;
 
             if (isSelected()) {
-                if (getForeground() != null)
+                if (getForeground() != null) {
                     statusIcon.setIconColor(getForeground());
+                }
             } else if (highlightWaiting) {
                 if (g instanceof Graphics2D) {
                     Graphics2D g2 = (Graphics2D) g.create();
@@ -196,8 +208,9 @@ public final class NavButton extends JButton {
             } else {
                 Color color = SwingHtmlUtils.getUiColor(getForeground(), "Label.disabledForeground",
                         "Component.accentColor");
-                if (color != null)
+                if (color != null) {
                     statusIcon.setIconColor(color);
+                }
             }
             statusIcon.paintIcon(this, g, x, y);
         }

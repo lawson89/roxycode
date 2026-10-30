@@ -226,22 +226,10 @@ public final class HeaderPanel extends JPanel {
         JButton button = new JButton(FontIcon.of(icon, 16, resolveForegroundColor()));
         button.setToolTipText(tooltip);
         button.setFocusable(false);
-        button.setContentAreaFilled(false);
+        button.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_TOOLBAR_BUTTON);
         button.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.addActionListener(listener);
-        button.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
-                button.setContentAreaFilled(true);
-                button.setBackground(UIManager.getColor("Button.hoverBackground"));
-            }
-
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
-                button.setContentAreaFilled(false);
-            }
-        });
         return button;
     }
 

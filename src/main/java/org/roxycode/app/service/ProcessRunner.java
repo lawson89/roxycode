@@ -50,20 +50,11 @@ public final class ProcessRunner {
         return run(command, workingDir, env, DEFAULT_TIMEOUT, true, null);
     }
 
-    public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout) {
-        return run(command, workingDir, env, timeout, true, null);
-    }
-
-    public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout,
-            boolean redirectErrorStream) {
-        return run(command, workingDir, env, timeout, redirectErrorStream, null);
-    }
-
     @SuppressWarnings({"PMD.CloseResource", "PMD.PreserveStackTrace"})
     public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout,
             boolean redirectErrorStream, OutputStream outputMirror) {
-        BoundedOutputStream stdoutStream = new BoundedOutputStream();
-        BoundedOutputStream stderrStream = new BoundedOutputStream();
+        BoundedOutputStream stdoutStream = new BoundedOutputStream(MAX_OUTPUT_CHARS);
+        BoundedOutputStream stderrStream = new BoundedOutputStream(MAX_OUTPUT_CHARS);
         OutputStream primaryOut = stdoutStream;
         if (outputMirror != null) {
             primaryOut = new TeeOutputStream(stdoutStream, outputMirror);
@@ -98,8 +89,10 @@ public final class ProcessRunner {
             boolean completed = process.waitFor(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!completed) {
                 destroyProcessTree(process);
-                joinQuietly(stdoutThread);
-                joinQuietly(stderrThread);
+                stdoutThread.join();
+                if (stderrThread != null) {
+                    stderrThread.join();
+                }
                 return new ProcessResult(-1, stdoutStream.toString(), stderrStream.toString(), true);
             }
 
@@ -133,20 +126,10 @@ public final class ProcessRunner {
         }
     }
 
-    private static void joinQuietly(Thread thread) throws InterruptedException {
-        if (thread != null) {
-            thread.join(1000);
-        }
-    }
-
     static final class BoundedOutputStream extends ThresholdingOutputStream {
 
         private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         private OutputStream currentStream = buffer;
-
-        BoundedOutputStream() {
-            this(MAX_OUTPUT_CHARS);
-        }
 
         BoundedOutputStream(int maxBytes) {
             super(maxBytes);

@@ -5,12 +5,16 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.CtagsRunner;
 import org.roxycode.app.ai.services.CtagsRunner.CtagsEntry;
 import org.roxycode.app.ai.services.EditorResult;
@@ -18,10 +22,9 @@ import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProjectService;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.util.ExceptionUtils;
 import org.roxycode.app.util.PathUtils;
+import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -44,29 +47,36 @@ public class RepoMapPackerService {
             "Test.java,Tests.java,IT.java,_test.py,_test.go,.test.ts,.spec.ts,.test.tsx,.spec.tsx,.test.js,.spec.js,.test.jsx,.spec.jsx"
                     .split(","));
 
+    public record RepoMapSnapshot(String projectName, String content, LocalDateTime lastUpdated, long estimatedTokens) {
+    }
+
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
     private final GrepService grepService;
-    private final ProjectCacheMetaService metaService;
     private final List<String> excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
     private final AtomicLong generation = new AtomicLong(1);
+    private volatile RepoMapSnapshot currentSnapshot;
 
     static final int MAX_SKELETON_CACHE_SIZE = 10_000;
     private final Cache<Path, CachedSkeleton> skeletonCache = Caffeine.newBuilder().maximumSize(MAX_SKELETON_CACHE_SIZE)
             .build();
-    private final Cache<Long, String> repoMapCache = Caffeine.newBuilder().maximumSize(1).build();
     private CtagsRunner ctagsRunner = CtagsRunner.DEFAULT;
 
-    public RepoMapPackerService(ProjectService projectService, ObjectMapper objectMapper, GrepService grepService,
-            ProjectCacheMetaService metaService) {
+    public RepoMapPackerService(ProjectService projectService, ObjectMapper objectMapper, GrepService grepService) {
         this.projectService = projectService;
         this.objectMapper = objectMapper;
         this.grepService = grepService;
-        this.metaService = metaService;
     }
 
     void setCtagsRunner(CtagsRunner ctagsRunner) {
         this.ctagsRunner = ctagsRunner;
+    }
+
+    public Optional<RepoMapSnapshot> getCachedSnapshot() {
+        if (!projectService.hasActiveProject()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(currentSnapshot);
     }
 
     @EventListener
@@ -92,10 +102,9 @@ public class RepoMapPackerService {
     public void invalidateCache() {
         synchronized (this) {
             generation.incrementAndGet();
-            repoMapCache.invalidateAll();
+            currentSnapshot = null;
             skeletonCache.invalidateAll();
         }
-        metaService.deleteRepoCache();
     }
 
     public EditorResult forceRegenerateRepoMap() {
@@ -105,7 +114,7 @@ public class RepoMapPackerService {
 
     private synchronized void invalidateForFileChange(String changedRelativePath) {
         generation.incrementAndGet();
-        repoMapCache.invalidateAll();
+        currentSnapshot = null;
         if (changedRelativePath != null && !changedRelativePath.isBlank()) {
             Path root = projectService.getCurrentProjectRoot();
             if (root != null) {
@@ -122,9 +131,9 @@ public class RepoMapPackerService {
         }
 
         long startGeneration = generation.get();
-        String existingMap = repoMapCache.getIfPresent(startGeneration);
-        if (existingMap != null) {
-            return new EditorResult(true, existingMap, null);
+        RepoMapSnapshot existingSnapshot = currentSnapshot;
+        if (existingSnapshot != null) {
+            return new EditorResult(true, existingSnapshot.content(), null);
         }
 
         List<String> rawFiles = grepService.listFiles(null);
@@ -162,15 +171,11 @@ public class RepoMapPackerService {
         }
 
         String generatedMap = sb.toString();
-        boolean cacheSaved = false;
         synchronized (this) {
             if (generation.get() == startGeneration && root.equals(projectService.getCurrentProjectRoot())) {
-                repoMapCache.put(startGeneration, generatedMap);
-                cacheSaved = true;
+                currentSnapshot = new RepoMapSnapshot(projectService.getProjectName(), generatedMap,
+                        LocalDateTime.now(), TokenUtils.estimateTokens(generatedMap));
             }
-        }
-        if (cacheSaved) {
-            metaService.saveRepoCache(generatedMap);
         }
         return new EditorResult(true, generatedMap, null);
     }

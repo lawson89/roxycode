@@ -22,7 +22,11 @@ public final class WorkflowPhaseIndicator extends JPanel {
 
     public WorkflowPhaseIndicator(WorkflowPhase phase, String fontStyle) {
         this.phase = phase;
-        this.defaultFontStyle = fontStyle != null ? fontStyle : "font: -1";
+        if (fontStyle != null) {
+            this.defaultFontStyle = fontStyle;
+        } else {
+            this.defaultFontStyle = "font: -1";
+        }
         setLayout(new MigLayout("insets 0", "[center]", "center"));
         textLabel = new JLabel(phase.getDisplayName());
         add(textLabel);
@@ -70,15 +74,21 @@ public final class WorkflowPhaseIndicator extends JPanel {
             textLabel.setForeground(Color.WHITE);
         } else {
             putClientProperty(FlatClientProperties.STYLE, null);
-            textLabel.putClientProperty(FlatClientProperties.STYLE, completed ? "font: bold -1" : defaultFontStyle);
-            textLabel.setForeground(completed ? greenColor : disabledFg);
+            if (completed) {
+                textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
+                textLabel.setForeground(greenColor);
+            } else {
+                textLabel.putClientProperty(FlatClientProperties.STYLE, defaultFontStyle);
+                textLabel.setForeground(disabledFg);
+            }
         }
     }
 
     @Override
     public void updateUI() {
         super.updateUI();
-        if (textLabel != null)
+        if (textLabel != null) {
             updateStyle();
+        }
     }
 }

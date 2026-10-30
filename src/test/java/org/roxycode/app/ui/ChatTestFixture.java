@@ -44,12 +44,12 @@ abstract class ChatTestFixture {
         return new ChatPanel(aiService, planService, publisher, chatMemory, "test", null, true, null, null);
     }
 
-    protected FeatureChatPanel createFeatureChatPanel(Executor executor) {
-        return new FeatureChatPanel(aiService, planService, publisher, chatMemory, settingsService, executor);
+    protected ChatPanel createFeatureChatPanel(Executor executor) {
+        return ChatPanel.createFeaturePanel(aiService, planService, publisher, chatMemory, settingsService, executor);
     }
 
-    protected ExploreChatPanel createExploreChatPanel(Executor executor) {
-        return new ExploreChatPanel(aiService, planService, publisher, chatMemory, settingsService, executor,
+    protected ChatPanel createExploreChatPanel(Executor executor) {
+        return ChatPanel.createExplorePanel(aiService, planService, publisher, chatMemory, settingsService, executor,
                 memoryService, environmentService);
     }
 

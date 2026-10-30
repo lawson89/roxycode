@@ -15,7 +15,6 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.ai.services.cache.ProjectCacheMetaService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
@@ -53,13 +52,13 @@ class MainFrameTest {
 
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
         StatusPanel statusPanel = new StatusPanel(envService);
-        QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(
-                new ExploreChatPanel(aiService, planService, pub, chatMemory, settingsService, null, null, null), null);
+        QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(ChatPanel.createExplorePanel(aiService, planService,
+                pub, chatMemory, settingsService, null, null, null), null);
         TaskWorkspacePanel taskWorkspacePanel = new TaskWorkspacePanel(
-                new FeatureChatPanel(aiService, planService, pub, chatMemory, settingsService, null), planService,
-                new PlanPanel(planService, gitService), null);
+                ChatPanel.createFeaturePanel(aiService, planService, pub, chatMemory, settingsService, null),
+                planService, new PlanPanel(planService, gitService), null);
         CodebaseCachePanel codebaseCachePanel = new CodebaseCachePanel(mock(RepoMapPackerService.class),
-                mock(ProjectCacheMetaService.class), mock(PromptService.class));
+                mock(PromptService.class));
         JexlApiPanel jexlApiPanel = new JexlApiPanel(new JexlServiceRegistry());
 
         SystemToolService systemToolService = mock(SystemToolService.class);

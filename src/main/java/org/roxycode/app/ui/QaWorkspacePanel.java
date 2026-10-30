@@ -14,6 +14,7 @@ import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -28,14 +29,14 @@ public final class QaWorkspacePanel extends JPanel {
     static final String PAST_TOPICS_TAB_TITLE = "Past Topics";
 
     final JTabbedPane qaTabs;
-    final ExploreChatPanel qaChatPanel;
+    final ChatPanel qaChatPanel;
     final ArchiveBrowserPanel pastTopicsPanel;
     final JPanel qaHeaderBar;
     final JPanel mentorBanner;
     final JLabel mentorModeLabel;
     final JLabel mentorSubtitleLabel;
 
-    public QaWorkspacePanel(ExploreChatPanel exploreChatPanel, MemoryService memoryService) {
+    public QaWorkspacePanel(@Qualifier("exploreChatPanel") ChatPanel exploreChatPanel, MemoryService memoryService) {
         super(new BorderLayout());
 
         qaHeaderBar = new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
@@ -74,8 +75,9 @@ public final class QaWorkspacePanel extends JPanel {
 
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        if (pastTopicsPanel != null)
+        if (pastTopicsPanel != null) {
             pastTopicsPanel.refresh();
+        }
     }
 
     @EventListener
@@ -88,8 +90,9 @@ public final class QaWorkspacePanel extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (mentorBanner != null)
+        if (mentorBanner != null) {
             applyBannerStyling();
+        }
     }
 
     void applyBannerStyling() {
