@@ -5,26 +5,19 @@ import com.formdev.flatlaf.FlatLaf;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Desktop;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.Rectangle;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
-import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -47,8 +40,6 @@ public final class SystemToolsPanel extends JPanel {
     static final String SUBTITLE_TEXT = "External CLI utilities and runtimes used by RoxyCode for search, version control, symbol indexing, and isolated builds.";
     static final String REQUIRED_BADGE_TEXT = "Required";
     static final String OPTIONAL_BADGE_TEXT = "Optional";
-    private static final String MIG_COL_GROW_FILL = "[0:0, grow, fill]";
-    private static final String MIG_GROWX_WMIN_ZERO = "growx, wmin 0";
 
     private final transient SystemToolService toolService;
     private final JLabel titleLabel;
@@ -63,41 +54,24 @@ public final class SystemToolsPanel extends JPanel {
 
     public SystemToolsPanel(SystemToolService toolService) {
         this.toolService = toolService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", MIG_COL_GROW_FILL, "[]10[]10[grow, fill]"));
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]10[]10[grow, fill]"));
         setOpaque(true);
 
         titleLabel = new JLabel("System Tools Status");
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 18f));
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
-
-        JPanel titleBlock = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", MIG_COL_GROW_FILL, "[]"));
-        titleBlock.setOpaque(false);
-        titleBlock.add(titleLabel, MIG_GROWX_WMIN_ZERO);
-        titleBlock.add(subtitleLabel, MIG_GROWX_WMIN_ZERO);
 
         refreshBtn = new JButton("Refresh Status");
         refreshBtn.addActionListener(e -> refreshTools());
 
-        JPanel header = new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill][]", "[center]"));
-        header.setOpaque(false);
-        header.add(titleBlock, MIG_GROWX_WMIN_ZERO);
-        header.add(refreshBtn);
-        add(header, "growx, wmin 0, wrap");
+        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, refreshBtn), "growx, wmin 0, wrap");
 
         progressBar = new JProgressBar();
         progressBar.setVisible(false);
         add(progressBar, "growx, wmin 0, wrap, hidemode 3");
 
-        cardsContainer = new ScrollableCardsPanel();
-        cardsContainer.setLayout(new MigLayout("fillx, wrap 1, insets 4 2 12 6, gapy 12", MIG_COL_GROW_FILL, ""));
-        cardsContainer.setOpaque(true);
-
-        scrollPane = new JScrollPane(cardsContainer);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        scrollPane.setOpaque(true);
-        scrollPane.getViewport().setOpaque(true);
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        cardsContainer = UiComponents.createScrollableCardsPanel(
+                new MigLayout("fillx, wrap 1, insets 4 2 12 6, gapy 12", "[grow, fill]", ""));
+        scrollPane = UiComponents.createBorderlessScrollPane(cardsContainer);
         add(scrollPane, "grow, wmin 0");
 
         applyThemeStyling();
@@ -105,11 +79,13 @@ public final class SystemToolsPanel extends JPanel {
     }
 
     private void loadInitialTools() {
-        if (toolService == null)
+        if (toolService == null) {
             return;
+        }
         CompletableFuture<List<SystemTool>> future = toolService.detectTools();
-        if (future == null)
+        if (future == null) {
             return;
+        }
         this.initialToolsFuture = future;
         if (future.isDone() && !future.isCompletedExceptionally()) {
             List<SystemTool> immediate = future.join();
@@ -128,7 +104,10 @@ public final class SystemToolsPanel extends JPanel {
             return CompletableFuture.completedFuture(List.of());
         }
         CompletableFuture<List<SystemTool>> future = toolService.refreshTools();
-        return runAsyncToolLoad(future != null ? future : toolService.detectTools());
+        if (future == null) {
+            future = toolService.detectTools();
+        }
+        return runAsyncToolLoad(future);
     }
 
     private CompletableFuture<List<SystemTool>> runAsyncToolLoad(CompletableFuture<List<SystemTool>> future) {
@@ -137,9 +116,12 @@ public final class SystemToolsPanel extends JPanel {
             progressBar.setIndeterminate(true);
             progressBar.setVisible(true);
         });
-        CompletableFuture<List<SystemTool>> effectiveFuture = future != null
-                ? future
-                : CompletableFuture.completedFuture(List.of());
+        CompletableFuture<List<SystemTool>> effectiveFuture;
+        if (future != null) {
+            effectiveFuture = future;
+        } else {
+            effectiveFuture = CompletableFuture.completedFuture(List.of());
+        }
         return effectiveFuture.whenComplete((tools, ex) -> Edt.run(() -> {
             if (future != null && ex == null && tools != null) {
                 populateCards(tools);
@@ -165,7 +147,7 @@ public final class SystemToolsPanel extends JPanel {
                 if (tool != null) {
                     ToolCard card = new ToolCard(tool, this::openWebsite);
                     toolCards.add(card);
-                    cardsContainer.add(card, MIG_GROWX_WMIN_ZERO);
+                    cardsContainer.add(card, "growx, wmin 0");
                 }
             }
         }
@@ -174,8 +156,9 @@ public final class SystemToolsPanel extends JPanel {
     }
 
     void openWebsite(String websiteUrl) {
-        if (StringUtils.isBlank(websiteUrl))
+        if (StringUtils.isBlank(websiteUrl)) {
             return;
+        }
         try {
             browseWithDesktop(URI.create(websiteUrl.trim()));
             return;
@@ -210,8 +193,9 @@ public final class SystemToolsPanel extends JPanel {
     }
 
     static Codicons resolveToolIcon(String toolName) {
-        if (toolName == null)
+        if (toolName == null) {
             return Codicons.TOOLS;
+        }
         return switch (toolName) {
             case SystemTool.TOOL_RIPGREP -> Codicons.SEARCH;
             case SystemTool.TOOL_GIT -> Codicons.SOURCE_CONTROL;
@@ -222,17 +206,15 @@ public final class SystemToolsPanel extends JPanel {
     }
 
     static String formatWebsiteDisplay(String websiteUrl) {
-        if (StringUtils.isBlank(websiteUrl))
+        if (StringUtils.isBlank(websiteUrl)) {
             return "";
+        }
         String display = StringUtils.removeStart(StringUtils.removeStart(websiteUrl.trim(), "https://"), "http://");
         return StringUtils.removeEnd(StringUtils.removeStart(display, "www."), "/");
     }
 
     private void applyThemeStyling() {
-        Color muted = SwingHtmlUtils.getUiColor(new Color(0x66, 0x66, 0x66), "Label.disabledForeground",
-                "Component.infoForeground");
         Color fg = SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
-        subtitleLabel.setForeground(muted);
         refreshBtn.setIcon(FontIcon.of(Codicons.REFRESH, 14, fg));
         toolCards.forEach(ToolCard::applyCardTheme);
     }
@@ -242,35 +224,6 @@ public final class SystemToolsPanel extends JPanel {
         super.updateUI();
         if (subtitleLabel != null) {
             applyThemeStyling();
-        }
-    }
-
-    private static final class ScrollableCardsPanel extends JPanel implements Scrollable {
-        private static final long serialVersionUID = 1L;
-
-        @Override
-        public Dimension getPreferredScrollableViewportSize() {
-            return getPreferredSize();
-        }
-
-        @Override
-        public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
-            return 16;
-        }
-
-        @Override
-        public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
-            return Math.max(visibleRect.height - 32, 32);
-        }
-
-        @Override
-        public boolean getScrollableTracksViewportWidth() {
-            return true;
-        }
-
-        @Override
-        public boolean getScrollableTracksViewportHeight() {
-            return false;
         }
     }
 
@@ -288,8 +241,8 @@ public final class SystemToolsPanel extends JPanel {
 
         ToolCard(SystemTool tool, Consumer<String> websiteOpener) {
             this.tool = tool;
-            setLayout(new MigLayout("fillx, wrap 1, insets 14 16 14 16, gapy 8", MIG_COL_GROW_FILL, ""));
-            setOpaque(true);
+            setLayout(new MigLayout("fillx, wrap 1, insets 14 16 14 16, gapy 8", "[grow, fill]", ""));
+            UiComponents.styleCardPanel(this);
 
             JPanel headerRow = new JPanel(new MigLayout("fillx, insets 0, gapx 8", "[][0:0, grow][right]", "[center]"));
             headerRow.setOpaque(false);
@@ -299,23 +252,24 @@ public final class SystemToolsPanel extends JPanel {
             nameLabel.setIconTextGap(8);
             headerRow.add(nameLabel, "left, wmin 0");
 
-            requirementBadge = new JLabel(tool.required() ? REQUIRED_BADGE_TEXT : OPTIONAL_BADGE_TEXT);
+            String badgeText;
+            if (tool.required()) {
+                badgeText = REQUIRED_BADGE_TEXT;
+            } else {
+                badgeText = OPTIONAL_BADGE_TEXT;
+            }
+            requirementBadge = new JLabel(badgeText);
             headerRow.add(requirementBadge, "left");
 
             statusBadge = new JLabel(tool.status());
             statusBadge.setHorizontalTextPosition(SwingConstants.RIGHT);
             statusBadge.setIconTextGap(6);
             headerRow.add(statusBadge, "right");
-            add(headerRow, MIG_GROWX_WMIN_ZERO);
+            add(headerRow, "growx, wmin 0");
 
-            descriptionArea = new JTextArea(tool.description());
-            descriptionArea.setEditable(false);
-            descriptionArea.setLineWrap(true);
-            descriptionArea.setWrapStyleWord(true);
-            descriptionArea.setOpaque(false);
-            descriptionArea.setFocusable(false);
-            descriptionArea.setBorder(BorderFactory.createEmptyBorder());
-            add(descriptionArea, MIG_GROWX_WMIN_ZERO);
+            descriptionArea = UiComponents.createReadOnlyTextArea();
+            descriptionArea.setText(tool.description());
+            add(descriptionArea, "growx, wmin 0");
 
             JPanel footerRow = new JPanel(
                     new MigLayout("fillx, insets 2 0 0 0, gapx 10", "[]10[]push[right]", "[center]"));
@@ -326,7 +280,13 @@ public final class SystemToolsPanel extends JPanel {
             footerRow.add(versionBadge, "wmin 0");
 
             boolean hasLicense = StringUtils.isNotBlank(tool.license());
-            licenseBadge = new JLabel(hasLicense ? "License: " + tool.license() : "");
+            String licenseText;
+            if (hasLicense) {
+                licenseText = "License: " + tool.license();
+            } else {
+                licenseText = "";
+            }
+            licenseBadge = new JLabel(licenseText);
             licenseBadge.setIconTextGap(5);
             licenseBadge.setVisible(hasLicense);
             footerRow.add(licenseBadge, "wmin 0, hidemode 3");
@@ -345,36 +305,38 @@ public final class SystemToolsPanel extends JPanel {
             }
             footerRow.add(websiteLinkButton, "right, hidemode 3");
 
-            add(footerRow, MIG_GROWX_WMIN_ZERO);
+            add(footerRow, "growx, wmin 0");
             applyCardTheme();
         }
 
         void applyCardTheme() {
             boolean dark = FlatLaf.isLafDark();
             Color accentColor = SwingHtmlUtils.getAccentColor();
-            Color borderColor = SwingHtmlUtils.getUiColor(
-                    dark ? new Color(0x3c, 0x3f, 0x41) : new Color(0xd8, 0xdc, 0xe0), "Component.borderColor");
+            Color borderFallback;
+            if (dark) {
+                borderFallback = new Color(0x3c, 0x3f, 0x41);
+            } else {
+                borderFallback = new Color(0xd8, 0xdc, 0xe0);
+            }
+            Color borderColor = SwingHtmlUtils.getUiColor(borderFallback, "Component.borderColor");
             Color mutedColor = SwingHtmlUtils.getUiColor(new Color(0x6c, 0x75, 0x7d), "Label.disabledForeground",
                     "Component.infoForeground");
             Color fgColor = SwingHtmlUtils.getUiColor(new Color(0x21, 0x25, 0x29), "Label.foreground");
 
             String borderHex = SwingHtmlUtils.toHex(borderColor);
-            String bgDirective = dark ? "lighten($Panel.background, 3%)" : "darken($Panel.background, 2%)";
-            putClientProperty(FlatClientProperties.STYLE,
-                    "arc: 12; border: 1,1,1,1," + borderHex + ",1,12; background: " + bgDirective);
+            UiComponents.styleCardPanel(this);
 
             nameLabel.setForeground(fgColor);
             nameLabel.setIcon(FontIcon.of(resolveToolIcon(tool.name()), 18, accentColor));
 
-            Font baseFont = UIManager.getFont("Label.font");
-            if (baseFont != null) {
-                descriptionArea.setFont(baseFont);
-            }
-            descriptionArea.setForeground(mutedColor);
-
             applyStatusBadgeStyle();
 
-            String pillBg = dark ? "lighten($Panel.background, 7%)" : "darken($Panel.background, 5%)";
+            String pillBg;
+            if (dark) {
+                pillBg = "lighten($Panel.background, 7%)";
+            } else {
+                pillBg = "darken($Panel.background, 5%)";
+            }
             requirementBadge.putClientProperty(FlatClientProperties.STYLE,
                     "font: -1; arc: 999; border: 2,8,2,8," + borderHex + ",1,999; background: " + pillBg);
             requirementBadge.setForeground(mutedColor);

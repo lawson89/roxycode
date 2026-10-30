@@ -2,6 +2,8 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
 import com.vladsch.flexmark.ext.tables.TableBlock;
 import com.vladsch.flexmark.ext.tables.TableCell;
@@ -20,8 +22,12 @@ import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.Locale;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -40,8 +46,15 @@ import javax.swing.text.html.InlineView;
 import javax.swing.text.html.ParagraphView;
 import javax.swing.text.html.StyleSheet;
 import org.apache.commons.text.StringEscapeUtils;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.Theme;
+import org.roxycode.app.service.SettingsService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class SwingHtmlUtils {
+
+    private static final Logger log = LoggerFactory.getLogger(SwingHtmlUtils.class);
 
     private static final DataHolder FLEXMARK_OPTIONS = new MutableDataSet().set(Parser.EXTENSIONS, Arrays
             .asList(TablesExtension.create(), StrikethroughExtension.create(), new MarkdownTableAttributeExtension()))
@@ -50,6 +63,8 @@ public final class SwingHtmlUtils {
     private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
     private static final Color TRANSPARENT_CARET_COLOR = new Color(0, 0, 0, 0);
     private static volatile boolean testMode = Boolean.getBoolean("roxycode.testMode");
+
+    private static final Cache<Boolean, Theme> RSYNTAX_THEME_CACHE = Caffeine.newBuilder().maximumSize(2).build();
 
     private SwingHtmlUtils() {
     }
@@ -98,14 +113,21 @@ public final class SwingHtmlUtils {
             attributes.replaceValue("cellspacing", "0");
             attributes.replaceValue("border", "0");
         } else if (node instanceof TableCell cell) {
-            attributes.addValue("class", cell.isHeader() ? "md-th" : "md-td");
+            String cellClass;
+            if (cell.isHeader()) {
+                cellClass = "md-th";
+            } else {
+                cellClass = "md-td";
+            }
+            attributes.addValue("class", cellClass);
         }
     }
 
     public static String renderMarkdownToHtml(String markdown) {
-        return (markdown == null || markdown.isEmpty())
-                ? ""
-                : JexlToHtmlConverter.highlightCodeBlocks(MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
+        if (markdown == null || markdown.isEmpty()) {
+            return "";
+        }
+        return JexlToHtmlConverter.highlightCodeBlocks(MARKDOWN_RENDERER.render(MARKDOWN_PARSER.parse(markdown)));
     }
 
     public static JEditorPane createHtmlEditorPane() {
@@ -159,14 +181,32 @@ public final class SwingHtmlUtils {
         };
         StyleSheet sheet = new StyleSheet();
         boolean isDark = FlatLaf.isLafDark();
-        URL cssUrl = SwingHtmlUtils.class
-                .getResource(isDark ? "/css/chat-styles-dark.css" : "/css/chat-styles-light.css");
+        String cssPath;
+        if (isDark) {
+            cssPath = "/css/chat-styles-dark.css";
+        } else {
+            cssPath = "/css/chat-styles-light.css";
+        }
+        URL cssUrl = SwingHtmlUtils.class.getResource(cssPath);
         if (cssUrl != null) {
             sheet.importStyleSheet(cssUrl);
         }
 
-        Color bg = getUiColor(isDark ? new Color(30, 30, 30) : Color.WHITE, "TextPane.background");
-        Color fg = getUiColor(isDark ? Color.LIGHT_GRAY : Color.BLACK, "TextPane.foreground");
+        Color bgFallback;
+        if (isDark) {
+            bgFallback = new Color(30, 30, 30);
+        } else {
+            bgFallback = Color.WHITE;
+        }
+        Color bg = getUiColor(bgFallback, "TextPane.background");
+
+        Color fgFallback;
+        if (isDark) {
+            fgFallback = Color.LIGHT_GRAY;
+        } else {
+            fgFallback = Color.BLACK;
+        }
+        Color fg = getUiColor(fgFallback, "TextPane.foreground");
         textPane.setBackground(bg);
         textPane.setForeground(fg);
         textPane.setOpaque(true);
@@ -200,13 +240,17 @@ public final class SwingHtmlUtils {
         @Override
         public View create(Element elem) {
             View view = super.create(elem);
-            if (isNoWrap(elem))
+            if (isNoWrap(elem)) {
                 return view;
+            }
             if (view.getClass() == InlineView.class) {
                 return new InlineView(elem) {
                     @Override
                     public float getMinimumSpan(int axis) {
-                        return axis == View.X_AXIS ? 0 : super.getMinimumSpan(axis);
+                        if (axis == View.X_AXIS) {
+                            return 0;
+                        }
+                        return super.getMinimumSpan(axis);
                     }
                 };
             }
@@ -214,7 +258,10 @@ public final class SwingHtmlUtils {
                 return new ParagraphView(elem) {
                     @Override
                     public float getMinimumSpan(int axis) {
-                        return axis == View.X_AXIS ? 0 : super.getMinimumSpan(axis);
+                        if (axis == View.X_AXIS) {
+                            return 0;
+                        }
+                        return super.getMinimumSpan(axis);
                     }
                 };
             }
@@ -222,7 +269,10 @@ public final class SwingHtmlUtils {
                 return new BlockView(elem, blockView.getAxis()) {
                     @Override
                     public float getMinimumSpan(int axis) {
-                        return axis == View.X_AXIS ? 0 : super.getMinimumSpan(axis);
+                        if (axis == View.X_AXIS) {
+                            return 0;
+                        }
+                        return super.getMinimumSpan(axis);
                     }
                 };
             }
@@ -339,6 +389,61 @@ public final class SwingHtmlUtils {
     }
 
     public static String escapeHtml(String text) {
-        return text == null ? "" : StringEscapeUtils.escapeHtml4(text);
+        if (text == null) {
+            return "";
+        }
+        return StringEscapeUtils.escapeHtml4(text);
+    }
+
+    public static boolean isDarkTheme(String themeName) {
+        if (themeName != null && !themeName.isBlank()) {
+            String lower = themeName.toLowerCase(Locale.ROOT);
+            if (lower.contains("dark") || "darcula".equals(lower)) {
+                return true;
+            }
+            if (lower.contains("light") || "intellij".equals(lower)) {
+                return false;
+            }
+        }
+        return FlatLaf.isLafDark();
+    }
+
+    public static void applyRSyntaxTheme(RSyntaxTextArea textArea, SettingsService settingsService) {
+        String theme = null;
+        if (settingsService != null && settingsService.getSettings() != null) {
+            theme = settingsService.getSettings().getTheme();
+        }
+        applyRSyntaxTheme(textArea, theme);
+    }
+
+    public static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
+        if (textArea == null) {
+            return;
+        }
+        try {
+            getRSyntaxTheme(isDarkTheme(themeName)).apply(textArea);
+        } catch (IOException ioe) {
+            log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
+        }
+    }
+
+    private static Theme getRSyntaxTheme(boolean dark) throws IOException {
+        try {
+            return RSYNTAX_THEME_CACHE.get(dark, isDark -> {
+                String themePath;
+                if (isDark) {
+                    themePath = "/org/fife/ui/rsyntaxtextarea/themes/dark.xml";
+                } else {
+                    themePath = "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
+                }
+                try (InputStream in = SwingHtmlUtils.class.getResourceAsStream(themePath)) {
+                    return Theme.load(in);
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
+        } catch (UncheckedIOException e) {
+            throw e.getCause();
+        }
     }
 }

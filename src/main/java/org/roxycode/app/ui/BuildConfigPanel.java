@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -10,7 +9,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
-import org.apache.commons.lang3.StringUtils;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
@@ -59,8 +57,6 @@ public final class BuildConfigPanel extends JPanel {
     final JLabel subtitleLabel;
     final JPanel modelCardPanel;
     final JLabel modelSectionHeaderLabel;
-    final JLabel modelFieldTitleLabel;
-    final JLabel modelFieldDescLabel;
     final JComboBox<GeminiModelConfig> modelCombo;
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
@@ -97,54 +93,33 @@ public final class BuildConfigPanel extends JPanel {
         setOpaque(true);
 
         titleLabel = new JLabel(TITLE_TEXT);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 18f));
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
-
-        JPanel titleBlock = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[grow, fill]", "[]"));
-        titleBlock.setOpaque(false);
-        titleBlock.add(titleLabel, "growx, wmin 0");
-        titleBlock.add(subtitleLabel, "growx, wmin 0");
-        add(titleBlock, "growx, wmin 0, wrap, gapbottom 10");
+        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, null), "growx, wmin 0, wrap, gapbottom 10");
 
         modelCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 14 18 14 18, gapy 8", "[grow, fill]", ""));
-        modelCardPanel.setOpaque(true);
+        UiComponents.styleCardPanel(modelCardPanel);
+
         modelSectionHeaderLabel = new JLabel(SECTION_AI_MODEL_TITLE);
         modelSectionHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
         modelSectionHeaderLabel.setIconTextGap(8);
         modelCardPanel.add(modelSectionHeaderLabel, "growx, wmin 0");
 
-        JPanel modelHeaderRow = new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill]16[right]", "[center]"));
-        modelHeaderRow.setOpaque(false);
-
-        JPanel modelFieldBlock = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[grow, fill]", ""));
-        modelFieldBlock.setOpaque(false);
-        modelFieldTitleLabel = new JLabel("Project Gemini Model");
-        modelFieldTitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold");
-        modelFieldDescLabel = new JLabel(
-                "Override the default Global Settings Gemini model specifically for the active project.");
-        modelFieldDescLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-        modelFieldBlock.add(modelFieldTitleLabel, "growx, wmin 0");
-        modelFieldBlock.add(modelFieldDescLabel, "growx, wmin 0");
-        modelHeaderRow.add(modelFieldBlock, "growx, wmin 0");
-
         modelCombo = new JComboBox<>();
         modelApiBadgeLabel = new JLabel();
-        modelApiBadgeLabel.setIconTextGap(5);
-        modelDescriptionArea = new JTextArea();
-        modelDescriptionArea.setEditable(false);
-        modelDescriptionArea.setLineWrap(true);
-        modelDescriptionArea.setWrapStyleWord(true);
-        modelDescriptionArea.setOpaque(false);
-        modelDescriptionArea.setFocusable(false);
-        modelDescriptionArea.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
+        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
+
+        modelDescriptionArea = UiComponents.createReadOnlyTextArea();
 
         JPanel modelControlBox = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", "[center]"));
         modelControlBox.setOpaque(false);
         modelControlBox.add(modelApiBadgeLabel, "hidemode 3");
         modelControlBox.add(modelCombo, "w 240:280:340");
-        modelHeaderRow.add(modelControlBox);
 
-        modelCardPanel.add(modelHeaderRow, "growx, wmin 0");
+        modelCardPanel.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Project Gemini Model",
+                        "Override the default Global Settings Gemini model specifically for the active project.", null),
+                modelControlBox, ""), "growx, wmin 0");
+
         modelCardPanel.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
         add(modelCardPanel, "growx, wrap, gapbottom 14");
 
@@ -234,91 +209,19 @@ public final class BuildConfigPanel extends JPanel {
         if (projectService != null && projectService.hasActiveProject()) {
             projectModel = projectService.getProjectGeminiModel();
         }
-        selectProjectModelOption(projectModel);
-    }
-
-    private void selectProjectModelOption(String projectModel) {
-        String target = StringUtils.defaultString(projectModel).trim();
-        for (int i = 0; i < modelCombo.getItemCount(); i++) {
-            GeminiModelConfig item = modelCombo.getItemAt(i);
-            if (item != null && target.equals(item.apiName())) {
-                modelCombo.setSelectedIndex(i);
-                return;
-            }
-        }
-        if (modelCombo.getItemCount() > 0) {
-            modelCombo.setSelectedIndex(0);
-        }
+        UiComponents.selectModelByApiName(modelCombo, projectModel);
     }
 
     void updateSelectedModelDetails() {
-        GeminiModelConfig selected = (GeminiModelConfig) modelCombo.getSelectedItem();
-        if (selected == null) {
-            modelApiBadgeLabel.setText("");
-            modelApiBadgeLabel.setVisible(false);
-            modelDescriptionArea.setText("");
-            modelDescriptionArea.setVisible(false);
-            return;
-        }
-        String apiName = StringUtils.defaultString(selected.apiName());
-        if (apiName.isBlank()) {
-            String globalModel = resolveGlobalDefaultModel();
-            modelApiBadgeLabel.setText(globalModel);
-            modelApiBadgeLabel.setVisible(!globalModel.isBlank());
-        } else {
-            modelApiBadgeLabel.setText(apiName);
-            modelApiBadgeLabel.setVisible(true);
-        }
-        String description = StringUtils.defaultString(selected.description());
-        modelDescriptionArea.setText(description);
-        modelDescriptionArea.setVisible(!description.isBlank());
+        UiComponents.updateModelSelectionDetails(modelCombo, modelApiBadgeLabel, modelDescriptionArea,
+                resolveGlobalDefaultModel());
     }
 
     private void applySectionStyling() {
-        boolean dark = FlatLaf.isLafDark();
         Color accentColor = SwingHtmlUtils.getAccentColor();
-        Color borderFallback = new Color(0xd8, 0xdc, 0xe0);
-        if (dark) {
-            borderFallback = new Color(0x3c, 0x3f, 0x41);
-        }
-        Color borderColor = SwingHtmlUtils.getUiColor(borderFallback, "Component.borderColor");
-        Color mutedColor = SwingHtmlUtils.getUiColor(new Color(0x6c, 0x75, 0x7d), "Label.disabledForeground",
-                "Component.infoForeground");
-        Color fgColor = SwingHtmlUtils.getUiColor(new Color(0x21, 0x25, 0x29), "Label.foreground");
 
-        titleLabel.setForeground(fgColor);
-        subtitleLabel.setForeground(mutedColor);
-
-        String borderHex = SwingHtmlUtils.toHex(borderColor);
-        String cardBgDirective = "darken($Panel.background, 2%)";
-        if (dark) {
-            cardBgDirective = "lighten($Panel.background, 3%)";
-        }
-        modelCardPanel.putClientProperty(FlatClientProperties.STYLE,
-                "arc: 12; border: 1,1,1,1," + borderHex + ",1,12; background: " + cardBgDirective);
-
-        modelSectionHeaderLabel.setForeground(fgColor);
         modelSectionHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
-        modelFieldTitleLabel.setForeground(fgColor);
-        modelFieldDescLabel.setForeground(mutedColor);
-
-        buildSectionHeaderLabel.setForeground(fgColor);
         buildSectionHeaderLabel.setIcon(FontIcon.of(Codicons.PACKAGE, 18, accentColor));
-
-        Font baseFont = UIManager.getFont("Label.font");
-        if (baseFont != null) {
-            modelDescriptionArea.setFont(baseFont.deriveFont(Math.max(11f, baseFont.getSize2D() - 1f)));
-        }
-        modelDescriptionArea.setForeground(mutedColor);
-
-        String pillBg = "darken($Panel.background, 5%)";
-        if (dark) {
-            pillBg = "lighten($Panel.background, 7%)";
-        }
-        modelApiBadgeLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: $monospaced.font -1; arc: 8; border: 2,8,2,8," + borderHex + ",1,8; background: " + pillBg);
-        modelApiBadgeLabel.setForeground(fgColor);
-        modelApiBadgeLabel.setIcon(FontIcon.of(Codicons.CODE, 13, accentColor));
 
         statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
     }
@@ -566,6 +469,6 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     private void updateTextAreaTheme() {
-        SettingsPanel.applyRSyntaxTheme(textArea, settingsService);
+        SwingHtmlUtils.applyRSyntaxTheme(textArea, settingsService);
     }
 }
