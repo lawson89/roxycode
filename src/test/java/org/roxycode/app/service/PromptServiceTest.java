@@ -185,7 +185,7 @@ class PromptServiceTest {
         when(planService.getCurrentPlan()).thenReturn(plan);
 
         SwingTestUtils.assertContainsAll(promptService.getSessionContext(WorkflowPhase.CODE),
-                "## CURRENT PLAN PROGRESS", "- [x] 0. Update prompts", "- [ ] 1. Update PlanService",
+                "## CURRENT PLAN PROGRESS", "- [x] 0. ~~Update prompts~~", "- [ ] 1. Update PlanService",
                 "- [ ] 2. Update PromptService");
     }
 

@@ -564,4 +564,31 @@ class AiServiceTest {
         assertTrue(wasInterrupted.get());
         assertTrue(elapsedMs < 2000, "Topic title timeout fallback should complete quickly, took " + elapsedMs + "ms");
     }
+
+    @Test
+    void testChatTurnTimeoutInterruptsHungTurnAndThrowsCancellationException() throws Exception {
+        assertEquals(AiConfig.DEFAULT_TURN_TIMEOUT_SECONDS, aiService.getTurnTimeoutSeconds());
+        aiService.setTurnTimeoutSeconds(1);
+        stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "Ignored", "STOP", null);
+        CountDownLatch interrupted = new CountDownLatch(1);
+
+        when(responseSpec.chatResponse()).thenAnswer(inv -> {
+            try {
+                Thread.sleep(10_000);
+            } catch (InterruptedException e) {
+                interrupted.countDown();
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Model call interrupted by watchdog", e);
+            }
+            return buildChatResponse("Should not reach", "STOP", null);
+        });
+
+        try {
+            assertThrows(CancellationException.class, () -> aiService.chat("default", null, "Hung request", null));
+            assertTrue(Thread.interrupted());
+            assertTrue(interrupted.await(2, TimeUnit.SECONDS), "Turn watchdog should interrupt hung turn thread");
+        } finally {
+            Thread.interrupted();
+        }
+    }
 }

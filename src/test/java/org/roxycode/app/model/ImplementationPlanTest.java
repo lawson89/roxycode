@@ -36,7 +36,7 @@ class ImplementationPlanTest {
         SwingTestUtils.assertContainsAll(withoutLog, "# Implementation Plan: Feature Plan", "**Goal:** Deliver feature",
                 "## Approvals", "- **Move to Code:** Approved by alice on 2026-04-06T12:00:00Z",
                 "- **Final Acceptance:** Accepted by bob on 2026-04-06T12:30:00Z", "## Requirements" + LF + "- Req A",
-                "## Technical Steps" + LF + "- [x] 0. Step 0" + LF + "- [ ] 1. Step 1");
+                "## Technical Steps" + LF + "- [x] 0. ~~Step 0~~" + LF + "- [ ] 1. Step 1");
         assertFalse(withoutLog.contains("## Handoff Log"));
 
         String withLog = plan.toMarkdown(true);

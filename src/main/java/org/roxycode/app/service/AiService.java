@@ -4,8 +4,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.StringUtils;
@@ -62,6 +64,12 @@ public class AiService {
 
     public static final Duration DEFAULT_TOPIC_TITLE_TIMEOUT = Duration.ofSeconds(10);
     private static final ExecutorService TITLE_TIMEOUT_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+    private static final ScheduledExecutorService TURN_TIMEOUT_SCHEDULER = Executors
+            .newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "ai-turn-watchdog");
+                t.setDaemon(true);
+                return t;
+            });
 
     public static final int MAX_AUTO_NUDGES = 2;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
@@ -77,6 +85,7 @@ public class AiService {
     private final ChatMemory chatMemory;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
     private volatile Duration topicTitleTimeout = DEFAULT_TOPIC_TITLE_TIMEOUT;
+    private volatile int turnTimeoutSeconds = AiConfig.DEFAULT_TURN_TIMEOUT_SECONDS;
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, PromptService promptService,
             JexlTool jexlTool, PlanService planService, ChatMemory chatMemory, ToolCallingManager toolCallingManager,
@@ -127,6 +136,14 @@ public class AiService {
 
     Duration getTopicTitleTimeout() {
         return topicTitleTimeout;
+    }
+
+    void setTurnTimeoutSeconds(int turnTimeoutSeconds) {
+        this.turnTimeoutSeconds = turnTimeoutSeconds;
+    }
+
+    int getTurnTimeoutSeconds() {
+        return turnTimeoutSeconds;
     }
 
     public String generateTopicTitle(String conversationExcerpt) {
@@ -196,9 +213,17 @@ public class AiService {
     public String chat(String conversationId, WorkflowPhase phase, String message, String additionalInstructions,
             List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
-        TurnToolContext turnContext = new TurnToolContext(conversationId,
-                phase != null ? phase : planService.getCurrentPhase(), new AtomicInteger(0));
+        WorkflowPhase resolvedPhase = phase;
+        if (resolvedPhase == null) {
+            resolvedPhase = planService.getCurrentPhase();
+        }
+        TurnToolContext turnContext = new TurnToolContext(conversationId, resolvedPhase, new AtomicInteger(0));
         String convId = turnContext.conversationId();
+        Thread callerThread = Thread.currentThread();
+        ScheduledFuture<?> timeoutTask = TURN_TIMEOUT_SCHEDULER.schedule(() -> {
+            log.warn("Chat turn timed out after {} seconds, interrupting thread", turnTimeoutSeconds);
+            callerThread.interrupt();
+        }, turnTimeoutSeconds, TimeUnit.SECONDS);
 
         AiConfig.clearHandledRetryState();
         try {
@@ -212,10 +237,12 @@ public class AiService {
             return content;
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, "Chat turn cancelled");
-            if (e instanceof RuntimeException re)
+            if (e instanceof RuntimeException re) {
                 throw re;
+            }
             throw new RuntimeException("Unexpected error during chat turn", e);
         } finally {
+            timeoutTask.cancel(false);
             AiConfig.clearHandledRetryState();
         }
     }

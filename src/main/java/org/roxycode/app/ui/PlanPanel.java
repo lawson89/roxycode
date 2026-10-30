@@ -1,9 +1,7 @@
 package org.roxycode.app.ui;
 
 import java.awt.*;
-import java.util.List;
 import javax.swing.*;
-import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
@@ -185,102 +183,7 @@ public final class PlanPanel extends JPanel {
                     """;
         }
 
-        StringBuilder reqItems = new StringBuilder();
-        for (String req : plan.requirements()) {
-            reqItems.append("<li>").append(SwingHtmlUtils.escapeHtml(req)).append("</li>");
-        }
-
-        StringBuilder stepRows = new StringBuilder();
-        int index = 0;
-        for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
-            String checkbox = step.completed()
-                    ? "<span class='plan-step-done'><b>[x]</b></span>"
-                    : "<span class='plan-muted'>[&nbsp;]</span>";
-            String textClass = step.completed() ? "class='plan-step-completed'" : "";
-            stepRows.append("""
-                    <tr>
-                        <td valign='top' nowrap='nowrap' class='plan-step-index'>%d.</td>
-                        <td valign='top' nowrap='nowrap' class='plan-step-check'>%s</td>
-                        <td width='100%%' %s>%s</td>
-                    </tr>
-                    """.formatted(index, checkbox, textClass, SwingHtmlUtils.escapeHtml(step.description())));
-            index++;
-        }
-
-        return """
-                <html><body>
-                <h2 class='spec-technical-header'>Implementation Plan</h2>
-                <p><b>Title:</b> %s</p>
-                <p><b>Goal:</b> %s</p>
-                %s
-                <h3>Requirements:</h3>
-                <ul>%s</ul>
-                <h3>Technical Steps:</h3>
-                <table width='100%%' border='0' cellpadding='4' cellspacing='0'>
-                %s
-                </table>
-                %s
-                %s
-                </body></html>
-                """.formatted(SwingHtmlUtils.escapeHtml(plan.title()), SwingHtmlUtils.escapeHtml(plan.goal()),
-                renderApprovalsHtml(plan), reqItems, stepRows, renderLogTable("Handoff Log", plan.handoffLog()),
-                renderChangesHtml(gitStatus));
-    }
-
-    private static String renderApprovalsHtml(ImplementationPlan plan) {
-        if (!plan.hasApprovals())
-            return "";
-        StringBuilder items = new StringBuilder();
-        if (plan.hasMoveToCodeApproval()) {
-            appendApprovalItem(items, "Move to Code", "Approved by ", plan.approvedBy(), plan.approvalTimestamp());
-        }
-        if (plan.hasFinalAcceptance()) {
-            appendApprovalItem(items, "Final Acceptance", "Accepted by ", plan.completedBy(), plan.completedOn());
-        }
-        return "<h3>Approvals:</h3><ul>%s</ul>".formatted(items);
-    }
-
-    private static void appendApprovalItem(StringBuilder items, String label, String verb, String rawUser,
-            String rawTimestamp) {
-        items.append("<li><b>").append(label).append(":</b> ").append(verb)
-                .append(SwingHtmlUtils.escapeHtml(StringUtils.defaultIfBlank(rawUser, "User"))).append(" on ")
-                .append(SwingHtmlUtils.escapeHtml(StringUtils.defaultIfBlank(rawTimestamp, "N/A"))).append("</li>");
-    }
-
-    private static String renderChangesHtml(String gitStatus) {
-        String changes = formatChangesText(gitStatus);
-        return NO_FILES_CHANGED.equals(changes)
-                ? "<h3>Changes:</h3><p class='plan-muted'>%s</p>".formatted(NO_FILES_CHANGED)
-                : "<h3>Changes:</h3><pre>%s</pre>".formatted(SwingHtmlUtils.escapeHtml(changes));
-    }
-
-    private static String renderLogTable(String title, List<ImplementationPlan.LogEntry> logs) {
-        if (logs == null || logs.isEmpty())
-            return "";
-
-        StringBuilder rows = new StringBuilder();
-        for (ImplementationPlan.LogEntry entry : logs) {
-            rows.append("""
-                    <tr>
-                        <td valign='top'><span class='plan-muted'><font size='2'>%s</font></span></td>
-                        <td valign='top'><span class='plan-log-user'><font size='2'>%s</font></span></td>
-                        <td valign='top'><font size='3'>%s</font></td>
-                    </tr>
-                    """.formatted(SwingHtmlUtils.escapeHtml(entry.formattedTimestamp()),
-                    SwingHtmlUtils.escapeHtml(entry.user()), SwingHtmlUtils.escapeHtml(entry.message())));
-        }
-
-        return """
-                <h3>%s:</h3>
-                <table width='100%%' border='0' cellpadding='2' cellspacing='0'>
-                    <tr class='system-entry'>
-                        <td class='md-th' width='25%%' align='left'><b><span class='plan-muted'><font size='2'>Timestamp</font></span></b></td>
-                        <td class='md-th' width='15%%' align='left'><b><span class='plan-muted'><font size='2'>User</font></span></b></td>
-                        <td class='md-th' width='60%%' align='left'><b><span class='plan-muted'><font size='2'>Message</font></span></b></td>
-                    </tr>
-                %s
-                </table>
-                """
-                .formatted(title, rows);
+        String markdown = buildPlanMarkdown(plan, gitStatus);
+        return "<html><body>" + SwingHtmlUtils.renderMarkdownToHtml(markdown) + "</body></html>";
     }
 }

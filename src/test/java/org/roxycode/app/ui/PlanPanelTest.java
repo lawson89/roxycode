@@ -31,18 +31,21 @@ class PlanPanelTest {
     }
 
     @Test
-    void testBuildPlanHtmlUsesNowrapAndNonBreakingCheckbox() {
+    void testBuildPlanHtmlRendersMarkdownWithStrikethroughApprovalsAndLogs() {
+        assertTrue(PlanPanel.buildPlanHtml(null).contains("No implementation plan submitted yet."));
+
         ImplementationPlan plan = createPlan(new ImplementationPlan.TechStep(
                 "Long step description that should wrap in its column without squishing the index or checkbox.", false),
                 new ImplementationPlan.TechStep("Completed step", true));
 
         String html = PlanPanel.buildPlanHtml(plan);
-        assertContainsAll(html, "<p><b>Title:</b> Test Plan</p>", "<p><b>Goal:</b> Test Goal</p>", "[&nbsp;]",
-                "<b>[x]</b>", "nowrap='nowrap'", "<td width='100%'", "<h3>Changes:</h3>", "No files changed");
-        assertFalse(html.contains(">[ ]<"));
+        assertContainsAll(html, "<html><body>", "<h1>Implementation Plan: Test Plan</h1>",
+                "<p><strong>Goal:</strong> Test Goal</p>", "<h2>Requirements</h2>", "<h2>Technical Steps</h2>",
+                "[ ] 0. Long step description", "[x] 1. <del>Completed step</del>", "<h2>Changes</h2>",
+                "No files changed", "</body></html>");
 
         String htmlWithChanges = PlanPanel.buildPlanHtml(plan, " M src/App.java\n?? src/NewFile.java\n");
-        assertContainsAll(htmlWithChanges, "<h3>Changes:</h3>", "<pre> M src/App.java\n?? src/NewFile.java</pre>");
+        assertContainsAll(htmlWithChanges, "<h2>Changes</h2>", "M src/App.java", "?? src/NewFile.java");
         assertFalse(htmlWithChanges.contains("No files changed"));
 
         ImplementationPlan planWithLogs = new ImplementationPlan("Test Plan", "Test Goal", List.of("Requirement 1"),
@@ -50,14 +53,11 @@ class PlanPanelTest {
                 "reviewer", "2026-04-06T13:00:00",
                 List.of(new ImplementationPlan.LogEntry("2026-04-06T12:00:00", "User", "Approved")));
         String htmlWithLogs = PlanPanel.buildPlanHtml(planWithLogs);
-        for (String legacy : List.of("bgcolor='#2d2d2d'", "#888888", "#569cd6", "#28a745")) {
-            assertFalse(htmlWithLogs.contains(legacy));
-        }
-        assertContainsAll(htmlWithLogs, "<h3>Approvals:</h3>",
-                "<li><b>Move to Code:</b> Approved by user on 2026-04-06T12:00:00</li>",
-                "<li><b>Final Acceptance:</b> Accepted by reviewer on 2026-04-06T13:00:00</li>",
-                "class='plan-step-done'", "class='plan-step-completed'", "class='plan-log-user'");
-        assertTrue(htmlWithLogs.contains("class='system-entry'") || htmlWithLogs.contains("class='md-th'"));
+        assertContainsAll(htmlWithLogs, "<h2>Approvals</h2>",
+                "<li><strong>Move to Code:</strong> Approved by user on 2026-04-06T12:00:00</li>",
+                "<li><strong>Final Acceptance:</strong> Accepted by reviewer on 2026-04-06T13:00:00</li>",
+                "<del>Completed step</del>", "<h2>Handoff Log</h2>", "md-table", "md-th", "2026-04-06T12:00:00",
+                "Approved");
     }
 
     @Test
@@ -98,7 +98,7 @@ class PlanPanelTest {
         SwingTestUtils.clickOnEdt(panel.getCopyMarkdownButton());
         verify(gitService, never()).getStatus();
         assertEquals("Copied!", panel.getCopyMarkdownButton().getText());
-        assertContainsAll(panel.getLastCopiedMarkdown(), "# Implementation Plan: Test Plan", "- [x] 0. Step 0",
+        assertContainsAll(panel.getLastCopiedMarkdown(), "# Implementation Plan: Test Plan", "- [x] 0. ~~Step 0~~",
                 "## Changes", " M src/Main.java");
 
         SwingTestUtils.runOnEdt(panel::updateUI);

@@ -246,8 +246,11 @@ public record ImplementationPlan(String title, String goal, List<String> require
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < technicalSteps.size(); i++) {
             TechStep step = technicalSteps.get(i);
-            sb.append(step.completed() ? "- [x] " : "- [ ] ").append(i).append(". ").append(step.description())
-                    .append("\n");
+            if (step.completed()) {
+                sb.append("- [x] ").append(i).append(". ~~").append(step.description()).append("~~\n");
+            } else {
+                sb.append("- [ ] ").append(i).append(". ").append(step.description()).append("\n");
+            }
         }
         return sb.toString();
     }
