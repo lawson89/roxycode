@@ -10,8 +10,8 @@ run_single = "./gradlew test --tests {testName}"
 ROXY_CODE = "true"
 
 [parse]
-error_regex = '(?m)^> Compilation failed; see the compiler error output for details\\.\\n(.*)$'
-test_failure_regex = '(?m)^([\\w.]+ > [\\w.]+) FAILED'
+error_regex = '^> Compilation failed|e: file://.*:\d+:\d+'
+test_failure_regex = '^[\w.]+ > [\w.]+ FAILED'
 
 [container]
 enabled = false

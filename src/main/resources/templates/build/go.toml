@@ -10,8 +10,8 @@ run_single = "go test -run {testName}"
 ROXY_CODE = "true"
 
 [parse]
-error_regex = '(?m)^# (.*)\\n(.*):(\\d+):(\\d+): (.*)$'
-test_failure_regex = '(?m)^--- FAIL: (.*)$'
+error_regex = '^.*:\d+:\d+: '
+test_failure_regex = '^--- FAIL:'
 
 [container]
 enabled = false

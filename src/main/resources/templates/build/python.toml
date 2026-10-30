@@ -10,8 +10,8 @@ run_single = "pytest -k {testName}"
 ROXY_CODE = "true"
 
 [parse]
-error_regex = '(?m)^E\\s+(.*)$'
-test_failure_regex = '(?m)^FAILED (.*)$'
+error_regex = '^(E\s+|SyntaxError:|IndentationError:)'
+test_failure_regex = '^FAILED '
 
 [container]
 enabled = false

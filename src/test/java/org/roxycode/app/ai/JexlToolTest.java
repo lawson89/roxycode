@@ -48,7 +48,7 @@ public class JexlToolTest {
         @AgentDoc("Returns a sample BuildResult.")
         public BuildResult sampleBuildResult() {
             return new BuildResult(false, 1, "Compilation failed", List.of("App.java:10: error"),
-                    List.of("AppTest#testFoo"), "Full build log");
+                    List.of("AppTest#testFoo"));
         }
 
         @AgentDoc("Returns a sample EditorResult.")

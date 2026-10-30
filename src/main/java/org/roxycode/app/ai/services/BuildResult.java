@@ -3,12 +3,19 @@ package org.roxycode.app.ai.services;
 import java.util.List;
 
 /** Result of a build tool command. */
-public record BuildResult(boolean success, int exitCode, String output, List<String> errors, List<String> failedTests,
-        String log) {
+public record BuildResult(boolean success, int exitCode, String output, List<String> errors, List<String> failedTests) {
 
     public BuildResult {
-        errors = errors == null ? List.of() : List.copyOf(errors);
-        failedTests = failedTests == null ? List.of() : List.copyOf(failedTests);
+        if (errors == null) {
+            errors = List.of();
+        } else {
+            errors = List.copyOf(errors);
+        }
+        if (failedTests == null) {
+            failedTests = List.of();
+        } else {
+            failedTests = List.copyOf(failedTests);
+        }
     }
 
     public boolean isSuccess() {
@@ -29,9 +36,5 @@ public record BuildResult(boolean success, int exitCode, String output, List<Str
 
     public List<String> getFailedTests() {
         return failedTests;
-    }
-
-    public String getLog() {
-        return log;
     }
 }

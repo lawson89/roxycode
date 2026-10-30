@@ -52,6 +52,12 @@ class ProjectServiceTest {
         assertEquals(".", projectService.resolveRelativePath(null));
         assertEquals(".", projectService.resolveRelativePath("   "));
         assertEquals("sub/file.txt", projectService.resolveRelativePath("sub/file.txt"));
+        assertEquals(projectService.resolveProjectDataPath("tmp/build.log"),
+                projectService.resolvePath(".roxycode/tmp/build.log"));
+        assertEquals(projectService.resolveProjectDataPath("tmp/build.log"),
+                projectService.resolvePath("./.roxycode/tmp/build.log"));
+        assertEquals(projectService.resolveProjectDataPath("tmp"), projectService.resolvePath(".roxycode/tmp"));
+        assertThrows(SecurityException.class, () -> projectService.resolvePath(".roxycode/tmp/../project.toml"));
         assertThrows(SecurityException.class, () -> projectService.resolvePath("../escape.txt"));
         assertThrows(SecurityException.class, () -> projectService.resolveRelativePath("../escape.txt"));
     }

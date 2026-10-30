@@ -26,6 +26,9 @@ public class ProjectService {
     private static final String PROJECTS_SUBDIR = "projects";
     private static final int MAX_PROJECT_NAME_LENGTH = 40;
     static final String PROJECT_CONFIG_FILE = "project.toml";
+    static final String ROXYCODE_TMP_DIR = ".roxycode/tmp";
+    private static final String ROXYCODE_TMP_PREFIX = ".roxycode/tmp/";
+    private static final String DATA_TMP_DIR = "tmp";
 
     public record ProjectConfig(String geminiModel) {
         public ProjectConfig {
@@ -148,6 +151,20 @@ public class ProjectService {
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
             throw new IllegalStateException("Project root is not set.");
+        }
+        if (relativePath != null) {
+            String normalized = PathUtils.normalizeRelativePath(relativePath.trim());
+            while (normalized.startsWith("./")) {
+                normalized = normalized.substring(2);
+            }
+            if (normalized.equals(ROXYCODE_TMP_DIR) || normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
+                Path tmpRoot = resolveProjectDataPath(DATA_TMP_DIR);
+                String subPath = ".";
+                if (normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
+                    subPath = normalized.substring(ROXYCODE_TMP_PREFIX.length());
+                }
+                return resolveWithinSandbox(tmpRoot, subPath);
+            }
         }
         return resolveWithinSandbox(projectRoot, relativePath);
     }

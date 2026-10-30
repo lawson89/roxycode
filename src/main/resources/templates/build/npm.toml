@@ -10,8 +10,8 @@ run_single = "npm test -- -t {testName}"
 ROXY_CODE = "true"
 
 [parse]
-error_regex = '(?m)^error (.*)$'
-test_failure_regex = '(?m)^\\s*✖ (.*)$'
+error_regex = '(^error\b|ERROR in|TS\d+:)'
+test_failure_regex = '(^\s*✖|^\s*FAIL\s+)'
 
 [container]
 enabled = false

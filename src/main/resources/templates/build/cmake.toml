@@ -10,8 +10,8 @@ run_single = "cd build && ctest -R {testName}"
 ROXY_CODE = "true"
 
 [parse]
-error_regex = '(?m)^error: (.*)$'
-test_failure_regex = '(?m)^\\d+: Test\\s+#\\d+:\\s+(\\w+)\\s+\\.+\\s+[\\*]*Failed'
+error_regex = '(^|:\d+:\d+:\s*)error:'
+test_failure_regex = '^\s*\d+/\d+\s+Test\s+#\d+:.*Failed'
 
 [container]
 enabled = false

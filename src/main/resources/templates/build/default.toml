@@ -10,8 +10,8 @@ run_single = "echo 'No test command configured'"
 ROXY_CODE = "true"
 
 [parse]
-error_regex = '(?m)^ERROR: (.*)$'
-test_failure_regex = '(?m)^FAIL: (.*)$'
+error_regex = '^ERROR:'
+test_failure_regex = '^FAIL:'
 
 [container]
 enabled = false

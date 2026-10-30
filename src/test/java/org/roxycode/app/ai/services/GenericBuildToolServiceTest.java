@@ -99,57 +99,93 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testCommandPlaceholders() throws IOException {
+    void testCommandPlaceholdersAndLogTailPersistence() throws IOException {
         writeBuildToml("[test]\nrun_single = 'echo {testName}'\n");
-        assertTrue(buildToolService.runSingleTest("MyTest").getLog().contains("MyTest"));
+        BuildResult result = buildToolService.runSingleTest("MyTest");
+        assertTrue(result.getOutput().contains("MyTest"));
+        Path persistedLog = projectDataDir.resolve("tmp/build.log");
+        assertTrue(Files.exists(persistedLog));
+        assertTrue(Files.readString(persistedLog).contains("MyTest"));
+        assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
+
+        Path smallLog = tempDir.resolve("small.log");
+        Files.writeString(smallLog, "short output");
+        assertEquals("short output", GenericBuildToolService.getLogTail(smallLog, "fallback"));
+
+        String largeContent = "HEADER-" + "A".repeat(5000) + "-TAIL_MARKER";
+        Path largeLog = tempDir.resolve("large.log");
+        Files.writeString(largeLog, largeContent);
+        String truncated = GenericBuildToolService.getLogTail(largeLog, "fallback");
+        assertTrue(truncated.startsWith(GenericBuildToolService.LOG_TRUNCATED_PREFIX));
+        assertFalse(truncated.contains("HEADER-"));
+        assertTrue(truncated.endsWith("-TAIL_MARKER"));
+        assertEquals(GenericBuildToolService.LOG_TRUNCATED_PREFIX.length() + GenericBuildToolService.MAX_LOG_TAIL_BYTES,
+                truncated.length());
+
+        assertEquals("fallback", GenericBuildToolService.getLogTail(tempDir.resolve("missing.log"), "fallback"));
     }
 
     @Test
     void testRegexParsing() throws IOException {
-        writeBuildToml("""
-                [build]
-                compile = 'echo [ERROR] Compilation failed'
-                [test]
-                run_all = 'echo FAIL: MyTest#broken'
-                [parse]
-                error_regex = '(?m)^.[E]RROR. (.*)$'
-                test_failure_regex = '(?m)^FAIL: (.*)$'
-                """);
+        Path logFile = tempDir.resolve("sample-build.log");
+        Files.writeString(logFile, "  [ERROR] App.java:[10,5] cannot find symbol  " + System.lineSeparator());
+        try (org.mockito.MockedStatic<org.roxycode.app.service.ProcessRunner> runner = mockStatic(
+                org.roxycode.app.service.ProcessRunner.class)) {
+            List<String> expectedCmd = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e",
+                    "^.[E]RROR.", logFile.toString());
+            runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(expectedCmd), isNull(), eq(false)))
+                    .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(0,
+                            "  [ERROR] App.java:[10,5] cannot find symbol  " + System.lineSeparator(), "", false));
+            List<String> matches = buildToolService.extractWithRipGrep("^.[E]RROR.", logFile, "errors");
+            assertEquals(List.of("[ERROR] App.java:[10,5] cannot find symbol"), matches);
+            runner.verify(() -> org.roxycode.app.service.ProcessRunner.run(eq(expectedCmd), isNull(), eq(false)));
 
-        BuildResult compileResult = buildToolService.compile();
-        assertFalse(compileResult.isSuccess());
-        assertEquals(List.of("Compilation failed"), compileResult.getErrors());
-
-        BuildResult testResult = buildToolService.runTests();
-        assertFalse(testResult.isSuccess());
-        assertEquals(0, testResult.getExitCode());
-        assertTrue(testResult.getErrors().isEmpty());
-        assertEquals(List.of("MyTest#broken"), testResult.getFailedTests());
+            List<String> noMatchCmd = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e", "^FAIL:",
+                    logFile.toString());
+            runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(noMatchCmd), isNull(), eq(false)))
+                    .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(
+                            GrepService.EXIT_CODE_NO_MATCHES, "", "", false));
+            assertTrue(buildToolService.extractWithRipGrep("^FAIL:", logFile, "test failures").isEmpty());
+        }
     }
 
     @Test
     void testContainerExecutionRegexParsing() throws IOException {
         stubDockerAvailable(true);
-        buildContainerService.setContainerSessionFactory(
-                key -> createMockSession(1, "[ERROR] Container compile failure\nFAIL: ContainerTest#fail", null, null));
+        buildContainerService.setContainerSessionFactory(key -> createMockSession(1,
+                "[ERROR] Container compile failure" + System.lineSeparator() + "FAIL: ContainerTest#fail", null, null));
 
         writeBuildToml("""
                 [test]
                 run_all = './mvnw test'
                 [parse]
-                error_regex = '(?m)^.[E]RROR. (.*)$'
-                test_failure_regex = '(?m)^FAIL: (.*)$'
+                error_regex = '^.[E]RROR.'
+                test_failure_regex = '^FAIL:'
                 [container]
                 enabled = true
                 image = 'eclipse-temurin:25-jdk'
                 workdir = '/workspace'
                 """);
+        Path persistedLog = projectDataDir.resolve("tmp/build.log");
+        try (org.mockito.MockedStatic<org.roxycode.app.service.ProcessRunner> runner = mockStatic(
+                org.roxycode.app.service.ProcessRunner.class)) {
+            List<String> errCmd = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e", "^.[E]RROR.",
+                    persistedLog.toString());
+            List<String> failCmd = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e", "^FAIL:",
+                    persistedLog.toString());
+            runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(errCmd), isNull(), eq(false)))
+                    .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(0,
+                            "[ERROR] Container compile failure" + System.lineSeparator(), "", false));
+            runner.when(() -> org.roxycode.app.service.ProcessRunner.run(eq(failCmd), isNull(), eq(false)))
+                    .thenReturn(new org.roxycode.app.service.ProcessRunner.ProcessResult(0,
+                            "FAIL: ContainerTest#fail" + System.lineSeparator(), "", false));
 
-        BuildResult result = buildToolService.runTests();
-        assertFalse(result.isSuccess());
-        assertEquals(1, result.getExitCode());
-        assertEquals(List.of("Container compile failure"), result.getErrors());
-        assertEquals(List.of("ContainerTest#fail"), result.getFailedTests());
+            BuildResult result = buildToolService.runTests();
+            assertFalse(result.isSuccess());
+            assertEquals(1, result.getExitCode());
+            assertEquals(List.of("[ERROR] Container compile failure"), result.getErrors());
+            assertEquals(List.of("FAIL: ContainerTest#fail"), result.getFailedTests());
+        }
     }
 
     @Test

@@ -44,15 +44,27 @@ public final class ProcessRunner {
         return run(command, workingDir, env, timeout, true);
     }
 
-    @SuppressWarnings("PMD.PreserveStackTrace")
     public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout,
             boolean redirectErrorStream) throws IOException {
+        return run(command, workingDir, env, timeout, redirectErrorStream, null);
+    }
+
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout,
+            boolean redirectErrorStream, OutputStream extraOutputStream) throws IOException {
         BoundedOutputStream stdoutStream = new BoundedOutputStream();
         BoundedOutputStream stderrStream = new BoundedOutputStream();
-        Duration effectiveTimeout = timeout != null ? timeout : DEFAULT_TIMEOUT;
+        OutputStream primaryOut = stdoutStream;
+        if (extraOutputStream != null) {
+            primaryOut = new org.apache.commons.io.output.TeeOutputStream(stdoutStream, extraOutputStream);
+        }
+        Duration effectiveTimeout = DEFAULT_TIMEOUT;
+        if (timeout != null) {
+            effectiveTimeout = timeout;
+        }
 
         ProcessExecutor executor = new ProcessExecutor().command(command).redirectErrorStream(redirectErrorStream)
-                .redirectOutput(stdoutStream).timeout(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS)
+                .redirectOutput(primaryOut).timeout(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS)
                 .stopper(ProcessRunner::destroyProcessTree).destroyOnExit();
 
         if (!redirectErrorStream) {

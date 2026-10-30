@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -18,8 +20,6 @@ import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -43,6 +43,9 @@ public class GenericBuildToolService {
 
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
     private static final String CONFIG_FILE = "build.toml";
+    static final String BUILD_LOG_REL_PATH = "tmp/build.log";
+    static final int MAX_LOG_TAIL_BYTES = 4096;
+    static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]\n";
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
     private static final String DEFAULT_FALLBACK_TOML = """
             [build]
@@ -77,20 +80,29 @@ public class GenericBuildToolService {
     public record BuildConfig(BuildSection build, TestSection test, Map<String, String> env, ParseSection parse,
             ContainerConfig container) {
         public BuildConfig {
-            build = build != null ? build : BuildSection.EMPTY;
-            test = test != null ? test : TestSection.EMPTY;
+            if (build == null) {
+                build = BuildSection.EMPTY;
+            }
+            if (test == null) {
+                test = TestSection.EMPTY;
+            }
             if (env == null || env.isEmpty()) {
                 env = Map.of();
             } else {
                 Map<String, String> sanitized = new HashMap<>();
                 env.forEach((k, v) -> {
-                    if (k != null && v != null)
+                    if (k != null && v != null) {
                         sanitized.put(k, v);
+                    }
                 });
                 env = Collections.unmodifiableMap(sanitized);
             }
-            parse = parse != null ? parse : ParseSection.EMPTY;
-            container = container != null ? container : ContainerConfig.DEFAULT;
+            if (parse == null) {
+                parse = ParseSection.EMPTY;
+            }
+            if (container == null) {
+                container = ContainerConfig.DEFAULT;
+            }
         }
     }
 
@@ -176,13 +188,13 @@ public class GenericBuildToolService {
 
                 TEST OUTPUT:
                 %s""".formatted(compileResult.output(), testResult.output()), testResult.errors(),
-                testResult.failedTests(), testResult.log());
+                testResult.failedTests());
     }
 
     private BuildResult runCommand(String commandLabel, Function<BuildConfig, String> commandExtractor,
             Map<String, String> placeholders) {
         if (!projectService.hasActiveProject()) {
-            return new BuildResult(false, -1, "", List.of("No active project"), List.of(), "No active project");
+            return new BuildResult(false, -1, "", List.of("No active project"), List.of());
         }
         ensureConfig();
 
@@ -190,8 +202,7 @@ public class GenericBuildToolService {
             BuildConfig config = loadConfig();
             String command = commandExtractor.apply(config);
             if (command == null || command.isBlank()) {
-                return new BuildResult(false, -1, "", List.of("Command not configured: " + commandLabel), List.of(),
-                        "Command not configured");
+                return new BuildResult(false, -1, "", List.of("Command not configured: " + commandLabel), List.of());
             }
             if (!placeholders.isEmpty()) {
                 command = new StringSubstitutor(placeholders, "{", "}").replace(command);
@@ -209,12 +220,19 @@ public class GenericBuildToolService {
             throw e;
         } catch (Exception e) {
             log.error("Failed to run build command: {}", commandLabel, e);
-            return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of(), e.getMessage());
+            return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of());
         }
     }
 
     private Path getConfigPath() {
         return projectService.resolveProjectDataPath(CONFIG_FILE);
+    }
+
+    private Path prepareBuildLogFile() throws IOException {
+        Path logFile = projectService.resolveProjectDataPath(BUILD_LOG_REL_PATH);
+        PathUtils.createParentDirectories(logFile);
+        Files.deleteIfExists(logFile);
+        return logFile;
     }
 
     @SuppressWarnings("PMD.UseProperClassLoader")
@@ -231,8 +249,9 @@ public class GenericBuildToolService {
 
     private void ensureConfig() {
         Path configPath = getConfigPath();
-        if (Files.exists(configPath))
+        if (Files.exists(configPath)) {
             return;
+        }
         try {
             PathUtils.createParentDirectories(configPath);
             Files.writeString(configPath, loadDefaultTemplateContent(), StandardCharsets.UTF_8);
@@ -270,7 +289,7 @@ public class GenericBuildToolService {
             stopActiveContainer();
             String msg = "Docker was not detected or the Docker daemon is not running. "
                     + "Cannot run isolated build in Testcontainers. Please start Docker or set [container] enabled = false in build.toml.";
-            return new BuildResult(false, -1, msg, List.of(msg), List.of(), msg);
+            return new BuildResult(false, -1, msg, List.of(msg), List.of());
         }
 
         log.info("Executing build command in container ({}): {}", containerConfig.image(), command);
@@ -278,11 +297,15 @@ public class GenericBuildToolService {
         int exitCode = -1;
         String fullOutput;
 
+        Path logFile = null;
         try {
+            logFile = prepareBuildLogFile();
             ContainerExecResult result = buildContainerService.executeCommand(projectService.getCurrentProjectRoot(),
                     containerConfig, env, command);
             fullOutput = result.combinedOutput();
             exitCode = result.exitCode();
+            Files.writeString(logFile, fullOutput, StandardCharsets.UTF_8);
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
         } catch (CancellationException e) {
             stopActiveContainer();
             throw e;
@@ -293,12 +316,14 @@ public class GenericBuildToolService {
         } catch (Exception e) {
             log.error("Container execution failed", e);
             stopActiveContainer();
-            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            String errorMsg = e.getClass().getSimpleName();
+            if (e.getMessage() != null) {
+                errorMsg = e.getMessage();
+            }
             errors.add("Container execution failed: " + errorMsg);
             fullOutput = errorMsg;
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
         }
-
-        return buildResultFromExecution(exitCode, fullOutput, errors, errorRegex, testFailureRegex);
     }
 
     private BuildResult execute(String command, Map<String, String> env, String errorRegex, String testFailureRegex) {
@@ -306,58 +331,110 @@ public class GenericBuildToolService {
         List<String> errors = new ArrayList<>();
         int exitCode = -1;
         String fullOutput = "";
+        Path logFile = null;
 
         try {
-            List<String> shellCommand = SystemUtils.IS_OS_WINDOWS
-                    ? List.of("cmd.exe", "/c", command)
-                    : List.of("sh", "-c", command);
+            logFile = prepareBuildLogFile();
+            List<String> shellCommand;
+            if (SystemUtils.IS_OS_WINDOWS) {
+                shellCommand = List.of("cmd.exe", "/c", command);
+            } else {
+                shellCommand = List.of("sh", "-c", command);
+            }
 
-            ProcessResult result = ProcessRunner.run(shellCommand, projectService.getCurrentProjectRoot(), env,
-                    BUILD_TIMEOUT, true);
+            ProcessResult result;
+            try (OutputStream fileOut = Files.newOutputStream(logFile)) {
+                result = ProcessRunner.run(shellCommand, projectService.getCurrentProjectRoot(), env, BUILD_TIMEOUT,
+                        true, fileOut);
+            }
             fullOutput = result.output();
             exitCode = result.exitCode();
             if (result.timedOut()) {
                 errors.add("Command timed out after 10 minutes");
             }
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
             log.error("Process execution failed", e);
             errors.add(ExceptionUtils.getStackTrace(e));
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
         }
-
-        return buildResultFromExecution(exitCode, fullOutput, errors, errorRegex, testFailureRegex);
     }
 
-    private BuildResult buildResultFromExecution(int exitCode, String fullOutput, List<String> errors,
+    private BuildResult buildResultFromExecution(int exitCode, String fullOutput, Path logFile, List<String> errors,
             String errorRegex, String testFailureRegex) {
-        errors.addAll(extractRegexMatches(fullOutput, errorRegex, "errors"));
-        List<String> failedTests = new ArrayList<>(extractRegexMatches(fullOutput, testFailureRegex, "test failures"));
+        errors.addAll(extractWithRipGrep(errorRegex, logFile, "errors"));
+        List<String> failedTests = new ArrayList<>(extractWithRipGrep(testFailureRegex, logFile, "test failures"));
         boolean success = exitCode == 0 && errors.isEmpty() && failedTests.isEmpty();
-        return new BuildResult(success, exitCode, fullOutput, errors, failedTests, fullOutput);
+        String tailOutput = getLogTail(logFile, fullOutput);
+        return new BuildResult(success, exitCode, tailOutput, errors, failedTests);
     }
 
-    private List<String> extractRegexMatches(String output, String regex, String patternType) {
-        List<String> matches = new ArrayList<>();
-        if (regex != null && !regex.isBlank()) {
-            try {
-                Matcher m = Pattern.compile(regex).matcher(output);
-                while (m.find()) {
-                    matches.add(m.group(m.groupCount() > 0 ? 1 : 0));
-                }
-            } catch (Exception e) {
-                log.error("Failed to parse {} with regex: {}", patternType, regex, e);
+    static String getLogTail(Path logFile, String fallbackOutput) {
+        if (logFile == null || !Files.exists(logFile)) {
+            if (fallbackOutput != null) {
+                return fallbackOutput;
             }
+            return "";
         }
-        return matches;
+        try {
+            long size = Files.size(logFile);
+            if (size == 0 && fallbackOutput != null && !fallbackOutput.isEmpty()) {
+                return fallbackOutput;
+            }
+            if (size <= MAX_LOG_TAIL_BYTES) {
+                return Files.readString(logFile, StandardCharsets.UTF_8);
+            }
+            try (RandomAccessFile raf = new RandomAccessFile(logFile.toFile(), "r")) {
+                raf.seek(size - MAX_LOG_TAIL_BYTES);
+                byte[] bytes = new byte[MAX_LOG_TAIL_BYTES];
+                raf.readFully(bytes);
+                return LOG_TRUNCATED_PREFIX + new String(bytes, StandardCharsets.UTF_8);
+            }
+        } catch (IOException e) {
+            log.warn("Failed to read build log tail from {}", logFile, e);
+            if (fallbackOutput != null) {
+                return fallbackOutput;
+            }
+            return "";
+        }
+    }
+
+    List<String> extractWithRipGrep(String regex, Path logFile, String patternType) {
+        if (regex == null || regex.isBlank() || logFile == null || !Files.exists(logFile)) {
+            return List.of();
+        }
+        List<String> command = List.of("rg", "--no-heading", "--no-line-number", "--color=never", "-e", regex,
+                logFile.toString());
+        try {
+            ProcessResult result = ProcessRunner.run(command, null, false);
+            if (result.timedOut()) {
+                log.warn("RipGrep command timed out for {}: {}", patternType, command);
+                return List.of();
+            }
+            if (result.exitCode() == 0 && result.output() != null && !result.output().isEmpty()) {
+                return result.output().lines().map(String::trim).filter(line -> !line.isEmpty()).toList();
+            }
+            if (result.exitCode() == GrepService.EXIT_CODE_NO_MATCHES) {
+                return List.of();
+            }
+            log.warn("RipGrep failed (exit {}) for {}: {}", result.exitCode(), patternType, result.errorOutput());
+            return List.of();
+        } catch (Exception e) {
+            log.warn("Failed to run RipGrep for {} with regex {}: {}", patternType, regex, e.getMessage());
+            return List.of();
+        }
     }
 
     public String getConfigContent() throws IOException {
-        if (!projectService.hasActiveProject())
+        if (!projectService.hasActiveProject()) {
             return "";
+        }
         Path configPath = getConfigPath();
-        if (!Files.exists(configPath))
+        if (!Files.exists(configPath)) {
             ensureConfig();
+        }
         if (Files.exists(configPath)) {
             try {
                 return Files.readString(configPath, StandardCharsets.UTF_8);
@@ -369,8 +446,9 @@ public class GenericBuildToolService {
     }
 
     public void saveConfigContent(String content) throws IOException {
-        if (!projectService.hasActiveProject())
+        if (!projectService.hasActiveProject()) {
             return;
+        }
         stopActiveContainer();
         Path configPath = getConfigPath();
         PathUtils.createParentDirectories(configPath);
