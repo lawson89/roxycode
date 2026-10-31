@@ -32,23 +32,15 @@ public class JexlToHtmlConverterTest {
         assertFalse(html.contains("<span class='mtk-keyword'>otherHelper</span>"));
         assertFalse(html.startsWith("<pre>"));
         assertFalse(html.endsWith("</pre>"));
-    }
 
-    @Test
-    public void testHighlightMethod() {
-        String code = "var x = 42;";
-        String html = JexlToHtmlConverter.highlight(code, "jexl");
-        assertTrue(html.startsWith("<pre class='jexl-highlight'><code>"));
-        assertTrue(html.endsWith("</code></pre>"));
-        assertContainsAll(html, "<span class='mtk-keyword'>var</span>", "<span class='mtk-number'>42</span>");
-    }
+        String highlighted = JexlToHtmlConverter.highlight("var x = 42;", "jexl");
+        assertTrue(highlighted.startsWith("<pre class='jexl-highlight'><code>"));
+        assertTrue(highlighted.endsWith("</code></pre>"));
+        assertContainsAll(highlighted, "<span class='mtk-keyword'>var</span>", "<span class='mtk-number'>42</span>");
 
-    @Test
-    public void testHighlightMethodProse() {
-        String code = "var x = 42;";
-        String html = JexlToHtmlConverter.highlight(code, "markdown");
-        assertTrue(html.contains("<pre class='jexl-highlight'><code>var x = 42;</code></pre>"));
-        assertFalse(html.contains("mtk-"));
+        String proseHtml = JexlToHtmlConverter.highlight("var x = 42;", "markdown");
+        assertTrue(proseHtml.contains("<pre class='jexl-highlight'><code>var x = 42;</code></pre>"));
+        assertFalse(proseHtml.contains("mtk-"));
     }
 
     @Test

@@ -4,7 +4,6 @@ import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.Image;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -19,14 +18,12 @@ public final class SplashScreenWindow extends JWindow {
 
     private final JLabel statusLabel = new JLabel("Starting Roxy...");
     private final JProgressBar progressBar = new JProgressBar();
-    private transient Image logoImage;
 
     public SplashScreenWindow() {
         initComponents();
     }
 
     private void initComponents() {
-        logoImage = UiComponents.loadClasspathImage(LOGO_RESOURCE_PATH);
         JPanel rootPanel = new JPanel(
                 new MigLayout("fill, insets 24 32 24 32, wrap 1", "[grow, center]", "[]12[]4[]16[]8[]"));
         rootPanel.setBorder(BorderFactory
@@ -43,7 +40,7 @@ public final class SplashScreenWindow extends JWindow {
         statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
         progressBar.setIndeterminate(true);
 
-        rootPanel.add(UiComponents.createRoundedImagePanel(logoImage, 96, 20), "w 80!, h 80!, center");
+        rootPanel.add(UiComponents.createRoundedImagePanel(LOGO_RESOURCE_PATH, 96, 20), "w 80!, h 80!, center");
         rootPanel.add(titleLabel, "center");
         rootPanel.add(subtitleLabel, "center");
         rootPanel.add(statusLabel, "center");
@@ -63,17 +60,5 @@ public final class SplashScreenWindow extends JWindow {
 
     public void setStatus(String status) {
         Edt.run(() -> statusLabel.setText(status));
-    }
-
-    JLabel getStatusLabel() {
-        return statusLabel;
-    }
-
-    JProgressBar getProgressBar() {
-        return progressBar;
-    }
-
-    Image getLogoImage() {
-        return logoImage;
     }
 }

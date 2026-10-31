@@ -3,9 +3,8 @@ package org.roxycode.app.service;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -63,7 +62,6 @@ public class AiService {
     private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
 
     public static final Duration DEFAULT_TOPIC_TITLE_TIMEOUT = Duration.ofSeconds(10);
-    private static final ExecutorService TITLE_TIMEOUT_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
     private static final ScheduledExecutorService TURN_TIMEOUT_SCHEDULER = Executors
             .newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "ai-turn-watchdog");
@@ -126,16 +124,8 @@ public class AiService {
         this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
     }
 
-    RetryTemplate getRetryTemplate() {
-        return retryTemplate;
-    }
-
     void setTopicTitleTimeout(Duration topicTitleTimeout) {
         this.topicTitleTimeout = Objects.requireNonNull(topicTitleTimeout, "topicTitleTimeout must not be null");
-    }
-
-    Duration getTopicTitleTimeout() {
-        return topicTitleTimeout;
     }
 
     void setTurnTimeoutSeconds(int turnTimeoutSeconds) {
@@ -157,21 +147,18 @@ public class AiService {
             excerpt = conversationExcerpt;
         }
         String activeModel = resolveEffectiveGeminiModel();
-        Future<ChatResponse> future = TITLE_TIMEOUT_EXECUTOR
-                .submit(() -> statelessChatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT).user(u -> u.text(excerpt))
-                        .options(GoogleGenAiChatOptions.builder().model(activeModel)).call().chatResponse());
         try {
-            ChatResponse response = future.get(Math.max(1L, topicTitleTimeout.toMillis()), TimeUnit.MILLISECONDS);
+            ChatResponse response = CompletableFuture
+                    .supplyAsync(() -> statelessChatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT)
+                            .user(u -> u.text(excerpt)).options(GoogleGenAiChatOptions.builder().model(activeModel))
+                            .call().chatResponse())
+                    .orTimeout(Math.max(1L, topicTitleTimeout.toMillis()), TimeUnit.MILLISECONDS).join();
             String rawTitle = extractResponseText(response);
             String sanitized = sanitizeTopicTitle(rawTitle);
             if (!sanitized.isEmpty()) {
                 return sanitized;
             }
         } catch (Exception e) {
-            future.cancel(true);
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
             log.warn("Failed to generate topic title via LLM, using fallback: {}", e.getMessage());
         }
         return deriveFallbackTopicTitle(conversationExcerpt);
@@ -202,9 +189,10 @@ public class AiService {
             if (line.isEmpty()) {
                 continue;
             }
-            if (line.regionMatches(true, 0, "User:", 0, 5)) {
-                line = line.substring(5).trim();
-            } else if (line.regionMatches(true, 0, "Roxy:", 0, 5) || line.regionMatches(true, 0, "AI:", 0, 3)) {
+            if (StringUtils.startsWithIgnoreCase(line, "User:")) {
+                line = StringUtils.removeStartIgnoreCase(line, "User:").trim();
+            } else if (StringUtils.startsWithIgnoreCase(line, "Roxy:")
+                    || StringUtils.startsWithIgnoreCase(line, "AI:")) {
                 continue;
             }
             String sanitized = sanitizeTopicTitle(line);
@@ -370,17 +358,6 @@ public class AiService {
         if (!usageSummary.isEmpty()) {
             sb.append("\n- **Token usage:** ").append(usageSummary);
         }
-    }
-
-    public static boolean isAutoNudgeableResponse(String response, boolean hadToolTurns) {
-        if (StringUtils.isBlank(response)) {
-            return false;
-        }
-        if (response.startsWith(JexlTool.MAX_TURNS_EXCEEDED_PREFIX) || response.contains(TRUNCATED_MARKER)
-                || response.contains(NO_VISIBLE_RESPONSE_MARKER)) {
-            return true;
-        }
-        return hadToolTurns && response.contains(EMPTY_RESPONSE_MARKER) && response.contains(EMPTY_STOP_MESSAGE);
     }
 
     private static boolean isTokenLimitFinishReason(String finishReason) {

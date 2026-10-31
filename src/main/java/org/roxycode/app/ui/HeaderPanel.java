@@ -198,7 +198,7 @@ public final class HeaderPanel extends JPanel {
         String currentTheme = settings.getTheme();
         boolean isDark;
         if (currentTheme != null && !currentTheme.isBlank()) {
-            isDark = SettingsPanel.isDarkTheme(currentTheme);
+            isDark = SwingHtmlUtils.isDarkTheme(currentTheme);
         } else {
             isDark = FlatLaf.isLafDark();
         }
@@ -255,10 +255,6 @@ public final class HeaderPanel extends JPanel {
 
     JLabel getProjectLabel() {
         return projectLabel;
-    }
-
-    JButton getChangeProjectButton() {
-        return changeProjectButton;
     }
 
     JLabel getBranchLabel() {

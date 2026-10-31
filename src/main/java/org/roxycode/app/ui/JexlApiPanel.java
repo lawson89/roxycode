@@ -12,13 +12,11 @@ public final class JexlApiPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     static final int COPY_FEEDBACK_DELAY_MS = 1500;
     static final String COPY_BUTTON_TEXT = "Copy";
-    static final String COPIED_BUTTON_TEXT = "Copied!";
 
     private final transient JexlServiceRegistry registry;
     private final JEditorPane textPane = SwingHtmlUtils.createHtmlEditorPane();
     private final JButton copyBtn;
     private Timer copyFeedbackTimer;
-    private String lastCopiedDocumentation;
 
     public JexlApiPanel(JexlServiceRegistry registry) {
         this.registry = registry;
@@ -40,21 +38,8 @@ public final class JexlApiPanel extends JPanel {
 
     private void copyDocumentation() {
         String doc = registry.getDocumentation(null);
-        this.lastCopiedDocumentation = doc;
         copyFeedbackTimer = UiComponents.copyWithFeedback(copyBtn, copyFeedbackTimer, doc, COPY_BUTTON_TEXT,
                 COPY_FEEDBACK_DELAY_MS);
-    }
-
-    JButton getCopyButton() {
-        return copyBtn;
-    }
-
-    JEditorPane getTextPane() {
-        return textPane;
-    }
-
-    String getLastCopiedDocumentation() {
-        return lastCopiedDocumentation;
     }
 
     @Override

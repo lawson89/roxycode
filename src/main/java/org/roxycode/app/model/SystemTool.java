@@ -2,6 +2,7 @@ package org.roxycode.app.model;
 
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang3.StringUtils;
 
 public record SystemTool(String name, String version, String status, String description, String license,
         String websiteUrl, boolean required) {
@@ -32,51 +33,27 @@ public record SystemTool(String name, String version, String status, String desc
                     "Apache-2.0", "https://www.docker.com", false));
 
     public SystemTool {
-        name = name != null ? name : "";
-        version = version != null ? version : "";
-        status = status != null ? status : "";
-        description = (description != null && !description.isBlank()) ? description : defaultDescriptionFor(name);
-        license = (license != null && !license.isBlank()) ? license : defaultLicenseFor(name);
-        websiteUrl = (websiteUrl != null && !websiteUrl.isBlank()) ? websiteUrl : defaultWebsiteUrlFor(name);
-        required = required || defaultRequiredFor(name);
-    }
-
-    public SystemTool(String name, String version, String status, String description) {
-        this(name, version, status, description, defaultLicenseFor(name), defaultWebsiteUrlFor(name),
-                defaultRequiredFor(name));
-    }
-
-    public SystemTool(String name, String version, String status, String description, String license,
-            String websiteUrl) {
-        this(name, version, status, description, license, websiteUrl, defaultRequiredFor(name));
+        name = StringUtils.defaultString(name);
+        version = StringUtils.defaultString(version);
+        status = StringUtils.defaultString(status);
+        ToolMetadata meta = KNOWN_METADATA.get(name);
+        String defaultDesc = "";
+        String defaultLicense = "";
+        String defaultUrl = "";
+        boolean defaultReq = false;
+        if (meta != null) {
+            defaultDesc = meta.description();
+            defaultLicense = meta.license();
+            defaultUrl = meta.websiteUrl();
+            defaultReq = meta.required();
+        }
+        description = StringUtils.defaultIfBlank(description, defaultDesc);
+        license = StringUtils.defaultIfBlank(license, defaultLicense);
+        websiteUrl = StringUtils.defaultIfBlank(websiteUrl, defaultUrl);
+        required = required || defaultReq;
     }
 
     public static SystemTool ofKnownTool(String name, String version, String status) {
-        return new SystemTool(name, version, status, defaultDescriptionFor(name), defaultLicenseFor(name),
-                defaultWebsiteUrlFor(name), defaultRequiredFor(name));
-    }
-
-    private static ToolMetadata metadataFor(String toolName) {
-        return toolName != null ? KNOWN_METADATA.get(toolName) : null;
-    }
-
-    public static String defaultDescriptionFor(String toolName) {
-        ToolMetadata meta = metadataFor(toolName);
-        return meta != null ? meta.description() : "";
-    }
-
-    public static String defaultLicenseFor(String toolName) {
-        ToolMetadata meta = metadataFor(toolName);
-        return meta != null ? meta.license() : "";
-    }
-
-    public static String defaultWebsiteUrlFor(String toolName) {
-        ToolMetadata meta = metadataFor(toolName);
-        return meta != null ? meta.websiteUrl() : "";
-    }
-
-    public static boolean defaultRequiredFor(String toolName) {
-        ToolMetadata meta = metadataFor(toolName);
-        return meta != null && meta.required();
+        return new SystemTool(name, version, status, null, null, null, false);
     }
 }

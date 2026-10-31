@@ -1,6 +1,8 @@
 package org.roxycode.app.service;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.Version;
 import java.io.IOException;
@@ -11,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import javax.swing.SwingUtilities;
@@ -20,9 +23,6 @@ import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
-import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import java.util.concurrent.TimeUnit;
 import org.roxycode.app.util.ExceptionUtils;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -100,9 +100,17 @@ public class SystemToolService {
     SystemToolService(SettingsService settingsService, TomlMapper mapper, ApplicationEventPublisher eventPublisher,
             DockerProbe dockerProbe, BooleanSupplier dockerCliPresentSupplier) {
         this.settingsService = settingsService;
-        this.mapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
-        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {
-        };
+        if (mapper != null) {
+            this.mapper = mapper;
+        } else {
+            this.mapper = AiConfig.SHARED_TOML_MAPPER;
+        }
+        if (eventPublisher != null) {
+            this.eventPublisher = eventPublisher;
+        } else {
+            this.eventPublisher = event -> {
+            };
+        }
         this.dockerProbe = dockerProbe;
         this.dockerCliPresentSupplier = dockerCliPresentSupplier;
         this.toolProber = this::probeAllTools;
@@ -126,7 +134,11 @@ public class SystemToolService {
     }
 
     void setToolProber(Supplier<List<SystemTool>> toolProber) {
-        this.toolProber = toolProber != null ? toolProber : this::probeAllTools;
+        if (toolProber != null) {
+            this.toolProber = toolProber;
+        } else {
+            this.toolProber = this::probeAllTools;
+        }
     }
 
     @SuppressWarnings({"PMD.CloseResource", "PMD.AvoidCatchingThrowable"})
@@ -135,8 +147,10 @@ public class SystemToolService {
         try {
             DockerClient client = DockerClientFactory.instance().client();
             Version version = client.versionCmd().exec();
-            return new DockerVersionInfo(version != null ? version.getVersion() : null,
-                    version != null ? version.getApiVersion() : null);
+            if (version == null) {
+                return new DockerVersionInfo(null, null);
+            }
+            return new DockerVersionInfo(version.getVersion(), version.getApiVersion());
         } catch (Throwable t) {
             resetTestcontainersClientAndFailureCache();
             throw t;
@@ -169,11 +183,6 @@ public class SystemToolService {
 
     static boolean isDockerCliInstalled() {
         return ProcessRunner.run(List.of("docker", ARG_VERSION)).isSuccess();
-    }
-
-    public boolean hasCachedTools() {
-        CompletableFuture<List<SystemTool>> future = toolsCache.getIfPresent("all");
-        return future != null && future.isDone() && !future.getNow(List.of()).isEmpty();
     }
 
     public List<SystemTool> getCachedTools() {
@@ -225,12 +234,10 @@ public class SystemToolService {
 
     public boolean checkDockerAvailable() {
         List<SystemTool> tools = getCachedTools();
-        return !tools.isEmpty() ? isDockerDetected(tools) : STATUS_DETECTED.equals(detectDockerTool().status());
-    }
-
-    public boolean checkRequiredToolsAvailable() {
-        List<SystemTool> tools = getCachedTools();
-        return areAllRequiredToolsDetected(!tools.isEmpty() ? tools : detectTools().join());
+        if (!tools.isEmpty()) {
+            return isDockerDetected(tools);
+        }
+        return STATUS_DETECTED.equals(detectDockerTool().status());
     }
 
     public static boolean areAllRequiredToolsDetected(List<SystemTool> tools) {
@@ -263,24 +270,28 @@ public class SystemToolService {
                 detectTool(CTAGS, "ctags", ARG_VERSION), detectDockerTool());
     }
 
-    private void updateCacheAndPublish(List<SystemTool> detected) {
-        toolsCache.synchronous().put("all", detected);
-        saveToDisk(detected);
-        eventPublisher.publishEvent(new SystemToolsUpdatedEvent(detected, isDockerDetected(detected)));
-    }
-
     Path getCacheFilePath() {
-        Path homeDir = settingsService != null ? settingsService.getRoxyHomeDir() : null;
-        return homeDir != null ? homeDir.resolve(SYSTEM_TOOLS_FILE) : null;
+        if (settingsService == null) {
+            return null;
+        }
+        Path homeDir = settingsService.getRoxyHomeDir();
+        if (homeDir == null) {
+            return null;
+        }
+        return homeDir.resolve(SYSTEM_TOOLS_FILE);
     }
 
     private List<SystemTool> loadFromDisk() {
         Path path = getCacheFilePath();
-        if (path == null || !Files.exists(path))
+        if (path == null || !Files.exists(path)) {
             return List.of();
+        }
         try {
             SystemToolsCache cache = mapper.readValue(path.toFile(), SystemToolsCache.class);
-            return (cache != null && cache.getTools() != null) ? List.copyOf(cache.getTools()) : List.of();
+            if (cache != null && cache.getTools() != null) {
+                return List.copyOf(cache.getTools());
+            }
+            return List.of();
         } catch (IOException e) {
             log.warn("Failed to load cached system tools from {}: {}", path, e.getMessage());
             return List.of();
@@ -289,8 +300,9 @@ public class SystemToolService {
 
     private void saveToDisk(List<SystemTool> tools) {
         Path path = getCacheFilePath();
-        if (path == null)
+        if (path == null) {
             return;
+        }
         try {
             PathUtils.createParentDirectories(path);
             mapper.writeValue(path.toFile(), new SystemToolsCache(tools));
@@ -303,13 +315,18 @@ public class SystemToolService {
     SystemTool detectDockerTool() {
         try {
             DockerVersionInfo info = dockerProbe.probe();
-            String serverVersion = StringUtils.defaultIfBlank(info != null ? StringUtils.trim(info.version()) : null,
-                    VERSION_UNKNOWN);
-            String apiVersion = StringUtils.defaultIfBlank(info != null ? StringUtils.trim(info.apiVersion()) : null,
-                    "");
-            String versionDisplay = !apiVersion.isEmpty()
-                    ? "Docker " + serverVersion + " (API " + apiVersion + ")"
-                    : "Docker " + serverVersion;
+            String rawVersion = null;
+            String rawApiVersion = null;
+            if (info != null) {
+                rawVersion = StringUtils.trim(info.version());
+                rawApiVersion = StringUtils.trim(info.apiVersion());
+            }
+            String serverVersion = StringUtils.defaultIfBlank(rawVersion, VERSION_UNKNOWN);
+            String apiVersion = StringUtils.defaultIfBlank(rawApiVersion, "");
+            String versionDisplay = "Docker " + serverVersion;
+            if (!apiVersion.isEmpty()) {
+                versionDisplay = versionDisplay + " (API " + apiVersion + ")";
+            }
             return SystemTool.ofKnownTool(DOCKER, versionDisplay, STATUS_DETECTED);
         } catch (Throwable t) {
             ExceptionUtils.rethrowIfCancelled(t, "Docker detection cancelled");
@@ -331,21 +348,26 @@ public class SystemToolService {
         if (StringUtils.isNotBlank(t.getMessage())) {
             return t.getMessage().trim();
         }
-        return root != null ? root.getClass().getSimpleName() : t.getClass().getSimpleName();
+        if (root != null) {
+            return root.getClass().getSimpleName();
+        }
+        return t.getClass().getSimpleName();
     }
 
     private static boolean isGenericEnvironmentNotFound(String message) {
-        if (StringUtils.isBlank(message))
+        if (StringUtils.isBlank(message)) {
             return true;
+        }
         String lower = message.toLowerCase(Locale.ROOT);
         return lower.contains("could not find a valid docker environment")
                 || lower.contains("previous attempts to find a docker environment failed") || "not found".equals(lower);
     }
 
     private static String formatDockerErrorMessage(String rawMessage) {
-        return StringUtils.isBlank(rawMessage)
-                ? "Testcontainers connection failed"
-                : StringUtils.abbreviate(StringUtils.normalizeSpace(rawMessage), MAX_DOCKER_ERROR_LENGTH);
+        if (StringUtils.isBlank(rawMessage)) {
+            return "Testcontainers connection failed";
+        }
+        return StringUtils.abbreviate(StringUtils.normalizeSpace(rawMessage), MAX_DOCKER_ERROR_LENGTH);
     }
 
     private SystemTool detectTool(String name, String command, String versionArg) {
@@ -358,12 +380,14 @@ public class SystemToolService {
     }
 
     static String parseVersion(String output) {
-        if (StringUtils.isBlank(output))
+        if (StringUtils.isBlank(output)) {
             return VERSION_UNKNOWN;
+        }
         String firstLine = output.lines().map(String::trim).filter(line -> !line.isEmpty()).findFirst()
                 .orElse(VERSION_UNKNOWN);
-        if (VERSION_UNKNOWN.equals(firstLine))
+        if (VERSION_UNKNOWN.equals(firstLine)) {
             return firstLine;
+        }
         for (String marker : VERSION_NOISE_MARKERS) {
             int idx = firstLine.indexOf(marker);
             if (idx > 0) {

@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ui.SwingHtmlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,9 +43,7 @@ public final class FrontmatterUtils {
         if (firstChild instanceof YamlFrontMatterBlock) {
             String blockText = rawMarkdown.substring(firstChild.getStartOffset(), firstChild.getEndOffset());
             if (blockText.trim().endsWith("---")) {
-                int endOffset = firstChild.getEndOffset();
-                String body = rawMarkdown.substring(endOffset);
-                return body.replaceFirst("^\\s+", "");
+                return StringUtils.stripStart(rawMarkdown.substring(firstChild.getEndOffset()), null);
             }
         }
         return rawMarkdown;
@@ -86,8 +86,7 @@ public final class FrontmatterUtils {
             if (!yamlBlock.trim().endsWith("---")) {
                 return Collections.emptyMap();
             }
-            // Strip the --- delimiters
-            String yamlContent = yamlBlock.replaceAll("(?m)^---\\s*$", "").trim();
+            String yamlContent = StringUtils.removeEnd(StringUtils.removeStart(yamlBlock.trim(), "---"), "---").trim();
             if (yamlContent.isEmpty()) {
                 return Collections.emptyMap();
             }
@@ -98,7 +97,7 @@ public final class FrontmatterUtils {
                     return Collections.emptyMap();
                 }
                 Map<String, String> result = new LinkedHashMap<>();
-                obj.forEach((k, v) -> result.put(k, v != null ? v.toString() : ""));
+                obj.forEach((k, v) -> result.put(k, Objects.toString(v, "")));
                 return result;
             } catch (Exception e) {
                 log.debug("Failed to parse YAML frontmatter: {}", e.getMessage());

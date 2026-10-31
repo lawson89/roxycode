@@ -15,8 +15,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import javax.swing.*;
-import javax.swing.text.Element;
-import javax.swing.text.html.HTML;
 import org.junit.jupiter.api.Assertions;
 
 public final class SwingTestUtils {
@@ -157,24 +155,5 @@ public final class SwingTestUtils {
 
     static JButton findButton(Container root, String text) {
         return findComponent(root, JButton.class, b -> text.equals(b.getText()));
-    }
-
-    static Element findElement(Element root, String tagName, Predicate<Element> predicate) {
-        if (root == null)
-            return null;
-        if ((tagName == null || tagName.equalsIgnoreCase(root.getName())) && predicate.test(root)) {
-            return root;
-        }
-        for (int i = 0; i < root.getElementCount(); i++) {
-            Element found = findElement(root.getElement(i), tagName, predicate);
-            if (found != null)
-                return found;
-        }
-        return null;
-    }
-
-    static Element findTdByClass(Element root, String className) {
-        return findElement(root, "td",
-                elem -> className.equals(String.valueOf(elem.getAttributes().getAttribute(HTML.Attribute.CLASS))));
     }
 }

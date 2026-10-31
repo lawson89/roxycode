@@ -45,10 +45,6 @@ public class PlanService {
     public static final String APPROVAL_REVIEW_TO_PLAN = "Approve Feature Request as complete";
     public static final String APPROVAL_CODE_TO_PLAN = "Approve Plan Revision and return to Plan";
 
-    public static final String STEP_COMPILE = ImplementationPlan.STEP_COMPILE;
-    public static final String STEP_UNIT_TESTS = ImplementationPlan.STEP_UNIT_TESTS;
-    public static final String STEP_CODE_REVIEW = ImplementationPlan.STEP_CODE_REVIEW;
-
     private record TransitionKey(WorkflowPhase from, WorkflowPhase to) {
     }
 
@@ -65,7 +61,15 @@ public class PlanService {
         if (from == WorkflowPhase.CODE && to == WorkflowPhase.PLAN) {
             return APPROVAL_CODE_TO_PLAN;
         }
-        return (from != null ? from.getDisplayName() : "") + " → " + (to != null ? to.getDisplayName() : "");
+        String fromName = "";
+        if (from != null) {
+            fromName = from.getDisplayName();
+        }
+        String toName = "";
+        if (to != null) {
+            toName = to.getDisplayName();
+        }
+        return fromName + " → " + toName;
     }
 
     private static final Map<TransitionKey, TransitionRule> TRANSITION_RULES = Map.of(
@@ -132,13 +136,17 @@ public class PlanService {
             @AgentDoc("Array of functional requirements") String[] requirements,
             @AgentDoc("Array of technical implementation steps") String[] technicalSteps) {
         requirePhase("submitPlan");
-        List<String> safeRequirements = requirements != null ? Arrays.asList(requirements) : List.of();
-        List<ImplementationPlan.TechStep> steps = technicalSteps != null
-                ? Arrays.stream(technicalSteps).map(s -> new ImplementationPlan.TechStep(s, false)).toList()
-                : List.of();
+        List<String> safeRequirements = List.of();
+        if (requirements != null) {
+            safeRequirements = Arrays.asList(requirements);
+        }
+        List<ImplementationPlan.TechStep> steps = List.of();
+        if (technicalSteps != null) {
+            steps = Arrays.stream(technicalSteps).map(s -> new ImplementationPlan.TechStep(s, false)).toList();
+        }
 
-        return submitPlan(new ImplementationPlan(title != null ? title : "", goal != null ? goal : "", safeRequirements,
-                steps, false, null, null, null, null, null));
+        return submitPlan(new ImplementationPlan(StringUtils.defaultString(title), StringUtils.defaultString(goal),
+                safeRequirements, steps, false, null, null, null, null, null));
     }
 
     private static String requireNonBlankDescription(String description) {
@@ -238,7 +246,11 @@ public class PlanService {
             steps.set(index, new ImplementationPlan.TechStep(steps.get(index).description(), completed));
         }
         setCurrentPlan(currentPlan.withTechnicalSteps(steps));
-        return String.format("Marked steps %s %s. %s", Arrays.toString(indices), completed ? "completed" : "incomplete",
+        String statusWord = "incomplete";
+        if (completed) {
+            statusWord = "completed";
+        }
+        return String.format("Marked steps %s %s. %s", Arrays.toString(indices), statusWord,
                 currentPlan.formatRemainingIncompleteSteps());
     }
 
@@ -363,12 +375,16 @@ public class PlanService {
         String message = String.format(
                 "**Transition Request: %s**%n%n**Reason:** %s%n%nTransition request queued for user approval. Provide a brief concluding summary to the user without calling any additional tools.",
                 formatApprovalLabel(currentPhase, nextPhase), reason);
-        return StringUtils.isNotBlank(summary) ? String.format("%s%n%n%s", summary, message) : message;
+        if (StringUtils.isNotBlank(summary)) {
+            return String.format("%s%n%n%s", summary, message);
+        }
+        return message;
     }
 
     private void verifyStepCompletionGates(WorkflowPhase from, WorkflowPhase to) {
-        if (currentPlan == null)
+        if (currentPlan == null) {
             return;
+        }
         if (from == WorkflowPhase.CODE && to == WorkflowPhase.REVIEW) {
             List<String> incomplete = currentPlan.collectIncompleteSteps(true);
             if (!incomplete.isEmpty()) {
@@ -389,8 +405,9 @@ public class PlanService {
     }
 
     private void archiveCurrentPlan(ImplementationPlan plan, String timestamp) {
-        if (plan == null || projectService == null || !projectService.hasActiveProject())
+        if (plan == null || projectService == null || !projectService.hasActiveProject()) {
             return;
+        }
         try {
             Path archiveDir = projectService.resolveProjectDataPath(ARCHIVE_PLANS_SUBDIR);
             Files.createDirectories(archiveDir);
@@ -399,7 +416,10 @@ public class PlanService {
             PathUtils.ArchiveFileTarget archiveTarget = PathUtils.resolveUniqueArchiveFile(archiveDir, baseId);
 
             Path projectRoot = projectService.getCurrentProjectRoot();
-            String projectPath = projectRoot != null ? projectRoot.toAbsolutePath().normalize().toString() : "";
+            String projectPath = "";
+            if (projectRoot != null) {
+                projectPath = projectRoot.toAbsolutePath().normalize().toString();
+            }
             String archivedMarkdown = plan.toArchivedMarkdown(archiveTarget.id(), projectService.getProjectName(),
                     projectPath, getGitStatusSafely());
             Files.writeString(archiveTarget.file(), archivedMarkdown, StandardCharsets.UTF_8);
@@ -413,8 +433,9 @@ public class PlanService {
     }
 
     private String getGitStatusSafely() {
-        if (gitService == null)
+        if (gitService == null) {
             return null;
+        }
         try {
             return gitService.getStatus();
         } catch (Exception e) {
@@ -439,10 +460,14 @@ public class PlanService {
         ImplementationPlan planToArchive = null;
         String archiveTimestamp = null;
         synchronized (this) {
-            if (pendingPhase == null)
+            if (pendingPhase == null) {
                 return;
+            }
             String timestamp = OffsetDateTime.now().toString();
-            String user = environmentService != null ? environmentService.getCurrentUser() : "User";
+            String user = "User";
+            if (environmentService != null) {
+                user = environmentService.getCurrentUser();
+            }
             addHandoffLogEntry(timestamp, user,
                     String.format("%s -> %s (User Approved): %s", currentPhase, pendingPhase, pendingReason));
 
@@ -516,7 +541,10 @@ public class PlanService {
     }
 
     private String formatPlanSummary(ImplementationPlan plan) {
-        return plan == null ? "" : """
+        if (plan == null) {
+            return "";
+        }
+        return """
                 PLAN SUMMARY:
 
                 """ + plan.toMarkdown(false).trim();

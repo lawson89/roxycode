@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
@@ -407,10 +406,7 @@ public class MemoryService {
         if (rawSlug.contains("..") || rawSlug.indexOf('/') >= 0 || rawSlug.indexOf(92) >= 0) {
             throw new IllegalArgumentException("Invalid note slug (path traversal not allowed): " + rawSlug);
         }
-        String trimmed = rawSlug.trim();
-        if (trimmed.toLowerCase(Locale.ROOT).endsWith(MD_EXTENSION)) {
-            trimmed = trimmed.substring(0, trimmed.length() - MD_EXTENSION.length()).trim();
-        }
+        String trimmed = StringUtils.removeEndIgnoreCase(rawSlug.trim(), MD_EXTENSION).trim();
         String sanitized = PathUtils.sanitizeSlug(trimmed, MAX_SLUG_LENGTH, "");
         if (sanitized.isEmpty()) {
             throw new IllegalArgumentException("Note slug must contain alphanumeric characters: " + rawSlug);
@@ -430,10 +426,7 @@ public class MemoryService {
         if (trimmed.contains("..") || trimmed.indexOf('/') >= 0 || trimmed.indexOf(92) >= 0) {
             throw new IllegalArgumentException("Invalid archived filename (path traversal not allowed): " + filename);
         }
-        if (trimmed.toLowerCase(Locale.ROOT).endsWith(MD_EXTENSION)) {
-            return trimmed;
-        }
-        return trimmed + MD_EXTENSION;
+        return StringUtils.appendIfMissingIgnoreCase(trimmed, MD_EXTENSION);
     }
 
     public static String capPinnedMemoryForPrompt(String content) {

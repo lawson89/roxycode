@@ -24,7 +24,6 @@ public final class PlanPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(PlanPanel.class);
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final String COPY_BUTTON_TEXT = "Copy Plan as Markdown";
-    static final String NO_FILES_CHANGED = ImplementationPlan.NO_FILES_CHANGED;
 
     private final transient PlanService planManagerService;
     private final transient GitService gitService;
@@ -107,10 +106,6 @@ public final class PlanPanel extends JPanel {
         return lastCopiedMarkdown;
     }
 
-    String getLastGitStatus() {
-        return lastGitStatus;
-    }
-
     @Override
     public void updateUI() {
         super.updateUI();
@@ -157,10 +152,6 @@ public final class PlanPanel extends JPanel {
         displayArea.setCaretPosition(0);
     }
 
-    static String buildPlanMarkdown(ImplementationPlan plan) {
-        return buildPlanMarkdown(plan, null);
-    }
-
     static String buildPlanMarkdown(ImplementationPlan plan, String gitStatus) {
         if (plan == null) {
             return "";
@@ -168,10 +159,6 @@ public final class PlanPanel extends JPanel {
         StringBuilder sb = new StringBuilder(plan.toMarkdown(true));
         ImplementationPlan.appendChangesMarkdown(sb, ImplementationPlan.formatChangesText(gitStatus));
         return sb.toString();
-    }
-
-    static String buildPlanHtml(ImplementationPlan plan) {
-        return buildPlanHtml(plan, null);
     }
 
     static String buildPlanHtml(ImplementationPlan plan, String gitStatus) {

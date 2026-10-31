@@ -18,7 +18,6 @@ import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
-import org.roxycode.app.events.UserMessageEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
@@ -137,9 +136,6 @@ public final class ChatController implements AutoCloseable {
                 view.appendMessage(ROLE_SYSTEM, IMAGE_REQUIRES_TEXT_MESSAGE);
             }
             return;
-        }
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new UserMessageEvent(model.getConversationId(), ROLE_USER, text));
         }
         view.appendMessage(ROLE_USER, text);
         view.clearInputText();

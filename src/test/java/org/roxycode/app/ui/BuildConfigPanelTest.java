@@ -206,7 +206,7 @@ class BuildConfigPanelTest {
         assertFalse(panel.containerToggleCheckBox.isSelected());
 
         panel.onSystemToolsUpdated(
-                new SystemToolsUpdatedEvent(List.of(new SystemTool("Docker", "28.0", "Detected", "Desc")), true));
+                new SystemToolsUpdatedEvent(List.of(SystemTool.ofKnownTool("Docker", "28.0", "Detected")), true));
         SwingTestUtils.flushEdt();
 
         assertTrue(panel.dockerAvailable);

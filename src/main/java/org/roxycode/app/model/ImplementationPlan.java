@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.util.FrontmatterUtils;
 
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
@@ -27,35 +28,36 @@ public record ImplementationPlan(String title, String goal, List<String> require
         private static final int TIMESTAMP_LENGTH = 19;
 
         public String formattedTimestamp() {
-            if (timestamp == null)
+            if (timestamp == null) {
                 return "";
-            return timestamp.length() > TIMESTAMP_LENGTH
-                    ? timestamp.substring(0, TIMESTAMP_LENGTH).replace('T', ' ')
-                    : timestamp;
+            }
+            if (timestamp.length() > TIMESTAMP_LENGTH) {
+                return timestamp.substring(0, TIMESTAMP_LENGTH).replace('T', ' ');
+            }
+            return timestamp;
         }
     }
 
     public ImplementationPlan {
-        requirements = requirements != null ? List.copyOf(requirements) : List.of();
-        technicalSteps = technicalSteps != null ? List.copyOf(technicalSteps) : List.of();
-        handoffLog = handoffLog != null ? List.copyOf(handoffLog) : List.of();
+        if (requirements != null) {
+            requirements = List.copyOf(requirements);
+        } else {
+            requirements = List.of();
+        }
+        if (technicalSteps != null) {
+            technicalSteps = List.copyOf(technicalSteps);
+        } else {
+            technicalSteps = List.of();
+        }
+        if (handoffLog != null) {
+            handoffLog = List.copyOf(handoffLog);
+        } else {
+            handoffLog = List.of();
+        }
     }
 
     public static String normalizeStepDescription(String description) {
-        if (description == null) {
-            return "";
-        }
-        String trimmed = description.trim();
-        int end = trimmed.length();
-        while (end > 0) {
-            char c = trimmed.charAt(end - 1);
-            if (c == '.' || c == '!' || c == ':' || c == ';' || Character.isWhitespace(c)) {
-                end--;
-            } else {
-                break;
-            }
-        }
-        return trimmed.substring(0, end).toLowerCase(Locale.ROOT);
+        return StringUtils.stripEnd(StringUtils.trimToEmpty(description), ".!;: \t\r\n").toLowerCase(Locale.ROOT);
     }
 
     public static boolean isCompileStep(String description) {
@@ -88,12 +90,14 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public ImplementationPlan withNormalizedStepsFrom(ImplementationPlan previousPlan) {
-        Set<String> previouslyCompletedSteps = previousPlan != null
-                ? previousPlan.collectCompletedNonVerificationSteps()
-                : Set.of();
-        List<LogEntry> preservedLog = (handoffLog.isEmpty() && previousPlan != null)
-                ? previousPlan.handoffLog()
-                : handoffLog;
+        Set<String> previouslyCompletedSteps = Set.of();
+        if (previousPlan != null) {
+            previouslyCompletedSteps = previousPlan.collectCompletedNonVerificationSteps();
+        }
+        List<LogEntry> preservedLog = handoffLog;
+        if (handoffLog.isEmpty() && previousPlan != null) {
+            preservedLog = previousPlan.handoffLog();
+        }
 
         List<TechStep> steps = new ArrayList<>();
         boolean hasCompile = false;
@@ -135,9 +139,10 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public String formatRemainingIncompleteSteps() {
         List<String> remaining = collectIncompleteSteps(false);
-        return remaining.isEmpty()
-                ? "Remaining incomplete steps: none (all steps completed)."
-                : "Remaining incomplete steps: [" + String.join(", ", remaining) + "]";
+        if (remaining.isEmpty()) {
+            return "Remaining incomplete steps: none (all steps completed).";
+        }
+        return "Remaining incomplete steps: [" + String.join(", ", remaining) + "]";
     }
 
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
@@ -167,11 +172,11 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public boolean hasMoveToCodeApproval() {
-        return userApproved || isNonBlank(approvedBy) || isNonBlank(approvalTimestamp);
+        return userApproved || StringUtils.isNotBlank(approvedBy) || StringUtils.isNotBlank(approvalTimestamp);
     }
 
     public boolean hasFinalAcceptance() {
-        return isNonBlank(completedBy) || isNonBlank(completedOn);
+        return StringUtils.isNotBlank(completedBy) || StringUtils.isNotBlank(completedOn);
     }
 
     public boolean hasApprovals() {
@@ -179,18 +184,19 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public String toMarkdown(boolean includeHandoffLog) {
-        StringBuilder md = new StringBuilder("# Implementation Plan: ").append(title != null ? title : "")
-                .append("\n\n**Goal:** ").append(goal != null ? goal : "").append("\n");
+        StringBuilder md = new StringBuilder("# Implementation Plan: ").append(StringUtils.defaultString(title))
+                .append("\n\n**Goal:** ").append(StringUtils.defaultString(goal)).append("\n");
 
         if (hasApprovals()) {
             md.append("\n## Approvals\n");
             if (hasMoveToCodeApproval()) {
-                md.append("- **Move to Code:** Approved by ").append(isNonBlank(approvedBy) ? approvedBy : "User")
-                        .append(" on ").append(isNonBlank(approvalTimestamp) ? approvalTimestamp : "N/A").append("\n");
+                md.append("- **Move to Code:** Approved by ").append(StringUtils.defaultIfBlank(approvedBy, "User"))
+                        .append(" on ").append(StringUtils.defaultIfBlank(approvalTimestamp, "N/A")).append("\n");
             }
             if (hasFinalAcceptance()) {
-                md.append("- **Final Acceptance:** Accepted by ").append(isNonBlank(completedBy) ? completedBy : "User")
-                        .append(" on ").append(isNonBlank(completedOn) ? completedOn : "N/A").append("\n");
+                md.append("- **Final Acceptance:** Accepted by ")
+                        .append(StringUtils.defaultIfBlank(completedBy, "User")).append(" on ")
+                        .append(StringUtils.defaultIfBlank(completedOn, "N/A")).append("\n");
             }
         }
 
@@ -229,7 +235,10 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public static String formatChangesText(String gitStatus) {
-        return (gitStatus == null || gitStatus.isBlank()) ? NO_FILES_CHANGED : gitStatus.stripTrailing();
+        if (StringUtils.isBlank(gitStatus)) {
+            return NO_FILES_CHANGED;
+        }
+        return gitStatus.stripTrailing();
     }
 
     public static void appendChangesMarkdown(StringBuilder sb, String gitStatus) {
@@ -255,13 +264,10 @@ public record ImplementationPlan(String title, String goal, List<String> require
         return sb.toString();
     }
 
-    private static boolean isNonBlank(String value) {
-        return value != null && !value.isBlank();
-    }
-
     private static String escapeMarkdownTableCell(String value) {
-        if (value == null)
+        if (value == null) {
             return "";
+        }
         return value.replace("|", "\\|").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
     }
 }

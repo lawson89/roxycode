@@ -150,11 +150,13 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         transitionLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Component.accentColor");
 
         approveButton = createActionButton("Approve", Codicons.CHECK, null, false,
-                "background: $Actions.Green; foreground: #ffffff", e -> controller.approvePhase());
+                "background: $Actions.Green; focusedBackground: $Actions.Green; hoverBackground: darken($Actions.Green, 8%); pressedBackground: darken($Actions.Green, 14%); foreground: #ffffff",
+                e -> controller.approvePhase());
         approveButton.setEnabled(false);
 
         rejectButton = createActionButton("Reject", Codicons.CLOSE, null, false,
-                "background: $Actions.Red; foreground: #ffffff", e -> controller.rejectPhase());
+                "background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff",
+                e -> controller.rejectPhase());
         rejectButton.setEnabled(false);
 
         panel.add(transitionLabel);
@@ -215,11 +217,12 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         fileMentionPopup = new FileMentionPopup(inputArea, inputScrollPane);
 
         sendButton = createActionButton("Send", Codicons.CHEVRON_RIGHT, new Insets(5, 14, 5, 14), false,
-                "arc: 8; font: bold; background: $Component.accentColor; foreground: $List.selectionForeground",
+                "arc: 8; font: bold; background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff",
                 this::sendMessage);
 
         stopButton = createActionButton("Stop", Codicons.DEBUG_STOP, new Insets(5, 14, 5, 14), false,
-                "arc: 8; font: bold; background: $Actions.Red; foreground: #ffffff", e -> controller.stopTurn());
+                "arc: 8; font: bold; background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff",
+                e -> controller.stopTurn());
         stopButton.setEnabled(false);
         stopButton.setVisible(false);
 
@@ -271,7 +274,13 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     private static JButton createActionButton(String text, Codicons icon, Insets margin, boolean borderless,
             String style, ActionListener listener) {
-        JButton btn = new JButton(text, FontIcon.of(icon, 16));
+        FontIcon fontIcon;
+        if (borderless) {
+            fontIcon = FontIcon.of(icon, 16);
+        } else {
+            fontIcon = FontIcon.of(icon, 16, Color.WHITE);
+        }
+        JButton btn = new JButton(text, fontIcon);
         if (margin != null) {
             btn.setMargin(margin);
         }
@@ -524,7 +533,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void setLoading(boolean loading) {
-        model.setLoading(loading);
         stopButton.setEnabled(loading);
         stopButton.setVisible(loading);
         sendButton.setEnabled(!loading);
@@ -537,7 +545,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             rejectButton.setEnabled(enableDecision);
         }
         if (loading) {
-            SwingUtilities.invokeLater(stopButton::requestFocusInWindow);
             sendButton.setText("Sending...");
         } else {
             SwingUtilities.invokeLater(inputArea::requestFocusInWindow);

@@ -76,11 +76,6 @@ public final class BuildConfigPanel extends JPanel {
     private transient Consumer<String> errorDialogPresenter;
     CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
-    public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
-            SystemToolService systemToolService) {
-        this(buildToolService, settingsService, systemToolService, null);
-    }
-
     @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
             SystemToolService systemToolService, @Nullable ProjectService projectService) {

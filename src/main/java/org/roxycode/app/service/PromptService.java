@@ -64,7 +64,11 @@ public class PromptService {
 
     public record ProjectContextConfig(List<String> folders) {
         public ProjectContextConfig {
-            folders = folders == null ? List.of() : List.copyOf(folders);
+            if (folders == null) {
+                folders = List.of();
+            } else {
+                folders = List.copyOf(folders);
+            }
         }
     }
 
@@ -159,7 +163,10 @@ public class PromptService {
             sb.append("\n");
         }
         sb.append("### ").append(title).append("\n");
-        int count = limit > 0 ? Math.min(limit, items.size()) : items.size();
+        int count = items.size();
+        if (limit > 0) {
+            count = Math.min(limit, items.size());
+        }
         for (int i = 0; i < count; i++) {
             sb.append("- ").append(items.get(i)).append("\n");
         }
@@ -171,7 +178,10 @@ public class PromptService {
     }
 
     public String getSessionContext(WorkflowPhase phase) {
-        WorkflowPhase currentPhase = phase != null ? phase : planService.getCurrentPhase();
+        WorkflowPhase currentPhase = phase;
+        if (currentPhase == null) {
+            currentPhase = planService.getCurrentPhase();
+        }
         StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
         sb.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage())
                 .append("\nCURRENT PHASE: ").append(currentPhase.name()).append("\nYou are the ")
@@ -191,7 +201,10 @@ public class PromptService {
     }
 
     public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
-        WorkflowPhase currentPhase = phase != null ? phase : planService.getCurrentPhase();
+        WorkflowPhase currentPhase = phase;
+        if (currentPhase == null) {
+            currentPhase = planService.getCurrentPhase();
+        }
         StringBuilder systemPrompt = new StringBuilder(getStableContext()).append(NEWLINE_DOUBLE)
                 .append(loadPhasePrompt(currentPhase));
 
@@ -215,8 +228,14 @@ public class PromptService {
         };
         String raw = readClasspathResource(path);
         if (phase == WorkflowPhase.EXPLORE) {
-            var settings = settingsService != null ? settingsService.getSettings() : null;
-            int maxTurns = settings != null ? settings.getMaxAgentToolTurns() : 5;
+            AppSettings settings = null;
+            if (settingsService != null) {
+                settings = settingsService.getSettings();
+            }
+            int maxTurns = 5;
+            if (settings != null) {
+                maxTurns = settings.getMaxAgentToolTurns();
+            }
             return StringSubstitutor.replace(raw, Map.of("maxTurns", maxTurns));
         }
         return raw;
@@ -227,12 +246,17 @@ public class PromptService {
     }
 
     public List<String> getGlobalContextFolders() {
-        AppSettings settings = settingsService != null ? settingsService.getSettings() : null;
-        return settings != null ? normalizeFolderList(settings.getGlobalContextFolders()) : List.of();
+        if (settingsService == null || settingsService.getSettings() == null) {
+            return List.of();
+        }
+        return normalizeFolderList(settingsService.getSettings().getGlobalContextFolders());
     }
 
     public void setGlobalContextFolders(List<String> folders) {
-        AppSettings settings = settingsService != null ? settingsService.getSettings() : null;
+        if (settingsService == null) {
+            return;
+        }
+        AppSettings settings = settingsService.getSettings();
         if (settings != null) {
             settings.setGlobalContextFolders(normalizeFolderList(folders));
             settingsService.saveSettings();
@@ -253,7 +277,10 @@ public class PromptService {
         try {
             ProjectContextConfig config = AiConfig.SHARED_TOML_MAPPER.readValue(configFile.toFile(),
                     ProjectContextConfig.class);
-            return config != null ? normalizeFolderList(config.folders()) : List.of();
+            if (config != null) {
+                return normalizeFolderList(config.folders());
+            }
+            return List.of();
         } catch (IOException e) {
             log.warn("Failed to read project context config {}: {}", configFile, e.getMessage());
             return List.of();
@@ -283,7 +310,10 @@ public class PromptService {
     }
 
     public List<ContextFileItem> listProjectContextFiles() {
-        return hasActiveProject() ? listContextFilesInFolders(getProjectContextFolders(), true) : List.of();
+        if (!hasActiveProject()) {
+            return List.of();
+        }
+        return listContextFilesInFolders(getProjectContextFolders(), true);
     }
 
     List<ContextFileItem> listContextFilesInFolders(List<String> folders, boolean resolveRelativeToProject) {
@@ -319,11 +349,7 @@ public class PromptService {
         return List.copyOf(result);
     }
 
-    public String readContextFile(Path filePath) {
-        return readContextFile(filePath, true);
-    }
-
-    private String readContextFile(Path filePath, boolean requireConfiguredFolder) {
+    private String readContextFile(Path filePath) {
         if (filePath == null) {
             throw new IllegalArgumentException("Context file path must not be null");
         }
@@ -333,9 +359,6 @@ public class PromptService {
         }
         if (normalized.getFileName().toString().startsWith(".")) {
             throw new IllegalArgumentException("Hidden files are not allowed as context: " + filePath);
-        }
-        if (requireConfiguredFolder && !isInsideConfiguredContextFolder(normalized)) {
-            throw new IllegalArgumentException("File is not in a configured context folder: " + filePath);
         }
         try {
             if (FileReadService.isBinaryFile(normalized)) {
@@ -363,31 +386,16 @@ public class PromptService {
         StringBuilder sb = new StringBuilder();
         for (ContextFileItem item : files) {
             try {
-                String content = readContextFile(item.filePath(), false);
+                String content = readContextFile(item.filePath());
                 if (!content.isBlank()) {
-                    sb.append("\n\n## ").append(headerTitle).append(": ").append(item.fileName()).append("\n")
-                            .append(content);
+                    sb.append(NEWLINE_DOUBLE).append("## ").append(headerTitle).append(": ").append(item.fileName())
+                            .append("\n").append(content);
                 }
             } catch (Exception e) {
                 log.warn("Failed to read {} context file {}: {}", logScope, item.filePath(), e.getMessage());
             }
         }
         return sb.toString();
-    }
-
-    private boolean isInsideConfiguredContextFolder(Path normalizedFile) {
-        Path parent = normalizedFile.getParent();
-        return parent != null && (matchesFolder(parent, getGlobalContextFolders(), false)
-                || (hasActiveProject() && matchesFolder(parent, getProjectContextFolders(), true)));
-    }
-
-    private boolean matchesFolder(Path parent, List<String> folders, boolean relativeToProject) {
-        for (String folder : folders) {
-            if (parent.equals(resolveFolderPath(folder, relativeToProject))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private Path resolveFolderPath(String folderStr, boolean resolveRelativeToProject) {
@@ -419,9 +427,10 @@ public class PromptService {
     }
 
     private static List<String> normalizeFolderList(List<String> folders) {
-        return folders == null
-                ? List.of()
-                : folders.stream().filter(f -> f != null && !f.isBlank()).map(String::trim).distinct().toList();
+        if (folders == null) {
+            return List.of();
+        }
+        return folders.stream().filter(f -> f != null && !f.isBlank()).map(String::trim).distinct().toList();
     }
 
     @SuppressWarnings("PMD.UseProperClassLoader")

@@ -361,8 +361,8 @@ public class GenericBuildToolService {
 
     private BuildResult buildResultFromExecution(int exitCode, String fullOutput, Path logFile, List<String> errors,
             String errorRegex, String testFailureRegex) {
-        errors.addAll(extractWithRipGrep(errorRegex, logFile, "errors"));
-        List<String> failedTests = new ArrayList<>(extractWithRipGrep(testFailureRegex, logFile, "test failures"));
+        errors.addAll(extractWithRipGrep(errorRegex, logFile));
+        List<String> failedTests = new ArrayList<>(extractWithRipGrep(testFailureRegex, logFile));
         boolean success = exitCode == 0 && errors.isEmpty() && failedTests.isEmpty();
         String tailOutput = getLogTail(fullOutput);
         return new BuildResult(success, exitCode, tailOutput, errors, failedTests);
@@ -378,7 +378,7 @@ public class GenericBuildToolService {
         return LOG_TRUNCATED_PREFIX + fullOutput.substring(fullOutput.length() - MAX_LOG_TAIL_BYTES);
     }
 
-    List<String> extractWithRipGrep(String regex, Path logFile, String patternType) {
+    List<String> extractWithRipGrep(String regex, Path logFile) {
         if (regex == null || regex.isBlank() || logFile == null || !Files.exists(logFile)) {
             return List.of();
         }

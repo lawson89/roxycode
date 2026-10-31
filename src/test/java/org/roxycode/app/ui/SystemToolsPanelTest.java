@@ -22,8 +22,8 @@ public class SystemToolsPanelTest {
     @Test
     public void testSystemToolsPanelInstantiationWithCachedTools() {
         SystemToolService service = mock(SystemToolService.class);
-        when(service.detectTools()).thenReturn(CompletableFuture
-                .completedFuture(List.of(new SystemTool("Ripgrep", "ripgrep 14.1.0", "Detected", "Fast search"))));
+        when(service.detectTools()).thenReturn(CompletableFuture.completedFuture(
+                List.of(new SystemTool("Ripgrep", "ripgrep 14.1.0", "Detected", "Fast search", null, null, false))));
 
         SystemToolsPanel panel = new SystemToolsPanel(service);
         SwingTestUtils.flushEdt();
@@ -67,8 +67,8 @@ public class SystemToolsPanelTest {
             assertTrue(panel.getProgressBar().isIndeterminate());
         });
 
-        pendingRefresh.complete(List
-                .of(new SystemTool("Test Tool", "1.0", "Detected", "Description", "MIT", "https://example.com/tool/")));
+        pendingRefresh.complete(List.of(new SystemTool("Test Tool", "1.0", "Detected", "Description", "MIT",
+                "https://example.com/tool/", false)));
         SwingTestUtils.flushEdt();
 
         assertFalse(panel.getProgressBar().isVisible());

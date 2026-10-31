@@ -126,7 +126,11 @@ public class LLMDocGenerator {
 
     private String getMethodTypeName(Class<?> rawType, Type genericType, Set<Class<?>> extraTypes) {
         Set<Class<?>> genericExtraTypes = new LinkedHashSet<>();
-        String genericName = getGenericTypeName(genericType != null ? genericType : rawType, genericExtraTypes);
+        Type targetType = rawType;
+        if (genericType != null) {
+            targetType = genericType;
+        }
+        String genericName = getGenericTypeName(targetType, genericExtraTypes);
         if (!genericExtraTypes.isEmpty()) {
             extraTypes.addAll(genericExtraTypes);
             return genericName;
@@ -140,7 +144,10 @@ public class LLMDocGenerator {
         }
         if (genericType instanceof ParameterizedType pt) {
             Type raw = pt.getRawType();
-            String rawName = raw instanceof Class<?> rawClass ? getTypeName(rawClass, extraTypes) : raw.getTypeName();
+            String rawName = raw.getTypeName();
+            if (raw instanceof Class<?> rawClass) {
+                rawName = getTypeName(rawClass, extraTypes);
+            }
             Type[] typeArgs = pt.getActualTypeArguments();
             if (typeArgs.length == 0) {
                 return rawName;
@@ -172,9 +179,10 @@ public class LLMDocGenerator {
         }
         if (argType instanceof WildcardType wt) {
             Type[] upper = wt.getUpperBounds();
-            return (upper.length > 0 && upper[0] != Object.class)
-                    ? getGenericTypeArgumentName(upper[0], extraTypes)
-                    : "any";
+            if (upper.length > 0 && upper[0] != Object.class) {
+                return getGenericTypeArgumentName(upper[0], extraTypes);
+            }
+            return "any";
         }
         return getGenericTypeName(argType, extraTypes);
     }

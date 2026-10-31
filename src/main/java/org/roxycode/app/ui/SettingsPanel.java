@@ -13,7 +13,6 @@ import java.text.ParseException;
 import java.util.List;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -271,8 +270,6 @@ public final class SettingsPanel extends JPanel {
         Color mutedColor = SwingHtmlUtils.getUiColor(new Color(0x6c, 0x75, 0x7d), "Label.disabledForeground",
                 "Component.infoForeground");
         Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
-        Color amberColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06), "Component.warning.borderColor",
-                "Actions.Yellow");
 
         statusLabel.setForeground(greenColor);
 
@@ -412,10 +409,6 @@ public final class SettingsPanel extends JPanel {
         return maxAgentToolTurnsSpinner;
     }
 
-    JComboBox<String> getThemeCombo() {
-        return themeCombo;
-    }
-
     JComboBox<GeminiModelConfig> getModelCombo() {
         return modelCombo;
     }
@@ -428,24 +421,8 @@ public final class SettingsPanel extends JPanel {
         return modelDescriptionArea;
     }
 
-    JPasswordField getGeminiApiKeyField() {
-        return geminiApiKeyField;
-    }
-
     JCheckBox getLogToolCallsCheckBox() {
         return logToolCallsCheckBox;
-    }
-
-    JButton getSaveButton() {
-        return saveButton;
-    }
-
-    public static void applyRSyntaxTheme(RSyntaxTextArea textArea, SettingsService settingsService) {
-        SwingHtmlUtils.applyRSyntaxTheme(textArea, settingsService);
-    }
-
-    public static boolean isDarkTheme(String themeName) {
-        return SwingHtmlUtils.isDarkTheme(themeName);
     }
 
     public static void applyTheme(String themeName) {

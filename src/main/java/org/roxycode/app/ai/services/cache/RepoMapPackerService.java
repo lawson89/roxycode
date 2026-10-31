@@ -41,7 +41,6 @@ public class RepoMapPackerService {
 
     static final Set<String> SOURCE_EXTENSIONS = Set
             .of("java,py,ts,tsx,js,jsx,go,rs,c,cpp,cc,cxx,h,hpp,cs,rb,php,kt,kts,swift,scala".split(","));
-    static final Set<String> IGNORED_TAG_KINDS = CtagsRunner.IGNORED_TAG_KINDS;
     private static final List<String> TEST_DIR_MARKERS = List.of("src/test/", "test/", "tests/", "__tests__/");
     private static final List<String> TEST_FILE_SUFFIXES = List.of(
             "Test.java,Tests.java,IT.java,_test.py,_test.go,.test.ts,.spec.ts,.test.tsx,.spec.tsx,.test.js,.spec.js,.test.jsx,.spec.jsx"

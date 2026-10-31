@@ -96,7 +96,6 @@ public final class ArchiveBrowserPanel extends JPanel {
     String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
     CompletableFuture<String> lastSelectionFuture = CompletableFuture.completedFuture("");
-    CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     public ArchiveBrowserPanel(MemoryService memoryService, ArchiveMode mode) {
         super(new BorderLayout());
@@ -185,13 +184,11 @@ public final class ArchiveBrowserPanel extends JPanel {
             query = searchField.getText();
         }
         final String searchQuery = query;
-        CompletableFuture<?> future = Edt.supplyAsync(() -> loadEntriesForQuery(searchQuery),
+        return Edt.supplyAsync(() -> loadEntriesForQuery(searchQuery),
                 results -> applySearchResults(results, searchQuery), e -> {
                     log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
                     applySearchResults(List.of(), searchQuery);
                 }).thenCompose(results -> lastSelectionFuture);
-        this.lastAsyncFuture = future;
-        return future;
     }
 
     private List<ArchiveEntrySummary> loadEntriesForQuery(String query) {
@@ -263,7 +260,6 @@ public final class ArchiveBrowserPanel extends JPanel {
             renderEmptyState(searchField != null && !searchField.getText().isBlank());
             CompletableFuture<String> done = CompletableFuture.completedFuture("");
             lastSelectionFuture = done;
-            lastAsyncFuture = done;
             return done;
         }
 
@@ -274,7 +270,6 @@ public final class ArchiveBrowserPanel extends JPanel {
                     applyDetailContent(entry, "");
                 });
         lastSelectionFuture = future;
-        lastAsyncFuture = future;
         return future;
     }
 

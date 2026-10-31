@@ -11,7 +11,6 @@ import org.apache.commons.jexl3.MapContext;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
-import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
@@ -43,7 +42,11 @@ public class JexlTool {
                 .silent(false).safe(false).create();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
-        this.mapper = objectMapper != null ? objectMapper : AiConfig.SHARED_OBJECT_MAPPER;
+        if (objectMapper != null) {
+            this.mapper = objectMapper;
+        } else {
+            this.mapper = AiConfig.SHARED_OBJECT_MAPPER;
+        }
         this.settingsService = settingsService;
     }
 
@@ -99,22 +102,29 @@ public class JexlTool {
             }
             log.warn("Error executing JEXL script: {}", e.getMessage());
             Throwable cause = ExceptionUtils.getRootCause(e);
-            String error = cause.getMessage() != null ? cause.getMessage() : cause.toString();
+            String error = cause.toString();
+            if (cause.getMessage() != null) {
+                error = cause.getMessage();
+            }
             publishToolEvent(conversationId, script, null, false, error);
             return toJsonError(error);
         }
     }
 
     private int resolveMaxTurns() {
-        AppSettings settings = settingsService != null ? settingsService.getSettings() : null;
-        return settings != null ? Math.max(1, settings.getMaxAgentToolTurns()) : 5;
+        if (settingsService != null && settingsService.getSettings() != null) {
+            return Math.max(1, settingsService.getSettings().getMaxAgentToolTurns());
+        }
+        return 5;
     }
 
     private String serializeResult(@Nullable Object result) throws Exception {
-        if (result == null)
+        if (result == null) {
             return mapper.writeValueAsString(Map.of(RESULT_KEY, "null"));
-        if (result instanceof Map)
+        }
+        if (result instanceof Map) {
             return mapper.writeValueAsString(result);
+        }
         if (isScalarResult(result) || AgentJexlPermissions.isAgentServiceClass(result.getClass())) {
             return serializeStringResult(result.toString());
         }
@@ -131,7 +141,10 @@ public class JexlTool {
     }
 
     private String serializeStringResult(String rawOutput) throws Exception {
-        String output = rawOutput == null || rawOutput.trim().isEmpty() ? "<empty result>" : rawOutput;
+        String output = rawOutput;
+        if (rawOutput == null || rawOutput.trim().isEmpty()) {
+            output = "<empty result>";
+        }
         return mapper.writeValueAsString(Map.of(RESULT_KEY, output));
     }
 
@@ -143,7 +156,11 @@ public class JexlTool {
 
     private String toJsonError(String message) {
         try {
-            return mapper.writeValueAsString(Map.of("error", message != null ? message : "Unknown error"));
+            String errorMsg = "Unknown error";
+            if (message != null) {
+                errorMsg = message;
+            }
+            return mapper.writeValueAsString(Map.of("error", errorMsg));
         } catch (Exception e) {
             return """
                     {"error":"Internal Error during error serialization"}""";

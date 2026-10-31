@@ -22,17 +22,14 @@ public final class ChatModel {
     public static final String QA_CONVERSATION_ID = QA_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
     public static final String TASK_CONVERSATION_ID = TASK_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
 
-    private final String sessionPrefix;
     private final String conversationId;
     private final WorkflowPhase lockedPhase;
     private final boolean taskMode;
     private final AtomicBoolean turnCancelled = new AtomicBoolean(false);
     private final List<BufferedImage> pendingImages = new ArrayList<>();
     private volatile int currentTurn = 0;
-    private volatile boolean loading = false;
 
     public ChatModel(String sessionPrefix, WorkflowPhase lockedPhase, boolean taskMode) {
-        this.sessionPrefix = sessionPrefix;
         this.conversationId = defaultConversationId(sessionPrefix);
         this.lockedPhase = lockedPhase;
         this.taskMode = taskMode;
@@ -42,16 +39,8 @@ public final class ChatModel {
         return sessionPrefix + DEFAULT_CONVERSATION_SUFFIX;
     }
 
-    public String getSessionPrefix() {
-        return sessionPrefix;
-    }
-
     public String getConversationId() {
         return conversationId;
-    }
-
-    public WorkflowPhase getLockedPhase() {
-        return lockedPhase;
     }
 
     public boolean isTaskMode() {
@@ -59,7 +48,10 @@ public final class ChatModel {
     }
 
     public WorkflowPhase resolveActivePhase(WorkflowPhase workflowCurrentPhase) {
-        return lockedPhase != null ? lockedPhase : workflowCurrentPhase;
+        if (lockedPhase != null) {
+            return lockedPhase;
+        }
+        return workflowCurrentPhase;
     }
 
     public int getCurrentTurn() {
@@ -68,14 +60,6 @@ public final class ChatModel {
 
     public void setCurrentTurn(int currentTurn) {
         this.currentTurn = currentTurn;
-    }
-
-    public boolean isLoading() {
-        return loading;
-    }
-
-    public void setLoading(boolean loading) {
-        this.loading = loading;
     }
 
     public boolean isTurnCancelled() {

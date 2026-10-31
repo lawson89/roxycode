@@ -184,7 +184,7 @@ class GenericBuildToolServiceTest {
             List<String> noMatchCmd = List.of("rg", "--color=never", "-N", "-e", "^NOMATCH:", persistedLog.toString());
             runner.when(() -> ProcessRunner.run(eq(noMatchCmd), isNull(), eq(false)))
                     .thenReturn(new ProcessResult(GrepService.EXIT_CODE_NO_MATCHES, "", "", false));
-            assertTrue(buildToolService.extractWithRipGrep("^NOMATCH:", persistedLog, "test failures").isEmpty());
+            assertTrue(buildToolService.extractWithRipGrep("^NOMATCH:", persistedLog).isEmpty());
         }
     }
 

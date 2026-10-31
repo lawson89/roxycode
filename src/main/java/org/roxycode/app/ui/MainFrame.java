@@ -44,6 +44,21 @@ public final class MainFrame extends JPanel {
     static final String MISSING_API_KEY_TITLE = "Gemini API Key Required";
     static final String MISSING_API_KEY_MESSAGE = "Welcome to RoxyCode! Please enter and save your Gemini API Key in Global Settings to get started.";
 
+    private static final class StartupAlertState {
+        final String title;
+        final String message;
+        final int messageType;
+        String lastMessage;
+        boolean pending;
+        Consumer<String> presenter;
+
+        StartupAlertState(String title, String message, int messageType) {
+            this.title = title;
+            this.message = message;
+            this.messageType = messageType;
+        }
+    }
+
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
     private final transient ChatMemory chatMemory;
@@ -57,12 +72,10 @@ public final class MainFrame extends JPanel {
     private SidebarPanel sidebar;
     private String title = "";
     private String currentCard = QA_VIEW;
-    private String lastMissingToolsMessage;
-    private boolean pendingMissingToolsAlert;
-    private transient Consumer<String> missingToolsDialogPresenter;
-    private String lastMissingApiKeyMessage;
-    private boolean pendingMissingApiKeyAlert;
-    private transient Consumer<String> missingApiKeyDialogPresenter;
+    private final transient StartupAlertState apiKeyAlert = new StartupAlertState(MISSING_API_KEY_TITLE,
+            MISSING_API_KEY_MESSAGE, JOptionPane.INFORMATION_MESSAGE);
+    private final transient StartupAlertState toolsAlert = new StartupAlertState(MISSING_REQUIRED_TOOLS_TITLE,
+            MISSING_REQUIRED_TOOLS_MESSAGE, JOptionPane.WARNING_MESSAGE);
 
     public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
             HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
@@ -85,7 +98,7 @@ public final class MainFrame extends JPanel {
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 contextManagerPanel);
-        checkSettingsOnStartup();
+        handleStartupSettingsCheck();
         checkRequiredSystemToolsOnStartup(systemToolsPanel);
     }
 
@@ -161,13 +174,11 @@ public final class MainFrame extends JPanel {
         if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null) {
             qaWorkspacePanel.focusChatInput();
         }
-        if (pendingMissingApiKeyAlert) {
-            pendingMissingApiKeyAlert = false;
-            Edt.run(() -> showMissingApiKeyOptionPane(MISSING_API_KEY_MESSAGE));
-        }
-        if (pendingMissingToolsAlert) {
-            pendingMissingToolsAlert = false;
-            Edt.run(() -> showMissingToolsOptionPane(MISSING_REQUIRED_TOOLS_MESSAGE));
+        for (StartupAlertState alert : List.of(apiKeyAlert, toolsAlert)) {
+            if (alert.pending) {
+                alert.pending = false;
+                Edt.run(() -> presentStartupAlert(alert));
+            }
         }
     }
 
@@ -225,10 +236,6 @@ public final class MainFrame extends JPanel {
         showCard(QA_VIEW);
     }
 
-    private void checkSettingsOnStartup() {
-        handleStartupSettingsCheck();
-    }
-
     void handleStartupSettingsCheck() {
         if (settingsService == null) {
             return;
@@ -237,30 +244,8 @@ public final class MainFrame extends JPanel {
         if (sidebar != null) {
             sidebar.setSettingsAttentionNeeded(missingKey);
         }
-        if (!missingKey) {
-            return;
-        }
-        lastMissingApiKeyMessage = MISSING_API_KEY_MESSAGE;
-        if (missingApiKeyDialogPresenter != null) {
-            missingApiKeyDialogPresenter.accept(MISSING_API_KEY_MESSAGE);
-        } else if (!GraphicsEnvironment.isHeadless()) {
-            if (isShowing()) {
-                showMissingApiKeyOptionPane(MISSING_API_KEY_MESSAGE);
-            } else {
-                pendingMissingApiKeyAlert = true;
-            }
-        }
-    }
-
-    private void showMissingApiKeyOptionPane(String message) {
-        if (missingApiKeyDialogPresenter != null) {
-            missingApiKeyDialogPresenter.accept(message);
-        } else if (!GraphicsEnvironment.isHeadless()) {
-            java.awt.Component parent = this;
-            if (hostFrame != null) {
-                parent = hostFrame;
-            }
-            JOptionPane.showMessageDialog(parent, message, MISSING_API_KEY_TITLE, JOptionPane.INFORMATION_MESSAGE);
+        if (missingKey) {
+            triggerStartupAlert(apiKeyAlert);
         }
     }
 
@@ -269,8 +254,9 @@ public final class MainFrame extends JPanel {
             return;
         }
         CompletableFuture<List<SystemTool>> future = systemToolsPanel.getInitialToolsFuture();
-        if (future == null)
+        if (future == null) {
             return;
+        }
         future.whenComplete((tools, ex) -> {
             if (ex == null && tools != null) {
                 Edt.run(() -> handleStartupToolsCheck(tools));
@@ -286,30 +272,33 @@ public final class MainFrame extends JPanel {
         if (sidebar != null) {
             sidebar.setToolsAttentionNeeded(missingTools);
         }
-        if (!missingTools) {
-            return;
+        if (missingTools) {
+            triggerStartupAlert(toolsAlert);
         }
-        lastMissingToolsMessage = MISSING_REQUIRED_TOOLS_MESSAGE;
-        if (missingToolsDialogPresenter != null) {
-            missingToolsDialogPresenter.accept(MISSING_REQUIRED_TOOLS_MESSAGE);
+    }
+
+    private void triggerStartupAlert(StartupAlertState alert) {
+        alert.lastMessage = alert.message;
+        if (alert.presenter != null) {
+            alert.presenter.accept(alert.message);
         } else if (!GraphicsEnvironment.isHeadless()) {
             if (isShowing()) {
-                showMissingToolsOptionPane(MISSING_REQUIRED_TOOLS_MESSAGE);
+                presentStartupAlert(alert);
             } else {
-                pendingMissingToolsAlert = true;
+                alert.pending = true;
             }
         }
     }
 
-    private void showMissingToolsOptionPane(String message) {
-        if (missingToolsDialogPresenter != null) {
-            missingToolsDialogPresenter.accept(message);
+    private void presentStartupAlert(StartupAlertState alert) {
+        if (alert.presenter != null) {
+            alert.presenter.accept(alert.message);
         } else if (!GraphicsEnvironment.isHeadless()) {
             java.awt.Component parent = this;
             if (hostFrame != null) {
                 parent = hostFrame;
             }
-            JOptionPane.showMessageDialog(parent, message, MISSING_REQUIRED_TOOLS_TITLE, JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(parent, alert.message, alert.title, alert.messageType);
         }
     }
 
@@ -327,19 +316,19 @@ public final class MainFrame extends JPanel {
     }
 
     void setMissingToolsDialogPresenter(Consumer<String> presenter) {
-        this.missingToolsDialogPresenter = presenter;
+        this.toolsAlert.presenter = presenter;
     }
 
     String getLastMissingToolsMessage() {
-        return lastMissingToolsMessage;
+        return toolsAlert.lastMessage;
     }
 
     void setMissingApiKeyDialogPresenter(Consumer<String> presenter) {
-        this.missingApiKeyDialogPresenter = presenter;
+        this.apiKeyAlert.presenter = presenter;
     }
 
     String getLastMissingApiKeyMessage() {
-        return lastMissingApiKeyMessage;
+        return apiKeyAlert.lastMessage;
     }
 
     String getCurrentCard() {
@@ -348,18 +337,6 @@ public final class MainFrame extends JPanel {
 
     SidebarPanel getSidebar() {
         return sidebar;
-    }
-
-    HeaderPanel getHeader() {
-        return header;
-    }
-
-    QaWorkspacePanel getQaWorkspacePanel() {
-        return qaWorkspacePanel;
-    }
-
-    TaskWorkspacePanel getTaskWorkspacePanel() {
-        return taskWorkspacePanel;
     }
 
     private void updateTitle() {

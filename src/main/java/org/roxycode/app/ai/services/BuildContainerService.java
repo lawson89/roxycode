@@ -124,13 +124,6 @@ public class BuildContainerService {
         return systemToolService.checkDockerAvailable();
     }
 
-    public ContainerConfig parseContainerConfig(ContainerConfig config) {
-        if (config != null) {
-            return config;
-        }
-        return ContainerConfig.DEFAULT;
-    }
-
     public ContainerExecResult executeCommand(Path projectRoot, ContainerConfig containerConfig,
             Map<String, String> env, String command) throws Exception {
         ContainerSessionKey sessionKey = new ContainerSessionKey(projectRoot.toAbsolutePath().normalize(),

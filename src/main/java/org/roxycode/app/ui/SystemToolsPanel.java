@@ -385,10 +385,6 @@ public final class SystemToolsPanel extends JPanel {
                     "font: bold -1; arc: 999; border: 3,10,3,10," + hex + ",1,999; background: fade(" + hex + ", 14%)");
         }
 
-        SystemTool getTool() {
-            return tool;
-        }
-
         JLabel getNameLabel() {
             return nameLabel;
         }

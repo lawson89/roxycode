@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -496,28 +495,24 @@ class AiServiceTest {
         doReturn(responseSpec).when(requestSpec).call();
         aiService.setTopicTitleTimeout(Duration.ofMillis(50));
         CountDownLatch started = new CountDownLatch(1);
-        CountDownLatch interrupted = new CountDownLatch(1);
-        AtomicBoolean wasInterrupted = new AtomicBoolean(false);
+        CountDownLatch releaseSlowCall = new CountDownLatch(1);
 
         when(responseSpec.chatResponse()).thenAnswer(inv -> {
             started.countDown();
-            try {
-                Thread.sleep(10_000);
-            } catch (InterruptedException e) {
-                wasInterrupted.set(true);
-                interrupted.countDown();
-                Thread.currentThread().interrupt();
-            }
+            releaseSlowCall.await(2, TimeUnit.SECONDS);
             return buildChatResponse("Delayed Title", "STOP", null);
         });
         long startNanos = System.nanoTime();
-        String title = aiService.generateTopicTitle("User: Why did Gemini time out?");
+        String title;
+        try {
+            title = aiService.generateTopicTitle("User: Why did Gemini time out?");
+        } finally {
+            releaseSlowCall.countDown();
+        }
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
 
         assertEquals("Why did Gemini time out", title);
         assertTrue(started.await(1, TimeUnit.SECONDS));
-        assertTrue(interrupted.await(1, TimeUnit.SECONDS));
-        assertTrue(wasInterrupted.get());
         assertTrue(elapsedMs < 2000);
     }
 

@@ -333,10 +333,6 @@ public final class SwingHtmlUtils {
         testMode = enabled;
     }
 
-    public static boolean isTestMode() {
-        return testMode;
-    }
-
     public static void copyToClipboard(String text) {
         if (text == null || testMode) {
             return;

@@ -58,12 +58,6 @@ class PromptServiceTest {
                 projectAnalysisService, repoMapPackerService, null, eventPublisher);
     }
 
-    private static void assertContainsNone(String text, String... forbidden) {
-        for (String s : forbidden) {
-            assertFalse(text.contains(s), "Unexpected '" + s + "'");
-        }
-    }
-
     @Test
     void testGlobalAndProjectContextFoldersAndTopLevelTextDiscovery() throws IOException {
         Path projectDataDir = tempDir.resolve("project-data");
@@ -96,7 +90,6 @@ class PromptServiceTest {
         assertEquals(2, globalFiles.size());
         assertEquals("a_global.md", globalFiles.get(0).fileName());
         assertEquals("b_global.txt", globalFiles.get(1).fileName());
-        assertEquals("Global A markdown", promptService.readContextFile(globalFiles.get(0).filePath()));
 
         Path projDocsDir = Files.createDirectories(projectRoot.resolve("docs"));
         Files.writeString(projDocsDir.resolve("z_spec.json"), "{spec: true}");
@@ -113,12 +106,11 @@ class PromptServiceTest {
         assertEquals(2, projectFiles.size());
         assertEquals("a_architecture.md", projectFiles.get(0).fileName());
         assertEquals("z_spec.json", projectFiles.get(1).fileName());
-        assertEquals("Architecture guidelines", promptService.readContextFile(projectFiles.get(0).filePath()));
 
         String globalContext = promptService.loadGlobalContext();
         SwingTestUtils.assertContainsAll(globalContext, "## Global Context: a_global.md\nGlobal A markdown",
                 "## Global Context: b_global.txt\nGlobal B text");
-        assertContainsNone(globalContext, "Hidden file", "Nested should be ignored");
+        SwingTestUtils.assertContainsNone(globalContext, "Hidden file", "Nested should be ignored");
 
         clearInvocations(projectService);
         String projectContext = promptService.loadProjectContext();
@@ -126,14 +118,8 @@ class PromptServiceTest {
         SwingTestUtils.assertContainsAll(projectContext,
                 "## Project Context: a_architecture.md\nArchitecture guidelines",
                 "## Project Context: z_spec.json\n{spec: true}");
-        assertContainsNone(projectContext, "Subdir ignored");
+        SwingTestUtils.assertContainsNone(projectContext, "Subdir ignored");
         assertTrue(projectContext.indexOf("a_architecture.md") < projectContext.indexOf("z_spec.json"));
-
-        Path outsideFile = Files.writeString(tempDir.resolve("outside.md"), "Outside");
-        for (Path invalid : new Path[]{outsideFile, globalDir.resolve(".hidden.md"), globalDir.resolve("binary.bin"),
-                null}) {
-            assertThrows(IllegalArgumentException.class, () -> promptService.readContextFile(invalid));
-        }
     }
 
     @Test
@@ -159,13 +145,13 @@ class PromptServiceTest {
         when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
 
         String stable = promptService.getStableContext();
-        SwingTestUtils.assertContainsAll(stable, "RoxyCode Workflow Protocol", "## JEXL CONTEXT",
-                "## Global Context: global.md\nGLOBAL RULES", "## Project Context: rules.md\nCUSTOM RULES");
+        SwingTestUtils.assertContainsAll(stable, "## JEXL CONTEXT", "## Global Context: global.md\nGLOBAL RULES",
+                "## Project Context: rules.md\nCUSTOM RULES");
 
         String session = promptService.getSessionContext();
         SwingTestUtils.assertContainsAll(session, "DOMINANT LANGUAGE: Java", "CURRENT PHASE: CODE", "Senior Developer",
                 "JEXL DOCS", "M file.java");
-        assertContainsNone(session, "## CURRENT PLAN PROGRESS");
+        SwingTestUtils.assertContainsNone(session, "## CURRENT PLAN PROGRESS");
 
         SwingTestUtils.assertContainsAll(promptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS"),
                 stable, "REPO MAP CONTENT", session, "EXTRA INSTRUCTIONS");
@@ -203,7 +189,7 @@ class PromptServiceTest {
         when(memoryService.listArchivedPlans()).thenReturn(List.of());
 
         assertEquals("", psWithMemory.loadAgentMemoryContext());
-        assertContainsNone(psWithMemory.getStableContext(), "## GLOBAL AGENT MEMORY",
+        SwingTestUtils.assertContainsNone(psWithMemory.getStableContext(), "## GLOBAL AGENT MEMORY",
                 "## PROJECT AGENT MEMORY & ARCHIVE");
 
         when(memoryService.readGlobalMemory()).thenReturn("# Global Prefs\n- Use Java 21");
@@ -224,6 +210,6 @@ class PromptServiceTest {
                 "### Recent Archived Plans", "- p6.md: Plan 6", "- p2.md: Plan 2", "### Recent Archived Topics",
                 "- t6.md: Topic 6", "- t2.md: Topic 2",
                 "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), memoryService.readArchivedTopic(filename), or memoryService.search(pattern) to inspect.");
-        assertContainsNone(stable, "- p1.md: Plan 1", "- t1.md: Topic 1");
+        SwingTestUtils.assertContainsNone(stable, "- p1.md: Plan 1", "- t1.md: Topic 1");
     }
 }

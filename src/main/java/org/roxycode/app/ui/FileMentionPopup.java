@@ -92,7 +92,6 @@ public final class FileMentionPopup {
     private boolean popupActive = false;
     private boolean updatingInputText = false;
     private MentionToken activeToken;
-    private Point lastPopupLocation = new Point(0, 0);
 
     public FileMentionPopup(JTextArea inputArea, JScrollPane inputScrollPane) {
         this.inputArea = inputArea;
@@ -213,10 +212,6 @@ public final class FileMentionPopup {
         refreshIndexAsync();
     }
 
-    GrepService getGrepService() {
-        return grepService;
-    }
-
     void setBackgroundExecutor(Executor backgroundExecutor) {
         if (backgroundExecutor != null) {
             this.backgroundExecutor = backgroundExecutor;
@@ -331,7 +326,6 @@ public final class FileMentionPopup {
 
         Dimension popupSize = popupMenu.getPreferredSize();
         Point location = computePopupLocation(atTokenStartOffset, popupSize.width, popupSize.height);
-        this.lastPopupLocation = location;
 
         if (inputArea.isShowing()) {
             popupMenu.show(inputArea, location.x, location.y);
@@ -464,14 +458,6 @@ public final class FileMentionPopup {
 
     JPopupMenu getPopupMenu() {
         return popupMenu;
-    }
-
-    Point getLastPopupLocation() {
-        return lastPopupLocation;
-    }
-
-    List<FileCandidate> getCachedCandidates() {
-        return cachedCandidates;
     }
 
     static Codicons resolveFileIcon(String fileNameLower) {

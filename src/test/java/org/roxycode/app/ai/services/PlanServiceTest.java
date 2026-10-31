@@ -102,7 +102,7 @@ class PlanServiceTest {
         assertEquals(5, steps.size());
         assertEquals("Step 1", steps.get(0).description());
         assertEquals("Step 2", steps.get(1).description());
-        assertEquals(PlanService.STEP_COMPILE, steps.get(2).description());
+        assertEquals(ImplementationPlan.STEP_COMPILE, steps.get(2).description());
 
         service.requestDevelopment("Ready");
         service.approveTransition();

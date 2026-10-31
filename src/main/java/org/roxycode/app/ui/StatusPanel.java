@@ -58,14 +58,6 @@ public final class StatusPanel extends JPanel {
         super.removeNotify();
     }
 
-    Timer getStatsTimer() {
-        return statsTimer;
-    }
-
-    JProgressBar getMemProgressBar() {
-        return memProgressBar;
-    }
-
     @Override
     public void updateUI() {
         super.updateUI();

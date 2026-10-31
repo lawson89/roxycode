@@ -34,14 +34,16 @@ public class FileReadService {
     }
 
     public static boolean isBinaryFile(Path path) throws IOException {
-        if (path == null || !Files.isRegularFile(path))
+        if (path == null || !Files.isRegularFile(path)) {
             return false;
+        }
         try (InputStream in = Files.newInputStream(path)) {
             byte[] buf = new byte[BINARY_SNIFF_BYTES];
             int read = in.read(buf);
             for (int i = 0; i < read; i++) {
-                if (buf[i] == 0)
+                if (buf[i] == 0) {
                     return true;
+                }
             }
             return false;
         }
@@ -64,7 +66,10 @@ public class FileReadService {
 
     @AgentDoc(value = "Reads multiple files in a single batch call, returning a map of relativePath to file content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFiles(['pom.xml', 'src/main/java/Main.java'])")
     public Map<String, String> readFiles(@AgentDoc(DOC_FILE_PATHS) String... relativePaths) {
-        return readBatch(relativePaths == null ? List.of() : Arrays.asList(relativePaths), false);
+        if (relativePaths == null) {
+            return readBatch(List.of(), false);
+        }
+        return readBatch(Arrays.asList(relativePaths), false);
     }
 
     public Map<String, String> readFiles(List<String> relativePaths) {
@@ -73,7 +78,10 @@ public class FileReadService {
 
     @AgentDoc(value = "Reads multiple files with 1-based line numbers ('<line>: <content>') in a single batch call, returning a map of relativePath to numbered content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFilesNumbered(['src/main/java/Main.java', 'src/main/java/App.java'])")
     public Map<String, String> readFilesNumbered(@AgentDoc(DOC_FILE_PATHS) String... relativePaths) {
-        return readBatch(relativePaths == null ? List.of() : Arrays.asList(relativePaths), true);
+        if (relativePaths == null) {
+            return readBatch(List.of(), true);
+        }
+        return readBatch(Arrays.asList(relativePaths), true);
     }
 
     public Map<String, String> readFilesNumbered(List<String> relativePaths) {
@@ -132,13 +140,19 @@ public class FileReadService {
                 return ERROR_PREFIX + "Binary file cannot be read as text: " + relativePath;
             }
             String content = Files.readString(path);
-            return numbered
-                    ? formatNumberedLines(content.isEmpty() ? List.of() : content.lines().toList(), 1,
-                            Integer.MAX_VALUE)
-                    : content;
+            if (!numbered) {
+                return content;
+            }
+            return formatNumberedLines(content.lines().toList(), 1, Integer.MAX_VALUE);
         } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return msg.startsWith(ERROR_PREFIX) ? msg : ERROR_PREFIX + msg;
+            String msg = e.getClass().getSimpleName();
+            if (e.getMessage() != null) {
+                msg = e.getMessage();
+            }
+            if (msg.startsWith(ERROR_PREFIX)) {
+                return msg;
+            }
+            return ERROR_PREFIX + msg;
         }
     }
 
@@ -166,7 +180,7 @@ public class FileReadService {
             @AgentDoc("The 1-based start line number (inclusive)") int startLine,
             @AgentDoc("The 1-based end line number (inclusive)") int endLine) throws IOException {
         String content = readFile(relativePath);
-        return formatNumberedLines(content.isEmpty() ? List.of() : content.lines().toList(), startLine, endLine);
+        return formatNumberedLines(content.lines().toList(), startLine, endLine);
     }
 
     @AgentDoc(value = "Reads the entire file with every line prefixed by its 1-based line number ('<line>: <content>').", examples = "fileReadService.readFileNumbered('src/main/java/Main.java')")
@@ -195,7 +209,11 @@ public class FileReadService {
             List<String> entries = new ArrayList<>();
             for (Path entry : dirStream) {
                 String name = entry.getFileName().toString();
-                entries.add(Files.isDirectory(entry) ? name + "/" : name);
+                if (Files.isDirectory(entry)) {
+                    entries.add(name + "/");
+                } else {
+                    entries.add(name);
+                }
             }
             Collections.sort(entries);
             return entries;

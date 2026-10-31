@@ -226,7 +226,6 @@ class ChatControllerTest extends ChatTestFixture {
 
         sendOnEdt(chatPanel, "Build feature");
         flushEdt();
-        verify(publisher).publishEvent(new UserMessageEvent("task:default", "user", "Build feature"));
         assertTrue(chatPanel.outputArea.getText().contains("FINAL_PLAN_SUMMARY"));
         assertTrue(chatPanel.inlineActionPanel.isVisible());
         assertEquals("Approve Plan and proceed to Code", chatPanel.transitionLabel.getText());

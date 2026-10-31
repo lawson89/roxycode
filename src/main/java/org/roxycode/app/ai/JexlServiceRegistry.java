@@ -12,8 +12,9 @@ public class JexlServiceRegistry {
     private final Cache<String, String> docCache = Caffeine.newBuilder().maximumSize(16).build();
 
     public synchronized void register(Object service) {
-        if (service == null)
+        if (service == null) {
             return;
+        }
         AgentService ann = AnnotationUtils.findAnnotation(AopUtils.getTargetClass(service), AgentService.class);
         if (ann != null) {
             services.put(ann.value(), service);
@@ -37,7 +38,10 @@ public class JexlServiceRegistry {
     }
 
     public String getDocumentation(WorkflowPhase currentPhase) {
-        String cacheKey = currentPhase != null ? currentPhase.name() : "NULL_PHASE";
+        String cacheKey = "NULL_PHASE";
+        if (currentPhase != null) {
+            cacheKey = currentPhase.name();
+        }
         return docCache.get(cacheKey,
                 key -> docGenerator.generateDoc(new ArrayList<>(getServices(currentPhase).values()), currentPhase));
     }

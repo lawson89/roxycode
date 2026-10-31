@@ -43,24 +43,13 @@ class RepoMapPackerServiceTest {
     }
 
     private String ctagsLine(String name, String path, int line) {
-        try {
-            return objectMapper.writeValueAsString(Map.of("name", name, "path", path, "line", line)) + "\n";
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
+        return ctagsLine(name, path, line, "class");
     }
 
-    private String ctagsLineWithPattern(String name, String path, int line, String kind, String pattern) {
+    private String ctagsLine(String name, String path, int line, String kind) {
         try {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("name", name);
-            map.put("path", path);
-            map.put("line", line);
-            map.put("kind", kind);
-            if (pattern != null) {
-                map.put("pattern", pattern);
-            }
-            return objectMapper.writeValueAsString(map) + "\n";
+            return objectMapper.writeValueAsString(Map.of("name", name, "path", path, "line", line, "kind", kind))
+                    + "\n";
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -89,12 +78,12 @@ class RepoMapPackerServiceTest {
         service.setCtagsRunner(cmd -> {
             ctagsCommands.add(cmd);
             return new ProcessResult(0,
-                    ctagsLineWithPattern("demo", smallJava.toString(), 1, "package", null)
-                            + ctagsLineWithPattern("List", smallJava.toString(), 2, "import", null)
-                            + ctagsLineWithPattern("ns", smallJava.toString(), 1, "namespace", null)
-                            + ctagsLineWithPattern("SmallService", smallJava.toString(), 3, "class", null)
-                            + ctagsLineWithPattern("execute", smallJava.toString(), 5, "method", null)
-                            + ctagsLineWithPattern("submitPlan", smallJava.toString(), 6, "method", null),
+                    ctagsLine("demo", smallJava.toString(), 1, "package")
+                            + ctagsLine("List", smallJava.toString(), 2, "import")
+                            + ctagsLine("ns", smallJava.toString(), 1, "namespace")
+                            + ctagsLine("SmallService", smallJava.toString(), 3, "class")
+                            + ctagsLine("execute", smallJava.toString(), 5, "method")
+                            + ctagsLine("submitPlan", smallJava.toString(), 6, "method"),
                     "", false);
         });
 

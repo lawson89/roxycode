@@ -38,7 +38,7 @@ class SystemToolServiceTest {
     }
 
     @Test
-    void testAreAllRequiredToolsDetectedAndCheckRequiredToolsAvailable() {
+    void testAreAllRequiredToolsDetected() {
         assertFalse(SystemToolService.areAllRequiredToolsDetected(null));
         assertFalse(SystemToolService.areAllRequiredToolsDetected(List.of()));
 
@@ -68,14 +68,6 @@ class SystemToolServiceTest {
                 new SystemTool("CustomRequired", "Not found", SystemToolService.STATUS_MISSING, "Desc", "MIT",
                         "https://example.com", true));
         assertFalse(SystemToolService.areAllRequiredToolsDetected(customRequiredMissing));
-
-        SystemToolService service = new SystemToolService(null, null, null);
-        service.setToolProber(() -> allRequiredDetectedDockerMissing);
-        assertTrue(service.checkRequiredToolsAvailable());
-
-        service.setToolProber(() -> ctagsMissing);
-        service.refreshTools().join();
-        assertFalse(service.checkRequiredToolsAvailable());
     }
 
     @Test
@@ -143,8 +135,8 @@ class SystemToolServiceTest {
         });
         service1.setToolProber(() -> {
             int call = probeCount.incrementAndGet();
-            return List.of(new SystemTool("Git", "2.45." + call, "Detected", "Git VCS"), new SystemTool("Docker",
-                    call == 1 ? "Not found" : "Docker 28.0.0", call == 1 ? "Missing" : "Detected", "Testcontainers"));
+            return List.of(SystemTool.ofKnownTool("Git", "2.45." + call, "Detected"), SystemTool.ofKnownTool("Docker",
+                    call == 1 ? "Not found" : "Docker 28.0.0", call == 1 ? "Missing" : "Detected"));
         });
 
         assertTrue(service1.getCachedTools().isEmpty());
@@ -167,7 +159,6 @@ class SystemToolServiceTest {
             return List.of();
         });
 
-        final boolean[] edtHasCached = new boolean[1];
         final CompletableFuture<List<SystemTool>>[] edtDetectFuture = new CompletableFuture[1];
         SwingUtilities.invokeAndWait(() -> {
             edtDetectFuture[0] = service2.detectTools();
@@ -205,7 +196,7 @@ class SystemToolServiceTest {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            return List.of(new SystemTool("Docker", "28.0", "Detected", "Desc"));
+            return List.of(SystemTool.ofKnownTool("Docker", "28.0", "Detected"));
         });
 
         CompletableFuture<List<SystemTool>> f1 = service.refreshTools();

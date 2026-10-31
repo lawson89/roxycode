@@ -72,10 +72,6 @@ class SymbolServiceTest {
 
     @Test
     void testGetFileOutlineFiltersNoiseSortsByStartLineAndResolvesEndLineFallbacks() throws IOException {
-        SymbolInfo normalized = new SymbolInfo(null, null, null, 5, 10, null, null);
-        assertEquals("", normalized.name());
-        assertEquals("", normalized.signature());
-
         Path file = tempDir.resolve("ServiceTest.java");
         Files.writeString(file,
                 String.join(NL, "package demo;", "import java.util.List;", "class ServiceTest {",

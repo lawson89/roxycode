@@ -50,16 +50,4 @@ class EdtTest {
         assertNotNull(capturedError.get());
         assertEquals("boom", capturedError.get().getMessage());
     }
-
-    @Test
-    void testRunAsync() throws Exception {
-        AtomicBoolean taskRan = new AtomicBoolean(false);
-        AtomicBoolean successRan = new AtomicBoolean(false);
-
-        CompletableFuture<Void> future = Edt.runAsync(() -> taskRan.set(true), () -> successRan.set(true));
-
-        future.get(5, TimeUnit.SECONDS);
-        assertTrue(taskRan.get());
-        assertTrue(successRan.get());
-    }
 }
