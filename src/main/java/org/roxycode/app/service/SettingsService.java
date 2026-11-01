@@ -2,7 +2,6 @@ package org.roxycode.app.service;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,7 +19,6 @@ import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -40,9 +38,17 @@ public class SettingsService {
     private volatile CompletableFuture<Void> lastSaveFuture = CompletableFuture.completedFuture(null);
 
     public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
-        this.mapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
-        this.eventPublisher = eventPublisher != null ? eventPublisher : event -> {
-        };
+        if (mapper != null) {
+            this.mapper = mapper;
+        } else {
+            this.mapper = AiConfig.SHARED_TOML_MAPPER;
+        }
+        if (eventPublisher != null) {
+            this.eventPublisher = eventPublisher;
+        } else {
+            this.eventPublisher = event -> {
+            };
+        }
     }
 
     public static Path getDefaultRoxyHomeDir() {
@@ -54,9 +60,10 @@ public class SettingsService {
     }
 
     public synchronized Path getRoxyHomeDir() {
-        return (settingsPathOverride != null && settingsPathOverride.getParent() != null)
-                ? settingsPathOverride.getParent()
-                : getDefaultRoxyHomeDir();
+        if (settingsPathOverride != null && settingsPathOverride.getParent() != null) {
+            return settingsPathOverride.getParent();
+        }
+        return getDefaultRoxyHomeDir();
     }
 
     public static AppSettings loadFromDisk() {
@@ -64,7 +71,10 @@ public class SettingsService {
     }
 
     public static AppSettings loadFromDisk(Path path, TomlMapper mapper) {
-        TomlMapper effectiveMapper = mapper != null ? mapper : AiConfig.SHARED_TOML_MAPPER;
+        TomlMapper effectiveMapper = AiConfig.SHARED_TOML_MAPPER;
+        if (mapper != null) {
+            effectiveMapper = mapper;
+        }
         if (path != null && Files.exists(path)) {
             try {
                 return effectiveMapper.readValue(path.toFile(), AppSettings.class);
@@ -84,19 +94,35 @@ public class SettingsService {
         }
     }
 
-    @SuppressWarnings("PMD.UseProperClassLoader")
     private List<GeminiModelConfig> loadAvailableModels() {
         try {
-            String content = new ClassPathResource("models.toml", SettingsService.class.getClassLoader())
-                    .getContentAsString(StandardCharsets.UTF_8);
+            String content = PathUtils.readClasspathResourceUtf8("models.toml", SettingsService.class);
             GeminiModels geminiModels = mapper.readValue(content, GeminiModels.class);
-            return geminiModels != null && geminiModels.models() != null
-                    ? List.copyOf(geminiModels.models())
-                    : List.of();
+            if (geminiModels != null && geminiModels.models() != null) {
+                return List.copyOf(geminiModels.models());
+            }
+            return List.of();
         } catch (IOException e) {
             log.error("Failed to load Gemini models: {}", e.getMessage(), e);
             return List.of();
         }
+    }
+
+    public String getGlobalGeminiModel() {
+        return resolveGlobalGeminiModel(this);
+    }
+
+    public static String resolveGlobalGeminiModel(SettingsService settingsService) {
+        if (settingsService != null) {
+            AppSettings current = settingsService.getSettings();
+            if (current != null) {
+                String model = current.getGeminiModel();
+                if (model != null && !model.isBlank()) {
+                    return model.trim();
+                }
+            }
+        }
+        return AppSettings.DEFAULT_GEMINI_MODEL;
     }
 
     public synchronized boolean hasSettingsFile() {
@@ -160,6 +186,9 @@ public class SettingsService {
     }
 
     private Path getSettingsPath() {
-        return settingsPathOverride != null ? settingsPathOverride : getDefaultSettingsPath();
+        if (settingsPathOverride != null) {
+            return settingsPathOverride;
+        }
+        return getDefaultSettingsPath();
     }
 }

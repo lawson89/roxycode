@@ -1,10 +1,14 @@
-[build]
-compile = "./gradlew classes"
+[commands]
+install = "./gradlew dependencies"
 clean = "./gradlew clean"
-
-[test]
-run_all = "./gradlew test"
-run_single = "./gradlew test --tests {testName}"
+compile = "./gradlew classes testClasses"
+build = "./gradlew assemble"
+test_all = "./gradlew test"
+test_single = "./gradlew test --tests {testName}"
+lint = "./gradlew check -x test"
+lint_single = "./gradlew check -x test"
+format = "./gradlew spotlessApply"
+format_single = "./gradlew spotlessApply -PspotlessIdeHook={file}"
 
 [env]
 ROXY_CODE = "true"

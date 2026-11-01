@@ -1,6 +1,8 @@
 package org.roxycode.app.util;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
@@ -9,6 +11,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.io.ClassPathResource;
 
 public final class PathUtils {
 
@@ -54,12 +57,18 @@ public final class PathUtils {
     }
 
     public static String sanitizeSlug(String raw, int maxLength, String fallback) {
-        String normalized = raw != null ? raw.toLowerCase(Locale.ROOT) : "";
+        String normalized = "";
+        if (raw != null) {
+            normalized = raw.toLowerCase(Locale.ROOT);
+        }
         String sanitized = normalized.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
         if (maxLength > 0 && sanitized.length() > maxLength) {
             sanitized = sanitized.substring(0, maxLength).replaceAll("-+$", "");
         }
-        return sanitized.isEmpty() ? fallback : sanitized;
+        if (sanitized.isEmpty()) {
+            return fallback;
+        }
+        return sanitized;
     }
 
     public static String formatArchiveTimestamp(String isoTimestamp) {
@@ -73,6 +82,17 @@ public final class PathUtils {
         return OffsetDateTime.now().format(ARCHIVE_TIMESTAMP_FORMATTER);
     }
 
+    public static String formatTimestampDisplay(String rawTimestamp, int maxLength, String emptyFallback) {
+        if (StringUtils.isBlank(rawTimestamp)) {
+            return emptyFallback;
+        }
+        String trimmed = rawTimestamp.trim();
+        if (maxLength > 0 && trimmed.length() > maxLength) {
+            return trimmed.substring(0, maxLength).replace('T', ' ');
+        }
+        return trimmed.replace('T', ' ');
+    }
+
     public static ArchiveFileTarget resolveUniqueArchiveFile(Path archiveDir, String baseId) {
         String id = baseId;
         Path targetFile = archiveDir.resolve(id + MD_EXTENSION);
@@ -83,5 +103,20 @@ public final class PathUtils {
             targetFile = archiveDir.resolve(id + MD_EXTENSION);
         }
         return new ArchiveFileTarget(id, targetFile);
+    }
+
+    public static ArchiveFileTarget prepareArchiveTarget(Path archiveDir, String isoTimestamp, String title,
+            int maxSlugLength, String fallbackSlug) throws IOException {
+        Files.createDirectories(archiveDir);
+        String tsPrefix = formatArchiveTimestamp(isoTimestamp);
+        String slug = sanitizeSlug(title, maxSlugLength, fallbackSlug);
+        return resolveUniqueArchiveFile(archiveDir, tsPrefix + "-" + slug);
+    }
+
+    public static String readClasspathResourceUtf8(String path, Class<?> anchorClass) throws IOException {
+        ClassPathResource resource = new ClassPathResource(path, anchorClass.getClassLoader());
+        try (InputStream is = resource.getInputStream()) {
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 }

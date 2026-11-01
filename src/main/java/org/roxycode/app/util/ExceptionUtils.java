@@ -3,6 +3,7 @@ package org.roxycode.app.util;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.concurrent.CancellationException;
 import org.apache.commons.jexl3.JexlException;
+import org.apache.commons.lang3.StringUtils;
 
 public final class ExceptionUtils {
 
@@ -14,10 +15,35 @@ public final class ExceptionUtils {
     }
 
     public static Throwable getRootCause(Throwable t) {
-        if (t == null)
+        if (t == null) {
             return null;
+        }
         Throwable root = org.apache.commons.lang3.exception.ExceptionUtils.getRootCause(t);
-        return root != null ? root : t;
+        if (root != null) {
+            return root;
+        }
+        return t;
+    }
+
+    public static String getMessageOrSimpleName(Throwable t) {
+        if (t == null) {
+            return "Unknown error";
+        }
+        if (t.getMessage() != null) {
+            return t.getMessage();
+        }
+        return t.getClass().getSimpleName();
+    }
+
+    public static String getRootCauseMessage(Throwable t) {
+        if (t == null) {
+            return "Unknown error";
+        }
+        Throwable root = getRootCause(t);
+        if (root != null && StringUtils.isNotBlank(root.getMessage())) {
+            return root.getMessage();
+        }
+        return getMessageOrSimpleName(t);
     }
 
     public static boolean isCancellation(Throwable t) {
@@ -29,15 +55,18 @@ public final class ExceptionUtils {
 
     public static CancellationException asCancellationException(Throwable t, String defaultMessage) {
         Thread.currentThread().interrupt();
-        if (t instanceof CancellationException ce)
+        if (t instanceof CancellationException ce) {
             return ce;
+        }
         CancellationException cancelCause = findCause(t, CancellationException.class);
-        String msg = (cancelCause != null && cancelCause.getMessage() != null)
-                ? cancelCause.getMessage()
-                : defaultMessage;
+        String msg = defaultMessage;
+        if (cancelCause != null && cancelCause.getMessage() != null) {
+            msg = cancelCause.getMessage();
+        }
         CancellationException cancelEx = new CancellationException(msg);
-        if (t != null)
+        if (t != null) {
             cancelEx.initCause(t);
+        }
         return cancelEx;
     }
 

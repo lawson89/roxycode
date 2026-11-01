@@ -27,4 +27,19 @@ public enum WorkflowPhase {
     public String getDescription() {
         return description;
     }
+
+    public static boolean isAllowed(String[] allowedPhases, WorkflowPhase currentPhase) {
+        if (allowedPhases == null || allowedPhases.length == 0) {
+            return false;
+        }
+        if (currentPhase == null) {
+            return true;
+        }
+        for (String token : allowedPhases) {
+            if ("*".equals(token) || currentPhase.name().equals(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

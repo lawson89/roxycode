@@ -1,10 +1,14 @@
-[build]
-compile = "./mvnw compile"
+[commands]
+install = "./mvnw dependency:resolve"
 clean = "./mvnw clean"
-
-[test]
-run_all = "./mvnw test"
-run_single = "./mvnw test -Dtest={testName}"
+compile = "./mvnw test-compile"
+build = "./mvnw package -DskipTests"
+test_all = "./mvnw test"
+test_single = "./mvnw test -Dtest={testName}"
+lint = "./mvnw pmd:check spotless:check"
+lint_single = "./mvnw pmd:check spotless:check -DspotlessFiles=.*\\Q{file}\\E$"
+format = "./mvnw spotless:apply"
+format_single = "./mvnw spotless:apply -DspotlessFiles=.*\\Q{file}\\E$"
 
 [env]
 ROXY_CODE = "true"

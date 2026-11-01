@@ -13,6 +13,7 @@ import javax.swing.text.Element;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
+import org.apache.commons.lang3.StringUtils;
 
 public final class MarkdownPane extends JTextPane {
     private static final long serialVersionUID = 1L;
@@ -65,8 +66,9 @@ public final class MarkdownPane extends JTextPane {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (messages != null)
+        if (messages != null) {
             updateTheme();
+        }
     }
 
     public void updateTheme() {
@@ -75,7 +77,7 @@ public final class MarkdownPane extends JTextPane {
     }
 
     public void appendMessage(String role, String content) {
-        String safeContent = content != null ? content : "";
+        String safeContent = StringUtils.defaultString(content);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         int index = messages.size();
         Message msg = new Message(role, safeContent, timestamp, false, true, null,
@@ -85,7 +87,7 @@ public final class MarkdownPane extends JTextPane {
     }
 
     public void appendToolLog(String output, boolean success, String error) {
-        String safeOutput = output != null ? output : "";
+        String safeOutput = StringUtils.defaultString(output);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         int index = messages.size();
         Message msg = new Message(null, safeOutput, timestamp, true, success, error,
@@ -95,11 +97,13 @@ public final class MarkdownPane extends JTextPane {
     }
 
     public void copyMessageMarkdown(int index) {
-        if (index < 0 || index >= messages.size())
+        if (index < 0 || index >= messages.size()) {
             return;
+        }
         Message msg = messages.get(index);
-        if (msg.isTool())
+        if (msg.isTool()) {
             return;
+        }
         String rawMarkdown = msg.content();
         this.lastCopiedMarkdown = rawMarkdown;
         SwingHtmlUtils.copyToClipboard(rawMarkdown);
@@ -113,8 +117,9 @@ public final class MarkdownPane extends JTextPane {
         if (previousCopiedIndex >= 0 && previousCopiedIndex != index) {
             updateCopyCellInPlace(previousCopiedIndex, false);
         }
-        if (!updateCopyCellInPlace(index, true))
+        if (!updateCopyCellInPlace(index, true)) {
             renderAll(false);
+        }
 
         copyFeedbackTimer = new Timer(COPY_FEEDBACK_DELAY_MS, e -> {
             int indexToRevert = this.copiedMessageIndex;
@@ -140,11 +145,13 @@ public final class MarkdownPane extends JTextPane {
     }
 
     private boolean updateCopyCellInPlace(int messageIndex, boolean copied) {
-        if (!(getDocument() instanceof HTMLDocument doc))
+        if (!(getDocument() instanceof HTMLDocument doc)) {
             return false;
+        }
         Element cellElem = doc.getElement(ChatHtmlTemplates.COPY_CELL_ID_PREFIX + messageIndex);
-        if (cellElem == null)
+        if (cellElem == null) {
             return false;
+        }
         int savedCaret = getCaretPosition();
         try {
             doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderCopyActionHtml(messageIndex, copied));
@@ -180,16 +187,18 @@ public final class MarkdownPane extends JTextPane {
     }
 
     private static Element findBodyElement(Element element) {
-        if (element == null)
+        if (element == null) {
             return null;
+        }
         if (element.getAttributes().getAttribute(StyleConstants.NameAttribute) == HTML.Tag.BODY
                 || "body".equalsIgnoreCase(element.getName())) {
             return element;
         }
         for (int i = 0; i < element.getElementCount(); i++) {
             Element found = findBodyElement(element.getElement(i));
-            if (found != null)
+            if (found != null) {
                 return found;
+            }
         }
         return null;
     }
@@ -212,9 +221,13 @@ public final class MarkdownPane extends JTextPane {
 
     private String formatMessageEntryHtml(Message msg, int index) {
         try {
-            if (msg.isTool())
+            if (msg.isTool()) {
                 return msg.renderedHtml();
-            String safeRole = msg.role() != null ? msg.role().toLowerCase(Locale.ROOT) : "";
+            }
+            String safeRole = "";
+            if (msg.role() != null) {
+                safeRole = msg.role().toLowerCase(Locale.ROOT);
+            }
             return ChatHtmlTemplates.renderChatEntry(safeRole, msg.renderedHtml(), msg.timestamp(), index,
                     index == copiedMessageIndex);
         } catch (Exception e) {

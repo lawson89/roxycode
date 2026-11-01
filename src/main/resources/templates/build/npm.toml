@@ -1,10 +1,14 @@
-[build]
-compile = "npm run build"
+[commands]
+install = "npm install"
 clean = "rm -rf dist/"
-
-[test]
-run_all = "npm test"
-run_single = "npm test -- -t {testName}"
+compile = "npm run build"
+build = "npm run build"
+test_all = "npm test"
+test_single = "npm test -- -t {testName}"
+lint = "npm run lint"
+lint_single = "npx eslint {file}"
+format = "npm run format"
+format_single = "npx prettier --write {file}"
 
 [env]
 ROXY_CODE = "true"

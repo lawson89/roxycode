@@ -1,10 +1,14 @@
-[build]
-compile = "python3 -m py_compile **/*.py"
+[commands]
+install = "pip install -r requirements.txt"
 clean = "find . -type d -name __pycache__ -exec rm -rf {} +"
-
-[test]
-run_all = "pytest"
-run_single = "pytest -k {testName}"
+compile = ""
+build = ""
+test_all = "pytest"
+test_single = "pytest -k {testName}"
+lint = "ruff check ."
+lint_single = "ruff check {file}"
+format = "ruff format ."
+format_single = "ruff format {file}"
 
 [env]
 ROXY_CODE = "true"

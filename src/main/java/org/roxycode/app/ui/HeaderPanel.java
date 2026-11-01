@@ -90,10 +90,7 @@ public final class HeaderPanel extends JPanel {
         if (projectService != null) {
             return projectService.getEffectiveGeminiModel();
         }
-        if (settingsService != null && settingsService.getSettings() != null) {
-            return settingsService.getSettings().getGeminiModel();
-        }
-        return AppSettings.DEFAULT_GEMINI_MODEL;
+        return SettingsService.resolveGlobalGeminiModel(settingsService);
     }
 
     private void updateProjectTooltip(Path root) {

@@ -30,13 +30,18 @@ public class ProjectService {
     private static final String ROXYCODE_TMP_PREFIX = ".roxycode/tmp/";
     private static final String DATA_TMP_DIR = "tmp";
 
-    public record ProjectConfig(String geminiModel) {
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record ProjectConfig(String geminiModel, boolean buildConfirmed) {
         public ProjectConfig {
             if (geminiModel == null) {
                 geminiModel = "";
             } else {
                 geminiModel = geminiModel.trim();
             }
+        }
+
+        public ProjectConfig(String geminiModel) {
+            this(geminiModel, false);
         }
     }
 
@@ -90,24 +95,42 @@ public class ProjectService {
         return projectRoot.toString();
     }
 
-    public String getProjectGeminiModel() {
+    private ProjectConfig readProjectConfig() {
         if (!hasActiveProject()) {
-            return "";
+            return new ProjectConfig("", false);
         }
         Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
         if (configFile == null || !Files.exists(configFile)) {
-            return "";
+            return new ProjectConfig("", false);
         }
         try {
             ProjectConfig config = AiConfig.SHARED_TOML_MAPPER.readValue(configFile.toFile(), ProjectConfig.class);
             if (config != null) {
-                return config.geminiModel();
+                return config;
             }
-            return "";
+            return new ProjectConfig("", false);
         } catch (IOException e) {
             log.warn("Failed to read project config {}: {}", configFile, e.getMessage());
-            return "";
+            return new ProjectConfig("", false);
         }
+    }
+
+    private void writeProjectConfig(ProjectConfig config) {
+        if (!hasActiveProject()) {
+            throw new IllegalStateException("Project root is not set.");
+        }
+        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
+        try {
+            PathUtils.createParentDirectories(configFile);
+            AiConfig.SHARED_TOML_MAPPER.writeValue(configFile.toFile(), config);
+        } catch (IOException e) {
+            log.error("Failed to save project config {}: {}", configFile, e.getMessage());
+            throw new UncheckedIOException("Failed to save project config", e);
+        }
+    }
+
+    public String getProjectGeminiModel() {
+        return readProjectConfig().geminiModel();
     }
 
     public void setProjectGeminiModel(String geminiModel) {
@@ -118,19 +141,25 @@ public class ProjectService {
         if (geminiModel != null) {
             normalized = geminiModel.trim();
         }
-        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
-        try {
-            PathUtils.createParentDirectories(configFile);
-            AiConfig.SHARED_TOML_MAPPER.writeValue(configFile.toFile(), new ProjectConfig(normalized));
-            AppSettings currentSettings = null;
-            if (settingsService != null && settingsService.getSettings() != null) {
-                currentSettings = settingsService.getSettings().copy();
-            }
-            eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
-        } catch (IOException e) {
-            log.error("Failed to save project config {}: {}", configFile, e.getMessage());
-            throw new UncheckedIOException("Failed to save project config", e);
+        ProjectConfig existing = readProjectConfig();
+        writeProjectConfig(new ProjectConfig(normalized, existing.buildConfirmed()));
+        AppSettings currentSettings = null;
+        if (settingsService != null && settingsService.getSettings() != null) {
+            currentSettings = settingsService.getSettings().copy();
         }
+        eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
+    }
+
+    public boolean isBuildConfirmed() {
+        return readProjectConfig().buildConfirmed();
+    }
+
+    public void setBuildConfirmed(boolean confirmed) {
+        if (!hasActiveProject()) {
+            throw new IllegalStateException("Project root is not set.");
+        }
+        ProjectConfig existing = readProjectConfig();
+        writeProjectConfig(new ProjectConfig(existing.geminiModel(), confirmed));
     }
 
     public String getEffectiveGeminiModel() {
@@ -138,13 +167,22 @@ public class ProjectService {
         if (!projectModel.isEmpty()) {
             return projectModel;
         }
-        if (settingsService != null && settingsService.getSettings() != null) {
-            String globalModel = settingsService.getSettings().getGeminiModel();
-            if (globalModel != null && !globalModel.isBlank()) {
-                return globalModel.trim();
-            }
+        return SettingsService.resolveGlobalGeminiModel(settingsService);
+    }
+
+    public String getNormalizedProjectPath() {
+        return resolveNormalizedProjectPath(this);
+    }
+
+    public static String resolveNormalizedProjectPath(ProjectService projectService) {
+        if (projectService == null) {
+            return "";
         }
-        return AppSettings.DEFAULT_GEMINI_MODEL;
+        Path projectRoot = projectService.getCurrentProjectRoot();
+        if (projectRoot == null) {
+            return "";
+        }
+        return projectRoot.toAbsolutePath().normalize().toString();
     }
 
     public Path resolvePath(String relativePath) {

@@ -33,17 +33,20 @@ public class ProjectAnalysisService {
 
     private String computeDominantLanguage() {
         List<String> files = grepService.listFiles(null);
-        if (files == null || files.isEmpty())
+        if (files == null || files.isEmpty()) {
             return "Unknown";
+        }
 
         Map<String, Integer> extensionCounts = new HashMap<>();
         for (String filePath : files) {
             String ext = extractExtension(filePath);
-            if (ext != null)
+            if (ext != null) {
                 extensionCounts.merge(ext, 1, Integer::sum);
+            }
         }
-        if (extensionCounts.isEmpty())
+        if (extensionCounts.isEmpty()) {
             return "Unknown";
+        }
 
         String dominantExt = Collections.max(extensionCounts.entrySet(), Map.Entry.comparingByValue()).getKey();
         return switch (dominantExt) {
@@ -67,6 +70,9 @@ public class ProjectAnalysisService {
 
     static String extractExtension(String filePath) {
         String ext = PathUtils.getLowerExtension(filePath, false);
-        return ext.isEmpty() ? null : "." + ext;
+        if (ext.isEmpty()) {
+            return null;
+        }
+        return "." + ext;
     }
 }

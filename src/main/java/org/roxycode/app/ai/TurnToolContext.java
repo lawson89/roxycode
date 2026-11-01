@@ -14,8 +14,12 @@ public record TurnToolContext(String conversationId, WorkflowPhase phase, Atomic
 
     public TurnToolContext {
         conversationId = StringUtils.defaultIfBlank(conversationId, DEFAULT_CONVERSATION_ID);
-        phase = phase != null ? phase : WorkflowPhase.EXPLORE;
-        turnCounter = turnCounter != null ? turnCounter : new AtomicInteger(0);
+        if (phase == null) {
+            phase = WorkflowPhase.EXPLORE;
+        }
+        if (turnCounter == null) {
+            turnCounter = new AtomicInteger(0);
+        }
     }
 
     public Map<String, Object> toMap() {
@@ -23,17 +27,25 @@ public record TurnToolContext(String conversationId, WorkflowPhase phase, Atomic
     }
 
     public static TurnToolContext fromToolContext(ToolContext toolContext) {
-        return fromMap(toolContext != null ? toolContext.getContext() : null, WorkflowPhase.EXPLORE);
+        Map<String, Object> contextMap = null;
+        if (toolContext != null) {
+            contextMap = toolContext.getContext();
+        }
+        return fromMap(contextMap, WorkflowPhase.EXPLORE);
     }
 
     public static TurnToolContext fromMap(Map<String, Object> contextMap, WorkflowPhase fallbackPhase) {
-        WorkflowPhase defaultPhase = fallbackPhase != null ? fallbackPhase : WorkflowPhase.EXPLORE;
+        WorkflowPhase defaultPhase = WorkflowPhase.EXPLORE;
+        if (fallbackPhase != null) {
+            defaultPhase = fallbackPhase;
+        }
         if (contextMap == null || contextMap.isEmpty()) {
             return new TurnToolContext(DEFAULT_CONVERSATION_ID, defaultPhase, null);
         }
-        String convId = contextMap.get(CONVERSATION_ID_KEY) instanceof String s && StringUtils.isNotBlank(s)
-                ? s
-                : DEFAULT_CONVERSATION_ID;
+        String convId = DEFAULT_CONVERSATION_ID;
+        if (contextMap.get(CONVERSATION_ID_KEY) instanceof String s && StringUtils.isNotBlank(s)) {
+            convId = s;
+        }
         WorkflowPhase resolvedPhase = defaultPhase;
         Object phaseObj = contextMap.get(PHASE_KEY);
         if (phaseObj instanceof WorkflowPhase wp) {
@@ -44,7 +56,10 @@ public record TurnToolContext(String conversationId, WorkflowPhase phase, Atomic
             } catch (IllegalArgumentException ignored) {
             }
         }
-        return new TurnToolContext(convId, resolvedPhase,
-                contextMap.get(TURN_COUNTER_KEY) instanceof AtomicInteger ai ? ai : null);
+        AtomicInteger counter = null;
+        if (contextMap.get(TURN_COUNTER_KEY) instanceof AtomicInteger ai) {
+            counter = ai;
+        }
+        return new TurnToolContext(convId, resolvedPhase, counter);
     }
 }

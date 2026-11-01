@@ -30,7 +30,6 @@ import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -433,11 +432,9 @@ public class PromptService {
         return folders.stream().filter(f -> f != null && !f.isBlank()).map(String::trim).distinct().toList();
     }
 
-    @SuppressWarnings("PMD.UseProperClassLoader")
     private String readClasspathResource(String path) {
         try {
-            return new ClassPathResource(path, PromptService.class.getClassLoader())
-                    .getContentAsString(StandardCharsets.UTF_8);
+            return PathUtils.readClasspathResourceUtf8(path, PromptService.class);
         } catch (IOException e) {
             log.error("Failed to load resource {} from classpath: {}", path, e.getMessage());
             return "";

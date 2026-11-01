@@ -20,12 +20,14 @@ public final class SidebarPanel extends JPanel {
     static final String SUBTITLE_BADGE_TEXT = "AI Workspace";
     static final String SETTINGS_ATTENTION_TOOLTIP = "Gemini API Key required in Global Settings";
     static final String TOOLS_ATTENTION_TOOLTIP = "Required system tools are missing";
+    static final String BUILD_CONFIG_ATTENTION_TOOLTIP = "Please confirm or customize project build commands";
     private final Consumer<String> navigationAction;
     private final List<NavButton> navButtons = new ArrayList<>();
     private final Map<String, NavButton> cardButtons = new LinkedHashMap<>();
     private NavButton qaBtn;
     private NavButton taskBtn;
     private NavButton toolsBtn;
+    private NavButton buildConfigBtn;
     private NavButton settingsBtn;
 
     public SidebarPanel(Consumer<String> navigationAction) {
@@ -55,7 +57,9 @@ public final class SidebarPanel extends JPanel {
         toolsBtn = createNavButton("System Tools", MainFrame.TOOLS_VIEW, Codicons.TOOLS);
         toolsBtn.setAttentionTooltip(TOOLS_ATTENTION_TOOLTIP);
         add(toolsBtn);
-        add(createNavButton("Project Settings", "BUILD_CONFIG", Codicons.PACKAGE));
+        buildConfigBtn = createNavButton("Project Settings", MainFrame.BUILD_CONFIG_VIEW, Codicons.PACKAGE);
+        buildConfigBtn.setAttentionTooltip(BUILD_CONFIG_ATTENTION_TOOLTIP);
+        add(buildConfigBtn);
         settingsBtn = createNavButton("Global Settings", MainFrame.SETTINGS_VIEW, Codicons.SETTINGS_GEAR);
         settingsBtn.setAttentionTooltip(SETTINGS_ATTENTION_TOOLTIP);
         add(settingsBtn);
@@ -143,6 +147,16 @@ public final class SidebarPanel extends JPanel {
 
     public boolean isToolsAttentionNeeded() {
         return toolsBtn != null && toolsBtn.isWaitingApproval();
+    }
+
+    public void setBuildConfigAttentionNeeded(boolean attentionNeeded) {
+        if (buildConfigBtn != null) {
+            buildConfigBtn.setWaitingApproval(attentionNeeded);
+        }
+    }
+
+    public boolean isBuildConfigAttentionNeeded() {
+        return buildConfigBtn != null && buildConfigBtn.isWaitingApproval();
     }
 
     NavButton getCardButton(String cardName) {

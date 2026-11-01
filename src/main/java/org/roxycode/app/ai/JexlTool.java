@@ -102,10 +102,7 @@ public class JexlTool {
             }
             log.warn("Error executing JEXL script: {}", e.getMessage());
             Throwable cause = ExceptionUtils.getRootCause(e);
-            String error = cause.toString();
-            if (cause.getMessage() != null) {
-                error = cause.getMessage();
-            }
+            String error = ExceptionUtils.getMessageOrSimpleName(cause);
             publishToolEvent(conversationId, script, null, false, error);
             return toJsonError(error);
         }

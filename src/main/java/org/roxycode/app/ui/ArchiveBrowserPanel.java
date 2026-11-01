@@ -29,6 +29,7 @@ import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.MemoryService.ArchiveEntrySummary;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.FrontmatterUtils;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -382,7 +383,7 @@ public final class ArchiveBrowserPanel extends JPanel {
         }
         String trimmed = rawTimestamp.trim();
         if (trimmed.length() >= TIMESTAMP_PREFIX_LEN) {
-            return trimmed.substring(0, TIMESTAMP_PREFIX_LEN).replace('T', ' ');
+            return PathUtils.formatTimestampDisplay(trimmed, TIMESTAMP_PREFIX_LEN, "");
         }
         return trimmed;
     }

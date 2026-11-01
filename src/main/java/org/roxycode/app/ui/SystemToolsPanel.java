@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import com.formdev.flatlaf.FlatLaf;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Desktop;
@@ -310,20 +309,12 @@ public final class SystemToolsPanel extends JPanel {
         }
 
         void applyCardTheme() {
-            boolean dark = FlatLaf.isLafDark();
             Color accentColor = SwingHtmlUtils.getAccentColor();
-            Color borderFallback;
-            if (dark) {
-                borderFallback = new Color(0x3c, 0x3f, 0x41);
-            } else {
-                borderFallback = new Color(0xd8, 0xdc, 0xe0);
-            }
-            Color borderColor = SwingHtmlUtils.getUiColor(borderFallback, "Component.borderColor");
             Color mutedColor = SwingHtmlUtils.getUiColor(new Color(0x6c, 0x75, 0x7d), "Label.disabledForeground",
                     "Component.infoForeground");
             Color fgColor = SwingHtmlUtils.getUiColor(new Color(0x21, 0x25, 0x29), "Label.foreground");
 
-            String borderHex = SwingHtmlUtils.toHex(borderColor);
+            String borderHex = UiComponents.getCardBorderHex();
             UiComponents.styleCardPanel(this);
 
             nameLabel.setForeground(fgColor);
@@ -331,12 +322,7 @@ public final class SystemToolsPanel extends JPanel {
 
             applyStatusBadgeStyle();
 
-            String pillBg;
-            if (dark) {
-                pillBg = "lighten($Panel.background, 7%)";
-            } else {
-                pillBg = "darken($Panel.background, 5%)";
-            }
+            String pillBg = UiComponents.getPillBackgroundDirective();
             requirementBadge.putClientProperty(FlatClientProperties.STYLE,
                     "font: -1; arc: 999; border: 2,8,2,8," + borderHex + ",1,999; background: " + pillBg);
             requirementBadge.setForeground(mutedColor);

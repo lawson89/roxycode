@@ -39,7 +39,7 @@ public final class ChatController implements AutoCloseable {
     static final String ROLE_USER = "user";
     static final String ROLE_AI = "ai";
     static final String IMAGE_REQUIRES_TEXT_MESSAGE = "Please enter a prompt message to accompany the attached image.";
-    private static final String BT = "`";
+    private static final String BT = String.valueOf((char) 96);
 
     private final ChatModel model;
     private final ChatPanel view;
@@ -69,7 +69,11 @@ public final class ChatController implements AutoCloseable {
         this.chatMemory = chatMemory;
         this.settingsService = settingsService;
         this.turnExecutorOwned = turnExecutor == null;
-        this.turnExecutor = turnExecutor != null ? turnExecutor : Executors.newVirtualThreadPerTaskExecutor();
+        if (turnExecutor != null) {
+            this.turnExecutor = turnExecutor;
+        } else {
+            this.turnExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        }
     }
 
     void setTopicArchiveServices(MemoryService memoryService, EnvironmentService environmentService) {
@@ -117,8 +121,14 @@ public final class ChatController implements AutoCloseable {
     }
 
     public String formatCurrentTurnStatus() {
-        AppSettings settings = settingsService != null ? settingsService.getSettings() : null;
-        ImplementationPlan plan = (model.isTaskMode() && planService != null) ? planService.getCurrentPlan() : null;
+        AppSettings settings = null;
+        if (settingsService != null) {
+            settings = settingsService.getSettings();
+        }
+        ImplementationPlan plan = null;
+        if (model.isTaskMode() && planService != null) {
+            plan = planService.getCurrentPlan();
+        }
         return model.formatTurnStatus(settings, plan);
     }
 
@@ -128,8 +138,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     public void sendMessage(String rawText) {
-        if (rawText == null)
+        if (rawText == null) {
             return;
+        }
         String text = rawText.trim();
         if (text.isEmpty()) {
             if (model.hasPendingImages()) {
@@ -166,8 +177,9 @@ public final class ChatController implements AutoCloseable {
     public void approvePhase() {
         WorkflowPhase current = planService.getCurrentPhase();
         WorkflowPhase requested = planService.getPendingPhase();
-        if (requested == null)
+        if (requested == null) {
             return;
+        }
         cancelActiveTurnState(false);
         Edt.run(view::hideTransitionBanner);
         turnExecutor.execute(() -> {
@@ -188,8 +200,9 @@ public final class ChatController implements AutoCloseable {
 
     public void rejectPhase() {
         WorkflowPhase requested = planService.getPendingPhase();
-        if (requested == null)
+        if (requested == null) {
             return;
+        }
         cancelActiveTurnState(false);
         planService.rejectTransition();
         view.appendMessage(ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
@@ -218,7 +231,11 @@ public final class ChatController implements AutoCloseable {
     private void performNewTopicReset() {
         List<ChatTranscriptEntry> capturedTranscript = view.getConversationMessages();
         boolean shouldArchive = !capturedTranscript.isEmpty() && memoryService != null;
-        resetSessionState(true, shouldArchive ? null : "Started a new topic.");
+        String notice = "Started a new topic.";
+        if (shouldArchive) {
+            notice = null;
+        }
+        resetSessionState(true, notice);
         if (shouldArchive) {
             turnExecutor.execute(() -> archiveCapturedTopic(capturedTranscript));
         }
@@ -237,19 +254,30 @@ public final class ChatController implements AutoCloseable {
         if (title == null || title.isBlank()) {
             title = AiService.deriveFallbackTopicTitle(excerpt);
         }
-        String rawUser = environmentService != null ? environmentService.getCurrentUser() : null;
-        String user = (rawUser != null && !rawUser.isBlank()) ? rawUser : "User";
+        String rawUser = null;
+        if (environmentService != null) {
+            rawUser = environmentService.getCurrentUser();
+        }
+        String user = "User";
+        if (rawUser != null && !rawUser.isBlank()) {
+            user = rawUser;
+        }
         String filename = memoryService.archiveTopicConversation(title, user, Instant.now().toString(),
                 capturedTranscript);
         if (filename != null && !filename.isBlank() && eventPublisher != null) {
             eventPublisher.publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC, filename));
         }
         String finalTitle = title;
-        Edt.run(() -> view.appendMessage(ROLE_SYSTEM,
-                (filename != null && !filename.isBlank())
-                        ? "Archived previous topic as **" + finalTitle + "** (" + BT + filename + BT
-                                + ") and started a new topic."
-                        : "Started a new topic."));
+        Edt.run(() -> {
+            String message;
+            if (filename != null && !filename.isBlank()) {
+                message = "Archived previous topic as **" + finalTitle + "** (" + BT + filename + BT
+                        + ") and started a new topic.";
+            } else {
+                message = "Started a new topic.";
+            }
+            view.appendMessage(ROLE_SYSTEM, message);
+        });
     }
 
     private void resetSessionState(boolean clearMemory, String systemNotice) {
@@ -275,8 +303,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     public void triggerTurn(String text) {
-        if (text == null || text.trim().isEmpty())
+        if (text == null || text.trim().isEmpty()) {
             return;
+        }
 
         cancelActiveTurnState(false);
         long turnId = turnSequence.incrementAndGet();
@@ -305,8 +334,7 @@ public final class ChatController implements AutoCloseable {
                     return;
                 }
                 log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
-                String errorMsg = "Error: "
-                        + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
+                String errorMsg = "Error: " + ExceptionUtils.getMessageOrSimpleName(ex);
                 Edt.run(() -> finishTurnError(turnId, errorMsg));
             }
         }, null);
@@ -323,8 +351,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     private void finishTurn(long turnId, String role, String message) {
-        if (activeTurnId != turnId || model.isTurnCancelled())
+        if (activeTurnId != turnId || model.isTurnCancelled()) {
             return;
+        }
         activeTurnId = 0;
         activeTurnFuture = null;
         WorkflowTransitionEvent transition = deferredTransitionEvent;
@@ -340,8 +369,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     private void finishTurnCancelled(long turnId) {
-        if (activeTurnId != turnId)
+        if (activeTurnId != turnId) {
             return;
+        }
         activeTurnId = 0;
         activeTurnFuture = null;
         model.setTurnCancelled(true);
@@ -351,18 +381,21 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onWorkflowTransition(WorkflowTransitionEvent event) {
-        if (event == null || !model.isTaskMode())
+        if (event == null || !model.isTaskMode()) {
             return;
+        }
         if (!event.autonomous() && event.to() == null) {
             deferredTransitionEvent = null;
             Edt.run(view::hideTransitionBanner);
             return;
         }
-        if (model.isTurnCancelled())
+        if (model.isTurnCancelled()) {
             return;
+        }
         Edt.run(() -> {
-            if (model.isTurnCancelled())
+            if (model.isTurnCancelled()) {
                 return;
+            }
             if (isTurnActive()) {
                 deferredTransitionEvent = event;
             } else {
@@ -372,8 +405,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     private void applyWorkflowTransition(WorkflowTransitionEvent event) {
-        if (model.isTurnCancelled() || event.to() == null)
+        if (model.isTurnCancelled() || event.to() == null) {
             return;
+        }
         if (event.autonomous()) {
             if (event.to() == WorkflowPhase.PLAN) {
                 view.appendMessage(ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
@@ -390,8 +424,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onAgentTurn(AgentTurnEvent event) {
-        if (event == null || !isMatchingActiveTurnEvent(event.conversationId()))
+        if (event == null || !isMatchingActiveTurnEvent(event.conversationId())) {
             return;
+        }
         Edt.run(() -> {
             if (!model.isTurnCancelled()) {
                 model.setCurrentTurn(event.turnNumber());
@@ -401,8 +436,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onToolExecution(ToolExecutionEvent event) {
-        if (event == null || !isMatchingActiveTurnEvent(event.conversationId()))
+        if (event == null || !isMatchingActiveTurnEvent(event.conversationId())) {
             return;
+        }
         Edt.run(() -> {
             if (!model.isTurnCancelled()) {
                 view.appendToolLog(JexlToHtmlConverter.convert(event.script()), event.success(), event.error());
@@ -411,8 +447,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onAgentTurnComplete(AgentTurnCompleteEvent event) {
-        if (event == null || !model.getConversationId().equals(event.conversationId()))
+        if (event == null || !model.getConversationId().equals(event.conversationId())) {
             return;
+        }
         Edt.run(() -> {
             if (!isTurnActive()) {
                 view.setLoading(false);
@@ -431,8 +468,9 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onPhaseChanged(PhaseChangedEvent event) {
-        if (event == null)
+        if (event == null) {
             return;
+        }
         log.debug("Phase changed to: {}", event.phase());
         Edt.run(() -> {
             if (model.isTaskMode()) {

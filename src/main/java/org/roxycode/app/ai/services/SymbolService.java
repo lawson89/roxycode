@@ -110,10 +110,7 @@ public class SymbolService {
             }
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-            String msg = e.getClass().getSimpleName();
-            if (e.getMessage() != null) {
-                msg = e.getMessage();
-            }
+            String msg = ExceptionUtils.getMessageOrSimpleName(e);
             String errorMsg = ERROR_PREFIX + msg;
             if (msg.startsWith(ERROR_PREFIX)) {
                 errorMsg = msg;

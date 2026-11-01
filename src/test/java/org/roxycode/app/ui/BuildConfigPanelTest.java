@@ -44,8 +44,8 @@ class BuildConfigPanelTest {
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getProjectGeminiModel()).thenReturn("");
         when(buildToolService.getConfigContent()).thenReturn("""
-                [build]
-                compile = './mvnw compile'
+                [commands]
+                compile = './mvnw test-compile'
 
                 [container]
                 enabled = false
@@ -69,8 +69,8 @@ class BuildConfigPanelTest {
         when(buildToolService.getConfigContent()).thenAnswer(inv -> {
             loadCalledOnEdt.set(SwingUtilities.isEventDispatchThread());
             return """
-                    [build]
-                    compile = './mvnw compile'
+                    [commands]
+                    compile = './mvnw test-compile'
                     """;
         });
         doAnswer(inv -> {
@@ -86,7 +86,7 @@ class BuildConfigPanelTest {
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(loadCalledOnEdt.get());
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
-        assertTrue(panel.textArea.getText().contains("./mvnw compile"));
+        assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
 
         JComboBox<GeminiModelConfig> modelCombo = panel.getModelCombo();
         assertEquals(3, modelCombo.getItemCount());
@@ -94,7 +94,7 @@ class BuildConfigPanelTest {
         assertEquals("gemini-3.5-flash", panel.getModelApiBadgeLabel().getText());
 
         String updatedToml = """
-                [build]
+                [commands]
                 compile = 'mvn test'
                 """;
         SwingTestUtils.runOnEdt(() -> {
@@ -111,6 +111,7 @@ class BuildConfigPanelTest {
         assertTrue(panel.saveButton.isEnabled());
         assertEquals("Configuration saved successfully!", panel.statusLabel.getText());
         verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
+        verify(projectService).setBuildConfirmed(true);
         verify(buildToolService).saveConfigContent(updatedToml);
 
         when(projectService.getProjectGeminiModel()).thenReturn("gemini-3.5-pro");
@@ -153,7 +154,7 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
 
         SwingTestUtils.runOnEdt(() -> panel.textArea.setText("""
-                [build]
+                [commands]
                 compile = 'mvn'
 
                 [container] # inline comment
@@ -166,7 +167,7 @@ class BuildConfigPanelTest {
     @Test
     void testRecheckDockerButtonUpdatesAvailabilityAndAppendsContainerSectionIfMissing() throws Exception {
         when(buildToolService.getConfigContent()).thenReturn("""
-                [build]
+                [commands]
                 compile = 'mvn'
                 """);
         when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
@@ -212,5 +213,44 @@ class BuildConfigPanelTest {
         assertTrue(panel.dockerAvailable);
         assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
         assertTrue(panel.containerToggleCheckBox.isEnabled());
+    }
+
+    @Test
+    void testTemplateSelectorApplyTemplateAndAutoDetectWithAi() throws Exception {
+        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
+        when(buildToolService.getAvailableTemplates()).thenReturn(GenericBuildToolService.AVAILABLE_TEMPLATES);
+        when(buildToolService.detectTemplate()).thenReturn("maven");
+        when(buildToolService.loadTemplateContent("rust")).thenReturn("[commands]\ncompile = 'cargo check'\n");
+
+        org.roxycode.app.service.AiService aiService = mock(org.roxycode.app.service.AiService.class);
+        when(aiService.chat(anyString(), eq(org.roxycode.app.ai.WorkflowPhase.EXPLORE), anyString(), anyList()))
+                .thenReturn("```toml\n[commands]\ncompile = 'make build'\n```");
+
+        BuildConfigPanel panel = SwingTestUtils.callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService,
+                systemToolService, projectService, aiService));
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+
+        GenericBuildToolService.BuildTemplateInfo selected = (GenericBuildToolService.BuildTemplateInfo) panel
+                .getTemplateCombo().getSelectedItem();
+        assertNotNull(selected);
+        assertEquals("maven", selected.id());
+        assertEquals("Maven (auto-detected)", panel.formatTemplateDisplayText(selected));
+
+        SwingTestUtils.runOnEdt(() -> {
+            for (int i = 0; i < panel.getTemplateCombo().getItemCount(); i++) {
+                GenericBuildToolService.BuildTemplateInfo item = panel.getTemplateCombo().getItemAt(i);
+                if ("rust".equals(item.id())) {
+                    panel.getTemplateCombo().setSelectedIndex(i);
+                    break;
+                }
+            }
+            panel.getApplyTemplateButton().doClick();
+        });
+        assertTrue(panel.textArea.getText().contains("cargo check"));
+
+        SwingTestUtils.runOnEdt(() -> panel.getAutoDetectAiButton().doClick());
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        assertTrue(panel.textArea.getText().contains("make build"));
+        assertFalse(panel.textArea.getText().contains("```"));
     }
 }

@@ -128,7 +128,13 @@ public final class ContextManagerPanel extends JPanel {
             headerLabel.setFont(headerLabel.getFont().deriveFont(Font.BOLD, 14f));
             headerLabel.setIconTextGap(8);
 
-            subtitleLabel = new JLabel(globalScope ? GLOBAL_SUBTITLE : PROJECT_SUBTITLE);
+            String subtitleText;
+            if (globalScope) {
+                subtitleText = GLOBAL_SUBTITLE;
+            } else {
+                subtitleText = PROJECT_SUBTITLE;
+            }
+            subtitleLabel = new JLabel(subtitleText);
             subtitleLabel.setFont(subtitleLabel.getFont().deriveFont(Font.PLAIN, 11f));
 
             headerBanner = new JPanel(new BorderLayout(8, 0));
@@ -185,11 +191,21 @@ public final class ContextManagerPanel extends JPanel {
                 public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index,
                         boolean isSelected, boolean cellHasFocus) {
                     super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                    setIcon(FontIcon.of(icon, 14, isSelected ? getForeground() : resolveAccentColor()));
+                    Color iconColor;
+                    if (isSelected) {
+                        iconColor = getForeground();
+                    } else {
+                        iconColor = resolveAccentColor();
+                    }
+                    setIcon(FontIcon.of(icon, 14, iconColor));
                     setIconTextGap(6);
                     if (value instanceof ContextFileItem item) {
                         setText(item.fileName());
-                        setToolTipText(item.filePath() != null ? item.filePath().toString() : null);
+                        if (item.filePath() != null) {
+                            setToolTipText(item.filePath().toString());
+                        } else {
+                            setToolTipText(null);
+                        }
                     } else if (value != null) {
                         setToolTipText(value.toString());
                     }
@@ -207,9 +223,10 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         Color resolveAccentColor() {
-            return globalScope
-                    ? SwingHtmlUtils.getAccentColor()
-                    : SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
+            if (globalScope) {
+                return SwingHtmlUtils.getAccentColor();
+            }
+            return SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
         }
 
         void applyScopeStyling() {
@@ -224,7 +241,13 @@ public final class ContextManagerPanel extends JPanel {
                     BorderFactory.createEmptyBorder(8, 8, 8, 8)));
 
             SwingHtmlUtils.applyTintedBannerStyle(headerBanner, accent, 6, 10, 10);
-            headerLabel.setIcon(FontIcon.of(globalScope ? Codicons.GLOBE : Codicons.FOLDER_OPENED, 18, accent));
+            Codicons headerIcon;
+            if (globalScope) {
+                headerIcon = Codicons.GLOBE;
+            } else {
+                headerIcon = Codicons.FOLDER_OPENED;
+            }
+            headerLabel.setIcon(FontIcon.of(headerIcon, 18, accent));
             subtitleLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
 
             foldersSectionLabel.setIcon(FontIcon.of(Codicons.FOLDER, 14, accent));
@@ -259,60 +282,49 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         private void chooseAndAddFolder() {
-            if (GraphicsEnvironment.isHeadless())
+            if (GraphicsEnvironment.isHeadless()) {
                 return;
+            }
             JFileChooser chooser = new JFileChooser();
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-            chooser.setDialogTitle(globalScope ? "Select Global Context Folder" : "Select Project Context Folder");
+            if (globalScope) {
+                chooser.setDialogTitle("Select Global Context Folder");
+            } else {
+                chooser.setDialogTitle("Select Project Context Folder");
+            }
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION && chooser.getSelectedFile() != null) {
                 addFolderAsync(chooser.getSelectedFile().getAbsolutePath());
             }
         }
 
         CompletableFuture<FolderAndFilesData> addFolderAsync(String folderPath) {
-            CompletableFuture<FolderAndFilesData> future = Edt.runAsync(() -> {
+            return mutateFoldersAsync(updated -> {
                 if (folderPath == null || folderPath.isBlank()) {
                     throw new IllegalArgumentException("Folder path must not be blank");
                 }
-                List<String> updated = new ArrayList<>(loadConfiguredFolders());
                 String trimmed = folderPath.trim();
                 if (!updated.contains(trimmed)) {
                     updated.add(trimmed);
                 }
-                saveConfiguredFolders(updated);
-            }, null, ex -> {
-                log.warn("Failed to add context folder {}: {}", folderPath, ex.getMessage());
-                Throwable root = ExceptionUtils.getRootCause(ex);
-                if (errorReporter != null) {
-                    String message;
-                    if (root != null) {
-                        message = root.getMessage();
-                    } else {
-                        message = ex.getMessage();
-                    }
-                    errorReporter.accept("Error adding context folder " + folderPath + ": " + message);
-                }
-            }).thenCompose(v -> refreshFoldersAndFiles());
-            lastRefreshFuture = future;
-            return future;
+            }, null, "add", "adding", folderPath);
         }
 
         CompletableFuture<FolderAndFilesData> removeFolderAsync(String folderPath) {
+            return mutateFoldersAsync(updated -> updated.remove(folderPath), this::clearSelection, "remove", "removing",
+                    folderPath);
+        }
+
+        private CompletableFuture<FolderAndFilesData> mutateFoldersAsync(Consumer<List<String>> mutator,
+                Runnable onEdtSuccess, String logVerb, String errorGerund, String folderPath) {
             CompletableFuture<FolderAndFilesData> future = Edt.runAsync(() -> {
                 List<String> updated = new ArrayList<>(loadConfiguredFolders());
-                updated.remove(folderPath);
+                mutator.accept(updated);
                 saveConfiguredFolders(updated);
-            }, this::clearSelection, ex -> {
-                log.warn("Failed to remove context folder {}: {}", folderPath, ex.getMessage());
-                Throwable root = ExceptionUtils.getRootCause(ex);
+            }, onEdtSuccess, ex -> {
+                log.warn("Failed to {} context folder {}: {}", logVerb, folderPath, ex.getMessage());
                 if (errorReporter != null) {
-                    String message;
-                    if (root != null) {
-                        message = root.getMessage();
-                    } else {
-                        message = ex.getMessage();
-                    }
-                    errorReporter.accept("Error removing context folder " + folderPath + ": " + message);
+                    errorReporter.accept("Error " + errorGerund + " context folder " + folderPath + ": "
+                            + ExceptionUtils.getRootCauseMessage(ex));
                 }
             }).thenCompose(v -> refreshFoldersAndFiles());
             lastRefreshFuture = future;
@@ -350,7 +362,10 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         private List<String> loadConfiguredFolders() {
-            return globalScope ? promptService.getGlobalContextFolders() : promptService.getProjectContextFolders();
+            if (globalScope) {
+                return promptService.getGlobalContextFolders();
+            }
+            return promptService.getProjectContextFolders();
         }
 
         private void saveConfiguredFolders(List<String> folders) {
@@ -362,7 +377,10 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         private List<ContextFileItem> loadDiscoveredFiles() {
-            return globalScope ? promptService.listGlobalContextFiles() : promptService.listProjectContextFiles();
+            if (globalScope) {
+                return promptService.listGlobalContextFiles();
+            }
+            return promptService.listProjectContextFiles();
         }
     }
 }

@@ -187,18 +187,48 @@ final class UiComponents {
     /**
      * Applies the standard rounded card style using FlatLaf style expressions.
      */
-    static void styleCardPanel(JPanel card) {
-        boolean dark = FlatLaf.isLafDark();
+    static Color getCardBorderColor() {
         Color borderFallback;
-        if (dark) {
+        if (FlatLaf.isLafDark()) {
             borderFallback = new Color(0x3c, 0x3f, 0x41);
         } else {
             borderFallback = new Color(0xd8, 0xdc, 0xe0);
         }
-        String borderHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getUiColor(borderFallback, "Component.borderColor"));
+        return SwingHtmlUtils.getUiColor(borderFallback, "Component.borderColor");
+    }
 
+    static String getCardBorderHex() {
+        return SwingHtmlUtils.toHex(getCardBorderColor());
+    }
+
+    static String getPillBackgroundDirective() {
+        if (FlatLaf.isLafDark()) {
+            return "lighten($Panel.background, 7%)";
+        }
+        return "darken($Panel.background, 5%)";
+    }
+
+    static JLabel createSectionHeader(String title, Codicons icon, String fontStyle) {
+        JLabel label = new JLabel(title);
+        label.putClientProperty(FlatClientProperties.STYLE, fontStyle);
+        label.setIconTextGap(8);
+        label.setIcon(FontIcon.of(icon, 18, SwingHtmlUtils.getAccentColor()));
+        return label;
+    }
+
+    static JPanel createModelControlBox(JLabel badgeLabel, JComboBox<GeminiModelConfig> comboBox,
+            String comboConstraints) {
+        JPanel box = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", "[center]"));
+        box.setOpaque(false);
+        box.add(badgeLabel, "hidemode 3");
+        box.add(comboBox, comboConstraints);
+        return box;
+    }
+
+    static void styleCardPanel(JPanel card) {
+        String borderHex = getCardBorderHex();
         String cardBgDirective;
-        if (dark) {
+        if (FlatLaf.isLafDark()) {
             cardBgDirective = "lighten($Panel.background, 3%)";
         } else {
             cardBgDirective = "darken($Panel.background, 2%)";
@@ -271,21 +301,8 @@ final class UiComponents {
      * Styles a label as a monospaced pill badge with a code icon.
      */
     static void styleCodePillBadge(JLabel badge) {
-        boolean dark = FlatLaf.isLafDark();
-        Color borderFallback;
-        if (dark) {
-            borderFallback = new Color(0x3c, 0x3f, 0x41);
-        } else {
-            borderFallback = new Color(0xd8, 0xdc, 0xe0);
-        }
-        String borderHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getUiColor(borderFallback, "Component.borderColor"));
-
-        String pillBg;
-        if (dark) {
-            pillBg = "lighten($Panel.background, 7%)";
-        } else {
-            pillBg = "darken($Panel.background, 5%)";
-        }
+        String borderHex = getCardBorderHex();
+        String pillBg = getPillBackgroundDirective();
 
         badge.setIcon(FontIcon.of(Codicons.CODE, 13, SwingHtmlUtils.getAccentColor()));
         badge.setIconTextGap(5);

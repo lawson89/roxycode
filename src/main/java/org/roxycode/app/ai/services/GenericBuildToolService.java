@@ -20,13 +20,17 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import javax.swing.SwingUtilities;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.text.StringSubstitutor;
+import org.jspecify.annotations.Nullable;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerConfig;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -34,10 +38,12 @@ import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.io.ClassPathResource;
 
 @AgentService(value = "buildToolService", phases = {"CODE", "EXPLORE", "PLAN", "REVIEW"})
+@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class GenericBuildToolService {
 
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
@@ -48,8 +54,38 @@ public class GenericBuildToolService {
             + (char) 10;
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
     private static final String DEFAULT_FALLBACK_TOML = """
-            [build]
-            compile = 'echo No build command'""";
+            [commands]
+            install = ""
+            clean = ""
+            compile = ""
+            build = ""
+            test_all = ""
+            test_single = ""
+            lint = ""
+            lint_single = ""
+            format = ""
+            format_single = ""
+            """;
+
+    public record BuildTemplateInfo(String id, String displayName, String description, List<String> markerFiles) {
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
+
+    public static final List<BuildTemplateInfo> AVAILABLE_TEMPLATES = List.of(
+            new BuildTemplateInfo("maven", "Maven", "Java project with pom.xml", List.of("pom.xml")),
+            new BuildTemplateInfo("gradle", "Gradle", "JVM project with build.gradle or build.gradle.kts",
+                    List.of("build.gradle", "build.gradle.kts")),
+            new BuildTemplateInfo("npm", "npm / Node.js", "JavaScript/TypeScript project with package.json",
+                    List.of("package.json")),
+            new BuildTemplateInfo("python", "Python", "Python project with requirements.txt or pyproject.toml",
+                    List.of("requirements.txt", "pyproject.toml")),
+            new BuildTemplateInfo("go", "Go", "Go module with go.mod or main.go", List.of("go.mod", "main.go")),
+            new BuildTemplateInfo("rust", "Rust", "Cargo Rust project with Cargo.toml", List.of("Cargo.toml")),
+            new BuildTemplateInfo("cmake", "CMake", "C/C++ project with CMakeLists.txt", List.of("CMakeLists.txt")),
+            new BuildTemplateInfo("default", "No-Op / Manual Setup", "Blank commands fallback template", List.of()));
 
     private record TemplateRule(String template, List<String> markerFiles) {
     }
@@ -58,16 +94,20 @@ public class GenericBuildToolService {
             new TemplateRule("gradle", List.of("build.gradle", "build.gradle.kts")),
             new TemplateRule("npm", List.of("package.json")),
             new TemplateRule("python", List.of("requirements.txt", "pyproject.toml")),
-            new TemplateRule("go", List.of("go.mod", "main.go")), new TemplateRule("cmake", List.of("CMakeLists.txt")));
+            new TemplateRule("go", List.of("go.mod", "main.go")), new TemplateRule("rust", List.of("Cargo.toml")),
+            new TemplateRule("cmake", List.of("CMakeLists.txt")));
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record BuildSection(String compile, String clean) {
-        public static final BuildSection EMPTY = new BuildSection(null, null);
+    public List<BuildTemplateInfo> getAvailableTemplates() {
+        return AVAILABLE_TEMPLATES;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record TestSection(@JsonProperty("run_all") String runAll, @JsonProperty("run_single") String runSingle) {
-        public static final TestSection EMPTY = new TestSection(null, null);
+    public record CommandsSection(String install, String clean, String compile, String build,
+            @JsonProperty("test_all") String testAll, @JsonProperty("test_single") String testSingle, String lint,
+            @JsonProperty("lint_single") String lintSingle, String format,
+            @JsonProperty("format_single") String formatSingle) {
+        public static final CommandsSection EMPTY = new CommandsSection(null, null, null, null, null, null, null, null,
+                null, null);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -77,14 +117,11 @@ public class GenericBuildToolService {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record BuildConfig(BuildSection build, TestSection test, Map<String, String> env, ParseSection parse,
+    public record BuildConfig(CommandsSection commands, Map<String, String> env, ParseSection parse,
             ContainerConfig container) {
         public BuildConfig {
-            if (build == null) {
-                build = BuildSection.EMPTY;
-            }
-            if (test == null) {
-                test = TestSection.EMPTY;
+            if (commands == null) {
+                commands = CommandsSection.EMPTY;
             }
             if (env == null || env.isEmpty()) {
                 env = Map.of();
@@ -109,12 +146,23 @@ public class GenericBuildToolService {
     private final ProjectService projectService;
     private final TomlMapper tomlMapper;
     private final BuildContainerService buildContainerService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final PlanService planService;
 
     public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper,
             BuildContainerService buildContainerService) {
+        this(projectService, tomlMapper, buildContainerService, null, null);
+    }
+
+    @Autowired
+    public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper,
+            BuildContainerService buildContainerService, @Nullable ApplicationEventPublisher eventPublisher,
+            @Nullable PlanService planService) {
         this.projectService = projectService;
         this.tomlMapper = tomlMapper;
         this.buildContainerService = buildContainerService;
+        this.eventPublisher = eventPublisher;
+        this.planService = planService;
         if (this.projectService.hasActiveProject()) {
             ensureConfig();
         }
@@ -140,14 +188,40 @@ public class GenericBuildToolService {
         buildContainerService.stopActiveContainer();
     }
 
+    static String formatNoOpOutput(String commandLabel) {
+        return "Command '" + commandLabel + "' is not configured (no-op).";
+    }
+
+    @AgentDoc(value = "Installs or syncs project dependencies using the configured install command.", phases = {
+            "CODE"}, examples = "buildToolService.install()")
+    public BuildResult install() {
+        requireCodePhase("install");
+        BuildResult result = runCommand("commands.install", config -> config.commands().install(), Map.of());
+        if (result.success() && !formatNoOpOutput("commands.install").equals(result.output())) {
+            publishFileChanged("");
+        }
+        return result;
+    }
+
     @AgentDoc(value = "Cleans the project using the configured clean command", examples = "buildToolService.clean()")
     public BuildResult clean() {
-        return runCommand("build.clean", config -> config.build().clean());
+        return runCommand("commands.clean", config -> config.commands().clean());
     }
 
     @AgentDoc(value = "Compiles the project using the configured compile command", examples = "buildToolService.compile()")
     public BuildResult compile() {
-        return runCommand("build.compile", config -> config.build().compile());
+        return runCommand("commands.compile", config -> config.commands().compile());
+    }
+
+    @AgentDoc(value = "Builds or packages the project using the configured build command (falls back to compile if build is not configured).", examples = "buildToolService.build()")
+    public BuildResult build() {
+        return runCommand("commands.build", config -> {
+            String cmd = config.commands().build();
+            if (StringUtils.isNotBlank(cmd)) {
+                return cmd;
+            }
+            return config.commands().compile();
+        });
     }
 
     @AgentDoc(value = "Checks if a generic build configuration exists (build.toml)", examples = "buildToolService.detect()")
@@ -155,35 +229,136 @@ public class GenericBuildToolService {
         return projectService.hasActiveProject() && Files.exists(getConfigPath());
     }
 
-    @AgentDoc(value = "Runs all tests using the configured test command", examples = "buildToolService.runTests()")
+    @AgentDoc(value = "Runs all tests using the configured test_all command", examples = "buildToolService.runTests()")
     public BuildResult runTests() {
-        return runCommand("test.run_all", config -> config.test().runAll());
+        return runCommand("commands.test_all", config -> config.commands().testAll());
     }
 
-    @AgentDoc(value = "Runs a single test using the configured run_single command. {testName} is replaced with the argument.", examples = "buildToolService.runSingleTest('com.example.TestClass')")
+    @AgentDoc(value = "Runs a single test using the configured test_single command. {testName} is replaced with the argument.", examples = "buildToolService.runSingleTest('com.example.TestClass')")
     public BuildResult runSingleTest(
             @AgentDoc("The name of the test class or method (e.g., MyTest or MyTest#myMethod)") String testName) {
-        return runCommand("test.run_single", config -> config.test().runSingle(), Map.of("testName", testName));
+        return runCommand("commands.test_single", config -> config.commands().testSingle(),
+                Map.of("testName", StringUtils.defaultString(testName)));
+    }
+
+    @AgentDoc(value = "Runs the project linter or static analysis checks using the configured lint command.", examples = "buildToolService.lint()")
+    public BuildResult lint() {
+        return runCommand("commands.lint", config -> config.commands().lint());
+    }
+
+    @AgentDoc(value = "Runs the linter on a specific file using lint_single (falls back to lint if lint_single is not configured).", examples = "buildToolService.lint('src/main/java/App.java')")
+    public BuildResult lint(@AgentDoc("The file path relative to the project root") String relativePath) {
+        String normalizedPath;
+        try {
+            normalizedPath = validateRelativeFilePath(relativePath);
+        } catch (Exception e) {
+            return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of());
+        }
+        return runCommand("commands.lint_single", config -> {
+            String single = config.commands().lintSingle();
+            if (StringUtils.isNotBlank(single)) {
+                return single;
+            }
+            return config.commands().lint();
+        }, Map.of("file", normalizedPath));
+    }
+
+    @AgentDoc(value = "Formats the project source code using the configured format command.", phases = {
+            "CODE"}, examples = "buildToolService.format()")
+    public BuildResult format() {
+        requireCodePhase("format");
+        BuildResult result = runCommand("commands.format", config -> config.commands().format(), Map.of());
+        if (result.success() && !formatNoOpOutput("commands.format").equals(result.output())) {
+            publishFileChanged("");
+        }
+        return result;
+    }
+
+    @AgentDoc(value = "Formats a specific file using format_single (falls back to format if format_single is not configured).", phases = {
+            "CODE"}, examples = "buildToolService.format('src/main/java/App.java')")
+    public BuildResult format(@AgentDoc("The file path relative to the project root") String relativePath) {
+        requireCodePhase("format");
+        String normalizedPath;
+        try {
+            normalizedPath = validateRelativeFilePath(relativePath);
+        } catch (Exception e) {
+            return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of());
+        }
+        BuildResult result = runCommand("commands.format_single", config -> {
+            String single = config.commands().formatSingle();
+            if (StringUtils.isNotBlank(single)) {
+                return single;
+            }
+            return config.commands().format();
+        }, Map.of("file", normalizedPath));
+        if (result.success() && !formatNoOpOutput("commands.format_single").equals(result.output())) {
+            publishFileChanged(normalizedPath);
+        }
+        return result;
     }
 
     private BuildResult runCommand(String commandLabel, Function<BuildConfig, String> commandExtractor) {
         return runCommand(commandLabel, commandExtractor, Map.of());
     }
 
-    @AgentDoc(value = "Compiles the project and, if successful, runs all tests. Use this for the Verification phase.", examples = "buildToolService.buildAndTest()")
+    @AgentDoc(value = "Compiles the project, runs all tests, and runs lint checks sequentially. Stops on the first failure. Use this for verification.", examples = "buildToolService.buildAndTest()")
     public BuildResult buildAndTest() {
         BuildResult compileResult = compile();
         if (!compileResult.success()) {
             return compileResult;
         }
         BuildResult testResult = runTests();
-        return new BuildResult(testResult.success(), testResult.exitCode(), """
+        if (!testResult.success()) {
+            return new BuildResult(false, testResult.exitCode(), """
+                    COMPILE OUTPUT:
+                    %s
+
+                    TEST OUTPUT:
+                    %s""".formatted(compileResult.output(), testResult.output()), testResult.errors(),
+                    testResult.failedTests());
+        }
+        BuildResult lintResult = lint();
+        return new BuildResult(lintResult.success(), lintResult.exitCode(), """
                 COMPILE OUTPUT:
                 %s
 
                 TEST OUTPUT:
-                %s""".formatted(compileResult.output(), testResult.output()), testResult.errors(),
-                testResult.failedTests());
+                %s
+
+                LINT OUTPUT:
+                %s""".formatted(compileResult.output(), testResult.output(), lintResult.output()), lintResult.errors(),
+                lintResult.failedTests());
+    }
+
+    private void requireCodePhase(String methodName) {
+        if (planService == null) {
+            return;
+        }
+        WorkflowPhase current = planService.getCurrentPhase();
+        if (current != WorkflowPhase.CODE) {
+            throw new IllegalStateException(
+                    "Method '" + methodName + "' is only allowed in phase(s) [CODE]. Current phase: " + current);
+        }
+    }
+
+    private String validateRelativeFilePath(String relativePath) {
+        if (!projectService.hasActiveProject()) {
+            throw new IllegalStateException("No active project");
+        }
+        if (StringUtils.isBlank(relativePath)) {
+            throw new IllegalArgumentException("File path must not be blank");
+        }
+        String normalized = projectService.resolveRelativePath(relativePath);
+        if (".".equals(normalized)) {
+            throw new IllegalArgumentException("Invalid file path: " + relativePath);
+        }
+        return normalized;
+    }
+
+    private void publishFileChanged(String path) {
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new FileChangedEvent(path));
+        }
     }
 
     private BuildResult runCommand(String commandLabel, Function<BuildConfig, String> commandExtractor,
@@ -197,7 +372,7 @@ public class GenericBuildToolService {
             BuildConfig config = loadConfig();
             String command = commandExtractor.apply(config);
             if (command == null || command.isBlank()) {
-                return new BuildResult(false, -1, "", List.of("Command not configured: " + commandLabel), List.of());
+                return new BuildResult(true, 0, formatNoOpOutput(commandLabel), List.of(), List.of());
             }
             if (!placeholders.isEmpty()) {
                 command = new StringSubstitutor(placeholders, "{", "}").replace(command);
@@ -235,16 +410,19 @@ public class GenericBuildToolService {
         return logFile;
     }
 
-    @SuppressWarnings("PMD.UseProperClassLoader")
-    private String loadDefaultTemplateContent() {
-        String templateName = detectTemplate();
+    public String loadTemplateContent(String templateId) {
+        String id = StringUtils.defaultIfBlank(templateId, "default");
         try {
-            return new ClassPathResource("templates/build/" + templateName + ".toml",
-                    GenericBuildToolService.class.getClassLoader()).getContentAsString(StandardCharsets.UTF_8);
+            return PathUtils.readClasspathResourceUtf8("templates/build/" + id + ".toml",
+                    GenericBuildToolService.class);
         } catch (IOException e) {
-            log.warn("Failed to read build template: {}", templateName, e);
+            log.warn("Failed to read build template: {}", id, e);
             return DEFAULT_FALLBACK_TOML;
         }
+    }
+
+    private String loadDefaultTemplateContent() {
+        return loadTemplateContent(detectTemplate());
     }
 
     private void ensureConfig() {
@@ -260,7 +438,10 @@ public class GenericBuildToolService {
         }
     }
 
-    private String detectTemplate() {
+    public String detectTemplate() {
+        if (!projectService.hasActiveProject()) {
+            return "default";
+        }
         Path root = projectService.getCurrentProjectRoot();
         for (TemplateRule rule : TEMPLATE_RULES) {
             if (rule.markerFiles().stream().anyMatch(m -> Files.exists(root.resolve(m)))) {
@@ -314,10 +495,7 @@ public class GenericBuildToolService {
         } catch (Exception e) {
             log.error("Container execution failed", e);
             stopActiveContainer();
-            String errorMsg = e.getClass().getSimpleName();
-            if (e.getMessage() != null) {
-                errorMsg = e.getMessage();
-            }
+            String errorMsg = org.roxycode.app.util.ExceptionUtils.getMessageOrSimpleName(e);
             errors.add("Container execution failed: " + errorMsg);
             fullOutput = errorMsg;
             return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);

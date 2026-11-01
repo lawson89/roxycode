@@ -47,14 +47,16 @@ public final class StatusPanel extends JPanel {
     @Override
     public void addNotify() {
         super.addNotify();
-        if (statsTimer != null && !statsTimer.isRunning())
+        if (statsTimer != null && !statsTimer.isRunning()) {
             statsTimer.start();
+        }
     }
 
     @Override
     public void removeNotify() {
-        if (statsTimer != null)
+        if (statsTimer != null) {
             statsTimer.stop();
+        }
         super.removeNotify();
     }
 
@@ -72,7 +74,10 @@ public final class StatusPanel extends JPanel {
         long usedMb = envService.getMemoryUsageMb();
         long totalMb = envService.getTotalMemoryMb();
         memLabel.setText("Mem: " + usedMb + "/" + totalMb + "MB");
-        int pct = totalMb > 0 ? (int) Math.min(100L, Math.max(0L, (usedMb * 100L) / totalMb)) : 0;
+        int pct = 0;
+        if (totalMb > 0) {
+            pct = (int) Math.min(100L, Math.max(0L, (usedMb * 100L) / totalMb));
+        }
         memProgressBar.setValue(pct);
         memProgressBar.setToolTipText(pct + "% JVM heap used (" + usedMb + " / " + totalMb + " MB)");
     }

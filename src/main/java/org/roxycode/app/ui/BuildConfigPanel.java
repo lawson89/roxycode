@@ -14,18 +14,21 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.ai.services.GenericBuildToolService.BuildTemplateInfo;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
-import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +40,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Lazy
 public final class BuildConfigPanel extends JPanel {
+
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
     static final String TITLE_TEXT = "Project Settings";
@@ -45,14 +49,21 @@ public final class BuildConfigPanel extends JPanel {
     static final String SECTION_BUILD_CONFIG_TITLE = "Build Configuration (build.toml)";
     static final String RECHECK_DOCKER_TEXT = "Re-check Docker";
     static final String CHECKING_DOCKER_TEXT = "Checking...";
+    static final String APPLY_TEMPLATE_TEXT = "Apply Template";
+    static final String AUTO_DETECT_AI_TEXT = "✨ Auto-Detect with AI";
+    static final String DETECTING_AI_TEXT = "Detecting...";
+    static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     static final String DOCKER_MISSING_WARNING_TEXT = "Docker was not detected in System Tools. Running builds in Testcontainers is unavailable — build and test commands will execute directly on your host machine and can potentially modify your system.";
     static final String CONTAINER_ACTIVE_TEXT = "Testcontainers Isolation Active — Builds run inside an isolated Docker container.";
     static final String HOST_EXECUTION_ACTIVE_TEXT = "Host Execution Active — Container isolation is available via Docker ([container] enabled = true). Builds currently run on your host machine.";
+    static final String AI_BUILD_DETECT_PROMPT_PATH = "prompts/build_detect.md";
+    static final String AI_BUILD_DETECT_PROMPT = loadAiBuildDetectPrompt();
 
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
     private final transient SystemToolService systemToolService;
     private final transient ProjectService projectService;
+    private final transient AiService aiService;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
     final JPanel modelCardPanel;
@@ -61,6 +72,9 @@ public final class BuildConfigPanel extends JPanel {
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
     final JLabel buildSectionHeaderLabel;
+    final JComboBox<BuildTemplateInfo> templateCombo;
+    final JButton applyTemplateButton;
+    final JButton autoDetectAiButton;
     final JPanel bannerPanel;
     final JLabel bannerIconLabel;
     final JLabel bannerMessageLabel;
@@ -73,17 +87,27 @@ public final class BuildConfigPanel extends JPanel {
 
     boolean dockerAvailable = false;
     private boolean updatingTextProgrammatically = false;
+    private boolean textEditedByUser = false;
+    String detectedTemplateId = "default";
     private transient Consumer<String> errorDialogPresenter;
+    private transient Runnable onConfirmSavedCallback;
     CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
+
+    public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
+            SystemToolService systemToolService, @Nullable ProjectService projectService) {
+        this(buildToolService, settingsService, systemToolService, projectService, null);
+    }
 
     @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
-            SystemToolService systemToolService, @Nullable ProjectService projectService) {
+            SystemToolService systemToolService, @Nullable ProjectService projectService,
+            @Nullable AiService aiService) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         this.systemToolService = systemToolService;
         this.projectService = projectService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[][][][][grow][]"));
+        this.aiService = aiService;
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[][][][][][grow][]"));
         setOpaque(true);
 
         titleLabel = new JLabel(TITLE_TEXT);
@@ -93,9 +117,8 @@ public final class BuildConfigPanel extends JPanel {
         modelCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 14 18 14 18, gapy 8", "[grow, fill]", ""));
         UiComponents.styleCardPanel(modelCardPanel);
 
-        modelSectionHeaderLabel = new JLabel(SECTION_AI_MODEL_TITLE);
-        modelSectionHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
-        modelSectionHeaderLabel.setIconTextGap(8);
+        modelSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_AI_MODEL_TITLE, Codicons.HUBOT,
+                "font: bold +1");
         modelCardPanel.add(modelSectionHeaderLabel, "growx, wmin 0");
 
         modelCombo = new JComboBox<>();
@@ -104,10 +127,7 @@ public final class BuildConfigPanel extends JPanel {
 
         modelDescriptionArea = UiComponents.createReadOnlyTextArea();
 
-        JPanel modelControlBox = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", "[center]"));
-        modelControlBox.setOpaque(false);
-        modelControlBox.add(modelApiBadgeLabel, "hidemode 3");
-        modelControlBox.add(modelCombo, "w 240:280:340");
+        JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo, "w 240:280:340");
 
         modelCardPanel.add(UiComponents.createFieldRow(
                 UiComponents.createFieldTextBlock("Project Gemini Model",
@@ -121,10 +141,39 @@ public final class BuildConfigPanel extends JPanel {
         modelCombo.addActionListener(e -> updateSelectedModelDetails());
         updateSelectedModelDetails();
 
-        buildSectionHeaderLabel = new JLabel(SECTION_BUILD_CONFIG_TITLE);
-        buildSectionHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
-        buildSectionHeaderLabel.setIconTextGap(8);
+        buildSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_BUILD_CONFIG_TITLE, Codicons.PACKAGE,
+                "font: bold +1");
         add(buildSectionHeaderLabel, "growx, wrap, gapbottom 6");
+
+        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0", "[][grow][][]", "[]"));
+        templateToolbar.setOpaque(false);
+        JLabel templateLabel = new JLabel("Build Template:");
+        templateCombo = new JComboBox<>();
+        templateCombo.setRenderer(new DefaultListCellRenderer() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof BuildTemplateInfo info) {
+                    setText(formatTemplateDisplayText(info));
+                }
+                return this;
+            }
+        });
+        applyTemplateButton = new JButton(APPLY_TEMPLATE_TEXT);
+        applyTemplateButton.addActionListener(e -> applySelectedTemplate());
+        autoDetectAiButton = new JButton(AUTO_DETECT_AI_TEXT);
+        autoDetectAiButton.addActionListener(e -> autoDetectWithAi());
+
+        templateToolbar.add(templateLabel, "gapright 6");
+        templateToolbar.add(templateCombo, "w 220:280:360, gapright 8");
+        templateToolbar.add(applyTemplateButton, "gapright 8");
+        templateToolbar.add(autoDetectAiButton);
+        add(templateToolbar, "growx, wrap, gapbottom 8");
+
+        loadTemplateOptions();
 
         bannerPanel = new JPanel(new MigLayout("fillx, insets 10 14 10 14", "[][grow][][]", "[]"));
         bannerPanel.setOpaque(false);
@@ -154,7 +203,7 @@ public final class BuildConfigPanel extends JPanel {
 
         JPanel buttonPanel = new JPanel(new MigLayout("insets 0", "[]10push[]"));
         buttonPanel.setOpaque(false);
-        saveButton = new JButton("Save Changes");
+        saveButton = new JButton(SAVE_BUTTON_TEXT);
         saveButton.addActionListener(e -> saveConfig());
         buttonPanel.add(saveButton);
 
@@ -172,14 +221,144 @@ public final class BuildConfigPanel extends JPanel {
         lastAsyncFuture = CompletableFuture.allOf(configFuture, dockerFuture);
     }
 
-    private String resolveGlobalDefaultModel() {
-        if (settingsService != null && settingsService.getSettings() != null) {
-            String model = settingsService.getSettings().getGeminiModel();
-            if (model != null && !model.isBlank()) {
-                return model.trim();
+    String formatTemplateDisplayText(BuildTemplateInfo info) {
+        if (info == null) {
+            return "";
+        }
+        if (info.id().equals(detectedTemplateId) && !"default".equals(info.id())) {
+            return info.displayName() + " (auto-detected)";
+        }
+        return info.displayName();
+    }
+
+    void loadTemplateOptions() {
+        DefaultComboBoxModel<BuildTemplateInfo> comboModel = new DefaultComboBoxModel<>();
+        List<BuildTemplateInfo> templates = GenericBuildToolService.AVAILABLE_TEMPLATES;
+        if (buildToolService != null) {
+            List<BuildTemplateInfo> fromService = buildToolService.getAvailableTemplates();
+            if (fromService != null && !fromService.isEmpty()) {
+                templates = fromService;
+            }
+            String detected = buildToolService.detectTemplate();
+            if (detected != null && !detected.isBlank()) {
+                detectedTemplateId = detected;
+            } else {
+                detectedTemplateId = "default";
+            }
+        } else {
+            detectedTemplateId = "default";
+        }
+        BuildTemplateInfo toSelect = null;
+        for (BuildTemplateInfo info : templates) {
+            comboModel.addElement(info);
+            if (info.id().equals(detectedTemplateId)) {
+                toSelect = info;
             }
         }
-        return AppSettings.DEFAULT_GEMINI_MODEL;
+        templateCombo.setModel(comboModel);
+        if (toSelect != null) {
+            templateCombo.setSelectedItem(toSelect);
+        } else if (comboModel.getSize() > 0) {
+            templateCombo.setSelectedIndex(0);
+        }
+    }
+
+    void applySelectedTemplate() {
+        BuildTemplateInfo selected = (BuildTemplateInfo) templateCombo.getSelectedItem();
+        if (selected == null || buildToolService == null) {
+            return;
+        }
+        if (textEditedByUser && !GraphicsEnvironment.isHeadless()) {
+            int result = JOptionPane.showConfirmDialog(this,
+                    "Replace current build.toml editor contents with the '" + selected.displayName() + "' template?",
+                    "Apply Template", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (result != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+        String content = buildToolService.loadTemplateContent(selected.id());
+        if (content != null) {
+            updatingTextProgrammatically = true;
+            try {
+                textArea.setText(content);
+                textArea.setCaretPosition(0);
+                textEditedByUser = false;
+            } finally {
+                updatingTextProgrammatically = false;
+            }
+            updateBannerState();
+            statusLabel.setText("Applied '" + selected.displayName() + "' template.");
+            statusTimer.restart();
+        }
+    }
+
+    public CompletableFuture<String> autoDetectWithAi() {
+        if (aiService == null) {
+            showSaveErrorDialog("AI Service is not available.");
+            CompletableFuture<String> done = CompletableFuture.completedFuture("");
+            lastAsyncFuture = done;
+            return done;
+        }
+        autoDetectAiButton.setEnabled(false);
+        autoDetectAiButton.setText(DETECTING_AI_TEXT);
+        CompletableFuture<String> future = Edt.supplyAsync(() -> {
+            String rawResponse = aiService.chat("build-detect:default", WorkflowPhase.EXPLORE, AI_BUILD_DETECT_PROMPT,
+                    List.of());
+            return stripMarkdownCodeFences(rawResponse);
+        }, tomlContent -> {
+            autoDetectAiButton.setText(AUTO_DETECT_AI_TEXT);
+            autoDetectAiButton.setEnabled(true);
+            if (tomlContent != null && !tomlContent.isBlank()) {
+                updatingTextProgrammatically = true;
+                try {
+                    textArea.setText(tomlContent);
+                    textArea.setCaretPosition(0);
+                    textEditedByUser = false;
+                } finally {
+                    updatingTextProgrammatically = false;
+                }
+                updateBannerState();
+                statusLabel.setText("AI build configuration generated! Review and click Confirm & Save Settings.");
+                statusTimer.restart();
+            }
+        }, ex -> {
+            autoDetectAiButton.setText(AUTO_DETECT_AI_TEXT);
+            autoDetectAiButton.setEnabled(true);
+            Throwable cause = ExceptionUtils.getRootCause(ex);
+            log.error("AI build auto-detection failed: {}", cause.getMessage());
+            showSaveErrorDialog("AI auto-detection failed: " + cause.getMessage());
+        });
+        lastAsyncFuture = future;
+        return future;
+    }
+
+    private static String loadAiBuildDetectPrompt() {
+        try {
+            return PathUtils.readClasspathResourceUtf8(AI_BUILD_DETECT_PROMPT_PATH, BuildConfigPanel.class).strip();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to load " + AI_BUILD_DETECT_PROMPT_PATH, e);
+        }
+    }
+
+    static String stripMarkdownCodeFences(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            if (firstNewline >= 0) {
+                trimmed = trimmed.substring(firstNewline + 1);
+            }
+            if (trimmed.endsWith("```")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 3);
+            }
+        }
+        return trimmed.trim();
+    }
+
+    private String resolveGlobalDefaultModel() {
+        return SettingsService.resolveGlobalGeminiModel(settingsService);
     }
 
     void loadModelOptions() {
@@ -237,6 +416,7 @@ public final class BuildConfigPanel extends JPanel {
         Edt.run(() -> {
             loadModelOptions();
             updateSelectedModelDetails();
+            loadTemplateOptions();
             loadConfig();
             updateBannerState();
         });
@@ -298,6 +478,7 @@ public final class BuildConfigPanel extends JPanel {
 
     private void onTomlTextEdited() {
         if (!updatingTextProgrammatically) {
+            textEditedByUser = true;
             updateBannerState();
         }
     }
@@ -392,6 +573,7 @@ public final class BuildConfigPanel extends JPanel {
             try {
                 textArea.setText(content);
                 textArea.setCaretPosition(0);
+                textEditedByUser = false;
             } finally {
                 updatingTextProgrammatically = false;
             }
@@ -419,6 +601,7 @@ public final class BuildConfigPanel extends JPanel {
             try {
                 if (projectService != null && projectService.hasActiveProject()) {
                     projectService.setProjectGeminiModel(modelOverrideToSave);
+                    projectService.setBuildConfirmed(true);
                 }
                 if (buildToolService != null) {
                     buildToolService.saveConfigContent(contentToSave);
@@ -428,7 +611,11 @@ public final class BuildConfigPanel extends JPanel {
             }
         }, () -> {
             saveButton.setEnabled(true);
+            textEditedByUser = false;
             updateBannerState();
+            if (onConfirmSavedCallback != null) {
+                onConfirmSavedCallback.run();
+            }
             statusLabel.setText("Configuration saved successfully!");
             statusTimer.restart();
         }, ex -> {
@@ -439,6 +626,10 @@ public final class BuildConfigPanel extends JPanel {
         });
         lastAsyncFuture = future;
         return future;
+    }
+
+    void setOnConfirmSavedCallback(Runnable callback) {
+        this.onConfirmSavedCallback = callback;
     }
 
     private void showSaveErrorDialog(String message) {
@@ -464,6 +655,18 @@ public final class BuildConfigPanel extends JPanel {
 
     JTextArea getModelDescriptionArea() {
         return modelDescriptionArea;
+    }
+
+    JComboBox<BuildTemplateInfo> getTemplateCombo() {
+        return templateCombo;
+    }
+
+    JButton getApplyTemplateButton() {
+        return applyTemplateButton;
+    }
+
+    JButton getAutoDetectAiButton() {
+        return autoDetectAiButton;
     }
 
     private void updateTextAreaTheme() {

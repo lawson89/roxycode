@@ -1,10 +1,14 @@
-[build]
-compile = "echo 'No build command configured'"
-clean = "echo 'No clean command configured'"
-
-[test]
-run_all = "echo 'No test command configured'"
-run_single = "echo 'No test command configured'"
+[commands]
+install = ""
+clean = ""
+compile = ""
+build = ""
+test_all = ""
+test_single = ""
+lint = ""
+lint_single = ""
+format = ""
+format_single = ""
 
 [env]
 ROXY_CODE = "true"

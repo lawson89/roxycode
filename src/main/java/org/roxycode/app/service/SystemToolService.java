@@ -349,9 +349,9 @@ public class SystemToolService {
             return t.getMessage().trim();
         }
         if (root != null) {
-            return root.getClass().getSimpleName();
+            return ExceptionUtils.getMessageOrSimpleName(root);
         }
-        return t.getClass().getSimpleName();
+        return ExceptionUtils.getMessageOrSimpleName(t);
     }
 
     private static boolean isGenericEnvironmentNotFound(String message) {

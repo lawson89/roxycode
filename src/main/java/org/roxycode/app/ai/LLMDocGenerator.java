@@ -74,11 +74,7 @@ public class LLMDocGenerator {
     }
 
     static boolean isMethodAllowedInPhase(AgentDoc doc, WorkflowPhase currentPhase) {
-        if (doc == null || doc.phases().length == 0) {
-            return false;
-        }
-        List<String> phaseList = Arrays.asList(doc.phases());
-        return currentPhase == null || phaseList.contains("*") || phaseList.contains(currentPhase.name());
+        return doc != null && WorkflowPhase.isAllowed(doc.phases(), currentPhase);
     }
 
     private void generateClassStub(Class<?> clazz, WorkflowPhase currentPhase, StringBuilder sb,

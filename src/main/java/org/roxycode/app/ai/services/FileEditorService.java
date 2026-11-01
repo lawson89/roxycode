@@ -61,8 +61,9 @@ public class FileEditorService {
             @AgentDoc("The replacement text block") String replacementBlock) throws IOException {
         Path path = projectService.resolvePath(relativePath);
         EditorResult validationError = validateRegularFile(path, relativePath);
-        if (validationError != null)
+        if (validationError != null) {
             return validationError;
+        }
 
         String content = Files.readString(path);
         if (targetBlock == null || targetBlock.isBlank()) {
@@ -106,39 +107,10 @@ public class FileEditorService {
 
         for (int i = 0; i < edits.size(); i++) {
             int editNum = i + 1;
-            Object rawEdit = edits.get(i);
-            if (!(rawEdit instanceof Map<?, ?> editMap)) {
-                return new EditorResult(false, "",
-                        "Edit #" + editNum + " failed: Edit entry must be a map with 'target' and 'replacement' keys");
+            EditorResult editError = resolveAndValidateEditEntry(editNum, edits.get(i), relativePath, content, matches);
+            if (editError != null) {
+                return editError;
             }
-            Object targetObj = editMap.get("target");
-            Object replacementObj = editMap.get("replacement");
-            String targetBlock = targetObj instanceof String s ? s : (targetObj != null ? targetObj.toString() : null);
-            String replacementBlock = replacementObj instanceof String s
-                    ? s
-                    : (replacementObj != null ? replacementObj.toString() : null);
-
-            if (targetBlock == null || targetBlock.isBlank()) {
-                return new EditorResult(false, "",
-                        "Edit #" + editNum + " failed: " + buildTargetNotFoundHint(relativePath, content));
-            }
-            if (replacementBlock == null) {
-                return new EditorResult(false, "",
-                        "Edit #" + editNum + " failed: 'replacement' must not be null in file: " + relativePath);
-            }
-
-            BlockMatch match = findUniqueBlockMatch(editNum, relativePath, content, targetBlock, replacementBlock);
-            if (match.errorHint() != null) {
-                return new EditorResult(false, "", "Edit #" + editNum + " failed: " + match.errorHint());
-            }
-
-            for (BlockMatch existing : matches) {
-                if (match.start() < existing.end() && existing.start() < match.end()) {
-                    return new EditorResult(false, "", "Edit #" + editNum + " failed: Target block overlaps with Edit #"
-                            + existing.editIndex() + " in file: " + relativePath);
-                }
-            }
-            matches.add(match);
         }
 
         matches.sort(Comparator.comparingInt(BlockMatch::start).reversed());
@@ -151,6 +123,49 @@ public class FileEditorService {
                 "Replaced " + matches.size() + " blocks successfully in: " + relativePath);
     }
 
+    private EditorResult resolveAndValidateEditEntry(int editNum, Object rawEdit, String relativePath, String content,
+            List<BlockMatch> matches) {
+        if (!(rawEdit instanceof Map<?, ?> editMap)) {
+            return new EditorResult(false, "",
+                    "Edit #" + editNum + " failed: Edit entry must be a map with 'target' and 'replacement' keys");
+        }
+        String targetBlock = objectToString(editMap.get("target"));
+        String replacementBlock = objectToString(editMap.get("replacement"));
+
+        if (targetBlock == null || targetBlock.isBlank()) {
+            return new EditorResult(false, "",
+                    "Edit #" + editNum + " failed: " + buildTargetNotFoundHint(relativePath, content));
+        }
+        if (replacementBlock == null) {
+            return new EditorResult(false, "",
+                    "Edit #" + editNum + " failed: 'replacement' must not be null in file: " + relativePath);
+        }
+
+        BlockMatch match = findUniqueBlockMatch(editNum, relativePath, content, targetBlock, replacementBlock);
+        if (match.errorHint() != null) {
+            return new EditorResult(false, "", "Edit #" + editNum + " failed: " + match.errorHint());
+        }
+
+        for (BlockMatch existing : matches) {
+            if (match.start() < existing.end() && existing.start() < match.end()) {
+                return new EditorResult(false, "", "Edit #" + editNum + " failed: Target block overlaps with Edit #"
+                        + existing.editIndex() + " in file: " + relativePath);
+            }
+        }
+        matches.add(match);
+        return null;
+    }
+
+    private static String objectToString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String s) {
+            return s;
+        }
+        return value.toString();
+    }
+
     private record BlockMatch(int editIndex, int start, int end, String replacement, String errorHint) {
     }
 
@@ -158,9 +173,10 @@ public class FileEditorService {
             String replacementBlock) {
         String lineSeparator = detectLineSeparator(content, replacementBlock);
         String normalizedTarget = normalizeLineEndings(targetBlock, lineSeparator);
-        String normalizedReplacement = replacementBlock == null
-                ? ""
-                : normalizeLineEndings(replacementBlock, lineSeparator);
+        String normalizedReplacement = "";
+        if (replacementBlock != null) {
+            normalizedReplacement = normalizeLineEndings(replacementBlock, lineSeparator);
+        }
 
         List<Integer> exactMatchOffsets = findExactMatches(content, normalizedTarget);
         if (exactMatchOffsets.size() == SINGLE_MATCH_COUNT) {
@@ -172,21 +188,7 @@ public class FileEditorService {
                     formatNonUniqueMatchError(relativePath, content, exactMatchOffsets));
         }
 
-        String[] parts = normalizedTarget.trim().split(WHITESPACE_REGEX);
-        StringBuilder sb = new StringBuilder("(?s)");
-        for (int i = 0; i < parts.length; i++) {
-            if (!parts[i].isEmpty()) {
-                sb.append(Pattern.quote(parts[i]));
-                if (i < parts.length - 1)
-                    sb.append(WHITESPACE_REGEX);
-            }
-        }
-        Matcher matcher = Pattern.compile(sb.toString()).matcher(content);
-        List<int[]> regexMatches = new ArrayList<>();
-        while (matcher.find()) {
-            regexMatches.add(new int[]{matcher.start(), matcher.end()});
-        }
-
+        List<int[]> regexMatches = findWhitespaceTolerantMatches(content, normalizedTarget);
         if (regexMatches.isEmpty()) {
             return new BlockMatch(editIndex, -1, -1, null, buildTargetNotFoundHint(relativePath, content));
         }
@@ -195,16 +197,44 @@ public class FileEditorService {
                     formatNonUniqueMatchError(relativePath, content, regexMatches.stream().map(m -> m[0]).toList()));
         }
 
-        int start = regexMatches.get(0)[0];
+        int start = adjustMatchStartForLeadingIndent(content, regexMatches.get(0)[0], normalizedTarget,
+                normalizedReplacement);
         int end = regexMatches.get(0)[1];
-        int lineStart = start == 0 ? 0 : content.lastIndexOf(LF, start - 1) + 1;
-        String linePrefix = content.substring(lineStart, start);
+        return new BlockMatch(editIndex, start, end, normalizedReplacement, null);
+    }
+
+    private static List<int[]> findWhitespaceTolerantMatches(String content, String normalizedTarget) {
+        String[] parts = normalizedTarget.trim().split(WHITESPACE_REGEX);
+        StringBuilder sb = new StringBuilder("(?s)");
+        for (int i = 0; i < parts.length; i++) {
+            if (!parts[i].isEmpty()) {
+                sb.append(Pattern.quote(parts[i]));
+                if (i < parts.length - 1) {
+                    sb.append(WHITESPACE_REGEX);
+                }
+            }
+        }
+        Matcher matcher = Pattern.compile(sb.toString()).matcher(content);
+        List<int[]> regexMatches = new ArrayList<>();
+        while (matcher.find()) {
+            regexMatches.add(new int[]{matcher.start(), matcher.end()});
+        }
+        return regexMatches;
+    }
+
+    private static int adjustMatchStartForLeadingIndent(String content, int matchStart, String normalizedTarget,
+            String normalizedReplacement) {
+        int lineStart = 0;
+        if (matchStart > 0) {
+            lineStart = content.lastIndexOf(LF, matchStart - 1) + 1;
+        }
+        String linePrefix = content.substring(lineStart, matchStart);
         if (isHorizontalWhitespaceOnly(linePrefix)
                 && (startsWithHorizontalWhitespace(stripLeadingNewlines(normalizedTarget))
                         || startsWithHorizontalWhitespace(normalizedReplacement))) {
-            start = lineStart;
+            return lineStart;
         }
-        return new BlockMatch(editIndex, start, end, normalizedReplacement, null);
+        return matchStart;
     }
 
     @AgentDoc(value = "Replaces a range of lines with new content using 1-based indexing.", examples = """
@@ -250,14 +280,18 @@ public class FileEditorService {
             LineMutator mutator, String successMessage) throws IOException {
         Path path = projectService.resolvePath(relativePath);
         EditorResult validationError = validateRegularFile(path, relativePath);
-        if (validationError != null)
+        if (validationError != null) {
             return validationError;
+        }
 
         String rawContent = Files.readString(path);
         String lineSeparator = detectLineSeparator(rawContent, inputContent);
-        boolean hasTrailingNewline = (fallbackTrailingToInputWhenEmpty && rawContent.isEmpty())
-                ? hasTrailingLineSeparator(inputContent)
-                : hasTrailingLineSeparator(rawContent);
+        boolean hasTrailingNewline;
+        if (fallbackTrailingToInputWhenEmpty && rawContent.isEmpty()) {
+            hasTrailingNewline = hasTrailingLineSeparator(inputContent);
+        } else {
+            hasTrailingNewline = hasTrailingLineSeparator(rawContent);
+        }
         List<String> newLines = new ArrayList<>(rawContent.lines().toList());
         String error = mutator.mutate(newLines);
         if (error != null) {
@@ -272,8 +306,9 @@ public class FileEditorService {
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
         EditorResult validationError = validateRegularFile(path, relativePath, "Cannot delete directory: ");
-        if (validationError != null)
+        if (validationError != null) {
             return validationError;
+        }
         Files.delete(path);
         log.info("Deleted file: {} at {}", relativePath, path.toAbsolutePath());
         eventPublisher.publishEvent(new FileChangedEvent(relativePath));
@@ -302,8 +337,9 @@ public class FileEditorService {
         Path source = projectService.resolvePath(sourcePath);
         Path target = projectService.resolvePath(targetPath);
         EditorResult validationError = validateRegularFile(source, sourcePath, "Cannot copy directory: ");
-        if (validationError != null)
+        if (validationError != null) {
             return validationError;
+        }
         PathUtils.createParentDirectories(target);
         Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Copied file from {} to {}", sourcePath, targetPath);
@@ -332,7 +368,10 @@ public class FileEditorService {
         if (!Files.exists(path)) {
             return new EditorResult(false, "", "File does not exist: " + relativePath);
         }
-        return Files.isDirectory(path) ? new EditorResult(false, "", directoryErrorPrefix + relativePath) : null;
+        if (Files.isDirectory(path)) {
+            return new EditorResult(false, "", directoryErrorPrefix + relativePath);
+        }
+        return null;
     }
 
     private EditorResult applyReplacement(Path path, String relativePath, String content, int start, int end,
@@ -355,8 +394,9 @@ public class FileEditorService {
 
     private static List<Integer> findExactMatches(String content, String target) {
         List<Integer> offsets = new ArrayList<>();
-        if (target.isEmpty())
+        if (target.isEmpty()) {
             return offsets;
+        }
         for (int index = content.indexOf(target, 0); index != -1; index = content.indexOf(target,
                 index + target.length())) {
             offsets.add(index);
@@ -398,11 +438,16 @@ public class FileEditorService {
     }
 
     private static String detectLineSeparator(String rawContent, String fallbackText) {
-        if (rawContent.contains(CRLF))
+        if (rawContent.contains(CRLF)) {
             return CRLF;
-        if (rawContent.contains(NL))
+        }
+        if (rawContent.contains(NL)) {
             return NL;
-        return (fallbackText != null && fallbackText.contains(CRLF)) ? CRLF : NL;
+        }
+        if (fallbackText != null && fallbackText.contains(CRLF)) {
+            return CRLF;
+        }
+        return NL;
     }
 
     static List<String> splitLines(String content) {
@@ -410,7 +455,10 @@ public class FileEditorService {
             return List.of("");
         }
         List<String> lines = content.lines().toList();
-        return lines.stream().allMatch(String::isEmpty) ? List.of(content.split("\\R", -1)) : lines;
+        if (lines.stream().allMatch(String::isEmpty)) {
+            return List.of(content.split("\\R", -1));
+        }
+        return lines;
     }
 
     private static boolean hasTrailingLineSeparator(String text) {
@@ -424,6 +472,10 @@ public class FileEditorService {
             return;
         }
         String joined = String.join(lineSeparator, lines);
-        Files.writeString(path, hasTrailingNewline ? joined + lineSeparator : joined);
+        if (hasTrailingNewline) {
+            Files.writeString(path, joined + lineSeparator);
+        } else {
+            Files.writeString(path, joined);
+        }
     }
 }

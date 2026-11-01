@@ -27,11 +27,8 @@ public class JexlServiceRegistry {
         for (Map.Entry<String, Object> entry : services.entrySet()) {
             Object service = entry.getValue();
             AgentService ann = AnnotationUtils.findAnnotation(AopUtils.getTargetClass(service), AgentService.class);
-            if (ann != null && ann.phases().length > 0) {
-                List<String> phaseList = Arrays.asList(ann.phases());
-                if (phase == null || phaseList.contains("*") || phaseList.contains(phase.name())) {
-                    filtered.put(entry.getKey(), service);
-                }
+            if (ann != null && WorkflowPhase.isAllowed(ann.phases(), phase)) {
+                filtered.put(entry.getKey(), service);
             }
         }
         return filtered;

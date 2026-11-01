@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.util.FrontmatterUtils;
+import org.roxycode.app.util.PathUtils;
 
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
@@ -32,7 +33,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
                 return "";
             }
             if (timestamp.length() > TIMESTAMP_LENGTH) {
-                return timestamp.substring(0, TIMESTAMP_LENGTH).replace('T', ' ');
+                return PathUtils.formatTimestampDisplay(timestamp, TIMESTAMP_LENGTH, "");
             }
             return timestamp;
         }

@@ -1,10 +1,14 @@
-[build]
-compile = "go build ./..."
+[commands]
+install = "go mod tidy"
 clean = "go clean"
-
-[test]
-run_all = "go test ./..."
-run_single = "go test -run {testName}"
+compile = "go build ./..."
+build = "go build ./..."
+test_all = "go test ./..."
+test_single = "go test ./... -run {testName}"
+lint = "go vet ./..."
+lint_single = "go vet {file}"
+format = "gofmt -w ."
+format_single = "gofmt -w {file}"
 
 [env]
 ROXY_CODE = "true"

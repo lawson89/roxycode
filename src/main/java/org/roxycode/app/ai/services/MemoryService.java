@@ -186,16 +186,10 @@ public class MemoryService {
             return null;
         }
         try {
-            Files.createDirectories(archiveDir);
             String resolvedTitle = StringUtils.defaultIfBlank(title, AiService.DEFAULT_TOPIC_TITLE).trim();
-            String slug = PathUtils.sanitizeSlug(resolvedTitle, PlanService.MAX_PLAN_SLUG_LENGTH, "topic");
-            String baseId = PathUtils.formatArchiveTimestamp(isoTimestamp) + "-" + slug;
-            PathUtils.ArchiveFileTarget archiveTarget = PathUtils.resolveUniqueArchiveFile(archiveDir, baseId);
-            Path projectRoot = projectService.getCurrentProjectRoot();
-            String projectPath = "";
-            if (projectRoot != null) {
-                projectPath = projectRoot.toAbsolutePath().normalize().toString();
-            }
+            PathUtils.ArchiveFileTarget archiveTarget = PathUtils.prepareArchiveTarget(archiveDir, isoTimestamp,
+                    resolvedTitle, PlanService.MAX_PLAN_SLUG_LENGTH, "topic");
+            String projectPath = ProjectService.resolveNormalizedProjectPath(projectService);
             String resolvedUser = StringUtils.defaultIfBlank(user, "User").trim();
             String resolvedTimestamp = StringUtils.defaultIfBlank(isoTimestamp, Instant.now().toString()).trim();
 

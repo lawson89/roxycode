@@ -14,6 +14,7 @@ import java.util.Map;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.ExceptionUtils;
 
 @AgentService(value = "fileReadService", phases = {"*"})
 @AgentDoc("Provides read-only access to files within the current project.")
@@ -145,10 +146,7 @@ public class FileReadService {
             }
             return formatNumberedLines(content.lines().toList(), 1, Integer.MAX_VALUE);
         } catch (Exception e) {
-            String msg = e.getClass().getSimpleName();
-            if (e.getMessage() != null) {
-                msg = e.getMessage();
-            }
+            String msg = ExceptionUtils.getMessageOrSimpleName(e);
             if (msg.startsWith(ERROR_PREFIX)) {
                 return msg;
             }

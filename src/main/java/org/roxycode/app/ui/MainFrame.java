@@ -37,7 +37,7 @@ public final class MainFrame extends JPanel {
     private static final String API_VIEW = "API";
     static final String TOOLS_VIEW = "TOOLS";
     static final String SETTINGS_VIEW = "SETTINGS";
-    private static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
+    static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String MISSING_REQUIRED_TOOLS_TITLE = "Required System Tools Missing";
     static final String MISSING_REQUIRED_TOOLS_MESSAGE = "RoxyCode requires Ripgrep, Git, and Universal Ctags to function properly. Please review the System Tools page to install or configure any missing required tools.";
@@ -98,7 +98,15 @@ public final class MainFrame extends JPanel {
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 contextManagerPanel);
+        if (buildConfigPanel != null) {
+            buildConfigPanel.setOnConfirmSavedCallback(() -> {
+                if (sidebar != null) {
+                    sidebar.setBuildConfigAttentionNeeded(false);
+                }
+            });
+        }
         handleStartupSettingsCheck();
+        updateBuildConfigAttentionState();
         checkRequiredSystemToolsOnStartup(systemToolsPanel);
     }
 
@@ -114,7 +122,16 @@ public final class MainFrame extends JPanel {
             }
             chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
             chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
+            updateBuildConfigAttentionState();
         });
+    }
+
+    void updateBuildConfigAttentionState() {
+        if (sidebar == null || projectService == null || !projectService.hasActiveProject()) {
+            return;
+        }
+        boolean unconfirmed = !projectService.isBuildConfirmed();
+        sidebar.setBuildConfigAttentionNeeded(unconfirmed);
     }
 
     @EventListener
@@ -306,6 +323,9 @@ public final class MainFrame extends JPanel {
         this.currentCard = cardName;
         if (sidebar != null) {
             sidebar.selectCard(cardName);
+            if (BUILD_CONFIG_VIEW.equals(cardName)) {
+                sidebar.setBuildConfigAttentionNeeded(false);
+            }
         }
         cardLayout.show(contentArea, cardName);
         if (QA_VIEW.equals(cardName) && qaWorkspacePanel != null) {

@@ -64,8 +64,11 @@ class LLMDocGeneratorTest {
                         "getDiffHead(relativePath: string): string;", "getChangedFiles(): List;",
                         "getBlame(relativePath: string, startLine: number, endLine: number): string;"),
                 serviceCase(GenericBuildToolService.class, new GenericBuildToolService(ps, null, null),
-                        "buildAndTest(): BuildResult;", "compile(): BuildResult;",
-                        "runSingleTest(testName: string): BuildResult;", "runTests(): BuildResult;"),
+                        "install(): BuildResult;", "clean(): BuildResult;", "compile(): BuildResult;",
+                        "build(): BuildResult;", "runTests(): BuildResult;",
+                        "runSingleTest(testName: string): BuildResult;", "lint(): BuildResult;",
+                        "lint(relativePath: string): BuildResult;", "format(): BuildResult;",
+                        "format(relativePath: string): BuildResult;", "buildAndTest(): BuildResult;"),
                 serviceCase(MemoryService.class, new MemoryService(null, ps), "readGlobalMemory(): string;",
                         "readProjectMemory(): string;",
                         "saveProjectNote(slug: string, title: string, tags: string, content: string): EditorResult;",
@@ -178,6 +181,24 @@ class LLMDocGeneratorTest {
         assertFalse(codeDoc.contains("planOnlyMethod"));
         assertFalse(codeDoc.contains("interface Details {"));
         assertFalse(codeDoc.contains("emptyPhasesMethod"));
+
+        ProjectService ps = mock(ProjectService.class);
+        when(ps.hasActiveProject()).thenReturn(false);
+        GenericBuildToolService buildTool = new GenericBuildToolService(ps, null, null);
+        String buildCodeDoc = generator.generateDoc(List.of(buildTool), WorkflowPhase.CODE);
+        SwingTestUtils.assertContainsAll(buildCodeDoc, "install(): BuildResult;", "format(): BuildResult;",
+                "format(relativePath: string): BuildResult;", "lint(): BuildResult;",
+                "lint(relativePath: string): BuildResult;", "build(): BuildResult;");
+
+        for (WorkflowPhase nonCodePhase : List.of(WorkflowPhase.EXPLORE, WorkflowPhase.PLAN, WorkflowPhase.REVIEW)) {
+            String nonCodeDoc = generator.generateDoc(List.of(buildTool), nonCodePhase);
+            SwingTestUtils.assertContainsAll(nonCodeDoc, "compile(): BuildResult;", "build(): BuildResult;",
+                    "runTests(): BuildResult;", "lint(): BuildResult;", "lint(relativePath: string): BuildResult;",
+                    "buildAndTest(): BuildResult;");
+            assertFalse(nonCodeDoc.contains("install(): BuildResult;"));
+            assertFalse(nonCodeDoc.contains("format(): BuildResult;"));
+            assertFalse(nonCodeDoc.contains("format(relativePath: string): BuildResult;"));
+        }
     }
 
     @Test

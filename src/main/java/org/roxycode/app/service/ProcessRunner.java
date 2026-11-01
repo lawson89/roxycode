@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.io.output.TeeOutputStream;
 import org.apache.commons.io.output.ThresholdingOutputStream;
+import org.roxycode.app.util.ExceptionUtils;
 
 public final class ProcessRunner {
 
@@ -109,13 +110,7 @@ public final class ProcessRunner {
             throw ce;
         } catch (IOException e) {
             destroyProcessTree(process);
-            String errorMsg;
-            if (e.getMessage() != null) {
-                errorMsg = e.getMessage();
-            } else {
-                errorMsg = e.getClass().getSimpleName();
-            }
-            return new ProcessResult(-1, "", errorMsg, false);
+            return new ProcessResult(-1, "", ExceptionUtils.getMessageOrSimpleName(e), false);
         }
     }
 

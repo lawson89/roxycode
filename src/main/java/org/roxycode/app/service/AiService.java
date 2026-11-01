@@ -16,7 +16,6 @@ import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
-import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,10 +113,7 @@ public class AiService {
         if (projectService != null) {
             return projectService.getEffectiveGeminiModel();
         }
-        if (settingsService != null && settingsService.getSettings() != null) {
-            return settingsService.getSettings().getGeminiModel();
-        }
-        return AppSettings.DEFAULT_GEMINI_MODEL;
+        return SettingsService.resolveGlobalGeminiModel(settingsService);
     }
 
     void setRetryTemplate(RetryTemplate retryTemplate) {

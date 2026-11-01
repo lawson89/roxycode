@@ -35,10 +35,15 @@ public class EnvironmentService {
     }
 
     public FontIcon getOsIcon() {
-        FontIcon fontIcon = FontIcon.of(SystemUtils.IS_OS_WINDOWS ? Codicons.WINDOW : Codicons.TERMINAL, 14);
+        Codicons iconCode = Codicons.TERMINAL;
+        if (SystemUtils.IS_OS_WINDOWS) {
+            iconCode = Codicons.WINDOW;
+        }
+        FontIcon fontIcon = FontIcon.of(iconCode, 14);
         Color color = UIManager.getColor("Label.foreground");
-        if (color != null)
+        if (color != null) {
             fontIcon.setIconColor(color);
+        }
         return fontIcon;
     }
 }

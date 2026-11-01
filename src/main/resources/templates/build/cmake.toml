@@ -1,10 +1,14 @@
-[build]
-compile = "mkdir -p build && cd build && cmake .. && make"
+[commands]
+install = "cmake -B build"
 clean = "rm -rf build/"
-
-[test]
-run_all = "cd build && ctest"
-run_single = "cd build && ctest -R {testName}"
+compile = "cmake -B build && cmake --build build"
+build = "cmake -B build && cmake --build build"
+test_all = "ctest --test-dir build --output-on-failure"
+test_single = "ctest --test-dir build -R {testName} --output-on-failure"
+lint = ""
+lint_single = "clang-tidy {file}"
+format = ""
+format_single = "clang-format -i {file}"
 
 [env]
 ROXY_CODE = "true"

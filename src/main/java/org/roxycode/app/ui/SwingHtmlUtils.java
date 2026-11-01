@@ -239,11 +239,13 @@ public final class SwingHtmlUtils {
         for (Element curr = elem; curr != null; curr = curr.getParentElement()) {
             AttributeSet attrs = curr.getAttributes();
             if (attrs != null) {
-                if (attrs.isDefined(HTML.Attribute.NOWRAP))
+                if (attrs.isDefined(HTML.Attribute.NOWRAP)) {
                     return true;
+                }
                 Object ws = attrs.getAttribute(CSS.Attribute.WHITE_SPACE);
-                if (ws != null && "nowrap".equalsIgnoreCase(ws.toString()))
+                if (ws != null && "nowrap".equalsIgnoreCase(ws.toString())) {
                     return true;
+                }
             }
             if ("td".equalsIgnoreCase(curr.getName()) || "th".equalsIgnoreCase(curr.getName())) {
                 break;
@@ -300,14 +302,16 @@ public final class SwingHtmlUtils {
         component.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                if (e.isPopupTrigger())
+                if (e.isPopupTrigger()) {
                     showPopup(e);
+                }
             }
 
             @Override
             public void mouseReleased(MouseEvent e) {
-                if (e.isPopupTrigger())
+                if (e.isPopupTrigger()) {
                     showPopup(e);
+                }
             }
 
             private void showPopup(MouseEvent e) {
@@ -368,8 +372,9 @@ public final class SwingHtmlUtils {
         if (uiKeys != null) {
             for (String key : uiKeys) {
                 Color color = UIManager.getColor(key);
-                if (color != null)
+                if (color != null) {
                     return color;
+                }
             }
         }
         return fallback;

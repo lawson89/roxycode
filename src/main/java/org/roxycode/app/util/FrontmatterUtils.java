@@ -27,6 +27,21 @@ public final class FrontmatterUtils {
     private FrontmatterUtils() {
     }
 
+    private static YamlFrontMatterBlock findClosedFrontmatterBlock(String content) {
+        if (StringUtils.isEmpty(content)) {
+            return null;
+        }
+        Node document = SwingHtmlUtils.getMarkdownParser().parse(content);
+        Node firstChild = document.getFirstChild();
+        if (firstChild instanceof YamlFrontMatterBlock block) {
+            String blockText = content.substring(block.getStartOffset(), block.getEndOffset());
+            if (blockText.trim().endsWith("---")) {
+                return block;
+            }
+        }
+        return null;
+    }
+
     /**
      * Strips the YAML frontmatter block from the beginning of a Markdown string.
      *
@@ -38,13 +53,9 @@ public final class FrontmatterUtils {
         if (rawMarkdown == null || rawMarkdown.isEmpty()) {
             return "";
         }
-        Node document = SwingHtmlUtils.getMarkdownParser().parse(rawMarkdown);
-        Node firstChild = document.getFirstChild();
-        if (firstChild instanceof YamlFrontMatterBlock) {
-            String blockText = rawMarkdown.substring(firstChild.getStartOffset(), firstChild.getEndOffset());
-            if (blockText.trim().endsWith("---")) {
-                return StringUtils.stripStart(rawMarkdown.substring(firstChild.getEndOffset()), null);
-            }
+        YamlFrontMatterBlock block = findClosedFrontmatterBlock(rawMarkdown);
+        if (block != null) {
+            return StringUtils.stripStart(rawMarkdown.substring(block.getEndOffset()), null);
         }
         return rawMarkdown;
     }
@@ -76,35 +87,28 @@ public final class FrontmatterUtils {
      * @return A map of frontmatter keys to their string representation
      */
     public static Map<String, String> parseFrontmatter(String content) {
-        if (content == null || content.isEmpty()) {
+        YamlFrontMatterBlock block = findClosedFrontmatterBlock(content);
+        if (block == null) {
             return Collections.emptyMap();
         }
-        Node document = SwingHtmlUtils.getMarkdownParser().parse(content);
-        Node firstChild = document.getFirstChild();
-        if (firstChild instanceof YamlFrontMatterBlock) {
-            String yamlBlock = content.substring(firstChild.getStartOffset(), firstChild.getEndOffset());
-            if (!yamlBlock.trim().endsWith("---")) {
-                return Collections.emptyMap();
-            }
-            String yamlContent = StringUtils.removeEnd(StringUtils.removeStart(yamlBlock.trim(), "---"), "---").trim();
-            if (yamlContent.isEmpty()) {
-                return Collections.emptyMap();
-            }
-            try {
-                Yaml yaml = new Yaml();
-                Map<String, Object> obj = yaml.load(yamlContent);
-                if (obj == null) {
-                    return Collections.emptyMap();
-                }
-                Map<String, String> result = new LinkedHashMap<>();
-                obj.forEach((k, v) -> result.put(k, Objects.toString(v, "")));
-                return result;
-            } catch (Exception e) {
-                log.debug("Failed to parse YAML frontmatter: {}", e.getMessage());
-                return Collections.emptyMap();
-            }
+        String yamlBlock = content.substring(block.getStartOffset(), block.getEndOffset());
+        String yamlContent = StringUtils.removeEnd(StringUtils.removeStart(yamlBlock.trim(), "---"), "---").trim();
+        if (yamlContent.isEmpty()) {
+            return Collections.emptyMap();
         }
-        return Collections.emptyMap();
+        try {
+            Yaml yaml = new Yaml();
+            Map<String, Object> obj = yaml.load(yamlContent);
+            if (obj == null) {
+                return Collections.emptyMap();
+            }
+            Map<String, String> result = new LinkedHashMap<>();
+            obj.forEach((k, v) -> result.put(k, Objects.toString(v, "")));
+            return result;
+        } catch (Exception e) {
+            log.debug("Failed to parse YAML frontmatter: {}", e.getMessage());
+            return Collections.emptyMap();
+        }
     }
 
     /**

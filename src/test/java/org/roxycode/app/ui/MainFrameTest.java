@@ -37,6 +37,8 @@ class MainFrameTest {
             throws Exception {
         ApplicationEventPublisher pub = mock(ApplicationEventPublisher.class);
         ProjectService projectService = mock(ProjectService.class);
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.isBuildConfirmed()).thenReturn(false);
         when(projectService.getProjectName()).thenReturn("test-project");
         when(projectService.getEffectiveGeminiModel()).thenReturn("gemini-3.5-flash");
 
@@ -123,6 +125,10 @@ class MainFrameTest {
             assertFalse(frame.getSidebar().isSettingsAttentionNeeded());
             assertNull(settingsBtn.getStatusIcon());
             assertNull(settingsBtn.getToolTipText());
+
+            assertTrue(frame.getSidebar().isBuildConfigAttentionNeeded());
+            frame.showCard(MainFrame.BUILD_CONFIG_VIEW);
+            assertFalse(frame.getSidebar().isBuildConfigAttentionNeeded());
         } finally {
             frame.dispose();
         }

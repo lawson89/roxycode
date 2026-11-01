@@ -196,7 +196,7 @@ class BuildContainerServiceTest {
         for (String invalid : new String[]{null, "", "   ", "[container\nenabled = true\n", "invalid = = toml"}) {
             assertFalse(BuildContainerService.isContainerEnabledInToml(invalid));
         }
-        String tomlWithDisabled = "[build]\ncompile = './mvnw compile'\n\n[container]\nenabled = false # inline comment\nimage = 'eclipse-temurin:25-jdk'\n";
+        String tomlWithDisabled = "[commands]\ncompile = './mvnw test-compile'\n\n[container]\nenabled = false # inline comment\nimage = 'eclipse-temurin:25-jdk'\n";
 
         String enabledToml = BuildContainerService.updateContainerEnabledInToml(tomlWithDisabled, true);
         assertTrue(BuildContainerService.isContainerEnabledInToml(enabledToml));
@@ -205,8 +205,8 @@ class BuildContainerServiceTest {
                 .isContainerEnabledInToml(BuildContainerService.updateContainerEnabledInToml(enabledToml, false)));
 
         String appended = BuildContainerService.updateContainerEnabledInToml("""
-                [build]
-                compile = './mvnw compile'
+                [commands]
+                compile = './mvnw test-compile'
                 """, true);
         SwingTestUtils.assertContainsAll(appended, "[container]",
                 "image = '" + BuildContainerService.DEFAULT_CONTAINER_IMAGE + "'",
@@ -214,7 +214,7 @@ class BuildContainerServiceTest {
         assertTrue(BuildContainerService.isContainerEnabledInToml(appended));
 
         String commentedSectionToml = """
-                [build]
+                [commands]
                 compile = './mvnw'
 
                 [container] # container settings

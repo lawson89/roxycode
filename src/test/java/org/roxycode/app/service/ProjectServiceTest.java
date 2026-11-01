@@ -119,5 +119,12 @@ class ProjectServiceTest {
         projectService.setProjectGeminiModel("   ");
         assertEquals("", projectService.getProjectGeminiModel());
         assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
+
+        assertFalse(projectService.isBuildConfirmed());
+        projectService.setBuildConfirmed(true);
+        assertTrue(projectService.isBuildConfirmed());
+        projectService.setProjectGeminiModel("gemini-3.5-pro");
+        assertTrue(projectService.isBuildConfirmed());
+        assertEquals("gemini-3.5-pro", projectService.getProjectGeminiModel());
     }
 }

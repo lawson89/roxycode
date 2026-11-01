@@ -89,11 +89,9 @@ public class PlanService {
                 continue;
             }
             List<WorkflowPhase> phases = new ArrayList<>();
-            for (String phaseName : doc.phases()) {
-                if ("*".equals(phaseName)) {
-                    Collections.addAll(phases, WorkflowPhase.values());
-                } else {
-                    phases.add(WorkflowPhase.valueOf(phaseName));
+            for (WorkflowPhase candidate : WorkflowPhase.values()) {
+                if (WorkflowPhase.isAllowed(doc.phases(), candidate)) {
+                    phases.add(candidate);
                 }
             }
             map.putIfAbsent(method.getName(), List.copyOf(phases));
@@ -410,18 +408,10 @@ public class PlanService {
         }
         try {
             Path archiveDir = projectService.resolveProjectDataPath(ARCHIVE_PLANS_SUBDIR);
-            Files.createDirectories(archiveDir);
-            String baseId = PathUtils.formatArchiveTimestamp(timestamp) + "-"
-                    + PathUtils.sanitizeSlug(plan.title(), MAX_PLAN_SLUG_LENGTH, "plan");
-            PathUtils.ArchiveFileTarget archiveTarget = PathUtils.resolveUniqueArchiveFile(archiveDir, baseId);
-
-            Path projectRoot = projectService.getCurrentProjectRoot();
-            String projectPath = "";
-            if (projectRoot != null) {
-                projectPath = projectRoot.toAbsolutePath().normalize().toString();
-            }
+            PathUtils.ArchiveFileTarget archiveTarget = PathUtils.prepareArchiveTarget(archiveDir, timestamp,
+                    plan.title(), MAX_PLAN_SLUG_LENGTH, "plan");
             String archivedMarkdown = plan.toArchivedMarkdown(archiveTarget.id(), projectService.getProjectName(),
-                    projectPath, getGitStatusSafely());
+                    ProjectService.resolveNormalizedProjectPath(projectService), getGitStatusSafely());
             Files.writeString(archiveTarget.file(), archivedMarkdown, StandardCharsets.UTF_8);
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_PLAN,

@@ -62,6 +62,9 @@ public final class SettingsPanel extends JPanel {
     private final JLabel legendLabel;
     private final JLabel statusLabel;
     private final Timer statusTimer;
+    private JLabel appearanceHeaderLabel;
+    private JLabel aiModelHeaderLabel;
+    private JLabel agentExecutionHeaderLabel;
 
     private boolean updatingFromSettings = false;
 
@@ -148,11 +151,9 @@ public final class SettingsPanel extends JPanel {
         JPanel card = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 10", "[grow, fill]", ""));
         UiComponents.styleCardPanel(card);
 
-        JLabel headerLabel = new JLabel(SECTION_APPEARANCE_TITLE);
-        headerLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
-        headerLabel.setIconTextGap(8);
-        headerLabel.setIcon(FontIcon.of(Codicons.SYMBOL_COLOR, 18, SwingHtmlUtils.getAccentColor()));
-        card.add(headerLabel, "growx, wmin 0, gapbottom 2");
+        appearanceHeaderLabel = UiComponents.createSectionHeader(SECTION_APPEARANCE_TITLE, Codicons.SYMBOL_COLOR,
+                "font: bold +2");
+        card.add(appearanceHeaderLabel, "growx, wmin 0, gapbottom 2");
 
         card.add(UiComponents.createFieldRow(
                 UiComponents.createFieldTextBlock("Theme",
@@ -166,16 +167,10 @@ public final class SettingsPanel extends JPanel {
         JPanel card = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 10", "[grow, fill]", ""));
         UiComponents.styleCardPanel(card);
 
-        JLabel headerLabel = new JLabel(SECTION_AI_MODEL_TITLE);
-        headerLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
-        headerLabel.setIconTextGap(8);
-        headerLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, SwingHtmlUtils.getAccentColor()));
-        card.add(headerLabel, "growx, wmin 0, gapbottom 2");
+        aiModelHeaderLabel = UiComponents.createSectionHeader(SECTION_AI_MODEL_TITLE, Codicons.HUBOT, "font: bold +2");
+        card.add(aiModelHeaderLabel, "growx, wmin 0, gapbottom 2");
 
-        JPanel modelControlBox = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", "[center]"));
-        modelControlBox.setOpaque(false);
-        modelControlBox.add(modelApiBadgeLabel, "hidemode 3");
-        modelControlBox.add(modelCombo, "w 220:250:280");
+        JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo, "w 220:250:280");
 
         card.add(UiComponents.createFieldRow(
                 UiComponents.createFieldTextBlock("Gemini Model",
@@ -201,11 +196,9 @@ public final class SettingsPanel extends JPanel {
         JPanel card = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 10", "[grow, fill]", ""));
         UiComponents.styleCardPanel(card);
 
-        JLabel headerLabel = new JLabel(SECTION_AGENT_EXECUTION_TITLE);
-        headerLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
-        headerLabel.setIconTextGap(8);
-        headerLabel.setIcon(FontIcon.of(Codicons.PULSE, 18, SwingHtmlUtils.getAccentColor()));
-        card.add(headerLabel, "growx, wmin 0, gapbottom 2");
+        agentExecutionHeaderLabel = UiComponents.createSectionHeader(SECTION_AGENT_EXECUTION_TITLE, Codicons.PULSE,
+                "font: bold +2");
+        card.add(agentExecutionHeaderLabel, "growx, wmin 0, gapbottom 2");
 
         card.add(UiComponents.createFieldRow(
                 UiComponents.createFieldTextBlock("Max Agent Tool Turns",
@@ -258,20 +251,22 @@ public final class SettingsPanel extends JPanel {
     }
 
     void applyThemeStyling() {
-        boolean dark = FlatLaf.isLafDark();
         Color accentColor = SwingHtmlUtils.getAccentColor();
-        Color borderFallback;
-        if (dark) {
-            borderFallback = new Color(0x3c, 0x3f, 0x41);
-        } else {
-            borderFallback = new Color(0xd8, 0xdc, 0xe0);
-        }
-        Color borderColor = SwingHtmlUtils.getUiColor(borderFallback, "Component.borderColor");
         Color mutedColor = SwingHtmlUtils.getUiColor(new Color(0x6c, 0x75, 0x7d), "Label.disabledForeground",
                 "Component.infoForeground");
         Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
 
         statusLabel.setForeground(greenColor);
+        if (appearanceHeaderLabel != null) {
+            appearanceHeaderLabel.setIcon(FontIcon.of(Codicons.SYMBOL_COLOR, 18, accentColor));
+        }
+        if (aiModelHeaderLabel != null) {
+            aiModelHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
+        }
+        if (agentExecutionHeaderLabel != null) {
+            agentExecutionHeaderLabel.setIcon(FontIcon.of(Codicons.PULSE, 18, accentColor));
+        }
+        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
 
         String accentHex = SwingHtmlUtils.toHex(accentColor);
         saveButton.setIcon(FontIcon.of(Codicons.SAVE, 14, Color.WHITE));
@@ -283,7 +278,7 @@ public final class SettingsPanel extends JPanel {
 
         geminiApiKeyField.putClientProperty(FlatClientProperties.STYLE, "showRevealButton: true; arc: 8");
 
-        String borderHex = SwingHtmlUtils.toHex(borderColor);
+        String borderHex = UiComponents.getCardBorderHex();
         String calloutBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(accentColor, 0.10));
         restartCalloutPanel.putClientProperty(FlatClientProperties.STYLE,
                 "arc: 10; border: 1,1,1,1," + borderHex + ",1,10; background: " + calloutBgHex);

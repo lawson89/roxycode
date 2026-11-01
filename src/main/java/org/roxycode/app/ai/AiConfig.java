@@ -196,19 +196,19 @@ public class AiConfig {
     }
 
     private static boolean hasNonRetryableClientMessage(String msg) {
-        if (msg == null || msg.isBlank()) {
-            return false;
-        }
-        String upper = msg.toUpperCase(Locale.ROOT);
-        return NON_RETRYABLE_MARKERS.stream().anyMatch(upper::contains);
+        return containsAnyMarker(msg, NON_RETRYABLE_MARKERS);
     }
 
     private static boolean hasTransientStatusMessage(String msg) {
+        return containsAnyMarker(msg, TRANSIENT_STATUS_MARKERS);
+    }
+
+    private static boolean containsAnyMarker(String msg, List<String> markers) {
         if (msg == null || msg.isBlank()) {
             return false;
         }
         String upper = msg.toUpperCase(Locale.ROOT);
-        return TRANSIENT_STATUS_MARKERS.stream().anyMatch(upper::contains);
+        return markers.stream().anyMatch(upper::contains);
     }
 
     @Bean
