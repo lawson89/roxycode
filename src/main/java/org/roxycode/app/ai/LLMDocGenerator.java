@@ -15,10 +15,6 @@ public class LLMDocGenerator {
     private static final String FENCE_START = "```typescript\n";
     private static final String FENCE_END = "```\n";
 
-    public String generateDoc(Collection<Object> services) {
-        return generateDoc(services, null);
-    }
-
     public String generateDoc(Collection<Object> services, WorkflowPhase currentPhase) {
         StringBuilder sb = new StringBuilder("### JEXL API Documentation\n\n").append(FENCE_START)
                 .append("""

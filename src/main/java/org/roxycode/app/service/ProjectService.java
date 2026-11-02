@@ -38,10 +38,6 @@ public class ProjectService {
         public ProjectConfig {
             geminiModel = StringUtils.trimToEmpty(geminiModel);
         }
-
-        public ProjectConfig(String geminiModel) {
-            this(geminiModel, false);
-        }
     }
 
     private final SettingsService settingsService;
@@ -140,10 +136,6 @@ public class ProjectService {
             return projectModel;
         }
         return SettingsService.resolveGlobalGeminiModel(settingsService);
-    }
-
-    public String getNormalizedProjectPath() {
-        return resolveNormalizedProjectPath(this);
     }
 
     public static String resolveNormalizedProjectPath(ProjectService projectService) {

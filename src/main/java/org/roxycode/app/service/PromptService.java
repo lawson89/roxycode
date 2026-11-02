@@ -53,7 +53,6 @@ public class PromptService {
     private static final String HEADER_SESSION_CONTEXT = "\n\n## SESSION CONTEXT\n";
     private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
     private static final String HEADER_CURRENT_PLAN_PROGRESS = "## CURRENT PLAN PROGRESS\n";
-    private static final String HEADER_ADDITIONAL_INSTRUCTIONS = "## ADDITIONAL INSTRUCTIONS\n";
 
     public record ContextFileItem(String folderPath, String fileName, Path filePath) {
         @Override
@@ -198,7 +197,7 @@ public class PromptService {
         return sb.toString();
     }
 
-    public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
+    public String buildSystemPrompt(WorkflowPhase phase) {
         WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         StringBuilder systemPrompt = new StringBuilder(getStableContext()).append(NEWLINE_DOUBLE)
                 .append(loadPhasePrompt(currentPhase));
@@ -208,9 +207,6 @@ public class PromptService {
             systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
         }
         systemPrompt.append(getSessionContext(currentPhase));
-        if (additionalInstructions != null) {
-            systemPrompt.append(HEADER_ADDITIONAL_INSTRUCTIONS).append(additionalInstructions).append(NEWLINE_DOUBLE);
-        }
         return systemPrompt.toString();
     }
 

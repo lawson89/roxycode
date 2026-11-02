@@ -21,12 +21,8 @@ public final class AgentJexlPermissions extends JexlPermissions.Delegate {
 
     public static final AgentJexlPermissions INSTANCE = new AgentJexlPermissions();
 
-    public AgentJexlPermissions() {
-        this(JexlPermissions.RESTRICTED.compose(APP_WILDCARD_PERMISSION));
-    }
-
-    public AgentJexlPermissions(JexlPermissions delegate) {
-        super(delegate);
+    private AgentJexlPermissions() {
+        super(JexlPermissions.RESTRICTED.compose(APP_WILDCARD_PERMISSION));
     }
 
     @Override

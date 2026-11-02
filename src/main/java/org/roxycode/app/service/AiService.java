@@ -218,20 +218,14 @@ public class AiService implements AutoCloseable {
         this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
     }
 
-    public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
-        return chat(conversationId, phase, message, null, images);
-    }
-
     @SuppressWarnings("PMD.PreserveStackTrace")
-    public String chat(String conversationId, WorkflowPhase phase, String message, String additionalInstructions,
-            List<byte[]> images) {
+    public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
         WorkflowPhase resolvedPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         TurnToolContext turnContext = new TurnToolContext(conversationId, resolvedPhase, new AtomicInteger(0));
         String convId = turnContext.conversationId();
         try {
-            ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, additionalInstructions,
-                    images);
+            ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, images);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
             ChatResponse chatResponse = executeChatCall(promptSpec, convId);
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
@@ -388,10 +382,10 @@ public class AiService implements AutoCloseable {
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(TurnToolContext turnContext, String message,
-            String additionalInstructions, List<byte[]> images) {
+            List<byte[]> images) {
         WorkflowPhase currentPhase = turnContext.phase();
         ChatClient.ChatClientRequestSpec promptSpec = chatClient.prompt()
-                .system(promptService.buildSystemPrompt(currentPhase, additionalInstructions)).user(u -> {
+                .system(promptService.buildSystemPrompt(currentPhase)).user(u -> {
                     u.text(message);
                     if (images != null) {
                         for (byte[] img : images) {

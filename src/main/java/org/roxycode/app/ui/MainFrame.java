@@ -52,7 +52,6 @@ public final class MainFrame extends JPanel {
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
     SidebarPanel sidebar;
-    private String title = "";
     String currentCard = QA_VIEW;
     private boolean initialToolsCheckComplete;
     private List<SystemTool> lastStartupTools = List.of();
@@ -195,12 +194,7 @@ public final class MainFrame extends JPanel {
         }
     }
 
-    public String getTitle() {
-        return title;
-    }
-
     public void setTitle(String title) {
-        this.title = title;
         if (hostFrame != null) {
             hostFrame.setTitle(title);
         }

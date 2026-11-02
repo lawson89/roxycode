@@ -10,10 +10,6 @@ public class ChatHtmlTemplates {
     private static final String CAT_EARS = "/" + (char) 92 + "_/" + (char) 92;
     public static final String COPY_CELL_ID_PREFIX = "copy-cell-";
 
-    public static String renderCopyActionHtml(int messageIndex, boolean copied) {
-        return renderCopyActionHtml(messageIndex, copied, false);
-    }
-
     public static String renderCopyActionHtml(int messageIndex, boolean copied, boolean speaking) {
         String speakLabel;
         if (speaking) {
@@ -29,11 +25,6 @@ public class ChatHtmlTemplates {
             copyHtml = "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
         }
         return speakHtml + "&nbsp;&nbsp;" + copyHtml;
-    }
-
-    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
-            boolean copied) {
-        return renderChatEntry(role, content, timestamp, messageIndex, copied, false);
     }
 
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
@@ -111,10 +102,6 @@ public class ChatHtmlTemplates {
                 """
                 .formatted(SwingHtmlUtils.escapeHtml(StringUtils.defaultString(timestamp)), statusHtml,
                         StringUtils.defaultString(output));
-    }
-
-    public static String renderWelcomeCard() {
-        return renderWelcomeCard(false);
     }
 
     public static String renderWelcomeCard(boolean isTaskMode) {

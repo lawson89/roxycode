@@ -222,10 +222,6 @@ public class SystemToolService {
         return detectTools().thenApply(SystemToolService::isDockerDetected);
     }
 
-    public CompletableFuture<Boolean> refreshDockerAvailable() {
-        return refreshTools().thenApply(SystemToolService::isDockerDetected);
-    }
-
     public boolean checkDockerAvailable() {
         List<SystemTool> tools = getCachedTools();
         if (!tools.isEmpty()) {
@@ -324,30 +320,14 @@ public class SystemToolService {
     }
 
     SystemTool detectBubblewrapTool() {
-        ProcessResult result = ProcessRunner.run(List.of("bwrap", ARG_VERSION));
-        String version = VERSION_NOT_FOUND;
-        String status = STATUS_MISSING;
-        if (result.isSuccess()) {
-            version = parseVersion(result.output());
-            status = STATUS_DETECTED;
-        } else {
-            log.warn("Tool {} detection failed with exit code {}", BUBBLEWRAP, result.exitCode());
-        }
-        return new SystemTool(BUBBLEWRAP, version, status,
-                "Unprivileged user-namespace sandboxing tool used for native Linux build isolation.", "LGPL-2.0",
-                "https://github.com/containers/bubblewrap", false);
+        return detectTool(BUBBLEWRAP, "bwrap", ARG_VERSION);
     }
 
     SystemTool detectSeatbeltTool() {
-        String version = VERSION_NOT_FOUND;
-        String status = STATUS_MISSING;
         if (Files.isExecutable(MACOS_SANDBOX_EXEC_PATH)) {
-            version = "Built-in (macOS)";
-            status = STATUS_DETECTED;
+            return SystemTool.ofKnownTool(SEATBELT, "Built-in (macOS)", STATUS_DETECTED);
         }
-        return new SystemTool(SEATBELT, version, status,
-                "macOS kernel sandbox utility (/usr/bin/sandbox-exec) used for native build isolation.", "macOS System",
-                "https://developer.apple.com/documentation/security/app-sandbox", false);
+        return SystemTool.ofKnownTool(SEATBELT, VERSION_NOT_FOUND, STATUS_MISSING);
     }
 
     Path getCacheFilePath() {

@@ -55,7 +55,7 @@ class LLMDocGeneratorTest {
     @MethodSource("agentServiceProvider")
     void testAllAgentServicesExposeAnnotatedMethodsInJexlPermissionsAndLlmDoc(Class<?> serviceClass,
             Object serviceInstance) {
-        String doc = new LLMDocGenerator().generateDoc(List.of(serviceInstance));
+        String doc = new LLMDocGenerator().generateDoc(List.of(serviceInstance), null);
         assertTrue(doc.contains("interface " + serviceClass.getSimpleName()));
 
         int documentedMethodCount = 0;
@@ -134,7 +134,7 @@ class LLMDocGeneratorTest {
 
         ProxyFactory proxyFactory = new ProxyFactory(svc);
         proxyFactory.setProxyTargetClass(true);
-        String proxyDoc = generator.generateDoc(List.of(proxyFactory.getProxy()));
+        String proxyDoc = generator.generateDoc(List.of(proxyFactory.getProxy()), null);
         assertTrue(proxyDoc.contains("interface PhaseFilteredService {"));
         assertFalse(proxyDoc.contains("SpringCGLIB"));
     }

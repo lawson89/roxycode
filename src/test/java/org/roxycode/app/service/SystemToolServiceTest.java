@@ -218,12 +218,11 @@ class SystemToolServiceTest {
         assertTrue(probeStarted.await(5, TimeUnit.SECONDS));
 
         CompletableFuture<List<SystemTool>> f2 = service.refreshTools();
-        CompletableFuture<Boolean> dockerFuture = service.refreshDockerAvailable();
 
         releaseProbe.countDown();
         assertEquals(1, f1.get(5, TimeUnit.SECONDS).size());
         assertEquals(1, f2.get(5, TimeUnit.SECONDS).size());
-        assertTrue(dockerFuture.get(5, TimeUnit.SECONDS));
+        assertTrue(service.isDockerAvailable().get(5, TimeUnit.SECONDS));
         assertEquals(1, probeCount.get());
     }
 

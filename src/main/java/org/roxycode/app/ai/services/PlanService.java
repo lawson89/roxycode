@@ -452,10 +452,6 @@ public class PlanService {
         return pendingPhase;
     }
 
-    public String getPendingReason() {
-        return pendingReason;
-    }
-
     public void approveTransition() {
         ImplementationPlan planToArchive = null;
         String archiveTimestamp = null;

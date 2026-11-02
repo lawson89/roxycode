@@ -51,7 +51,6 @@ public final class ContextManagerPanel extends JPanel {
     final JLabel subtitleLabel;
     final ContextScopeColumn globalColumn;
     final ContextScopeColumn projectColumn;
-    String lastErrorMessage;
     private transient Consumer<String> errorDialogPresenter;
 
     public ContextManagerPanel(PromptService promptService) {
@@ -91,7 +90,6 @@ public final class ContextManagerPanel extends JPanel {
     }
 
     void showError(String message) {
-        this.lastErrorMessage = message;
         if (errorDialogPresenter != null) {
             errorDialogPresenter.accept(message);
         }

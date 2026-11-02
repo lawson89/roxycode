@@ -99,10 +99,6 @@ public final class SettingsPanel extends JPanel {
 
     private boolean updatingFromSettings = false;
 
-    public SettingsPanel(SettingsService settingsService) {
-        this(settingsService, null);
-    }
-
     @Autowired
     public SettingsPanel(SettingsService settingsService, @Nullable AiService aiService) {
         this.settingsService = settingsService;

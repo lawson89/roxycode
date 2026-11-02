@@ -92,12 +92,6 @@ public final class ChatModel {
         }
     }
 
-    public List<BufferedImage> getPendingImages() {
-        synchronized (pendingImages) {
-            return List.copyOf(pendingImages);
-        }
-    }
-
     public boolean hasPendingImages() {
         synchronized (pendingImages) {
             return !pendingImages.isEmpty();

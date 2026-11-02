@@ -77,7 +77,7 @@ class MainFrameTest {
         when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
         SystemToolsPanel systemToolsPanel = new SystemToolsPanel(systemToolService);
 
-        SettingsPanel settingsPanel = new SettingsPanel(settingsService);
+        SettingsPanel settingsPanel = new SettingsPanel(settingsService, null);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         when(buildToolService.getConfigContent()).thenReturn("");
         buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, projectService);

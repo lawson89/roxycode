@@ -31,22 +31,14 @@ public record TurnToolContext(String conversationId, WorkflowPhase phase, Atomic
         if (toolContext != null) {
             contextMap = toolContext.getContext();
         }
-        return fromMap(contextMap, WorkflowPhase.EXPLORE);
-    }
-
-    public static TurnToolContext fromMap(Map<String, Object> contextMap, WorkflowPhase fallbackPhase) {
-        WorkflowPhase defaultPhase = WorkflowPhase.EXPLORE;
-        if (fallbackPhase != null) {
-            defaultPhase = fallbackPhase;
-        }
         if (contextMap == null || contextMap.isEmpty()) {
-            return new TurnToolContext(DEFAULT_CONVERSATION_ID, defaultPhase, null);
+            return new TurnToolContext(DEFAULT_CONVERSATION_ID, WorkflowPhase.EXPLORE, null);
         }
         String convId = DEFAULT_CONVERSATION_ID;
         if (contextMap.get(CONVERSATION_ID_KEY) instanceof String s && StringUtils.isNotBlank(s)) {
             convId = s;
         }
-        WorkflowPhase resolvedPhase = defaultPhase;
+        WorkflowPhase resolvedPhase = WorkflowPhase.EXPLORE;
         Object phaseObj = contextMap.get(PHASE_KEY);
         if (phaseObj instanceof WorkflowPhase wp) {
             resolvedPhase = wp;

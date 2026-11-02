@@ -91,10 +91,6 @@ public class SettingsService {
         }
     }
 
-    public String getGlobalGeminiModel() {
-        return resolveGlobalGeminiModel(this);
-    }
-
     public static String resolveGlobalGeminiModel(SettingsService settingsService) {
         if (settingsService != null && settingsService.getSettings() != null) {
             return StringUtils

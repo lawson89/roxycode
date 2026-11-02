@@ -15,7 +15,7 @@ class MarkdownPaneTest {
 
     @Test
     void testIncrementalAppendInPlaceCopyFeedbackToolLogsAndTranscript() {
-        MarkdownPane pane = new MarkdownPane();
+        MarkdownPane pane = new MarkdownPane(false);
         assertContainsAll(pane.getText(), "welcome-card", "Technical Mentor (Read-Only Explore Mode)", "@ Mention");
         assertTrue(new MarkdownPane(true).getText().contains("Autonomous Feature Development"));
 

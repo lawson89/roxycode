@@ -40,10 +40,6 @@ public final class MarkdownPane extends JTextPane {
             String renderedHtml) {
     }
 
-    public MarkdownPane() {
-        this(false);
-    }
-
     public MarkdownPane(boolean taskMode) {
         this.taskMode = taskMode;
         setEditable(false);

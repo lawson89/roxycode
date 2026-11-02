@@ -236,14 +236,6 @@ public class MemoryService {
         }
     }
 
-    public static String sanitizeTopicTitle(String rawTitle) {
-        String cleaned = cleanTopicTitle(rawTitle);
-        if (cleaned.isEmpty()) {
-            return DEFAULT_TOPIC_TITLE;
-        }
-        return cleaned;
-    }
-
     public static String resolveTopicTitle(String customTitle, List<ChatTranscriptEntry> entries) {
         String cleaned = cleanTopicTitle(customTitle);
         if (!cleaned.isEmpty()) {

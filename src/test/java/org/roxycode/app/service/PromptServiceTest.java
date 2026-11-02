@@ -141,8 +141,8 @@ class PromptServiceTest {
                 "M file.java");
         SwingTestUtils.assertContainsNone(session, "## CURRENT PLAN PROGRESS");
 
-        SwingTestUtils.assertContainsAll(promptService.buildSystemPrompt(WorkflowPhase.CODE, "EXTRA INSTRUCTIONS"),
-                stable, "REPO MAP CONTENT", session, "EXTRA INSTRUCTIONS");
+        SwingTestUtils.assertContainsAll(promptService.buildSystemPrompt(WorkflowPhase.CODE), stable,
+                "REPO MAP CONTENT", session);
 
         ImplementationPlan plan = new ImplementationPlan("Test Plan", "Goal", List.of("Req 1"),
                 List.of(new ImplementationPlan.TechStep("Update prompts", true),

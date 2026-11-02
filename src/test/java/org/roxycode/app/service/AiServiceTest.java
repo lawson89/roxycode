@@ -123,7 +123,7 @@ class AiServiceTest {
     private void stubChatResponse(WorkflowPhase phase, String promptText, String responseText, String finishReason,
             Usage usage) {
         lenient().when(planService.getCurrentPhase()).thenReturn(phase);
-        lenient().when(promptService.buildSystemPrompt(phase, null)).thenReturn(promptText);
+        lenient().when(promptService.buildSystemPrompt(phase)).thenReturn(promptText);
         lenient().when(responseSpec.chatResponse()).thenReturn(buildChatResponse(responseText, finishReason, usage));
     }
 
@@ -174,7 +174,7 @@ class AiServiceTest {
         AiService service = new AiService(ChatClient.builder(mockChatModel), settingsService, promptService, jexlTool,
                 planService, realMemory, customToolManager, eventPublisher);
         service.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0));
-        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null)).thenReturn("EXPLORE PROMPT");
+        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE)).thenReturn("EXPLORE PROMPT");
         return service;
     }
 
