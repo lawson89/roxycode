@@ -126,30 +126,65 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testPerformResetSessionInQaModeArchivesNonEmptyTopicAndSkipsWhenEmpty() {
+    void testNewTopicResetInQaModeHandlesEmptySaveDiscardAndCancelChoices() {
         ChatPanel panel = createExploreChatPanel(directExecutor);
-        SwingTestUtils.runOnEdt(() -> panel.controller.performResetSession());
-        flushEdt();
+        AtomicBoolean dialogInvoked = new AtomicBoolean(false);
+        panel.setNewTopicDialogPresenter(defaultTitle -> {
+            dialogInvoked.set(true);
+            return new ChatPanel.NewTopicChoice(true, true, defaultTitle);
+        });
 
+        // 1. Empty conversation resets immediately without showing dialog or archiving
+        SwingTestUtils.clickOnEdt(panel.resetSessionButton);
+        flushEdt();
+        assertFalse(dialogInvoked.get(), "Empty conversation should not open New Topic dialog");
         verify(chatMemory).clear("qa:default");
-        verifyNoInteractions(memoryService);
+        verifyNoInteractions(memoryService, aiService);
         assertTrue(panel.outputArea.getText().contains("Started a new topic."));
 
-        clearInvocations(chatMemory, aiService, memoryService);
+        // 2. Cancel / Close (proceed = false) keeps current conversation open without resetting or archiving
+        clearInvocations(chatMemory, memoryService, publisher);
+        AtomicReference<String> capturedDefaultTitle = new AtomicReference<>();
+        panel.setNewTopicDialogPresenter(defaultTitle -> {
+            capturedDefaultTitle.set(defaultTitle);
+            return new ChatPanel.NewTopicChoice(false, false, "");
+        });
+        SwingTestUtils.runOnEdt(() -> {
+            panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
+            panel.appendMessage("ai", "It searches global, project, and archive dirs.");
+        });
+        SwingTestUtils.clickOnEdt(panel.resetSessionButton);
+        flushEdt();
+        assertEquals("How does RipGrep search work in MemoryService", capturedDefaultTitle.get());
+        assertEquals(2, panel.getConversationMessages().size());
+        verifyNoInteractions(chatMemory, memoryService, aiService);
+
+        // 3. No, Discard (proceed = true, saveTopic = false) resets immediately without archiving
+        panel.setNewTopicDialogPresenter(defaultTitle -> new ChatPanel.NewTopicChoice(true, false, "Ignored Title"));
+        SwingTestUtils.clickOnEdt(panel.resetSessionButton);
+        flushEdt();
+        verify(chatMemory).clear("qa:default");
+        verifyNoInteractions(memoryService, aiService);
+        assertTrue(panel.getConversationMessages().isEmpty());
+        assertTrue(panel.outputArea.getText().contains("Started a new topic."));
+
+        // 4. Yes, Save Topic (proceed = true, saveTopic = true) sanitizes user-entered title and archives
+        clearInvocations(chatMemory, memoryService, publisher);
         when(environmentService.getCurrentUser()).thenReturn("DevUser");
-        when(aiService.generateTopicTitle(anyString())).thenReturn("RipGrep Search Architecture");
         when(memoryService.archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
                 anyList())).thenReturn("20250514-153000-ripgrep-search-architecture.md");
+        panel.setNewTopicDialogPresenter(
+                defaultTitle -> new ChatPanel.NewTopicChoice(true, true, "  # **RipGrep Search Architecture!**  "));
 
         SwingTestUtils.runOnEdt(() -> {
             panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
             panel.appendMessage("ai", "It searches global, project, and archive dirs.");
-            panel.controller.performResetSession();
         });
+        SwingTestUtils.clickOnEdt(panel.resetSessionButton);
         flushEdt();
 
         verify(chatMemory).clear("qa:default");
-        verify(aiService).generateTopicTitle(contains("How does RipGrep search work"));
+        verifyNoInteractions(aiService);
         verify(memoryService).archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
                 argThat(list -> list.size() == 2));
         assertContainsAll(panel.outputArea.getText(), "Archived previous topic as", "RipGrep Search Architecture",

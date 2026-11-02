@@ -211,6 +211,19 @@ public final class ChatController implements AutoCloseable {
     }
 
     public void resetSession() {
+        if (!model.isTaskMode()) {
+            List<ChatTranscriptEntry> capturedTranscript = view.getConversationMessages();
+            if (capturedTranscript.isEmpty()) {
+                performNewTopicReset(false, "");
+                return;
+            }
+            String defaultTitle = MemoryService.deriveDefaultTopicTitle(capturedTranscript);
+            ChatPanel.NewTopicChoice choice = view.promptNewTopicChoice(defaultTitle);
+            if (choice != null && choice.proceed()) {
+                performNewTopicReset(choice.saveTopic(), choice.topicName());
+            }
+            return;
+        }
         if (view.confirmResetSession()) {
             performResetSession();
         }
@@ -218,7 +231,7 @@ public final class ChatController implements AutoCloseable {
 
     void performResetSession() {
         if (!model.isTaskMode()) {
-            performNewTopicReset();
+            performNewTopicReset(true, null);
         } else {
             resetSessionState(true, "Session reset.");
         }
@@ -228,32 +241,21 @@ public final class ChatController implements AutoCloseable {
         resetSessionState(false, null);
     }
 
-    private void performNewTopicReset() {
+    void performNewTopicReset(boolean saveTopic, String customTopicTitle) {
         List<ChatTranscriptEntry> capturedTranscript = view.getConversationMessages();
-        boolean shouldArchive = !capturedTranscript.isEmpty() && memoryService != null;
+        boolean shouldArchive = saveTopic && !capturedTranscript.isEmpty() && memoryService != null;
         String notice = "Started a new topic.";
         if (shouldArchive) {
             notice = null;
         }
         resetSessionState(true, notice);
         if (shouldArchive) {
-            turnExecutor.execute(() -> archiveCapturedTopic(capturedTranscript));
+            turnExecutor.execute(() -> archiveCapturedTopic(capturedTranscript, customTopicTitle));
         }
     }
 
-    private void archiveCapturedTopic(List<ChatTranscriptEntry> capturedTranscript) {
-        String excerpt = MemoryService.buildTranscriptExcerpt(capturedTranscript);
-        String title = null;
-        if (aiService != null) {
-            try {
-                title = aiService.generateTopicTitle(excerpt);
-            } catch (Exception e) {
-                log.warn("Failed to generate topic title: {}", e.getMessage());
-            }
-        }
-        if (title == null || title.isBlank()) {
-            title = AiService.deriveFallbackTopicTitle(excerpt);
-        }
+    private void archiveCapturedTopic(List<ChatTranscriptEntry> capturedTranscript, String customTopicTitle) {
+        String title = MemoryService.resolveTopicTitle(customTopicTitle, capturedTranscript);
         String rawUser = null;
         if (environmentService != null) {
             rawUser = environmentService.getCurrentUser();

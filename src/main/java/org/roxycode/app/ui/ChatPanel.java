@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -50,7 +51,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 
-@SuppressWarnings("PMD.ConstructorCallsOverridableMethod")
+@SuppressWarnings("PMD.NullAssignment")
 public final class ChatPanel extends JPanel implements AutoCloseable {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
@@ -58,7 +59,14 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String NEW_TOPIC_BUTTON_TEXT = "New Topic";
     static final String RESET_SESSION_BUTTON_TEXT = "Reset Session";
     static final String NEW_TOPIC_TOOLTIP = "Archive current conversation and start a new Q&A topic";
+    static final String NEW_TOPIC_PROMPT_MESSAGE = "Save the current topic to Past Topics before starting a new one?";
+    static final String TOPIC_NAME_LABEL_TEXT = "Topic Name:";
+    static final String SAVE_TOPIC_BUTTON_TEXT = "Yes, Save Topic";
+    static final String DISCARD_TOPIC_BUTTON_TEXT = "No, Discard";
     static final int THUMBNAIL_SIZE = 64;
+
+    public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
+    }
 
     final transient ChatModel model;
     final transient ChatController controller;
@@ -76,6 +84,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     private JScrollPane outputScrollPane;
     private JPanel attachmentPanel;
     transient FileMentionPopup fileMentionPopup;
+    private transient Function<String, NewTopicChoice> newTopicDialogPresenter;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
 
     @Configuration
@@ -442,16 +451,37 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     boolean confirmResetSession() {
-        String message;
-        String title;
-        if (model.isTaskMode()) {
-            message = "Reset session? This cancels active tasks and clears chat history.";
-            title = "Reset";
-        } else {
-            message = "Start a new topic? The current conversation will be archived.";
-            title = NEW_TOPIC_BUTTON_TEXT;
+        String message = "Reset session? This cancels active tasks and clears chat history.";
+        return JOptionPane.showConfirmDialog(this, message, "Reset",
+                JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
+    }
+
+    NewTopicChoice promptNewTopicChoice(String defaultTopicName) {
+        if (newTopicDialogPresenter != null) {
+            return newTopicDialogPresenter.apply(defaultTopicName);
         }
-        return JOptionPane.showConfirmDialog(this, message, title, JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
+        JTextField topicNameField = new JTextField(defaultTopicName, 30);
+        topicNameField.selectAll();
+
+        JPanel dialogPanel = new JPanel(new MigLayout("insets 0, fillx, wrap 1", "[grow, fill]"));
+        dialogPanel.add(new JLabel(NEW_TOPIC_PROMPT_MESSAGE));
+        dialogPanel.add(new JLabel(TOPIC_NAME_LABEL_TEXT), "gaptop 8");
+        dialogPanel.add(topicNameField);
+
+        Object[] options = {SAVE_TOPIC_BUTTON_TEXT, DISCARD_TOPIC_BUTTON_TEXT};
+        int choice = JOptionPane.showOptionDialog(this, dialogPanel, NEW_TOPIC_BUTTON_TEXT, JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        if (choice == JOptionPane.YES_OPTION) {
+            return new NewTopicChoice(true, true, topicNameField.getText());
+        }
+        if (choice == JOptionPane.NO_OPTION) {
+            return new NewTopicChoice(true, false, "");
+        }
+        return new NewTopicChoice(false, false, "");
+    }
+
+    void setNewTopicDialogPresenter(Function<String, NewTopicChoice> newTopicDialogPresenter) {
+        this.newTopicDialogPresenter = newTopicDialogPresenter;
     }
 
     private void sendMessage(ActionEvent e) {

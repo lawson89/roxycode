@@ -303,17 +303,20 @@ class MemoryServiceTest {
         assertTrue(stripped.startsWith("# Topic: Test Topic"));
         assertTrue(stripped.contains("Body text here."));
 
-        assertEquals("", MemoryService.buildTranscriptExcerpt(null));
-        assertEquals("", MemoryService.buildTranscriptExcerpt(List.of()));
+        assertEquals(MemoryService.DEFAULT_TOPIC_TITLE, MemoryService.sanitizeTopicTitle(null));
+        assertEquals(MemoryService.DEFAULT_TOPIC_TITLE, MemoryService.sanitizeTopicTitle("   "));
+        assertEquals(MemoryService.DEFAULT_TOPIC_TITLE, MemoryService.sanitizeTopicTitle("!!! ###"));
+        assertEquals("Memory Service RipGrep Search",
+                MemoryService.sanitizeTopicTitle("  '# **Memory Service RipGrep Search!**'\nExtra line"));
+        assertEquals(MemoryService.MAX_TOPIC_TITLE_LENGTH, MemoryService.sanitizeTopicTitle("a".repeat(100)).length());
 
-        String longMsg = "x".repeat(600);
+        assertEquals(MemoryService.DEFAULT_TOPIC_TITLE, MemoryService.deriveDefaultTopicTitle(null));
+        assertEquals(MemoryService.DEFAULT_TOPIC_TITLE, MemoryService.deriveDefaultTopicTitle(List.of()));
         List<ChatTranscriptEntry> entries = List.of(
-                new ChatTranscriptEntry("user", "  How does repo map packing work?  ", "10:00:00"),
-                new ChatTranscriptEntry("ai", longMsg, "10:00:01"), new ChatTranscriptEntry("user", null, "10:00:02"));
-        String excerpt = MemoryService.buildTranscriptExcerpt(entries);
-        String nl = String.valueOf((char) 10);
-        assertTrue(excerpt
-                .startsWith("User: How does repo map packing work?" + nl + "Roxy: " + "x".repeat(500) + "..." + nl));
-        assertTrue(excerpt.endsWith(nl + "User: "));
+                new ChatTranscriptEntry("user", "  # How does repo map packing work?  ", "10:00:00"),
+                new ChatTranscriptEntry("ai", "It runs Universal Ctags.", "10:00:01"));
+        assertEquals("How does repo map packing work", MemoryService.deriveDefaultTopicTitle(entries));
+        assertEquals("Custom User Title", MemoryService.resolveTopicTitle("  **Custom User Title**  ", entries));
+        assertEquals("How does repo map packing work", MemoryService.resolveTopicTitle("   ", entries));
     }
 }

@@ -1,9 +1,7 @@
 package org.roxycode.app.service;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -48,19 +46,11 @@ public class AiService {
     private static final String AGENT_NAME = "Roxy";
     static final String FINISH_REASON_UNKNOWN = "UNKNOWN";
 
-    public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
-    static final int MAX_TOPIC_TITLE_LENGTH = 80;
-    private static final int MAX_EXCERPT_LENGTH = 4000;
-    static final String TOPIC_TITLE_SYSTEM_PROMPT = "Generate a concise, descriptive 3 to 6 word title summarizing this technical Q&A topic. "
-            + "Return ONLY the plain title text without quotes, markdown, or punctuation.";
-
     public static final String TRUNCATED_MARKER = "⚠️ **Response Truncated (finishReason:";
     public static final String NO_VISIBLE_RESPONSE_MARKER = "⚠️ **No Visible Response (finishReason:";
     public static final String EMPTY_RESPONSE_MARKER = "⚠️ **Empty Response Returned (finishReason:";
     public static final String EMPTY_STOP_MESSAGE = "Roxy completed the turn without generating a visible text message.";
-    private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
 
-    public static final Duration DEFAULT_TOPIC_TITLE_TIMEOUT = Duration.ofSeconds(10);
     private static final ScheduledExecutorService TURN_TIMEOUT_SCHEDULER = Executors
             .newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "ai-turn-watchdog");
@@ -71,7 +61,6 @@ public class AiService {
     public static final int MAX_AUTO_NUDGES = 2;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
 
-    private final ChatClient statelessChatClient;
     private final ChatClient chatClient;
     private final SettingsService settingsService;
     private final ProjectService projectService;
@@ -81,7 +70,6 @@ public class AiService {
     private final ApplicationEventPublisher eventPublisher;
     private final ChatMemory chatMemory;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
-    private volatile Duration topicTitleTimeout = DEFAULT_TOPIC_TITLE_TIMEOUT;
     private volatile int turnTimeoutSeconds = AiConfig.DEFAULT_TURN_TIMEOUT_SECONDS;
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, PromptService promptService,
@@ -103,7 +91,6 @@ public class AiService {
         this.planService = planService;
         this.eventPublisher = eventPublisher;
         this.chatMemory = chatMemory;
-        this.statelessChatClient = chatClientBuilder.build();
         this.chatClient = chatClientBuilder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
                 new ModelCallRetryAdvisor()).build();
@@ -120,87 +107,12 @@ public class AiService {
         this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
     }
 
-    void setTopicTitleTimeout(Duration topicTitleTimeout) {
-        this.topicTitleTimeout = Objects.requireNonNull(topicTitleTimeout, "topicTitleTimeout must not be null");
-    }
-
     void setTurnTimeoutSeconds(int turnTimeoutSeconds) {
         this.turnTimeoutSeconds = turnTimeoutSeconds;
     }
 
     int getTurnTimeoutSeconds() {
         return turnTimeoutSeconds;
-    }
-
-    public String generateTopicTitle(String conversationExcerpt) {
-        if (StringUtils.isBlank(conversationExcerpt)) {
-            return DEFAULT_TOPIC_TITLE;
-        }
-        String excerpt;
-        if (conversationExcerpt.length() > MAX_EXCERPT_LENGTH) {
-            excerpt = conversationExcerpt.substring(0, MAX_EXCERPT_LENGTH);
-        } else {
-            excerpt = conversationExcerpt;
-        }
-        String activeModel = resolveEffectiveGeminiModel();
-        try {
-            ChatResponse response = CompletableFuture
-                    .supplyAsync(() -> statelessChatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT)
-                            .user(u -> u.text(excerpt)).options(GoogleGenAiChatOptions.builder().model(activeModel))
-                            .call().chatResponse())
-                    .orTimeout(Math.max(1L, topicTitleTimeout.toMillis()), TimeUnit.MILLISECONDS).join();
-            String rawTitle = extractResponseText(response);
-            String sanitized = sanitizeTopicTitle(rawTitle);
-            if (!sanitized.isEmpty()) {
-                return sanitized;
-            }
-        } catch (Exception e) {
-            log.warn("Failed to generate topic title via LLM, using fallback: {}", e.getMessage());
-        }
-        return deriveFallbackTopicTitle(conversationExcerpt);
-    }
-
-    static String sanitizeTopicTitle(String rawTitle) {
-        if (StringUtils.isBlank(rawTitle)) {
-            return "";
-        }
-        String firstLine = rawTitle.lines().map(String::trim).filter(line -> !line.isEmpty()).findFirst().orElse("");
-        if (firstLine.isEmpty()) {
-            return "";
-        }
-        String cleaned = firstLine.replaceAll(STRIP_TITLE_CHARS_REGEX, " ").replaceAll("\\s+", " ")
-                .replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "").trim();
-        if (cleaned.length() > MAX_TOPIC_TITLE_LENGTH) {
-            return cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH).replaceAll("[^a-zA-Z0-9]+$", "").trim();
-        }
-        return cleaned;
-    }
-
-    public static String deriveFallbackTopicTitle(String conversationExcerpt) {
-        if (StringUtils.isBlank(conversationExcerpt)) {
-            return DEFAULT_TOPIC_TITLE;
-        }
-        for (String rawLine : conversationExcerpt.lines().toList()) {
-            String line = rawLine.trim();
-            if (line.isEmpty()) {
-                continue;
-            }
-            if (StringUtils.startsWithIgnoreCase(line, "User:")) {
-                line = StringUtils.removeStartIgnoreCase(line, "User:").trim();
-            } else if (StringUtils.startsWithIgnoreCase(line, "Roxy:")
-                    || StringUtils.startsWithIgnoreCase(line, "AI:")) {
-                continue;
-            }
-            String sanitized = sanitizeTopicTitle(line);
-            if (!sanitized.isEmpty()) {
-                return sanitized;
-            }
-        }
-        String fallback = sanitizeTopicTitle(conversationExcerpt);
-        if (fallback.isEmpty()) {
-            return DEFAULT_TOPIC_TITLE;
-        }
-        return fallback;
     }
 
     public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {

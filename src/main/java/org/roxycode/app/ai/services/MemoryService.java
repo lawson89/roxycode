@@ -14,7 +14,6 @@ import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
@@ -33,15 +32,15 @@ public class MemoryService {
     static final String NOTES_SUBDIR = "notes";
     static final String ARCHIVE_PLANS_SUBDIR = PlanService.ARCHIVE_PLANS_SUBDIR;
     public static final String ARCHIVE_TOPICS_SUBDIR = "archive/topics";
+    public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
+    public static final int MAX_TOPIC_TITLE_LENGTH = 80;
     static final int MAX_SLUG_LENGTH = 50;
     static final int MAX_PINNED_MEMORY_LINES = 200;
     static final int MAX_PINNED_MEMORY_CHARS = 8192;
     private static final int SEARCH_CONTEXT_LINES = 2;
-    private static final int MAX_EXCERPT_ENTRIES = 8;
-    private static final int MAX_ENTRY_CHARS = 500;
+    private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
     private static final char LF = 10;
     private static final String NL = String.valueOf(LF);
-
     private static final String SCOPE_GLOBAL = "global";
     private static final String SCOPE_PROJECT = "project";
     private static final String NO_ACTIVE_PROJECT = "No active project";
@@ -186,7 +185,7 @@ public class MemoryService {
             return null;
         }
         try {
-            String resolvedTitle = StringUtils.defaultIfBlank(title, AiService.DEFAULT_TOPIC_TITLE).trim();
+            String resolvedTitle = resolveTopicTitle(title, entries);
             PathUtils.ArchiveFileTarget archiveTarget = PathUtils.prepareArchiveTarget(archiveDir, isoTimestamp,
                     resolvedTitle, PlanService.MAX_PLAN_SLUG_LENGTH, "topic");
             String projectPath = ProjectService.resolveNormalizedProjectPath(projectService);
@@ -229,30 +228,59 @@ public class MemoryService {
         }
     }
 
-    public static String buildTranscriptExcerpt(List<ChatTranscriptEntry> entries) {
+    public static String sanitizeTopicTitle(String rawTitle) {
+        String cleaned = cleanTopicTitle(rawTitle);
+        if (cleaned.isEmpty()) {
+            return DEFAULT_TOPIC_TITLE;
+        }
+        return cleaned;
+    }
+
+    public static String resolveTopicTitle(String customTitle, List<ChatTranscriptEntry> entries) {
+        String cleaned = cleanTopicTitle(customTitle);
+        if (!cleaned.isEmpty()) {
+            return cleaned;
+        }
+        return deriveDefaultTopicTitle(entries);
+    }
+
+    public static String deriveDefaultTopicTitle(List<ChatTranscriptEntry> entries) {
         if (entries == null || entries.isEmpty()) {
+            return DEFAULT_TOPIC_TITLE;
+        }
+        for (ChatTranscriptEntry entry : entries) {
+            if (entry != null && "user".equalsIgnoreCase(entry.role())) {
+                String cleaned = cleanTopicTitle(entry.content());
+                if (!cleaned.isEmpty()) {
+                    return cleaned;
+                }
+            }
+        }
+        for (ChatTranscriptEntry entry : entries) {
+            if (entry != null) {
+                String cleaned = cleanTopicTitle(entry.content());
+                if (!cleaned.isEmpty()) {
+                    return cleaned;
+                }
+            }
+        }
+        return DEFAULT_TOPIC_TITLE;
+    }
+
+    static String cleanTopicTitle(String rawTitle) {
+        if (StringUtils.isBlank(rawTitle)) {
             return "";
         }
-        StringBuilder sb = new StringBuilder();
-        int count = Math.min(entries.size(), MAX_EXCERPT_ENTRIES);
-        for (int i = 0; i < count; i++) {
-            ChatTranscriptEntry entry = entries.get(i);
-            String speaker;
-            if ("user".equalsIgnoreCase(entry.role())) {
-                speaker = "User";
-            } else {
-                speaker = "Roxy";
-            }
-            String content = StringUtils.defaultString(entry.content()).trim();
-            if (content.length() > MAX_ENTRY_CHARS) {
-                content = content.substring(0, MAX_ENTRY_CHARS) + "...";
-            }
-            if (i > 0) {
-                sb.append(LF);
-            }
-            sb.append(speaker).append(": ").append(content);
+        String firstLine = rawTitle.lines().map(String::trim).filter(line -> !line.isEmpty()).findFirst().orElse("");
+        if (firstLine.isEmpty()) {
+            return "";
         }
-        return sb.toString();
+        String cleaned = firstLine.replaceAll(STRIP_TITLE_CHARS_REGEX, " ").replaceAll("\\s+", " ")
+                .replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "").trim();
+        if (cleaned.length() > MAX_TOPIC_TITLE_LENGTH) {
+            return cleaned.substring(0, MAX_TOPIC_TITLE_LENGTH).replaceAll("[^a-zA-Z0-9]+$", "").trim();
+        }
+        return cleaned;
     }
 
     public record ArchiveEntrySummary(String filename, String type, String title, String createdBy, String timestamp,
@@ -261,7 +289,6 @@ public class MemoryService {
             return new ArchiveEntrySummary(filename, type, title, createdBy, timestamp, messageCount, snippet);
         }
     }
-
     public List<ArchiveEntrySummary> listArchivedTopicSummaries() {
         return listArchivedEntrySummaries(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), "topic");
     }

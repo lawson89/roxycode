@@ -475,48 +475,6 @@ class AiServiceTest {
     }
 
     @Test
-    void testGenerateTopicTitleSanitizesAndFallsBackOnErrorOrTimeout() throws Exception {
-        assertEquals(AiService.DEFAULT_TOPIC_TITLE, aiService.generateTopicTitle("   "));
-
-        when(responseSpec.chatResponse())
-                .thenReturn(buildChatResponse("  '# **Memory Service RipGrep Search**'\nExtra line", "STOP", null));
-        assertEquals("Memory Service RipGrep Search",
-                aiService.generateTopicTitle("User: How does memory search work?\nRoxy: It uses RipGrep."));
-        verify(requestSpec).system(AiService.TOPIC_TITLE_SYSTEM_PROMPT);
-        verify(requestSpec, never()).tools(any(Object[].class));
-
-        when(responseSpec.chatResponse()).thenReturn(buildChatResponse("   ", "STOP", null));
-        assertEquals("How does memory search work",
-                aiService.generateTopicTitle("User: How does memory search work?\nRoxy: It uses RipGrep."));
-        when(requestSpec.call()).thenThrow(new RuntimeException("LLM offline"));
-        assertEquals("Exploring Swing HTML Constraints",
-                aiService.generateTopicTitle("User: # Exploring Swing HTML Constraints!"));
-
-        doReturn(responseSpec).when(requestSpec).call();
-        aiService.setTopicTitleTimeout(Duration.ofMillis(50));
-        CountDownLatch started = new CountDownLatch(1);
-        CountDownLatch releaseSlowCall = new CountDownLatch(1);
-
-        when(responseSpec.chatResponse()).thenAnswer(inv -> {
-            started.countDown();
-            releaseSlowCall.await(2, TimeUnit.SECONDS);
-            return buildChatResponse("Delayed Title", "STOP", null);
-        });
-        long startNanos = System.nanoTime();
-        String title;
-        try {
-            title = aiService.generateTopicTitle("User: Why did Gemini time out?");
-        } finally {
-            releaseSlowCall.countDown();
-        }
-        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-
-        assertEquals("Why did Gemini time out", title);
-        assertTrue(started.await(1, TimeUnit.SECONDS));
-        assertTrue(elapsedMs < 2000);
-    }
-
-    @Test
     void testChatTurnTimeoutInterruptsHungTurnAndThrowsCancellationException() throws Exception {
         assertEquals(AiConfig.DEFAULT_TURN_TIMEOUT_SECONDS, aiService.getTurnTimeoutSeconds());
         aiService.setTurnTimeoutSeconds(1);
