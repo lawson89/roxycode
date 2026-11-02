@@ -51,7 +51,6 @@ public class GenericBuildToolService {
 
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
     private static final String CONFIG_FILE = "build.toml";
-    private static final String CURRENT_DIR = ".";
     static final String BUILD_LOG_REL_PATH = "tmp/build.log";
     static final int MAX_LOG_TAIL_BYTES = 4096;
     static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]"
@@ -66,9 +65,7 @@ public class GenericBuildToolService {
             test_all = ""
             test_single = ""
             lint = ""
-            lint_single = ""
             format = ""
-            format_single = ""
 
             [sandbox]
             # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
@@ -107,10 +104,8 @@ public class GenericBuildToolService {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CommandsSection(String install, String clean, String compile, String build,
             @JsonProperty("test_all") String testAll, @JsonProperty("test_single") String testSingle, String lint,
-            @JsonProperty("lint_single") String lintSingle, String format,
-            @JsonProperty("format_single") String formatSingle) {
-        public static final CommandsSection EMPTY = new CommandsSection(null, null, null, null, null, null, null, null,
-                null, null);
+            String format) {
+        public static final CommandsSection EMPTY = new CommandsSection(null, null, null, null, null, null, null, null);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -193,7 +188,7 @@ public class GenericBuildToolService {
             "CODE"}, examples = "buildToolService.install()")
     public BuildResult install() {
         requireCodePhase("install");
-        return notifyIfMutated("commands.install", "",
+        return notifyIfMutated("commands.install",
                 runCommand("commands.install", config -> config.commands().install()));
     }
 
@@ -246,46 +241,16 @@ public class GenericBuildToolService {
         return runCommand("commands.lint", config -> config.commands().lint());
     }
 
-    @AgentDoc(value = "Runs the linter on a specific file using lint_single (falls back to lint if lint_single is not configured).", examples = "buildToolService.lint('src/main/java/App.java')")
-    public BuildResult lint(@AgentDoc("The file path relative to the project root") String relativePath) {
-        return runSingleFileCommand("commands.lint_single", relativePath,
-                c -> StringUtils.firstNonBlank(c.commands().lintSingle(), c.commands().lint()), false);
-    }
-
     @AgentDoc(value = "Formats the project source code using the configured format command.", phases = {
             "CODE"}, examples = "buildToolService.format()")
     public BuildResult format() {
         requireCodePhase("format");
-        return notifyIfMutated("commands.format", "",
-                runCommand("commands.format", config -> config.commands().format()));
+        return notifyIfMutated("commands.format", runCommand("commands.format", config -> config.commands().format()));
     }
 
-    @AgentDoc(value = "Formats a specific file using format_single (falls back to format if format_single is not configured).", phases = {
-            "CODE"}, examples = "buildToolService.format('src/main/java/App.java')")
-    public BuildResult format(@AgentDoc("The file path relative to the project root") String relativePath) {
-        requireCodePhase("format");
-        return runSingleFileCommand("commands.format_single", relativePath,
-                c -> StringUtils.firstNonBlank(c.commands().formatSingle(), c.commands().format()), true);
-    }
-
-    private BuildResult runSingleFileCommand(String label, String relativePath, Function<BuildConfig, String> extractor,
-            boolean notifyChange) {
-        String normalizedPath;
-        try {
-            normalizedPath = validateRelativeFilePath(relativePath);
-        } catch (Exception e) {
-            return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of());
-        }
-        BuildResult result = runCommand(label, extractor, Map.of("file", normalizedPath));
-        if (notifyChange) {
-            return notifyIfMutated(label, normalizedPath, result);
-        }
-        return result;
-    }
-
-    private BuildResult notifyIfMutated(String label, String path, BuildResult result) {
+    private BuildResult notifyIfMutated(String label, BuildResult result) {
         if (result.success() && !formatNoOpOutput(label).equals(result.output()) && eventPublisher != null) {
-            eventPublisher.publishEvent(new FileChangedEvent(path));
+            eventPublisher.publishEvent(new FileChangedEvent(""));
         }
         return result;
     }
@@ -332,20 +297,6 @@ public class GenericBuildToolService {
             throw new IllegalStateException(
                     "Method '" + methodName + "' is only allowed in phase(s) [CODE]. Current phase: " + current);
         }
-    }
-
-    private String validateRelativeFilePath(String relativePath) {
-        if (!projectService.hasActiveProject()) {
-            throw new IllegalStateException("No active project");
-        }
-        if (StringUtils.isBlank(relativePath)) {
-            throw new IllegalArgumentException("File path must not be blank");
-        }
-        String normalized = projectService.resolveRelativePath(relativePath);
-        if (CURRENT_DIR.equals(normalized)) {
-            throw new IllegalArgumentException("Invalid file path: " + relativePath);
-        }
-        return normalized;
     }
 
     private BuildResult runCommand(String commandLabel, Function<BuildConfig, String> commandExtractor,

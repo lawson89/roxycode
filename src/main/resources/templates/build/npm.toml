@@ -7,12 +7,8 @@ test_all = "npm test"
 test_single = "npm test -- -t {testName}"
 # Examples: 'npm run lint', 'npx eslint .', 'npx @biomejs/biome check .'
 lint = ''
-# Examples: 'npx eslint {file}', 'npx @biomejs/biome check {file}'
-lint_single = ''
 # Examples: 'npm run format', 'npx prettier --write .', 'npx @biomejs/biome format --write .'
 format = ''
-# Examples: 'npx prettier --write {file}', 'npx @biomejs/biome format --write {file}'
-format_single = ''
 
 [env]
 ROXY_CODE = "true"

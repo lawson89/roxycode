@@ -125,20 +125,19 @@ class GenericBuildToolServiceTest {
         Files.deleteIfExists(projectRoot.resolve("pom.xml"));
         Files.writeString(projectRoot.resolve("Cargo.toml"), "[package]\nname = 'demo'\n");
         assertEquals("rust", buildToolService.detectTemplate());
-        assertContainsAll(buildToolService.getConfigContent(), "cargo check --tests", "rustfmt {file}");
+        assertContainsAll(buildToolService.getConfigContent(), "cargo check --tests", "cargo fmt");
         assertEquals(8, buildToolService.getAvailableTemplates().size());
         assertContainsAll(buildToolService.loadTemplateContent("default"), "[commands]", "compile = ");
     }
 
     @Test
-    void testNoOpForBlankCommandsFallbacksFilePlaceholdersAndCodePhaseEnforcement() throws IOException {
-        writeBuildToml("[commands]\ncompile = ''\nformat_single = ''\n");
+    void testNoOpForBlankCommandsFallbacksAndCodePhaseEnforcement() throws IOException {
+        writeBuildToml("[commands]\ncompile = ''\nformat = ''\n");
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             BuildResult compileNoOp = buildToolService.compile();
             assertTrue(compileNoOp.isSuccess());
             assertEquals("Command 'commands.compile' is not configured (no-op).", compileNoOp.getOutput());
-            assertEquals("Command 'commands.format_single' is not configured (no-op).",
-                    buildToolService.format("src/App.java").getOutput());
+            assertEquals("Command 'commands.format' is not configured (no-op).", buildToolService.format().getOutput());
             runner.verifyNoInteractions();
             verifyNoInteractions(eventPublisher);
         }
@@ -148,38 +147,23 @@ class GenericBuildToolServiceTest {
                 install = 'echo installed-deps'
                 compile = 'echo fallback-compile'
                 build = ''
-                lint = 'echo fallback-lint'
-                lint_single = ''
-                format = 'echo fallback-format'
-                format_single = ''
+                lint = 'echo project-lint'
+                format = 'echo project-format'
                 """);
 
         assertTrue(buildToolService.build().getOutput().contains("fallback-compile"));
-        assertTrue(buildToolService.lint("./src/Main.java").getOutput().contains("fallback-lint"));
-        assertTrue(buildToolService.format("./src/Main.java").getOutput().contains("fallback-format"));
-        verify(eventPublisher).publishEvent(new FileChangedEvent("src/Main.java"));
-
+        assertTrue(buildToolService.lint().getOutput().contains("project-lint"));
+        assertTrue(buildToolService.format().getOutput().contains("project-format"));
         assertTrue(buildToolService.install().getOutput().contains("installed-deps"));
-        verify(eventPublisher).publishEvent(new FileChangedEvent(""));
+        verify(eventPublisher, times(2)).publishEvent(new FileChangedEvent(""));
 
-        writeBuildToml("""
-                [commands]
-                build = 'echo explicit-build'
-                lint_single = 'echo linting-{file}'
-                format_single = 'echo formatting-{file}'
-                """);
+        writeBuildToml("[commands]\nbuild = 'echo explicit-build'\n");
         assertTrue(buildToolService.build().getOutput().contains("explicit-build"));
-        assertTrue(buildToolService.lint("src/dir/Foo.java").getOutput().contains("linting-src/dir/Foo.java"));
-        assertTrue(buildToolService.format("src/dir/Foo.java").getOutput().contains("formatting-src/dir/Foo.java"));
-
-        assertFalse(buildToolService.lint("../outside.java").isSuccess());
-        assertFalse(buildToolService.format("   ").isSuccess());
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
         assertThrows(IllegalStateException.class, () -> buildToolService.install());
         assertThrows(IllegalStateException.class, () -> buildToolService.format());
-        assertThrows(IllegalStateException.class, () -> buildToolService.format("src/Main.java"));
-        assertDoesNotThrow(() -> buildToolService.lint("src/Main.java"));
+        assertDoesNotThrow(() -> buildToolService.lint());
     }
 
     @Test
@@ -344,18 +328,15 @@ class GenericBuildToolServiceTest {
         String dq = String.valueOf((char) 34);
         String nl = String.valueOf((char) 10);
         String rawTomlWithUnescapedDoubleQuotedRegex = "[commands]" + nl + "compile = " + dq + "./mvnw test-compile"
-                + dq + nl + "lint_single = " + dq + "./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs
-                + "Q{file}" + bs + "E$" + dq + nl + "format_single = " + dq + "./mvnw spotless:apply -DspotlessFiles=.*"
-                + bs + "Q{file}" + bs + "E$" + dq + nl + nl + "[parse]" + nl + "error_regex = " + dq + bs + "[ERROR"
-                + bs + "].*" + bs + "[" + bs + "d+," + bs + "d+" + bs + "]|PMD Failure:" + dq + nl;
+                + dq + nl + "lint = " + dq + "./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs + "QApp.java"
+                + bs + "E$" + dq + nl + nl + "[parse]" + nl + "error_regex = " + dq + bs + "[ERROR" + bs + "].*" + bs
+                + "[" + bs + "d+," + bs + "d+" + bs + "]|PMD Failure:" + dq + nl;
         writeBuildToml(rawTomlWithUnescapedDoubleQuotedRegex);
 
         GenericBuildToolService.BuildConfig loaded = buildToolService.loadConfig();
         assertEquals("./mvnw test-compile", loaded.commands().compile());
-        assertEquals("./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs + "Q{file}" + bs + "E$",
-                loaded.commands().lintSingle());
-        assertEquals("./mvnw spotless:apply -DspotlessFiles=.*" + bs + "Q{file}" + bs + "E$",
-                loaded.commands().formatSingle());
+        assertEquals("./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs + "QApp.java" + bs + "E$",
+                loaded.commands().lint());
         assertEquals(bs + "[ERROR" + bs + "].*" + bs + "[" + bs + "d+," + bs + "d+" + bs + "]|PMD Failure:",
                 loaded.parse().errorRegex());
 

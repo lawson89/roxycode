@@ -6,9 +6,7 @@ build = ''
 test_all = ''
 test_single = ''
 lint = ''
-lint_single = ''
 format = ''
-format_single = ''
 
 [env]
 ROXY_CODE = "true"

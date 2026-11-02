@@ -6,9 +6,7 @@ build = "go build ./..."
 test_all = "go test ./..."
 test_single = "go test ./... -run {testName}"
 lint = "go vet ./..."
-lint_single = "go vet {file}"
 format = "gofmt -w ."
-format_single = "gofmt -w {file}"
 
 [env]
 ROXY_CODE = "true"

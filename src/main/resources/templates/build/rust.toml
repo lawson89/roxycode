@@ -6,9 +6,7 @@ build = "cargo build"
 test_all = "cargo test"
 test_single = "cargo test {testName}"
 lint = "cargo clippy -- -D warnings"
-lint_single = "cargo clippy -- -D warnings"
 format = "cargo fmt"
-format_single = "rustfmt {file}"
 
 [env]
 ROXY_CODE = "true"

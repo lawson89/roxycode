@@ -7,12 +7,8 @@ test_all = "./gradlew test"
 test_single = "./gradlew test --tests {testName}"
 # Examples: './gradlew check -x test', './gradlew checkstyleMain pmdMain', './gradlew detekt'
 lint = ''
-# Example: './gradlew check -x test'
-lint_single = ''
 # Examples: './gradlew spotlessApply', './gradlew ktlintFormat'
 format = ''
-# Example: './gradlew spotlessApply -PspotlessIdeHook={file}'
-format_single = ''
 
 [env]
 ROXY_CODE = "true"
