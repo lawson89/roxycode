@@ -339,4 +339,48 @@ class PlanServiceTest {
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
         assertEquals(Set.of(WorkflowPhase.PLAN), service.getVisitedPhases());
     }
+
+    @Test
+    void testUpdateVerificationStepAndResetOnFileChangedInCodePhase() {
+        assertDoesNotThrow(() -> service.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true));
+
+        setupCodePhase();
+        // Steps: 0=Step 1, 1=Step 2, 2=Code compiles successfully, 3=Unit tests pass, 4=Automated code review passes
+        service.markStepsCompleted(0, 1);
+
+        AtomicInteger planEvents = new AtomicInteger(0);
+        doAnswer(inv -> {
+            if (inv.getArgument(0) instanceof PlanUpdatedEvent) {
+                planEvents.incrementAndGet();
+            }
+            return null;
+        }).when(eventPublisher).publishEvent(any(Object.class));
+
+        service.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        assertTrue(service.getCurrentPlan().technicalSteps().get(2).completed());
+        assertEquals(1, planEvents.get());
+
+        // No-op when state is already true
+        service.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        assertEquals(1, planEvents.get());
+
+        service.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
+        assertTrue(service.getCurrentPlan().technicalSteps().get(3).completed());
+        assertEquals(2, planEvents.get());
+
+        // Editing a file in CODE phase resets STEP_COMPILE and STEP_UNIT_TESTS to false
+        service.onFileChanged(new FileChangedEvent("src/App.java", FileChangedEvent.ChangeType.MODIFIED));
+        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
+        assertTrue(service.getCurrentPlan().technicalSteps().get(1).completed());
+        assertFalse(service.getCurrentPlan().technicalSteps().get(2).completed());
+        assertFalse(service.getCurrentPlan().technicalSteps().get(3).completed());
+        assertIllegalState(() -> service.requestReview("Try review without re-running build/tests"),
+                "2: Code compiles successfully", "3: Unit tests pass");
+
+        // Re-verify and transition to REVIEW
+        service.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        service.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
+        assertTrue(service.requestReview("Re-verified").contains("Autonomous transition"));
+        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
+    }
 }

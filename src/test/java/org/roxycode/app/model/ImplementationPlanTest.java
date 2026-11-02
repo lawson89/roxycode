@@ -156,5 +156,18 @@ class ImplementationPlanTest {
         assertTrue(allDone.collectIncompleteSteps(false).isEmpty());
         assertEquals("Remaining incomplete steps: none (all steps completed).",
                 allDone.formatRemainingIncompleteSteps());
+
+        ImplementationPlan afterCompilePass = normalized
+                .withVerificationStepCompleted("  code compiles successfully.! ", true);
+        assertNotSame(normalized, afterCompilePass);
+        assertTrue(afterCompilePass.technicalSteps().get(2).completed());
+        assertSame(afterCompilePass,
+                afterCompilePass.withVerificationStepCompleted(ImplementationPlan.STEP_COMPILE, true));
+        assertSame(afterCompilePass, afterCompilePass.withVerificationStepCompleted("   ", true));
+        assertSame(afterCompilePass, afterCompilePass.withVerificationStepCompleted("Non-existent step", true));
+
+        ImplementationPlan afterCompileReset = afterCompilePass
+                .withVerificationStepCompleted(ImplementationPlan.STEP_COMPILE, false);
+        assertFalse(afterCompileReset.technicalSteps().get(2).completed());
     }
 }

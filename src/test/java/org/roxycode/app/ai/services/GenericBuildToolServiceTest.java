@@ -25,6 +25,7 @@ import org.roxycode.app.ai.services.BuildContainerService.ContainerSession;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSessionKey;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
@@ -548,5 +549,76 @@ class GenericBuildToolServiceTest {
         BuildResult malformedSectionResult = assertDoesNotThrow(() -> buildToolService.compile());
         assertFalse(malformedSectionResult.isSuccess());
         assertEquals(-1, malformedSectionResult.getExitCode());
+    }
+
+    @Test
+    void testCompileRunTestsAndBuildAndTestAutomaticallyUpdatePlanVerificationStepsAndAllowRequestReview()
+            throws IOException {
+        EnvironmentService envService = mock(EnvironmentService.class);
+        when(envService.getCurrentUser()).thenReturn("dev");
+        PlanService realPlanService = new PlanService(envService, eventPublisher, projectService);
+        GenericBuildToolService integratedBuildService = new GenericBuildToolService(projectService, new TomlMapper(),
+                buildContainerService, eventPublisher, realPlanService);
+
+        realPlanService.submitPlan("Feature", "Goal", new String[]{"Req"}, new String[]{"Implement feature"});
+        realPlanService.requestDevelopment("Start coding");
+        realPlanService.approveTransition();
+        assertEquals(WorkflowPhase.CODE, realPlanService.getCurrentPhase());
+
+        writeBuildToml("""
+                [commands]
+                compile = 'echo compile-ok'
+                test_all = 'echo tests-ok'
+                lint = 'echo lint-ok'
+                """);
+
+        // 1. compile() marks STEP_COMPILE = true
+        assertTrue(integratedBuildService.compile().isSuccess());
+        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
+
+        // Failing compile marks STEP_COMPILE = false
+        writeBuildToml("""
+                [commands]
+                compile = 'exit 1'
+                test_all = 'echo tests-ok'
+                """);
+        assertFalse(integratedBuildService.compile().isSuccess());
+        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
+
+        // 2. Passing runTests() marks both STEP_UNIT_TESTS = true and STEP_COMPILE = true
+        assertTrue(integratedBuildService.runTests().isSuccess());
+        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
+
+        // Failing runTests() marks STEP_UNIT_TESTS = false while leaving STEP_COMPILE = true
+        writeBuildToml("""
+                [commands]
+                compile = 'echo compile-ok'
+                test_all = 'exit 1'
+                """);
+        assertFalse(integratedBuildService.runTests().isSuccess());
+        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
+
+        // 3. File edit resets both verification steps; buildAndTest() + markStepCompleted(0) + requestReview() succeeds
+        realPlanService.markStepCompleted(0);
+        realPlanService.onFileChanged(new FileChangedEvent("src/Feature.java", FileChangedEvent.ChangeType.MODIFIED));
+        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
+
+        writeBuildToml("""
+                [commands]
+                compile = 'echo compile-ok'
+                test_all = 'echo tests-ok'
+                lint = 'echo lint-ok'
+                """);
+        assertTrue(integratedBuildService.buildAndTest().isSuccess());
+        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
+
+        String reviewTransition = realPlanService.requestReview("All steps and buildAndTest verified");
+        assertTrue(reviewTransition.contains("Autonomous transition from CODE to REVIEW"));
+        assertEquals(WorkflowPhase.REVIEW, realPlanService.getCurrentPhase());
     }
 }

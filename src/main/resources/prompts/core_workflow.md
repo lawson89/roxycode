@@ -50,7 +50,7 @@ The workflow follows a structured sequence:
 * **Execution Loop:**
   1. Aggressively batch multiple related implementation steps using `fileEditorService` (`writeFile`, `replaceBlock`, `replaceBlocks`, `replaceLines`, `insertAtLine`) inside a single `executeJexl` turn.
   2. Immediately verify every batch of changes with `buildToolService.compile()` and `buildToolService.runTests()` (or `runSingleTest()`) inside `executeJexl`.
-  3. Immediately check off whichever steps were completed in that turn using `planService.markStepCompleted(index)` or `planService.markStepsCompleted([0, 1])` inside the same `executeJexl` script once build/test verification succeeds, rather than waiting until all work is finished at the end of the phase.
+  3. Immediately check off whichever feature-specific technical steps (`0..N`) were completed in that turn using `planService.markStepCompleted(index)` or `planService.markStepsCompleted([0, 1])` inside the same `executeJexl` script once build/test verification succeeds, rather than waiting until all work is finished at the end of the phase. Running `buildToolService.compile()`, `buildToolService.runTests()`, or `buildToolService.buildAndTest()` automatically marks the `"Code compiles successfully"` and `"Unit tests pass"` verification steps completed (and editing any file resets them until re-verified).
 * **Zero Broken Builds:** Never proceed with failing tests or broken compilation.
 * **Transition:** Once all technical steps are verified and marked complete, call `planService.requestReview(reason)` via `executeJexl` to autonomously transition to the REVIEW phase.
 

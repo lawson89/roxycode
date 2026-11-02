@@ -32,6 +32,7 @@ import org.roxycode.app.ai.services.BuildContainerService.ContainerConfig;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
@@ -211,7 +212,11 @@ public class GenericBuildToolService {
 
     @AgentDoc(value = "Compiles the project using the configured compile command", examples = "buildToolService.compile()")
     public BuildResult compile() {
-        return runCommand("commands.compile", config -> config.commands().compile());
+        BuildResult result = runCommand("commands.compile", config -> config.commands().compile());
+        if (planService != null) {
+            planService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, result.success());
+        }
+        return result;
     }
 
     @AgentDoc(value = "Builds or packages the project using the configured build command (falls back to compile if build is not configured).", examples = "buildToolService.build()")
@@ -232,7 +237,14 @@ public class GenericBuildToolService {
 
     @AgentDoc(value = "Runs all tests using the configured test_all command", examples = "buildToolService.runTests()")
     public BuildResult runTests() {
-        return runCommand("commands.test_all", config -> config.commands().testAll());
+        BuildResult result = runCommand("commands.test_all", config -> config.commands().testAll());
+        if (planService != null) {
+            planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, result.success());
+            if (result.success()) {
+                planService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+            }
+        }
+        return result;
     }
 
     @AgentDoc(value = "Runs a single test using the configured test_single command. {testName} is replaced with the argument.", examples = "buildToolService.runSingleTest('com.example.TestClass')")

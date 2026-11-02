@@ -177,6 +177,31 @@ public record ImplementationPlan(String title, String goal, List<String> require
                 completedBy, completedOn, handoffLog, fileChanges);
     }
 
+    public ImplementationPlan withVerificationStepCompleted(String stepDescription, boolean completed) {
+        String normalizedTarget = normalizeStepDescription(stepDescription);
+        if (normalizedTarget.isEmpty() || technicalSteps.isEmpty()) {
+            return this;
+        }
+        List<TechStep> updatedSteps = new ArrayList<>(technicalSteps.size());
+        boolean modified = false;
+        for (TechStep step : technicalSteps) {
+            if (normalizeStepDescription(step.description()).equals(normalizedTarget)) {
+                if (step.completed() != completed) {
+                    updatedSteps.add(new TechStep(step.description(), completed));
+                    modified = true;
+                } else {
+                    updatedSteps.add(step);
+                }
+            } else {
+                updatedSteps.add(step);
+            }
+        }
+        if (!modified) {
+            return this;
+        }
+        return withTechnicalSteps(updatedSteps);
+    }
+
     public ImplementationPlan withApproval(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, true, timestamp, user, completedBy,
                 completedOn, handoffLog, fileChanges);

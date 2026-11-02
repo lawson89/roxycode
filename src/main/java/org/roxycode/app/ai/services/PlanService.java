@@ -122,7 +122,12 @@ public class PlanService {
         if (event == null || StringUtils.isBlank(event.path()) || currentPlan == null) {
             return;
         }
-        setCurrentPlan(currentPlan.withRecordedFileChange(event.path(), event.changeType()));
+        ImplementationPlan updated = currentPlan.withRecordedFileChange(event.path(), event.changeType());
+        if (currentPhase == WorkflowPhase.CODE) {
+            updated = updated.withVerificationStepCompleted(ImplementationPlan.STEP_COMPILE, false)
+                    .withVerificationStepCompleted(ImplementationPlan.STEP_UNIT_TESTS, false);
+        }
+        setCurrentPlan(updated);
     }
 
     public synchronized String submitPlan(ImplementationPlan plan) {
@@ -206,6 +211,16 @@ public class PlanService {
     public synchronized void completePlan(String user, String timestamp) {
         if (currentPlan != null) {
             setCurrentPlan(currentPlan.withCompletion(user, timestamp));
+        }
+    }
+
+    public synchronized void updateVerificationStep(String stepDescription, boolean completed) {
+        if (currentPlan == null) {
+            return;
+        }
+        ImplementationPlan updated = currentPlan.withVerificationStepCompleted(stepDescription, completed);
+        if (!updated.equals(currentPlan)) {
+            setCurrentPlan(updated);
         }
     }
 
