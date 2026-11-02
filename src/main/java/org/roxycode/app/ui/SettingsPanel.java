@@ -41,6 +41,7 @@ public final class SettingsPanel extends JPanel {
 
     static final String SUBTITLE_TEXT = "Configure appearance, Gemini model credentials, agent execution limits, and diagnostics.";
     static final String SAVED_APPLIED_TEXT = "Settings saved and applied.";
+    static final String ONBOARDING_API_KEY_NOTICE_TEXT = "Welcome to RoxyCode! Enter your Gemini API Key below and click 'Save Settings' to get started.";
     static final String GET_API_KEY_BUTTON_TEXT = "Get a Gemini API Key";
     static final String GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
     static final String TEST_CONNECTION_TEXT = "Test Connection";
@@ -76,6 +77,9 @@ public final class SettingsPanel extends JPanel {
     final JButton testConnectionButton;
     final JSpinner maxAgentToolTurnsSpinner;
     final JCheckBox logToolCallsCheckBox;
+    final JPanel onboardingBannerPanel;
+    final JLabel onboardingBannerIconLabel;
+    final JLabel onboardingBannerMessageLabel;
     final JButton saveButton;
     final JLabel statusLabel;
     final Timer statusTimer;
@@ -83,6 +87,7 @@ public final class SettingsPanel extends JPanel {
     private JLabel aiModelHeaderLabel;
     private JLabel agentExecutionHeaderLabel;
     private transient Consumer<String> urlOpener = UiComponents::openUrlOrCopyToClipboard;
+    private transient Runnable onInitialApiKeyConfiguredCallback;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     private boolean updatingFromSettings = false;
@@ -91,7 +96,7 @@ public final class SettingsPanel extends JPanel {
     public SettingsPanel(SettingsService settingsService, @Nullable AiService aiService) {
         this.settingsService = settingsService;
         this.aiService = aiService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[]12" + GROW_FILL));
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[][]12" + GROW_FILL));
         setOpaque(true);
 
         titleLabel = new JLabel("Global Settings");
@@ -110,6 +115,14 @@ public final class SettingsPanel extends JPanel {
         headerActions.add(saveButton);
 
         add(UiComponents.createPageHeader(titleLabel, subtitleLabel, headerActions), "growx, wmin 0, wrap");
+
+        onboardingBannerPanel = new JPanel(new MigLayout("fillx, insets 0", "[][grow]", "[]"));
+        onboardingBannerIconLabel = new JLabel();
+        onboardingBannerMessageLabel = new JLabel(ONBOARDING_API_KEY_NOTICE_TEXT);
+        onboardingBannerPanel.add(onboardingBannerIconLabel, "gapright 8");
+        onboardingBannerPanel.add(onboardingBannerMessageLabel, "growx, wmin 100");
+        onboardingBannerPanel.setVisible(false);
+        add(onboardingBannerPanel, "growx, wmin 0, wrap, gaptop 8, hidemode 3");
 
         themeCombo = new JComboBox<>(
                 new String[]{"FlatLaf Light", "FlatLaf Dark", "IntelliJ", "Darcula", "macOS Light", "macOS Dark"});
@@ -171,6 +184,7 @@ public final class SettingsPanel extends JPanel {
         statusTimer.setRepeats(false);
 
         applyThemeStyling();
+        updateOnboardingBannerState();
     }
 
     private JPanel buildAppearanceCard() {
@@ -317,6 +331,36 @@ public final class SettingsPanel extends JPanel {
         if (subtitleLabel != null) {
             applyThemeStyling();
         }
+        if (onboardingBannerPanel != null) {
+            updateOnboardingBannerState();
+        }
+    }
+
+    boolean isApiKeyConfigured() {
+        if (settingsService == null) {
+            return false;
+        }
+        if (settingsService.hasConfiguredApiKey()) {
+            return true;
+        }
+        AppSettings current = settingsService.getSettings();
+        return current != null && current.getGeminiApiKey() != null && !current.getGeminiApiKey().isBlank();
+    }
+
+    void updateOnboardingBannerState() {
+        boolean showOnboarding = !isApiKeyConfigured();
+        if (onboardingBannerPanel != null) {
+            if (showOnboarding) {
+                Color warnColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06),
+                        "Component.warning.borderColor", "Actions.Yellow");
+                onboardingBannerIconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warnColor));
+                onboardingBannerMessageLabel.setText(ONBOARDING_API_KEY_NOTICE_TEXT);
+                SwingHtmlUtils.applyTintedBannerStyle(onboardingBannerPanel, warnColor, 10, 14, 14);
+            }
+            onboardingBannerPanel.setVisible(showOnboarding);
+            onboardingBannerPanel.revalidate();
+            onboardingBannerPanel.repaint();
+        }
     }
 
     @EventListener
@@ -360,6 +404,7 @@ public final class SettingsPanel extends JPanel {
             if (logToolCalls != logToolCallsCheckBox.isSelected()) {
                 logToolCallsCheckBox.setSelected(logToolCalls);
             }
+            updateOnboardingBannerState();
         });
     }
 
@@ -433,6 +478,7 @@ public final class SettingsPanel extends JPanel {
         commitSpinnerEdit(maxAgentToolTurnsSpinner);
         commitSpinnerEdit(maxMessagesSpinner);
 
+        boolean wasApiKeyConfigured = isApiKeyConfigured();
         AppSettings settings = settingsService.getSettings();
         String newApiKey = new String(geminiApiKeyField.getPassword());
         int newMaxMessages = (Integer) maxMessagesSpinner.getValue();
@@ -446,8 +492,16 @@ public final class SettingsPanel extends JPanel {
         settings.setMaxChatMemoryMessages(newMaxMessages);
         settings.setLogToolCalls(logToolCallsCheckBox.isSelected());
         settingsService.saveSettings();
+        updateOnboardingBannerState();
 
         showStatusMessage(SAVED_APPLIED_TEXT, true);
+        if (!wasApiKeyConfigured && !newApiKey.isBlank() && onInitialApiKeyConfiguredCallback != null) {
+            onInitialApiKeyConfiguredCallback.run();
+        }
+    }
+
+    void setOnInitialApiKeyConfiguredCallback(Runnable callback) {
+        this.onInitialApiKeyConfiguredCallback = callback;
     }
 
     void setUrlOpener(Consumer<String> urlOpener) {

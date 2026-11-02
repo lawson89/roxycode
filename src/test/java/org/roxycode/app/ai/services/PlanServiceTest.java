@@ -22,6 +22,7 @@ import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
@@ -105,8 +106,21 @@ class PlanServiceTest {
         PlanService archivingService = new PlanService(envService, eventPublisher, projectService);
         assertIllegalState(() -> archivingService.requestDevelopment("Reason"), "Implementation Plan is missing");
 
+        archivingService.onTokenUsage(new TokenUsageEvent("qa:default", "gemini-3.5-flash", 1_048_576, 5_000, 4_000,
+                1_000, 200, 50, 5_250, 0.0012));
+        archivingService.onTokenUsage(new TokenUsageEvent(PlanService.TASK_CONVERSATION_ID, "gemini-3.5-flash",
+                1_048_576, 20_000, 15_000, 5_000, 800, 200, 21_000, 0.0051));
+
         archivingService.submitPlan("Archive Feature Plan!", "Persist completed plans",
                 new String[]{"Include frontmatter"}, new String[]{"Implement archiving"});
+        assertEquals(1, archivingService.getCurrentPlan().usageSummary().modelCalls());
+        assertEquals(21_000L, archivingService.getCurrentPlan().usageSummary().totalTokens());
+
+        archivingService.onTokenUsage(new TokenUsageEvent(PlanService.TASK_CONVERSATION_ID, "gemini-3.5-flash",
+                1_048_576, 30_000, 25_000, 5_000, 1_200, 300, 31_500, 0.0071));
+        assertEquals(2, archivingService.getCurrentPlan().usageSummary().modelCalls());
+        assertEquals(52_500L, archivingService.getCurrentPlan().usageSummary().totalTokens());
+        assertEquals(80, archivingService.getCurrentPlan().usageSummary().cacheHitPercent());
         assertThrows(IllegalStateException.class, () -> archivingService.markStepCompleted(0));
         assertThrows(IllegalStateException.class, () -> archivingService.requestReview("done"));
 
@@ -173,6 +187,8 @@ class PlanServiceTest {
         assertEquals(1, archivedFiles.size());
         String content = Files.readString(archivedFiles.get(0));
         assertContainsAll(content, "project: ", "my-project", "approvedBy: ", "alice", "completedBy: ", "bob",
+                "totalTokens: 52500", "cachedTokens: 40000", "cacheHitPercent: 80", "estimatedCostUsd: ", "0.0122",
+                "## Token Usage & Cost", "**Model Calls:** 2", "**Total Tokens:** 52.5k (52500)",
                 "MODIFIED src/Main.java");
         verify(eventPublisher).publishEvent(argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent));
 

@@ -92,6 +92,9 @@ class BuildConfigPanelTest {
         assertEquals("", modelCombo.getItemAt(0).apiName());
         assertEquals("gemini-3.5-flash", panel.modelApiBadgeLabel.getText());
 
+        java.util.concurrent.atomic.AtomicInteger confirmCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
+        panel.setOnConfirmSavedCallback(confirmCallbackCount::incrementAndGet);
+
         String updatedToml = """
                 [commands]
                 compile = 'mvn test'
@@ -110,9 +113,14 @@ class BuildConfigPanelTest {
         assertTrue(panel.saveButton.isEnabled());
         assertFalse(panel.unconfirmedBannerPanel.isVisible());
         assertEquals("Configuration saved successfully!", panel.statusLabel.getText());
+        assertEquals(1, confirmCallbackCount.get());
         verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
         verify(projectService).setBuildConfirmed(true);
         verify(buildToolService).saveConfigContent(updatedToml);
+
+        SwingTestUtils.clickOnEdt(panel.saveButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        assertEquals(1, confirmCallbackCount.get(), "Confirm callback should only fire on first-time confirmation");
 
         when(projectService.getProjectGeminiModel()).thenReturn("gemini-3.5-pro");
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));

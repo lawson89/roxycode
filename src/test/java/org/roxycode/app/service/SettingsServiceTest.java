@@ -93,6 +93,18 @@ class SettingsServiceTest {
         assertTrue(models.stream().anyMatch(m -> "gemini-3.5-flash".equals(m.apiName())));
         assertSame(models, service.getAvailableModels(), "Repeated calls should return cached list");
 
+        org.roxycode.app.model.GeminiModelConfig flashCfg = service.resolveModelConfig("gemini-3.5-flash");
+        assertEquals(1_048_576, flashCfg.contextWindowTokens());
+        assertEquals(0.75, flashCfg.inputPricePerMillion(), 1e-6);
+        assertEquals(0.075, flashCfg.cachedInputPricePerMillion(), 1e-6);
+        assertEquals(3.75, flashCfg.outputPricePerMillion(), 1e-6);
+
+        org.roxycode.app.model.GeminiModelConfig proCfg = service.resolveModelConfig("gemini-4-argon");
+        assertEquals(2.00, proCfg.inputPricePerMillion(), 1e-6);
+        assertEquals(0.10, proCfg.cachedInputPricePerMillion(), 1e-6);
+        assertEquals(10.00, proCfg.outputPricePerMillion(), 1e-6);
+        assertEquals(0.011, proCfg.calculateCostUsd(2_000, 10_000, 600), 1e-7);
+
         Path edtSettingsFile = tempDir.resolve("edt_settings.toml");
         service.setSettingsPathOverride(edtSettingsFile);
         service.getSettings().setTheme("FlatLaf Dark");

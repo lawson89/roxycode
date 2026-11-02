@@ -283,9 +283,17 @@ public class MemoryService {
     }
 
     public record ArchiveEntrySummary(String filename, String type, String title, String createdBy, String timestamp,
-            int messageCount, String matchSnippet) {
+            int messageCount, String matchSnippet, long totalTokens, long cachedTokens, int cacheHitPercent,
+            double estimatedCostUsd) {
+
+        public ArchiveEntrySummary(String filename, String type, String title, String createdBy, String timestamp,
+                int messageCount, String matchSnippet) {
+            this(filename, type, title, createdBy, timestamp, messageCount, matchSnippet, 0L, 0L, 0, 0.0);
+        }
+
         public ArchiveEntrySummary withMatchSnippet(String snippet) {
-            return new ArchiveEntrySummary(filename, type, title, createdBy, timestamp, messageCount, snippet);
+            return new ArchiveEntrySummary(filename, type, title, createdBy, timestamp, messageCount, snippet,
+                    totalTokens, cachedTokens, cacheHitPercent, estimatedCostUsd);
         }
     }
     public List<ArchiveEntrySummary> listArchivedTopicSummaries() {
@@ -331,7 +339,12 @@ public class MemoryService {
                 StringUtils.firstNonBlank(fm.get("archivedOn"), fm.get("completedOn"), fm.get("approvalTimestamp")))
                 .trim();
         int messageCount = NumberUtils.toInt(StringUtils.trim(fm.get("messageCount")), 0);
-        return new ArchiveEntrySummary(filename, type, title, createdBy, timestamp, messageCount, "");
+        long totalTokens = NumberUtils.toLong(StringUtils.trim(fm.get("totalTokens")), 0L);
+        long cachedTokens = NumberUtils.toLong(StringUtils.trim(fm.get("cachedTokens")), 0L);
+        int cacheHitPercent = NumberUtils.toInt(StringUtils.trim(fm.get("cacheHitPercent")), 0);
+        double estimatedCostUsd = NumberUtils.toDouble(StringUtils.trim(fm.get("estimatedCostUsd")), 0.0);
+        return new ArchiveEntrySummary(filename, type, title, createdBy, timestamp, messageCount, "", totalTokens,
+                cachedTokens, cacheHitPercent, estimatedCostUsd);
     }
 
     private List<ArchiveEntrySummary> searchArchiveEntries(List<ArchiveEntrySummary> allEntries, Path archiveDir,

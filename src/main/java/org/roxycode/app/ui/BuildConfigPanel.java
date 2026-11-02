@@ -394,6 +394,7 @@ public final class BuildConfigPanel extends JPanel {
             selectedModelApiName = selectedModel.apiName();
         }
         final String modelOverrideToSave = selectedModelApiName;
+        final boolean wasBuildConfirmed = projectService != null && projectService.isBuildConfirmed();
         saveButton.setEnabled(false);
         CompletableFuture<Void> future = Edt.runAsync(() -> {
             try {
@@ -411,11 +412,11 @@ public final class BuildConfigPanel extends JPanel {
             saveButton.setEnabled(true);
             textEditedByUser = false;
             updateBannerState();
-            if (onConfirmSavedCallback != null) {
-                onConfirmSavedCallback.run();
-            }
             statusLabel.setText("Configuration saved successfully!");
             statusTimer.restart();
+            if (!wasBuildConfirmed && onConfirmSavedCallback != null) {
+                onConfirmSavedCallback.run();
+            }
         }, ex -> {
             saveButton.setEnabled(true);
             Throwable cause = ExceptionUtils.getRootCause(ex);

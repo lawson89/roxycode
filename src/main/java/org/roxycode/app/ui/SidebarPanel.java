@@ -16,13 +16,18 @@ public final class SidebarPanel extends JPanel {
     private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
     static final int LOGO_SIZE = 88;
     static final String SUBTITLE_BADGE_TEXT = "AI Workspace";
-    static final String SETTINGS_ATTENTION_TOOLTIP = "Gemini API Key required in Global Settings";
     static final String TOOLS_ATTENTION_TOOLTIP = "Required system tools are missing";
-    static final String BUILD_CONFIG_ATTENTION_TOOLTIP = "Please confirm or customize project build commands";
+    static final String MISSING_API_KEY_TOOLTIP = "Configure your Gemini API Key in Global Settings first";
+    static final String MISSING_PROJECT_TOOLTIP = "Select a project folder in the top bar first";
+    static final String UNCONFIRMED_BUILD_TOOLTIP = "Confirm your project build configuration in Project Settings first";
+
     private final Consumer<String> navigationAction;
     private final Map<String, NavButton> cardButtons = new LinkedHashMap<>();
     private NavButton qaBtn;
     private NavButton taskBtn;
+    private NavButton contextMgrBtn;
+    private NavButton cacheBtn;
+    private NavButton apiBtn;
     private NavButton toolsBtn;
     private NavButton buildConfigBtn;
     private NavButton settingsBtn;
@@ -40,25 +45,26 @@ public final class SidebarPanel extends JPanel {
         add(createBrandingHeader());
 
         add(createSectionHeader("WORKSPACES"), "gaptop 10");
-        qaBtn = createNavButton("Codebase Q&A", "QA_VIEW", Codicons.COMMENT_DISCUSSION);
+        qaBtn = createNavButton("Codebase Q&A", MainFrame.QA_VIEW, Codicons.COMMENT_DISCUSSION);
         add(qaBtn);
-        taskBtn = createNavButton("Feature Request", "TASK_VIEW", Codicons.GIT_PULL_REQUEST);
+        taskBtn = createNavButton("Feature Request", MainFrame.TASK_VIEW, Codicons.GIT_PULL_REQUEST);
         add(taskBtn);
 
         add(createSectionHeader("CONTEXT"), "gaptop 15");
-        add(createNavButton("Context", "CONTEXT_MGR", Codicons.FILE));
-        add(createNavButton("Repo Map & Prompt", "CACHE", Codicons.DATABASE));
-        add(createNavButton("Agent Tools API", "API", Codicons.CODE));
+        contextMgrBtn = createNavButton("Context", MainFrame.CONTEXT_MGR_VIEW, Codicons.FILE);
+        add(contextMgrBtn);
+        cacheBtn = createNavButton("Repo Map & Prompt", MainFrame.CACHE_VIEW, Codicons.DATABASE);
+        add(cacheBtn);
+        apiBtn = createNavButton("Agent Tools API", MainFrame.API_VIEW, Codicons.CODE);
+        add(apiBtn);
 
         add(createSectionHeader("CONFIG"), "gaptop 15");
         toolsBtn = createNavButton("System Tools", MainFrame.TOOLS_VIEW, Codicons.TOOLS);
         toolsBtn.setAttentionTooltip(TOOLS_ATTENTION_TOOLTIP);
         add(toolsBtn);
         buildConfigBtn = createNavButton("Project Settings", MainFrame.BUILD_CONFIG_VIEW, Codicons.PACKAGE);
-        buildConfigBtn.setAttentionTooltip(BUILD_CONFIG_ATTENTION_TOOLTIP);
         add(buildConfigBtn);
         settingsBtn = createNavButton("Global Settings", MainFrame.SETTINGS_VIEW, Codicons.SETTINGS_GEAR);
-        settingsBtn.setAttentionTooltip(SETTINGS_ATTENTION_TOOLTIP);
         add(settingsBtn);
 
         updateSelection(qaBtn);
@@ -112,14 +118,6 @@ public final class SidebarPanel extends JPanel {
         return taskBtn.isWaitingApproval();
     }
 
-    public void setSettingsAttentionNeeded(boolean attentionNeeded) {
-        settingsBtn.setWaitingApproval(attentionNeeded);
-    }
-
-    public boolean isSettingsAttentionNeeded() {
-        return settingsBtn.isWaitingApproval();
-    }
-
     public void setToolsAttentionNeeded(boolean attentionNeeded) {
         toolsBtn.setWaitingApproval(attentionNeeded);
     }
@@ -128,12 +126,55 @@ public final class SidebarPanel extends JPanel {
         return toolsBtn.isWaitingApproval();
     }
 
-    public void setBuildConfigAttentionNeeded(boolean attentionNeeded) {
-        buildConfigBtn.setWaitingApproval(attentionNeeded);
+    public void updateNavigationAccess(boolean hasApiKey, boolean hasProject, boolean buildConfirmed) {
+        applyButtonAccess(settingsBtn, true, null);
+        applyButtonAccess(toolsBtn, true, null);
+
+        if (!hasApiKey) {
+            applyButtonAccess(qaBtn, false, MISSING_API_KEY_TOOLTIP);
+            applyButtonAccess(taskBtn, false, MISSING_API_KEY_TOOLTIP);
+            applyButtonAccess(cacheBtn, false, MISSING_API_KEY_TOOLTIP);
+            applyButtonAccess(apiBtn, false, MISSING_API_KEY_TOOLTIP);
+            applyButtonAccess(contextMgrBtn, false, MISSING_API_KEY_TOOLTIP);
+            applyButtonAccess(buildConfigBtn, false, MISSING_API_KEY_TOOLTIP);
+            return;
+        }
+
+        applyButtonAccess(apiBtn, true, null);
+        applyButtonAccess(contextMgrBtn, true, null);
+
+        if (!hasProject) {
+            applyButtonAccess(qaBtn, false, MISSING_PROJECT_TOOLTIP);
+            applyButtonAccess(taskBtn, false, MISSING_PROJECT_TOOLTIP);
+            applyButtonAccess(cacheBtn, false, MISSING_PROJECT_TOOLTIP);
+            applyButtonAccess(buildConfigBtn, false, MISSING_PROJECT_TOOLTIP);
+            return;
+        }
+
+        applyButtonAccess(buildConfigBtn, true, null);
+
+        if (!buildConfirmed) {
+            applyButtonAccess(qaBtn, false, UNCONFIRMED_BUILD_TOOLTIP);
+            applyButtonAccess(taskBtn, false, UNCONFIRMED_BUILD_TOOLTIP);
+            applyButtonAccess(cacheBtn, false, UNCONFIRMED_BUILD_TOOLTIP);
+            return;
+        }
+
+        applyButtonAccess(qaBtn, true, null);
+        applyButtonAccess(taskBtn, true, null);
+        applyButtonAccess(cacheBtn, true, null);
     }
 
-    public boolean isBuildConfigAttentionNeeded() {
-        return buildConfigBtn.isWaitingApproval();
+    private static void applyButtonAccess(NavButton btn, boolean enabled, String disabledTooltip) {
+        if (btn == null) {
+            return;
+        }
+        btn.setEnabled(enabled);
+        if (!enabled) {
+            btn.setToolTipText(disabledTooltip);
+        } else {
+            btn.restoreStatusTooltip();
+        }
     }
 
     NavButton getCardButton(String cardName) {

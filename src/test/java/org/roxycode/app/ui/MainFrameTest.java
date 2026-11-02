@@ -8,7 +8,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -19,7 +18,7 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.PhaseChangedEvent;
-import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
@@ -44,6 +43,7 @@ class MainFrameTest {
     private JexlServiceRegistry jexlServiceRegistry;
     private JexlApiPanel jexlApiPanel;
     private TaskWorkspacePanel taskWorkspacePanel;
+    private SettingsPanel settingsPanel;
     private BuildConfigPanel buildConfigPanel;
 
     private MainFrame createMainFrame(SettingsService settingsService, CompletableFuture<List<SystemTool>> toolsFuture)
@@ -82,7 +82,7 @@ class MainFrameTest {
         when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
         SystemToolsPanel systemToolsPanel = new SystemToolsPanel(systemToolService);
 
-        SettingsPanel settingsPanel = new SettingsPanel(settingsService, null);
+        settingsPanel = new SettingsPanel(settingsService, null);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         when(buildToolService.getConfigContent()).thenReturn("");
         buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, projectService);
@@ -94,8 +94,9 @@ class MainFrameTest {
     }
 
     @Test
-    void testStartupWithMissingApiKeyStaysOnQaViewSetsSettingsBellAndKeepsBuildBadgeUntilConfirmed() throws Exception {
-        SettingsService settingsService = new SettingsService(null, null);
+    void testProgressiveOnboardingFlowFromSettingsToBuildConfigToQaView() throws Exception {
+        SettingsService settingsService = new SettingsService(null, event -> {
+        });
         settingsService.setSettingsPathOverride(tempDir.resolve("missing-roxy").resolve("settings.toml"));
 
         List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
@@ -105,32 +106,32 @@ class MainFrameTest {
         MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
         try {
             SwingTestUtils.flushEdt();
-            assertEquals(MainFrame.QA_VIEW, frame.currentCard);
-            String expectedMsg = MainFrame.buildFirstTimeSetupMessage(true, List.of());
-            assertEquals(expectedMsg, frame.lastStartupAlertMessage);
-            assertTrue(frame.sidebar.isSettingsAttentionNeeded());
+            assertEquals(MainFrame.SETTINGS_VIEW, frame.currentCard);
+            assertNull(frame.lastStartupAlertMessage,
+                    "Missing API key should open SettingsPanel with onboarding banner without a modal popup");
+            assertTrue(settingsPanel.onboardingBannerPanel.isVisible());
             assertFalse(frame.sidebar.isToolsAttentionNeeded());
 
             NavButton settingsBtn = frame.sidebar.getCardButton(MainFrame.SETTINGS_VIEW);
-            assertEquals(Codicons.BELL_DOT, settingsBtn.statusIcon.getIkon());
-            assertEquals(SidebarPanel.SETTINGS_ATTENTION_TOOLTIP, settingsBtn.getToolTipText());
-
-            settingsService.getSettings().setGeminiApiKey("   ");
-            settingsService.saveSettings();
-            AtomicReference<String> presentedMessage = new AtomicReference<>();
-            frame.setStartupAlertPresenter(presentedMessage::set);
-            frame.handleStartupSettingsCheck();
-            assertEquals(expectedMsg, presentedMessage.get());
-
-            settingsService.getSettings().setGeminiApiKey("valid-api-key");
-            frame.onSettingsChanged(new SettingsChangedEvent(settingsService.getSettings()));
-            SwingTestUtils.flushEdt();
-            assertFalse(frame.sidebar.isSettingsAttentionNeeded());
+            NavButton qaBtn = frame.sidebar.getCardButton(MainFrame.QA_VIEW);
+            NavButton buildConfigBtn = frame.sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW);
+            assertTrue(settingsBtn.isEnabled());
             assertNull(settingsBtn.statusIcon);
+            assertFalse(qaBtn.isEnabled());
+            assertFalse(buildConfigBtn.isEnabled());
+            assertEquals(SidebarPanel.MISSING_API_KEY_TOOLTIP, qaBtn.getToolTipText());
 
-            assertTrue(frame.sidebar.isBuildConfigAttentionNeeded());
-            frame.showCard(MainFrame.BUILD_CONFIG_VIEW);
-            assertTrue(frame.sidebar.isBuildConfigAttentionNeeded());
+            SwingTestUtils.runOnEdt(() -> {
+                settingsPanel.geminiApiKeyField.setText("valid-api-key");
+                settingsPanel.saveButton.doClick();
+            });
+            SwingTestUtils.flushEdt();
+
+            assertFalse(settingsPanel.onboardingBannerPanel.isVisible());
+            assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
+            assertTrue(buildConfigBtn.isEnabled());
+            assertFalse(qaBtn.isEnabled());
+            assertEquals(SidebarPanel.UNCONFIRMED_BUILD_TOOLTIP, qaBtn.getToolTipText());
 
             doAnswer(inv -> {
                 when(projectService.isBuildConfirmed()).thenReturn(true);
@@ -138,7 +139,31 @@ class MainFrameTest {
             }).when(projectService).setBuildConfirmed(true);
             SwingTestUtils.clickOnEdt(buildConfigPanel.saveButton);
             SwingTestUtils.awaitFuture(buildConfigPanel.lastAsyncFuture);
-            assertFalse(frame.sidebar.isBuildConfigAttentionNeeded());
+
+            assertEquals(MainFrame.QA_VIEW, frame.currentCard);
+            assertTrue(qaBtn.isEnabled());
+            assertNull(qaBtn.getToolTipText());
+
+            frame.showCard(MainFrame.BUILD_CONFIG_VIEW);
+            SwingTestUtils.clickOnEdt(buildConfigPanel.saveButton);
+            SwingTestUtils.awaitFuture(buildConfigPanel.lastAsyncFuture);
+            assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard,
+                    "Subsequent saves on an already-confirmed project should stay on Project Settings");
+
+            frame.showCard(MainFrame.SETTINGS_VIEW);
+            SwingTestUtils.clickOnEdt(settingsPanel.saveButton);
+            SwingTestUtils.flushEdt();
+            assertEquals(MainFrame.SETTINGS_VIEW, frame.currentCard,
+                    "Subsequent saves when API key was already configured should stay on Global Settings");
+
+            when(projectService.hasActiveProject()).thenReturn(false);
+            frame.showCard(MainFrame.QA_VIEW);
+            frame.onProjectChanged(new ProjectChangedEvent(null));
+            SwingTestUtils.flushEdt();
+            assertEquals(MainFrame.SETTINGS_VIEW, frame.currentCard);
+            assertFalse(qaBtn.isEnabled());
+            assertFalse(buildConfigBtn.isEnabled());
+            assertEquals(SidebarPanel.MISSING_PROJECT_TOOLTIP, qaBtn.getToolTipText());
         } finally {
             frame.dispose();
         }
@@ -146,7 +171,8 @@ class MainFrameTest {
 
     @Test
     void testStartupWithMissingRequiredToolsTaskPhaseBadgeAndApprovalSync() throws Exception {
-        SettingsService settingsService = new SettingsService(null, null);
+        SettingsService settingsService = new SettingsService(null, event -> {
+        });
         settingsService.setSettingsPathOverride(tempDir.resolve("configured-roxy").resolve("settings.toml"));
         settingsService.getSettings().setGeminiApiKey("valid-gemini-key");
         settingsService.saveSettings();
@@ -158,7 +184,8 @@ class MainFrameTest {
         MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(missingCtagsTools));
         try {
             SwingTestUtils.flushEdt();
-            assertEquals(MainFrame.buildFirstTimeSetupMessage(false, List.of("Universal Ctags")),
+            assertEquals(MainFrame.TOOLS_VIEW, frame.currentCard);
+            assertEquals(MainFrame.buildFirstTimeSetupMessage(List.of("Universal Ctags")),
                     frame.lastStartupAlertMessage);
             assertTrue(frame.sidebar.isToolsAttentionNeeded());
 

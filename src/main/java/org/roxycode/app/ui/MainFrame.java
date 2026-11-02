@@ -34,11 +34,11 @@ public final class MainFrame extends JPanel {
     static final String QA_VIEW = "QA_VIEW";
     static final String TASK_VIEW = "TASK_VIEW";
     static final String CACHE_VIEW = "CACHE";
-    private static final String API_VIEW = "API";
+    static final String API_VIEW = "API";
     static final String TOOLS_VIEW = "TOOLS";
     static final String SETTINGS_VIEW = "SETTINGS";
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
-    private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
+    static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String FIRST_TIME_SETUP_TITLE = "First-Time Setup Required";
 
     private final transient SettingsService settingsService;
@@ -82,15 +82,26 @@ public final class MainFrame extends JPanel {
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 contextManagerPanel);
-        if (buildConfigPanel != null) {
-            buildConfigPanel.setOnConfirmSavedCallback(() -> {
-                if (sidebar != null) {
-                    sidebar.setBuildConfigAttentionNeeded(false);
+        if (settingsPanel != null) {
+            settingsPanel.setOnInitialApiKeyConfiguredCallback(() -> {
+                updateOnboardingAndNavigationState();
+                boolean hasProject = projectService != null && projectService.hasActiveProject();
+                if (hasProject) {
+                    if (projectService.isBuildConfirmed()) {
+                        showCard(QA_VIEW);
+                    } else {
+                        showCard(BUILD_CONFIG_VIEW);
+                    }
                 }
             });
         }
+        if (buildConfigPanel != null) {
+            buildConfigPanel.setOnConfirmSavedCallback(() -> {
+                updateOnboardingAndNavigationState();
+                showCard(QA_VIEW);
+            });
+        }
         handleStartupSettingsCheck();
-        updateBuildConfigAttentionState();
         checkRequiredSystemToolsOnStartup(systemToolsPanel);
     }
 
@@ -106,25 +117,34 @@ public final class MainFrame extends JPanel {
             }
             chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
             chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
-            updateBuildConfigAttentionState();
+            updateOnboardingAndNavigationState();
         });
-    }
-
-    void updateBuildConfigAttentionState() {
-        if (sidebar == null || projectService == null || !projectService.hasActiveProject()) {
-            return;
-        }
-        boolean unconfirmed = !projectService.isBuildConfirmed();
-        sidebar.setBuildConfigAttentionNeeded(unconfirmed);
     }
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        Edt.run(() -> {
-            if (sidebar != null && settingsService != null) {
-                sidebar.setSettingsAttentionNeeded(!settingsService.hasConfiguredApiKey());
-            }
-        });
+        Edt.run(this::updateOnboardingAndNavigationState);
+    }
+
+    void updateOnboardingAndNavigationState() {
+        boolean hasApiKey = settingsService != null && settingsService.hasConfiguredApiKey();
+        boolean hasProject = projectService != null && projectService.hasActiveProject();
+        boolean buildConfirmed = hasProject && projectService.isBuildConfirmed();
+        if (sidebar != null) {
+            sidebar.updateNavigationAccess(hasApiKey, hasProject, buildConfirmed);
+        }
+        if (!hasApiKey) {
+            showCard(SETTINGS_VIEW);
+        } else if (hasProject && !buildConfirmed) {
+            showCard(BUILD_CONFIG_VIEW);
+        } else if (!hasProject && isProjectDependentCard(currentCard)) {
+            showCard(SETTINGS_VIEW);
+        }
+    }
+
+    private static boolean isProjectDependentCard(String cardName) {
+        return QA_VIEW.equals(cardName) || TASK_VIEW.equals(cardName) || CACHE_VIEW.equals(cardName)
+                || BUILD_CONFIG_VIEW.equals(cardName);
     }
 
     @EventListener
@@ -235,10 +255,7 @@ public final class MainFrame extends JPanel {
         if (settingsService == null) {
             return;
         }
-        boolean missingKey = !settingsService.hasConfiguredApiKey();
-        if (sidebar != null) {
-            sidebar.setSettingsAttentionNeeded(missingKey);
-        }
+        updateOnboardingAndNavigationState();
         if (initialToolsCheckComplete) {
             evaluateStartupSetupAlert();
         }
@@ -283,13 +300,9 @@ public final class MainFrame extends JPanel {
         evaluateStartupSetupAlert();
     }
 
-    static String buildFirstTimeSetupMessage(boolean missingApiKey, List<String> missingToolNames) {
+    static String buildFirstTimeSetupMessage(List<String> missingToolNames) {
         StringBuilder sb = new StringBuilder(
                 "Welcome to RoxyCode! Please complete the following setup steps to get started:");
-        if (missingApiKey) {
-            sb.append((char) 10).append((char) 10).append(
-                    "• Gemini API Key Required: Open Configuration → Global Settings to enter your Gemini API Key, test the connection, and save.");
-        }
         if (missingToolNames != null && !missingToolNames.isEmpty()) {
             sb.append((char) 10).append((char) 10).append("• Required System Tools Missing (")
                     .append(String.join(", ", missingToolNames))
@@ -300,18 +313,17 @@ public final class MainFrame extends JPanel {
 
     @SuppressWarnings("PMD.NullAssignment")
     private void evaluateStartupSetupAlert() {
-        boolean missingKey = settingsService != null && !settingsService.hasConfiguredApiKey();
         List<String> missingToolNames = List.of();
         if (lastStartupTools != null && !lastStartupTools.isEmpty()) {
             missingToolNames = SystemToolService.getMissingRequiredToolNames(lastStartupTools);
         }
-        boolean missingTools = !missingToolNames.isEmpty();
-        if (!missingKey && !missingTools) {
+        if (missingToolNames.isEmpty()) {
             lastStartupAlertMessage = null;
             startupAlertPending = false;
             return;
         }
-        String message = buildFirstTimeSetupMessage(missingKey, missingToolNames);
+        showCard(TOOLS_VIEW);
+        String message = buildFirstTimeSetupMessage(missingToolNames);
         lastStartupAlertMessage = message;
         if (startupAlertPresenter != null) {
             startupAlertPresenter.accept(message);

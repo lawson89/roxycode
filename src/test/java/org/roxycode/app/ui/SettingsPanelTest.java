@@ -55,6 +55,12 @@ class SettingsPanelTest {
             SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
         }
 
+        assertTrue(settingsPanel.onboardingBannerPanel.isVisible());
+        assertEquals(SettingsPanel.ONBOARDING_API_KEY_NOTICE_TEXT,
+                settingsPanel.onboardingBannerMessageLabel.getText());
+        java.util.concurrent.atomic.AtomicInteger initialCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
+        settingsPanel.setOnInitialApiKeyConfiguredCallback(initialCallbackCount::incrementAndGet);
+
         JSpinner.DefaultEditor turnsEditor = (JSpinner.DefaultEditor) settingsPanel.maxAgentToolTurnsSpinner
                 .getEditor();
 
@@ -67,6 +73,8 @@ class SettingsPanelTest {
         assertEquals("new-secret-key", settings.getGeminiApiKey());
         assertEquals(85, settings.getMaxAgentToolTurns());
         assertTrue(settings.isLogToolCalls());
+        assertFalse(settingsPanel.onboardingBannerPanel.isVisible());
+        assertEquals(1, initialCallbackCount.get());
 
         AppSettings copied = settings.copy();
         assertEquals("new-secret-key", copied.getGeminiApiKey());
@@ -78,6 +86,8 @@ class SettingsPanelTest {
         settingsPanel.saveButton.doClick();
         assertEquals(120, settings.getMaxChatMemoryMessages());
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.statusLabel.getText());
+        assertEquals(1, initialCallbackCount.get(),
+                "Callback should not fire again when API key was already configured");
 
         settings.setGeminiApiKey("synced-from-event-key");
         settings.setGeminiModel(modelCombo.getItemAt(1).apiName());

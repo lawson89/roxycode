@@ -25,6 +25,7 @@ import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
@@ -44,6 +45,7 @@ public class PlanService {
     private static final Logger log = LoggerFactory.getLogger(PlanService.class);
     static final String ARCHIVE_PLANS_SUBDIR = "archive/plans";
     static final int MAX_PLAN_SLUG_LENGTH = 40;
+    public static final String TASK_CONVERSATION_ID = "task:default";
 
     public static final String APPROVAL_PLAN_TO_CODE = "Approve Plan and proceed to Code";
     public static final String APPROVAL_REVIEW_TO_PLAN = "Approve Feature Request as complete";
@@ -107,6 +109,7 @@ public class PlanService {
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectService projectService;
     private volatile ImplementationPlan currentPlan;
+    private ImplementationPlan.UsageSummary unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
     private volatile WorkflowPhase currentPhase = WorkflowPhase.PLAN;
     private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.PLAN);
     private volatile WorkflowPhase pendingPhase;
@@ -140,12 +143,29 @@ public class PlanService {
         setCurrentPlan(updated);
     }
 
+    @EventListener
+    public synchronized void onTokenUsage(TokenUsageEvent event) {
+        if (event == null || !TASK_CONVERSATION_ID.equals(event.conversationId())) {
+            return;
+        }
+        if (currentPlan != null) {
+            setCurrentPlan(currentPlan.withRecordedTokenUsage(event));
+        } else {
+            unassignedTaskUsage = unassignedTaskUsage.addEvent(event);
+        }
+    }
+
     public synchronized String submitPlan(ImplementationPlan plan) {
         requirePhase("submitPlan");
         if (plan == null) {
             throw new IllegalArgumentException("Error: Plan cannot be null.");
         }
-        setCurrentPlan(plan.withNormalizedStepsFrom(currentPlan));
+        ImplementationPlan normalized = plan.withNormalizedStepsFrom(currentPlan);
+        if (unassignedTaskUsage.hasUsage()) {
+            normalized = normalized.withUsageSummary(normalized.usageSummary().merge(unassignedTaskUsage));
+            unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
+        }
+        setCurrentPlan(normalized);
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
@@ -309,6 +329,7 @@ public class PlanService {
     }
 
     public synchronized void clearPlan() {
+        this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
         setCurrentPlan(null);
     }
 

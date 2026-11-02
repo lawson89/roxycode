@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.google.genai.Client;
 import com.google.genai.errors.ClientException;
+import com.google.genai.types.GenerateContentResponseUsageMetadata;
 import com.google.genai.errors.GenAiIOException;
 import com.google.genai.errors.ServerException;
 import java.net.SocketTimeoutException;
@@ -36,7 +37,9 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.GeminiModelConfig;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -156,9 +159,15 @@ class AiServiceTest {
     }
 
     private AgentTurnCompleteEvent captureTurnCompleteEvent() {
-        ArgumentCaptor<AgentTurnCompleteEvent> captor = ArgumentCaptor.forClass(AgentTurnCompleteEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        return captor.getValue();
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, atLeastOnce()).publishEvent(captor.capture());
+        for (Object event : captor.getAllValues()) {
+            if (event instanceof AgentTurnCompleteEvent turnComplete) {
+                return turnComplete;
+            }
+        }
+        fail("Expected AgentTurnCompleteEvent to be published");
+        return null;
     }
 
     private static AssistantMessage createToolCallMessage() {
@@ -312,7 +321,13 @@ class AiServiceTest {
 
         AssistantMessage toolCallMsg = createToolCallMessage();
         ChatResponse firstTurnResponse = createToolCallResponse(toolCallMsg);
-        ChatResponse secondTurnResponse = buildChatResponse("Final answer after tool & retry", "STOP", null);
+        GenerateContentResponseUsageMetadata nativeUsage = GenerateContentResponseUsageMetadata.builder()
+                .promptTokenCount(10_000).cachedContentTokenCount(8_000).candidatesTokenCount(400)
+                .thoughtsTokenCount(200).totalTokenCount(10_600).build();
+        DefaultUsage secondUsage = new DefaultUsage(10_000, 400, 10_600, nativeUsage);
+        ChatResponse secondTurnResponse = buildChatResponse("Final answer after tool & retry", "STOP", secondUsage);
+        when(settingsService.resolveModelConfig(anyString())).thenReturn(
+                new GeminiModelConfig("gemini-3.5-flash", "Gemini 3.5 Flash", "Desc", 1_048_576, 0.30, 0.075, 2.50));
 
         AtomicInteger modelCalls = new AtomicInteger();
         when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
@@ -337,6 +352,25 @@ class AiServiceTest {
                 serviceWithRealClient.chat("qa:default", WorkflowPhase.EXPLORE, "Run tool", null));
         assertEquals(1, toolExecutions.get());
         assertEquals(3, modelCalls.get());
+
+        ArgumentCaptor<Object> publishedEvents = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, atLeastOnce()).publishEvent(publishedEvents.capture());
+        TokenUsageEvent usageEvent = null;
+        for (Object ev : publishedEvents.getAllValues()) {
+            if (ev instanceof TokenUsageEvent tue) {
+                usageEvent = tue;
+            }
+        }
+        assertNotNull(usageEvent);
+        assertEquals("qa:default", usageEvent.conversationId());
+        assertEquals(10_000, usageEvent.promptTokens());
+        assertEquals(8_000, usageEvent.cachedInputTokens());
+        assertEquals(2_000, usageEvent.uncachedInputTokens());
+        assertEquals(400, usageEvent.candidatesTokens());
+        assertEquals(200, usageEvent.thoughtsTokens());
+        assertEquals(600, usageEvent.outputAndThinkingTokens());
+        assertEquals(10_600, usageEvent.totalTokens());
+        assertEquals(0.0027, usageEvent.estimatedCostUsd(), 1e-6);
 
         clearInvocations(mockChatModel);
         doThrow(new ClientException(400, "Bad Request", "INVALID_ARGUMENT")).when(mockChatModel)

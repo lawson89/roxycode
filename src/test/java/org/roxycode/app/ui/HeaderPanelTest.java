@@ -28,6 +28,9 @@ class HeaderPanelTest {
         when(gitService.getCurrentBranch()).thenReturn("feature/async-branch");
 
         HeaderPanel header = new HeaderPanel(ps, gitService, ss);
+        assertTrue(header.noProjectNoticeLabel.isVisible());
+        assertEquals(HeaderPanel.NO_PROJECT_NOTICE_TEXT, header.noProjectNoticeLabel.getText());
+        assertEquals(HeaderPanel.SELECT_PROJECT_TEXT, header.changeProjectButton.getText());
         SwingTestUtils.awaitFuture(header.updateBranchLabel());
         assertEquals("feature/async-branch", header.branchLabel.getText());
         assertTrue(header.branchLabel.isVisible());
@@ -46,6 +49,8 @@ class HeaderPanelTest {
         SwingTestUtils.flushEdt();
 
         assertEquals("updated-proj", header.projectLabel.getText());
+        assertFalse(header.noProjectNoticeLabel.isVisible());
+        assertEquals(HeaderPanel.CHANGE_PROJECT_TEXT, header.changeProjectButton.getText());
         assertEquals("gemini-4-argon", header.modelLabel.getText());
 
         ps.setProjectGeminiModel("gemini-project-override");

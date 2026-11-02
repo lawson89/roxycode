@@ -8,8 +8,10 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.ui.SwingTestUtils;
 import org.roxycode.app.util.FrontmatterUtils;
+import org.roxycode.app.util.TokenUtils;
 
 class ImplementationPlanTest {
 
@@ -56,7 +58,19 @@ class ImplementationPlanTest {
         assertTrue(emptyPlan.toArchivedMarkdown("20250514-143210-archive-feature", "roxycode", "/path/to/roxycode")
                 .contains("## Changes" + LF + "No files changed" + LF));
 
+        assertEquals("0", TokenUtils.formatTokenCount(0));
+        assertEquals("950", TokenUtils.formatTokenCount(950));
+        assertEquals("48.2k", TokenUtils.formatTokenCount(48_200));
+        assertEquals("1.0M", TokenUtils.formatTokenCount(1_048_576));
+        assertEquals("$0.00", TokenUtils.formatCostUsd(0.0));
+        assertEquals("$0.0042", TokenUtils.formatCostUsd(0.0042));
+        assertEquals("$0.08", TokenUtils.formatCostUsd(0.081));
+        assertEquals(78, TokenUtils.computeCacheHitPercent(7_800, 10_000));
+        assertEquals(0, TokenUtils.computeCacheHitPercent(0, 0));
+
         ImplementationPlan plan = emptyPlan
+                .withRecordedTokenUsage(new TokenUsageEvent("task:default", "gemini-3.5-flash", 1_048_576, 40_000,
+                        30_000, 10_000, 1_500, 500, 42_000, 0.01025))
                 .withRecordedFileChange("src/NewFile.java", FileChangedEvent.ChangeType.CREATED)
                 .withRecordedFileChange("src/NewFile.java", FileChangedEvent.ChangeType.MODIFIED)
                 .withRecordedFileChange("src/App.java", FileChangedEvent.ChangeType.MODIFIED)
@@ -75,7 +89,11 @@ class ImplementationPlanTest {
                 "approvedBy: ", "alice", "approvalTimestamp: ", "2025-05-14T14:10:00Z", "completedBy: ", "bob",
                 "completedOn: ", "2025-05-14T14:32:10Z", "# Implementation Plan: Archive Feature", "## Approvals",
                 "- **Move to Code:** Approved by alice on 2025-05-14T14:10:00Z",
-                "- **Final Acceptance:** Accepted by bob on 2025-05-14T14:32:10Z", "## Handoff Log",
+                "- **Final Acceptance:** Accepted by bob on 2025-05-14T14:32:10Z", "## Token Usage & Cost",
+                "- **Model Calls:** 1", "- **Total Tokens:** 42.0k (42000)",
+                "- **Input Tokens:** 40.0k (Cached: 30.0k, Cache Hit: 75%)",
+                "- **Output + Thinking Tokens:** 2.0k (Output: 1.5k, Thinking: 500)", "- **Estimated Cost:** $0.01",
+                "totalTokens: 42000", "cachedTokens: 30000", "cacheHitPercent: 75", "## Handoff Log",
                 "REVIEW -> PLAN (User Approved): Complete", "## Changes" + LF, "CREATED src/NewFile.java",
                 "MODIFIED src/App.java", "DELETED src/Temp.java");
 

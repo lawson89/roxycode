@@ -91,6 +91,19 @@ public class SettingsService {
         }
     }
 
+    public GeminiModelConfig resolveModelConfig(String apiName) {
+        String target = StringUtils.trimToEmpty(apiName);
+        if (target.isEmpty()) {
+            target = resolveGlobalGeminiModel(this);
+        }
+        for (GeminiModelConfig model : getAvailableModels()) {
+            if (model != null && target.equalsIgnoreCase(StringUtils.trimToEmpty(model.apiName()))) {
+                return model;
+            }
+        }
+        return GeminiModelConfig.defaultForApiName(target);
+    }
+
     public static String resolveGlobalGeminiModel(SettingsService settingsService) {
         if (settingsService != null && settingsService.getSettings() != null) {
             return StringUtils
@@ -105,7 +118,7 @@ public class SettingsService {
     }
 
     public synchronized boolean hasConfiguredApiKey() {
-        return hasSettingsFile() && StringUtils.isNotBlank(getSettings().getGeminiApiKey());
+        return StringUtils.isNotBlank(getSettings().getGeminiApiKey());
     }
 
     public synchronized AppSettings getSettings() {

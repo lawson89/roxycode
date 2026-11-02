@@ -11,18 +11,20 @@ import java.util.Objects;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
+import org.roxycode.app.util.TokenUtils;
 
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
-        List<LogEntry> handoffLog, List<FileChange> fileChanges) {
+        List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary) {
 
     public static final String NO_FILES_CHANGED = "No files changed";
     public static final String STEP_COMPILE = "Code compiles successfully";
     public static final String STEP_UNIT_TESTS = "Unit tests pass";
     public static final String STEP_CODE_REVIEW = "Automated code review passes";
-    private static final String CODE_FENCE = "```";
+    private static final String CODE_FENCE = String.valueOf((char) 96).repeat(3);
 
     public record TechStep(String description, boolean completed) {
     }
@@ -45,18 +47,81 @@ public record ImplementationPlan(String title, String goal, List<String> require
         }
     }
 
+    public record UsageSummary(int modelCalls, long promptTokens, long cachedInputTokens, long uncachedInputTokens,
+            long outputTokens, long thoughtsTokens, long totalTokens, double estimatedCostUsd) {
+
+        public static final UsageSummary EMPTY = new UsageSummary(0, 0L, 0L, 0L, 0L, 0L, 0L, 0.0);
+
+        public UsageSummary {
+            modelCalls = Math.max(0, modelCalls);
+            promptTokens = Math.max(0L, promptTokens);
+            cachedInputTokens = Math.max(0L, cachedInputTokens);
+            uncachedInputTokens = Math.max(0L, uncachedInputTokens);
+            outputTokens = Math.max(0L, outputTokens);
+            thoughtsTokens = Math.max(0L, thoughtsTokens);
+            totalTokens = Math.max(0L, totalTokens);
+            estimatedCostUsd = Math.max(0.0, estimatedCostUsd);
+        }
+
+        public boolean hasUsage() {
+            return modelCalls > 0 || totalTokens > 0L;
+        }
+
+        public long outputAndThinkingTokens() {
+            return outputTokens + thoughtsTokens;
+        }
+
+        public int cacheHitPercent() {
+            return TokenUtils.computeCacheHitPercent(cachedInputTokens, promptTokens);
+        }
+
+        public UsageSummary addEvent(TokenUsageEvent event) {
+            if (event == null) {
+                return this;
+            }
+            return new UsageSummary(modelCalls + 1, promptTokens + Math.max(0, event.promptTokens()),
+                    cachedInputTokens + Math.max(0, event.cachedInputTokens()),
+                    uncachedInputTokens + Math.max(0, event.uncachedInputTokens()),
+                    outputTokens + Math.max(0, event.candidatesTokens()),
+                    thoughtsTokens + Math.max(0, event.thoughtsTokens()),
+                    totalTokens + Math.max(0, event.totalTokens()),
+                    estimatedCostUsd + Math.max(0.0, event.estimatedCostUsd()));
+        }
+
+        public UsageSummary merge(UsageSummary other) {
+            if (other == null || !other.hasUsage()) {
+                return this;
+            }
+            if (!this.hasUsage()) {
+                return other;
+            }
+            return new UsageSummary(modelCalls + other.modelCalls, promptTokens + other.promptTokens,
+                    cachedInputTokens + other.cachedInputTokens, uncachedInputTokens + other.uncachedInputTokens,
+                    outputTokens + other.outputTokens, thoughtsTokens + other.thoughtsTokens,
+                    totalTokens + other.totalTokens, estimatedCostUsd + other.estimatedCostUsd);
+        }
+    }
+
     public ImplementationPlan {
         requirements = List.copyOf(Objects.requireNonNullElse(requirements, List.of()));
         technicalSteps = List.copyOf(Objects.requireNonNullElse(technicalSteps, List.of()));
         handoffLog = List.copyOf(Objects.requireNonNullElse(handoffLog, List.of()));
         fileChanges = List.copyOf(Objects.requireNonNullElse(fileChanges, List.of()));
+        usageSummary = Objects.requireNonNullElse(usageSummary, UsageSummary.EMPTY);
+    }
+
+    public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
+            boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
+            List<LogEntry> handoffLog, List<FileChange> fileChanges) {
+        this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
+                completedOn, handoffLog, fileChanges, UsageSummary.EMPTY);
     }
 
     public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
             boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
             List<LogEntry> handoffLog) {
         this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
-                completedOn, handoffLog, List.of());
+                completedOn, handoffLog, List.of(), UsageSummary.EMPTY);
     }
 
     public static String normalizeStepDescription(String description) {
@@ -105,6 +170,10 @@ public record ImplementationPlan(String title, String goal, List<String> require
         if (fileChanges.isEmpty() && previousPlan != null) {
             preservedChanges = previousPlan.fileChanges();
         }
+        UsageSummary preservedUsage = usageSummary;
+        if (previousPlan != null && previousPlan.usageSummary().hasUsage()) {
+            preservedUsage = previousPlan.usageSummary().merge(usageSummary);
+        }
 
         List<TechStep> steps = new ArrayList<>();
         boolean hasCompile = false;
@@ -130,7 +199,8 @@ public record ImplementationPlan(String title, String goal, List<String> require
             steps.add(new TechStep(STEP_CODE_REVIEW, false));
         }
 
-        return withTechnicalSteps(steps).withHandoffLog(preservedLog).withFileChanges(preservedChanges);
+        return withTechnicalSteps(steps).withHandoffLog(preservedLog).withFileChanges(preservedChanges)
+                .withUsageSummary(preservedUsage);
     }
 
     public List<String> collectIncompleteSteps(boolean excludeCodeReviewStep) {
@@ -154,7 +224,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
         return new ImplementationPlan(title, goal, requirements, newSteps, userApproved, approvalTimestamp, approvedBy,
-                completedBy, completedOn, handoffLog, fileChanges);
+                completedBy, completedOn, handoffLog, fileChanges, usageSummary);
     }
 
     public ImplementationPlan withVerificationStepCompleted(String stepDescription, boolean completed) {
@@ -184,17 +254,17 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withApproval(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, true, timestamp, user, completedBy,
-                completedOn, handoffLog, fileChanges);
+                completedOn, handoffLog, fileChanges, usageSummary);
     }
 
     public ImplementationPlan withCompletion(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, user, timestamp, handoffLog, fileChanges);
+                approvedBy, user, timestamp, handoffLog, fileChanges, usageSummary);
     }
 
     public ImplementationPlan withHandoffLog(List<LogEntry> newLog) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, newLog, fileChanges);
+                approvedBy, completedBy, completedOn, newLog, fileChanges, usageSummary);
     }
 
     public ImplementationPlan withAddedHandoffLogEntry(String timestamp, String user, String message) {
@@ -205,7 +275,19 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withFileChanges(List<FileChange> newChanges) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, handoffLog, newChanges);
+                approvedBy, completedBy, completedOn, handoffLog, newChanges, usageSummary);
+    }
+
+    public ImplementationPlan withUsageSummary(UsageSummary newUsage) {
+        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
+                approvedBy, completedBy, completedOn, handoffLog, fileChanges, newUsage);
+    }
+
+    public ImplementationPlan withRecordedTokenUsage(TokenUsageEvent event) {
+        if (event == null) {
+            return this;
+        }
+        return withUsageSummary(usageSummary.addEvent(event));
     }
 
     public ImplementationPlan withRecordedFileChange(String rawPath, FileChangedEvent.ChangeType changeType) {
@@ -272,6 +354,22 @@ public record ImplementationPlan(String title, String goal, List<String> require
         }
         md.append("\n## Technical Steps\n").append(formatStepsMarkdown());
 
+        if (usageSummary.hasUsage()) {
+            md.append("\n## Token Usage & Cost\n");
+            md.append("- **Model Calls:** ").append(usageSummary.modelCalls()).append("\n");
+            md.append("- **Total Tokens:** ").append(TokenUtils.formatTokenCount(usageSummary.totalTokens()))
+                    .append(" (").append(usageSummary.totalTokens()).append(")\n");
+            md.append("- **Input Tokens:** ").append(TokenUtils.formatTokenCount(usageSummary.promptTokens()))
+                    .append(" (Cached: ").append(TokenUtils.formatTokenCount(usageSummary.cachedInputTokens()))
+                    .append(", Cache Hit: ").append(usageSummary.cacheHitPercent()).append("%)\n");
+            md.append("- **Output + Thinking Tokens:** ")
+                    .append(TokenUtils.formatTokenCount(usageSummary.outputAndThinkingTokens())).append(" (Output: ")
+                    .append(TokenUtils.formatTokenCount(usageSummary.outputTokens())).append(", Thinking: ")
+                    .append(TokenUtils.formatTokenCount(usageSummary.thoughtsTokens())).append(")\n");
+            md.append("- **Estimated Cost:** ").append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd()))
+                    .append("\n");
+        }
+
         if (includeHandoffLog && !handoffLog.isEmpty()) {
             md.append("\n## Handoff Log\n| Timestamp | User | Message |\n| :--- | :--- | :--- |\n");
             for (LogEntry entry : handoffLog) {
@@ -294,6 +392,10 @@ public record ImplementationPlan(String title, String goal, List<String> require
         frontmatter.put("approvalTimestamp", approvalTimestamp);
         frontmatter.put("completedBy", completedBy);
         frontmatter.put("completedOn", completedOn);
+        frontmatter.put("totalTokens", usageSummary.totalTokens());
+        frontmatter.put("cachedTokens", usageSummary.cachedInputTokens());
+        frontmatter.put("cacheHitPercent", usageSummary.cacheHitPercent());
+        frontmatter.put("estimatedCostUsd", String.format(Locale.US, "%.4f", usageSummary.estimatedCostUsd()));
         StringBuilder sb = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
         sb.append(toMarkdown(true));
         appendChangesMarkdown(sb);

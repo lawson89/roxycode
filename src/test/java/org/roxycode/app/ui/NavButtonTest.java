@@ -49,6 +49,47 @@ class NavButtonTest {
             assertTrue(btn.busyTimer.isRunning());
             btn.removeNotify();
             assertFalse(btn.busyTimer.isRunning());
+
+            SidebarPanel sidebar = new SidebarPanel(card -> {
+            });
+            sidebar.updateNavigationAccess(false, false, false);
+            assertTrue(sidebar.getCardButton(MainFrame.SETTINGS_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.TOOLS_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.QA_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.TASK_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.CACHE_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.API_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).isEnabled());
+            assertEquals(SidebarPanel.MISSING_API_KEY_TOOLTIP,
+                    sidebar.getCardButton(MainFrame.QA_VIEW).getToolTipText());
+
+            sidebar.updateNavigationAccess(true, false, false);
+            assertTrue(sidebar.getCardButton(MainFrame.SETTINGS_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.TOOLS_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.API_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.QA_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.TASK_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.CACHE_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).isEnabled());
+            assertEquals(SidebarPanel.MISSING_PROJECT_TOOLTIP,
+                    sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).getToolTipText());
+
+            sidebar.updateNavigationAccess(true, true, false);
+            assertTrue(sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).isEnabled());
+            assertNull(sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).getToolTipText());
+            assertFalse(sidebar.getCardButton(MainFrame.QA_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.TASK_VIEW).isEnabled());
+            assertFalse(sidebar.getCardButton(MainFrame.CACHE_VIEW).isEnabled());
+            assertEquals(SidebarPanel.UNCONFIRMED_BUILD_TOOLTIP,
+                    sidebar.getCardButton(MainFrame.QA_VIEW).getToolTipText());
+
+            sidebar.updateNavigationAccess(true, true, true);
+            assertTrue(sidebar.getCardButton(MainFrame.QA_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.TASK_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.CACHE_VIEW).isEnabled());
+            assertNull(sidebar.getCardButton(MainFrame.QA_VIEW).getToolTipText());
         });
     }
 }

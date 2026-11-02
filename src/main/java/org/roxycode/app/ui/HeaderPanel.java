@@ -29,7 +29,9 @@ public final class HeaderPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(HeaderPanel.class);
     private static final String LAYOUT_CENTER = "center";
+    static final String SELECT_PROJECT_TEXT = "Select Project...";
     static final String CHANGE_PROJECT_TEXT = "Change Project...";
+    static final String NO_PROJECT_NOTICE_TEXT = "Select a project folder to get started";
     private static final Color BRANCH_ACCENT_LIGHT = new Color(0x0d, 0x94, 0x88);
     private static final Color BRANCH_ACCENT_DARK = new Color(0x2d, 0xd4, 0xbf);
     private static final Color MODEL_ACCENT_LIGHT = new Color(0x7c, 0x3a, 0xed);
@@ -40,7 +42,8 @@ public final class HeaderPanel extends JPanel {
     private final transient SettingsService settingsService;
 
     final JLabel projectLabel;
-    private final JButton changeProjectButton;
+    final JButton changeProjectButton;
+    final JLabel noProjectNoticeLabel;
     final JLabel branchLabel;
     final JLabel modelLabel;
     final JButton themeToggleButton;
@@ -54,7 +57,7 @@ public final class HeaderPanel extends JPanel {
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
-        JPanel leftPanel = new JPanel(new MigLayout("insets 0", "[]8[]12[]", LAYOUT_CENTER));
+        JPanel leftPanel = new JPanel(new MigLayout("insets 0, hidemode 3", "[]8[]8[]12[]", LAYOUT_CENTER));
         leftPanel.setOpaque(false);
 
         projectLabel = new JLabel(projectService.getProjectName());
@@ -63,6 +66,9 @@ public final class HeaderPanel extends JPanel {
 
         changeProjectButton = createChangeProjectButton(e -> chooseProject());
         leftPanel.add(changeProjectButton);
+
+        noProjectNoticeLabel = new JLabel(NO_PROJECT_NOTICE_TEXT);
+        leftPanel.add(noProjectNoticeLabel);
 
         branchLabel = new JLabel();
         branchLabel.setVisible(false);
@@ -82,8 +88,20 @@ public final class HeaderPanel extends JPanel {
         add(rightPanel, "right");
 
         applyHeaderStyling();
+        updateProjectStateDisplay();
         updateBranchLabel();
         updateProjectTooltip(projectService.getCurrentProjectRoot());
+    }
+
+    void updateProjectStateDisplay() {
+        boolean hasProject = projectService != null && projectService.hasActiveProject();
+        if (hasProject) {
+            changeProjectButton.setText(CHANGE_PROJECT_TEXT);
+            noProjectNoticeLabel.setVisible(false);
+        } else {
+            changeProjectButton.setText(SELECT_PROJECT_TEXT);
+            noProjectNoticeLabel.setVisible(true);
+        }
     }
 
     private String resolveEffectiveModel() {
@@ -148,6 +166,14 @@ public final class HeaderPanel extends JPanel {
                         + accentHex + ", 20%); pressedBackground: fade(" + accentHex + ", 28%); borderColor: fade("
                         + accentHex + ", 35%)");
 
+        Color warnColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06), "Component.warning.borderColor",
+                "Actions.Yellow");
+        String warnBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warnColor, 0.14));
+        noProjectNoticeLabel.setForeground(warnColor);
+        noProjectNoticeLabel.setIcon(FontIcon.of(Codicons.WARNING, 14, warnColor));
+        noProjectNoticeLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: bold -1; background: " + warnBgHex + "; arc: 10; border: 3,8,3,8");
+
         branchLabel.setForeground(branchAccent);
         branchLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -1; background: " + branchBgHex + "; arc: 10; border: 3,8,3,8");
@@ -166,6 +192,7 @@ public final class HeaderPanel extends JPanel {
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             projectLabel.setText(projectService.getProjectName());
+            updateProjectStateDisplay();
             updateProjectTooltip(event.projectRoot());
             updateModelDisplay(resolveEffectiveModel());
             updateBranchLabel();

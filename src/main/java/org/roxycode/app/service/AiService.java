@@ -1,6 +1,7 @@
 package org.roxycode.app.service;
 
 import com.google.genai.Client;
+import com.google.genai.types.GenerateContentResponseUsageMetadata;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,6 +14,8 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.TokenUsageEvent;
+import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -264,11 +267,97 @@ public class AiService implements AutoCloseable {
 
         @Override
         public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
-            return RetryUtils.execute(retryTemplate, () -> {
+            ChatClientResponse response = RetryUtils.execute(retryTemplate, () -> {
                 ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
                 return callAdvisorChain.copy(this).nextCall(chatClientRequest);
             });
+            if (response != null) {
+                publishTokenUsageIfPresent(resolveConversationId(chatClientRequest),
+                        resolveRequestModelName(chatClientRequest), response.chatResponse());
+            }
+            return response;
         }
+    }
+
+    private static String resolveConversationId(ChatClientRequest request) {
+        if (request != null && request.context() != null) {
+            Object convId = request.context().get(ChatMemory.CONVERSATION_ID);
+            if (convId != null) {
+                return convId.toString();
+            }
+        }
+        return "";
+    }
+
+    private String resolveRequestModelName(ChatClientRequest request) {
+        if (request != null && request.prompt() != null && request.prompt().getOptions() != null) {
+            String optionModel = request.prompt().getOptions().getModel();
+            if (StringUtils.isNotBlank(optionModel)) {
+                return optionModel.trim();
+            }
+        }
+        return resolveEffectiveGeminiModel();
+    }
+
+    void publishTokenUsageIfPresent(String conversationId, String modelName, @Nullable ChatResponse chatResponse) {
+        if (eventPublisher == null || chatResponse == null || chatResponse.getMetadata() == null) {
+            return;
+        }
+        Usage usage = chatResponse.getMetadata().getUsage();
+        if (usage == null) {
+            return;
+        }
+        int promptTokens = safeNonNegativeInt(usage.getPromptTokens());
+        int candidatesTokens = safeNonNegativeInt(usage.getCompletionTokens());
+        int totalTokens = safeNonNegativeInt(usage.getTotalTokens());
+        int cachedTokens = 0;
+        int thoughtsTokens = 0;
+
+        Object nativeUsage = usage.getNativeUsage();
+        if (nativeUsage instanceof GenerateContentResponseUsageMetadata genAiUsage) {
+            cachedTokens = safeNonNegativeInt(genAiUsage.cachedContentTokenCount().orElse(0));
+            thoughtsTokens = safeNonNegativeInt(genAiUsage.thoughtsTokenCount().orElse(0));
+            if (promptTokens == 0) {
+                promptTokens = safeNonNegativeInt(genAiUsage.promptTokenCount().orElse(0));
+            }
+            if (candidatesTokens == 0) {
+                candidatesTokens = safeNonNegativeInt(genAiUsage.candidatesTokenCount().orElse(0));
+            }
+            if (totalTokens == 0) {
+                totalTokens = safeNonNegativeInt(genAiUsage.totalTokenCount().orElse(0));
+            }
+        }
+
+        int cachedInputTokens = Math.min(promptTokens, cachedTokens);
+        int uncachedInputTokens = Math.max(0, promptTokens - cachedInputTokens);
+        if (totalTokens <= 0) {
+            totalTokens = promptTokens + candidatesTokens + thoughtsTokens;
+        }
+        if (promptTokens <= 0 && candidatesTokens <= 0 && thoughtsTokens <= 0 && totalTokens <= 0) {
+            return;
+        }
+
+        String resolvedModel = StringUtils.defaultIfBlank(modelName, resolveEffectiveGeminiModel()).trim();
+        GeminiModelConfig modelConfig = null;
+        if (settingsService != null) {
+            modelConfig = settingsService.resolveModelConfig(resolvedModel);
+        }
+        if (modelConfig == null) {
+            modelConfig = GeminiModelConfig.defaultForApiName(resolvedModel);
+        }
+
+        double costUsd = modelConfig.calculateCostUsd(uncachedInputTokens, cachedInputTokens,
+                (long) candidatesTokens + thoughtsTokens);
+        eventPublisher.publishEvent(new TokenUsageEvent(StringUtils.defaultString(conversationId), resolvedModel,
+                modelConfig.contextWindowTokens(), promptTokens, cachedInputTokens, uncachedInputTokens,
+                candidatesTokens, thoughtsTokens, totalTokens, costUsd));
+    }
+
+    private static int safeNonNegativeInt(@Nullable Integer value) {
+        if (value == null || value < 0) {
+            return 0;
+        }
+        return value;
     }
 
     String formatChatResponse(ChatResponse chatResponse, TurnToolContext turnContext) {

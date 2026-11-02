@@ -120,7 +120,9 @@ public final class NavButton extends JButton {
         } else {
             stopBusyTimer();
             statusIcon = null;
-            setToolTipText(null);
+            if (isEnabled()) {
+                setToolTipText(null);
+            }
         }
         updatePaddingBorder();
         revalidate();
@@ -154,9 +156,25 @@ public final class NavButton extends JButton {
         updateIconColor();
     }
 
+    void restoreStatusTooltip() {
+        if (busy) {
+            setToolTipText(BUSY_TOOLTIP);
+        } else if (waitingApproval) {
+            setToolTipText(attentionTooltip);
+        } else {
+            setToolTipText(null);
+        }
+    }
+
     private void updateIconColor() {
-        if (getIcon() instanceof FontIcon fontIcon && getForeground() != null) {
-            fontIcon.setIconColor(getForeground());
+        if (getIcon() instanceof FontIcon fontIcon) {
+            Color color = getForeground();
+            if (!isEnabled()) {
+                color = SwingHtmlUtils.getUiColor(color, "Label.disabledForeground");
+            }
+            if (color != null) {
+                fontIcon.setIconColor(color);
+            }
         }
     }
 

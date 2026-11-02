@@ -30,6 +30,7 @@ import org.roxycode.app.ai.services.MemoryService.ArchiveEntrySummary;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
+import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -304,6 +305,18 @@ public final class ArchiveBrowserPanel extends JPanel {
                 """.formatted(SwingHtmlUtils.escapeHtml(archiveMode.dateLabel), SwingHtmlUtils.escapeHtml(dateDisplay),
                 SwingHtmlUtils.escapeHtml(author), messageCountSuffix));
 
+        if (archiveMode == ArchiveMode.PLANS && (entry.totalTokens() > 0L || entry.estimatedCostUsd() > 0.0)) {
+            String tokenMeta = SwingHtmlUtils.escapeHtml(TokenUtils.formatTokenCount(entry.totalTokens())) + " tok ("
+                    + entry.cacheHitPercent() + "% cached) &nbsp;&bull;&nbsp; <b>Cost:</b> "
+                    + SwingHtmlUtils.escapeHtml(TokenUtils.formatCostUsd(entry.estimatedCostUsd()));
+            metaRows.append("""
+                    <tr>
+                        <td valign='top' nowrap='nowrap' class='plan-muted'><b>Tokens:</b></td>
+                        <td width='100%%'>%s</td>
+                    </tr>
+                    """.formatted(tokenMeta));
+        }
+
         if (entry.matchSnippet() != null && !entry.matchSnippet().isBlank()) {
             metaRows.append("""
                     <tr>
@@ -432,6 +445,9 @@ public final class ArchiveBrowserPanel extends JPanel {
                 sub.append(author);
                 if (mode == ArchiveMode.TOPICS && value.messageCount() > 0) {
                     sub.append("  •  ").append(value.messageCount()).append(" msgs");
+                } else if (mode == ArchiveMode.PLANS && (value.totalTokens() > 0L || value.estimatedCostUsd() > 0.0)) {
+                    sub.append("  •  ").append(TokenUtils.formatTokenCount(value.totalTokens())).append(" tok (")
+                            .append(TokenUtils.formatCostUsd(value.estimatedCostUsd())).append(")");
                 }
                 subtitleLabel.setText(sub.toString());
                 subtitleLabel.setForeground(muted);
