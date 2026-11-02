@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
+import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.ActionMap;
 import javax.swing.JButton;
 import javax.swing.JPanel;
@@ -33,6 +34,7 @@ import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.*;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.service.ProjectService;
 
 class ChatControllerTest extends ChatTestFixture {
 
@@ -439,8 +441,62 @@ class ChatControllerTest extends ChatTestFixture {
         assertFalse(chatPanel.fileMentionPopup.isPopupVisible());
         assertEquals("Review @src/main/java/org/roxycode/app/ui/ChatPanel.java ", inputArea.getText());
 
+        // Clicking @ Mention button when caret is after non-whitespace prepends a space and opens popup
+        SwingTestUtils.runOnEdt(() -> {
+            inputArea.setText("Inspect");
+            inputArea.setCaretPosition(inputArea.getText().length());
+            chatPanel.mentionButton.doClick();
+        });
+        flushEdt();
+        assertEquals("Inspect @", inputArea.getText());
+        assertTrue(chatPanel.fileMentionPopup.isPopupVisible());
+
+        // Clicking @ Mention button when already at an active @ mention token does not duplicate @
+        SwingTestUtils.runOnEdt(() -> chatPanel.mentionButton.doClick());
+        flushEdt();
+        assertEquals("Inspect @", inputArea.getText());
+        assertTrue(chatPanel.fileMentionPopup.isPopupVisible());
+
+        // Clicking @ Mention button on empty input inserts @ without leading space
+        SwingTestUtils.runOnEdt(() -> {
+            chatPanel.fileMentionPopup.hidePopup();
+            inputArea.setText("");
+            inputArea.setCaretPosition(0);
+            chatPanel.mentionButton.doClick();
+        });
+        flushEdt();
+        assertEquals("@", inputArea.getText());
+        assertTrue(chatPanel.fileMentionPopup.isPopupVisible());
+
         chatPanel.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
         chatPanel.onFileChanged(new FileChangedEvent("src/NewFile.java"));
         verify(grepService, times(3)).listFiles();
+    }
+
+    @Test
+    void testNoProjectGuardDisablesComposerUntilProjectSelected() {
+        ProjectService projectService = mock(ProjectService.class);
+        when(projectService.hasActiveProject()).thenReturn(false);
+
+        ChatPanel chatPanel = createExploreChatPanel(directExecutor);
+        chatPanel.setProjectService(projectService);
+
+        assertFalse(chatPanel.inputArea.isEnabled());
+        assertFalse(chatPanel.sendButton.isEnabled());
+        assertFalse(chatPanel.attachImageButton.isEnabled());
+        assertFalse(chatPanel.mentionButton.isEnabled());
+        assertEquals(ChatPanel.NO_PROJECT_PLACEHOLDER_TEXT,
+                chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
+
+        when(projectService.hasActiveProject()).thenReturn(true);
+        chatPanel.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
+        flushEdt();
+
+        assertTrue(chatPanel.inputArea.isEnabled());
+        assertTrue(chatPanel.sendButton.isEnabled());
+        assertTrue(chatPanel.attachImageButton.isEnabled());
+        assertTrue(chatPanel.mentionButton.isEnabled());
+        assertEquals(ChatPanel.DEFAULT_PLACEHOLDER_TEXT,
+                chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
     }
 }

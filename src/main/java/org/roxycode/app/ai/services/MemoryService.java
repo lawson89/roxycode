@@ -43,6 +43,9 @@ public class MemoryService {
     private static final String NL = String.valueOf(LF);
     private static final String SCOPE_GLOBAL = "global";
     private static final String SCOPE_PROJECT = "project";
+    private static final String TYPE_TOPIC = "topic";
+    private static final String KEY_TITLE = "title";
+    private static final String ROLE_USER = "user";
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
     private static final String MD_EXTENSION = ".md";
@@ -138,7 +141,7 @@ public class MemoryService {
 
     @AgentDoc(value = "Reads an archived Q&A topic conversation from <projectDataDir>/archive/topics/<filename>.", examples = "memoryService.readArchivedTopic('20250514-153000-memory-architecture.md')")
     public String readArchivedTopic(@AgentDoc("The archived topic filename (with or without .md)") String filename) {
-        return readArchivedFile(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), filename, "topic");
+        return readArchivedFile(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), filename, TYPE_TOPIC);
     }
 
     private static String readMemory(Path dir) {
@@ -187,17 +190,17 @@ public class MemoryService {
         try {
             String resolvedTitle = resolveTopicTitle(title, entries);
             PathUtils.ArchiveFileTarget archiveTarget = PathUtils.prepareArchiveTarget(archiveDir, isoTimestamp,
-                    resolvedTitle, PlanService.MAX_PLAN_SLUG_LENGTH, "topic");
+                    resolvedTitle, PlanService.MAX_PLAN_SLUG_LENGTH, TYPE_TOPIC);
             String projectPath = ProjectService.resolveNormalizedProjectPath(projectService);
             String resolvedUser = StringUtils.defaultIfBlank(user, "User").trim();
             String resolvedTimestamp = StringUtils.defaultIfBlank(isoTimestamp, Instant.now().toString()).trim();
 
             Map<String, Object> frontmatter = new LinkedHashMap<>();
             frontmatter.put("id", archiveTarget.id());
-            frontmatter.put("type", "topic");
+            frontmatter.put("type", TYPE_TOPIC);
             frontmatter.put("project", projectService.getProjectName());
             frontmatter.put("projectPath", projectPath);
-            frontmatter.put("title", resolvedTitle);
+            frontmatter.put(KEY_TITLE, resolvedTitle);
             frontmatter.put("createdBy", resolvedUser);
             frontmatter.put("archivedOn", resolvedTimestamp);
             frontmatter.put("messageCount", entries.size());
@@ -208,7 +211,7 @@ public class MemoryService {
 
             for (ChatTranscriptEntry entry : entries) {
                 String speaker;
-                if ("user".equalsIgnoreCase(entry.role())) {
+                if (ROLE_USER.equalsIgnoreCase(entry.role())) {
                     speaker = "User";
                 } else {
                     speaker = "Roxy";
@@ -290,7 +293,7 @@ public class MemoryService {
         }
     }
     public List<ArchiveEntrySummary> listArchivedTopicSummaries() {
-        return listArchivedEntrySummaries(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), "topic");
+        return listArchivedEntrySummaries(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), TYPE_TOPIC);
     }
 
     public List<ArchiveEntrySummary> listArchivedPlanSummaries() {
@@ -324,7 +327,7 @@ public class MemoryService {
         String filename = file.getFileName().toString();
         Map<String, String> fm = FrontmatterUtils.parseFrontmatter(file);
         String type = StringUtils.defaultIfBlank(fm.get("type"), defaultType).trim();
-        String title = StringUtils.defaultIfBlank(fm.get("title"), StringUtils.removeEnd(filename, MD_EXTENSION))
+        String title = StringUtils.defaultIfBlank(fm.get(KEY_TITLE), StringUtils.removeEnd(filename, MD_EXTENSION))
                 .trim();
         String rawCreator = StringUtils.firstNonBlank(fm.get("createdBy"), fm.get("completedBy"), fm.get("approvedBy"),
                 "User");
@@ -485,7 +488,7 @@ public class MemoryService {
         Map<String, Object> frontmatter = new LinkedHashMap<>();
         frontmatter.put("id", sanitizedSlug);
         frontmatter.put("scope", scope);
-        frontmatter.put("title", resolvedTitle);
+        frontmatter.put(KEY_TITLE, resolvedTitle);
         frontmatter.put("tags", resolvedTags);
         frontmatter.put("updatedAt", Instant.now().toString());
 
@@ -536,7 +539,7 @@ public class MemoryService {
                     .map(file -> {
                         String filename = file.getFileName().toString();
                         Map<String, String> fm = FrontmatterUtils.parseFrontmatter(file);
-                        String title = fm.getOrDefault("title", StringUtils.removeEnd(filename, MD_EXTENSION));
+                        String title = fm.getOrDefault(KEY_TITLE, StringUtils.removeEnd(filename, MD_EXTENSION));
                         String tags = fm.getOrDefault("tags", "");
                         String updatedAt = fm.getOrDefault("updatedAt", "");
                         String updatedAtSuffix = "";

@@ -29,6 +29,7 @@ public class ProjectService {
     static final String ROXYCODE_TMP_DIR = ".roxycode/tmp";
     private static final String ROXYCODE_TMP_PREFIX = ".roxycode/tmp/";
     private static final String DATA_TMP_DIR = "tmp";
+    private static final String NO_PROJECT_ROOT_MSG = "Project root is not set.";
 
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public record ProjectConfig(String geminiModel, boolean buildConfirmed) {
@@ -117,7 +118,7 @@ public class ProjectService {
 
     private void writeProjectConfig(ProjectConfig config) {
         if (!hasActiveProject()) {
-            throw new IllegalStateException("Project root is not set.");
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
         try {
@@ -135,7 +136,7 @@ public class ProjectService {
 
     public void setProjectGeminiModel(String geminiModel) {
         if (!hasActiveProject()) {
-            throw new IllegalStateException("Project root is not set.");
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         String normalized = "";
         if (geminiModel != null) {
@@ -156,7 +157,7 @@ public class ProjectService {
 
     public void setBuildConfirmed(boolean confirmed) {
         if (!hasActiveProject()) {
-            throw new IllegalStateException("Project root is not set.");
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         ProjectConfig existing = readProjectConfig();
         writeProjectConfig(new ProjectConfig(existing.geminiModel(), confirmed));
@@ -188,14 +189,14 @@ public class ProjectService {
     public Path resolvePath(String relativePath) {
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
-            throw new IllegalStateException("Project root is not set.");
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         if (relativePath != null) {
             String normalized = PathUtils.normalizeRelativePath(relativePath.trim());
             while (normalized.startsWith("./")) {
                 normalized = normalized.substring(2);
             }
-            if (normalized.equals(ROXYCODE_TMP_DIR) || normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
+            if (ROXYCODE_TMP_DIR.equals(normalized) || normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
                 Path tmpRoot = resolveProjectDataPath(DATA_TMP_DIR);
                 String subPath = ".";
                 if (normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
@@ -210,7 +211,7 @@ public class ProjectService {
     public String resolveRelativePath(String relativePath) {
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
-            throw new IllegalStateException("Project root is not set.");
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         Path root = projectRoot.toAbsolutePath().normalize();
         String target = ".";
@@ -228,7 +229,7 @@ public class ProjectService {
     public Path getProjectDataDir() {
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
-            throw new IllegalStateException("Project root is not set.");
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
         String dirName = sanitizeProjectName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);

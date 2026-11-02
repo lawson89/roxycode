@@ -113,6 +113,7 @@ public final class PathUtils {
         return resolveUniqueArchiveFile(archiveDir, tsPrefix + "-" + slug);
     }
 
+    @SuppressWarnings("PMD.UseProperClassLoader")
     public static String readClasspathResourceUtf8(String path, Class<?> anchorClass) throws IOException {
         ClassPathResource resource = new ClassPathResource(path, anchorClass.getClassLoader());
         try (InputStream is = resource.getInputStream()) {

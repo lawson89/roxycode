@@ -101,8 +101,44 @@ public class SystemToolsPanelTest {
         SwingTestUtils.flushEdt();
 
         assertEquals(3, panel.getToolCards().size());
-        assertCardState(panel.getToolCards().get(0), "Universal Ctags", "Missing", "Required");
-        assertCardState(panel.getToolCards().get(1), "Git", "Detected", "Optional");
-        assertCardState(panel.getToolCards().get(2), "Docker", "Error", "Optional");
+        ToolCard ctagsCard = panel.getToolCards().get(0);
+        ToolCard gitCard = panel.getToolCards().get(1);
+        ToolCard dockerCard = panel.getToolCards().get(2);
+        assertCardState(ctagsCard, "Universal Ctags", "Missing", "Required");
+        assertCardState(gitCard, "Git", "Detected", "Optional");
+        assertCardState(dockerCard, "Docker", "Error", "Optional");
+
+        assertTrue(ctagsCard.getCopyInstallButton().isVisible());
+        assertTrue(ctagsCard.getCopyInstallButton().getText().startsWith(SystemToolsPanel.COPY_INSTALL_PREFIX));
+        assertFalse(gitCard.getCopyInstallButton().isVisible());
+        assertTrue(dockerCard.getCopyInstallButton().isVisible());
+
+        SwingTestUtils.clickOnEdt(ctagsCard.getCopyInstallButton());
+        assertEquals("Copied!", ctagsCard.getCopyInstallButton().getText());
+    }
+
+    @Test
+    public void testResolveInstallCommandForWindowsMacAndLinux() {
+        assertEquals("winget install BurntSushi.ripgrep.MSVC",
+                SystemToolsPanel.resolveInstallCommand("Ripgrep", "Windows 11"));
+        assertEquals("winget install UniversalCtags.Ctags",
+                SystemToolsPanel.resolveInstallCommand("Universal Ctags", "Windows 10"));
+        assertEquals("winget install Git.Git", SystemToolsPanel.resolveInstallCommand("Git", "Windows 11"));
+        assertEquals("winget install Docker.DockerDesktop",
+                SystemToolsPanel.resolveInstallCommand("Docker", "Windows 11"));
+
+        assertEquals("brew install ripgrep", SystemToolsPanel.resolveInstallCommand("Ripgrep", "Mac OS X"));
+        assertEquals("brew install universal-ctags",
+                SystemToolsPanel.resolveInstallCommand("Universal Ctags", "Mac OS X"));
+        assertEquals("brew install git", SystemToolsPanel.resolveInstallCommand("Git", "Darwin"));
+        assertEquals("brew install --cask docker", SystemToolsPanel.resolveInstallCommand("Docker", "Mac OS X"));
+
+        assertEquals("sudo apt install ripgrep", SystemToolsPanel.resolveInstallCommand("Ripgrep", "Linux"));
+        assertEquals("sudo apt install universal-ctags",
+                SystemToolsPanel.resolveInstallCommand("Universal Ctags", "Linux"));
+        assertEquals("sudo apt install git", SystemToolsPanel.resolveInstallCommand("Git", "Linux"));
+        assertEquals("sudo apt install docker.io", SystemToolsPanel.resolveInstallCommand("Docker", "Linux"));
+        assertEquals("", SystemToolsPanel.resolveInstallCommand("UnknownTool", "Linux"));
+        assertEquals("", SystemToolsPanel.resolveInstallCommand(null, "Linux"));
     }
 }

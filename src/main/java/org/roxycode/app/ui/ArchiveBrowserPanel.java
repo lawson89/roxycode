@@ -41,6 +41,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     static final int COPY_FEEDBACK_DELAY_MS = 1500;
     static final int MAX_SNIPPET_LENGTH = 80;
     static final int TIMESTAMP_PREFIX_LEN = 16;
+    private static final int SINGLE_ITEM_COUNT = 1;
     static final String COPY_BUTTON_TEXT = "Copy as Markdown";
 
     public enum ArchiveMode {
@@ -96,7 +97,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     private String currentRawMarkdown = "";
     String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
-    CompletableFuture<String> lastSelectionFuture = CompletableFuture.completedFuture("");
+    transient CompletableFuture<String> lastSelectionFuture = CompletableFuture.completedFuture("");
 
     public ArchiveBrowserPanel(MemoryService memoryService, ArchiveMode mode) {
         super(new BorderLayout());
@@ -371,7 +372,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     private String formatCountText(int count) {
-        if (count == 1) {
+        if (count == SINGLE_ITEM_COUNT) {
             return count + " " + mode.singularNoun;
         }
         return count + " " + mode.pluralNoun;

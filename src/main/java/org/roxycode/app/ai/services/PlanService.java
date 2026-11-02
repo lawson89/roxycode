@@ -134,6 +134,7 @@ public class PlanService {
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
+    @SuppressWarnings("PMD.UseVarargs")
     @AgentDoc(value = "Submits a project plan covering both functional requirements and technical implementation steps.", phases = {
             "PLAN"}, examples = {"planService.submitPlan('Add Feature', 'Goal description', ['Req 1'], ['Step 1'])"})
     public synchronized String submitPlan(

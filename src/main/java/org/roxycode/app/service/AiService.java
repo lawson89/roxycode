@@ -1,5 +1,6 @@
 package org.roxycode.app.service;
 
+import com.google.genai.Client;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -7,6 +8,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlTool;
@@ -14,6 +16,7 @@ import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,11 +31,14 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.retry.RetryUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.retry.RetryTemplate;
@@ -41,7 +47,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.MimeTypeUtils;
 
 @Service
-public class AiService {
+public class AiService implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(AiService.class);
     private static final String AGENT_NAME = "Roxy";
     static final String FINISH_REASON_UNKNOWN = "UNKNOWN";
@@ -59,9 +65,15 @@ public class AiService {
             });
 
     public static final int MAX_AUTO_NUDGES = 2;
+    public static final int TEST_CONNECTION_TIMEOUT_MS = 15_000;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
 
-    private final ChatClient chatClient;
+    @FunctionalInterface
+    public interface ConnectionTester {
+        String verifyConnection(String apiKey, String modelName) throws Exception;
+    }
+
+    private volatile ChatClient chatClient;
     private final SettingsService settingsService;
     private final ProjectService projectService;
     private final PromptService promptService;
@@ -69,6 +81,11 @@ public class AiService {
     private final PlanService planService;
     private final ApplicationEventPublisher eventPublisher;
     private final ChatMemory chatMemory;
+    private final ToolCallingManager toolCallingManager;
+    private volatile String activeApiKey;
+    private volatile Client managedClient;
+    private Function<String, ChatClient.Builder> chatClientBuilderFactory = this::createChatClientBuilderForApiKey;
+    private ConnectionTester connectionTester = this::executeConnectionTest;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
     private volatile int turnTimeoutSeconds = AiConfig.DEFAULT_TURN_TIMEOUT_SECONDS;
 
@@ -91,9 +108,115 @@ public class AiService {
         this.planService = planService;
         this.eventPublisher = eventPublisher;
         this.chatMemory = chatMemory;
-        this.chatClient = chatClientBuilder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
+        this.toolCallingManager = toolCallingManager;
+        this.activeApiKey = resolveConfiguredApiKey();
+        this.chatClient = buildChatClient(chatClientBuilder);
+    }
+
+    private ChatClient buildChatClient(ChatClient.Builder builder) {
+        return builder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
                 new ModelCallRetryAdvisor()).build();
+    }
+
+    private String resolveConfiguredApiKey() {
+        if (settingsService != null && settingsService.getSettings() != null) {
+            return StringUtils.trimToEmpty(settingsService.getSettings().getGeminiApiKey());
+        }
+        return "";
+    }
+
+    @SuppressWarnings("PMD.CloseResource")
+    private ChatClient.Builder createChatClientBuilderForApiKey(String apiKey) {
+        Client oldClient = this.managedClient;
+        Client newClient = AiConfig.createGenAiClient(apiKey, AiConfig.DEFAULT_HTTP_TIMEOUT_MS);
+        this.managedClient = newClient;
+        closeClientQuietly(oldClient);
+        GoogleGenAiChatModel chatModel = AiConfig.createChatModel(newClient, resolveEffectiveGeminiModel(),
+                toolCallingManager);
+        return ChatClient.builder(chatModel);
+    }
+
+    private static void closeClientQuietly(Client client) {
+        if (client != null) {
+            try {
+                client.close();
+            } catch (Exception e) {
+                log.debug("Failed to close Google GenAI Client: {}", e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
+    public synchronized void close() {
+        Client clientToClose = this.managedClient;
+        this.managedClient = null;
+        closeClientQuietly(clientToClose);
+    }
+
+    @EventListener
+    public synchronized void onSettingsChanged(SettingsChangedEvent event) {
+        String newApiKey;
+        if (event != null && event.settings() != null) {
+            newApiKey = event.settings().getGeminiApiKey();
+        } else {
+            newApiKey = resolveConfiguredApiKey();
+        }
+        String trimmedKey = StringUtils.trimToEmpty(newApiKey);
+        if (!trimmedKey.isEmpty() && !Objects.equals(trimmedKey, this.activeApiKey)) {
+            reloadChatClient(trimmedKey);
+        }
+    }
+
+    synchronized void reloadChatClient(String apiKey) {
+        String trimmed = StringUtils.trimToEmpty(apiKey);
+        if (trimmed.isEmpty()) {
+            return;
+        }
+        ChatClient.Builder builder = chatClientBuilderFactory.apply(trimmed);
+        this.chatClient = buildChatClient(builder);
+        this.activeApiKey = trimmed;
+        log.info("Hot-reloaded Gemini ChatClient with updated API key");
+    }
+
+    public String testConnection(String apiKey, String modelName) {
+        String trimmedKey = StringUtils.trimToEmpty(apiKey);
+        if (trimmedKey.isEmpty()) {
+            throw new IllegalArgumentException("Please enter a Gemini API Key first.");
+        }
+        String effectiveModel = resolveEffectiveGeminiModel();
+        if (StringUtils.isNotBlank(modelName)) {
+            effectiveModel = modelName.trim();
+        }
+        try {
+            return connectionTester.verifyConnection(trimmedKey, effectiveModel);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Connection test failed: " + ExceptionUtils.getRootCauseMessage(e), e);
+        }
+    }
+
+    private String executeConnectionTest(String apiKey, String modelName) {
+        try (Client testClient = AiConfig.createGenAiClient(apiKey, TEST_CONNECTION_TIMEOUT_MS)) {
+            GoogleGenAiChatModel testModel = AiConfig.createChatModel(testClient, modelName, toolCallingManager);
+            ChatResponse response = testModel
+                    .call(new Prompt("Reply with OK", GoogleGenAiChatOptions.builder().model(modelName).build()));
+            return StringUtils.defaultIfBlank(extractResponseText(response), "OK");
+        }
+    }
+
+    void setChatClientBuilderFactory(Function<String, ChatClient.Builder> factory) {
+        this.chatClientBuilderFactory = Objects.requireNonNull(factory, "factory must not be null");
+    }
+
+    void setConnectionTester(ConnectionTester connectionTester) {
+        this.connectionTester = Objects.requireNonNull(connectionTester, "connectionTester must not be null");
+    }
+
+    String getActiveApiKey() {
+        return activeApiKey;
     }
 
     String resolveEffectiveGeminiModel() {

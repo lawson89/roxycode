@@ -95,21 +95,55 @@ public class ChatHtmlTemplates {
     }
 
     public static String renderWelcomeCard() {
+        return renderWelcomeCard(false);
+    }
+
+    public static String renderWelcomeCard(boolean isTaskMode) {
+        if (isTaskMode) {
+            return """
+                    <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
+                            <td width="100%%" style="padding: 12px 16px;">
+                                <div class="welcome-title">ROXY %s &mdash; Autonomous Feature Development (Plan &rarr; Code &rarr; Review)</div>
+                                <div class="welcome-hint" style="margin-top: 6px;">
+                                    Build features, refactor modules, and fix bugs through a structured 3-phase lifecycle with human-in-the-loop approval and automated verification:
+                                </div>
+                                <table width="100%%" cellpadding="2" cellspacing="0" border="0" style="margin-top: 8px;">
+                                    <tr>
+                                        <td class="welcome-hint">1. <b>Plan</b>: Describe the feature or bugfix; Roxy drafts a step-by-step implementation plan for your approval.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="welcome-hint">2. <b>Code</b>: Once you click <b>Approve</b>, Roxy edits files, compiles, and runs unit tests autonomously.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="welcome-hint">3. <b>Review</b>: Roxy audits the git diff and test results before requesting final sign-off.</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                    """
+                    .formatted(CAT_EARS);
+        }
         return """
                 <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                         <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
                         <td width="100%%" style="padding: 12px 16px;">
-                            <div class="welcome-title">ROXY %s &mdash; Ready to Assist</div>
+                            <div class="welcome-title">ROXY %s &mdash; Technical Mentor (Read-Only Explore Mode)</div>
                             <div class="welcome-hint" style="margin-top: 6px;">
-                                Ask questions about your codebase, plan architectural changes, or implement features with automated build &amp; test verification.
+                                Explore your codebase, ask architecture questions, and debug issues safely without modifying any files.
                             </div>
                             <table width="100%%" cellpadding="2" cellspacing="0" border="0" style="margin-top: 8px;">
                                 <tr>
-                                    <td class="welcome-hint">&bull; <b>Enter</b> to send message, <b>Shift+Enter</b> for new line</td>
+                                    <td class="welcome-hint">&bull; <i>"How does the workflow transition lifecycle work?"</i></td>
                                 </tr>
                                 <tr>
-                                    <td class="welcome-hint">&bull; <b>Ctrl+V</b> or click <b>Attach Image</b> to include screenshots &amp; diagrams</td>
+                                    <td class="welcome-hint">&bull; <i>"Explain how @PromptService.java assembles the system prompt."</i></td>
+                                </tr>
+                                <tr>
+                                    <td class="welcome-hint">&bull; Type <b>@</b> or click <b>@ Mention</b> to reference files &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline &bull; <b>Ctrl+V</b> to paste images</td>
                                 </tr>
                             </table>
                         </td>

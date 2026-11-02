@@ -3,11 +3,10 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Color;
 import java.awt.Cursor;
-import java.awt.Desktop;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import javax.swing.JButton;
@@ -17,8 +16,10 @@ import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
+import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.SystemUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
@@ -39,6 +40,8 @@ public final class SystemToolsPanel extends JPanel {
     static final String SUBTITLE_TEXT = "External CLI utilities and runtimes used by RoxyCode for search, version control, symbol indexing, and isolated builds.";
     static final String REQUIRED_BADGE_TEXT = "Required";
     static final String OPTIONAL_BADGE_TEXT = "Optional";
+    static final String COPY_INSTALL_PREFIX = "Copy Install: ";
+    static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
 
     private final transient SystemToolService toolService;
@@ -161,28 +164,7 @@ public final class SystemToolsPanel extends JPanel {
     }
 
     void openWebsite(String websiteUrl) {
-        if (StringUtils.isBlank(websiteUrl)) {
-            return;
-        }
-        try {
-            browseWithDesktop(URI.create(websiteUrl.trim()));
-            return;
-        } catch (Exception e) {
-            log.debug("Browser launch failed for {}, falling back to clipboard: {}", websiteUrl, e.getMessage());
-        }
-        SwingHtmlUtils.copyToClipboard(websiteUrl.trim());
-    }
-
-    private static void browseWithDesktop(URI uri) {
-        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-            try {
-                Desktop.getDesktop().browse(uri);
-                return;
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to browse " + uri, e);
-            }
-        }
-        throw new UnsupportedOperationException("Desktop browse action is not supported");
+        UiComponents.openUrlOrCopyToClipboard(websiteUrl);
     }
 
     JButton getRefreshButton() {
@@ -218,6 +200,44 @@ public final class SystemToolsPanel extends JPanel {
         return StringUtils.removeEnd(StringUtils.removeStart(display, "www."), "/");
     }
 
+    static String resolveInstallCommand(String toolName) {
+        return resolveInstallCommand(toolName, SystemUtils.OS_NAME);
+    }
+
+    static String resolveInstallCommand(String toolName, String osName) {
+        if (StringUtils.isBlank(toolName)) {
+            return "";
+        }
+        String normalizedOs = StringUtils.defaultString(osName).toLowerCase(Locale.ROOT);
+        boolean isMac = normalizedOs.contains("mac") || normalizedOs.contains("darwin");
+        boolean isWindows = !isMac && normalizedOs.contains("win");
+        if (isWindows) {
+            return switch (toolName) {
+                case SystemTool.TOOL_RIPGREP -> "winget install BurntSushi.ripgrep.MSVC";
+                case SystemTool.TOOL_CTAGS -> "winget install UniversalCtags.Ctags";
+                case SystemTool.TOOL_GIT -> "winget install Git.Git";
+                case SystemTool.TOOL_DOCKER -> "winget install Docker.DockerDesktop";
+                default -> "";
+            };
+        }
+        if (isMac) {
+            return switch (toolName) {
+                case SystemTool.TOOL_RIPGREP -> "brew install ripgrep";
+                case SystemTool.TOOL_CTAGS -> "brew install universal-ctags";
+                case SystemTool.TOOL_GIT -> "brew install git";
+                case SystemTool.TOOL_DOCKER -> "brew install --cask docker";
+                default -> "";
+            };
+        }
+        return switch (toolName) {
+            case SystemTool.TOOL_RIPGREP -> "sudo apt install ripgrep";
+            case SystemTool.TOOL_CTAGS -> "sudo apt install universal-ctags";
+            case SystemTool.TOOL_GIT -> "sudo apt install git";
+            case SystemTool.TOOL_DOCKER -> "sudo apt install docker.io";
+            default -> "";
+        };
+    }
+
     private void applyThemeStyling() {
         Color fg = SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
         refreshBtn.setIcon(FontIcon.of(Codicons.REFRESH, 14, fg));
@@ -242,7 +262,9 @@ public final class SystemToolsPanel extends JPanel {
         private final JTextArea descriptionArea;
         private final JLabel versionBadge;
         private final JLabel licenseBadge;
+        private final JButton copyInstallButton;
         private final JButton websiteLinkButton;
+        private Timer copyFeedbackTimer;
 
         ToolCard(SystemTool tool, Consumer<String> websiteOpener) {
             this.tool = tool;
@@ -277,7 +299,7 @@ public final class SystemToolsPanel extends JPanel {
             add(descriptionArea, GROWX_WMIN_0);
 
             JPanel footerRow = new JPanel(
-                    new MigLayout("fillx, insets 2 0 0 0, gapx 10", "[]10[]push[right]", "[center]"));
+                    new MigLayout("fillx, insets 2 0 0 0, gapx 10", "[]10[]push[][right]", "[center]"));
             footerRow.setOpaque(false);
 
             versionBadge = new JLabel(StringUtils.defaultIfBlank(tool.version(), "Unknown"));
@@ -295,6 +317,29 @@ public final class SystemToolsPanel extends JPanel {
             licenseBadge.setIconTextGap(5);
             licenseBadge.setVisible(hasLicense);
             footerRow.add(licenseBadge, "wmin 0, hidemode 3");
+
+            String installCmd = resolveInstallCommand(tool.name());
+            boolean showInstallCmd = !SystemToolService.STATUS_DETECTED.equalsIgnoreCase(tool.status())
+                    && StringUtils.isNotBlank(installCmd);
+            String copyBtnText;
+            if (showInstallCmd) {
+                copyBtnText = COPY_INSTALL_PREFIX + installCmd;
+            } else {
+                copyBtnText = "";
+            }
+            copyInstallButton = new JButton(copyBtnText);
+            copyInstallButton.setVisible(showInstallCmd);
+            copyInstallButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            copyInstallButton.setFocusable(false);
+            copyInstallButton.setIconTextGap(6);
+            if (showInstallCmd) {
+                copyInstallButton.setToolTipText("Copy terminal install command: " + installCmd);
+                copyInstallButton.addActionListener(e -> {
+                    copyFeedbackTimer = UiComponents.copyWithFeedback(copyInstallButton, copyFeedbackTimer, installCmd,
+                            copyBtnText, COPY_FEEDBACK_DELAY_MS);
+                });
+            }
+            footerRow.add(copyInstallButton, "right, hidemode 3");
 
             String websiteUrl = tool.websiteUrl();
             boolean hasWebsite = StringUtils.isNotBlank(websiteUrl);
@@ -346,6 +391,15 @@ public final class SystemToolsPanel extends JPanel {
             }
 
             String accentHex = SwingHtmlUtils.toHex(accentColor);
+            copyInstallButton.putClientProperty(FlatClientProperties.STYLE,
+                    "font: $monospaced.font -1; arc: 8; margin: 2,8,2,8; borderColor: " + borderHex + "; background: "
+                            + pillBg + "; hoverBackground: fade(" + accentHex + ", 14%); pressedBackground: fade("
+                            + accentHex + ", 22%)");
+            copyInstallButton.setForeground(fgColor);
+            if (copyInstallButton.isVisible()) {
+                copyInstallButton.setIcon(FontIcon.of(Codicons.TERMINAL, 13, accentColor));
+            }
+
             websiteLinkButton.putClientProperty(FlatClientProperties.STYLE,
                     "font: -1; arc: 8; margin: 2,8,2,8; borderWidth: 0; background: null; hoverBackground: fade("
                             + accentHex + ", 14%); pressedBackground: fade(" + accentHex + ", 22%)");
@@ -399,6 +453,10 @@ public final class SystemToolsPanel extends JPanel {
 
         JLabel getLicenseBadge() {
             return licenseBadge;
+        }
+
+        JButton getCopyInstallButton() {
+            return copyInstallButton;
         }
 
         JButton getWebsiteLinkButton() {

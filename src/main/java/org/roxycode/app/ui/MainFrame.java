@@ -39,25 +39,11 @@ public final class MainFrame extends JPanel {
     static final String SETTINGS_VIEW = "SETTINGS";
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
+    static final String FIRST_TIME_SETUP_TITLE = "First-Time Setup Required";
     static final String MISSING_REQUIRED_TOOLS_TITLE = "Required System Tools Missing";
     static final String MISSING_REQUIRED_TOOLS_MESSAGE = "RoxyCode requires Ripgrep and Universal Ctags to function properly. Please review the System Tools page to install or configure any missing required tools.";
     static final String MISSING_API_KEY_TITLE = "Gemini API Key Required";
     static final String MISSING_API_KEY_MESSAGE = "Welcome to RoxyCode! Please enter and save your Gemini API Key in Global Settings to get started.";
-
-    private static final class StartupAlertState {
-        final String title;
-        final String message;
-        final int messageType;
-        String lastMessage;
-        boolean pending;
-        Consumer<String> presenter;
-
-        StartupAlertState(String title, String message, int messageType) {
-            this.title = title;
-            this.message = message;
-            this.messageType = messageType;
-        }
-    }
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
@@ -72,10 +58,15 @@ public final class MainFrame extends JPanel {
     private SidebarPanel sidebar;
     private String title = "";
     private String currentCard = QA_VIEW;
-    private final transient StartupAlertState apiKeyAlert = new StartupAlertState(MISSING_API_KEY_TITLE,
-            MISSING_API_KEY_MESSAGE, JOptionPane.INFORMATION_MESSAGE);
-    private final transient StartupAlertState toolsAlert = new StartupAlertState(MISSING_REQUIRED_TOOLS_TITLE,
-            MISSING_REQUIRED_TOOLS_MESSAGE, JOptionPane.WARNING_MESSAGE);
+    private boolean initialToolsCheckComplete;
+    private List<SystemTool> lastStartupTools = List.of();
+    private String lastStartupAlertMessage;
+    private String lastMissingApiKeyMessage;
+    private String lastMissingToolsMessage;
+    private boolean startupAlertPending;
+    private transient Consumer<String> startupAlertPresenter;
+    private transient Consumer<String> missingApiKeyDialogPresenter;
+    private transient Consumer<String> missingToolsDialogPresenter;
 
     public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
             HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
@@ -191,11 +182,10 @@ public final class MainFrame extends JPanel {
         if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null) {
             qaWorkspacePanel.focusChatInput();
         }
-        for (StartupAlertState alert : List.of(apiKeyAlert, toolsAlert)) {
-            if (alert.pending) {
-                alert.pending = false;
-                Edt.run(() -> presentStartupAlert(alert));
-            }
+        if (startupAlertPending && lastStartupAlertMessage != null) {
+            startupAlertPending = false;
+            String message = lastStartupAlertMessage;
+            Edt.run(() -> presentStartupAlert(message));
         }
     }
 
@@ -261,61 +251,126 @@ public final class MainFrame extends JPanel {
         if (sidebar != null) {
             sidebar.setSettingsAttentionNeeded(missingKey);
         }
-        if (missingKey) {
-            triggerStartupAlert(apiKeyAlert);
+        if (initialToolsCheckComplete) {
+            evaluateStartupSetupAlert();
         }
     }
 
     private void checkRequiredSystemToolsOnStartup(SystemToolsPanel systemToolsPanel) {
         if (systemToolsPanel == null) {
+            initialToolsCheckComplete = true;
+            evaluateStartupSetupAlert();
             return;
         }
         CompletableFuture<List<SystemTool>> future = systemToolsPanel.getInitialToolsFuture();
         if (future == null) {
+            initialToolsCheckComplete = true;
+            evaluateStartupSetupAlert();
             return;
         }
         future.whenComplete((tools, ex) -> {
-            if (ex == null && tools != null) {
-                Edt.run(() -> handleStartupToolsCheck(tools));
-            }
+            Edt.run(() -> {
+                initialToolsCheckComplete = true;
+                if (ex == null && tools != null) {
+                    handleStartupToolsCheck(tools);
+                } else {
+                    evaluateStartupSetupAlert();
+                }
+            });
         });
     }
 
     void handleStartupToolsCheck(List<SystemTool> tools) {
+        initialToolsCheckComplete = true;
         if (tools == null || tools.isEmpty()) {
+            lastStartupTools = List.of();
+            evaluateStartupSetupAlert();
             return;
         }
+        lastStartupTools = List.copyOf(tools);
         boolean missingTools = !SystemToolService.areAllRequiredToolsDetected(tools);
         if (sidebar != null) {
             sidebar.setToolsAttentionNeeded(missingTools);
         }
-        if (missingTools) {
-            triggerStartupAlert(toolsAlert);
-        }
+        evaluateStartupSetupAlert();
     }
 
-    private void triggerStartupAlert(StartupAlertState alert) {
-        alert.lastMessage = alert.message;
-        if (alert.presenter != null) {
-            alert.presenter.accept(alert.message);
+    static String buildFirstTimeSetupMessage(boolean missingApiKey, List<String> missingToolNames) {
+        StringBuilder sb = new StringBuilder(
+                "Welcome to RoxyCode! Please complete the following setup steps to get started:");
+        if (missingApiKey) {
+            sb.append((char) 10).append((char) 10).append(
+                    "• Gemini API Key Required: Open Configuration → Global Settings to enter your Gemini API Key, test the connection, and save.");
+        }
+        if (missingToolNames != null && !missingToolNames.isEmpty()) {
+            sb.append((char) 10).append((char) 10).append("• Required System Tools Missing (")
+                    .append(String.join(", ", missingToolNames))
+                    .append("): Open Configuration → System Tools to install the missing tools and click Refresh Status.");
+        }
+        return sb.toString();
+    }
+
+    @SuppressWarnings("PMD.NullAssignment")
+    private void evaluateStartupSetupAlert() {
+        boolean missingKey = settingsService != null && !settingsService.hasConfiguredApiKey();
+        List<String> missingToolNames = List.of();
+        if (lastStartupTools != null && !lastStartupTools.isEmpty()) {
+            missingToolNames = SystemToolService.getMissingRequiredToolNames(lastStartupTools);
+        }
+        boolean missingTools = !missingToolNames.isEmpty();
+        if (!missingKey && !missingTools) {
+            lastStartupAlertMessage = null;
+            lastMissingApiKeyMessage = null;
+            lastMissingToolsMessage = null;
+            startupAlertPending = false;
+            return;
+        }
+        String message = buildFirstTimeSetupMessage(missingKey, missingToolNames);
+        lastStartupAlertMessage = message;
+        if (missingKey) {
+            lastMissingApiKeyMessage = message;
+        } else {
+            lastMissingApiKeyMessage = null;
+        }
+        if (missingTools) {
+            lastMissingToolsMessage = message;
+        } else {
+            lastMissingToolsMessage = null;
+        }
+        Consumer<String> presenter = resolveStartupAlertPresenter(missingKey, missingTools);
+        if (presenter != null) {
+            presenter.accept(message);
         } else if (!GraphicsEnvironment.isHeadless()) {
             if (isShowing()) {
-                presentStartupAlert(alert);
+                presentStartupAlert(message);
             } else {
-                alert.pending = true;
+                startupAlertPending = true;
             }
         }
     }
 
-    private void presentStartupAlert(StartupAlertState alert) {
-        if (alert.presenter != null) {
-            alert.presenter.accept(alert.message);
+    private Consumer<String> resolveStartupAlertPresenter(boolean missingKey, boolean missingTools) {
+        if (startupAlertPresenter != null) {
+            return startupAlertPresenter;
+        }
+        if (missingKey && missingApiKeyDialogPresenter != null) {
+            return missingApiKeyDialogPresenter;
+        }
+        if (missingTools && missingToolsDialogPresenter != null) {
+            return missingToolsDialogPresenter;
+        }
+        return null;
+    }
+
+    private void presentStartupAlert(String message) {
+        if (startupAlertPresenter != null) {
+            startupAlertPresenter.accept(message);
         } else if (!GraphicsEnvironment.isHeadless()) {
             java.awt.Component parent = this;
             if (hostFrame != null) {
                 parent = hostFrame;
             }
-            JOptionPane.showMessageDialog(parent, alert.message, alert.title, alert.messageType);
+            JOptionPane.showMessageDialog(parent, message, FIRST_TIME_SETUP_TITLE, JOptionPane.WARNING_MESSAGE);
         }
     }
 
@@ -323,9 +378,6 @@ public final class MainFrame extends JPanel {
         this.currentCard = cardName;
         if (sidebar != null) {
             sidebar.selectCard(cardName);
-            if (BUILD_CONFIG_VIEW.equals(cardName)) {
-                sidebar.setBuildConfigAttentionNeeded(false);
-            }
         }
         cardLayout.show(contentArea, cardName);
         if (QA_VIEW.equals(cardName) && qaWorkspacePanel != null) {
@@ -335,20 +387,28 @@ public final class MainFrame extends JPanel {
         }
     }
 
+    void setStartupAlertPresenter(Consumer<String> presenter) {
+        this.startupAlertPresenter = presenter;
+    }
+
+    String getLastStartupAlertMessage() {
+        return lastStartupAlertMessage;
+    }
+
     void setMissingToolsDialogPresenter(Consumer<String> presenter) {
-        this.toolsAlert.presenter = presenter;
+        this.missingToolsDialogPresenter = presenter;
     }
 
     String getLastMissingToolsMessage() {
-        return toolsAlert.lastMessage;
+        return lastMissingToolsMessage;
     }
 
     void setMissingApiKeyDialogPresenter(Consumer<String> presenter) {
-        this.apiKeyAlert.presenter = presenter;
+        this.missingApiKeyDialogPresenter = presenter;
     }
 
     String getLastMissingApiKeyMessage() {
-        return apiKeyAlert.lastMessage;
+        return lastMissingApiKeyMessage;
     }
 
     String getCurrentCard() {

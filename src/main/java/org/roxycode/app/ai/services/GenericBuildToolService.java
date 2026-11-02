@@ -48,6 +48,7 @@ public class GenericBuildToolService {
 
     private static final Logger log = LoggerFactory.getLogger(GenericBuildToolService.class);
     private static final String CONFIG_FILE = "build.toml";
+    private static final String CURRENT_DIR = ".";
     static final String BUILD_LOG_REL_PATH = "tmp/build.log";
     static final int MAX_LOG_TAIL_BYTES = 4096;
     static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]"
@@ -349,7 +350,7 @@ public class GenericBuildToolService {
             throw new IllegalArgumentException("File path must not be blank");
         }
         String normalized = projectService.resolveRelativePath(relativePath);
-        if (".".equals(normalized)) {
+        if (CURRENT_DIR.equals(normalized)) {
             throw new IllegalArgumentException("Invalid file path: " + relativePath);
         }
         return normalized;
@@ -410,7 +411,7 @@ public class GenericBuildToolService {
         return logFile;
     }
 
-    public String loadTemplateContent(String templateId) {
+    public final String loadTemplateContent(String templateId) {
         String id = StringUtils.defaultIfBlank(templateId, "default");
         try {
             return PathUtils.readClasspathResourceUtf8("templates/build/" + id + ".toml",
@@ -438,7 +439,7 @@ public class GenericBuildToolService {
         }
     }
 
-    public String detectTemplate() {
+    public final String detectTemplate() {
         if (!projectService.hasActiveProject()) {
             return "default";
         }

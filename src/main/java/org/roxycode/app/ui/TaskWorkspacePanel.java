@@ -97,6 +97,13 @@ public final class TaskWorkspacePanel extends JPanel {
                 pastPlansPanel.refresh();
             }
         });
+        if (this.taskChatPanel != null) {
+            this.taskChatPanel.setOnViewPlanAction(() -> {
+                if (this.planPanel != null) {
+                    this.taskTabs.setSelectedComponent(this.planPanel);
+                }
+            });
+        }
         add(taskTabs, BorderLayout.CENTER);
     }
 

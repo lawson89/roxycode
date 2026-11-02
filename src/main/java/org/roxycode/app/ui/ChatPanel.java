@@ -39,6 +39,7 @@ import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
+import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
@@ -63,6 +64,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String TOPIC_NAME_LABEL_TEXT = "Topic Name:";
     static final String SAVE_TOPIC_BUTTON_TEXT = "Yes, Save Topic";
     static final String DISCARD_TOPIC_BUTTON_TEXT = "No, Discard";
+    static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, Ctrl+V to paste image)";
+    static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     static final int THUMBNAIL_SIZE = 64;
 
     public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
@@ -75,6 +78,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     JButton sendButton;
     JButton stopButton;
     JButton attachImageButton;
+    JButton mentionButton;
+    JButton viewPlanButton;
     JButton approveButton;
     JButton rejectButton;
     JButton resetSessionButton;
@@ -84,6 +89,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     private JScrollPane outputScrollPane;
     private JPanel attachmentPanel;
     transient FileMentionPopup fileMentionPopup;
+    private transient ProjectService projectService;
+    private transient Runnable onViewPlanAction;
+    private boolean loading = false;
     private transient Function<String, NewTopicChoice> newTopicDialogPresenter;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
 
@@ -93,18 +101,23 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         @Lazy
         ChatPanel exploreChatPanel(AiService aiService, PlanService planService,
                 ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
-                ExecutorService chatTurnExecutor, MemoryService memoryService, EnvironmentService environmentService) {
-            return createExplorePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
+                ExecutorService chatTurnExecutor, MemoryService memoryService, EnvironmentService environmentService,
+                ProjectService projectService) {
+            ChatPanel panel = createExplorePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
                     chatTurnExecutor, memoryService, environmentService);
+            panel.setProjectService(projectService);
+            return panel;
         }
 
         @Bean("featureChatPanel")
         @Lazy
         ChatPanel featureChatPanel(AiService aiService, PlanService planService,
                 ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
-                ExecutorService chatTurnExecutor) {
-            return createFeaturePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
+                ExecutorService chatTurnExecutor, ProjectService projectService) {
+            ChatPanel panel = createFeaturePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
                     chatTurnExecutor);
+            panel.setProjectService(projectService);
+            return panel;
         }
     }
 
@@ -144,6 +157,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         SwingHtmlUtils.installTextContextMenu(inputArea);
         setupUndoRedo();
         setupKeyboardShortcuts();
+        updateProjectComposerState();
     }
 
     private JPanel createInlineActionPanel() {
@@ -163,6 +177,15 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 e -> controller.approvePhase());
         approveButton.setEnabled(false);
 
+        viewPlanButton = createActionButton("View Plan", Codicons.LIST_ORDERED, null, false,
+                "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff",
+                e -> {
+                    if (onViewPlanAction != null) {
+                        onViewPlanAction.run();
+                    }
+                });
+        viewPlanButton.setVisible(false);
+
         rejectButton = createActionButton("Reject", Codicons.CLOSE, null, false,
                 "background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff",
                 e -> controller.rejectPhase());
@@ -170,13 +193,14 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         panel.add(transitionLabel);
         panel.add(Box.createHorizontalStrut(10));
+        panel.add(viewPlanButton, "hidemode 3");
         panel.add(approveButton);
         panel.add(rejectButton);
         return panel;
     }
 
     private Component createOutputSection(boolean isTaskMode) {
-        outputArea = new MarkdownPane();
+        outputArea = new MarkdownPane(isTaskMode);
         outputScrollPane = new JScrollPane(outputArea);
         outputScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         updateOutputScrollPaneBorder();
@@ -217,8 +241,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         inputArea.setWrapStyleWord(true);
         inputArea.setMargin(new Insets(8, 12, 4, 12));
         inputArea.setBorder(BorderFactory.createEmptyBorder(8, 12, 4, 12));
-        inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
-                "Ask Roxy... (Enter to send, Shift+Enter for new line, @ to mention files, Ctrl+V to paste image)");
+        inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, DEFAULT_PLACEHOLDER_TEXT);
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
         inputScrollPane.setBorder(BorderFactory.createEmptyBorder());
         inputScrollPane.setOpaque(false);
@@ -254,21 +277,20 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             resetSessionButton.setToolTipText(NEW_TOPIC_TOOLTIP);
         }
 
-        JLabel mentionHintLabel = new JLabel("@ Mention");
-        mentionHintLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: -1; foreground: $Label.disabledForeground");
-        mentionHintLabel.setToolTipText("Type @ in the prompt to search and mention project files");
+        mentionButton = createActionButton("@ Mention", Codicons.MENTION, new Insets(4, 8, 4, 8), true,
+                "arc: 8; font: -1; foreground: $Label.disabledForeground", e -> triggerMentionPopup());
+        mentionButton.setToolTipText("Insert @ to search and mention project files");
 
         turnLabel = new JLabel();
         turnLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: $small.font; foreground: $Label.disabledForeground; background: darken($TextArea.background, 4%); arc: 8; border: 2,8,2,8");
         updateTurnLabel();
 
-        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", "[]4[]10[]push[]8[]", "center"));
+        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", "[]4[]4[]push[]8[]", "center"));
         actionToolbar.setOpaque(false);
         actionToolbar.add(attachImageButton);
         actionToolbar.add(resetSessionButton);
-        actionToolbar.add(mentionHintLabel);
+        actionToolbar.add(mentionButton);
         actionToolbar.add(turnLabel);
         actionToolbar.add(sendButton, "hidemode 3");
         actionToolbar.add(stopButton, "hidemode 3");
@@ -359,6 +381,61 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         fileMentionPopup.setGrepService(grepService);
     }
 
+    @Autowired(required = false)
+    public void setProjectService(ProjectService projectService) {
+        this.projectService = projectService;
+        updateProjectComposerState();
+    }
+
+    private boolean isProjectReady() {
+        return projectService == null || projectService.hasActiveProject();
+    }
+
+    void updateProjectComposerState() {
+        boolean projectReady = isProjectReady();
+        String placeholder;
+        if (projectReady) {
+            placeholder = DEFAULT_PLACEHOLDER_TEXT;
+        } else {
+            placeholder = NO_PROJECT_PLACEHOLDER_TEXT;
+        }
+        inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, placeholder);
+        boolean enableComposer = !loading && projectReady;
+        inputArea.setEnabled(enableComposer);
+        sendButton.setEnabled(enableComposer);
+        attachImageButton.setEnabled(enableComposer);
+        mentionButton.setEnabled(enableComposer);
+    }
+
+    public void setOnViewPlanAction(Runnable action) {
+        this.onViewPlanAction = action;
+        if (viewPlanButton != null) {
+            viewPlanButton.setVisible(action != null);
+        }
+    }
+
+    void triggerMentionPopup() {
+        if (!inputArea.isEnabled()) {
+            return;
+        }
+        inputArea.requestFocusInWindow();
+        String text = inputArea.getText();
+        int caret = inputArea.getCaretPosition();
+        if (FileMentionPopup.extractMentionToken(text, caret) == null) {
+            String insertion;
+            if (caret > 0 && !Character.isWhitespace(text.charAt(caret - 1))) {
+                insertion = " @";
+            } else {
+                insertion = "@";
+            }
+            inputArea.insert(insertion, caret);
+            inputArea.setCaretPosition(caret + insertion.length());
+        }
+        if (fileMentionPopup != null) {
+            fileMentionPopup.evaluateCurrentInput();
+        }
+    }
+
     @EventListener
     public void onAgentTurn(AgentTurnEvent event) {
         controller.onAgentTurn(event);
@@ -382,6 +459,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         fileMentionPopup.invalidateCache();
+        Edt.run(this::updateProjectComposerState);
     }
 
     @EventListener
@@ -488,6 +566,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         if (e != null) {
             log.debug("Send message triggered by: {}", e.getActionCommand());
         }
+        if (!isProjectReady()) {
+            return;
+        }
         fileMentionPopup.hidePopup();
         controller.sendMessage(inputArea.getText());
     }
@@ -563,12 +644,15 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void setLoading(boolean loading) {
+        this.loading = loading;
+        boolean enableComposer = !loading && isProjectReady();
         stopButton.setEnabled(loading);
         stopButton.setVisible(loading);
-        sendButton.setEnabled(!loading);
+        sendButton.setEnabled(enableComposer);
         sendButton.setVisible(!loading);
-        attachImageButton.setEnabled(!loading);
-        inputArea.setEnabled(!loading);
+        attachImageButton.setEnabled(enableComposer);
+        mentionButton.setEnabled(enableComposer);
+        inputArea.setEnabled(enableComposer);
         if (model.isTaskMode()) {
             boolean enableDecision = !loading && controller.hasPendingPhase();
             approveButton.setEnabled(enableDecision);

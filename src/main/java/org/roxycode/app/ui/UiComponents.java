@@ -12,9 +12,11 @@ import java.awt.Image;
 import java.awt.LayoutManager;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Desktop;
 import java.awt.Shape;
 import java.awt.geom.RoundRectangle2D;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
@@ -44,6 +46,8 @@ import org.springframework.lang.Nullable;
  */
 final class UiComponents {
     private static final Logger log = LoggerFactory.getLogger(UiComponents.class);
+    private static final String GROWX_WMIN_0 = "growx, wmin 0";
+    private static final String ROW_CENTER = "[center]";
 
     private UiComponents() {
     }
@@ -132,6 +136,25 @@ final class UiComponents {
     }
 
     /**
+     * Opens a URL in the system default browser, falling back to copying the URL to the clipboard.
+     */
+    static void openUrlOrCopyToClipboard(String url) {
+        if (StringUtils.isBlank(url)) {
+            return;
+        }
+        String trimmed = url.trim();
+        try {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(URI.create(trimmed));
+                return;
+            }
+        } catch (Exception e) {
+            log.debug("Browser launch failed for {}, falling back to clipboard: {}", trimmed, e.getMessage());
+        }
+        SwingHtmlUtils.copyToClipboard(trimmed);
+    }
+
+    /**
      * Copies text to the clipboard and triggers temporary "Copied!" button feedback.
      */
     static Timer copyWithFeedback(JButton button, @Nullable Timer existingTimer, String content, String originalText,
@@ -170,16 +193,16 @@ final class UiComponents {
 
         JPanel titleBlock = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[grow, fill]", "[]"));
         titleBlock.setOpaque(false);
-        titleBlock.add(titleLabel, "growx, wmin 0");
-        titleBlock.add(subtitleLabel, "growx, wmin 0");
+        titleBlock.add(titleLabel, GROWX_WMIN_0);
+        titleBlock.add(subtitleLabel, GROWX_WMIN_0);
 
         if (rightComponent == null) {
             return titleBlock;
         }
 
-        JPanel header = new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill][]", "[center]"));
+        JPanel header = new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill][]", ROW_CENTER));
         header.setOpaque(false);
-        header.add(titleBlock, "growx, wmin 0");
+        header.add(titleBlock, GROWX_WMIN_0);
         header.add(rightComponent);
         return header;
     }
@@ -218,7 +241,7 @@ final class UiComponents {
 
     static JPanel createModelControlBox(JLabel badgeLabel, JComboBox<GeminiModelConfig> comboBox,
             String comboConstraints) {
-        JPanel box = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", "[center]"));
+        JPanel box = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", ROW_CENTER));
         box.setOpaque(false);
         box.add(badgeLabel, "hidemode 3");
         box.add(comboBox, comboConstraints);
@@ -250,18 +273,18 @@ final class UiComponents {
         titleLbl.putClientProperty(FlatClientProperties.STYLE, "font: bold");
 
         if (badge != null) {
-            JPanel titleLine = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", "[center]"));
+            JPanel titleLine = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", ROW_CENTER));
             titleLine.setOpaque(false);
             titleLine.add(titleLbl);
             titleLine.add(badge);
-            block.add(titleLine, "growx, wmin 0");
+            block.add(titleLine, GROWX_WMIN_0);
         } else {
-            block.add(titleLbl, "growx, wmin 0");
+            block.add(titleLbl, GROWX_WMIN_0);
         }
 
         JLabel descLbl = new JLabel(description);
         descLbl.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
-        block.add(descLbl, "growx, wmin 0");
+        block.add(descLbl, GROWX_WMIN_0);
 
         return block;
     }
@@ -270,9 +293,9 @@ final class UiComponents {
      * Combines a field text block with a control component in a row.
      */
     static JPanel createFieldRow(JPanel fieldBlock, JComponent control, String controlConstraints) {
-        JPanel row = new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill]16[right]", "[center]"));
+        JPanel row = new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill]16[right]", ROW_CENTER));
         row.setOpaque(false);
-        row.add(fieldBlock, "growx, wmin 0");
+        row.add(fieldBlock, GROWX_WMIN_0);
         row.add(control, controlConstraints);
         return row;
     }

@@ -23,6 +23,7 @@ public final class MarkdownPane extends JTextPane {
     private static final String ERROR_RENDERING_HTML = "<div>Error rendering message</div>";
 
     private final List<Message> messages = new ArrayList<>();
+    private final boolean taskMode;
     private int copiedMessageIndex = -1;
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
@@ -36,6 +37,11 @@ public final class MarkdownPane extends JTextPane {
     }
 
     public MarkdownPane() {
+        this(false);
+    }
+
+    public MarkdownPane(boolean taskMode) {
+        this.taskMode = taskMode;
         setEditable(false);
         setContentType("text/html");
         setOpaque(true);
@@ -239,7 +245,7 @@ public final class MarkdownPane extends JTextPane {
         int savedCaret = getCaretPosition();
         StringBuilder fullHtml = new StringBuilder("<html><body>");
         if (messages.isEmpty()) {
-            fullHtml.append(ChatHtmlTemplates.renderWelcomeCard());
+            fullHtml.append(ChatHtmlTemplates.renderWelcomeCard(taskMode));
         } else {
             for (int i = 0; i < messages.size(); i++) {
                 fullHtml.append(formatMessageEntryHtml(messages.get(i), i));

@@ -51,7 +51,7 @@ public final class ProcessRunner {
         return run(command, workingDir, env, DEFAULT_TIMEOUT, true, null);
     }
 
-    @SuppressWarnings({"PMD.CloseResource", "PMD.PreserveStackTrace"})
+    @SuppressWarnings("PMD.CloseResource")
     public static ProcessResult run(List<String> command, Path workingDir, Map<String, String> env, Duration timeout,
             boolean redirectErrorStream, OutputStream outputMirror) {
         BoundedOutputStream stdoutStream = new BoundedOutputStream(MAX_OUTPUT_CHARS);
@@ -132,14 +132,16 @@ public final class ProcessRunner {
 
         @Override
         public void write(byte[] b, int off, int len) throws IOException {
+            int currentOff = off;
+            int currentLen = len;
             long remaining = getThreshold() - getByteCount();
-            if (remaining > 0 && len > remaining) {
+            if (remaining > 0 && currentLen > remaining) {
                 int prefixLen = (int) remaining;
-                super.write(b, off, prefixLen);
-                off += prefixLen;
-                len -= prefixLen;
+                super.write(b, currentOff, prefixLen);
+                currentOff += prefixLen;
+                currentLen -= prefixLen;
             }
-            super.write(b, off, len);
+            super.write(b, currentOff, currentLen);
         }
 
         @Override

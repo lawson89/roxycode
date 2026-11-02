@@ -444,6 +444,7 @@ public final class SwingHtmlUtils {
         }
     }
 
+    @SuppressWarnings("PMD.PreserveStackTrace")
     private static Theme getRSyntaxTheme(boolean dark) throws IOException {
         try {
             return RSYNTAX_THEME_CACHE.get(dark, isDark -> {
@@ -482,6 +483,7 @@ public final class SwingHtmlUtils {
                     new NodeRenderingHandler<>(IndentedCodeBlock.class, this::render));
         }
 
+        @SuppressWarnings("PMD.UnusedFormalParameter")
         private void render(Node node, NodeRendererContext context, HtmlWriter html) {
             String code = ((Block) node).getContentChars().toString();
             String language = "";

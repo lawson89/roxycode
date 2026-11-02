@@ -36,7 +36,12 @@ class MarkdownPaneTest {
     @Test
     void testIncrementalAppendPreservesDocumentInstanceAndPreviousEntries() {
         MarkdownPane pane = new MarkdownPane();
-        assertTrue(pane.getText().contains("welcome-card"));
+        assertContainsAll(pane.getText(), "welcome-card", "Technical Mentor (Read-Only Explore Mode)", "@ Mention");
+
+        MarkdownPane taskPane = new MarkdownPane(true);
+        assertContainsAll(taskPane.getText(), "welcome-card", "Autonomous Feature Development", "Plan", "Code",
+                "Review");
+        assertEquals(ChatHtmlTemplates.renderWelcomeCard(false), ChatHtmlTemplates.renderWelcomeCard());
 
         pane.appendMessage("user", "First user question");
         Document doc = pane.getDocument();

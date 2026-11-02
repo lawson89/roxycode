@@ -8,6 +8,7 @@ import com.github.dockerjava.api.model.Version;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -257,20 +258,32 @@ public class SystemToolService {
         if (tools == null || tools.isEmpty()) {
             return false;
         }
+        return getMissingRequiredToolNames(tools).isEmpty();
+    }
+
+    public static List<String> getMissingRequiredToolNames(List<SystemTool> tools) {
+        if (tools == null || tools.isEmpty()) {
+            return SystemTool.REQUIRED_TOOL_NAMES;
+        }
         Set<String> detectedNames = new HashSet<>();
+        List<String> missing = new ArrayList<>();
         for (SystemTool tool : tools) {
             if (tool == null) {
                 continue;
             }
             boolean detected = STATUS_DETECTED.equals(tool.status());
-            if (tool.required() && !detected) {
-                return false;
-            }
             if (detected && tool.name() != null) {
                 detectedNames.add(tool.name());
+            } else if (tool.required() && tool.name() != null && !missing.contains(tool.name())) {
+                missing.add(tool.name());
             }
         }
-        return detectedNames.containsAll(SystemTool.REQUIRED_TOOL_NAMES);
+        for (String reqName : SystemTool.REQUIRED_TOOL_NAMES) {
+            if (!detectedNames.contains(reqName) && !missing.contains(reqName)) {
+                missing.add(reqName);
+            }
+        }
+        return List.copyOf(missing);
     }
 
     static boolean isDockerDetected(List<SystemTool> tools) {

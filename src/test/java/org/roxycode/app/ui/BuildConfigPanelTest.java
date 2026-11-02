@@ -81,12 +81,18 @@ class BuildConfigPanelTest {
             modelSaveCalledOnEdt.set(SwingUtilities.isEventDispatchThread());
             return null;
         }).when(projectService).setProjectGeminiModel(anyString());
+        doAnswer(inv -> {
+            when(projectService.isBuildConfirmed()).thenReturn(inv.getArgument(0, Boolean.class));
+            return null;
+        }).when(projectService).setBuildConfirmed(anyBoolean());
         when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
 
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(loadCalledOnEdt.get());
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
+        assertTrue(panel.unconfirmedBannerPanel.isVisible());
+        assertEquals(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT, panel.unconfirmedBannerMessageLabel.getText());
 
         JComboBox<GeminiModelConfig> modelCombo = panel.getModelCombo();
         assertEquals(3, modelCombo.getItemCount());
@@ -109,6 +115,7 @@ class BuildConfigPanelTest {
         assertFalse(saveCalledOnEdt.get());
         assertFalse(modelSaveCalledOnEdt.get());
         assertTrue(panel.saveButton.isEnabled());
+        assertFalse(panel.unconfirmedBannerPanel.isVisible());
         assertEquals("Configuration saved successfully!", panel.statusLabel.getText());
         verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
         verify(projectService).setBuildConfirmed(true);

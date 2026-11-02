@@ -98,6 +98,7 @@ public class RepoMapPackerService {
         log.debug("Repo map invalidated due to file change: {}", logPath);
     }
 
+    @SuppressWarnings("PMD.NullAssignment")
     public void invalidateCache() {
         synchronized (this) {
             generation.incrementAndGet();
@@ -111,6 +112,7 @@ public class RepoMapPackerService {
         return generateRepoMap();
     }
 
+    @SuppressWarnings("PMD.NullAssignment")
     private synchronized void invalidateForFileChange(String changedRelativePath) {
         generation.incrementAndGet();
         currentSnapshot = null;

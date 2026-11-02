@@ -30,6 +30,8 @@ class ContextManagerPanelTest {
         when(promptService.listProjectContextFiles()).thenReturn(List.of(projItem));
 
         ContextManagerPanel panel = new ContextManagerPanel(promptService);
+        assertEquals(ContextManagerPanel.PAGE_TITLE, panel.titleLabel.getText());
+        assertEquals(ContextManagerPanel.PAGE_SUBTITLE, panel.subtitleLabel.getText());
         ContextManagerPanel.ContextScopeColumn globalCol = panel.globalColumn;
         ContextManagerPanel.ContextScopeColumn projCol = panel.projectColumn;
         SwingTestUtils.awaitFuture(globalCol.lastRefreshFuture);

@@ -8,12 +8,13 @@ public class AppSettings {
 
     public static final String DEFAULT_THEME = "FlatLaf Light";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
+    public static final int DEFAULT_MAX_AGENT_TOOL_TURNS = 50;
 
     private String theme = DEFAULT_THEME;
     private String geminiApiKey = "";
     private String currentProjectPath = "";
     private String geminiModel = DEFAULT_GEMINI_MODEL;
-    private int maxAgentToolTurns = 5;
+    private int maxAgentToolTurns = DEFAULT_MAX_AGENT_TOOL_TURNS;
     private int maxChatMemoryMessages = 50;
     private boolean logToolCalls = false;
     private List<String> globalContextFolders = new ArrayList<>();

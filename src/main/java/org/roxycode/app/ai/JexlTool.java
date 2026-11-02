@@ -11,6 +11,7 @@ import org.apache.commons.jexl3.MapContext;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
@@ -112,7 +113,7 @@ public class JexlTool {
         if (settingsService != null && settingsService.getSettings() != null) {
             return Math.max(1, settingsService.getSettings().getMaxAgentToolTurns());
         }
-        return 5;
+        return AppSettings.DEFAULT_MAX_AGENT_TOOL_TURNS;
     }
 
     private String serializeResult(@Nullable Object result) throws Exception {

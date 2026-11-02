@@ -235,7 +235,7 @@ public class PromptService {
             if (settingsService != null) {
                 settings = settingsService.getSettings();
             }
-            int maxTurns = 5;
+            int maxTurns = AppSettings.DEFAULT_MAX_AGENT_TOOL_TURNS;
             if (settings != null) {
                 maxTurns = settings.getMaxAgentToolTurns();
             }

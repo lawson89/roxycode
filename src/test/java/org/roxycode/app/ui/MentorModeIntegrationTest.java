@@ -124,6 +124,11 @@ class MentorModeIntegrationTest {
         sidebar.selectCard("TOOLS");
         assertTrue(toolsBtn.isSelected());
         assertFalse(qaBtn.isSelected());
+
+        assertEquals(taskWorkspacePanel.taskChatPanel, taskWorkspacePanel.taskTabs.getSelectedComponent());
+        assertTrue(taskWorkspacePanel.taskChatPanel.viewPlanButton.isVisible());
+        SwingTestUtils.clickOnEdt(taskWorkspacePanel.taskChatPanel.viewPlanButton);
+        assertEquals(taskWorkspacePanel.planPanel, taskWorkspacePanel.taskTabs.getSelectedComponent());
     }
 
     @Test

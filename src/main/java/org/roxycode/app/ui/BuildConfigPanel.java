@@ -52,6 +52,7 @@ public final class BuildConfigPanel extends JPanel {
     static final String DOCKER_MISSING_WARNING_TEXT = "Docker was not detected in System Tools. Running builds in Testcontainers is unavailable — build and test commands will execute directly on your host machine and can potentially modify your system.";
     static final String CONTAINER_ACTIVE_TEXT = "Testcontainers Isolation Active — Builds run inside an isolated Docker container.";
     static final String HOST_EXECUTION_ACTIVE_TEXT = "Host Execution Active — Container isolation is available via Docker ([container] enabled = true). Builds currently run on your host machine.";
+    static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below and click 'Confirm & Save Settings'.";
 
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
@@ -67,6 +68,9 @@ public final class BuildConfigPanel extends JPanel {
     final JLabel buildSectionHeaderLabel;
     final JComboBox<BuildTemplateInfo> templateCombo;
     final JButton applyTemplateButton;
+    final JPanel unconfirmedBannerPanel;
+    final JLabel unconfirmedBannerIconLabel;
+    final JLabel unconfirmedBannerMessageLabel;
     final JPanel bannerPanel;
     final JLabel bannerIconLabel;
     final JLabel bannerMessageLabel;
@@ -92,7 +96,7 @@ public final class BuildConfigPanel extends JPanel {
         this.settingsService = settingsService;
         this.systemToolService = systemToolService;
         this.projectService = projectService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[][][][][][grow][]"));
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[][][][][][][grow][]"));
         setOpaque(true);
 
         titleLabel = new JLabel(TITLE_TEXT);
@@ -156,6 +160,15 @@ public final class BuildConfigPanel extends JPanel {
         add(templateToolbar, "growx, wrap, gapbottom 8");
 
         loadTemplateOptions();
+
+        unconfirmedBannerPanel = new JPanel(new MigLayout("fillx, insets 10 14 10 14", "[][grow]", "[]"));
+        unconfirmedBannerPanel.setOpaque(false);
+        unconfirmedBannerIconLabel = new JLabel();
+        unconfirmedBannerMessageLabel = new JLabel(UNCONFIRMED_BUILD_NOTICE_TEXT);
+        unconfirmedBannerPanel.add(unconfirmedBannerIconLabel, "gapright 8");
+        unconfirmedBannerPanel.add(unconfirmedBannerMessageLabel, "growx, wmin 100");
+        unconfirmedBannerPanel.setVisible(false);
+        add(unconfirmedBannerPanel, "growx, wrap, gapbottom 8, hidemode 3");
 
         bannerPanel = new JPanel(new MigLayout("fillx, insets 10 14 10 14", "[][grow][][]", "[]"));
         bannerPanel.setOpaque(false);
@@ -413,6 +426,23 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     void updateBannerState() {
+        boolean showUnconfirmedNotice = projectService != null && projectService.hasActiveProject()
+                && !projectService.isBuildConfirmed();
+        if (unconfirmedBannerPanel != null) {
+            if (showUnconfirmedNotice) {
+                Color warnColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06),
+                        "Component.warning.borderColor", "Actions.Yellow");
+                String warnHex = SwingHtmlUtils.toHex(warnColor);
+                String warnBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warnColor, 0.15));
+                unconfirmedBannerIconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warnColor));
+                unconfirmedBannerMessageLabel.setText(UNCONFIRMED_BUILD_NOTICE_TEXT);
+                unconfirmedBannerPanel.putClientProperty(FlatClientProperties.STYLE,
+                        "arc: 12; border: 1,1,1,1," + warnHex + ",1,12; background: " + warnBgHex);
+            }
+            unconfirmedBannerPanel.setVisible(showUnconfirmedNotice);
+            unconfirmedBannerPanel.revalidate();
+            unconfirmedBannerPanel.repaint();
+        }
         String currentText = "";
         if (textArea != null) {
             currentText = textArea.getText();

@@ -41,9 +41,13 @@ import org.springframework.stereotype.Component;
 public final class ContextManagerPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
+    static final String PAGE_TITLE = "Context Folders";
+    static final String PAGE_SUBTITLE = "Top-level Markdown and text files in these folders are automatically injected into every AI system prompt as coding guidelines and reference docs.";
     static final String GLOBAL_SUBTITLE = "Shared across all projects";
     static final String PROJECT_SUBTITLE = "Scoped to active project";
 
+    final JLabel titleLabel;
+    final JLabel subtitleLabel;
     final ContextScopeColumn globalColumn;
     final ContextScopeColumn projectColumn;
     String lastErrorMessage;
@@ -55,14 +59,21 @@ public final class ContextManagerPanel extends JPanel {
                 JOptionPane.showMessageDialog(ContextManagerPanel.this, msg, "Error", JOptionPane.ERROR_MESSAGE);
             }
         };
-        setLayout(new GridLayout(1, 2, 12, 0));
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setLayout(new BorderLayout(0, 12));
+        setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        this.titleLabel = new JLabel(PAGE_TITLE);
+        this.subtitleLabel = new JLabel(PAGE_SUBTITLE);
+        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, null), BorderLayout.NORTH);
 
         this.globalColumn = new ContextScopeColumn(promptService, "Global Context", true, this::showError);
         this.projectColumn = new ContextScopeColumn(promptService, "Project Context", false, this::showError);
 
-        add(globalColumn);
-        add(projectColumn);
+        JPanel columnsPanel = new JPanel(new GridLayout(1, 2, 12, 0));
+        columnsPanel.setOpaque(false);
+        columnsPanel.add(globalColumn);
+        columnsPanel.add(projectColumn);
+        add(columnsPanel, BorderLayout.CENTER);
     }
 
     @EventListener
@@ -110,7 +121,7 @@ public final class ContextManagerPanel extends JPanel {
 
         final DefaultListModel<ContextFileItem> fileListModel = new DefaultListModel<>();
         final JList<ContextFileItem> fileList = new JList<>(fileListModel);
-        CompletableFuture<FolderAndFilesData> lastRefreshFuture = CompletableFuture
+        transient CompletableFuture<FolderAndFilesData> lastRefreshFuture = CompletableFuture
                 .completedFuture(new FolderAndFilesData(List.of(), List.of()));
 
         record FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {

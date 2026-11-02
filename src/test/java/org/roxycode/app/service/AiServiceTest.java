@@ -36,6 +36,7 @@ import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -499,5 +500,53 @@ class AiServiceTest {
         } finally {
             Thread.interrupted();
         }
+    }
+
+    @Test
+    void testHotReloadApiKeyOnSettingsChangedAndTestConnection() {
+        ChatClient reloadedClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec reloadedRequestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec reloadedResponseSpec = mock(ChatClient.CallResponseSpec.class);
+        when(reloadedClient.prompt()).thenReturn(reloadedRequestSpec);
+        when(reloadedRequestSpec.system(anyString())).thenReturn(reloadedRequestSpec);
+        when(reloadedRequestSpec.user(any(Consumer.class))).thenReturn(reloadedRequestSpec);
+        when(reloadedRequestSpec.advisors(any(Consumer.class))).thenReturn(reloadedRequestSpec);
+        when(reloadedRequestSpec.advisors(any(Advisor[].class))).thenReturn(reloadedRequestSpec);
+        when(reloadedRequestSpec.options(any())).thenReturn(reloadedRequestSpec);
+        when(reloadedRequestSpec.toolContext(anyMap())).thenReturn(reloadedRequestSpec);
+        when(reloadedRequestSpec.tools(any(Object[].class))).thenReturn(reloadedRequestSpec);
+        when(reloadedRequestSpec.call()).thenReturn(reloadedResponseSpec);
+        when(reloadedResponseSpec.chatResponse())
+                .thenReturn(buildChatResponse("Response from hot-reloaded client", "STOP", null));
+
+        ChatClient.Builder reloadedBuilder = mock(ChatClient.Builder.class);
+        when(reloadedBuilder.defaultAdvisors(any(Advisor[].class))).thenReturn(reloadedBuilder);
+        when(reloadedBuilder.build()).thenReturn(reloadedClient);
+
+        AtomicReference<String> reloadedKeyRef = new AtomicReference<>();
+        aiService.setChatClientBuilderFactory(key -> {
+            reloadedKeyRef.set(key);
+            return reloadedBuilder;
+        });
+
+        settings.setGeminiApiKey("  hot-reloaded-key-123  ");
+        aiService.onSettingsChanged(new SettingsChangedEvent(settings));
+        assertEquals("hot-reloaded-key-123", reloadedKeyRef.get());
+        assertEquals("hot-reloaded-key-123", aiService.getActiveApiKey());
+
+        // Firing SettingsChangedEvent with the same trimmed API key does not rebuild ChatClient again
+        reloadedKeyRef.set(null);
+        aiService.onSettingsChanged(new SettingsChangedEvent(settings));
+        assertNull(reloadedKeyRef.get());
+
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
+        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null)).thenReturn("EXPLORE");
+        assertEquals("Response from hot-reloaded client", aiService.chat("qa:default", null, "Test", null));
+        verify(reloadedClient, times(1)).prompt();
+
+        // Verify testConnection validation and delegation
+        assertThrows(IllegalArgumentException.class, () -> aiService.testConnection("   ", "gemini-3.5-flash"));
+        aiService.setConnectionTester((key, model) -> key + ":" + model);
+        assertEquals("my-key:gemini-3.5-pro", aiService.testConnection("  my-key  ", " gemini-3.5-pro "));
     }
 }

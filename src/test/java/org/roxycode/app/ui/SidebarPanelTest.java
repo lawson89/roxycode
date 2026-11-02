@@ -30,5 +30,12 @@ class SidebarPanelTest {
         SwingTestUtils.runOnEdt(() -> sidebar.setBuildConfigAttentionNeeded(false));
         assertFalse(sidebar.isBuildConfigAttentionNeeded());
         assertNull(buildConfigBtn.getStatusIcon());
+
+        NavButton cacheBtn = sidebar.getCardButton("CACHE");
+        NavButton apiBtn = sidebar.getCardButton("API");
+        assertNotNull(cacheBtn);
+        assertNotNull(apiBtn);
+        assertEquals("Repo Map & Prompt", cacheBtn.getText());
+        assertEquals("Agent Tools API", apiBtn.getText());
     }
 }

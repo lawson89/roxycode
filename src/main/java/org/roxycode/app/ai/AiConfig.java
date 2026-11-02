@@ -17,10 +17,13 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.google.genai.GoogleGenAiChatModel;
+import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiConnectionProperties;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.retry.NonTransientAiException;
@@ -107,6 +110,29 @@ public class AiConfig {
         } else {
             throw new IllegalStateException(
                     "Incomplete Google GenAI configuration: Provide 'api-key' for Gemini API or 'project-id' and 'location' for Vertex AI.");
+        }
+        return builder.build();
+    }
+
+    public static Client createGenAiClient(String apiKey, int httpTimeoutMs) {
+        Client.Builder builder = Client.builder();
+        if (httpTimeoutMs > 0) {
+            builder.httpOptions(HttpOptions.builder().timeout(httpTimeoutMs).build());
+        }
+        builder.apiKey(apiKey);
+        return builder.build();
+    }
+
+    public static GoogleGenAiChatModel createChatModel(Client client, String defaultModel,
+            ToolCallingManager toolCallingManager) {
+        String modelName = AppSettings.DEFAULT_GEMINI_MODEL;
+        if (StringUtils.hasText(defaultModel)) {
+            modelName = defaultModel.trim();
+        }
+        GoogleGenAiChatOptions options = GoogleGenAiChatOptions.builder().model(modelName).build();
+        GoogleGenAiChatModel.Builder builder = GoogleGenAiChatModel.builder().genAiClient(client).options(options);
+        if (toolCallingManager != null) {
+            builder.toolCallingManager(toolCallingManager);
         }
         return builder.build();
     }

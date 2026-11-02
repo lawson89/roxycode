@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.awt.event.ActionListener;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 
 @ExtendWith(MockitoExtension.class)
@@ -20,6 +23,8 @@ class SettingsPanelTest {
 
     @Mock
     private SettingsService settingsService;
+    @Mock
+    private AiService aiService;
     private SettingsPanel settingsPanel;
     private AppSettings settings;
 
@@ -29,7 +34,7 @@ class SettingsPanelTest {
         lenient().when(settingsService.getSettings()).thenReturn(settings);
         lenient().when(settingsService.getAvailableModels())
                 .thenReturn(new SettingsService(null, null).getAvailableModels());
-        settingsPanel = new SettingsPanel(settingsService);
+        settingsPanel = new SettingsPanel(settingsService, aiService);
     }
 
     @Test
@@ -57,6 +62,8 @@ class SettingsPanelTest {
 
     @Test
     void testSaveLiveSettingsShowsAppliedAndPreservesRestartLegendAfterTimer() {
+        assertEquals(50, settings.getMaxAgentToolTurns());
+        assertEquals(50, settingsPanel.getMaxAgentToolTurnsSpinner().getValue());
         assertEquals(SettingsPanel.RESTART_LEGEND_TEXT, settingsPanel.getLegendLabel().getText());
         assertEquals("", settingsPanel.getStatusLabel().getText());
         assertFalse(settingsPanel.getLogToolCallsCheckBox().isSelected());
@@ -116,7 +123,7 @@ class SettingsPanelTest {
     }
 
     @Test
-    void testRestartRequiredSettingsShowRestartWarningOnSave() {
+    void testApiKeyHotReloadShowsAppliedWhileMaxMessagesShowsRestartWarning() {
         JPasswordField apiKeyField = SwingTestUtils.findComponent(settingsPanel, JPasswordField.class);
         assertNotNull(apiKeyField);
         apiKeyField.setText("new-secret-key");
@@ -125,15 +132,56 @@ class SettingsPanelTest {
         saveButton.doClick();
 
         assertEquals("new-secret-key", settings.getGeminiApiKey());
-        assertEquals(SettingsPanel.SAVED_RESTART_REQUIRED_TEXT, settingsPanel.getStatusLabel().getText());
-        verify(settingsService, times(1)).saveSettings();
-
-        saveButton.doClick();
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
+        verify(settingsService, times(1)).saveSettings();
 
         settingsPanel.getMaxMessagesSpinner().setValue(120);
         saveButton.doClick();
         assertEquals(120, settings.getMaxChatMemoryMessages());
         assertEquals(SettingsPanel.SAVED_RESTART_REQUIRED_TEXT, settingsPanel.getStatusLabel().getText());
+
+        saveButton.doClick();
+        assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
+    }
+
+    @Test
+    void testGetApiKeyLinkAndTestConnectionButtons() {
+        AtomicReference<String> openedUrl = new AtomicReference<>();
+        settingsPanel.setUrlOpener(openedUrl::set);
+        SwingTestUtils.clickOnEdt(settingsPanel.getGetApiKeyLinkButton());
+        assertEquals(SettingsPanel.GEMINI_API_KEY_URL, openedUrl.get());
+
+        // Blank API key fails validation immediately without calling AiService
+        JPasswordField apiKeyField = SwingTestUtils.findComponent(settingsPanel, JPasswordField.class);
+        apiKeyField.setText("   ");
+        SwingTestUtils.clickOnEdt(settingsPanel.getTestConnectionButton());
+        assertTrue(settingsPanel.getStatusLabel().getText().contains("Please enter a Gemini API Key first."));
+        verifyNoInteractions(aiService);
+
+        // Successful connection test
+        CompletableFuture<String> gate = new CompletableFuture<>();
+        when(aiService.testConnection(eq("valid-key"), anyString())).thenAnswer(inv -> gate.join());
+        apiKeyField.setText("valid-key");
+        SwingTestUtils.runOnEdt(() -> settingsPanel.getTestConnectionButton().doClick());
+        SwingTestUtils.runOnEdt(() -> {
+            assertFalse(settingsPanel.getTestConnectionButton().isEnabled());
+            assertEquals(SettingsPanel.TESTING_CONNECTION_TEXT, settingsPanel.getTestConnectionButton().getText());
+        });
+
+        gate.complete("OK");
+        SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
+        assertTrue(settingsPanel.getTestConnectionButton().isEnabled());
+        assertEquals(SettingsPanel.TEST_CONNECTION_TEXT, settingsPanel.getTestConnectionButton().getText());
+        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.getStatusLabel().getText());
+
+        // Failed connection test shows root cause error
+        when(aiService.testConnection(eq("invalid-key"), anyString()))
+                .thenThrow(new IllegalStateException("401 UNAUTHORIZED: API key not valid"));
+        apiKeyField.setText("invalid-key");
+        SwingTestUtils.clickOnEdt(settingsPanel.getTestConnectionButton());
+        SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
+        assertTrue(settingsPanel.getTestConnectionButton().isEnabled());
+        assertEquals(SettingsPanel.CONNECTION_FAILED_PREFIX + "401 UNAUTHORIZED: API key not valid",
+                settingsPanel.getStatusLabel().getText());
     }
 }
