@@ -33,10 +33,10 @@ import org.springframework.stereotype.Service;
 import org.testcontainers.DockerClientFactory;
 
 @Service
-@SuppressWarnings("PMD.NullAssignment")
 public class SystemToolService {
     private static final Logger log = LoggerFactory.getLogger(SystemToolService.class);
     static final String SYSTEM_TOOLS_FILE = "system-tools.toml";
+    private static final String CACHE_KEY_ALL = "all";
     private static final String RIPGREP = SystemTool.TOOL_RIPGREP;
     private static final String GIT = SystemTool.TOOL_GIT;
     private static final String CTAGS = SystemTool.TOOL_CTAGS;
@@ -186,7 +186,7 @@ public class SystemToolService {
     }
 
     public List<SystemTool> getCachedTools() {
-        CompletableFuture<List<SystemTool>> future = toolsCache.getIfPresent("all");
+        CompletableFuture<List<SystemTool>> future = toolsCache.getIfPresent(CACHE_KEY_ALL);
         if (future != null && future.isDone()) {
             return future.getNow(List.of());
         }
@@ -195,7 +195,7 @@ public class SystemToolService {
         }
         List<SystemTool> loaded = loadFromDisk();
         if (!loaded.isEmpty()) {
-            toolsCache.synchronous().put("all", loaded);
+            toolsCache.synchronous().put(CACHE_KEY_ALL, loaded);
             return loaded;
         }
         return List.of();
@@ -206,7 +206,7 @@ public class SystemToolService {
         if (!cached.isEmpty()) {
             return CompletableFuture.completedFuture(cached);
         }
-        return toolsCache.get("all");
+        return toolsCache.get(CACHE_KEY_ALL);
     }
 
     public CompletableFuture<List<SystemTool>> refreshTools() {
@@ -218,8 +218,8 @@ public class SystemToolService {
                 log.debug("Failed to delete cache file for refresh", e);
             }
         }
-        return toolsCache.synchronous().refresh("all").thenApply(tools -> {
-            toolsCache.put("all", CompletableFuture.completedFuture(tools));
+        return toolsCache.synchronous().refresh(CACHE_KEY_ALL).thenApply(tools -> {
+            toolsCache.put(CACHE_KEY_ALL, CompletableFuture.completedFuture(tools));
             return tools;
         });
     }
@@ -238,6 +238,19 @@ public class SystemToolService {
             return isDockerDetected(tools);
         }
         return STATUS_DETECTED.equals(detectDockerTool().status());
+    }
+
+    public boolean checkGitAvailable() {
+        List<SystemTool> tools = getCachedTools();
+        if (!tools.isEmpty()) {
+            return isGitDetected(tools);
+        }
+        return STATUS_DETECTED.equals(detectTool(GIT, "git", ARG_VERSION).status());
+    }
+
+    public static boolean isGitDetected(List<SystemTool> tools) {
+        return tools != null
+                && tools.stream().anyMatch(t -> GIT.equals(t.name()) && STATUS_DETECTED.equals(t.status()));
     }
 
     public static boolean areAllRequiredToolsDetected(List<SystemTool> tools) {
@@ -266,8 +279,8 @@ public class SystemToolService {
     }
 
     private List<SystemTool> probeAllTools() {
-        return List.of(detectTool(RIPGREP, "rg", ARG_VERSION), detectTool(GIT, "git", ARG_VERSION),
-                detectTool(CTAGS, "ctags", ARG_VERSION), detectDockerTool());
+        return List.of(detectTool(RIPGREP, "rg", ARG_VERSION), detectTool(CTAGS, "ctags", ARG_VERSION),
+                detectTool(GIT, "git", ARG_VERSION), detectDockerTool());
     }
 
     Path getCacheFilePath() {

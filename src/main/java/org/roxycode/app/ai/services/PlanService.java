@@ -20,6 +20,7 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
@@ -30,6 +31,7 @@ import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.AnnotationUtils;
 
 @AgentService(value = "planService", phases = {"PLAN", "CODE", "REVIEW"})
@@ -102,7 +104,6 @@ public class PlanService {
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectService projectService;
-    private final GitService gitService;
     private volatile ImplementationPlan currentPlan;
     private volatile WorkflowPhase currentPhase = WorkflowPhase.PLAN;
     private final Set<WorkflowPhase> visitedPhases = EnumSet.of(WorkflowPhase.PLAN);
@@ -110,11 +111,18 @@ public class PlanService {
     private volatile String pendingReason;
 
     public PlanService(EnvironmentService environmentService, ApplicationEventPublisher eventPublisher,
-            ProjectService projectService, GitService gitService) {
+            ProjectService projectService) {
         this.environmentService = environmentService;
         this.eventPublisher = eventPublisher;
         this.projectService = projectService;
-        this.gitService = gitService;
+    }
+
+    @EventListener
+    public synchronized void onFileChanged(FileChangedEvent event) {
+        if (event == null || StringUtils.isBlank(event.path()) || currentPlan == null) {
+            return;
+        }
+        setCurrentPlan(currentPlan.withRecordedFileChange(event.path(), event.changeType()));
     }
 
     public synchronized String submitPlan(ImplementationPlan plan) {
@@ -411,7 +419,7 @@ public class PlanService {
             PathUtils.ArchiveFileTarget archiveTarget = PathUtils.prepareArchiveTarget(archiveDir, timestamp,
                     plan.title(), MAX_PLAN_SLUG_LENGTH, "plan");
             String archivedMarkdown = plan.toArchivedMarkdown(archiveTarget.id(), projectService.getProjectName(),
-                    ProjectService.resolveNormalizedProjectPath(projectService), getGitStatusSafely());
+                    ProjectService.resolveNormalizedProjectPath(projectService));
             Files.writeString(archiveTarget.file(), archivedMarkdown, StandardCharsets.UTF_8);
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_PLAN,
@@ -419,18 +427,6 @@ public class PlanService {
             }
         } catch (Exception e) {
             log.warn("Failed to archive completed implementation plan", e);
-        }
-    }
-
-    private String getGitStatusSafely() {
-        if (gitService == null) {
-            return null;
-        }
-        try {
-            return gitService.getStatus();
-        } catch (Exception e) {
-            log.debug("Failed to retrieve git status for archived plan", e);
-            return null;
         }
     }
 

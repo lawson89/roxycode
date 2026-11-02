@@ -54,6 +54,7 @@ class PromptServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(jexlServiceRegistry.isGitAvailable()).thenReturn(true);
         promptService = new PromptService(projectService, settingsService, planService, jexlServiceRegistry, gitService,
                 projectAnalysisService, repoMapPackerService, null, eventPublisher);
     }
@@ -161,7 +162,7 @@ class PromptServiceTest {
     void testGetSessionContextIncludesCurrentPlanProgressWithZeroBasedIndices() {
         when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
-        when(gitService.getStatus()).thenReturn("");
+        when(gitService.getStatus()).thenReturn("Not a git repository");
 
         ImplementationPlan plan = new ImplementationPlan("Test Plan", "Goal", List.of("Req 1"),
                 List.of(new ImplementationPlan.TechStep("Update prompts", true),
@@ -173,6 +174,12 @@ class PromptServiceTest {
         SwingTestUtils.assertContainsAll(promptService.getSessionContext(WorkflowPhase.CODE),
                 "## CURRENT PLAN PROGRESS", "- [x] 0. ~~Update prompts~~", "- [ ] 1. Update PlanService",
                 "- [ ] 2. Update PromptService");
+
+        clearInvocations(gitService);
+        when(jexlServiceRegistry.isGitAvailable()).thenReturn(false);
+        String sessionWithoutGit = promptService.getSessionContext(WorkflowPhase.CODE);
+        verify(gitService, never()).getStatus();
+        SwingTestUtils.assertContainsNone(sessionWithoutGit, "## GIT STATUS");
     }
 
     @Test

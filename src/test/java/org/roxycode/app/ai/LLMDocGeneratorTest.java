@@ -80,7 +80,7 @@ class LLMDocGeneratorTest {
                         "readSymbols(relativePath: string, symbolNames: string[]): Map;",
                         "findSymbol(symbolName: string): List<SymbolInfo>;", "interface SymbolInfo {",
                         "startLine: number;", "endLine: number;", "signature: string;"),
-                serviceCase(PlanService.class, new PlanService(null, null, null, null),
+                serviceCase(PlanService.class, new PlanService(null, null, null),
                         "submitPlan(title: string, goal: string, requirements: string[], technicalSteps: string[]): string;",
                         "markStepCompleted(index: number): string;", "markStepsCompleted(indices: number[]): string;",
                         "requestDevelopment(reason: string): string;", "requestReview(reason: string): string;",

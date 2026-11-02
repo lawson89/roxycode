@@ -144,22 +144,44 @@ class FileEditorServiceTest {
 
     @Test
     void testMoveCopyDeleteAndMkdirsOperations() throws IOException {
+        assertTrue(fileEditorService.writeFile("new_file.txt", "initial").success());
+        verify(eventPublisher).publishEvent(new FileChangedEvent("new_file.txt", FileChangedEvent.ChangeType.CREATED));
+        clearInvocations(eventPublisher);
+        assertTrue(fileEditorService.writeFile("new_file.txt", "updated").success());
+        verify(eventPublisher).publishEvent(new FileChangedEvent("new_file.txt", FileChangedEvent.ChangeType.MODIFIED));
+
         Path toDelete = Files.writeString(tempDir.resolve("to_delete.txt"), "delete me");
+        clearInvocations(eventPublisher);
         assertTrue(fileEditorService.deleteFile("to_delete.txt").success());
         assertFalse(Files.exists(toDelete));
+        verify(eventPublisher).publishEvent(new FileChangedEvent("to_delete.txt", FileChangedEvent.ChangeType.DELETED));
         assertEditFails(fileEditorService.deleteFile("missing.txt"), "File does not exist: missing.txt");
         Files.createDirectory(tempDir.resolve("some_dir"));
         assertEditFails(fileEditorService.deleteFile("some_dir"), "Cannot delete directory: some_dir");
 
+        clearInvocations(eventPublisher);
         assertTrue(fileEditorService.mkdirs("nested/dir/structure").success());
         assertTrue(Files.isDirectory(tempDir.resolve("nested/dir/structure")));
+        verify(eventPublisher)
+                .publishEvent(new FileChangedEvent("nested/dir/structure", FileChangedEvent.ChangeType.CREATED));
+        clearInvocations(eventPublisher);
+        assertTrue(fileEditorService.mkdirs("nested/dir/structure").success());
+        verify(eventPublisher)
+                .publishEvent(new FileChangedEvent("nested/dir/structure", FileChangedEvent.ChangeType.MODIFIED));
 
         Path existingFile = Files.writeString(tempDir.resolve("existing.txt"), "hello");
         assertEditFails(fileEditorService.mkdirs("existing.txt"), "existing.txt");
 
+        clearInvocations(eventPublisher);
         assertTrue(fileEditorService.copyFile("existing.txt", "copied/sub/existing_copy.txt").success());
         assertEquals("hello", Files.readString(tempDir.resolve("copied/sub/existing_copy.txt")));
         assertTrue(Files.exists(existingFile));
+        verify(eventPublisher).publishEvent(
+                new FileChangedEvent("copied/sub/existing_copy.txt", FileChangedEvent.ChangeType.CREATED));
+        clearInvocations(eventPublisher);
+        assertTrue(fileEditorService.copyFile("existing.txt", "copied/sub/existing_copy.txt").success());
+        verify(eventPublisher).publishEvent(
+                new FileChangedEvent("copied/sub/existing_copy.txt", FileChangedEvent.ChangeType.MODIFIED));
 
         assertEditFails(fileEditorService.copyFile("nope.txt", "copied/nope.txt"), "File does not exist: nope.txt");
         assertEditFails(fileEditorService.copyFile("nested", "copied/nested_copy"), "nested");
@@ -168,8 +190,9 @@ class FileEditorServiceTest {
         assertTrue(fileEditorService.moveFile("existing.txt", "moved/sub/renamed.txt").success());
         assertFalse(Files.exists(existingFile));
         assertEquals("hello", Files.readString(tempDir.resolve("moved/sub/renamed.txt")));
-        verify(eventPublisher).publishEvent(new FileChangedEvent("existing.txt"));
-        verify(eventPublisher).publishEvent(new FileChangedEvent("moved/sub/renamed.txt"));
+        verify(eventPublisher).publishEvent(new FileChangedEvent("existing.txt", FileChangedEvent.ChangeType.DELETED));
+        verify(eventPublisher)
+                .publishEvent(new FileChangedEvent("moved/sub/renamed.txt", FileChangedEvent.ChangeType.CREATED));
 
         assertEditFails(fileEditorService.moveFile("existing.txt", "moved/again.txt"),
                 "File does not exist: existing.txt");

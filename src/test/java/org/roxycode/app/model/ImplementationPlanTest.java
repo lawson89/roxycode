@@ -7,13 +7,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.ui.SwingTestUtils;
 import org.roxycode.app.util.FrontmatterUtils;
 
 class ImplementationPlanTest {
 
     private static final String LF = String.valueOf((char) 10);
-    private static final String CRLF = String.valueOf((char) 13) + (char) 10;
 
     private static ImplementationPlan createPlan(List<String> reqs, List<ImplementationPlan.TechStep> steps,
             List<ImplementationPlan.LogEntry> logs) {
@@ -45,15 +45,29 @@ class ImplementationPlanTest {
     }
 
     @Test
-    void testToArchivedMarkdownIncludesFrontmatterApprovalsLogAndChanges() {
-        ImplementationPlan plan = new ImplementationPlan("Archive Feature", "Save completed plans",
+    void testToArchivedMarkdownAndFileChangeRecordingStateTransitions() {
+        ImplementationPlan emptyPlan = new ImplementationPlan("Archive Feature", "Save completed plans",
                 List.of("Store markdown"), List.of(new ImplementationPlan.TechStep("Implement archiving", true)), true,
                 "2025-05-14T14:10:00Z", "alice", "bob", "2025-05-14T14:32:10Z",
                 List.of(new ImplementationPlan.LogEntry("2025-05-14T14:32:10Z", "bob",
                         "REVIEW -> PLAN (User Approved): Complete")));
 
-        String archived = plan.toArchivedMarkdown("20250514-143210-archive-feature", "roxycode", "/path/to/roxycode",
-                " M src/App.java" + LF);
+        assertEquals(ImplementationPlan.NO_FILES_CHANGED, emptyPlan.formatChangesText());
+        assertTrue(emptyPlan.toArchivedMarkdown("20250514-143210-archive-feature", "roxycode", "/path/to/roxycode")
+                .contains("## Changes" + LF + "No files changed" + LF));
+
+        ImplementationPlan plan = emptyPlan
+                .withRecordedFileChange("src/NewFile.java", FileChangedEvent.ChangeType.CREATED)
+                .withRecordedFileChange("src/NewFile.java", FileChangedEvent.ChangeType.MODIFIED)
+                .withRecordedFileChange("src/App.java", FileChangedEvent.ChangeType.MODIFIED)
+                .withRecordedFileChange("src/Temp.java", FileChangedEvent.ChangeType.CREATED)
+                .withRecordedFileChange("src/Temp.java", FileChangedEvent.ChangeType.DELETED)
+                .withRecordedFileChange("   ", FileChangedEvent.ChangeType.MODIFIED);
+
+        assertEquals("CREATED src/NewFile.java" + LF + "MODIFIED src/App.java" + LF + "DELETED src/Temp.java",
+                plan.formatChangesText());
+
+        String archived = plan.toArchivedMarkdown("20250514-143210-archive-feature", "roxycode", "/path/to/roxycode");
 
         assertTrue(archived.startsWith("---" + LF));
         SwingTestUtils.assertContainsAll(archived, "id: ", "20250514-143210-archive-feature", "project: ", "roxycode",
@@ -62,14 +76,9 @@ class ImplementationPlanTest {
                 "completedOn: ", "2025-05-14T14:32:10Z", "# Implementation Plan: Archive Feature", "## Approvals",
                 "- **Move to Code:** Approved by alice on 2025-05-14T14:10:00Z",
                 "- **Final Acceptance:** Accepted by bob on 2025-05-14T14:32:10Z", "## Handoff Log",
-                "REVIEW -> PLAN (User Approved): Complete", "## Changes" + LF, "M src/App.java");
+                "REVIEW -> PLAN (User Approved): Complete", "## Changes" + LF, "CREATED src/NewFile.java",
+                "MODIFIED src/App.java", "DELETED src/Temp.java");
 
-        assertTrue(plan.toArchivedMarkdown("20250514-143210-archive-feature", "roxycode", "/path/to/roxycode", "")
-                .contains("## Changes" + LF + "No files changed" + LF));
-
-        assertEquals(ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText(null));
-        assertEquals(ImplementationPlan.NO_FILES_CHANGED, ImplementationPlan.formatChangesText("   "));
-        assertEquals(" M src/App.java", ImplementationPlan.formatChangesText(" M src/App.java" + LF + "  "));
         assertEquals("---" + LF + "---" + LF + LF, FrontmatterUtils.formatFrontmatter(null));
         Map<String, Object> fm = new LinkedHashMap<>();
         fm.put("title", "Say " + '"' + "Hi" + '"');
@@ -111,7 +120,8 @@ class ImplementationPlanTest {
                 List.of(new ImplementationPlan.TechStep("Step 1", true),
                         new ImplementationPlan.TechStep("Step 2", false),
                         new ImplementationPlan.TechStep(ImplementationPlan.STEP_COMPILE, true)),
-                List.of(new ImplementationPlan.LogEntry("t0", "u0", "prev log")));
+                List.of(new ImplementationPlan.LogEntry("t0", "u0", "prev log")))
+                .withRecordedFileChange("src/First.java", FileChangedEvent.ChangeType.CREATED);
 
         assertEquals(Set.of("step 1"), prev.collectCompletedNonVerificationSteps());
 
@@ -129,6 +139,8 @@ class ImplementationPlanTest {
         assertEquals(ImplementationPlan.STEP_UNIT_TESTS, normalized.technicalSteps().get(3).description());
         assertEquals(ImplementationPlan.STEP_CODE_REVIEW, normalized.technicalSteps().get(4).description());
         assertEquals(1, normalized.handoffLog().size());
+        assertEquals(List.of(new ImplementationPlan.FileChange("src/First.java", FileChangedEvent.ChangeType.CREATED)),
+                normalized.fileChanges());
 
         assertEquals(List.of("1: Step 2a", "2: Code compiles successfully", "3: Unit tests pass"),
                 normalized.collectIncompleteSteps(true));

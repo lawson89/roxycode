@@ -9,12 +9,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
 
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
-        List<LogEntry> handoffLog) {
+        List<LogEntry> handoffLog, List<FileChange> fileChanges) {
 
     public static final String NO_FILES_CHANGED = "No files changed";
     public static final String STEP_COMPILE = "Code compiles successfully";
@@ -23,6 +24,15 @@ public record ImplementationPlan(String title, String goal, List<String> require
     private static final String CODE_FENCE = "```";
 
     public record TechStep(String description, boolean completed) {
+    }
+
+    public record FileChange(String path, FileChangedEvent.ChangeType changeType) {
+        public FileChange {
+            path = PathUtils.normalizeRelativePath(path);
+            if (changeType == null) {
+                changeType = FileChangedEvent.ChangeType.MODIFIED;
+            }
+        }
     }
 
     public record LogEntry(String timestamp, String user, String message) {
@@ -55,6 +65,18 @@ public record ImplementationPlan(String title, String goal, List<String> require
         } else {
             handoffLog = List.of();
         }
+        if (fileChanges != null) {
+            fileChanges = List.copyOf(fileChanges);
+        } else {
+            fileChanges = List.of();
+        }
+    }
+
+    public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
+            boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
+            List<LogEntry> handoffLog) {
+        this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
+                completedOn, handoffLog, List.of());
     }
 
     public static String normalizeStepDescription(String description) {
@@ -99,6 +121,10 @@ public record ImplementationPlan(String title, String goal, List<String> require
         if (handoffLog.isEmpty() && previousPlan != null) {
             preservedLog = previousPlan.handoffLog();
         }
+        List<FileChange> preservedChanges = fileChanges;
+        if (fileChanges.isEmpty() && previousPlan != null) {
+            preservedChanges = previousPlan.fileChanges();
+        }
 
         List<TechStep> steps = new ArrayList<>();
         boolean hasCompile = false;
@@ -124,7 +150,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
             steps.add(new TechStep(STEP_CODE_REVIEW, false));
         }
 
-        return withTechnicalSteps(steps).withHandoffLog(preservedLog);
+        return withTechnicalSteps(steps).withHandoffLog(preservedLog).withFileChanges(preservedChanges);
     }
 
     public List<String> collectIncompleteSteps(boolean excludeCodeReviewStep) {
@@ -148,28 +174,64 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
         return new ImplementationPlan(title, goal, requirements, newSteps, userApproved, approvalTimestamp, approvedBy,
-                completedBy, completedOn, handoffLog);
+                completedBy, completedOn, handoffLog, fileChanges);
     }
 
     public ImplementationPlan withApproval(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, true, timestamp, user, completedBy,
-                completedOn, handoffLog);
+                completedOn, handoffLog, fileChanges);
     }
 
     public ImplementationPlan withCompletion(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, user, timestamp, handoffLog);
+                approvedBy, user, timestamp, handoffLog, fileChanges);
     }
 
     public ImplementationPlan withHandoffLog(List<LogEntry> newLog) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, newLog);
+                approvedBy, completedBy, completedOn, newLog, fileChanges);
     }
 
     public ImplementationPlan withAddedHandoffLogEntry(String timestamp, String user, String message) {
         List<LogEntry> updatedLog = new ArrayList<>(handoffLog);
         updatedLog.add(new LogEntry(timestamp, user, message));
         return withHandoffLog(updatedLog);
+    }
+
+    public ImplementationPlan withFileChanges(List<FileChange> newChanges) {
+        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
+                approvedBy, completedBy, completedOn, handoffLog, newChanges);
+    }
+
+    public ImplementationPlan withRecordedFileChange(String rawPath, FileChangedEvent.ChangeType changeType) {
+        String normalizedPath = PathUtils.normalizeRelativePath(rawPath);
+        if (StringUtils.isBlank(normalizedPath)) {
+            return this;
+        }
+        FileChangedEvent.ChangeType resolvedType = FileChangedEvent.ChangeType.MODIFIED;
+        if (changeType != null) {
+            resolvedType = changeType;
+        }
+        List<FileChange> updated = new ArrayList<>(fileChanges);
+        int existingIndex = -1;
+        for (int i = 0; i < updated.size(); i++) {
+            if (updated.get(i).path().equals(normalizedPath)) {
+                existingIndex = i;
+                break;
+            }
+        }
+        if (existingIndex < 0) {
+            updated.add(new FileChange(normalizedPath, resolvedType));
+        } else {
+            FileChangedEvent.ChangeType previousType = updated.get(existingIndex).changeType();
+            FileChangedEvent.ChangeType nextType = resolvedType;
+            if (previousType == FileChangedEvent.ChangeType.CREATED
+                    && resolvedType == FileChangedEvent.ChangeType.MODIFIED) {
+                nextType = FileChangedEvent.ChangeType.CREATED;
+            }
+            updated.set(existingIndex, new FileChange(normalizedPath, nextType));
+        }
+        return withFileChanges(updated);
     }
 
     public boolean hasMoveToCodeApproval() {
@@ -218,7 +280,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         return md.toString();
     }
 
-    public String toArchivedMarkdown(String id, String projectName, String projectPath, String changesText) {
+    public String toArchivedMarkdown(String id, String projectName, String projectPath) {
         Map<String, Object> frontmatter = new LinkedHashMap<>();
         frontmatter.put("id", id);
         frontmatter.put("project", projectName);
@@ -231,24 +293,33 @@ public record ImplementationPlan(String title, String goal, List<String> require
         frontmatter.put("completedOn", completedOn);
         StringBuilder sb = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
         sb.append(toMarkdown(true));
-        appendChangesMarkdown(sb, changesText);
+        appendChangesMarkdown(sb);
         return sb.toString();
     }
 
-    public static String formatChangesText(String gitStatus) {
-        if (StringUtils.isBlank(gitStatus)) {
+    public String formatChangesText() {
+        if (fileChanges.isEmpty()) {
             return NO_FILES_CHANGED;
         }
-        return gitStatus.stripTrailing();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < fileChanges.size(); i++) {
+            FileChange change = fileChanges.get(i);
+            if (i > 0) {
+                sb.append((char) 10);
+            }
+            sb.append(change.changeType().getLabel()).append(' ').append(change.path());
+        }
+        return sb.toString();
     }
 
-    public static void appendChangesMarkdown(StringBuilder sb, String gitStatus) {
-        String changes = formatChangesText(gitStatus);
-        sb.append("\n## Changes\n");
+    public void appendChangesMarkdown(StringBuilder sb) {
+        String changes = formatChangesText();
+        sb.append((char) 10).append("## Changes").append((char) 10);
         if (NO_FILES_CHANGED.equals(changes)) {
-            sb.append(NO_FILES_CHANGED).append("\n");
+            sb.append(NO_FILES_CHANGED).append((char) 10);
         } else {
-            sb.append(CODE_FENCE).append("text\n").append(changes).append("\n").append(CODE_FENCE).append("\n");
+            sb.append(CODE_FENCE).append("text").append((char) 10).append(changes).append((char) 10).append(CODE_FENCE)
+                    .append((char) 10);
         }
     }
 
@@ -269,6 +340,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         if (value == null) {
             return "";
         }
-        return value.replace("|", "\\|").replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
+        return value.replace("|", (char) 92 + "|").replace((char) 13 + "" + (char) 10, " ").replace((char) 10, ' ')
+                .replace((char) 13, ' ');
     }
 }

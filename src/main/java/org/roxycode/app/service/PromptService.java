@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
@@ -188,9 +189,12 @@ public class PromptService {
                 .append(NEWLINE_DOUBLE).append("You have access to the following JEXL tools:\n")
                 .append(jexlServiceRegistry.getDocumentation(currentPhase));
 
-        String gitStatus = gitService.getStatus();
-        if (gitStatus != null && !gitStatus.isEmpty() && !gitStatus.startsWith("Error")) {
-            sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
+        if (gitService != null && (jexlServiceRegistry == null || jexlServiceRegistry.isGitAvailable())) {
+            String gitStatus = gitService.getStatus();
+            if (StringUtils.isNotBlank(gitStatus) && !gitStatus.startsWith("Error")
+                    && !gitStatus.startsWith("Not a git repository")) {
+                sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
+            }
         }
         ImplementationPlan currentPlan = planService.getCurrentPlan();
         if (currentPlan != null) {

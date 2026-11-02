@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
+import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -245,8 +246,8 @@ public class AiConfig {
     }
 
     @Bean
-    public JexlServiceRegistry jexlServiceRegistry(ApplicationContext context) {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
+    public JexlServiceRegistry jexlServiceRegistry(ApplicationContext context, SystemToolService systemToolService) {
+        JexlServiceRegistry registry = new JexlServiceRegistry(systemToolService);
         Map<String, Object> beans = context.getBeansWithAnnotation(AgentService.class);
         for (Object bean : beans.values()) {
             registry.register(bean);

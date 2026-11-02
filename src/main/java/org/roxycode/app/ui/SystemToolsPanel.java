@@ -39,6 +39,7 @@ public final class SystemToolsPanel extends JPanel {
     static final String SUBTITLE_TEXT = "External CLI utilities and runtimes used by RoxyCode for search, version control, symbol indexing, and isolated builds.";
     static final String REQUIRED_BADGE_TEXT = "Required";
     static final String OPTIONAL_BADGE_TEXT = "Optional";
+    private static final String GROWX_WMIN_0 = "growx, wmin 0";
 
     private final transient SystemToolService toolService;
     private final JLabel titleLabel;
@@ -142,12 +143,17 @@ public final class SystemToolsPanel extends JPanel {
         cardsContainer.removeAll();
         toolCards.clear();
         if (tools != null) {
+            List<SystemTool> sortedTools = new ArrayList<>();
             for (SystemTool tool : tools) {
                 if (tool != null) {
-                    ToolCard card = new ToolCard(tool, this::openWebsite);
-                    toolCards.add(card);
-                    cardsContainer.add(card, "growx, wmin 0");
+                    sortedTools.add(tool);
                 }
+            }
+            sortedTools.sort((a, b) -> Boolean.compare(b.required(), a.required()));
+            for (SystemTool tool : sortedTools) {
+                ToolCard card = new ToolCard(tool, this::openWebsite);
+                toolCards.add(card);
+                cardsContainer.add(card, GROWX_WMIN_0);
             }
         }
         cardsContainer.revalidate();
@@ -264,11 +270,11 @@ public final class SystemToolsPanel extends JPanel {
             statusBadge.setHorizontalTextPosition(SwingConstants.RIGHT);
             statusBadge.setIconTextGap(6);
             headerRow.add(statusBadge, "right");
-            add(headerRow, "growx, wmin 0");
+            add(headerRow, GROWX_WMIN_0);
 
             descriptionArea = UiComponents.createReadOnlyTextArea();
             descriptionArea.setText(tool.description());
-            add(descriptionArea, "growx, wmin 0");
+            add(descriptionArea, GROWX_WMIN_0);
 
             JPanel footerRow = new JPanel(
                     new MigLayout("fillx, insets 2 0 0 0, gapx 10", "[]10[]push[right]", "[center]"));
@@ -304,7 +310,7 @@ public final class SystemToolsPanel extends JPanel {
             }
             footerRow.add(websiteLinkButton, "right, hidemode 3");
 
-            add(footerRow, "growx, wmin 0");
+            add(footerRow, GROWX_WMIN_0);
             applyCardTheme();
         }
 

@@ -12,7 +12,6 @@ import javax.swing.JLabel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -41,7 +40,6 @@ class MentorModeIntegrationTest {
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
         AiService aiService = mock(AiService.class);
-        GitService gitService = mock(GitService.class);
         ApplicationEventPublisher pub = mock(ApplicationEventPublisher.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
@@ -49,7 +47,7 @@ class MentorModeIntegrationTest {
                 settingsService, null, null, null), null);
         taskWorkspacePanel = new TaskWorkspacePanel(
                 ChatPanel.createFeaturePanel(aiService, planService, pub, chatMemory, settingsService, null),
-                planService, new PlanPanel(planService, gitService), null);
+                planService, new PlanPanel(planService), null);
 
         sidebar = new SidebarPanel(selectedCard::set);
         qaWorkspacePanel.bindSidebar(sidebar);

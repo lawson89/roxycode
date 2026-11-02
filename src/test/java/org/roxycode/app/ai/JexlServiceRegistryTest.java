@@ -4,11 +4,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import org.junit.jupiter.api.Test;
+import java.util.List;
 import org.roxycode.app.ai.services.FileEditorService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.SymbolService;
+import org.roxycode.app.events.SystemToolsUpdatedEvent;
+import org.roxycode.app.model.SystemTool;
+import org.roxycode.app.service.SystemToolService;
 
 class JexlServiceRegistryTest {
 
@@ -36,7 +41,7 @@ class JexlServiceRegistryTest {
         GenericBuildToolService buildTool = mock(GenericBuildToolService.class);
         MemoryService memoryService = mock(MemoryService.class);
         SymbolService symbolService = mock(SymbolService.class);
-        PlanService planService = new PlanService(null, null, null, null);
+        PlanService planService = new PlanService(null, null, null);
 
         registry.register(editor);
         registry.register(buildTool);
@@ -90,5 +95,49 @@ class JexlServiceRegistryTest {
         String doc = registry.getDocumentation(WorkflowPhase.CODE);
         assertTrue(doc.contains("// Global variable exposed in JEXL: contractService"));
         assertTrue(doc.contains("runAction(): string;"));
+    }
+
+    @Test
+    void testGitServiceExcludedWhenGitNotInstalledAndIncludedWhenDetected() {
+        SystemToolService systemToolService = mock(SystemToolService.class);
+        when(systemToolService.checkGitAvailable()).thenReturn(false);
+
+        JexlServiceRegistry registry = new JexlServiceRegistry(systemToolService);
+        GitService gitService = new GitService(null);
+        MemoryService memoryService = mock(MemoryService.class);
+        registry.register(gitService);
+        registry.register(memoryService);
+
+        assertFalse(registry.isGitAvailable());
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            assertFalse(registry.getServices(phase).containsKey("gitService"));
+            assertTrue(registry.getServices(phase).containsKey("memoryService"));
+            String doc = registry.getDocumentation(phase);
+            assertFalse(doc.contains("gitService"));
+            assertFalse(doc.contains("interface GitService"));
+            assertTrue(doc.contains("memoryService"));
+        }
+        verify(systemToolService, times(1)).checkGitAvailable();
+
+        // Simulate SystemToolsUpdatedEvent when user installs Git and refreshes tools
+        registry.onSystemToolsUpdated(new SystemToolsUpdatedEvent(List.of(
+                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "git version 2.45.0", SystemToolService.STATUS_DETECTED)),
+                false));
+
+        assertTrue(registry.isGitAvailable());
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            assertSame(gitService, registry.getServices(phase).get("gitService"));
+            String doc = registry.getDocumentation(phase);
+            assertTrue(doc.contains("// Global variable exposed in JEXL: gitService"));
+            assertTrue(doc.contains("interface GitService"));
+        }
+
+        // Simulate SystemToolsUpdatedEvent when Git becomes missing again
+        registry.onSystemToolsUpdated(new SystemToolsUpdatedEvent(
+                List.of(SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "Not found", SystemToolService.STATUS_MISSING)),
+                false));
+        assertFalse(registry.isGitAvailable());
+        assertFalse(registry.getServices(WorkflowPhase.CODE).containsKey("gitService"));
+        assertFalse(registry.getDocumentation(WorkflowPhase.CODE).contains("gitService"));
     }
 }

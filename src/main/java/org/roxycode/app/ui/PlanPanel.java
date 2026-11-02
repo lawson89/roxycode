@@ -1,18 +1,17 @@
 package org.roxycode.app.ui;
 
-import java.awt.*;
-import java.util.concurrent.CompletableFuture;
-import javax.swing.*;
-import org.roxycode.app.ai.services.GitService;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import javax.swing.JButton;
+import javax.swing.JEditorPane;
+import javax.swing.JPanel;
+import javax.swing.Timer;
 import org.roxycode.app.ai.services.PlanService;
-import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.util.Edt;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -21,22 +20,17 @@ import org.springframework.stereotype.Component;
 @Lazy
 public final class PlanPanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    private static final Logger log = LoggerFactory.getLogger(PlanPanel.class);
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final String COPY_BUTTON_TEXT = "Copy Plan as Markdown";
 
     private final transient PlanService planManagerService;
-    private final transient GitService gitService;
     private final JEditorPane displayArea;
     private final JButton copyMarkdownButton;
     private Timer copyFeedbackTimer;
     private String lastCopiedMarkdown;
-    private volatile String lastGitStatus = "";
-    CompletableFuture<String> lastRefreshFuture = CompletableFuture.completedFuture("");
 
-    public PlanPanel(PlanService planManagerService, GitService gitService) {
+    public PlanPanel(PlanService planManagerService) {
         this.planManagerService = planManagerService;
-        this.gitService = gitService;
         setLayout(new BorderLayout());
 
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -52,8 +46,8 @@ public final class PlanPanel extends JPanel {
         refresh();
     }
 
-    public CompletableFuture<String> refresh() {
-        return updateDisplay(planManagerService.getCurrentPlan());
+    public void refresh() {
+        updateDisplay(planManagerService.getCurrentPlan());
     }
 
     @EventListener
@@ -67,13 +61,7 @@ public final class PlanPanel extends JPanel {
     }
 
     @EventListener
-    public void onFileChanged(FileChangedEvent event) {
-        refresh();
-    }
-
-    @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
-        lastGitStatus = "";
         refresh();
     }
 
@@ -82,13 +70,7 @@ public final class PlanPanel extends JPanel {
         if (plan == null) {
             return;
         }
-        String gitStatus;
-        if (SwingUtilities.isEventDispatchThread()) {
-            gitStatus = lastGitStatus;
-        } else {
-            gitStatus = getGitStatusText();
-        }
-        String markdown = buildPlanMarkdown(plan, gitStatus);
+        String markdown = buildPlanMarkdown(plan);
         this.lastCopiedMarkdown = markdown;
         copyFeedbackTimer = UiComponents.copyWithFeedback(copyMarkdownButton, copyFeedbackTimer, markdown,
                 COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
@@ -112,7 +94,7 @@ public final class PlanPanel extends JPanel {
         if (displayArea != null) {
             updateTheme();
             if (planManagerService != null) {
-                applyDisplayOnEdt(planManagerService.getCurrentPlan(), lastGitStatus);
+                applyDisplayOnEdt(planManagerService.getCurrentPlan());
             }
         }
     }
@@ -121,47 +103,28 @@ public final class PlanPanel extends JPanel {
         SwingHtmlUtils.applyTheme(displayArea, 15);
     }
 
-    private String getGitStatusText() {
-        if (gitService != null) {
-            return gitService.getStatus();
-        }
-        return null;
+    void updateDisplay(ImplementationPlan plan) {
+        Edt.run(() -> applyDisplayOnEdt(plan));
     }
 
-    CompletableFuture<String> updateDisplay(ImplementationPlan plan) {
-        CompletableFuture<String> future = Edt.supplyAsync(this::getGitStatusText, status -> {
-            String normalized = "";
-            if (status != null) {
-                normalized = status;
-            }
-            lastGitStatus = normalized;
-            applyDisplayOnEdt(plan, normalized);
-        }, e -> {
-            log.debug("Failed to refresh git status for plan panel", e);
-            applyDisplayOnEdt(plan, lastGitStatus);
-        });
-        this.lastRefreshFuture = future;
-        return future;
-    }
-
-    private void applyDisplayOnEdt(ImplementationPlan plan, String gitStatus) {
+    private void applyDisplayOnEdt(ImplementationPlan plan) {
         if (copyMarkdownButton != null) {
             copyMarkdownButton.setEnabled(plan != null);
         }
-        displayArea.setText(buildPlanHtml(plan, gitStatus));
+        displayArea.setText(buildPlanHtml(plan));
         displayArea.setCaretPosition(0);
     }
 
-    static String buildPlanMarkdown(ImplementationPlan plan, String gitStatus) {
+    static String buildPlanMarkdown(ImplementationPlan plan) {
         if (plan == null) {
             return "";
         }
         StringBuilder sb = new StringBuilder(plan.toMarkdown(true));
-        ImplementationPlan.appendChangesMarkdown(sb, ImplementationPlan.formatChangesText(gitStatus));
+        plan.appendChangesMarkdown(sb);
         return sb.toString();
     }
 
-    static String buildPlanHtml(ImplementationPlan plan, String gitStatus) {
+    static String buildPlanHtml(ImplementationPlan plan) {
         if (plan == null) {
             return """
                     <html><body>
@@ -171,7 +134,7 @@ public final class PlanPanel extends JPanel {
                     """;
         }
 
-        String markdown = buildPlanMarkdown(plan, gitStatus);
+        String markdown = buildPlanMarkdown(plan);
         return "<html><body>" + SwingHtmlUtils.renderMarkdownToHtml(markdown) + "</body></html>";
     }
 }

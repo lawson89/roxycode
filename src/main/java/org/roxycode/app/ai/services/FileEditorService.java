@@ -47,12 +47,19 @@ public class FileEditorService {
     public EditorResult writeFile(@AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("The full content to write to the file") String content) throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        if (Files.exists(path) && Files.isDirectory(path)) {
+        boolean existed = Files.exists(path);
+        if (existed && Files.isDirectory(path)) {
             return new EditorResult(false, "", "Path is a directory: " + relativePath);
         }
         PathUtils.createParentDirectories(path);
         Files.writeString(path, content);
-        return completeFileMutation(path, relativePath, "File written successfully: " + relativePath);
+        FileChangedEvent.ChangeType changeType;
+        if (existed) {
+            changeType = FileChangedEvent.ChangeType.MODIFIED;
+        } else {
+            changeType = FileChangedEvent.ChangeType.CREATED;
+        }
+        return completeFileMutation(path, relativePath, "File written successfully: " + relativePath, changeType);
     }
 
     @AgentDoc(value = "Replaces a unique block of text with new content.", examples = "fileEditorService.replaceBlock('src/Main.java', '// TODO: implement', 'System.out.println('Hello');')")
@@ -81,13 +88,11 @@ public class FileEditorService {
     @AgentDoc(value = "Replaces multiple non-overlapping target blocks in a file atomically in a single write operation.", examples = "fileEditorService.replaceBlocks('src/Main.java', [{'target': 'old1', 'replacement': 'new1'}, {'target': 'old2', 'replacement': 'new2'}])")
     public EditorResult replaceBlocks(@AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("Array of maps with 'target' and 'replacement' keys") Object... edits) throws IOException {
-        List<?> editList;
+        List<?> editList = List.of();
         if (edits != null && edits.length == 1 && edits[0] instanceof List<?> list) {
             editList = list;
         } else if (edits != null) {
             editList = Arrays.asList(edits);
-        } else {
-            editList = null;
         }
         return replaceBlocksInternal(relativePath, editList);
     }
@@ -311,7 +316,7 @@ public class FileEditorService {
         }
         Files.delete(path);
         log.info("Deleted file: {} at {}", relativePath, path.toAbsolutePath());
-        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
+        eventPublisher.publishEvent(new FileChangedEvent(relativePath, FileChangedEvent.ChangeType.DELETED));
         return new EditorResult(true, "File deleted successfully: " + relativePath, null);
     }
 
@@ -323,11 +328,18 @@ public class FileEditorService {
         if (!Files.exists(source)) {
             return new EditorResult(false, "", "File does not exist: " + sourcePath);
         }
+        boolean targetExisted = Files.exists(target);
         PathUtils.createParentDirectories(target);
         Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Moved file from {} to {}", sourcePath, targetPath);
-        eventPublisher.publishEvent(new FileChangedEvent(sourcePath));
-        eventPublisher.publishEvent(new FileChangedEvent(targetPath));
+        FileChangedEvent.ChangeType targetChangeType;
+        if (targetExisted) {
+            targetChangeType = FileChangedEvent.ChangeType.MODIFIED;
+        } else {
+            targetChangeType = FileChangedEvent.ChangeType.CREATED;
+        }
+        eventPublisher.publishEvent(new FileChangedEvent(sourcePath, FileChangedEvent.ChangeType.DELETED));
+        eventPublisher.publishEvent(new FileChangedEvent(targetPath, targetChangeType));
         return new EditorResult(true, "File moved successfully from " + sourcePath + " to " + targetPath, null);
     }
 
@@ -340,10 +352,17 @@ public class FileEditorService {
         if (validationError != null) {
             return validationError;
         }
+        boolean targetExisted = Files.exists(target);
         PathUtils.createParentDirectories(target);
         Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Copied file from {} to {}", sourcePath, targetPath);
-        eventPublisher.publishEvent(new FileChangedEvent(targetPath));
+        FileChangedEvent.ChangeType targetChangeType;
+        if (targetExisted) {
+            targetChangeType = FileChangedEvent.ChangeType.MODIFIED;
+        } else {
+            targetChangeType = FileChangedEvent.ChangeType.CREATED;
+        }
+        eventPublisher.publishEvent(new FileChangedEvent(targetPath, targetChangeType));
         return new EditorResult(true, "File copied successfully from " + sourcePath + " to " + targetPath, null);
     }
 
@@ -351,12 +370,19 @@ public class FileEditorService {
     public EditorResult mkdirs(@AgentDoc("The directory path relative to the project root") String relativePath)
             throws IOException {
         Path path = projectService.resolvePath(relativePath);
-        if (Files.exists(path) && !Files.isDirectory(path)) {
+        boolean existed = Files.exists(path);
+        if (existed && !Files.isDirectory(path)) {
             return new EditorResult(false, "", "A regular file already exists at path: " + relativePath);
         }
         Files.createDirectories(path);
         log.info("Created directory: {} at {}", relativePath, path.toAbsolutePath());
-        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
+        FileChangedEvent.ChangeType changeType;
+        if (existed) {
+            changeType = FileChangedEvent.ChangeType.MODIFIED;
+        } else {
+            changeType = FileChangedEvent.ChangeType.CREATED;
+        }
+        eventPublisher.publishEvent(new FileChangedEvent(relativePath, changeType));
         return new EditorResult(true, "Directory created successfully: " + relativePath, null);
     }
 
@@ -381,8 +407,13 @@ public class FileEditorService {
     }
 
     private EditorResult completeFileMutation(Path path, String relativePath, String message) throws IOException {
+        return completeFileMutation(path, relativePath, message, FileChangedEvent.ChangeType.MODIFIED);
+    }
+
+    private EditorResult completeFileMutation(Path path, String relativePath, String message,
+            FileChangedEvent.ChangeType changeType) throws IOException {
         log.info("{} ({} bytes) at {}", message, Files.size(path), path.toAbsolutePath());
-        eventPublisher.publishEvent(new FileChangedEvent(relativePath));
+        eventPublisher.publishEvent(new FileChangedEvent(relativePath, changeType));
         return new EditorResult(true, message, null);
     }
 

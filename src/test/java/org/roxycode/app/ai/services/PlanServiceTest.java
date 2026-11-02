@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
@@ -38,7 +39,7 @@ class PlanServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PlanService(envService, eventPublisher, null, null);
+        service = new PlanService(envService, eventPublisher, null);
         lenient().when(envService.getCurrentUser()).thenReturn("user");
     }
 
@@ -145,6 +146,7 @@ class PlanServiceTest {
         setupCodePhase();
         service.markStepsCompleted(0, 2);
         service.addHandoffLogEntry("Finished Step 1 before blocker");
+        service.onFileChanged(new FileChangedEvent("src/Step1.java", FileChangedEvent.ChangeType.CREATED));
 
         service.requestPlanRevision("Split Step 2 into sub-steps");
         service.approveTransition();
@@ -161,6 +163,7 @@ class PlanServiceTest {
         assertFalse(revised.technicalSteps().get(2).completed());
         assertFalse(revised.technicalSteps().get(3).completed());
         assertEquals(logCount, revised.handoffLog().size());
+        assertEquals("CREATED src/Step1.java", revised.formatChangesText());
     }
 
     @Test
@@ -246,7 +249,6 @@ class PlanServiceTest {
     @Test
     void testReviewToPlanArchivesCompletedPlanWithHitlMetadataAndFrontmatter(@TempDir Path tempDir) throws Exception {
         ProjectService projectService = mock(ProjectService.class);
-        GitService gitService = mock(GitService.class);
         Path projectRoot = tempDir.resolve("my-project");
         Path archiveDir = tempDir.resolve("roxy-home/projects/my-project-12345678/archive/plans");
 
@@ -254,9 +256,8 @@ class PlanServiceTest {
         when(projectService.getProjectName()).thenReturn("my-project");
         when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
         when(projectService.resolveProjectDataPath("archive/plans")).thenReturn(archiveDir);
-        when(gitService.getStatus()).thenReturn(" M src/Main.java\n");
 
-        PlanService archivingService = new PlanService(envService, eventPublisher, projectService, gitService);
+        PlanService archivingService = new PlanService(envService, eventPublisher, projectService);
         archivingService.submitPlan("Archive Feature Plan!", "Persist completed plans",
                 new String[]{"Include frontmatter", "Include approvals"}, new String[]{"Implement archiving"});
 
@@ -265,6 +266,9 @@ class PlanServiceTest {
         archivingService.approveTransition();
         assertEquals(WorkflowPhase.CODE, archivingService.getCurrentPhase());
 
+        archivingService.onFileChanged(new FileChangedEvent("src/Main.java", FileChangedEvent.ChangeType.MODIFIED));
+        archivingService
+                .onFileChanged(new FileChangedEvent("src/NewFeature.java", FileChangedEvent.ChangeType.CREATED));
         archivingService.markStepsCompleted(0, 1, 2);
         archivingService.requestReview("Ready for review");
         assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
@@ -289,13 +293,14 @@ class PlanServiceTest {
         assertTrue(fileName.endsWith("-archive-feature-plan.md"));
 
         String content = Files.readString(archivedFile);
-        assertTrue(content.startsWith("---\n"));
+        assertTrue(content.startsWith("---" + (char) 10));
         assertContainsAll(content, "project: ", "my-project", "projectPath: ",
                 projectRoot.toAbsolutePath().normalize().toString(), "title: ", "Archive Feature Plan!",
-                "userApproved: true\n", "approvedBy: ", "alice", "completedBy: ", "bob",
+                "userApproved: true" + (char) 10, "approvedBy: ", "alice", "completedBy: ", "bob",
                 "# Implementation Plan: Archive Feature Plan!", "## Approvals",
                 "- **Move to Code:** Approved by alice on ", "- **Final Acceptance:** Accepted by bob on ",
-                "## Handoff Log", "REVIEW -> PLAN (User Approved): All checks passed", "## Changes", "M src/Main.java");
+                "## Handoff Log", "REVIEW -> PLAN (User Approved): All checks passed", "## Changes",
+                "MODIFIED src/Main.java", "CREATED src/NewFeature.java");
         verify(eventPublisher).publishEvent(
                 argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent aue && fileName.equals(aue.filename())));
     }

@@ -40,7 +40,7 @@ public final class MainFrame extends JPanel {
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String MISSING_REQUIRED_TOOLS_TITLE = "Required System Tools Missing";
-    static final String MISSING_REQUIRED_TOOLS_MESSAGE = "RoxyCode requires Ripgrep, Git, and Universal Ctags to function properly. Please review the System Tools page to install or configure any missing required tools.";
+    static final String MISSING_REQUIRED_TOOLS_MESSAGE = "RoxyCode requires Ripgrep and Universal Ctags to function properly. Please review the System Tools page to install or configure any missing required tools.";
     static final String MISSING_API_KEY_TITLE = "Gemini API Key Required";
     static final String MISSING_API_KEY_MESSAGE = "Welcome to RoxyCode! Please enter and save your Gemini API Key in Global Settings to get started.";
 

@@ -42,12 +42,16 @@ class SystemToolServiceTest {
         assertFalse(SystemToolService.areAllRequiredToolsDetected(null));
         assertFalse(SystemToolService.areAllRequiredToolsDetected(List.of()));
 
-        List<SystemTool> allRequiredDetectedDockerMissing = List.of(
+        List<SystemTool> allRequiredDetectedGitAndDockerMissing = List.of(
                 SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
-                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "2.43.0", SystemToolService.STATUS_DETECTED),
+                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "Not found", SystemToolService.STATUS_MISSING),
                 SystemTool.ofKnownTool(SystemTool.TOOL_CTAGS, "5.9.0", SystemToolService.STATUS_DETECTED),
                 SystemTool.ofKnownTool(SystemTool.TOOL_DOCKER, "Not found", SystemToolService.STATUS_MISSING));
-        assertTrue(SystemToolService.areAllRequiredToolsDetected(allRequiredDetectedDockerMissing));
+        assertTrue(SystemToolService.areAllRequiredToolsDetected(allRequiredDetectedGitAndDockerMissing));
+        assertFalse(SystemToolService.isGitDetected(allRequiredDetectedGitAndDockerMissing));
+        assertFalse(SystemToolService.isGitDetected(null));
+        assertFalse(
+                SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "Not found", SystemToolService.STATUS_MISSING).required());
 
         List<SystemTool> ctagsMissing = List.of(
                 SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
@@ -55,6 +59,7 @@ class SystemToolServiceTest {
                 SystemTool.ofKnownTool(SystemTool.TOOL_CTAGS, "Not found", SystemToolService.STATUS_MISSING),
                 SystemTool.ofKnownTool(SystemTool.TOOL_DOCKER, "28.0.0", SystemToolService.STATUS_DETECTED));
         assertFalse(SystemToolService.areAllRequiredToolsDetected(ctagsMissing));
+        assertTrue(SystemToolService.isGitDetected(ctagsMissing));
 
         List<SystemTool> incompleteList = List.of(
                 SystemTool.ofKnownTool(SystemTool.TOOL_RIPGREP, "14.1.0", SystemToolService.STATUS_DETECTED),
@@ -144,6 +149,7 @@ class SystemToolServiceTest {
         List<SystemTool> firstResult = service1.detectTools().get(5, TimeUnit.SECONDS);
         assertEquals(1, probeCount.get());
         assertEquals(2, firstResult.size());
+        assertTrue(service1.checkGitAvailable());
         assertFalse(service1.checkDockerAvailable());
         assertFalse(service1.isDockerAvailable().get(5, TimeUnit.SECONDS));
         assertEquals(1, probeCount.get());

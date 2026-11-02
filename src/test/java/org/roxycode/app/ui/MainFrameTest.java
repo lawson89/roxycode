@@ -58,7 +58,7 @@ class MainFrameTest {
                 pub, chatMemory, settingsService, null, null, null), null);
         TaskWorkspacePanel taskWorkspacePanel = new TaskWorkspacePanel(
                 ChatPanel.createFeaturePanel(aiService, planService, pub, chatMemory, settingsService, null),
-                planService, new PlanPanel(planService, gitService), null);
+                planService, new PlanPanel(planService), null);
         CodebaseCachePanel codebaseCachePanel = new CodebaseCachePanel(mock(RepoMapPackerService.class),
                 mock(PromptService.class));
         JexlApiPanel jexlApiPanel = new JexlApiPanel(new JexlServiceRegistry());

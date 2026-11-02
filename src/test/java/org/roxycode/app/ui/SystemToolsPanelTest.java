@@ -101,8 +101,8 @@ public class SystemToolsPanelTest {
         SwingTestUtils.flushEdt();
 
         assertEquals(3, panel.getToolCards().size());
-        assertCardState(panel.getToolCards().get(0), "Git", "Detected", "Required");
-        assertCardState(panel.getToolCards().get(1), "Docker", "Error", "Optional");
-        assertCardState(panel.getToolCards().get(2), "Universal Ctags", "Missing", "Required");
+        assertCardState(panel.getToolCards().get(0), "Universal Ctags", "Missing", "Required");
+        assertCardState(panel.getToolCards().get(1), "Git", "Detected", "Optional");
+        assertCardState(panel.getToolCards().get(2), "Docker", "Error", "Optional");
     }
 }

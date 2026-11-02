@@ -12,7 +12,7 @@ public record SystemTool(String name, String version, String status, String desc
     public static final String TOOL_CTAGS = "Universal Ctags";
     public static final String TOOL_DOCKER = "Docker";
 
-    public static final List<String> REQUIRED_TOOL_NAMES = List.of(TOOL_RIPGREP, TOOL_GIT, TOOL_CTAGS);
+    public static final List<String> REQUIRED_TOOL_NAMES = List.of(TOOL_RIPGREP, TOOL_CTAGS);
 
     public record ToolMetadata(String description, String license, String websiteUrl, boolean required) {
     }
@@ -22,7 +22,7 @@ public record SystemTool(String name, String version, String status, String desc
             "Unlicense / MIT", "https://github.com/BurntSushi/ripgrep", true), TOOL_GIT,
             new ToolMetadata(
                     "Powers GitService for branch detection, porcelain status, working-tree and HEAD diffs, commit history, and line-level blame annotations.",
-                    "GPL-2.0", "https://git-scm.com", true),
+                    "GPL-2.0", "https://git-scm.com", false),
             TOOL_CTAGS,
             new ToolMetadata(
                     "Powers RepoMapPackerService to extract class, method, and symbol definitions across languages when building the repository map snapshot.",
