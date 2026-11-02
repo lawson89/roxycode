@@ -41,7 +41,9 @@ import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.VoiceService;
 import org.roxycode.app.util.Edt;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -51,6 +53,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
+import org.springframework.lang.Nullable;
 
 @SuppressWarnings("PMD.NullAssignment")
 public final class ChatPanel extends JPanel implements AutoCloseable {
@@ -66,6 +69,12 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String DISCARD_TOPIC_BUTTON_TEXT = "No, Discard";
     static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, Ctrl+V to paste image)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
+    static final String VOICE_BUTTON_TEXT = "Voice";
+    static final String STOP_RECORDING_BUTTON_TEXT = "Stop Recording";
+    static final String TRANSCRIBING_BUTTON_TEXT = "Transcribing...";
+    static final String VOICE_RECORD_TOOLTIP = "Record voice input and transcribe with Gemini";
+    static final String STOP_RECORDING_TOOLTIP = "Stop Recording & Transcribe";
+    private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
     static final int THUMBNAIL_SIZE = 64;
 
     public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
@@ -78,6 +87,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     JButton sendButton;
     JButton stopButton;
     JButton attachImageButton;
+    JButton voiceRecordButton;
     JButton mentionButton;
     JButton viewPlanButton;
     JButton approveButton;
@@ -90,8 +100,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     private JPanel attachmentPanel;
     transient FileMentionPopup fileMentionPopup;
     private transient ProjectService projectService;
+    private transient VoiceService voiceService;
     private transient Runnable onViewPlanAction;
     private boolean loading = false;
+    private boolean transcribingVoice = false;
+    transient CompletableFuture<String> lastVoiceFuture = CompletableFuture.completedFuture("");
     private transient Function<String, NewTopicChoice> newTopicDialogPresenter;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
 
@@ -102,10 +115,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         ChatPanel exploreChatPanel(AiService aiService, PlanService planService,
                 ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
                 ExecutorService chatTurnExecutor, MemoryService memoryService, EnvironmentService environmentService,
-                ProjectService projectService) {
+                ProjectService projectService, @Nullable VoiceService voiceService) {
             ChatPanel panel = createExplorePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
                     chatTurnExecutor, memoryService, environmentService);
             panel.setProjectService(projectService);
+            panel.setVoiceService(voiceService);
             return panel;
         }
 
@@ -113,10 +127,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         @Lazy
         ChatPanel featureChatPanel(AiService aiService, PlanService planService,
                 ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
-                ExecutorService chatTurnExecutor, ProjectService projectService) {
+                ExecutorService chatTurnExecutor, ProjectService projectService, @Nullable VoiceService voiceService) {
             ChatPanel panel = createFeaturePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
                     chatTurnExecutor);
             panel.setProjectService(projectService);
+            panel.setVoiceService(voiceService);
             return panel;
         }
     }
@@ -201,6 +216,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     private Component createOutputSection(boolean isTaskMode) {
         outputArea = new MarkdownPane(isTaskMode);
+        outputArea.setSpeakActionHandler((msgIndex, markdown) -> controller.toggleSpeakMessage(msgIndex, markdown));
         outputScrollPane = new JScrollPane(outputArea);
         outputScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         updateOutputScrollPaneBorder();
@@ -259,8 +275,12 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         stopButton.setVisible(false);
 
         attachImageButton = createActionButton("Attach Image", Codicons.FILE_MEDIA, new Insets(4, 8, 4, 8), true,
-                "arc: 8; font: -1; foreground: $Label.disabledForeground", e -> chooseImageAttachment());
+                TOOLBAR_BUTTON_STYLE, e -> chooseImageAttachment());
         attachImageButton.setToolTipText("Attach Image (or paste with Ctrl+V)");
+
+        voiceRecordButton = createActionButton(VOICE_BUTTON_TEXT, Codicons.UNMUTE, new Insets(4, 8, 4, 8), true,
+                TOOLBAR_BUTTON_STYLE, e -> toggleVoiceRecording());
+        voiceRecordButton.setToolTipText(VOICE_RECORD_TOOLTIP);
 
         String resetText;
         Codicons resetIcon;
@@ -272,13 +292,13 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             resetIcon = Codicons.COMMENT_DISCUSSION;
         }
         resetSessionButton = createActionButton(resetText, resetIcon, new Insets(4, 8, 4, 8), true,
-                "arc: 8; font: -1; foreground: $Label.disabledForeground", e -> controller.resetSession());
+                TOOLBAR_BUTTON_STYLE, e -> controller.resetSession());
         if (!isTaskMode) {
             resetSessionButton.setToolTipText(NEW_TOPIC_TOOLTIP);
         }
 
-        mentionButton = createActionButton("@ Mention", Codicons.MENTION, new Insets(4, 8, 4, 8), true,
-                "arc: 8; font: -1; foreground: $Label.disabledForeground", e -> triggerMentionPopup());
+        mentionButton = createActionButton("Mention", Codicons.MENTION, new Insets(4, 8, 4, 8), true,
+                TOOLBAR_BUTTON_STYLE, e -> triggerMentionPopup());
         mentionButton.setToolTipText("Insert @ to search and mention project files");
 
         turnLabel = new JLabel();
@@ -286,9 +306,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 "font: $small.font; foreground: $Label.disabledForeground; background: darken($TextArea.background, 4%); arc: 8; border: 2,8,2,8");
         updateTurnLabel();
 
-        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", "[]4[]4[]push[]8[]", "center"));
+        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", "[]4[]4[]4[]push[]8[]", "center"));
         actionToolbar.setOpaque(false);
         actionToolbar.add(attachImageButton);
+        actionToolbar.add(voiceRecordButton);
         actionToolbar.add(resetSessionButton);
         actionToolbar.add(mentionButton);
         actionToolbar.add(turnLabel);
@@ -387,6 +408,12 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         updateProjectComposerState();
     }
 
+    @Autowired(required = false)
+    public void setVoiceService(VoiceService voiceService) {
+        this.voiceService = voiceService;
+        controller.setVoiceService(voiceService);
+    }
+
     private boolean isProjectReady() {
         return projectService == null || projectService.hasActiveProject();
     }
@@ -404,6 +431,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         inputArea.setEnabled(enableComposer);
         sendButton.setEnabled(enableComposer);
         attachImageButton.setEnabled(enableComposer);
+        voiceRecordButton.setEnabled(enableComposer && !transcribingVoice);
         mentionButton.setEnabled(enableComposer);
     }
 
@@ -573,6 +601,76 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         controller.sendMessage(inputArea.getText());
     }
 
+    void toggleVoiceRecording() {
+        if (voiceService == null) {
+            appendMessage(ChatController.ROLE_SYSTEM, "Voice service is unavailable.");
+            return;
+        }
+        if (!voiceService.isRecording()) {
+            try {
+                voiceService.startRecording();
+                updateVoiceButtonRecordingState(true);
+            } catch (Exception ex) {
+                log.warn("Failed to start microphone recording: {}", ex.getMessage());
+                updateVoiceButtonRecordingState(false);
+                appendMessage(ChatController.ROLE_SYSTEM,
+                        "Voice recording error: " + ExceptionUtils.getMessageOrSimpleName(ex));
+            }
+            return;
+        }
+
+        transcribingVoice = true;
+        voiceRecordButton.setEnabled(false);
+        voiceRecordButton.setText(TRANSCRIBING_BUTTON_TEXT);
+        lastVoiceFuture = Edt.supplyAsync(() -> {
+            byte[] wavBytes = voiceService.stopRecordingAndGetWav();
+            return voiceService.transcribeAudio(wavBytes);
+        }, transcript -> {
+            transcribingVoice = false;
+            updateVoiceButtonRecordingState(false);
+            insertTranscribedText(transcript);
+        }, error -> {
+            transcribingVoice = false;
+            updateVoiceButtonRecordingState(false);
+            appendMessage(ChatController.ROLE_SYSTEM,
+                    "Voice transcription failed: " + ExceptionUtils.getRootCauseMessage(error));
+        });
+    }
+
+    private void updateVoiceButtonRecordingState(boolean recording) {
+        if (recording) {
+            Color recordColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
+            voiceRecordButton.setText(STOP_RECORDING_BUTTON_TEXT);
+            voiceRecordButton.setIcon(FontIcon.of(Codicons.DEBUG_STOP, 16, recordColor));
+            voiceRecordButton.setToolTipText(STOP_RECORDING_TOOLTIP);
+            voiceRecordButton.putClientProperty(FlatClientProperties.STYLE,
+                    "arc: 8; font: bold -1; foreground: $Actions.Red");
+        } else {
+            voiceRecordButton.setText(VOICE_BUTTON_TEXT);
+            voiceRecordButton.setIcon(FontIcon.of(Codicons.UNMUTE, 16));
+            voiceRecordButton.setToolTipText(VOICE_RECORD_TOOLTIP);
+            voiceRecordButton.putClientProperty(FlatClientProperties.STYLE, TOOLBAR_BUTTON_STYLE);
+        }
+        voiceRecordButton.setEnabled(!loading && isProjectReady() && !transcribingVoice);
+    }
+
+    private void insertTranscribedText(String transcript) {
+        if (transcript == null || transcript.isBlank()) {
+            return;
+        }
+        String cleanTranscript = transcript.trim();
+        String existing = inputArea.getText();
+        int caret = Math.clamp(inputArea.getCaretPosition(), 0, existing.length());
+        String prefix = "";
+        if (caret > 0 && !Character.isWhitespace(existing.charAt(caret - 1))) {
+            prefix = " ";
+        }
+        String insertion = prefix + cleanTranscript;
+        inputArea.insert(insertion, caret);
+        inputArea.setCaretPosition(caret + insertion.length());
+        inputArea.requestFocusInWindow();
+    }
+
     private void chooseImageAttachment() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter("Image Files (png, jpg, jpeg, gif, bmp)", "png", "jpg",
@@ -651,6 +749,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         sendButton.setEnabled(enableComposer);
         sendButton.setVisible(!loading);
         attachImageButton.setEnabled(enableComposer);
+        voiceRecordButton.setEnabled(enableComposer && !transcribingVoice);
         mentionButton.setEnabled(enableComposer);
         inputArea.setEnabled(enableComposer);
         if (model.isTaskMode()) {

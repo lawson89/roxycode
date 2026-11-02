@@ -57,8 +57,15 @@ class SettingsPanelTest {
 
         JSpinner.DefaultEditor turnsEditor = (JSpinner.DefaultEditor) settingsPanel.maxAgentToolTurnsSpinner
                 .getEditor();
+        assertEquals(AppSettings.DEFAULT_STT_MODEL, settingsPanel.sttModelField.getText());
+        assertEquals(AppSettings.DEFAULT_TTS_MODEL, settingsPanel.ttsModelField.getText());
+
         turnsEditor.getTextField().setText("85");
         settingsPanel.logToolCallsCheckBox.setSelected(true);
+        settingsPanel.sttModelField.setText(" custom-stt-model ");
+        settingsPanel.ttsModelField.setText(" custom-tts-model ");
+        settingsPanel.ttsVoiceCombo.setSelectedItem("Aoede");
+        settingsPanel.autoSpeakCheckBox.setSelected(true);
         settingsPanel.geminiApiKeyField.setText("new-secret-key");
         settingsPanel.saveButton.doClick();
 
@@ -66,6 +73,16 @@ class SettingsPanelTest {
         assertEquals("new-secret-key", settings.getGeminiApiKey());
         assertEquals(85, settings.getMaxAgentToolTurns());
         assertTrue(settings.isLogToolCalls());
+        assertEquals("custom-stt-model", settings.getSttModel());
+        assertEquals("custom-tts-model", settings.getTtsModel());
+        assertEquals("Aoede", settings.getTtsVoice());
+        assertTrue(settings.isAutoSpeakResponses());
+
+        AppSettings copied = settings.copy();
+        assertEquals("custom-stt-model", copied.getSttModel());
+        assertEquals("custom-tts-model", copied.getTtsModel());
+        assertEquals("Aoede", copied.getTtsVoice());
+        assertTrue(copied.isAutoSpeakResponses());
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.statusLabel.getText());
 
         settingsPanel.maxMessagesSpinner.setValue(120);
@@ -77,12 +94,20 @@ class SettingsPanelTest {
         settings.setMaxAgentToolTurns(100);
         settings.setMaxChatMemoryMessages(250);
         settings.setLogToolCalls(false);
+        settings.setSttModel("gemini-3.5-transcribe-v2");
+        settings.setTtsModel("gemini-3.8-flash-tts");
+        settings.setTtsVoice("Fenrir");
+        settings.setAutoSpeakResponses(false);
         settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
         SwingTestUtils.flushEdt();
         assertEquals(modelCombo.getItemAt(1).apiName(), ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
         assertEquals(100, settingsPanel.maxAgentToolTurnsSpinner.getValue());
         assertEquals(250, settingsPanel.maxMessagesSpinner.getValue());
         assertFalse(settingsPanel.logToolCallsCheckBox.isSelected());
+        assertEquals("gemini-3.5-transcribe-v2", settingsPanel.sttModelField.getText());
+        assertEquals("gemini-3.8-flash-tts", settingsPanel.ttsModelField.getText());
+        assertEquals("Fenrir", settingsPanel.ttsVoiceCombo.getSelectedItem());
+        assertFalse(settingsPanel.autoSpeakCheckBox.isSelected());
 
         for (ActionListener listener : settingsPanel.statusTimer.getActionListeners()) {
             listener.actionPerformed(null);

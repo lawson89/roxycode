@@ -10,6 +10,11 @@ public class AppSettings {
     public static final String DEFAULT_THEME = "FlatLaf Light";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
     public static final int DEFAULT_MAX_AGENT_TOOL_TURNS = 50;
+    public static final String DEFAULT_STT_MODEL = "gemini-3.5-transcribe";
+    public static final String DEFAULT_TTS_MODEL = "gemini-3.8-flash-lite-tts";
+    public static final String DEFAULT_TTS_VOICE = "Kore";
+    public static final List<String> PREBUILT_TTS_VOICES = List.of("Kore", "Aoede", "Puck", "Charon", "Fenrir", "Leda",
+            "Orus", "Zephyr");
 
     private String theme = DEFAULT_THEME;
     private String geminiApiKey = "";
@@ -18,6 +23,10 @@ public class AppSettings {
     private int maxAgentToolTurns = DEFAULT_MAX_AGENT_TOOL_TURNS;
     private int maxChatMemoryMessages = 50;
     private boolean logToolCalls = false;
+    private String sttModel = DEFAULT_STT_MODEL;
+    private String ttsModel = DEFAULT_TTS_MODEL;
+    private String ttsVoice = DEFAULT_TTS_VOICE;
+    private boolean autoSpeakResponses = false;
     private List<String> globalContextFolders = new ArrayList<>();
 
     public AppSettings() {
@@ -32,6 +41,10 @@ public class AppSettings {
             this.maxAgentToolTurns = other.maxAgentToolTurns;
             this.maxChatMemoryMessages = other.maxChatMemoryMessages;
             this.logToolCalls = other.logToolCalls;
+            this.sttModel = other.sttModel;
+            this.ttsModel = other.ttsModel;
+            this.ttsVoice = other.ttsVoice;
+            this.autoSpeakResponses = other.autoSpeakResponses;
             this.globalContextFolders = new ArrayList<>(
                     Objects.requireNonNullElse(other.globalContextFolders, List.of()));
         }
@@ -95,6 +108,38 @@ public class AppSettings {
 
     public void setLogToolCalls(boolean logToolCalls) {
         this.logToolCalls = logToolCalls;
+    }
+
+    public String getSttModel() {
+        return StringUtils.defaultIfBlank(sttModel, DEFAULT_STT_MODEL);
+    }
+
+    public void setSttModel(String sttModel) {
+        this.sttModel = sttModel;
+    }
+
+    public String getTtsModel() {
+        return StringUtils.defaultIfBlank(ttsModel, DEFAULT_TTS_MODEL);
+    }
+
+    public void setTtsModel(String ttsModel) {
+        this.ttsModel = ttsModel;
+    }
+
+    public String getTtsVoice() {
+        return StringUtils.defaultIfBlank(ttsVoice, DEFAULT_TTS_VOICE);
+    }
+
+    public void setTtsVoice(String ttsVoice) {
+        this.ttsVoice = ttsVoice;
+    }
+
+    public boolean isAutoSpeakResponses() {
+        return autoSpeakResponses;
+    }
+
+    public void setAutoSpeakResponses(boolean autoSpeakResponses) {
+        this.autoSpeakResponses = autoSpeakResponses;
     }
 
     public List<String> getGlobalContextFolders() {

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.awt.event.ActionListener;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.Document;
 import javax.swing.text.html.HTMLDocument;
@@ -57,6 +59,24 @@ class MarkdownPaneTest {
         }
         pane.copyFeedbackTimer.stop();
         assertEquals(-1, pane.copiedMessageIndex);
+
+        AtomicInteger spokenIndex = new AtomicInteger(-1);
+        AtomicReference<String> spokenMarkdown = new AtomicReference<>();
+        pane.setSpeakActionHandler((idx, md) -> {
+            spokenIndex.set(idx);
+            spokenMarkdown.set(md);
+        });
+        assertTrue(pane.getText().contains("speak:3"));
+        pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "speak:3"));
+        assertEquals(3, spokenIndex.get());
+        assertEquals("AI Response 1", spokenMarkdown.get());
+
+        pane.setSpeakingMessageIndex(3);
+        assertEquals(3, pane.getSpeakingMessageIndex());
+        assertTrue(pane.getText().contains("[Stop]"));
+        pane.setSpeakingMessageIndex(-1);
+        assertEquals(-1, pane.getSpeakingMessageIndex());
+        assertFalse(pane.getText().contains("[Stop]"));
 
         pane.clear();
         assertTrue(pane.getConversationMessages().isEmpty());

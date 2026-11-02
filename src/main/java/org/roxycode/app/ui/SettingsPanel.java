@@ -52,9 +52,15 @@ public final class SettingsPanel extends JPanel {
     static final String CONNECTION_FAILED_PREFIX = "Connection failed: ";
     static final String SECTION_APPEARANCE_TITLE = "Appearance";
     static final String SECTION_AI_MODEL_TITLE = "AI Model & Credentials";
+    static final String SECTION_VOICE_TITLE = "Voice & Audio";
     static final String SECTION_AGENT_EXECUTION_TITLE = "Agent Execution & Diagnostics";
     private static final String GROW_FILL = "[grow, fill]";
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
+    private static final String SEPARATOR_CONSTRAINTS = "growx, gaptop 4, gapbottom 4";
+    private static final String CARD_LAYOUT_CONSTRAINTS = "fillx, wrap 1, insets 16 18 16 18, gapy 10";
+    private static final String HEADER_FONT_STYLE = "font: bold +2";
+    private static final String HEADER_CONSTRAINTS = "growx, wmin 0, gapbottom 2";
+    private static final String CONTROL_WIDTH_CONSTRAINTS = "w 220:250:280";
     static final int MIN_AGENT_TOOL_TURNS = 1;
     static final int MAX_AGENT_TOOL_TURNS = 100;
     static final int MIN_CHAT_MEMORY_MESSAGES = 1;
@@ -74,6 +80,10 @@ public final class SettingsPanel extends JPanel {
     final JButton testConnectionButton;
     final JSpinner maxAgentToolTurnsSpinner;
     final JCheckBox logToolCallsCheckBox;
+    final JTextField sttModelField;
+    final JTextField ttsModelField;
+    final JComboBox<String> ttsVoiceCombo;
+    final JCheckBox autoSpeakCheckBox;
     final JButton saveButton;
     private final JPanel restartCalloutPanel;
     private final JLabel legendIconLabel;
@@ -82,6 +92,7 @@ public final class SettingsPanel extends JPanel {
     final Timer statusTimer;
     private JLabel appearanceHeaderLabel;
     private JLabel aiModelHeaderLabel;
+    private JLabel voiceHeaderLabel;
     private JLabel agentExecutionHeaderLabel;
     private transient Consumer<String> urlOpener = UiComponents::openUrlOrCopyToClipboard;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
@@ -164,10 +175,28 @@ public final class SettingsPanel extends JPanel {
         logToolCallsCheckBox.setOpaque(false);
         logToolCallsCheckBox.setSelected(settingsService.getSettings().isLogToolCalls());
 
+        sttModelField = new JTextField(20);
+        sttModelField.setText(settingsService.getSettings().getSttModel());
+        sttModelField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, AppSettings.DEFAULT_STT_MODEL);
+        SwingHtmlUtils.installTextContextMenu(sttModelField);
+
+        ttsModelField = new JTextField(20);
+        ttsModelField.setText(settingsService.getSettings().getTtsModel());
+        ttsModelField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, AppSettings.DEFAULT_TTS_MODEL);
+        SwingHtmlUtils.installTextContextMenu(ttsModelField);
+
+        ttsVoiceCombo = new JComboBox<>(AppSettings.PREBUILT_TTS_VOICES.toArray(new String[0]));
+        ttsVoiceCombo.setSelectedItem(settingsService.getSettings().getTtsVoice());
+
+        autoSpeakCheckBox = new JCheckBox("Automatically read Roxy's responses aloud after each turn");
+        autoSpeakCheckBox.setOpaque(false);
+        autoSpeakCheckBox.setSelected(settingsService.getSettings().isAutoSpeakResponses());
+
         JPanel cardsContainer = UiComponents
                 .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
         cardsContainer.add(buildAppearanceCard(), GROWX_WMIN_0);
         cardsContainer.add(buildAiModelCard(), GROWX_WMIN_0);
+        cardsContainer.add(buildVoiceCard(), GROWX_WMIN_0);
         cardsContainer.add(buildAgentExecutionCard(), GROWX_WMIN_0);
 
         restartCalloutPanel = new JPanel(
@@ -189,29 +218,31 @@ public final class SettingsPanel extends JPanel {
     }
 
     private JPanel buildAppearanceCard() {
-        JPanel card = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 10", GROW_FILL, ""));
+        JPanel card = new JPanel(new MigLayout(CARD_LAYOUT_CONSTRAINTS, GROW_FILL, ""));
         UiComponents.styleCardPanel(card);
 
         appearanceHeaderLabel = UiComponents.createSectionHeader(SECTION_APPEARANCE_TITLE, Codicons.SYMBOL_COLOR,
-                "font: bold +2");
-        card.add(appearanceHeaderLabel, "growx, wmin 0, gapbottom 2");
+                HEADER_FONT_STYLE);
+        card.add(appearanceHeaderLabel, HEADER_CONSTRAINTS);
 
         card.add(UiComponents.createFieldRow(
                 UiComponents.createFieldTextBlock("Theme",
                         "Choose between light and dark color schemes. Changes preview immediately.", null),
-                themeCombo, "w 220:250:280"), GROWX_WMIN_0);
+                themeCombo, CONTROL_WIDTH_CONSTRAINTS), GROWX_WMIN_0);
 
         return card;
     }
 
     private JPanel buildAiModelCard() {
-        JPanel card = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 10", GROW_FILL, ""));
+        JPanel card = new JPanel(new MigLayout(CARD_LAYOUT_CONSTRAINTS, GROW_FILL, ""));
         UiComponents.styleCardPanel(card);
 
-        aiModelHeaderLabel = UiComponents.createSectionHeader(SECTION_AI_MODEL_TITLE, Codicons.HUBOT, "font: bold +2");
-        card.add(aiModelHeaderLabel, "growx, wmin 0, gapbottom 2");
+        aiModelHeaderLabel = UiComponents.createSectionHeader(SECTION_AI_MODEL_TITLE, Codicons.HUBOT,
+                HEADER_FONT_STYLE);
+        card.add(aiModelHeaderLabel, HEADER_CONSTRAINTS);
 
-        JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo, "w 220:250:280");
+        JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo,
+                CONTROL_WIDTH_CONSTRAINTS);
 
         card.add(UiComponents.createFieldRow(
                 UiComponents.createFieldTextBlock("Gemini Model",
@@ -219,7 +250,7 @@ public final class SettingsPanel extends JPanel {
                 modelControlBox, ""), GROWX_WMIN_0);
 
         card.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
-        card.add(createRowSeparator(), "growx, gaptop 4, gapbottom 4");
+        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
         JPanel apiKeyRow = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 8", GROW_FILL, ""));
         apiKeyRow.setOpaque(false);
@@ -237,26 +268,65 @@ public final class SettingsPanel extends JPanel {
         return card;
     }
 
+    private JPanel buildVoiceCard() {
+        JPanel card = new JPanel(new MigLayout(CARD_LAYOUT_CONSTRAINTS, GROW_FILL, ""));
+        UiComponents.styleCardPanel(card);
+
+        voiceHeaderLabel = UiComponents.createSectionHeader(SECTION_VOICE_TITLE, Codicons.UNMUTE, HEADER_FONT_STYLE);
+        card.add(voiceHeaderLabel, HEADER_CONSTRAINTS);
+
+        card.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Speech-to-Text (STT) Model",
+                        "Gemini model used to transcribe microphone voice recordings into text.", null),
+                sttModelField, CONTROL_WIDTH_CONSTRAINTS), GROWX_WMIN_0);
+
+        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
+
+        card.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Text-to-Speech (TTS) Model",
+                        "Gemini model used to synthesize spoken audio from Roxy's responses.", null),
+                ttsModelField, CONTROL_WIDTH_CONSTRAINTS), GROWX_WMIN_0);
+
+        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
+
+        card.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Roxy TTS Voice",
+                        "Prebuilt Gemini voice used when speaking AI responses aloud.", null),
+                ttsVoiceCombo, CONTROL_WIDTH_CONSTRAINTS), GROWX_WMIN_0);
+
+        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
+
+        JPanel autoSpeakRow = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 6", GROW_FILL, ""));
+        autoSpeakRow.setOpaque(false);
+        autoSpeakRow.add(
+                UiComponents.createFieldTextBlock("Auto-Speak AI Responses",
+                        "Automatically synthesize and play Roxy's spoken response at the end of each turn.", null),
+                GROWX_WMIN_0);
+        autoSpeakRow.add(autoSpeakCheckBox, GROWX_WMIN_0);
+        card.add(autoSpeakRow, GROWX_WMIN_0);
+        return card;
+    }
+
     private JPanel buildAgentExecutionCard() {
-        JPanel card = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 10", GROW_FILL, ""));
+        JPanel card = new JPanel(new MigLayout(CARD_LAYOUT_CONSTRAINTS, GROW_FILL, ""));
         UiComponents.styleCardPanel(card);
 
         agentExecutionHeaderLabel = UiComponents.createSectionHeader(SECTION_AGENT_EXECUTION_TITLE, Codicons.PULSE,
-                "font: bold +2");
-        card.add(agentExecutionHeaderLabel, "growx, wmin 0, gapbottom 2");
+                HEADER_FONT_STYLE);
+        card.add(agentExecutionHeaderLabel, HEADER_CONSTRAINTS);
 
         card.add(UiComponents.createFieldRow(
                 UiComponents.createFieldTextBlock("Max Agent Tool Turns",
                         "Maximum consecutive JEXL tool execution turns allowed per prompt (1–100).", null),
                 maxAgentToolTurnsSpinner, "w 100:120:140"), GROWX_WMIN_0);
 
-        card.add(createRowSeparator(), "growx, gaptop 4, gapbottom 4");
+        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
         card.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Max Chat History Messages",
                 "Maximum number of conversation messages retained in active chat memory (1–500).",
                 createRestartBadge()), maxMessagesSpinner, "w 100:120:140"), GROWX_WMIN_0);
 
-        card.add(createRowSeparator(), "growx, gaptop 4, gapbottom 4");
+        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
         JPanel logRow = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 6", GROW_FILL, ""));
         logRow.setOpaque(false);
@@ -306,6 +376,9 @@ public final class SettingsPanel extends JPanel {
         if (aiModelHeaderLabel != null) {
             aiModelHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
         }
+        if (voiceHeaderLabel != null) {
+            voiceHeaderLabel.setIcon(FontIcon.of(Codicons.UNMUTE, 18, accentColor));
+        }
         if (agentExecutionHeaderLabel != null) {
             agentExecutionHeaderLabel.setIcon(FontIcon.of(Codicons.PULSE, 18, accentColor));
         }
@@ -320,6 +393,8 @@ public final class SettingsPanel extends JPanel {
                         + ", 14%)");
 
         geminiApiKeyField.putClientProperty(FlatClientProperties.STYLE, "showRevealButton: true; arc: 8");
+        sttModelField.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
+        ttsModelField.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
 
         getApiKeyLinkButton.putClientProperty(FlatClientProperties.STYLE,
                 "font: -1; arc: 8; margin: 2,8,2,8; borderWidth: 0; background: null; hoverBackground: fade("
@@ -382,6 +457,22 @@ public final class SettingsPanel extends JPanel {
             boolean logToolCalls = event.settings().isLogToolCalls();
             if (logToolCalls != logToolCallsCheckBox.isSelected()) {
                 logToolCallsCheckBox.setSelected(logToolCalls);
+            }
+            String sttModel = event.settings().getSttModel();
+            if (sttModel != null && !sttModel.equals(sttModelField.getText())) {
+                sttModelField.setText(sttModel);
+            }
+            String ttsModel = event.settings().getTtsModel();
+            if (ttsModel != null && !ttsModel.equals(ttsModelField.getText())) {
+                ttsModelField.setText(ttsModel);
+            }
+            String ttsVoice = event.settings().getTtsVoice();
+            if (ttsVoice != null && !ttsVoice.equals(ttsVoiceCombo.getSelectedItem())) {
+                ttsVoiceCombo.setSelectedItem(ttsVoice);
+            }
+            boolean autoSpeak = event.settings().isAutoSpeakResponses();
+            if (autoSpeak != autoSpeakCheckBox.isSelected()) {
+                autoSpeakCheckBox.setSelected(autoSpeak);
             }
         });
     }
@@ -470,6 +561,15 @@ public final class SettingsPanel extends JPanel {
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
         settings.setLogToolCalls(logToolCallsCheckBox.isSelected());
+        settings.setSttModel(sttModelField.getText().trim());
+        settings.setTtsModel(ttsModelField.getText().trim());
+        sttModelField.setText(settings.getSttModel());
+        ttsModelField.setText(settings.getTtsModel());
+        String selectedVoice = (String) ttsVoiceCombo.getSelectedItem();
+        if (selectedVoice != null) {
+            settings.setTtsVoice(selectedVoice);
+        }
+        settings.setAutoSpeakResponses(autoSpeakCheckBox.isSelected());
         settingsService.saveSettings();
 
         if (restartRequiredChanged) {

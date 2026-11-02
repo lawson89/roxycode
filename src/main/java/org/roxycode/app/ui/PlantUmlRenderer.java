@@ -29,7 +29,6 @@ import net.sourceforge.plantuml.core.DiagramDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public final class PlantUmlRenderer {
 
     private static final Logger log = LoggerFactory.getLogger(PlantUmlRenderer.class);

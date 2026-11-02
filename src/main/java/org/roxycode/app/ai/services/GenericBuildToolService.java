@@ -482,7 +482,7 @@ public class GenericBuildToolService {
                     sb.append(c);
                     i++;
                 }
-            } else if (c == '#') {
+            } else if (c == (char) 35) {
                 inComment = true;
                 sb.append(c);
                 i++;
@@ -521,10 +521,10 @@ public class GenericBuildToolService {
                 || next == (char) 92) {
             return true;
         }
-        if (next == 'u') {
+        if (next == (char) 117) {
             return hasHexDigits(text, escapeCharIndex + 1, 4);
         }
-        if (next == 'U') {
+        if (next == (char) 85) {
             return hasHexDigits(text, escapeCharIndex + 1, 8);
         }
         if (multilineBasic && (next == ' ' || next == (char) 9 || next == (char) 10 || next == (char) 13)) {

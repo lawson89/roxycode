@@ -26,6 +26,7 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.service.VoiceService;
 import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
@@ -52,6 +53,7 @@ public final class ChatController implements AutoCloseable {
     private final PlanService planService;
     private MemoryService memoryService;
     private EnvironmentService environmentService;
+    private VoiceService voiceService;
     final boolean turnExecutorOwned;
     volatile Executor turnExecutor;
     private final AtomicLong turnSequence = new AtomicLong();
@@ -79,6 +81,44 @@ public final class ChatController implements AutoCloseable {
         this.environmentService = environmentService;
     }
 
+    public void setVoiceService(VoiceService voiceService) {
+        this.voiceService = voiceService;
+    }
+
+    public void toggleSpeakMessage(int messageIndex, String markdownText) {
+        if (voiceService == null) {
+            return;
+        }
+        if (view.outputArea.getSpeakingMessageIndex() == messageIndex && voiceService.isPlaying()) {
+            stopSpeechPlayback();
+            return;
+        }
+        startSpeechPlayback(messageIndex, markdownText);
+    }
+
+    void startSpeechPlayback(int messageIndex, String markdownText) {
+        if (voiceService == null) {
+            return;
+        }
+        voiceService.speakAsync(markdownText,
+                () -> Edt.run(() -> view.outputArea.setSpeakingMessageIndex(messageIndex)), () -> Edt.run(() -> {
+                    if (view.outputArea.getSpeakingMessageIndex() == messageIndex) {
+                        view.outputArea.setSpeakingMessageIndex(-1);
+                    }
+                }), errorMsg -> Edt.run(() -> view.appendMessage(ROLE_SYSTEM, "Voice playback error: " + errorMsg)));
+    }
+
+    public void stopSpeechPlayback() {
+        if (voiceService != null) {
+            voiceService.stopPlayback();
+        }
+        Edt.run(() -> {
+            if (view != null && view.outputArea != null) {
+                view.outputArea.setSpeakingMessageIndex(-1);
+            }
+        });
+    }
+
     synchronized void ensureOwnedExecutorActive() {
         if (turnExecutorOwned && turnExecutor instanceof ExecutorService executorService
                 && executorService.isShutdown()) {
@@ -94,6 +134,7 @@ public final class ChatController implements AutoCloseable {
 
     @Override
     public void close() {
+        stopSpeechPlayback();
         cancelActiveTurnState(true);
         synchronized (this) {
             if (turnExecutorOwned && turnExecutor instanceof ExecutorService executorService) {
@@ -152,6 +193,7 @@ public final class ChatController implements AutoCloseable {
     }
 
     public void stopTurn() {
+        stopSpeechPlayback();
         if (cancelActiveTurnState(true)) {
             Edt.run(() -> {
                 view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
@@ -266,6 +308,7 @@ public final class ChatController implements AutoCloseable {
     }
 
     private void resetSessionState(boolean clearMemory, String systemNotice) {
+        stopSpeechPlayback();
         cancelActiveTurnState(false);
         if (model.isTaskMode() && planService != null) {
             planService.resetWorkflow();
@@ -337,6 +380,11 @@ public final class ChatController implements AutoCloseable {
         deferredTransitionEvent = null;
 
         view.appendMessage(role, message);
+        if (ROLE_AI.equals(role) && voiceService != null && settingsService != null
+                && settingsService.getSettings() != null && settingsService.getSettings().isAutoSpeakResponses()) {
+            int msgIndex = view.outputArea.getMessageCount() - 1;
+            startSpeechPlayback(msgIndex, message);
+        }
         if (transition != null && !model.isTurnCancelled()) {
             view.setLoading(false);
             applyWorkflowTransition(transition);

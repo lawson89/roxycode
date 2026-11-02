@@ -11,14 +11,33 @@ public class ChatHtmlTemplates {
     public static final String COPY_CELL_ID_PREFIX = "copy-cell-";
 
     public static String renderCopyActionHtml(int messageIndex, boolean copied) {
-        if (copied) {
-            return "<span class='copy-feedback'>&#10003; Copied!</span>";
+        return renderCopyActionHtml(messageIndex, copied, false);
+    }
+
+    public static String renderCopyActionHtml(int messageIndex, boolean copied, boolean speaking) {
+        String speakLabel;
+        if (speaking) {
+            speakLabel = "[Stop]";
+        } else {
+            speakLabel = "[Speak]";
         }
-        return "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
+        String speakHtml = "<a class='copy-action' href='speak:" + messageIndex + "'>" + speakLabel + "</a>";
+        String copyHtml;
+        if (copied) {
+            copyHtml = "<span class='copy-feedback'>&#10003; Copied!</span>";
+        } else {
+            copyHtml = "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
+        }
+        return speakHtml + "&nbsp;&nbsp;" + copyHtml;
     }
 
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
             boolean copied) {
+        return renderChatEntry(role, content, timestamp, messageIndex, copied, false);
+    }
+
+    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
+            boolean copied, boolean speaking) {
         String normalizedRole = StringUtils.defaultString(role);
         String safeRole = SwingHtmlUtils.escapeHtml(normalizedRole);
         String indicator = switch (normalizedRole) {
@@ -30,8 +49,8 @@ public class ChatHtmlTemplates {
         String actionCell = "";
         if (ROLE_AI.equals(role) && messageIndex >= 0) {
             actionCell = "<td id='" + COPY_CELL_ID_PREFIX + messageIndex
-                    + "' align='right' valign='middle' nowrap='nowrap'>" + renderCopyActionHtml(messageIndex, copied)
-                    + "</td>";
+                    + "' align='right' valign='middle' nowrap='nowrap'>"
+                    + renderCopyActionHtml(messageIndex, copied, speaking) + "</td>";
         }
 
         return """

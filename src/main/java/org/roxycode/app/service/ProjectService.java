@@ -21,7 +21,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
-@SuppressWarnings("PMD.NullAssignment")
 public class ProjectService {
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
     private static final String PROJECTS_SUBDIR = "projects";

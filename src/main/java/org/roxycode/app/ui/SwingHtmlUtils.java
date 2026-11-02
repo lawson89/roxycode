@@ -30,6 +30,8 @@ import com.vladsch.flexmark.util.data.MutableDataSet;
 import com.vladsch.flexmark.util.html.MutableAttributes;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
@@ -53,6 +55,7 @@ import javax.swing.text.html.BlockView;
 import javax.swing.text.html.CSS;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.ImageView;
 import javax.swing.text.html.InlineView;
 import javax.swing.text.html.ParagraphView;
 import javax.swing.text.html.StyleSheet;
@@ -74,6 +77,8 @@ public final class SwingHtmlUtils {
     private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
     private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
     private static final Color TRANSPARENT_CARET_COLOR = new Color(0, 0, 0, 0);
+    static final int IMAGE_HORIZONTAL_PADDING = 48;
+    private static final String RESPONSIVE_RESIZE_LISTENER_KEY = "roxycode.responsiveResizeListener";
     private static volatile boolean testMode = Boolean.getBoolean("roxycode.testMode");
 
     private static final Cache<Boolean, Theme> RSYNTAX_THEME_CACHE = Caffeine.newBuilder().maximumSize(2).build();
@@ -220,6 +225,55 @@ public final class SwingHtmlUtils {
         kit.setDefaultCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
         textPane.setEditorKit(kit);
         configureReadOnlyCaret(textPane);
+        installResponsiveResizeListener(textPane);
+    }
+
+    private static void installResponsiveResizeListener(JEditorPane textPane) {
+        if (Boolean.TRUE.equals(textPane.getClientProperty(RESPONSIVE_RESIZE_LISTENER_KEY))) {
+            return;
+        }
+        textPane.putClientProperty(RESPONSIVE_RESIZE_LISTENER_KEY, Boolean.TRUE);
+        textPane.addComponentListener(new ComponentAdapter() {
+            private int lastWidth = -1;
+
+            @Override
+            public void componentResized(ComponentEvent e) {
+                int currentWidth = textPane.getWidth();
+                if (currentWidth > 0 && currentWidth != lastWidth) {
+                    lastWidth = currentWidth;
+                    invalidateResponsiveImages(textPane);
+                }
+            }
+        });
+    }
+
+    static void invalidateResponsiveImages(JEditorPane textPane) {
+        if (textPane == null || textPane.getUI() == null) {
+            return;
+        }
+        View rootView = textPane.getUI().getRootView(textPane);
+        if (rootView != null) {
+            invalidateResponsiveImageViews(rootView);
+            if (textPane.getWidth() > 0 && textPane.getHeight() > 0) {
+                rootView.setSize(textPane.getWidth(), textPane.getHeight());
+            }
+            textPane.revalidate();
+            textPane.repaint();
+        }
+    }
+
+    private static void invalidateResponsiveImageViews(View view) {
+        if (view instanceof ResponsiveImageView) {
+            view.preferenceChanged(null, true, true);
+            return;
+        }
+        int count = view.getViewCount();
+        for (int i = 0; i < count; i++) {
+            View child = view.getView(i);
+            if (child != null) {
+                invalidateResponsiveImageViews(child);
+            }
+        }
     }
 
     private static boolean isNoWrap(Element elem) {
@@ -248,10 +302,164 @@ public final class SwingHtmlUtils {
         return defaultSpan;
     }
 
+    static final class ResponsiveImageView extends ImageView {
+
+        ResponsiveImageView(Element elem) {
+            super(elem);
+            setLoadsSynchronously(true);
+        }
+
+        @Override
+        public void setParent(View parent) {
+            super.setParent(parent);
+            if (parent != null) {
+                super.getPreferredSpan(View.X_AXIS);
+            }
+        }
+
+        @Override
+        public float getMinimumSpan(int axis) {
+            if (axis == View.X_AXIS) {
+                return 0f;
+            }
+            return getPreferredSpan(axis);
+        }
+
+        @Override
+        public float getPreferredSpan(int axis) {
+            int intrinsicWidth = resolveIntrinsicDimension(View.X_AXIS);
+            int intrinsicHeight = resolveIntrinsicDimension(View.Y_AXIS);
+            if (intrinsicWidth <= 0 || intrinsicHeight <= 0) {
+                return super.getPreferredSpan(axis);
+            }
+            int availableWidth = resolveAvailableWidth();
+            boolean scaledDown = availableWidth > 0 && intrinsicWidth > availableWidth;
+            if (axis == View.X_AXIS) {
+                if (scaledDown) {
+                    return availableWidth;
+                }
+                return intrinsicWidth;
+            }
+            if (axis == View.Y_AXIS) {
+                if (scaledDown) {
+                    double scale = (double) availableWidth / intrinsicWidth;
+                    return Math.max(1f, Math.round(intrinsicHeight * scale));
+                }
+                return intrinsicHeight;
+            }
+            return super.getPreferredSpan(axis);
+        }
+
+        @Override
+        public float getMaximumSpan(int axis) {
+            return getPreferredSpan(axis);
+        }
+
+        @Override
+        public void paint(Graphics g, Shape a) {
+            Image image = getImage();
+            if (image == null || a == null) {
+                super.paint(g, a);
+                return;
+            }
+            Rectangle bounds;
+            if (a instanceof Rectangle rect) {
+                bounds = rect;
+            } else {
+                bounds = a.getBounds();
+            }
+            if (bounds.width <= 0 || bounds.height <= 0) {
+                return;
+            }
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                g2.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height, null);
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        int resolveIntrinsicDimension(int axis) {
+            HTML.Attribute attr;
+            if (axis == View.X_AXIS) {
+                attr = HTML.Attribute.WIDTH;
+            } else {
+                attr = HTML.Attribute.HEIGHT;
+            }
+            AttributeSet attrs = getElement().getAttributes();
+            int fromAttr = parsePositiveIntAttribute(attrs, attr);
+            if (fromAttr > 0) {
+                return fromAttr;
+            }
+            Image image = getImage();
+            if (image != null) {
+                int fromImage;
+                if (axis == View.X_AXIS) {
+                    fromImage = image.getWidth(null);
+                } else {
+                    fromImage = image.getHeight(null);
+                }
+                if (fromImage > 0) {
+                    return fromImage;
+                }
+            }
+            return Math.round(super.getPreferredSpan(axis));
+        }
+
+        int resolveAvailableWidth() {
+            Container container = getContainer();
+            if (container == null) {
+                return 0;
+            }
+            int width = container.getWidth();
+            if (width <= 0 && container.getParent() != null) {
+                width = container.getParent().getWidth();
+            }
+            if (width <= 0) {
+                return 0;
+            }
+            Insets insets = container.getInsets();
+            int horizontalInsets = 0;
+            if (insets != null) {
+                horizontalInsets = insets.left + insets.right;
+            }
+            int available = width - horizontalInsets - IMAGE_HORIZONTAL_PADDING;
+            return Math.max(0, available);
+        }
+
+        private static int parsePositiveIntAttribute(AttributeSet attrs, HTML.Attribute attr) {
+            if (attrs == null) {
+                return -1;
+            }
+            Object raw = attrs.getAttribute(attr);
+            if (raw == null) {
+                return -1;
+            }
+            String text = raw.toString().trim();
+            if (text.endsWith("px") || text.endsWith("PX")) {
+                text = text.substring(0, text.length() - 2).trim();
+            }
+            try {
+                int value = Integer.parseInt(text);
+                if (value > 0) {
+                    return value;
+                }
+            } catch (NumberFormatException ignored) {
+                // Ignore non-integer width/height attribute
+            }
+            return -1;
+        }
+    }
+
     private static final class WrappingHtmlFactory extends HTMLEditorKit.HTMLFactory {
         @Override
         public View create(Element elem) {
             View view = super.create(elem);
+            if (view instanceof ImageView) {
+                return new ResponsiveImageView(elem);
+            }
             if (isNoWrap(elem)) {
                 return view;
             }
