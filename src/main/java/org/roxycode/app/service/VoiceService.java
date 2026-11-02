@@ -75,6 +75,12 @@ public class VoiceService implements AutoCloseable {
     private static final String BT = String.valueOf((char) 96);
     private static final int AUDIO_BUFFER_SIZE = 4096;
     private static final int WAV_HEADER_OVERHEAD = 44;
+    private static final int BYTES_PER_PCM_SAMPLE = SAMPLE_SIZE_BITS / 8;
+    private static final int MIN_WAV_HEADER_BYTES = 12;
+    private static final int LOW_BYTE_MASK = 0xFF;
+    static final int PLAYBACK_FADE_OUT_SAMPLES = 360;
+    static final int PLAYBACK_TRAILING_SILENCE_SAMPLES = 1440;
+    static final int PLAYBACK_TRAILING_SILENCE_BYTES = PLAYBACK_TRAILING_SILENCE_SAMPLES * BYTES_PER_PCM_SAMPLE;
     private static final Pattern FENCED_CODE_BLOCK_PATTERN = Pattern.compile("(?s)" + BT + "{3}.*?" + BT + "{3}");
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
     private static final Pattern MARKDOWN_LINK_PATTERN = Pattern
@@ -372,11 +378,12 @@ public class VoiceService implements AutoCloseable {
         }
         String ttsModel = resolveTtsModel();
         String voiceName = resolveTtsVoice();
-        byte[] pcmBytes = ttsClient.synthesize(apiKey, ttsModel, voiceName, sanitizedText);
+        byte[] rawAudioBytes = ttsClient.synthesize(apiKey, ttsModel, voiceName, sanitizedText);
         if (activePlaybackId != playbackId || Thread.currentThread().isInterrupted()) {
             return;
         }
-        if (pcmBytes == null || pcmBytes.length == 0) {
+        byte[] pcmBytes = preparePcmForPlayback(rawAudioBytes);
+        if (pcmBytes.length == 0) {
             throw new IllegalStateException("Gemini TTS returned empty audio data.");
         }
 
@@ -395,8 +402,57 @@ public class VoiceService implements AutoCloseable {
             }
             if (activePlaybackId == playbackId && !Thread.currentThread().isInterrupted()) {
                 line.drain();
+                line.stop();
             }
         }
+    }
+
+    static byte[] preparePcmForPlayback(byte[] rawAudioBytes) {
+        if (rawAudioBytes == null || rawAudioBytes.length == 0) {
+            return new byte[0];
+        }
+        byte[] unwrapped = unwrapWavIfPresent(rawAudioBytes);
+        int alignedLength = unwrapped.length - (unwrapped.length % BYTES_PER_PCM_SAMPLE);
+        if (alignedLength <= 0) {
+            return new byte[0];
+        }
+        byte[] prepared = new byte[alignedLength + PLAYBACK_TRAILING_SILENCE_BYTES];
+        System.arraycopy(unwrapped, 0, prepared, 0, alignedLength);
+
+        int totalSamples = alignedLength / BYTES_PER_PCM_SAMPLE;
+        int fadeSamples = Math.min(PLAYBACK_FADE_OUT_SAMPLES, totalSamples);
+        if (fadeSamples > 0) {
+            int fadeStartSample = totalSamples - fadeSamples;
+            for (int i = 0; i < fadeSamples; i++) {
+                int byteIndex = (fadeStartSample + i) * BYTES_PER_PCM_SAMPLE;
+                int low = prepared[byteIndex] & LOW_BYTE_MASK;
+                int high = prepared[byteIndex + 1];
+                short sample = (short) ((high << 8) | low);
+                double gain = (double) (fadeSamples - 1 - i) / (double) fadeSamples;
+                short faded = (short) Math.round(sample * gain);
+                prepared[byteIndex] = (byte) (faded & LOW_BYTE_MASK);
+                prepared[byteIndex + 1] = (byte) ((faded >> 8) & LOW_BYTE_MASK);
+            }
+        }
+        return prepared;
+    }
+
+    private static byte[] unwrapWavIfPresent(byte[] audioBytes) {
+        if (audioBytes.length >= MIN_WAV_HEADER_BYTES && audioBytes[0] == 'R' && audioBytes[1] == 'I'
+                && audioBytes[2] == 'F' && audioBytes[3] == 'F' && audioBytes[8] == 'W' && audioBytes[9] == 'A'
+                && audioBytes[10] == 'V' && audioBytes[11] == 'E') {
+            try (AudioInputStream ais = AudioSystem.getAudioInputStream(new ByteArrayInputStream(audioBytes))) {
+                return ais.readAllBytes();
+            } catch (Exception e) {
+                log.debug("Failed to parse WAV container, falling back to raw PCM: {}", e.getMessage());
+                if (audioBytes.length > WAV_HEADER_OVERHEAD) {
+                    byte[] stripped = new byte[audioBytes.length - WAV_HEADER_OVERHEAD];
+                    System.arraycopy(audioBytes, WAV_HEADER_OVERHEAD, stripped, 0, stripped.length);
+                    return stripped;
+                }
+            }
+        }
+        return audioBytes;
     }
 
     public synchronized void stopPlayback() {

@@ -193,7 +193,7 @@ class VoiceServiceTest {
         assertEquals(0, VoiceService.extractInlineAudioBytes(null).length);
 
         ByteArrayOutputStream playedBytes = new ByteArrayOutputStream();
-        AtomicBoolean drained = new AtomicBoolean(false);
+        List<String> lifecycleEvents = new java.util.ArrayList<>();
         AtomicReference<String> usedVoice = new AtomicReference<>();
 
         AtomicReference<String> usedTtsModel = new AtomicReference<>();
@@ -206,6 +206,7 @@ class VoiceServiceTest {
         voiceService.setPlaybackLineSupplier(format -> new VoiceService.AudioPlaybackLine() {
             @Override
             public void start() {
+                lifecycleEvents.add("start");
             }
 
             @Override
@@ -216,15 +217,17 @@ class VoiceServiceTest {
 
             @Override
             public void drain() {
-                drained.set(true);
+                lifecycleEvents.add("drain");
             }
 
             @Override
             public void stop() {
+                lifecycleEvents.add("stop");
             }
 
             @Override
             public void close() {
+                lifecycleEvents.add("close");
             }
         });
 
@@ -236,10 +239,10 @@ class VoiceServiceTest {
 
         assertTrue(started.get());
         assertTrue(finished.get());
-        assertTrue(drained.get());
+        assertEquals(List.of("start", "drain", "stop", "close"), lifecycleEvents);
         assertEquals(VoiceService.TTS_MODEL, usedTtsModel.get());
         assertEquals("Aoede", usedVoice.get());
-        assertArrayEquals(expectedPcm, playedBytes.toByteArray());
+        assertArrayEquals(VoiceService.preparePcmForPlayback(expectedPcm), playedBytes.toByteArray());
 
         CountDownLatch writeStarted = new CountDownLatch(1);
         CountDownLatch allowWriteFinish = new CountDownLatch(1);
@@ -285,5 +288,53 @@ class VoiceServiceTest {
         assertFalse(voiceService.isPlaying());
         assertTrue(stoppedLine.get());
         cancelFuture.exceptionally(ex -> null).get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void testPreparePcmForPlaybackUnwrapsWavAlignsFadesTailAndAppendsSilence() {
+        assertEquals(0, VoiceService.preparePcmForPlayback(null).length);
+        assertEquals(0, VoiceService.preparePcmForPlayback(new byte[0]).length);
+        assertEquals(0, VoiceService.preparePcmForPlayback(new byte[]{42}).length);
+
+        int sampleCount = 500;
+        byte[] rawPcmWithOddByte = new byte[sampleCount * 2 + 1];
+        for (int i = 0; i < sampleCount; i++) {
+            short amplitude = 10000;
+            rawPcmWithOddByte[i * 2] = (byte) (amplitude & 0xFF);
+            rawPcmWithOddByte[i * 2 + 1] = (byte) ((amplitude >> 8) & 0xFF);
+        }
+        rawPcmWithOddByte[rawPcmWithOddByte.length - 1] = 0x7F;
+
+        byte[] prepared = VoiceService.preparePcmForPlayback(rawPcmWithOddByte);
+        int expectedLength = sampleCount * 2 + VoiceService.PLAYBACK_TRAILING_SILENCE_BYTES;
+        assertEquals(expectedLength, prepared.length);
+        assertEquals(0, prepared.length % 2);
+
+        short firstSample = readLeShort(prepared, 0);
+        int preFadeSampleIdx = sampleCount - VoiceService.PLAYBACK_FADE_OUT_SAMPLES - 1;
+        short lastUnfadedSample = readLeShort(prepared, preFadeSampleIdx * 2);
+        short midFadeSample = readLeShort(prepared, (sampleCount - VoiceService.PLAYBACK_FADE_OUT_SAMPLES / 2) * 2);
+        short finalAudioSample = readLeShort(prepared, (sampleCount - 1) * 2);
+
+        assertEquals(10000, firstSample);
+        assertEquals(10000, lastUnfadedSample);
+        assertTrue(midFadeSample > 0 && midFadeSample < 10000);
+        assertEquals(0, finalAudioSample);
+
+        for (int i = sampleCount * 2; i < prepared.length; i++) {
+            assertEquals(0, prepared[i]);
+        }
+
+        byte[] alignedPcm = new byte[sampleCount * 2];
+        System.arraycopy(rawPcmWithOddByte, 0, alignedPcm, 0, alignedPcm.length);
+        byte[] wavWrapped = VoiceService.encodePcmToWav(alignedPcm, VoiceService.PLAYBACK_FORMAT);
+        byte[] preparedFromWav = VoiceService.preparePcmForPlayback(wavWrapped);
+        assertArrayEquals(prepared, preparedFromWav);
+    }
+
+    private static short readLeShort(byte[] bytes, int byteOffset) {
+        int low = bytes[byteOffset] & 0xFF;
+        int high = bytes[byteOffset + 1];
+        return (short) ((high << 8) | low);
     }
 }
