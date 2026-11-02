@@ -52,3 +52,4 @@ code { font-family: monospace; background-color: #2c313a; color: #e2e8f0; }
 .plan-step-done { color: #4caf50; }
 .plan-step-completed { text-decoration: line-through; color: #888888; }
 .plan-log-user { color: #569cd6; }
+.diagram-container { background-color: #252526; border-color: #3c3c3c; border-style: solid; border-width: 1px; margin-top: 6px; margin-bottom: 6px; padding: 8px; }

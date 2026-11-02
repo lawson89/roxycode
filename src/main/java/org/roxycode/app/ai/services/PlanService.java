@@ -208,7 +208,7 @@ public class PlanService {
         }
     }
 
-    @AgentDoc(value = "Marks a specific technical implementation step as completed using its 0-based index. Call this immediately after a step is verified rather than deferring to the end of the phase.", phases = {
+    @AgentDoc(value = "Marks a specific technical implementation step (0..N) as completed using its 0-based index. Call this in the same executeJexl turn immediately after applying the file edits for that step (build and test verification steps are marked automatically by buildToolService).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepCompleted(0)"})
     public synchronized String markStepCompleted(
             @AgentDoc("The index of the step (0-based). Must be valid for the current plan") int index) {
@@ -216,7 +216,7 @@ public class PlanService {
         return updateStepsStatus(new int[]{index}, true);
     }
 
-    @AgentDoc(value = "Marks multiple technical implementation steps as completed in a single batch call (0-based indices).", phases = {
+    @AgentDoc(value = "Marks multiple technical implementation steps (0..N) as completed in a single batch call (0-based indices). Call this in the same executeJexl turn immediately after applying the file edits for those steps (build and test verification steps are marked automatically by buildToolService).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepsCompleted([0, 1])"})
     public synchronized String markStepsCompleted(
             @AgentDoc("Array of 0-based step indices to mark as completed") int... indices) {
@@ -247,6 +247,9 @@ public class PlanService {
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
         for (int index : indices) {
             validateStepIndex(index, steps.size());
+            if (completed && currentPhase == WorkflowPhase.CODE) {
+                validateManualCompletionInCodePhase(index, steps.get(index).description());
+            }
         }
         for (int index : indices) {
             steps.set(index, new ImplementationPlan.TechStep(steps.get(index).description(), completed));
@@ -273,6 +276,17 @@ public class PlanService {
         if (index < 0 || index >= stepCount) {
             throw new IllegalArgumentException(String
                     .format("Error: Invalid step index %d. Valid 0-based indices are 0..%d.", index, stepCount - 1));
+        }
+    }
+
+    private static void validateManualCompletionInCodePhase(int index, String description) {
+        if (ImplementationPlan.isCompileStep(description) || ImplementationPlan.isUnitTestStep(description)) {
+            throw new IllegalStateException("Error: Step " + index + " ('" + description
+                    + "') cannot be marked completed manually in CODE phase. Run buildToolService.compile(), buildToolService.runTests(), or buildToolService.buildAndTest() to satisfy build and test verification steps.");
+        }
+        if (ImplementationPlan.isCodeReviewStep(description)) {
+            throw new IllegalStateException("Error: Step " + index + " ('" + description
+                    + "') cannot be marked completed in CODE phase. Automated code review is verified in the REVIEW phase.");
         }
     }
 
@@ -397,7 +411,7 @@ public class PlanService {
                 throw new IllegalStateException(
                         "Error: Cannot transition from CODE to REVIEW. All implementation and build/test verification steps must be marked completed before requesting review. Incomplete steps: ["
                                 + String.join(", ", incomplete)
-                                + "]. Complete and mark them via markStepCompleted or markStepsCompleted first.");
+                                + "]. Mark implementation steps via markStepCompleted or markStepsCompleted, and run buildToolService.compile() and buildToolService.runTests() (or buildToolService.buildAndTest()) for build/test verification steps.");
             }
         } else if (from == WorkflowPhase.REVIEW && to == WorkflowPhase.PLAN) {
             List<String> incomplete = currentPlan.collectIncompleteSteps(false);

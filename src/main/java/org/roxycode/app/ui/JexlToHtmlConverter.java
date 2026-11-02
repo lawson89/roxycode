@@ -18,7 +18,8 @@ public class JexlToHtmlConverter {
             .compile("[a-zA-Z_][a-zA-Z0-9_]*[sS]ervice[a-zA-Z0-9_]*");
 
     private static final Pattern PROSE_LANG_PATTERN = Pattern.compile(
-            "(?<![a-zA-Z0-9_-])language-(?:markdown|md|text|plaintext|txt)(?![a-zA-Z0-9_-])", Pattern.CASE_INSENSITIVE);
+            "(?<![a-zA-Z0-9_-])language-(?:markdown|md|text|plaintext|txt|ascii|diagram|flowchart|tree|plantuml|puml|ditaa)(?![a-zA-Z0-9_-])",
+            Pattern.CASE_INSENSITIVE);
 
     public static String convert(String script) {
         if (script == null) {

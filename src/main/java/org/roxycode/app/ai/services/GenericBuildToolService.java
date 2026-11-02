@@ -461,12 +461,139 @@ public class GenericBuildToolService {
         Path configPath = getConfigPath();
         if (Files.exists(configPath)) {
             try {
-                return tomlMapper.readValue(configPath.toFile(), BuildConfig.class);
+                return parseConfig(Files.readString(configPath, StandardCharsets.UTF_8));
             } catch (NoSuchFileException | FileNotFoundException e) {
                 log.warn("Build config file not found at {}, falling back to template", configPath);
             }
         }
-        return tomlMapper.readValue(loadDefaultTemplateContent(), BuildConfig.class);
+        return parseConfig(loadDefaultTemplateContent());
+    }
+
+    BuildConfig parseConfig(String rawToml) throws IOException {
+        String content = StringUtils.defaultString(rawToml);
+        return tomlMapper.readValue(sanitizeTomlEscapes(content), BuildConfig.class);
+    }
+
+    static String sanitizeTomlEscapes(String toml) {
+        if (toml == null || toml.indexOf((char) 92) < 0) {
+            return StringUtils.defaultString(toml);
+        }
+        StringBuilder sb = new StringBuilder(toml.length() + 16);
+        int len = toml.length();
+        boolean inBasic = false;
+        boolean inMultilineBasic = false;
+        boolean inLiteral = false;
+        boolean inMultilineLiteral = false;
+        boolean inComment = false;
+        int i = 0;
+        while (i < len) {
+            char c = toml.charAt(i);
+            if (inComment) {
+                sb.append(c);
+                if (c == (char) 10 || c == (char) 13) {
+                    inComment = false;
+                }
+                i++;
+            } else if (inLiteral) {
+                sb.append(c);
+                if (c == (char) 39 || c == (char) 10 || c == (char) 13) {
+                    inLiteral = false;
+                }
+                i++;
+            } else if (inMultilineLiteral) {
+                if (startsWithTripleQuote(toml, i, (char) 39)) {
+                    sb.append("'''");
+                    inMultilineLiteral = false;
+                    i += 3;
+                } else {
+                    sb.append(c);
+                    i++;
+                }
+            } else if (inBasic || inMultilineBasic) {
+                if (inMultilineBasic && startsWithTripleQuote(toml, i, (char) 34)) {
+                    sb.append((char) 34).append((char) 34).append((char) 34);
+                    inMultilineBasic = false;
+                    i += 3;
+                } else if (inBasic && (c == (char) 34 || c == (char) 10 || c == (char) 13)) {
+                    sb.append(c);
+                    inBasic = false;
+                    i++;
+                } else if (c == (char) 92 && i + 1 < len) {
+                    char next = toml.charAt(i + 1);
+                    if (isValidTomlEscape(toml, i + 1, inMultilineBasic)) {
+                        sb.append((char) 92).append(next);
+                        i += 2;
+                    } else {
+                        sb.append((char) 92).append((char) 92);
+                        i++;
+                    }
+                } else {
+                    sb.append(c);
+                    i++;
+                }
+            } else if (c == '#') {
+                inComment = true;
+                sb.append(c);
+                i++;
+            } else if (startsWithTripleQuote(toml, i, (char) 34)) {
+                inMultilineBasic = true;
+                sb.append((char) 34).append((char) 34).append((char) 34);
+                i += 3;
+            } else if (startsWithTripleQuote(toml, i, (char) 39)) {
+                inMultilineLiteral = true;
+                sb.append("'''");
+                i += 3;
+            } else if (c == (char) 34) {
+                inBasic = true;
+                sb.append(c);
+                i++;
+            } else if (c == (char) 39) {
+                inLiteral = true;
+                sb.append(c);
+                i++;
+            } else {
+                sb.append(c);
+                i++;
+            }
+        }
+        return sb.toString();
+    }
+
+    private static boolean startsWithTripleQuote(String text, int index, char quoteChar) {
+        return index + 2 < text.length() && text.charAt(index) == quoteChar && text.charAt(index + 1) == quoteChar
+                && text.charAt(index + 2) == quoteChar;
+    }
+
+    private static boolean isValidTomlEscape(String text, int escapeCharIndex, boolean multilineBasic) {
+        char next = text.charAt(escapeCharIndex);
+        if (next == 'b' || next == 't' || next == 'n' || next == 'f' || next == 'r' || next == (char) 34
+                || next == (char) 92) {
+            return true;
+        }
+        if (next == 'u') {
+            return hasHexDigits(text, escapeCharIndex + 1, 4);
+        }
+        if (next == 'U') {
+            return hasHexDigits(text, escapeCharIndex + 1, 8);
+        }
+        if (multilineBasic && (next == ' ' || next == (char) 9 || next == (char) 10 || next == (char) 13)) {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean hasHexDigits(String text, int start, int count) {
+        if (start + count > text.length()) {
+            return false;
+        }
+        for (int i = 0; i < count; i++) {
+            char ch = text.charAt(start + i);
+            boolean isHex = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
+            if (!isHex) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")
@@ -590,9 +717,11 @@ public class GenericBuildToolService {
         if (!projectService.hasActiveProject()) {
             return;
         }
+        String normalizedContent = StringUtils.defaultString(content);
+        parseConfig(normalizedContent);
         stopActiveContainer();
         Path configPath = getConfigPath();
         PathUtils.createParentDirectories(configPath);
-        Files.writeString(configPath, content, StandardCharsets.UTF_8);
+        Files.writeString(configPath, normalizedContent, StandardCharsets.UTF_8);
     }
 }

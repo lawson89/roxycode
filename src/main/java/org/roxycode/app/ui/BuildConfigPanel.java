@@ -397,12 +397,12 @@ public final class BuildConfigPanel extends JPanel {
         saveButton.setEnabled(false);
         CompletableFuture<Void> future = Edt.runAsync(() -> {
             try {
+                if (buildToolService != null) {
+                    buildToolService.saveConfigContent(contentToSave);
+                }
                 if (projectService != null && projectService.hasActiveProject()) {
                     projectService.setProjectGeminiModel(modelOverrideToSave);
                     projectService.setBuildConfirmed(true);
-                }
-                if (buildToolService != null) {
-                    buildToolService.saveConfigContent(contentToSave);
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);

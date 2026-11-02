@@ -65,7 +65,10 @@ class PlanServiceTest {
 
         assertContainsAll(service.markStepsCompleted(0, 1), "Marked steps [0, 1] completed.");
         assertContainsAll(service.markStepsIncomplete(0, 1), "Marked steps [0, 1] incomplete.");
-        service.markStepsCompleted(0, 2);
+        service.markStepsCompleted(0, 1);
+        assertIllegalState(() -> service.markStepCompleted(2), "buildToolService.compile()");
+        assertIllegalState(() -> service.markStepCompleted(3), "buildToolService.runTests()");
+        assertIllegalState(() -> service.markStepCompleted(4), "REVIEW phase");
         service.addHandoffLogEntry("Finished Step 1 before blocker");
         service.onFileChanged(new FileChangedEvent("src/Step1.java", FileChangedEvent.ChangeType.CREATED));
 

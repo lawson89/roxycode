@@ -5,14 +5,14 @@ compile = "cmake -B build && cmake --build build"
 build = "cmake -B build && cmake --build build"
 test_all = "ctest --test-dir build --output-on-failure"
 test_single = "ctest --test-dir build -R {testName} --output-on-failure"
-# Examples: "clang-tidy -p build", "cppcheck --enable=all ."
-lint = ""
-# Examples: "clang-tidy -p build {file}", "cppcheck {file}"
-lint_single = ""
+# Examples: 'clang-tidy -p build', 'cppcheck --enable=all .'
+lint = ''
+# Examples: 'clang-tidy -p build {file}', 'cppcheck {file}'
+lint_single = ''
 # Example: "find src include -name '*.cpp' -o -name '*.h' | xargs clang-format -i"
-format = ""
-# Example: "clang-format -i {file}"
-format_single = ""
+format = ''
+# Example: 'clang-format -i {file}'
+format_single = ''
 
 [env]
 ROXY_CODE = "true"

@@ -119,6 +119,8 @@ class BuildConfigPanelTest {
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         assertEquals("gemini-3.5-pro", ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
 
+        clearInvocations(projectService);
+        when(projectService.isBuildConfirmed()).thenReturn(false);
         AtomicReference<String> errorMsg = new AtomicReference<>();
         panel.setErrorDialogPresenter(errorMsg::set);
         doThrow(new IOException("Disk full")).when(buildToolService).saveConfigContent(anyString());
@@ -128,6 +130,7 @@ class BuildConfigPanelTest {
 
         assertTrue(panel.saveButton.isEnabled());
         assertEquals("Error saving config: Disk full", errorMsg.get());
+        verify(projectService, never()).setBuildConfirmed(true);
     }
 
     @Test

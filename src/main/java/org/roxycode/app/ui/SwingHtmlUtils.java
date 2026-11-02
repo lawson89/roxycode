@@ -16,7 +16,6 @@ import com.vladsch.flexmark.html.renderer.LinkResolverContext;
 import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.ast.FencedCodeBlock;
 import com.vladsch.flexmark.ast.IndentedCodeBlock;
-import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.html.HtmlWriter;
 import com.vladsch.flexmark.html.renderer.NodeRenderer;
 import com.vladsch.flexmark.html.renderer.NodeRendererContext;
@@ -39,6 +38,7 @@ import java.io.UncheckedIOException;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.Optional;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -474,6 +474,13 @@ public final class SwingHtmlUtils {
             String language = "";
             if (node instanceof FencedCodeBlock fenced) {
                 language = fenced.getInfo().toString();
+            }
+            if (PlantUmlRenderer.isDiagramLanguage(language)) {
+                Optional<String> diagramHtml = PlantUmlRenderer.renderDiagramHtml(code, language, FlatLaf.isLafDark());
+                if (diagramHtml.isPresent()) {
+                    html.raw(diagramHtml.get());
+                    return;
+                }
             }
             html.raw(JexlToHtmlConverter.highlight(code, language));
         }

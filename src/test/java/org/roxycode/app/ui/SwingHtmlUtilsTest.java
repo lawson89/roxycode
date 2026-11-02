@@ -45,4 +45,30 @@ class SwingHtmlUtilsTest {
         assertContainsAll(rendered, "md-table", "md-th", "md-td", "right",
                 "<table><tr><td>Inline raw HTML table</td></tr></table>", "&lt;table&gt;");
     }
+
+    @Test
+    void testRenderMarkdownPlantUmlAndDitaaDiagramsWithFallbackOnInvalidSyntax() {
+        String validDiagramMd = """
+                ~~~plantuml
+                Alice -> Bob: Hello
+                ~~~
+
+                ~~~ditaa
+                +-----+
+                | Box |
+                +-----+
+                ~~~
+                """;
+        String renderedValid = SwingHtmlUtils.renderMarkdownToHtml(validDiagramMd);
+        assertContainsAll(renderedValid, "diagram-container", "<img src=", "file:");
+
+        String invalidDiagramMd = """
+                ~~~plantuml
+                invalid plantuml syntax @@@
+                ~~~
+                """;
+        String renderedInvalid = SwingHtmlUtils.renderMarkdownToHtml(invalidDiagramMd);
+        assertContainsAll(renderedInvalid, "<pre class='jexl-highlight'><code>", "invalid plantuml syntax @@@");
+        assertFalse(renderedInvalid.contains("mtk-keyword"));
+    }
 }

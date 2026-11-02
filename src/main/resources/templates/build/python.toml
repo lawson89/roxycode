@@ -1,18 +1,18 @@
 [commands]
 install = "pip install -r requirements.txt"
 clean = "find . -type d -name __pycache__ -exec rm -rf {} +"
-compile = ""
-build = ""
+compile = ''
+build = ''
 test_all = "pytest"
 test_single = "pytest -k {testName}"
-# Examples: "ruff check .", "flake8 .", "pylint src"
-lint = ""
-# Examples: "ruff check {file}", "flake8 {file}", "pylint {file}"
-lint_single = ""
-# Examples: "ruff format .", "black ."
-format = ""
-# Examples: "ruff format {file}", "black {file}"
-format_single = ""
+# Examples: 'ruff check .', 'flake8 .', 'pylint src'
+lint = ''
+# Examples: 'ruff check {file}', 'flake8 {file}', 'pylint {file}'
+lint_single = ''
+# Examples: 'ruff format .', 'black .'
+format = ''
+# Examples: 'ruff format {file}', 'black {file}'
+format_single = ''
 
 [env]
 ROXY_CODE = "true"

@@ -337,4 +337,34 @@ class GenericBuildToolServiceTest {
         assertTrue(realPlanService.requestReview("All steps verified").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, realPlanService.getCurrentPhase());
     }
+
+    @Test
+    void testSanitizeTomlEscapesAndSaveValidation() throws IOException {
+        String bs = String.valueOf((char) 92);
+        String dq = String.valueOf((char) 34);
+        String nl = String.valueOf((char) 10);
+        String rawTomlWithUnescapedDoubleQuotedRegex = "[commands]" + nl + "compile = " + dq + "./mvnw test-compile"
+                + dq + nl + "lint_single = " + dq + "./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs
+                + "Q{file}" + bs + "E$" + dq + nl + "format_single = " + dq + "./mvnw spotless:apply -DspotlessFiles=.*"
+                + bs + "Q{file}" + bs + "E$" + dq + nl + nl + "[parse]" + nl + "error_regex = " + dq + bs + "[ERROR"
+                + bs + "].*" + bs + "[" + bs + "d+," + bs + "d+" + bs + "]|PMD Failure:" + dq + nl;
+        writeBuildToml(rawTomlWithUnescapedDoubleQuotedRegex);
+
+        GenericBuildToolService.BuildConfig loaded = buildToolService.loadConfig();
+        assertEquals("./mvnw test-compile", loaded.commands().compile());
+        assertEquals("./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs + "Q{file}" + bs + "E$",
+                loaded.commands().lintSingle());
+        assertEquals("./mvnw spotless:apply -DspotlessFiles=.*" + bs + "Q{file}" + bs + "E$",
+                loaded.commands().formatSingle());
+        assertEquals(bs + "[ERROR" + bs + "].*" + bs + "[" + bs + "d+," + bs + "d+" + bs + "]|PMD Failure:",
+                loaded.parse().errorRegex());
+
+        assertDoesNotThrow(() -> buildToolService.saveConfigContent(rawTomlWithUnescapedDoubleQuotedRegex));
+
+        Path configPath = projectDataDir.resolve("build.toml");
+        String beforeInvalidSave = Files.readString(configPath);
+        assertThrows(IOException.class,
+                () -> buildToolService.saveConfigContent("[commands" + nl + "compile = " + dq + "unclosed"));
+        assertEquals(beforeInvalidSave, Files.readString(configPath));
+    }
 }

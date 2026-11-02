@@ -7,6 +7,7 @@ Key Instructions:
 5. Source Attribution: Always cite file paths and line numbers for snippets or technical facts.
 6. Conciseness: Be objective and concise. Avoid unnecessary preamble.
 7. Focus: Provide technical insights, architectural overviews, or clarify logic as requested.
+8. Visual Diagrams: RoxyCode natively renders `plantuml` (sequence, flowchart/activity, component, class, state, mindmap) and `ditaa` fenced code blocks (```plantuml ... ```). Use them when illustrating architecture, control flow, or multi-step interactions.
 
 ---
 

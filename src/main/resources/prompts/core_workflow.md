@@ -49,8 +49,8 @@ The workflow follows a structured sequence:
 * **Access Mode:** Full editing capabilities enabled. `fileEditorService` is exclusively unlocked in `executeJexl` during this phase.
 * **Execution Loop:**
   1. Aggressively batch multiple related implementation steps using `fileEditorService` (`writeFile`, `replaceBlock`, `replaceBlocks`, `replaceLines`, `insertAtLine`) inside a single `executeJexl` turn.
-  2. Immediately verify every batch of changes with `buildToolService.compile()` and `buildToolService.runTests()` (or `runSingleTest()`) inside `executeJexl`.
-  3. Immediately check off whichever feature-specific technical steps (`0..N`) were completed in that turn using `planService.markStepCompleted(index)` or `planService.markStepsCompleted([0, 1])` inside the same `executeJexl` script once build/test verification succeeds, rather than waiting until all work is finished at the end of the phase. Running `buildToolService.compile()`, `buildToolService.runTests()`, or `buildToolService.buildAndTest()` automatically marks the `"Code compiles successfully"` and `"Unit tests pass"` verification steps completed (and editing any file resets them until re-verified).
+  2. In every `executeJexl` turn where you apply the file edits for one or more implementation steps (`0..N`), **immediately** call `planService.markStepCompleted(index)` or `planService.markStepsCompleted([0, 1])` at the end of that **same** `executeJexl` script (even before running the final full build/test suite) so the Implementation Plan UI reflects step-by-step progress in real time alongside `## Changes`.
+  3. Verify your changes with `buildToolService.compile()` and `buildToolService.runTests()` (or `buildToolService.buildAndTest()`) inside `executeJexl`. `"Code compiles successfully"` and `"Unit tests pass"` cannot be marked manually in `CODE` phase—they are automatically marked completed by `buildToolService.compile()`, `buildToolService.runTests()`, or `buildToolService.buildAndTest()` (and automatically reset to incomplete if any file is subsequently modified).
 * **Zero Broken Builds:** Never proceed with failing tests or broken compilation.
 * **Transition:** Once all technical steps are verified and marked complete, call `planService.requestReview(reason)` via `executeJexl` to autonomously transition to the REVIEW phase.
 
@@ -81,5 +81,6 @@ RoxyCode provides a persistent Two-Tier Agent Memory system accessible via `memo
 3. **Sandbox Rules:** All workspace and workflow operations execute through the sandboxed JEXL interpreter (`executeJexl`), including `planService` (`submitPlan`, `markStepCompleted`, `markStepsCompleted`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`). Direct instantiation of unauthorized Java classes in JEXL is forbidden.
 4. **Phase Integrity:** Mutation operations (`fileEditorService`) can only be performed in the CODE phase; attempting edits in other phases throws an exception.
 5. **Turn Efficiency:** Batch related workspace and `planService` operations (reading, editing, compiling, marking steps completed) into cohesive JEXL scripts to minimize round-trip turns.
+6. **Visual Diagrams (`plantuml` / `ditaa`):** RoxyCode natively renders `plantuml` (`puml`) and `ditaa` fenced Markdown code blocks as theme-aware diagrams (sequence, flowchart/activity, component, class, state, mindmap). Use them when illustrating architecture, control flow, or multi-step interactions.
 
 ---
