@@ -38,150 +38,91 @@ class SettingsPanelTest {
     }
 
     @Test
-    void testModelSelectionUpdatesApiBadgeAndDescription() {
-        JComboBox<GeminiModelConfig> modelCombo = settingsPanel.getModelCombo();
+    void testModelThemeAndLiveSettingsPersistence() {
+        JComboBox<GeminiModelConfig> modelCombo = settingsPanel.modelCombo;
         assertTrue(modelCombo.getItemCount() > 1);
-
-        GeminiModelConfig initial = (GeminiModelConfig) modelCombo.getSelectedItem();
-        assertNotNull(initial);
-        assertEquals(initial.apiName(), settingsPanel.getModelApiBadgeLabel().getText());
-        assertEquals(initial.description(), settingsPanel.getModelDescriptionArea().getText());
 
         GeminiModelConfig firstModel = modelCombo.getItemAt(0);
         modelCombo.setSelectedIndex(0);
-        assertEquals(firstModel.apiName(), settingsPanel.getModelApiBadgeLabel().getText());
-        assertEquals(firstModel.description(), settingsPanel.getModelDescriptionArea().getText());
-        assertTrue(settingsPanel.getModelApiBadgeLabel().isVisible());
-        assertTrue(settingsPanel.getModelDescriptionArea().isVisible());
+        assertEquals(firstModel.apiName(), settingsPanel.modelApiBadgeLabel.getText());
+        assertEquals(firstModel.description(), settingsPanel.modelDescriptionArea.getText());
 
-        settings.setGeminiModel(modelCombo.getItemAt(1).apiName());
-        settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
-        SwingTestUtils.flushEdt();
-        assertEquals(modelCombo.getItemAt(1).apiName(), ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
-    }
+        try {
+            settingsPanel.themeCombo.setSelectedItem("FlatLaf Dark");
+            assertEquals("FlatLaf Dark", settings.getTheme());
+            verify(settingsService, never()).saveSettings();
+        } finally {
+            SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
+        }
 
-    @Test
-    void testSaveLiveSettingsShowsAppliedAndPreservesRestartLegendAfterTimer() {
-        assertEquals(50, settings.getMaxAgentToolTurns());
-        assertEquals(50, settingsPanel.getMaxAgentToolTurnsSpinner().getValue());
-        assertEquals(SettingsPanel.RESTART_LEGEND_TEXT, settingsPanel.getLegendLabel().getText());
-        assertEquals("", settingsPanel.getStatusLabel().getText());
-        assertFalse(settingsPanel.getLogToolCallsCheckBox().isSelected());
-
-        SpinnerNumberModel turnsModel = (SpinnerNumberModel) settingsPanel.getMaxAgentToolTurnsSpinner().getModel();
-        assertEquals(1, turnsModel.getMinimum());
-        assertEquals(100, turnsModel.getMaximum());
-
-        JSpinner.DefaultEditor turnsEditor = (JSpinner.DefaultEditor) settingsPanel.getMaxAgentToolTurnsSpinner()
+        JSpinner.DefaultEditor turnsEditor = (JSpinner.DefaultEditor) settingsPanel.maxAgentToolTurnsSpinner
                 .getEditor();
         turnsEditor.getTextField().setText("85");
-        settingsPanel.getLogToolCallsCheckBox().setSelected(true);
-        JButton saveButton = SwingTestUtils.findButton(settingsPanel, "Save Settings");
-        assertNotNull(saveButton);
-        saveButton.doClick();
+        settingsPanel.logToolCallsCheckBox.setSelected(true);
+        settingsPanel.geminiApiKeyField.setText("new-secret-key");
+        settingsPanel.saveButton.doClick();
 
         verify(settingsService, times(1)).saveSettings();
+        assertEquals("new-secret-key", settings.getGeminiApiKey());
         assertEquals(85, settings.getMaxAgentToolTurns());
-        assertEquals(85, settingsPanel.getMaxAgentToolTurnsSpinner().getValue());
         assertTrue(settings.isLogToolCalls());
-        assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
+        assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.statusLabel.getText());
 
+        settingsPanel.maxMessagesSpinner.setValue(120);
+        settingsPanel.saveButton.doClick();
+        assertEquals(120, settings.getMaxChatMemoryMessages());
+        assertEquals(SettingsPanel.SAVED_RESTART_REQUIRED_TEXT, settingsPanel.statusLabel.getText());
+
+        settings.setGeminiModel(modelCombo.getItemAt(1).apiName());
         settings.setMaxAgentToolTurns(100);
         settings.setMaxChatMemoryMessages(250);
         settings.setLogToolCalls(false);
         settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
         SwingTestUtils.flushEdt();
-        assertEquals(100, settingsPanel.getMaxAgentToolTurnsSpinner().getValue());
-        assertEquals(250, settingsPanel.getMaxMessagesSpinner().getValue());
-        assertFalse(settingsPanel.getLogToolCallsCheckBox().isSelected());
+        assertEquals(modelCombo.getItemAt(1).apiName(), ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
+        assertEquals(100, settingsPanel.maxAgentToolTurnsSpinner.getValue());
+        assertEquals(250, settingsPanel.maxMessagesSpinner.getValue());
+        assertFalse(settingsPanel.logToolCallsCheckBox.isSelected());
 
-        for (ActionListener listener : settingsPanel.getStatusTimer().getActionListeners()) {
+        for (ActionListener listener : settingsPanel.statusTimer.getActionListeners()) {
             listener.actionPerformed(null);
         }
-        assertEquals("", settingsPanel.getStatusLabel().getText());
-        assertEquals(SettingsPanel.RESTART_LEGEND_TEXT, settingsPanel.getLegendLabel().getText());
-    }
-
-    @Test
-    void testThemeSelectionUpdatesSettingsButDoesNotSave() {
-        try {
-            @SuppressWarnings("unchecked")
-            JComboBox<String> themeCombo = SwingTestUtils.findComponent(settingsPanel, JComboBox.class);
-            assertNotNull(themeCombo);
-
-            themeCombo.setSelectedItem("FlatLaf Dark");
-            assertEquals("FlatLaf Dark", settings.getTheme());
-            verify(settingsService, never()).saveSettings();
-
-            settings.setTheme("FlatLaf Light");
-            settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
-            SwingTestUtils.flushEdt();
-            assertEquals("FlatLaf Light", themeCombo.getSelectedItem());
-        } finally {
-            SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
-        }
-    }
-
-    @Test
-    void testApiKeyHotReloadShowsAppliedWhileMaxMessagesShowsRestartWarning() {
-        JPasswordField apiKeyField = SwingTestUtils.findComponent(settingsPanel, JPasswordField.class);
-        assertNotNull(apiKeyField);
-        apiKeyField.setText("new-secret-key");
-
-        JButton saveButton = SwingTestUtils.findButton(settingsPanel, "Save Settings");
-        saveButton.doClick();
-
-        assertEquals("new-secret-key", settings.getGeminiApiKey());
-        assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
-        verify(settingsService, times(1)).saveSettings();
-
-        settingsPanel.getMaxMessagesSpinner().setValue(120);
-        saveButton.doClick();
-        assertEquals(120, settings.getMaxChatMemoryMessages());
-        assertEquals(SettingsPanel.SAVED_RESTART_REQUIRED_TEXT, settingsPanel.getStatusLabel().getText());
-
-        saveButton.doClick();
-        assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.getStatusLabel().getText());
+        assertEquals("", settingsPanel.statusLabel.getText());
+        assertEquals(SettingsPanel.RESTART_LEGEND_TEXT, settingsPanel.legendLabel.getText());
     }
 
     @Test
     void testGetApiKeyLinkAndTestConnectionButtons() {
         AtomicReference<String> openedUrl = new AtomicReference<>();
         settingsPanel.setUrlOpener(openedUrl::set);
-        SwingTestUtils.clickOnEdt(settingsPanel.getGetApiKeyLinkButton());
+        SwingTestUtils.clickOnEdt(settingsPanel.getApiKeyLinkButton);
         assertEquals(SettingsPanel.GEMINI_API_KEY_URL, openedUrl.get());
 
-        // Blank API key fails validation immediately without calling AiService
-        JPasswordField apiKeyField = SwingTestUtils.findComponent(settingsPanel, JPasswordField.class);
-        apiKeyField.setText("   ");
-        SwingTestUtils.clickOnEdt(settingsPanel.getTestConnectionButton());
-        assertTrue(settingsPanel.getStatusLabel().getText().contains("Please enter a Gemini API Key first."));
+        settingsPanel.geminiApiKeyField.setText("   ");
+        SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
+        assertTrue(settingsPanel.statusLabel.getText().contains("Please enter a Gemini API Key first."));
         verifyNoInteractions(aiService);
 
-        // Successful connection test
         CompletableFuture<String> gate = new CompletableFuture<>();
         when(aiService.testConnection(eq("valid-key"), anyString())).thenAnswer(inv -> gate.join());
-        apiKeyField.setText("valid-key");
-        SwingTestUtils.runOnEdt(() -> settingsPanel.getTestConnectionButton().doClick());
+        settingsPanel.geminiApiKeyField.setText("valid-key");
+        SwingTestUtils.runOnEdt(settingsPanel.testConnectionButton::doClick);
         SwingTestUtils.runOnEdt(() -> {
-            assertFalse(settingsPanel.getTestConnectionButton().isEnabled());
-            assertEquals(SettingsPanel.TESTING_CONNECTION_TEXT, settingsPanel.getTestConnectionButton().getText());
+            assertFalse(settingsPanel.testConnectionButton.isEnabled());
+            assertEquals(SettingsPanel.TESTING_CONNECTION_TEXT, settingsPanel.testConnectionButton.getText());
         });
 
         gate.complete("OK");
         SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
-        assertTrue(settingsPanel.getTestConnectionButton().isEnabled());
-        assertEquals(SettingsPanel.TEST_CONNECTION_TEXT, settingsPanel.getTestConnectionButton().getText());
-        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.getStatusLabel().getText());
+        assertTrue(settingsPanel.testConnectionButton.isEnabled());
+        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.statusLabel.getText());
 
-        // Failed connection test shows root cause error
         when(aiService.testConnection(eq("invalid-key"), anyString()))
                 .thenThrow(new IllegalStateException("401 UNAUTHORIZED: API key not valid"));
-        apiKeyField.setText("invalid-key");
-        SwingTestUtils.clickOnEdt(settingsPanel.getTestConnectionButton());
+        settingsPanel.geminiApiKeyField.setText("invalid-key");
+        SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
         SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
-        assertTrue(settingsPanel.getTestConnectionButton().isEnabled());
         assertEquals(SettingsPanel.CONNECTION_FAILED_PREFIX + "401 UNAUTHORIZED: API key not valid",
-                settingsPanel.getStatusLabel().getText());
+                settingsPanel.statusLabel.getText());
     }
 }

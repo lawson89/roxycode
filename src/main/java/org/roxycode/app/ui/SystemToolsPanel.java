@@ -4,8 +4,8 @@ import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -47,12 +47,12 @@ public final class SystemToolsPanel extends JPanel {
     private final transient SystemToolService toolService;
     private final JLabel titleLabel;
     private final JLabel subtitleLabel;
-    private final JButton refreshBtn;
-    private final JProgressBar progressBar;
+    final JButton refreshBtn;
+    final JProgressBar progressBar;
     private final JPanel cardsContainer;
     private final JScrollPane scrollPane;
-    private final List<ToolCard> toolCards = new ArrayList<>();
-    private transient volatile CompletableFuture<List<SystemTool>> initialToolsFuture = CompletableFuture
+    final List<ToolCard> toolCards = new ArrayList<>();
+    transient volatile CompletableFuture<List<SystemTool>> initialToolsFuture = CompletableFuture
             .completedFuture(List.of());
 
     public SystemToolsPanel(SystemToolService toolService) {
@@ -98,19 +98,11 @@ public final class SystemToolsPanel extends JPanel {
         runAsyncToolLoad(future);
     }
 
-    CompletableFuture<List<SystemTool>> getInitialToolsFuture() {
-        return initialToolsFuture;
-    }
-
     public CompletableFuture<List<SystemTool>> refreshTools() {
         if (toolService == null) {
             return CompletableFuture.completedFuture(List.of());
         }
-        CompletableFuture<List<SystemTool>> future = toolService.refreshTools();
-        if (future == null) {
-            future = toolService.detectTools();
-        }
-        return runAsyncToolLoad(future);
+        return runAsyncToolLoad(Objects.requireNonNullElseGet(toolService.refreshTools(), toolService::detectTools));
     }
 
     private CompletableFuture<List<SystemTool>> runAsyncToolLoad(CompletableFuture<List<SystemTool>> future) {
@@ -119,12 +111,8 @@ public final class SystemToolsPanel extends JPanel {
             progressBar.setIndeterminate(true);
             progressBar.setVisible(true);
         });
-        CompletableFuture<List<SystemTool>> effectiveFuture;
-        if (future != null) {
-            effectiveFuture = future;
-        } else {
-            effectiveFuture = CompletableFuture.completedFuture(List.of());
-        }
+        CompletableFuture<List<SystemTool>> effectiveFuture = Objects.requireNonNullElseGet(future,
+                () -> CompletableFuture.completedFuture(List.of()));
         return effectiveFuture.whenCompleteAsync((tools, ex) -> {
             if (future != null && ex == null && tools != null) {
                 populateCards(tools);
@@ -165,18 +153,6 @@ public final class SystemToolsPanel extends JPanel {
 
     void openWebsite(String websiteUrl) {
         UiComponents.openUrlOrCopyToClipboard(websiteUrl);
-    }
-
-    JButton getRefreshButton() {
-        return refreshBtn;
-    }
-
-    JProgressBar getProgressBar() {
-        return progressBar;
-    }
-
-    List<ToolCard> getToolCards() {
-        return Collections.unmodifiableList(toolCards);
     }
 
     static Codicons resolveToolIcon(String toolName) {
@@ -258,14 +234,14 @@ public final class SystemToolsPanel extends JPanel {
         private static final long serialVersionUID = 1L;
 
         private final transient SystemTool tool;
-        private final JLabel nameLabel;
-        private final JLabel requirementBadge;
-        private final JLabel statusBadge;
-        private final JTextArea descriptionArea;
-        private final JLabel versionBadge;
-        private final JLabel licenseBadge;
-        private final JButton copyInstallButton;
-        private final JButton websiteLinkButton;
+        final JLabel nameLabel;
+        final JLabel requirementBadge;
+        final JLabel statusBadge;
+        final JTextArea descriptionArea;
+        final JLabel versionBadge;
+        final JLabel licenseBadge;
+        final JButton copyInstallButton;
+        final JButton websiteLinkButton;
         private Timer copyFeedbackTimer;
 
         ToolCard(SystemTool tool, Consumer<String> websiteOpener) {
@@ -431,38 +407,6 @@ public final class SystemToolsPanel extends JPanel {
             statusBadge.setIcon(FontIcon.of(statusIcon, 14, statusColor));
             statusBadge.putClientProperty(FlatClientProperties.STYLE,
                     "font: bold -1; arc: 999; border: 3,10,3,10," + hex + ",1,999; background: fade(" + hex + ", 14%)");
-        }
-
-        JLabel getNameLabel() {
-            return nameLabel;
-        }
-
-        JLabel getRequirementBadge() {
-            return requirementBadge;
-        }
-
-        JLabel getStatusBadge() {
-            return statusBadge;
-        }
-
-        JTextArea getDescriptionArea() {
-            return descriptionArea;
-        }
-
-        JLabel getVersionBadge() {
-            return versionBadge;
-        }
-
-        JLabel getLicenseBadge() {
-            return licenseBadge;
-        }
-
-        JButton getCopyInstallButton() {
-            return copyInstallButton;
-        }
-
-        JButton getWebsiteLinkButton() {
-            return websiteLinkButton;
         }
 
         @Override

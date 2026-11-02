@@ -7,6 +7,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
@@ -343,31 +344,18 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         CompletableFuture<FolderAndFilesData> refreshFoldersAndFiles() {
-            CompletableFuture<FolderAndFilesData> future = Edt.supplyAsync(() -> {
-                List<String> folders = loadConfiguredFolders();
-                List<ContextFileItem> files = loadDiscoveredFiles();
-                List<String> safeFolders;
-                if (folders != null) {
-                    safeFolders = folders;
-                } else {
-                    safeFolders = List.of();
-                }
-                List<ContextFileItem> safeFiles;
-                if (files != null) {
-                    safeFiles = files;
-                } else {
-                    safeFiles = List.of();
-                }
-                return new FolderAndFilesData(safeFolders, safeFiles);
-            }, data -> {
-                folderListModel.clear();
-                data.folders().forEach(folderListModel::addElement);
-                fileListModel.clear();
-                data.files().forEach(fileListModel::addElement);
-                btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
-            }, ex -> {
-                log.warn("Failed to refresh context folders and files: {}", ex.getMessage());
-            });
+            CompletableFuture<FolderAndFilesData> future = Edt.supplyAsync(
+                    () -> new FolderAndFilesData(Objects.requireNonNullElse(loadConfiguredFolders(), List.of()),
+                            Objects.requireNonNullElse(loadDiscoveredFiles(), List.of())),
+                    data -> {
+                        folderListModel.clear();
+                        data.folders().forEach(folderListModel::addElement);
+                        fileListModel.clear();
+                        data.files().forEach(fileListModel::addElement);
+                        btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
+                    }, ex -> {
+                        log.warn("Failed to refresh context folders and files: {}", ex.getMessage());
+                    });
             lastRefreshFuture = future;
             return future;
         }

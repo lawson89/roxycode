@@ -3,10 +3,6 @@ package org.roxycode.app.service;
 import com.google.genai.Client;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
@@ -57,13 +53,6 @@ public class AiService implements AutoCloseable {
     public static final String EMPTY_RESPONSE_MARKER = "⚠️ **Empty Response Returned (finishReason:";
     public static final String EMPTY_STOP_MESSAGE = "Roxy completed the turn without generating a visible text message.";
 
-    private static final ScheduledExecutorService TURN_TIMEOUT_SCHEDULER = Executors
-            .newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "ai-turn-watchdog");
-                t.setDaemon(true);
-                return t;
-            });
-
     public static final int MAX_AUTO_NUDGES = 2;
     public static final int TEST_CONNECTION_TIMEOUT_MS = 15_000;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
@@ -87,7 +76,6 @@ public class AiService implements AutoCloseable {
     private Function<String, ChatClient.Builder> chatClientBuilderFactory = this::createChatClientBuilderForApiKey;
     private ConnectionTester connectionTester = this::executeConnectionTest;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
-    private volatile int turnTimeoutSeconds = AiConfig.DEFAULT_TURN_TIMEOUT_SECONDS;
 
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, PromptService promptService,
             JexlTool jexlTool, PlanService planService, ChatMemory chatMemory, ToolCallingManager toolCallingManager,
@@ -230,14 +218,6 @@ public class AiService implements AutoCloseable {
         this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
     }
 
-    void setTurnTimeoutSeconds(int turnTimeoutSeconds) {
-        this.turnTimeoutSeconds = turnTimeoutSeconds;
-    }
-
-    int getTurnTimeoutSeconds() {
-        return turnTimeoutSeconds;
-    }
-
     public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
         return chat(conversationId, phase, message, null, images);
     }
@@ -246,18 +226,9 @@ public class AiService implements AutoCloseable {
     public String chat(String conversationId, WorkflowPhase phase, String message, String additionalInstructions,
             List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
-        WorkflowPhase resolvedPhase = phase;
-        if (resolvedPhase == null) {
-            resolvedPhase = planService.getCurrentPhase();
-        }
+        WorkflowPhase resolvedPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         TurnToolContext turnContext = new TurnToolContext(conversationId, resolvedPhase, new AtomicInteger(0));
         String convId = turnContext.conversationId();
-        Thread callerThread = Thread.currentThread();
-        ScheduledFuture<?> timeoutTask = TURN_TIMEOUT_SCHEDULER.schedule(() -> {
-            log.warn("Chat turn timed out after {} seconds, interrupting thread", turnTimeoutSeconds);
-            callerThread.interrupt();
-        }, turnTimeoutSeconds, TimeUnit.SECONDS);
-
         try {
             ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, additionalInstructions,
                     images);
@@ -273,8 +244,6 @@ public class AiService implements AutoCloseable {
                 throw re;
             }
             throw new RuntimeException("Unexpected error during chat turn", e);
-        } finally {
-            timeoutTask.cancel(false);
         }
     }
 

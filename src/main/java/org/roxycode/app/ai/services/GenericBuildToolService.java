@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -99,16 +100,6 @@ public class GenericBuildToolService {
             new BuildTemplateInfo("cmake", "CMake", "C/C++ project with CMakeLists.txt", List.of("CMakeLists.txt")),
             new BuildTemplateInfo("default", "No-Op / Manual Setup", "Blank commands fallback template", List.of()));
 
-    private record TemplateRule(String template, List<String> markerFiles) {
-    }
-
-    private static final List<TemplateRule> TEMPLATE_RULES = List.of(new TemplateRule("maven", List.of("pom.xml")),
-            new TemplateRule("gradle", List.of("build.gradle", "build.gradle.kts")),
-            new TemplateRule("npm", List.of("package.json")),
-            new TemplateRule("python", List.of("requirements.txt", "pyproject.toml")),
-            new TemplateRule("go", List.of("go.mod", "main.go")), new TemplateRule("rust", List.of("Cargo.toml")),
-            new TemplateRule("cmake", List.of("CMakeLists.txt")));
-
     public List<BuildTemplateInfo> getAvailableTemplates() {
         return AVAILABLE_TEMPLATES;
     }
@@ -132,9 +123,7 @@ public class GenericBuildToolService {
     public record BuildConfig(CommandsSection commands, Map<String, String> env, ParseSection parse,
             SandboxConfig sandbox) {
         public BuildConfig {
-            if (commands == null) {
-                commands = CommandsSection.EMPTY;
-            }
+            commands = Objects.requireNonNullElse(commands, CommandsSection.EMPTY);
             if (env == null || env.isEmpty()) {
                 env = Map.of();
             } else {
@@ -146,12 +135,8 @@ public class GenericBuildToolService {
                 });
                 env = Collections.unmodifiableMap(sanitized);
             }
-            if (parse == null) {
-                parse = ParseSection.EMPTY;
-            }
-            if (sandbox == null) {
-                sandbox = new SandboxConfig("none", List.of(), "ubuntu:24.04", "/workspace");
-            }
+            parse = Objects.requireNonNullElse(parse, ParseSection.EMPTY);
+            sandbox = Objects.requireNonNullElse(sandbox, SandboxConfig.DEFAULT);
         }
     }
 
@@ -208,11 +193,8 @@ public class GenericBuildToolService {
             "CODE"}, examples = "buildToolService.install()")
     public BuildResult install() {
         requireCodePhase("install");
-        BuildResult result = runCommand("commands.install", config -> config.commands().install(), Map.of());
-        if (result.success() && !formatNoOpOutput("commands.install").equals(result.output())) {
-            publishFileChanged("");
-        }
-        return result;
+        return notifyIfMutated("commands.install", "",
+                runCommand("commands.install", config -> config.commands().install()));
     }
 
     @AgentDoc(value = "Cleans the project using the configured clean command", examples = "buildToolService.clean()")
@@ -231,13 +213,8 @@ public class GenericBuildToolService {
 
     @AgentDoc(value = "Builds or packages the project using the configured build command (falls back to compile if build is not configured).", examples = "buildToolService.build()")
     public BuildResult build() {
-        return runCommand("commands.build", config -> {
-            String cmd = config.commands().build();
-            if (StringUtils.isNotBlank(cmd)) {
-                return cmd;
-            }
-            return config.commands().compile();
-        });
+        return runCommand("commands.build",
+                c -> StringUtils.firstNonBlank(c.commands().build(), c.commands().compile()));
     }
 
     @AgentDoc(value = "Checks if a generic build configuration exists (build.toml)", examples = "buildToolService.detect()")
@@ -271,51 +248,44 @@ public class GenericBuildToolService {
 
     @AgentDoc(value = "Runs the linter on a specific file using lint_single (falls back to lint if lint_single is not configured).", examples = "buildToolService.lint('src/main/java/App.java')")
     public BuildResult lint(@AgentDoc("The file path relative to the project root") String relativePath) {
-        String normalizedPath;
-        try {
-            normalizedPath = validateRelativeFilePath(relativePath);
-        } catch (Exception e) {
-            return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of());
-        }
-        return runCommand("commands.lint_single", config -> {
-            String single = config.commands().lintSingle();
-            if (StringUtils.isNotBlank(single)) {
-                return single;
-            }
-            return config.commands().lint();
-        }, Map.of("file", normalizedPath));
+        return runSingleFileCommand("commands.lint_single", relativePath,
+                c -> StringUtils.firstNonBlank(c.commands().lintSingle(), c.commands().lint()), false);
     }
 
     @AgentDoc(value = "Formats the project source code using the configured format command.", phases = {
             "CODE"}, examples = "buildToolService.format()")
     public BuildResult format() {
         requireCodePhase("format");
-        BuildResult result = runCommand("commands.format", config -> config.commands().format(), Map.of());
-        if (result.success() && !formatNoOpOutput("commands.format").equals(result.output())) {
-            publishFileChanged("");
-        }
-        return result;
+        return notifyIfMutated("commands.format", "",
+                runCommand("commands.format", config -> config.commands().format()));
     }
 
     @AgentDoc(value = "Formats a specific file using format_single (falls back to format if format_single is not configured).", phases = {
             "CODE"}, examples = "buildToolService.format('src/main/java/App.java')")
     public BuildResult format(@AgentDoc("The file path relative to the project root") String relativePath) {
         requireCodePhase("format");
+        return runSingleFileCommand("commands.format_single", relativePath,
+                c -> StringUtils.firstNonBlank(c.commands().formatSingle(), c.commands().format()), true);
+    }
+
+    private BuildResult runSingleFileCommand(String label, String relativePath, Function<BuildConfig, String> extractor,
+            boolean notifyChange) {
         String normalizedPath;
         try {
             normalizedPath = validateRelativeFilePath(relativePath);
         } catch (Exception e) {
             return new BuildResult(false, -1, "", List.of(e.getMessage()), List.of());
         }
-        BuildResult result = runCommand("commands.format_single", config -> {
-            String single = config.commands().formatSingle();
-            if (StringUtils.isNotBlank(single)) {
-                return single;
-            }
-            return config.commands().format();
-        }, Map.of("file", normalizedPath));
-        if (result.success() && !formatNoOpOutput("commands.format_single").equals(result.output())) {
-            publishFileChanged(normalizedPath);
+        BuildResult result = runCommand(label, extractor, Map.of("file", normalizedPath));
+        if (notifyChange) {
+            return notifyIfMutated(label, normalizedPath, result);
+        }
+        return result;
+    }
+
+    private BuildResult notifyIfMutated(String label, String path, BuildResult result) {
+        if (result.success() && !formatNoOpOutput(label).equals(result.output()) && eventPublisher != null) {
+            eventPublisher.publishEvent(new FileChangedEvent(path));
         }
         return result;
     }
@@ -376,12 +346,6 @@ public class GenericBuildToolService {
             throw new IllegalArgumentException("Invalid file path: " + relativePath);
         }
         return normalized;
-    }
-
-    private void publishFileChanged(String path) {
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new FileChangedEvent(path));
-        }
     }
 
     private BuildResult runCommand(String commandLabel, Function<BuildConfig, String> commandExtractor,
@@ -485,9 +449,9 @@ public class GenericBuildToolService {
             return "default";
         }
         Path root = projectService.getCurrentProjectRoot();
-        for (TemplateRule rule : TEMPLATE_RULES) {
-            if (rule.markerFiles().stream().anyMatch(m -> Files.exists(root.resolve(m)))) {
-                return rule.template();
+        for (BuildTemplateInfo info : AVAILABLE_TEMPLATES) {
+            if (info.markerFiles().stream().anyMatch(m -> Files.exists(root.resolve(m)))) {
+                return info.id();
             }
         }
         return "default";

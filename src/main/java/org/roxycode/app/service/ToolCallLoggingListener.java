@@ -1,5 +1,7 @@
 package org.roxycode.app.service;
 
+import java.util.Objects;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.slf4j.Logger;
@@ -27,9 +29,9 @@ public class ToolCallLoggingListener {
         if (settings == null || !settings.isLogToolCalls()) {
             return;
         }
-        String conversationId = event.conversationId() != null ? event.conversationId() : "unknown";
-        String script = event.script() != null ? event.script() : "";
-        String resultText = event.result() != null ? String.valueOf(event.result()) : "null";
+        String conversationId = Objects.requireNonNullElse(event.conversationId(), "unknown");
+        String script = StringUtils.defaultString(event.script());
+        String resultText = String.valueOf(event.result());
         if (event.success()) {
             toolCallLogger.info("""
                     Tool Call [conversation={}, success=true]
@@ -38,7 +40,7 @@ public class ToolCallLoggingListener {
                     Result:
                     {}""", conversationId, script, resultText);
         } else {
-            String errorText = event.error() != null ? event.error() : "Unknown error";
+            String errorText = Objects.requireNonNullElse(event.error(), "Unknown error");
             toolCallLogger.warn("""
                     Tool Call [conversation={}, success=false]
                     Call:

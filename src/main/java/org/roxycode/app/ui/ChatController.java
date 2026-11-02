@@ -2,6 +2,8 @@ package org.roxycode.app.ui;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
+import org.apache.commons.lang3.StringUtils;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,11 +52,11 @@ public final class ChatController implements AutoCloseable {
     private final PlanService planService;
     private MemoryService memoryService;
     private EnvironmentService environmentService;
-    private final boolean turnExecutorOwned;
-    private volatile Executor turnExecutor;
+    final boolean turnExecutorOwned;
+    volatile Executor turnExecutor;
     private final AtomicLong turnSequence = new AtomicLong();
 
-    private volatile long activeTurnId = 0;
+    volatile long activeTurnId = 0;
     private volatile Future<?> activeTurnFuture;
     private volatile WorkflowTransitionEvent deferredTransitionEvent;
 
@@ -69,24 +71,12 @@ public final class ChatController implements AutoCloseable {
         this.chatMemory = chatMemory;
         this.settingsService = settingsService;
         this.turnExecutorOwned = turnExecutor == null;
-        if (turnExecutor != null) {
-            this.turnExecutor = turnExecutor;
-        } else {
-            this.turnExecutor = Executors.newVirtualThreadPerTaskExecutor();
-        }
+        this.turnExecutor = Objects.requireNonNullElseGet(turnExecutor, Executors::newVirtualThreadPerTaskExecutor);
     }
 
     void setTopicArchiveServices(MemoryService memoryService, EnvironmentService environmentService) {
         this.memoryService = memoryService;
         this.environmentService = environmentService;
-    }
-
-    Executor getTurnExecutor() {
-        return turnExecutor;
-    }
-
-    boolean ownsTurnExecutor() {
-        return turnExecutorOwned;
     }
 
     synchronized void ensureOwnedExecutorActive() {
@@ -100,10 +90,6 @@ public final class ChatController implements AutoCloseable {
         if (turnExecutorOwned) {
             close();
         }
-    }
-
-    long getActiveTurnId() {
-        return activeTurnId;
     }
 
     @Override
@@ -260,10 +246,7 @@ public final class ChatController implements AutoCloseable {
         if (environmentService != null) {
             rawUser = environmentService.getCurrentUser();
         }
-        String user = "User";
-        if (rawUser != null && !rawUser.isBlank()) {
-            user = rawUser;
-        }
+        String user = StringUtils.defaultIfBlank(rawUser, "User");
         String filename = memoryService.archiveTopicConversation(title, user, Instant.now().toString(),
                 capturedTranscript);
         if (filename != null && !filename.isBlank() && eventPublisher != null) {
@@ -329,7 +312,7 @@ public final class ChatController implements AutoCloseable {
                     Edt.run(() -> finishTurnCancelled(turnId));
                     return;
                 }
-                Edt.run(() -> finishTurnSuccess(turnId, response));
+                Edt.run(() -> finishTurn(turnId, ROLE_AI, response));
             } catch (Exception ex) {
                 if (ExceptionUtils.isCancellation(ex) || model.isTurnCancelled()) {
                     Edt.run(() -> finishTurnCancelled(turnId));
@@ -337,19 +320,11 @@ public final class ChatController implements AutoCloseable {
                 }
                 log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
                 String errorMsg = "Error: " + ExceptionUtils.getMessageOrSimpleName(ex);
-                Edt.run(() -> finishTurnError(turnId, errorMsg));
+                Edt.run(() -> finishTurn(turnId, ROLE_AI, errorMsg));
             }
         }, null);
         activeTurnFuture = task;
         turnExecutor.execute(task);
-    }
-
-    private void finishTurnSuccess(long turnId, String response) {
-        finishTurn(turnId, ROLE_AI, response);
-    }
-
-    private void finishTurnError(long turnId, String errorMsg) {
-        finishTurn(turnId, ROLE_AI, errorMsg);
     }
 
     private void finishTurn(long turnId, String role, String message) {

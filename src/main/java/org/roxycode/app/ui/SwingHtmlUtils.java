@@ -208,21 +208,8 @@ public final class SwingHtmlUtils {
             sheet.importStyleSheet(cssUrl);
         }
 
-        Color bgFallback;
-        if (isDark) {
-            bgFallback = new Color(30, 30, 30);
-        } else {
-            bgFallback = Color.WHITE;
-        }
-        Color bg = getUiColor(bgFallback, "TextPane.background");
-
-        Color fgFallback;
-        if (isDark) {
-            fgFallback = Color.LIGHT_GRAY;
-        } else {
-            fgFallback = Color.BLACK;
-        }
-        Color fg = getUiColor(fgFallback, "TextPane.foreground");
+        Color bg = getUiColor(Color.WHITE, "TextPane.background");
+        Color fg = getUiColor(Color.BLACK, "TextPane.foreground");
         textPane.setBackground(bg);
         textPane.setForeground(fg);
         textPane.setOpaque(true);
@@ -254,6 +241,13 @@ public final class SwingHtmlUtils {
         return false;
     }
 
+    private static float zeroHorizontalMinimumSpan(int axis, float defaultSpan) {
+        if (axis == View.X_AXIS) {
+            return 0;
+        }
+        return defaultSpan;
+    }
+
     private static final class WrappingHtmlFactory extends HTMLEditorKit.HTMLFactory {
         @Override
         public View create(Element elem) {
@@ -265,10 +259,7 @@ public final class SwingHtmlUtils {
                 return new InlineView(elem) {
                     @Override
                     public float getMinimumSpan(int axis) {
-                        if (axis == View.X_AXIS) {
-                            return 0;
-                        }
-                        return super.getMinimumSpan(axis);
+                        return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
                     }
                 };
             }
@@ -276,10 +267,7 @@ public final class SwingHtmlUtils {
                 return new ParagraphView(elem) {
                     @Override
                     public float getMinimumSpan(int axis) {
-                        if (axis == View.X_AXIS) {
-                            return 0;
-                        }
-                        return super.getMinimumSpan(axis);
+                        return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
                     }
                 };
             }
@@ -287,10 +275,7 @@ public final class SwingHtmlUtils {
                 return new BlockView(elem, blockView.getAxis()) {
                     @Override
                     public float getMinimumSpan(int axis) {
-                        if (axis == View.X_AXIS) {
-                            return 0;
-                        }
-                        return super.getMinimumSpan(axis);
+                        return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
                     }
                 };
             }

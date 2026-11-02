@@ -39,11 +39,11 @@ public final class HeaderPanel extends JPanel {
     private final transient GitService gitService;
     private final transient SettingsService settingsService;
 
-    private final JLabel projectLabel;
+    final JLabel projectLabel;
     private final JButton changeProjectButton;
-    private final JLabel branchLabel;
-    private final JLabel modelLabel;
-    private final JButton themeToggleButton;
+    final JLabel branchLabel;
+    final JLabel modelLabel;
+    final JButton themeToggleButton;
 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService) {
         this.projectService = projectService;
@@ -250,29 +250,9 @@ public final class HeaderPanel extends JPanel {
         });
     }
 
-    JLabel getProjectLabel() {
-        return projectLabel;
-    }
-
-    JLabel getBranchLabel() {
-        return branchLabel;
-    }
-
-    JLabel getModelLabel() {
-        return modelLabel;
-    }
-
-    JButton getThemeToggleButton() {
-        return themeToggleButton;
-    }
-
     private void updateModelDisplay(String modelName) {
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, resolveModelAccentColor()));
-        if (modelName != null) {
-            modelLabel.setText(modelName);
-        } else {
-            modelLabel.setText("No model selected");
-        }
+        modelLabel.setText(java.util.Objects.requireNonNullElse(modelName, "No model selected"));
     }
 
     private void chooseProject() {

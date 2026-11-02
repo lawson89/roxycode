@@ -49,7 +49,6 @@ public class AiConfig {
     private static final Logger log = LoggerFactory.getLogger(AiConfig.class);
 
     public static final int DEFAULT_HTTP_TIMEOUT_MS = 120_000;
-    public static final int DEFAULT_TURN_TIMEOUT_SECONDS = 600;
     public static final int DEFAULT_MAX_TOOL_CALLS = 100;
     public static final int DEFAULT_MAX_RETRY_ATTEMPTS = 3;
     public static final Duration DEFAULT_INITIAL_BACKOFF = Duration.ofMillis(1500);

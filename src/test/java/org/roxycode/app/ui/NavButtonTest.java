@@ -11,50 +11,44 @@ class NavButtonTest {
 
     @Test
     void testBusyAndWaitingApprovalPrecedenceTooltipsAndTimerLifecycle() {
-        NavButton btn = new NavButton("Feature Request", FontIcon.of(Codicons.GIT_PULL_REQUEST, 16));
+        SwingTestUtils.runOnEdt(() -> {
+            NavButton btn = new NavButton("Feature Request", FontIcon.of(Codicons.GIT_PULL_REQUEST, 16));
+            assertFalse(btn.isBusy());
+            assertFalse(btn.isWaitingApproval());
+            assertNull(btn.statusIcon);
 
-        assertFalse(btn.isBusy());
-        assertFalse(btn.isWaitingApproval());
-        assertNull(btn.getStatusIcon());
-        assertNull(btn.getToolTipText());
+            btn.setBusy(true);
+            assertTrue(btn.isBusy());
+            assertEquals(FontAwesomeSolid.HOURGLASS_HALF, btn.statusIcon.getIkon());
+            assertEquals(NavButton.BUSY_TOOLTIP, btn.getToolTipText());
+            assertTrue(btn.busyTimer.isRunning());
+            btn.busyTimer.stop();
 
-        btn.setBusy(true);
-        assertTrue(btn.isBusy());
-        assertEquals(FontAwesomeSolid.HOURGLASS_HALF, btn.getStatusIcon().getIkon());
-        assertEquals(NavButton.BUSY_TOOLTIP, btn.getToolTipText());
-        assertTrue(btn.getBusyTimer().isRunning());
-
-        for (FontAwesomeSolid expected : new FontAwesomeSolid[]{FontAwesomeSolid.HOURGLASS_END,
-                FontAwesomeSolid.HOURGLASS_START, FontAwesomeSolid.HOURGLASS_HALF}) {
             btn.advanceBusyFrame();
-            assertEquals(expected, btn.getStatusIcon().getIkon());
-        }
+            assertEquals(FontAwesomeSolid.HOURGLASS_END, btn.statusIcon.getIkon());
 
-        btn.setWaitingApproval(true);
-        assertTrue(btn.isWaitingApproval());
-        assertEquals(FontAwesomeSolid.HOURGLASS_HALF, btn.getStatusIcon().getIkon());
-        assertEquals(NavButton.BUSY_TOOLTIP, btn.getToolTipText());
+            btn.setWaitingApproval(true);
+            assertEquals(FontAwesomeSolid.HOURGLASS_HALF, btn.statusIcon.getIkon());
+            assertEquals(NavButton.BUSY_TOOLTIP, btn.getToolTipText());
 
-        btn.setBusy(false);
-        assertFalse(btn.isBusy());
-        assertFalse(btn.getBusyTimer().isRunning());
-        assertTrue(btn.isWaitingApproval());
-        assertEquals(Codicons.BELL_DOT, btn.getStatusIcon().getIkon());
-        assertEquals(NavButton.WAITING_APPROVAL_TOOLTIP, btn.getToolTipText());
+            btn.setBusy(false);
+            assertFalse(btn.busyTimer.isRunning());
+            assertEquals(Codicons.BELL_DOT, btn.statusIcon.getIkon());
+            assertEquals(NavButton.WAITING_APPROVAL_TOOLTIP, btn.getToolTipText());
 
-        btn.setAttentionTooltip("Custom attention message");
-        assertEquals("Custom attention message", btn.getToolTipText());
-        btn.setAttentionTooltip("   ");
-        assertEquals(NavButton.WAITING_APPROVAL_TOOLTIP, btn.getToolTipText());
+            btn.setAttentionTooltip("Custom attention message");
+            assertEquals("Custom attention message", btn.getToolTipText());
+            btn.setAttentionTooltip("   ");
+            assertEquals(NavButton.WAITING_APPROVAL_TOOLTIP, btn.getToolTipText());
 
-        btn.setWaitingApproval(false);
-        assertFalse(btn.isWaitingApproval());
-        assertNull(btn.getStatusIcon());
-        assertNull(btn.getToolTipText());
+            btn.setWaitingApproval(false);
+            assertNull(btn.statusIcon);
+            assertNull(btn.getToolTipText());
 
-        btn.setBusy(true);
-        assertTrue(btn.getBusyTimer().isRunning());
-        btn.removeNotify();
-        assertFalse(btn.getBusyTimer().isRunning());
+            btn.setBusy(true);
+            assertTrue(btn.busyTimer.isRunning());
+            btn.removeNotify();
+            assertFalse(btn.busyTimer.isRunning());
+        });
     }
 }

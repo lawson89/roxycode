@@ -91,11 +91,7 @@ public class RepoMapPackerService {
             path = event.path();
         }
         invalidateForFileChange(path);
-        String logPath = "";
-        if (event != null && event.path() != null) {
-            logPath = event.path();
-        }
-        log.debug("Repo map invalidated due to file change: {}", logPath);
+        log.debug("Repo map invalidated due to file change: {}", StringUtils.defaultString(path));
     }
 
     @SuppressWarnings("PMD.NullAssignment")
@@ -246,11 +242,8 @@ public class RepoMapPackerService {
         Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(paths, CTAGS_SKELETON_FLAGS, objectMapper,
                 CANCELLED_MSG);
         for (FileStat stat : batch) {
-            String skeleton = formatSkeletonLines(stat.path(), entriesByPath.get(stat.path()));
-            String cachedSkeleton = "";
-            if (skeleton != null) {
-                cachedSkeleton = skeleton;
-            }
+            String cachedSkeleton = StringUtils
+                    .defaultString(formatSkeletonLines(stat.path(), entriesByPath.get(stat.path())));
             skeletonCache.put(stat.path(), new CachedSkeleton(stat.lastModifiedMillis(), stat.size(), cachedSkeleton));
         }
     }

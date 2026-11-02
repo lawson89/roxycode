@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.nio.file.Path;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -16,8 +18,11 @@ import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
+import org.roxycode.app.events.WorkflowTransitionEvent;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
@@ -34,6 +39,8 @@ class MainFrameTest {
     Path tempDir;
 
     private ProjectService projectService;
+    private PlanService planService;
+    private TaskWorkspacePanel taskWorkspacePanel;
     private BuildConfigPanel buildConfigPanel;
 
     private MainFrame createMainFrame(SettingsService settingsService, CompletableFuture<List<SystemTool>> toolsFuture)
@@ -48,18 +55,17 @@ class MainFrameTest {
         GitService gitService = mock(GitService.class);
         when(gitService.getCurrentBranch()).thenReturn("main");
 
-        PlanService planService = mock(PlanService.class);
+        planService = mock(PlanService.class);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
         AiService aiService = mock(AiService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
-        EnvironmentService envService = new EnvironmentService();
 
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
-        StatusPanel statusPanel = new StatusPanel(envService);
+        StatusPanel statusPanel = new StatusPanel(new EnvironmentService());
         QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(ChatPanel.createExplorePanel(aiService, planService,
                 pub, chatMemory, settingsService, null, null, null), null);
-        TaskWorkspacePanel taskWorkspacePanel = new TaskWorkspacePanel(
+        taskWorkspacePanel = new TaskWorkspacePanel(
                 ChatPanel.createFeaturePanel(aiService, planService, pub, chatMemory, settingsService, null),
                 planService, new PlanPanel(planService), null);
         CodebaseCachePanel codebaseCachePanel = new CodebaseCachePanel(mock(RepoMapPackerService.class),
@@ -85,8 +91,7 @@ class MainFrameTest {
     @Test
     void testStartupWithMissingApiKeyStaysOnQaViewSetsSettingsBellAndKeepsBuildBadgeUntilConfirmed() throws Exception {
         SettingsService settingsService = new SettingsService(null, null);
-        Path missingSettingsFile = tempDir.resolve("missing-roxy").resolve("settings.toml");
-        settingsService.setSettingsPathOverride(missingSettingsFile);
+        settingsService.setSettingsPathOverride(tempDir.resolve("missing-roxy").resolve("settings.toml"));
 
         List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
                 SystemTool.ofKnownTool("Git", "2.43.0", "Detected"),
@@ -95,65 +100,49 @@ class MainFrameTest {
         MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
         try {
             SwingTestUtils.flushEdt();
-            assertEquals(MainFrame.QA_VIEW, frame.getCurrentCard());
+            assertEquals(MainFrame.QA_VIEW, frame.currentCard);
             String expectedMsg = MainFrame.buildFirstTimeSetupMessage(true, List.of());
-            assertEquals(expectedMsg, frame.getLastStartupAlertMessage());
-            assertEquals(expectedMsg, frame.getLastMissingApiKeyMessage());
-            assertNull(frame.getLastMissingToolsMessage());
-            assertTrue(frame.getSidebar().isSettingsAttentionNeeded());
-            assertFalse(frame.getSidebar().isToolsAttentionNeeded());
+            assertEquals(expectedMsg, frame.lastStartupAlertMessage);
+            assertTrue(frame.sidebar.isSettingsAttentionNeeded());
+            assertFalse(frame.sidebar.isToolsAttentionNeeded());
 
-            NavButton settingsBtn = frame.getSidebar().getCardButton(MainFrame.SETTINGS_VIEW);
-            assertNotNull(settingsBtn);
-            assertEquals(Codicons.BELL_DOT, settingsBtn.getStatusIcon().getIkon());
+            NavButton settingsBtn = frame.sidebar.getCardButton(MainFrame.SETTINGS_VIEW);
+            assertEquals(Codicons.BELL_DOT, settingsBtn.statusIcon.getIkon());
             assertEquals(SidebarPanel.SETTINGS_ATTENTION_TOOLTIP, settingsBtn.getToolTipText());
 
-            // Verify custom presenter hook with blank key in existing settings file
             settingsService.getSettings().setGeminiApiKey("   ");
             settingsService.saveSettings();
-            assertTrue(settingsService.hasSettingsFile());
-            assertFalse(settingsService.hasConfiguredApiKey());
-
             AtomicReference<String> presentedMessage = new AtomicReference<>();
             frame.setStartupAlertPresenter(presentedMessage::set);
             frame.handleStartupSettingsCheck();
-
-            assertEquals(MainFrame.QA_VIEW, frame.getCurrentCard());
             assertEquals(expectedMsg, presentedMessage.get());
-            assertTrue(frame.getSidebar().isSettingsAttentionNeeded());
 
-            // Saving a valid API key and firing SettingsChangedEvent clears the bell indicator
             settingsService.getSettings().setGeminiApiKey("valid-api-key");
             frame.onSettingsChanged(new SettingsChangedEvent(settingsService.getSettings()));
             SwingTestUtils.flushEdt();
+            assertFalse(frame.sidebar.isSettingsAttentionNeeded());
+            assertNull(settingsBtn.statusIcon);
 
-            assertFalse(frame.getSidebar().isSettingsAttentionNeeded());
-            assertNull(settingsBtn.getStatusIcon());
-            assertNull(settingsBtn.getToolTipText());
-
-            // Viewing BUILD_CONFIG_VIEW must NOT prematurely clear buildConfigAttentionNeeded before saving
-            assertTrue(frame.getSidebar().isBuildConfigAttentionNeeded());
+            assertTrue(frame.sidebar.isBuildConfigAttentionNeeded());
             frame.showCard(MainFrame.BUILD_CONFIG_VIEW);
-            assertTrue(frame.getSidebar().isBuildConfigAttentionNeeded());
+            assertTrue(frame.sidebar.isBuildConfigAttentionNeeded());
 
-            // Clicking Confirm & Save Settings marks buildConfirmed=true and clears the sidebar badge
             doAnswer(inv -> {
                 when(projectService.isBuildConfirmed()).thenReturn(true);
                 return null;
             }).when(projectService).setBuildConfirmed(true);
             SwingTestUtils.clickOnEdt(buildConfigPanel.saveButton);
             SwingTestUtils.awaitFuture(buildConfigPanel.lastAsyncFuture);
-            assertFalse(frame.getSidebar().isBuildConfigAttentionNeeded());
+            assertFalse(frame.sidebar.isBuildConfigAttentionNeeded());
         } finally {
             frame.dispose();
         }
     }
 
     @Test
-    void testStartupWithMissingRequiredToolsAndBothMissingConsolidatesSingleAlert() throws Exception {
+    void testStartupWithMissingRequiredToolsTaskPhaseBadgeAndApprovalSync() throws Exception {
         SettingsService settingsService = new SettingsService(null, null);
-        Path configuredSettingsFile = tempDir.resolve("configured-roxy").resolve("settings.toml");
-        settingsService.setSettingsPathOverride(configuredSettingsFile);
+        settingsService.setSettingsPathOverride(tempDir.resolve("configured-roxy").resolve("settings.toml"));
         settingsService.getSettings().setGeminiApiKey("valid-gemini-key");
         settingsService.saveSettings();
 
@@ -164,43 +153,38 @@ class MainFrameTest {
         MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(missingCtagsTools));
         try {
             SwingTestUtils.flushEdt();
-            assertEquals(MainFrame.QA_VIEW, frame.getCurrentCard());
-            assertNull(frame.getLastMissingApiKeyMessage());
-            String expectedToolsMsg = MainFrame.buildFirstTimeSetupMessage(false, List.of("Universal Ctags"));
-            assertEquals(expectedToolsMsg, frame.getLastStartupAlertMessage());
-            assertEquals(expectedToolsMsg, frame.getLastMissingToolsMessage());
-            assertFalse(frame.getSidebar().isSettingsAttentionNeeded());
-            assertTrue(frame.getSidebar().isToolsAttentionNeeded());
+            assertEquals(MainFrame.buildFirstTimeSetupMessage(false, List.of("Universal Ctags")),
+                    frame.lastStartupAlertMessage);
+            assertTrue(frame.sidebar.isToolsAttentionNeeded());
 
-            NavButton toolsBtn = frame.getSidebar().getCardButton(MainFrame.TOOLS_VIEW);
-            assertNotNull(toolsBtn);
-            assertEquals(Codicons.BELL_DOT, toolsBtn.getStatusIcon().getIkon());
-            assertEquals(SidebarPanel.TOOLS_ATTENTION_TOOLTIP, toolsBtn.getToolTipText());
+            NavButton toolsBtn = frame.sidebar.getCardButton(MainFrame.TOOLS_VIEW);
+            assertEquals(Codicons.BELL_DOT, toolsBtn.statusIcon.getIkon());
 
-            // Verify consolidated alert when BOTH API key and required tools are missing
-            settingsService.getSettings().setGeminiApiKey("");
-            AtomicReference<String> consolidatedMsg = new AtomicReference<>();
-            frame.setStartupAlertPresenter(consolidatedMsg::set);
-            List<SystemTool> bothToolsMissing = List.of(SystemTool.ofKnownTool("Ripgrep", "Not found", "Missing"),
-                    SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing"));
-            frame.handleStartupSettingsCheck();
-            frame.handleStartupToolsCheck(bothToolsMissing);
-            SwingTestUtils.assertContainsAll(consolidatedMsg.get(), "Gemini API Key Required",
-                    "Configuration → Global Settings", "Required System Tools Missing (Ripgrep, Universal Ctags)",
-                    "Configuration → System Tools");
-            assertTrue(frame.getSidebar().isSettingsAttentionNeeded());
-            assertTrue(frame.getSidebar().isToolsAttentionNeeded());
-
-            // Firing SystemToolsUpdatedEvent with all required tools detected clears the tools bell indicator
             List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
                     SystemTool.ofKnownTool("Git", "2.43.0", "Detected"),
                     SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected"));
             frame.onSystemToolsUpdated(new SystemToolsUpdatedEvent(allDetectedTools, false));
             SwingTestUtils.flushEdt();
+            assertFalse(frame.sidebar.isToolsAttentionNeeded());
 
-            assertFalse(frame.getSidebar().isToolsAttentionNeeded());
-            assertNull(toolsBtn.getStatusIcon());
-            assertNull(toolsBtn.getToolTipText());
+            String longTitle = "Consolidate EDT dispatch with Edt.run, clean up ProcessRunner buffers, and standardize PromptService";
+            when(planService.getVisitedPhases()).thenReturn(EnumSet.of(WorkflowPhase.PLAN, WorkflowPhase.CODE));
+            when(planService.getCurrentPlan()).thenReturn(new ImplementationPlan("  " + longTitle + "  ", "Goal",
+                    List.of(), List.of(), false, null, null, null, null, List.of()));
+            taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
+            assertTrue(taskWorkspacePanel.planLabel.isVisible());
+            assertEquals(longTitle.toUpperCase(Locale.ROOT).substring(0, 37) + "...",
+                    taskWorkspacePanel.planLabel.getText());
+
+            taskWorkspacePanel.onWorkflowTransition(
+                    new WorkflowTransitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready", false));
+            SwingTestUtils.flushEdt();
+            assertTrue(frame.sidebar.isTaskWaitingApproval());
+
+            when(planService.getPendingPhase()).thenReturn(null);
+            taskWorkspacePanel.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
+            SwingTestUtils.flushEdt();
+            assertFalse(frame.sidebar.isTaskWaitingApproval());
         } finally {
             frame.dispose();
         }

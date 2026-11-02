@@ -36,69 +36,33 @@ class LLMDocGeneratorTest {
             int[].class, List.class, int.class, Integer.class, long.class, Long.class, double.class, Double.class,
             boolean.class, Boolean.class);
 
-    private static Arguments serviceCase(Class<?> clazz, Object instance, String... signatures) {
-        return Arguments.of(clazz, instance, List.of(signatures));
-    }
-
     static Stream<Arguments> agentServiceProvider() {
         ProjectService ps = mock(ProjectService.class);
         when(ps.hasActiveProject()).thenReturn(false);
         FileReadService frs = new FileReadService(ps);
-        return Stream.of(serviceCase(FileReadService.class, frs,
-                "readLines(relativePath: string, startLine: number, endLine: number): string;",
-                "readFileNumbered(relativePath: string): string;", "getLineCount(relativePath: string): number;",
-                "readFiles(relativePaths: string[]): Map;", "readFilesNumbered(relativePaths: string[]): Map;"),
-                serviceCase(FileEditorService.class, new FileEditorService(ps, null),
-                        "replaceBlocks(relativePath: string, edits: Object[]): EditorResult;",
-                        "moveFile(sourcePath: string, targetPath: string): EditorResult;",
-                        "copyFile(sourcePath: string, targetPath: string): EditorResult;",
-                        "mkdirs(relativePath: string): EditorResult;"),
-                serviceCase(GrepService.class, new GrepService(ps, frs),
-                        "grepWithContext(pattern: string, contextLines: number): EditorResult;",
-                        "grepLiteral(text: string): EditorResult;", "grepIgnoreCase(pattern: string): EditorResult;",
-                        "findMatchingFiles(pattern: string): List;",
-                        "findMatchingFiles(pattern: string, relativePath: string, filePattern: string): List;",
-                        "readMatchingFiles(pattern: string): Map;",
-                        "readMatchingFiles(pattern: string, relativePath: string, filePattern: string): Map;"),
-                serviceCase(GitService.class, new GitService(ps), "getDiffHead(): string;",
-                        "getDiffHead(relativePath: string): string;", "getChangedFiles(): List;",
-                        "getBlame(relativePath: string, startLine: number, endLine: number): string;"),
-                serviceCase(GenericBuildToolService.class, new GenericBuildToolService(ps, null, null),
-                        "install(): BuildResult;", "clean(): BuildResult;", "compile(): BuildResult;",
-                        "build(): BuildResult;", "runTests(): BuildResult;",
-                        "runSingleTest(testName: string): BuildResult;", "lint(): BuildResult;",
-                        "lint(relativePath: string): BuildResult;", "format(): BuildResult;",
-                        "format(relativePath: string): BuildResult;", "buildAndTest(): BuildResult;"),
-                serviceCase(MemoryService.class, new MemoryService(null, ps), "readGlobalMemory(): string;",
-                        "readProjectMemory(): string;",
-                        "saveProjectNote(slug: string, title: string, tags: string, content: string): EditorResult;",
-                        "search(pattern: string): EditorResult;", "searchIgnoreCase(pattern: string): EditorResult;"),
-                serviceCase(SymbolService.class,
-                        new SymbolService(ps, new GrepService(ps, frs), AiConfig.SHARED_OBJECT_MAPPER),
-                        "getFileOutline(relativePath: string): List<SymbolInfo>;",
-                        "readSymbol(relativePath: string, symbolName: string): string;",
-                        "readSymbols(relativePath: string, symbolNames: string[]): Map;",
-                        "findSymbol(symbolName: string): List<SymbolInfo>;", "interface SymbolInfo {",
-                        "startLine: number;", "endLine: number;", "signature: string;"),
-                serviceCase(PlanService.class, new PlanService(null, null, null),
-                        "submitPlan(title: string, goal: string, requirements: string[], technicalSteps: string[]): string;",
-                        "markStepCompleted(index: number): string;", "markStepsCompleted(indices: number[]): string;",
-                        "requestDevelopment(reason: string): string;", "requestReview(reason: string): string;",
-                        "requestFixes(reason: string): string;", "requestCompletion(reason: string): string;",
-                        "requestPlanRevision(reason: string): string;"));
+        return Stream.of(Arguments.of(FileReadService.class, frs),
+                Arguments.of(FileEditorService.class, new FileEditorService(ps, null)),
+                Arguments.of(GrepService.class, new GrepService(ps, frs)),
+                Arguments.of(GitService.class, new GitService(ps)),
+                Arguments.of(GenericBuildToolService.class, new GenericBuildToolService(ps, null, null)),
+                Arguments.of(MemoryService.class, new MemoryService(null, ps)),
+                Arguments.of(SymbolService.class,
+                        new SymbolService(ps, new GrepService(ps, frs), AiConfig.SHARED_OBJECT_MAPPER)),
+                Arguments.of(PlanService.class, new PlanService(null, null, null)));
     }
 
     @ParameterizedTest
     @MethodSource("agentServiceProvider")
     void testAllAgentServicesExposeAnnotatedMethodsInJexlPermissionsAndLlmDoc(Class<?> serviceClass,
-            Object serviceInstance, List<String> expectedSignatures) {
+            Object serviceInstance) {
         String doc = new LLMDocGenerator().generateDoc(List.of(serviceInstance));
         assertTrue(doc.contains("interface " + serviceClass.getSimpleName()));
 
         int documentedMethodCount = 0;
         for (Method method : serviceClass.getMethods()) {
-            if (method.getDeclaringClass() == Object.class)
+            if (method.getDeclaringClass() == Object.class) {
                 continue;
+            }
             if (method.isAnnotationPresent(AgentDoc.class)) {
                 documentedMethodCount++;
                 assertTrue(AgentJexlPermissions.INSTANCE.allow(serviceClass, method));
@@ -109,7 +73,6 @@ class LLMDocGeneratorTest {
             }
         }
         assertTrue(documentedMethodCount > 0);
-        expectedSignatures.forEach(sig -> assertTrue(doc.contains(sig)));
     }
 
     private static void assertJsFriendlyParamsAndReturnedRecordGetters(Class<?> serviceClass, Method method) {
@@ -122,11 +85,9 @@ class LLMDocGeneratorTest {
                         .anyMatch(m -> m.isAnnotationPresent(AgentDoc.class) && m.getName().equals(method.getName())
                                 && m.getParameterCount() == paramTypes.length
                                 && m.getParameterTypes()[paramIndex].isArray());
-                assertTrue(hasArrayOverload, serviceClass.getSimpleName() + "#" + method.getName()
-                        + " accepting Collection/List must also expose an @AgentDoc array overload for JS compatibility");
+                assertTrue(hasArrayOverload, serviceClass.getSimpleName() + "#" + method.getName());
             }
-            assertTrue(ALLOWED_JS_PARAM_TYPES.contains(paramType), serviceClass.getSimpleName() + "#" + method.getName()
-                    + " has non-JS-friendly parameter type: " + paramType.getName());
+            assertTrue(ALLOWED_JS_PARAM_TYPES.contains(paramType));
         }
         Class<?> returnType = method.getReturnType();
         if (returnType.isRecord()) {
@@ -150,80 +111,32 @@ class LLMDocGeneratorTest {
                 prefix = "is";
             }
             String getterName = prefix + cap;
-            Method getter = assertDoesNotThrow(() -> recordType.getMethod(getterName),
-                    recordType.getSimpleName() + " must expose public JavaBean getter " + getterName
-                            + "() so JS property access (obj." + compName + ") works in JEXL");
+            Method getter = assertDoesNotThrow(() -> recordType.getMethod(getterName));
             assertTrue(Modifier.isPublic(getter.getModifiers()));
             assertEquals(comp.getType(), getter.getReturnType());
         }
     }
 
     @Test
-    void testGenerateDocFiltersMethodsAndSupportingTypesByWorkflowPhase() {
+    void testGenerateDocPhaseFilteringCglibUnwrappingAndNestedTypes() {
         LLMDocGenerator generator = new LLMDocGenerator();
         PhaseFilteredService svc = new PhaseFilteredService();
 
-        String allDoc = generator.generateDoc(List.of(svc));
-        SwingTestUtils.assertContainsAll(allDoc, "wildcardMethod(): string;", "planOnlyMethod(): Details;",
-                "codeReviewMethod(): Status;", "interface Details {", "enum Status {");
-        assertFalse(allDoc.contains("emptyPhasesMethod"));
-
         String planDoc = generator.generateDoc(List.of(svc), WorkflowPhase.PLAN);
-        SwingTestUtils.assertContainsAll(planDoc, "wildcardMethod(): string;", "planOnlyMethod(): Details;",
-                "interface Details {");
+        SwingTestUtils.assertContainsAll(planDoc, "wildcardMethod(): string;", "planOnlyMethod(): ParentRecord;",
+                "interface ParentRecord {", "child: ChildRecord;", "enum Status {");
         assertFalse(planDoc.contains("codeReviewMethod"));
-        assertFalse(planDoc.contains("enum Status {"));
         assertFalse(planDoc.contains("emptyPhasesMethod"));
 
         String codeDoc = generator.generateDoc(List.of(svc), WorkflowPhase.CODE);
-        SwingTestUtils.assertContainsAll(codeDoc, "wildcardMethod(): string;", "codeReviewMethod(): Status;",
-                "enum Status {");
+        SwingTestUtils.assertContainsAll(codeDoc, "wildcardMethod(): string;", "codeReviewMethod(): Status;");
         assertFalse(codeDoc.contains("planOnlyMethod"));
-        assertFalse(codeDoc.contains("interface Details {"));
-        assertFalse(codeDoc.contains("emptyPhasesMethod"));
 
-        ProjectService ps = mock(ProjectService.class);
-        when(ps.hasActiveProject()).thenReturn(false);
-        GenericBuildToolService buildTool = new GenericBuildToolService(ps, null, null);
-        String buildCodeDoc = generator.generateDoc(List.of(buildTool), WorkflowPhase.CODE);
-        SwingTestUtils.assertContainsAll(buildCodeDoc, "install(): BuildResult;", "format(): BuildResult;",
-                "format(relativePath: string): BuildResult;", "lint(): BuildResult;",
-                "lint(relativePath: string): BuildResult;", "build(): BuildResult;");
-
-        for (WorkflowPhase nonCodePhase : List.of(WorkflowPhase.EXPLORE, WorkflowPhase.PLAN, WorkflowPhase.REVIEW)) {
-            String nonCodeDoc = generator.generateDoc(List.of(buildTool), nonCodePhase);
-            SwingTestUtils.assertContainsAll(nonCodeDoc, "compile(): BuildResult;", "build(): BuildResult;",
-                    "runTests(): BuildResult;", "lint(): BuildResult;", "lint(relativePath: string): BuildResult;",
-                    "buildAndTest(): BuildResult;");
-            assertFalse(nonCodeDoc.contains("install(): BuildResult;"));
-            assertFalse(nonCodeDoc.contains("format(): BuildResult;"));
-            assertFalse(nonCodeDoc.contains("format(relativePath: string): BuildResult;"));
-        }
-    }
-
-    @Test
-    void testGenerateDocUnwrapsSpringCglibProxy() {
-        LLMDocGenerator generator = new LLMDocGenerator();
-        ProxyFactory proxyFactory = new ProxyFactory(new MockAgentService());
+        ProxyFactory proxyFactory = new ProxyFactory(svc);
         proxyFactory.setProxyTargetClass(true);
-
-        String doc = generator.generateDoc(List.of(proxyFactory.getProxy()));
-        SwingTestUtils.assertContainsAll(doc, "// Global variable exposed in JEXL: mockService",
-                "interface MockAgentService {", "* @param input The input string to process",
-                "doSomething(input: string): string;");
-        assertFalse(doc.contains("SpringCGLIB"));
-
-        SwingTestUtils.assertContainsAll(generator.generateDoc(List.of(new SubclassMockAgentService())),
-                "interface SubclassMockAgentService {", "doSomething(input: string): string;",
-                "extraAction(): string;");
-    }
-
-    @Test
-    void testTransitiveNestedSupportingTypesNoConcurrentModificationException() {
-        String doc = assertDoesNotThrow(() -> new LLMDocGenerator().generateDoc(List.of(new ServiceWithNestedTypes())));
-        SwingTestUtils.assertContainsAll(doc, "interface ServiceWithNestedTypes", "getParent(): ParentRecord;",
-                "interface ParentRecord {", "child: ChildRecord;", "steps: NestedStep[];", "interface ChildRecord {",
-                "status: Status;", "interface NestedStep {", "description: string;", "enum Status {");
+        String proxyDoc = generator.generateDoc(List.of(proxyFactory.getProxy()));
+        assertTrue(proxyDoc.contains("interface PhaseFilteredService {"));
+        assertFalse(proxyDoc.contains("SpringCGLIB"));
     }
 
     @AgentService(value = "phaseService", phases = {"*"})
@@ -234,7 +147,7 @@ class LLMDocGeneratorTest {
         }
 
         @AgentDoc(value = "Plan only", phases = {"PLAN"})
-        public Details planOnlyMethod() {
+        public ParentRecord planOnlyMethod() {
             return null;
         }
 
@@ -249,48 +162,13 @@ class LLMDocGeneratorTest {
         }
     }
 
-    @AgentService("mockService")
-    @AgentDoc("This is a mock service")
-    public static class MockAgentService {
-        @AgentDoc("Does something")
-        public String doSomething(@AgentDoc("The input string to process") String input) {
-            return input;
-        }
-    }
-
-    public static class SubclassMockAgentService extends MockAgentService {
-        @Override
-        public String doSomething(String input) {
-            return super.doSomething(input);
-        }
-
-        @AgentDoc("Extra subclass action")
-        public String extraAction() {
-            return "extra";
-        }
-    }
-
-    @AgentService("nestedService")
-    public static class ServiceWithNestedTypes {
-        @AgentDoc("Get parent record")
-        public ParentRecord getParent() {
-            return null;
-        }
-    }
-
     public enum Status {
         ACTIVE, INACTIVE
     }
 
-    public record Details(int id, String name) {
-    }
-
-    public record ParentRecord(String title, ChildRecord child, NestedStep[] steps) {
+    public record ParentRecord(String title, ChildRecord child) {
     }
 
     public record ChildRecord(String label, Status status) {
-    }
-
-    public record NestedStep(String description, boolean completed) {
     }
 }

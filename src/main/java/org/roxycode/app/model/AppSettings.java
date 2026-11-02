@@ -2,6 +2,7 @@ package org.roxycode.app.model;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
 
 public class AppSettings {
@@ -31,9 +32,8 @@ public class AppSettings {
             this.maxAgentToolTurns = other.maxAgentToolTurns;
             this.maxChatMemoryMessages = other.maxChatMemoryMessages;
             this.logToolCalls = other.logToolCalls;
-            this.globalContextFolders = other.globalContextFolders == null
-                    ? new ArrayList<>()
-                    : new ArrayList<>(other.globalContextFolders);
+            this.globalContextFolders = new ArrayList<>(
+                    Objects.requireNonNullElse(other.globalContextFolders, List.of()));
         }
     }
 
@@ -42,10 +42,7 @@ public class AppSettings {
     }
 
     public String getTheme() {
-        if (StringUtils.isBlank(theme)) {
-            return DEFAULT_THEME;
-        }
-        return theme;
+        return StringUtils.defaultIfBlank(theme, DEFAULT_THEME);
     }
 
     public void setTheme(String theme) {
@@ -69,10 +66,7 @@ public class AppSettings {
     }
 
     public String getGeminiModel() {
-        if (StringUtils.isBlank(geminiModel)) {
-            return DEFAULT_GEMINI_MODEL;
-        }
-        return geminiModel;
+        return StringUtils.defaultIfBlank(geminiModel, DEFAULT_GEMINI_MODEL);
     }
 
     public void setGeminiModel(String geminiModel) {
@@ -104,12 +98,10 @@ public class AppSettings {
     }
 
     public List<String> getGlobalContextFolders() {
-        return globalContextFolders == null ? List.of() : List.copyOf(globalContextFolders);
+        return List.copyOf(Objects.requireNonNullElse(globalContextFolders, List.of()));
     }
 
     public void setGlobalContextFolders(List<String> globalContextFolders) {
-        this.globalContextFolders = globalContextFolders == null
-                ? new ArrayList<>()
-                : new ArrayList<>(globalContextFolders);
+        this.globalContextFolders = new ArrayList<>(Objects.requireNonNullElse(globalContextFolders, List.of()));
     }
 }

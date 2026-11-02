@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.UnaryOperator;
-
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProcessRunner;
@@ -202,15 +202,10 @@ public class GrepService {
         if (exitCode == EXIT_CODE_NO_MATCHES) {
             return new EditorResult(true, "", null);
         }
-        String trimmedOutput = "";
-        if (result.output() != null) {
-            trimmedOutput = result.output().trim();
-        }
+        String trimmedOutput = StringUtils.trimToEmpty(result.output());
         if (exitCode != 0) {
-            String errorDetail = trimmedOutput;
-            if (errorDetail.isEmpty() && result.errorOutput() != null) {
-                errorDetail = result.errorOutput().trim();
-            }
+            String errorDetail = StringUtils.defaultIfEmpty(trimmedOutput,
+                    StringUtils.trimToEmpty(result.errorOutput()));
             log.warn("RipGrep failed with exit code {}: {}", exitCode, errorDetail);
             return new EditorResult(false, "", "RipGrep error (" + exitCode + "): " + errorDetail);
         }

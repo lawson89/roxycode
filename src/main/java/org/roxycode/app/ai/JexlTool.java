@@ -2,6 +2,8 @@ package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
+import java.util.Objects;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
@@ -43,11 +45,7 @@ public class JexlTool {
                 .silent(false).safe(false).create();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
-        if (objectMapper != null) {
-            this.mapper = objectMapper;
-        } else {
-            this.mapper = AiConfig.SHARED_OBJECT_MAPPER;
-        }
+        this.mapper = Objects.requireNonNullElse(objectMapper, AiConfig.SHARED_OBJECT_MAPPER);
         this.settingsService = settingsService;
     }
 
@@ -139,11 +137,7 @@ public class JexlTool {
     }
 
     private String serializeStringResult(String rawOutput) throws Exception {
-        String output = rawOutput;
-        if (rawOutput == null || rawOutput.trim().isEmpty()) {
-            output = "<empty result>";
-        }
-        return mapper.writeValueAsString(Map.of(RESULT_KEY, output));
+        return mapper.writeValueAsString(Map.of(RESULT_KEY, StringUtils.defaultIfBlank(rawOutput, "<empty result>")));
     }
 
     private void publishToolEvent(String conversationId, String script, Object result, boolean success, String error) {
@@ -154,11 +148,7 @@ public class JexlTool {
 
     private String toJsonError(String message) {
         try {
-            String errorMsg = "Unknown error";
-            if (message != null) {
-                errorMsg = message;
-            }
-            return mapper.writeValueAsString(Map.of("error", errorMsg));
+            return mapper.writeValueAsString(Map.of("error", Objects.requireNonNullElse(message, "Unknown error")));
         } catch (Exception e) {
             return """
                     {"error":"Internal Error during error serialization"}""";

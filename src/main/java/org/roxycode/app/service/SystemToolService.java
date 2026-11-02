@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -105,17 +106,9 @@ public class SystemToolService {
     SystemToolService(SettingsService settingsService, TomlMapper mapper, ApplicationEventPublisher eventPublisher,
             DockerProbe dockerProbe, BooleanSupplier dockerCliPresentSupplier) {
         this.settingsService = settingsService;
-        if (mapper != null) {
-            this.mapper = mapper;
-        } else {
-            this.mapper = AiConfig.SHARED_TOML_MAPPER;
-        }
-        if (eventPublisher != null) {
-            this.eventPublisher = eventPublisher;
-        } else {
-            this.eventPublisher = event -> {
-            };
-        }
+        this.mapper = Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER);
+        this.eventPublisher = Objects.requireNonNullElse(eventPublisher, event -> {
+        });
         this.dockerProbe = dockerProbe;
         this.dockerCliPresentSupplier = dockerCliPresentSupplier;
         this.toolProber = this::probeAllTools;
@@ -139,11 +132,7 @@ public class SystemToolService {
     }
 
     void setToolProber(Supplier<List<SystemTool>> toolProber) {
-        if (toolProber != null) {
-            this.toolProber = toolProber;
-        } else {
-            this.toolProber = this::probeAllTools;
-        }
+        this.toolProber = Objects.requireNonNullElse(toolProber, this::probeAllTools);
     }
 
     @SuppressWarnings({"PMD.CloseResource", "PMD.AvoidCatchingThrowable"})
@@ -362,43 +351,28 @@ public class SystemToolService {
     }
 
     Path getCacheFilePath() {
-        if (settingsService == null) {
+        if (settingsService == null || settingsService.getRoxyHomeDir() == null) {
             return null;
         }
-        Path homeDir = settingsService.getRoxyHomeDir();
-        if (homeDir == null) {
-            return null;
-        }
-        return homeDir.resolve(SYSTEM_TOOLS_FILE);
+        return settingsService.getRoxyHomeDir().resolve(SYSTEM_TOOLS_FILE);
     }
 
     private List<SystemTool> loadFromDisk() {
-        Path path = getCacheFilePath();
-        if (path == null || !Files.exists(path)) {
-            return List.of();
+        SystemToolsCache cache = PathUtils.readTomlOrDefault(getCacheFilePath(), SystemToolsCache.class, null, mapper);
+        if (cache != null && cache.getTools() != null) {
+            return List.copyOf(cache.getTools());
         }
-        try {
-            SystemToolsCache cache = mapper.readValue(path.toFile(), SystemToolsCache.class);
-            if (cache != null && cache.getTools() != null) {
-                return List.copyOf(cache.getTools());
-            }
-            return List.of();
-        } catch (IOException e) {
-            log.warn("Failed to load cached system tools from {}: {}", path, e.getMessage());
-            return List.of();
-        }
+        return List.of();
     }
 
     private void saveToDisk(List<SystemTool> tools) {
         Path path = getCacheFilePath();
-        if (path == null) {
-            return;
-        }
-        try {
-            PathUtils.createParentDirectories(path);
-            mapper.writeValue(path.toFile(), new SystemToolsCache(tools));
-        } catch (IOException e) {
-            log.warn("Failed to save system tools cache to {}: {}", path, e.getMessage());
+        if (path != null) {
+            try {
+                PathUtils.writeToml(path, new SystemToolsCache(tools), mapper);
+            } catch (IOException e) {
+                log.warn("Failed to save system tools cache to {}: {}", path, e.getMessage());
+            }
         }
     }
 

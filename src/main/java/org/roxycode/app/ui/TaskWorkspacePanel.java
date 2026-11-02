@@ -79,10 +79,7 @@ public final class TaskWorkspacePanel extends JPanel {
 
         updateActivePhase(planService.getCurrentPhase());
 
-        this.taskTabs = new JTabbedPane();
-        taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE,
-                FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
-        taskTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, topBar);
+        this.taskTabs = UiComponents.createUnderlinedTabbedPane(topBar);
         Color accent = SwingHtmlUtils.getAccentColor();
         Color muted = SwingHtmlUtils.getMutedForegroundColor();
         taskTabs.addTab("Chat", FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent), taskChatPanel);

@@ -63,12 +63,10 @@ public class PromptService {
     }
 
     public record ProjectContextConfig(List<String> folders) {
+        public static final ProjectContextConfig EMPTY = new ProjectContextConfig(List.of());
+
         public ProjectContextConfig {
-            if (folders == null) {
-                folders = List.of();
-            } else {
-                folders = List.copyOf(folders);
-            }
+            folders = List.copyOf(Objects.requireNonNullElse(folders, List.of()));
         }
     }
 
@@ -178,10 +176,7 @@ public class PromptService {
     }
 
     public String getSessionContext(WorkflowPhase phase) {
-        WorkflowPhase currentPhase = phase;
-        if (currentPhase == null) {
-            currentPhase = planService.getCurrentPhase();
-        }
+        WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
         sb.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage())
                 .append("\nCURRENT PHASE: ").append(currentPhase.name()).append("\nYou are the ")
@@ -204,10 +199,7 @@ public class PromptService {
     }
 
     public String buildSystemPrompt(WorkflowPhase phase, String additionalInstructions) {
-        WorkflowPhase currentPhase = phase;
-        if (currentPhase == null) {
-            currentPhase = planService.getCurrentPhase();
-        }
+        WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         StringBuilder systemPrompt = new StringBuilder(getStableContext()).append(NEWLINE_DOUBLE)
                 .append(loadPhasePrompt(currentPhase));
 
@@ -231,13 +223,9 @@ public class PromptService {
         };
         String raw = readClasspathResource(path);
         if (phase == WorkflowPhase.EXPLORE) {
-            AppSettings settings = null;
-            if (settingsService != null) {
-                settings = settingsService.getSettings();
-            }
             int maxTurns = AppSettings.DEFAULT_MAX_AGENT_TOOL_TURNS;
-            if (settings != null) {
-                maxTurns = settings.getMaxAgentToolTurns();
+            if (settingsService != null && settingsService.getSettings() != null) {
+                maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
             }
             return StringSubstitutor.replace(raw, Map.of("maxTurns", maxTurns));
         }
@@ -273,21 +261,10 @@ public class PromptService {
         if (!hasActiveProject()) {
             return List.of();
         }
-        Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
-        if (configFile == null || !Files.exists(configFile)) {
-            return List.of();
-        }
-        try {
-            ProjectContextConfig config = AiConfig.SHARED_TOML_MAPPER.readValue(configFile.toFile(),
-                    ProjectContextConfig.class);
-            if (config != null) {
-                return normalizeFolderList(config.folders());
-            }
-            return List.of();
-        } catch (IOException e) {
-            log.warn("Failed to read project context config {}: {}", configFile, e.getMessage());
-            return List.of();
-        }
+        ProjectContextConfig config = PathUtils.readTomlOrDefault(
+                projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE), ProjectContextConfig.class,
+                ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
+        return normalizeFolderList(config.folders());
     }
 
     public void setProjectContextFolders(List<String> folders) {
@@ -296,9 +273,8 @@ public class PromptService {
         }
         Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
         try {
-            PathUtils.createParentDirectories(configFile);
-            AiConfig.SHARED_TOML_MAPPER.writeValue(configFile.toFile(),
-                    new ProjectContextConfig(normalizeFolderList(folders)));
+            PathUtils.writeToml(configFile, new ProjectContextConfig(normalizeFolderList(folders)),
+                    AiConfig.SHARED_TOML_MAPPER);
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(new ContextChangedEvent(false));
             }

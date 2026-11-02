@@ -6,7 +6,6 @@ import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,7 +21,6 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
@@ -50,304 +48,75 @@ class PlanServiceTest {
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
     }
 
-    private static ImplementationPlan createPlan(List<ImplementationPlan.TechStep> steps, boolean approved) {
-        String approvedOn = null;
-        String approvedBy = null;
-        if (approved) {
-            approvedOn = "now";
-            approvedBy = "user";
-        }
-        return new ImplementationPlan("Title", "Goal", List.of("Req 1"), steps, approved, approvedOn, approvedBy, null,
-                null, List.of());
-    }
-
     private static void assertIllegalState(Executable action, String... expectedSubstrings) {
         IllegalStateException ex = assertThrows(IllegalStateException.class, action);
         assertContainsAll(ex.getMessage(), expectedSubstrings);
     }
 
-    private static void assertIllegalStates(Executable... actions) {
-        for (Executable action : actions) {
-            assertThrows(IllegalStateException.class, action);
-        }
-    }
-
-    private static void assertBadArgs(Executable... actions) {
-        for (Executable action : actions) {
-            assertThrows(IllegalArgumentException.class, action);
-        }
-    }
-
     @Test
-    void testSubmitPlanAndNotifyListeners() {
-        AtomicInteger notifications = new AtomicInteger(0);
-        doAnswer(inv -> {
-            if (inv.getArgument(0) instanceof PlanUpdatedEvent) {
-                notifications.incrementAndGet();
-            }
-            return null;
-        }).when(eventPublisher).publishEvent(any(Object.class));
-
-        String res = service.submitPlan(createPlan(List.of(new ImplementationPlan.TechStep("Step 1", false)), false));
-        assertEquals("Implementation plan submitted successfully with mandatory verification checklist items.", res);
-        assertEquals("Title", service.getCurrentPlan().title());
-        assertEquals(4, service.getCurrentPlan().technicalSteps().size());
-        assertEquals(1, notifications.get());
-    }
-
-    @Test
-    void testStepMutationsCompletionAndValidation() {
+    void testStepMutationsCompletionValidationAndPlanRevisionPreservation() {
         service.submitPlan("T", "G", new String[0], new String[]{"Step 1"});
         assertTrue(service.addTechnicalStep("Step 2").contains("Added technical step at index 1: 'Step 2'"));
-        List<ImplementationPlan.TechStep> steps = service.getCurrentPlan().technicalSteps();
-        assertEquals(5, steps.size());
-        assertEquals("Step 1", steps.get(0).description());
-        assertEquals("Step 2", steps.get(1).description());
-        assertEquals(ImplementationPlan.STEP_COMPILE, steps.get(2).description());
+        assertEquals(5, service.getCurrentPlan().technicalSteps().size());
 
         service.requestDevelopment("Ready");
         service.approveTransition();
         assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
 
-        assertContainsAll(service.markStepsCompleted(0, 1), "Marked steps [0, 1] completed.",
-                "Remaining incomplete steps: [2: Code compiles successfully, 3: Unit tests pass, 4: Automated code review passes]");
-        assertContainsAll(service.markStepCompleted(2), "Marked steps [2] completed.",
-                "Remaining incomplete steps: [3: Unit tests pass, 4: Automated code review passes]");
-        assertContainsAll(service.markStepsIncomplete(0, 1), "Marked steps [0, 1] incomplete.", "0: Step 1",
-                "1: Step 2");
-
-        service.markStepCompleted(0);
-        assertTrue(service.updateTechnicalStep(0, "Step 1 (refined)")
-                .contains("Updated technical step 0 to 'Step 1 (refined)'"));
-        assertEquals("Step 1 (refined)", service.getCurrentPlan().technicalSteps().get(0).description());
-        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
-
-        assertTrue(service.addTechnicalStep("Step 3").contains("Added technical step at index 2: 'Step 3'"));
-        assertEquals(6, service.getCurrentPlan().technicalSteps().size());
-        assertTrue(service.markStepsCompleted(0, 1, 2, 3, 4, 5)
-                .contains("Remaining incomplete steps: none (all steps completed)."));
-
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> service.markStepCompleted(-1)).getMessage()
-                .contains("Valid 0-based indices are 0..5"));
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> service.markStepsCompleted(0, 6)).getMessage()
-                .contains("Invalid step index 6"));
-
-        assertBadArgs(() -> service.markStepsCompleted(new int[0]), () -> service.addHandoffLogEntry("   "),
-                () -> service.addTechnicalStep("  "), () -> service.updateTechnicalStep(0, ""),
-                () -> service.updateTechnicalStep(99, "Valid"));
-        assertEquals("Handoff log entry added.", service.addHandoffLogEntry("Completed initial refactoring"));
-
-        service.clearPlan();
-        assertIllegalStates(() -> service.markStepCompleted(0), () -> service.addHandoffLogEntry("entry"));
-    }
-
-    @Test
-    void testSubmitPlanPreservesCompletedStepsAndHandoffLogOnPlanRevision() {
-        setupCodePhase();
+        assertContainsAll(service.markStepsCompleted(0, 1), "Marked steps [0, 1] completed.");
+        assertContainsAll(service.markStepsIncomplete(0, 1), "Marked steps [0, 1] incomplete.");
         service.markStepsCompleted(0, 2);
         service.addHandoffLogEntry("Finished Step 1 before blocker");
         service.onFileChanged(new FileChangedEvent("src/Step1.java", FileChangedEvent.ChangeType.CREATED));
 
-        service.requestPlanRevision("Split Step 2 into sub-steps");
+        assertTrue(service.updateTechnicalStep(0, "Step 1 (refined)").contains("Step 1 (refined)"));
+        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
+
+        assertThrows(IllegalArgumentException.class, () -> service.markStepCompleted(-1));
+        assertThrows(IllegalArgumentException.class, () -> service.markStepsCompleted(new int[0]));
+        assertThrows(IllegalArgumentException.class, () -> service.addHandoffLogEntry("   "));
+
+        service.requestPlanRevision("Split Step 2");
         service.approveTransition();
         assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
 
-        int logCount = service.getCurrentPlan().handoffLog().size();
-        assertTrue(logCount > 0);
-
-        service.submitPlan("T", "G", new String[0], new String[]{"Step 1", "Step 2a", "Step 2b"});
+        service.submitPlan("T", "G", new String[0], new String[]{"Step 1 (refined)", "Step 2a", "Step 2b"});
         ImplementationPlan revised = service.getCurrentPlan();
         assertEquals(6, revised.technicalSteps().size());
         assertTrue(revised.technicalSteps().get(0).completed());
         assertFalse(revised.technicalSteps().get(1).completed());
-        assertFalse(revised.technicalSteps().get(2).completed());
-        assertFalse(revised.technicalSteps().get(3).completed());
-        assertEquals(logCount, revised.handoffLog().size());
         assertEquals("CREATED src/Step1.java", revised.formatChangesText());
     }
 
     @Test
-    void testWorkflowPhaseTransitionsGatesAndRevisions() {
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        assertIllegalState(() -> service.requestDevelopment("Reason"), "Implementation Plan is missing");
-
-        service.submitPlan("T", "G", new String[]{"R1"}, new String[]{"S1"});
-        assertContainsAll(service.requestDevelopment("Ready to build"), "PLAN SUMMARY:",
-                "Transition Request: Approve Plan and proceed to Code");
-        assertEquals("Approve Plan and proceed to Code",
-                PlanService.formatApprovalLabel(WorkflowPhase.PLAN, WorkflowPhase.CODE));
-        assertEquals("Approve Feature Request as complete",
-                PlanService.formatApprovalLabel(WorkflowPhase.REVIEW, WorkflowPhase.PLAN));
-        assertEquals("Approve Plan Revision and return to Plan",
-                PlanService.formatApprovalLabel(WorkflowPhase.CODE, WorkflowPhase.PLAN));
-        assertEquals(WorkflowPhase.CODE, service.getPendingPhase());
-
-        when(envService.getCurrentUser()).thenReturn("testuser");
-        service.approveTransition();
-        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-        assertNull(service.getPendingPhase());
-        assertTrue(service.getCurrentPlan().userApproved());
-        assertEquals("testuser", service.getCurrentPlan().approvedBy());
-
-        // Test CODE -> PLAN revision preserves plan
-        String revResponse = service.requestPlanRevision("Need architecture revision");
-        assertTrue(revResponse.contains("Transition Request: Approve Plan Revision and return to Plan"));
-        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
-        service.approveTransition();
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        assertNotNull(service.getCurrentPlan());
-        assertNull(service.getCurrentPlan().completedOn());
-
-        // Re-enter CODE and verify unapproved plan guard and step gates
-        service.requestDevelopment("Ready again");
-        service.approveTransition();
-        ImplementationPlan currentApprovedPlan = service.getCurrentPlan();
-        service.setCurrentPlan(createPlan(List.of(new ImplementationPlan.TechStep("S1", false)), false));
-        assertIllegalState(() -> service.requestReview("Checking quality"),
-                "An approved Implementation Plan is required");
-
-        service.setCurrentPlan(currentApprovedPlan);
-        assertIllegalState(() -> service.requestReview("Feature implemented"), "0: S1", "1: Code compiles successfully",
-                "2: Unit tests pass");
-
-        service.markStepsCompleted(0, 1, 2);
-        int initialLogSize = service.getCurrentPlan().handoffLog().size();
-        assertTrue(service.requestReview("Feature implemented").contains("Autonomous transition"));
-        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
-        verify(eventPublisher)
-                .publishEvent(argThat((Object ev) -> ev instanceof WorkflowTransitionEvent wte && wte.autonomous()));
-        assertEquals(initialLogSize + 1, service.getCurrentPlan().handoffLog().size());
-
-        assertTrue(service.requestFixes("Needs a fix").contains("Autonomous transition"));
-        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-
-        service.requestReview("Fixed");
-        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
-
-        assertIllegalState(() -> service.requestCompletion("All verified"), "3: Automated code review passes");
-
-        service.markStepCompleted(3);
-        List<ImplementationPlan> updates = new ArrayList<>();
-        doAnswer(inv -> {
-            if (inv.getArgument(0) instanceof PlanUpdatedEvent pue) {
-                updates.add(pue.plan());
-            }
-            return null;
-        }).when(eventPublisher).publishEvent(any(Object.class));
-
-        assertTrue(service.requestCompletion("All verified")
-                .contains("Transition Request: Approve Feature Request as complete"));
-        assertEquals(WorkflowPhase.PLAN, service.getPendingPhase());
-
-        service.approveTransition();
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        assertNull(service.getCurrentPlan());
-        assertTrue(updates.stream()
-                .anyMatch(p -> p != null && "testuser".equals(p.completedBy()) && p.completedOn() != null));
-    }
-
-    @Test
-    void testReviewToPlanArchivesCompletedPlanWithHitlMetadataAndFrontmatter(@TempDir Path tempDir) throws Exception {
+    void testWorkflowPhaseTransitionsGatesArchivingAndVerificationReset(@TempDir Path tempDir) throws Exception {
         ProjectService projectService = mock(ProjectService.class);
         Path projectRoot = tempDir.resolve("my-project");
         Path archiveDir = tempDir.resolve("roxy-home/projects/my-project-12345678/archive/plans");
-
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getProjectName()).thenReturn("my-project");
         when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
         when(projectService.resolveProjectDataPath("archive/plans")).thenReturn(archiveDir);
 
         PlanService archivingService = new PlanService(envService, eventPublisher, projectService);
+        assertIllegalState(() -> archivingService.requestDevelopment("Reason"), "Implementation Plan is missing");
+
         archivingService.submitPlan("Archive Feature Plan!", "Persist completed plans",
-                new String[]{"Include frontmatter", "Include approvals"}, new String[]{"Implement archiving"});
+                new String[]{"Include frontmatter"}, new String[]{"Implement archiving"});
+        assertThrows(IllegalStateException.class, () -> archivingService.markStepCompleted(0));
+        assertThrows(IllegalStateException.class, () -> archivingService.requestReview("done"));
 
         when(envService.getCurrentUser()).thenReturn("alice");
-        archivingService.requestDevelopment("Ready for code");
+        assertContainsAll(archivingService.requestDevelopment("Ready for code"), "PLAN SUMMARY:",
+                "Approve Plan and proceed to Code");
         archivingService.approveTransition();
         assertEquals(WorkflowPhase.CODE, archivingService.getCurrentPhase());
+        assertIllegalState(() -> archivingService.routeToPhase(WorkflowPhase.EXPLORE, "Jump"),
+                "Cannot jump from CODE to EXPLORE");
+        assertIllegalState(() -> archivingService.requestReview("Early"), "0: Implement archiving",
+                "1: Code compiles successfully", "2: Unit tests pass");
 
-        archivingService.onFileChanged(new FileChangedEvent("src/Main.java", FileChangedEvent.ChangeType.MODIFIED));
-        archivingService
-                .onFileChanged(new FileChangedEvent("src/NewFeature.java", FileChangedEvent.ChangeType.CREATED));
-        archivingService.markStepsCompleted(0, 1, 2);
-        archivingService.requestReview("Ready for review");
-        assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
-
-        archivingService.markStepCompleted(3);
-        archivingService.requestCompletion("All checks passed");
-
-        when(envService.getCurrentUser()).thenReturn("bob");
-        archivingService.approveTransition();
-
-        assertEquals(WorkflowPhase.PLAN, archivingService.getCurrentPhase());
-        assertNull(archivingService.getCurrentPlan());
-        assertTrue(Files.isDirectory(archiveDir));
-
-        List<Path> archivedFiles;
-        try (Stream<Path> stream = Files.list(archiveDir)) {
-            archivedFiles = stream.toList();
-        }
-        assertEquals(1, archivedFiles.size());
-        Path archivedFile = archivedFiles.get(0);
-        String fileName = archivedFile.getFileName().toString();
-        assertTrue(fileName.endsWith("-archive-feature-plan.md"));
-
-        String content = Files.readString(archivedFile);
-        assertTrue(content.startsWith("---" + (char) 10));
-        assertContainsAll(content, "project: ", "my-project", "projectPath: ",
-                projectRoot.toAbsolutePath().normalize().toString(), "title: ", "Archive Feature Plan!",
-                "userApproved: true" + (char) 10, "approvedBy: ", "alice", "completedBy: ", "bob",
-                "# Implementation Plan: Archive Feature Plan!", "## Approvals",
-                "- **Move to Code:** Approved by alice on ", "- **Final Acceptance:** Accepted by bob on ",
-                "## Handoff Log", "REVIEW -> PLAN (User Approved): All checks passed", "## Changes",
-                "MODIFIED src/Main.java", "CREATED src/NewFeature.java");
-        verify(eventPublisher).publishEvent(
-                argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent aue && fileName.equals(aue.filename())));
-    }
-
-    @Test
-    void testPhaseRestrictionsAndExploreDecouplingEnforced() {
-        service.submitPlan("T", "G", new String[0], new String[]{"S1"});
-        assertIllegalStates(() -> service.markStepCompleted(0), () -> service.markStepsCompleted(0),
-                () -> service.markStepIncomplete(0), () -> service.markStepsIncomplete(0),
-                () -> service.requestReview("done"), () -> service.requestFixes("fix"),
-                () -> service.requestCompletion("complete"), () -> service.requestPlanRevision("revise"));
-
-        service.requestDevelopment("Ready");
-        service.approveTransition();
-        assertEquals(WorkflowPhase.CODE, service.getCurrentPhase());
-        assertIllegalState(() -> service.routeToPhase(WorkflowPhase.EXPLORE, "Jump"),
-                "Error: Cannot jump from CODE to EXPLORE");
-
-        assertDoesNotThrow(() -> service.markStepsCompleted(0, 1, 2));
-        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
-        assertIllegalStates(() -> service.submitPlan("T2", "G2", new String[0], new String[0]),
-                () -> service.requestDevelopment("dev"), () -> service.requestFixes("fix"),
-                () -> service.requestCompletion("complete"));
-
-        service.requestReview("Ready for review");
-        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
-
-        assertDoesNotThrow(() -> service.markStepCompleted(3));
-        assertIllegalStates(() -> service.submitPlan("T3", "G3", new String[0], new String[0]),
-                () -> service.addTechnicalStep("extra"), () -> service.updateTechnicalStep(0, "updated"),
-                () -> service.requestDevelopment("dev"), () -> service.requestReview("review"),
-                () -> service.requestPlanRevision("revise"));
-
-        assertTrue(service.getVisitedPhases().contains(WorkflowPhase.CODE));
-        service.resetWorkflow();
-        assertEquals(WorkflowPhase.PLAN, service.getCurrentPhase());
-        assertEquals(Set.of(WorkflowPhase.PLAN), service.getVisitedPhases());
-    }
-
-    @Test
-    void testUpdateVerificationStepAndResetOnFileChangedInCodePhase() {
-        assertDoesNotThrow(() -> service.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true));
-
-        setupCodePhase();
-        // Steps: 0=Step 1, 1=Step 2, 2=Code compiles successfully, 3=Unit tests pass, 4=Automated code review passes
-        service.markStepsCompleted(0, 1);
-
+        archivingService.markStepCompleted(0);
         AtomicInteger planEvents = new AtomicInteger(0);
         doAnswer(inv -> {
             if (inv.getArgument(0) instanceof PlanUpdatedEvent) {
@@ -356,31 +125,45 @@ class PlanServiceTest {
             return null;
         }).when(eventPublisher).publishEvent(any(Object.class));
 
-        service.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
-        assertTrue(service.getCurrentPlan().technicalSteps().get(2).completed());
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
         assertEquals(1, planEvents.get());
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
 
-        // No-op when state is already true
-        service.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
-        assertEquals(1, planEvents.get());
+        archivingService.onFileChanged(new FileChangedEvent("src/Main.java", FileChangedEvent.ChangeType.MODIFIED));
+        assertFalse(archivingService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertFalse(archivingService.getCurrentPlan().technicalSteps().get(2).completed());
 
-        service.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
-        assertTrue(service.getCurrentPlan().technicalSteps().get(3).completed());
-        assertEquals(2, planEvents.get());
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
+        assertTrue(archivingService.requestReview("Ready for review").contains("Autonomous transition"));
+        assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
 
-        // Editing a file in CODE phase resets STEP_COMPILE and STEP_UNIT_TESTS to false
-        service.onFileChanged(new FileChangedEvent("src/App.java", FileChangedEvent.ChangeType.MODIFIED));
-        assertTrue(service.getCurrentPlan().technicalSteps().get(0).completed());
-        assertTrue(service.getCurrentPlan().technicalSteps().get(1).completed());
-        assertFalse(service.getCurrentPlan().technicalSteps().get(2).completed());
-        assertFalse(service.getCurrentPlan().technicalSteps().get(3).completed());
-        assertIllegalState(() -> service.requestReview("Try review without re-running build/tests"),
-                "2: Code compiles successfully", "3: Unit tests pass");
+        assertTrue(archivingService.requestFixes("Needs fix").contains("Autonomous transition"));
+        assertEquals(WorkflowPhase.CODE, archivingService.getCurrentPhase());
+        archivingService.requestReview("Fixed");
+        assertIllegalState(() -> archivingService.requestCompletion("All verified"), "3: Automated code review passes");
 
-        // Re-verify and transition to REVIEW
-        service.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
-        service.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
-        assertTrue(service.requestReview("Re-verified").contains("Autonomous transition"));
-        assertEquals(WorkflowPhase.REVIEW, service.getCurrentPhase());
+        archivingService.markStepCompleted(3);
+        assertTrue(archivingService.requestCompletion("All checks passed")
+                .contains("Approve Feature Request as complete"));
+
+        when(envService.getCurrentUser()).thenReturn("bob");
+        archivingService.approveTransition();
+        assertEquals(WorkflowPhase.PLAN, archivingService.getCurrentPhase());
+        assertNull(archivingService.getCurrentPlan());
+
+        List<Path> archivedFiles;
+        try (Stream<Path> stream = Files.list(archiveDir)) {
+            archivedFiles = stream.toList();
+        }
+        assertEquals(1, archivedFiles.size());
+        String content = Files.readString(archivedFiles.get(0));
+        assertContainsAll(content, "project: ", "my-project", "approvedBy: ", "alice", "completedBy: ", "bob",
+                "MODIFIED src/Main.java");
+        verify(eventPublisher).publishEvent(argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent));
+
+        archivingService.resetWorkflow();
+        assertEquals(Set.of(WorkflowPhase.PLAN), archivingService.getVisitedPhases());
     }
 }

@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.events.FileChangedEvent;
@@ -29,9 +30,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
     public record FileChange(String path, FileChangedEvent.ChangeType changeType) {
         public FileChange {
             path = PathUtils.normalizeRelativePath(path);
-            if (changeType == null) {
-                changeType = FileChangedEvent.ChangeType.MODIFIED;
-            }
+            changeType = Objects.requireNonNullElse(changeType, FileChangedEvent.ChangeType.MODIFIED);
         }
     }
 
@@ -39,37 +38,18 @@ public record ImplementationPlan(String title, String goal, List<String> require
         private static final int TIMESTAMP_LENGTH = 19;
 
         public String formattedTimestamp() {
-            if (timestamp == null) {
-                return "";
-            }
-            if (timestamp.length() > TIMESTAMP_LENGTH) {
+            if (timestamp != null && timestamp.length() > TIMESTAMP_LENGTH) {
                 return PathUtils.formatTimestampDisplay(timestamp, TIMESTAMP_LENGTH, "");
             }
-            return timestamp;
+            return StringUtils.defaultString(timestamp);
         }
     }
 
     public ImplementationPlan {
-        if (requirements != null) {
-            requirements = List.copyOf(requirements);
-        } else {
-            requirements = List.of();
-        }
-        if (technicalSteps != null) {
-            technicalSteps = List.copyOf(technicalSteps);
-        } else {
-            technicalSteps = List.of();
-        }
-        if (handoffLog != null) {
-            handoffLog = List.copyOf(handoffLog);
-        } else {
-            handoffLog = List.of();
-        }
-        if (fileChanges != null) {
-            fileChanges = List.copyOf(fileChanges);
-        } else {
-            fileChanges = List.of();
-        }
+        requirements = List.copyOf(Objects.requireNonNullElse(requirements, List.of()));
+        technicalSteps = List.copyOf(Objects.requireNonNullElse(technicalSteps, List.of()));
+        handoffLog = List.copyOf(Objects.requireNonNullElse(handoffLog, List.of()));
+        fileChanges = List.copyOf(Objects.requireNonNullElse(fileChanges, List.of()));
     }
 
     public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
@@ -233,10 +213,8 @@ public record ImplementationPlan(String title, String goal, List<String> require
         if (StringUtils.isBlank(normalizedPath)) {
             return this;
         }
-        FileChangedEvent.ChangeType resolvedType = FileChangedEvent.ChangeType.MODIFIED;
-        if (changeType != null) {
-            resolvedType = changeType;
-        }
+        FileChangedEvent.ChangeType resolvedType = Objects.requireNonNullElse(changeType,
+                FileChangedEvent.ChangeType.MODIFIED);
         List<FileChange> updated = new ArrayList<>(fileChanges);
         int existingIndex = -1;
         for (int i = 0; i < updated.size(); i++) {
@@ -362,10 +340,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     private static String escapeMarkdownTableCell(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("|", (char) 92 + "|").replace((char) 13 + "" + (char) 10, " ").replace((char) 10, ' ')
-                .replace((char) 13, ' ');
+        return StringUtils.defaultString(value).replace("|", (char) 92 + "|").replace((char) 13 + "" + (char) 10, " ")
+                .replace((char) 10, ' ').replace((char) 13, ' ');
     }
 }

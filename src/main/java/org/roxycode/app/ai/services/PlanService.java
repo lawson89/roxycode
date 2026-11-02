@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.SwingUtilities;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
@@ -148,14 +149,9 @@ public class PlanService {
             @AgentDoc("Array of functional requirements") String[] requirements,
             @AgentDoc("Array of technical implementation steps") String[] technicalSteps) {
         requirePhase("submitPlan");
-        List<String> safeRequirements = List.of();
-        if (requirements != null) {
-            safeRequirements = Arrays.asList(requirements);
-        }
-        List<ImplementationPlan.TechStep> steps = List.of();
-        if (technicalSteps != null) {
-            steps = Arrays.stream(technicalSteps).map(s -> new ImplementationPlan.TechStep(s, false)).toList();
-        }
+        List<String> safeRequirements = Arrays.asList(ArrayUtils.nullToEmpty(requirements));
+        List<ImplementationPlan.TechStep> steps = Arrays.stream(ArrayUtils.nullToEmpty(technicalSteps))
+                .map(s -> new ImplementationPlan.TechStep(s, false)).toList();
 
         return submitPlan(new ImplementationPlan(StringUtils.defaultString(title), StringUtils.defaultString(goal),
                 safeRequirements, steps, false, null, null, null, null, null));
@@ -200,18 +196,6 @@ public class PlanService {
         setCurrentPlan(currentPlan.withTechnicalSteps(steps));
         return String.format("Updated technical step %d to '%s'. %s", index, trimmed,
                 currentPlan.formatRemainingIncompleteSteps());
-    }
-
-    public synchronized void approvePlan(String user, String timestamp) {
-        if (currentPlan != null) {
-            setCurrentPlan(currentPlan.withApproval(user, timestamp));
-        }
-    }
-
-    public synchronized void completePlan(String user, String timestamp) {
-        if (currentPlan != null) {
-            setCurrentPlan(currentPlan.withCompletion(user, timestamp));
-        }
     }
 
     public synchronized void updateVerificationStep(String stepDescription, boolean completed) {
@@ -473,11 +457,11 @@ public class PlanService {
             addHandoffLogEntry(timestamp, user,
                     String.format("%s -> %s (User Approved): %s", currentPhase, pendingPhase, pendingReason));
 
-            if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE) {
-                approvePlan(user, timestamp);
+            if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE && currentPlan != null) {
+                setCurrentPlan(currentPlan.withApproval(user, timestamp));
             }
             if (currentPhase == WorkflowPhase.REVIEW && pendingPhase == WorkflowPhase.PLAN && currentPlan != null) {
-                completePlan(user, timestamp);
+                setCurrentPlan(currentPlan.withCompletion(user, timestamp));
                 planToArchive = currentPlan;
                 archiveTimestamp = timestamp;
                 clearPlan();

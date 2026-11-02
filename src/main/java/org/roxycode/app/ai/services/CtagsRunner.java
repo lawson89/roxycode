@@ -9,7 +9,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -45,14 +47,8 @@ public interface CtagsRunner {
         if (files == null || files.isEmpty()) {
             return results;
         }
-        ObjectMapper mapper = AiConfig.SHARED_OBJECT_MAPPER;
-        if (objectMapper != null) {
-            mapper = objectMapper;
-        }
-        int flagCount = 0;
-        if (extraFlags != null) {
-            flagCount = extraFlags.size();
-        }
+        ObjectMapper mapper = Objects.requireNonNullElse(objectMapper, AiConfig.SHARED_OBJECT_MAPPER);
+        int flagCount = Objects.requireNonNullElse(extraFlags, List.of()).size();
         List<String> command = new ArrayList<>(files.size() + flagCount + 4);
         command.add("ctags");
         command.add("-f");
@@ -110,7 +106,7 @@ public interface CtagsRunner {
     }
 
     static Path resolveTargetPath(String rawPath, List<Path> files) {
-        if (rawPath != null && !rawPath.isBlank()) {
+        if (StringUtils.isNotBlank(rawPath)) {
             return Path.of(rawPath).toAbsolutePath().normalize();
         }
         if (files.size() == SINGLE_FILE_COUNT) {

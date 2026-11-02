@@ -87,10 +87,10 @@ class BuildConfigPanelTest {
         assertTrue(panel.unconfirmedBannerPanel.isVisible());
         assertEquals(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT, panel.unconfirmedBannerMessageLabel.getText());
 
-        JComboBox<GeminiModelConfig> modelCombo = panel.getModelCombo();
+        JComboBox<GeminiModelConfig> modelCombo = panel.modelCombo;
         assertEquals(3, modelCombo.getItemCount());
         assertEquals("", modelCombo.getItemAt(0).apiName());
-        assertEquals("gemini-3.5-flash", panel.getModelApiBadgeLabel().getText());
+        assertEquals("gemini-3.5-flash", panel.modelApiBadgeLabel.getText());
 
         String updatedToml = """
                 [commands]
@@ -98,8 +98,8 @@ class BuildConfigPanelTest {
                 """;
         SwingTestUtils.runOnEdt(() -> {
             modelCombo.setSelectedIndex(2);
-            assertEquals("gemini-3.5-pro", panel.getModelApiBadgeLabel().getText());
-            assertEquals("Advanced reasoning model", panel.getModelDescriptionArea().getText());
+            assertEquals("gemini-3.5-pro", panel.modelApiBadgeLabel.getText());
+            assertEquals("Advanced reasoning model", panel.modelDescriptionArea.getText());
             panel.textArea.setText(updatedToml);
             panel.saveButton.doClick();
         });
@@ -141,21 +141,21 @@ class BuildConfigPanelTest {
 
         BuildConfigPanel panel = createPanelOnEdt();
 
-        GenericBuildToolService.BuildTemplateInfo selected = (GenericBuildToolService.BuildTemplateInfo) panel
-                .getTemplateCombo().getSelectedItem();
+        GenericBuildToolService.BuildTemplateInfo selected = (GenericBuildToolService.BuildTemplateInfo) panel.templateCombo
+                .getSelectedItem();
         assertNotNull(selected);
         assertEquals("maven", selected.id());
         assertEquals("Maven (auto-detected)", panel.formatTemplateDisplayText(selected));
 
         SwingTestUtils.runOnEdt(() -> {
-            for (int i = 0; i < panel.getTemplateCombo().getItemCount(); i++) {
-                GenericBuildToolService.BuildTemplateInfo item = panel.getTemplateCombo().getItemAt(i);
+            for (int i = 0; i < panel.templateCombo.getItemCount(); i++) {
+                GenericBuildToolService.BuildTemplateInfo item = panel.templateCombo.getItemAt(i);
                 if ("rust".equals(item.id())) {
-                    panel.getTemplateCombo().setSelectedIndex(i);
+                    panel.templateCombo.setSelectedIndex(i);
                     break;
                 }
             }
-            panel.getApplyTemplateButton().doClick();
+            panel.applyTemplateButton.doClick();
         });
         assertTrue(panel.textArea.getText().contains("cargo check"));
     }

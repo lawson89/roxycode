@@ -96,17 +96,17 @@ class FileMentionPopupTest {
         SwingTestUtils.flushEdt();
 
         assertTrue(popup.isPopupVisible());
-        assertEquals(1, popup.getListModel().size());
+        assertEquals(1, popup.listModel.size());
         verify(grepService, times(1)).listFiles();
 
         Point loc = popup.computePopupLocation(6, 320, 120);
         assertTrue(loc.x >= 0 && loc.x + 320 <= 400);
         assertTrue(loc.y < 0);
 
-        assertInstanceOf(JPanel.class, SwingTestUtils.renderListCell(popup.getCandidateList(), 0, true));
-        SwingTestUtils.withDarkTheme(popup.getPopupMenu(), () -> {
+        assertInstanceOf(JPanel.class, SwingTestUtils.renderListCell(popup.candidateList, 0, true));
+        SwingTestUtils.withDarkTheme(popup.popupMenu, () -> {
             popup.updateTheme();
-            assertInstanceOf(JPanel.class, SwingTestUtils.renderListCell(popup.getCandidateList(), 0, false));
+            assertInstanceOf(JPanel.class, SwingTestUtils.renderListCell(popup.candidateList, 0, false));
         });
         assertEquals(Codicons.FILE_CODE, FileMentionPopup.resolveFileIcon("chatpanel.java"));
         assertEquals(Codicons.FILE, FileMentionPopup.resolveFileIcon("license"));

@@ -1,5 +1,6 @@
 package org.roxycode.app.util;
 
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -9,8 +10,11 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
+import java.util.Objects;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.AiConfig;
 import org.springframework.core.io.ClassPathResource;
 
 public final class PathUtils {
@@ -31,11 +35,25 @@ public final class PathUtils {
         }
     }
 
-    public static String normalizeRelativePath(String path) {
-        if (path == null) {
-            return "";
+    public static <T> T readTomlOrDefault(Path path, Class<T> type, T fallback, TomlMapper mapper) {
+        if (path == null || !Files.exists(path)) {
+            return fallback;
         }
-        return StringUtils.removeStart(FilenameUtils.separatorsToUnix(path), "./");
+        try {
+            TomlMapper effective = Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER);
+            return Objects.requireNonNullElse(effective.readValue(path.toFile(), type), fallback);
+        } catch (IOException e) {
+            return fallback;
+        }
+    }
+
+    public static void writeToml(Path path, Object value, TomlMapper mapper) throws IOException {
+        createParentDirectories(path);
+        Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER).writeValue(path.toFile(), value);
+    }
+
+    public static String normalizeRelativePath(String path) {
+        return StringUtils.removeStart(FilenameUtils.separatorsToUnix(StringUtils.defaultString(path)), "./");
     }
 
     public static String getFileName(String path) {
@@ -47,32 +65,23 @@ public final class PathUtils {
 
     public static String getLowerExtension(String path, boolean allowLeadingDotFile) {
         String fileName = getFileName(path);
-        if (fileName.isEmpty()) {
-            return "";
-        }
-        if (!allowLeadingDotFile && StringUtils.isEmpty(FilenameUtils.getBaseName(fileName))) {
+        if (fileName.isEmpty() || (!allowLeadingDotFile && StringUtils.isEmpty(FilenameUtils.getBaseName(fileName)))) {
             return "";
         }
         return FilenameUtils.getExtension(fileName).toLowerCase(Locale.ROOT);
     }
 
     public static String sanitizeSlug(String raw, int maxLength, String fallback) {
-        String normalized = "";
-        if (raw != null) {
-            normalized = raw.toLowerCase(Locale.ROOT);
-        }
+        String normalized = StringUtils.defaultString(raw).toLowerCase(Locale.ROOT);
         String sanitized = normalized.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
         if (maxLength > 0 && sanitized.length() > maxLength) {
             sanitized = sanitized.substring(0, maxLength).replaceAll("-+$", "");
         }
-        if (sanitized.isEmpty()) {
-            return fallback;
-        }
-        return sanitized;
+        return StringUtils.defaultIfEmpty(sanitized, fallback);
     }
 
     public static String formatArchiveTimestamp(String isoTimestamp) {
-        if (isoTimestamp != null && !isoTimestamp.isBlank()) {
+        if (StringUtils.isNotBlank(isoTimestamp)) {
             try {
                 return OffsetDateTime.parse(isoTimestamp).format(ARCHIVE_TIMESTAMP_FORMATTER);
             } catch (DateTimeParseException ignored) {
@@ -88,7 +97,7 @@ public final class PathUtils {
         }
         String trimmed = rawTimestamp.trim();
         if (maxLength > 0 && trimmed.length() > maxLength) {
-            return trimmed.substring(0, maxLength).replace('T', ' ');
+            trimmed = trimmed.substring(0, maxLength);
         }
         return trimmed.replace('T', ' ');
     }
@@ -117,7 +126,7 @@ public final class PathUtils {
     public static String readClasspathResourceUtf8(String path, Class<?> anchorClass) throws IOException {
         ClassPathResource resource = new ClassPathResource(path, anchorClass.getClassLoader());
         try (InputStream is = resource.getInputStream()) {
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            return IOUtils.toString(is, StandardCharsets.UTF_8);
         }
     }
 }

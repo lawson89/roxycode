@@ -7,11 +7,11 @@ test_all = "./mvnw test"
 test_single = "./mvnw test -Dtest={testName}"
 # Examples: "./mvnw checkstyle:check", "./mvnw pmd:check", "./mvnw spotless:check"
 lint = ""
-# Example: "./mvnw pmd:check spotless:check -DspotlessFiles=.*\Q{file}\E$"
+# Example: './mvnw pmd:check spotless:check -DspotlessFiles=.*\Q{file}\E$'
 lint_single = ""
 # Examples: "./mvnw spotless:apply", "./mvnw com.spotify.fmt:fmt-maven-plugin:format"
 format = ""
-# Example: "./mvnw spotless:apply -DspotlessFiles=.*\Q{file}\E$"
+# Example: './mvnw spotless:apply -DspotlessFiles=.*\Q{file}\E$'
 format_single = ""
 
 [env]

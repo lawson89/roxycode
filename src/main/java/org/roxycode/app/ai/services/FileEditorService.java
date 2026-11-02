@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
@@ -53,13 +54,8 @@ public class FileEditorService {
         }
         PathUtils.createParentDirectories(path);
         Files.writeString(path, content);
-        FileChangedEvent.ChangeType changeType;
-        if (existed) {
-            changeType = FileChangedEvent.ChangeType.MODIFIED;
-        } else {
-            changeType = FileChangedEvent.ChangeType.CREATED;
-        }
-        return completeFileMutation(path, relativePath, "File written successfully: " + relativePath, changeType);
+        return completeFileMutation(path, relativePath, "File written successfully: " + relativePath,
+                FileChangedEvent.ChangeType.ofExisted(existed));
     }
 
     @AgentDoc(value = "Replaces a unique block of text with new content.", examples = "fileEditorService.replaceBlock('src/Main.java', '// TODO: implement', 'System.out.println('Hello');')")
@@ -82,7 +78,9 @@ public class FileEditorService {
         if (match.errorHint() != null) {
             return new EditorResult(false, "", match.errorHint());
         }
-        return applyReplacement(path, relativePath, content, match.start(), match.end(), match.replacement());
+        Files.writeString(path,
+                content.substring(0, match.start()) + match.replacement() + content.substring(match.end()));
+        return completeFileMutation(path, relativePath, "Block replaced successfully in: " + relativePath);
     }
 
     @AgentDoc(value = "Replaces multiple non-overlapping target blocks in a file atomically in a single write operation.", examples = "fileEditorService.replaceBlocks('src/Main.java', [{'target': 'old1', 'replacement': 'new1'}, {'target': 'old2', 'replacement': 'new2'}])")
@@ -134,8 +132,8 @@ public class FileEditorService {
             return new EditorResult(false, "",
                     "Edit #" + editNum + " failed: Edit entry must be a map with 'target' and 'replacement' keys");
         }
-        String targetBlock = objectToString(editMap.get("target"));
-        String replacementBlock = objectToString(editMap.get("replacement"));
+        String targetBlock = Objects.toString(editMap.get("target"), null);
+        String replacementBlock = Objects.toString(editMap.get("replacement"), null);
 
         if (targetBlock == null || targetBlock.isBlank()) {
             return new EditorResult(false, "",
@@ -161,16 +159,6 @@ public class FileEditorService {
         return null;
     }
 
-    private static String objectToString(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof String s) {
-            return s;
-        }
-        return value.toString();
-    }
-
     private record BlockMatch(int editIndex, int start, int end, String replacement, String errorHint) {
     }
 
@@ -178,10 +166,7 @@ public class FileEditorService {
             String replacementBlock) {
         String lineSeparator = detectLineSeparator(content, replacementBlock);
         String normalizedTarget = normalizeLineEndings(targetBlock, lineSeparator);
-        String normalizedReplacement = "";
-        if (replacementBlock != null) {
-            normalizedReplacement = normalizeLineEndings(replacementBlock, lineSeparator);
-        }
+        String normalizedReplacement = normalizeLineEndings(StringUtils.defaultString(replacementBlock), lineSeparator);
 
         List<Integer> exactMatchOffsets = findExactMatches(content, normalizedTarget);
         if (exactMatchOffsets.size() == SINGLE_MATCH_COUNT) {
@@ -235,7 +220,7 @@ public class FileEditorService {
         }
         String linePrefix = content.substring(lineStart, matchStart);
         if (isHorizontalWhitespaceOnly(linePrefix)
-                && (startsWithHorizontalWhitespace(stripLeadingNewlines(normalizedTarget))
+                && (startsWithHorizontalWhitespace(StringUtils.stripStart(normalizedTarget, CRLF))
                         || startsWithHorizontalWhitespace(normalizedReplacement))) {
             return lineStart;
         }
@@ -332,14 +317,9 @@ public class FileEditorService {
         PathUtils.createParentDirectories(target);
         Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Moved file from {} to {}", sourcePath, targetPath);
-        FileChangedEvent.ChangeType targetChangeType;
-        if (targetExisted) {
-            targetChangeType = FileChangedEvent.ChangeType.MODIFIED;
-        } else {
-            targetChangeType = FileChangedEvent.ChangeType.CREATED;
-        }
         eventPublisher.publishEvent(new FileChangedEvent(sourcePath, FileChangedEvent.ChangeType.DELETED));
-        eventPublisher.publishEvent(new FileChangedEvent(targetPath, targetChangeType));
+        eventPublisher
+                .publishEvent(new FileChangedEvent(targetPath, FileChangedEvent.ChangeType.ofExisted(targetExisted)));
         return new EditorResult(true, "File moved successfully from " + sourcePath + " to " + targetPath, null);
     }
 
@@ -356,13 +336,8 @@ public class FileEditorService {
         PathUtils.createParentDirectories(target);
         Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Copied file from {} to {}", sourcePath, targetPath);
-        FileChangedEvent.ChangeType targetChangeType;
-        if (targetExisted) {
-            targetChangeType = FileChangedEvent.ChangeType.MODIFIED;
-        } else {
-            targetChangeType = FileChangedEvent.ChangeType.CREATED;
-        }
-        eventPublisher.publishEvent(new FileChangedEvent(targetPath, targetChangeType));
+        eventPublisher
+                .publishEvent(new FileChangedEvent(targetPath, FileChangedEvent.ChangeType.ofExisted(targetExisted)));
         return new EditorResult(true, "File copied successfully from " + sourcePath + " to " + targetPath, null);
     }
 
@@ -376,13 +351,7 @@ public class FileEditorService {
         }
         Files.createDirectories(path);
         log.info("Created directory: {} at {}", relativePath, path.toAbsolutePath());
-        FileChangedEvent.ChangeType changeType;
-        if (existed) {
-            changeType = FileChangedEvent.ChangeType.MODIFIED;
-        } else {
-            changeType = FileChangedEvent.ChangeType.CREATED;
-        }
-        eventPublisher.publishEvent(new FileChangedEvent(relativePath, changeType));
+        eventPublisher.publishEvent(new FileChangedEvent(relativePath, FileChangedEvent.ChangeType.ofExisted(existed)));
         return new EditorResult(true, "Directory created successfully: " + relativePath, null);
     }
 
@@ -398,12 +367,6 @@ public class FileEditorService {
             return new EditorResult(false, "", directoryErrorPrefix + relativePath);
         }
         return null;
-    }
-
-    private EditorResult applyReplacement(Path path, String relativePath, String content, int start, int end,
-            String replacementBlock) throws IOException {
-        Files.writeString(path, content.substring(0, start) + replacementBlock + content.substring(end));
-        return completeFileMutation(path, relativePath, "Block replaced successfully in: " + relativePath);
     }
 
     private EditorResult completeFileMutation(Path path, String relativePath, String message) throws IOException {
@@ -454,10 +417,6 @@ public class FileEditorService {
 
     private static String normalizeLineEndings(String text, String lineSeparator) {
         return text.replace(CRLF, NL).replace(CR, NL).replace(NL, lineSeparator);
-    }
-
-    private static String stripLeadingNewlines(String text) {
-        return StringUtils.stripStart(text, CRLF);
     }
 
     private static boolean isHorizontalWhitespaceOnly(String text) {

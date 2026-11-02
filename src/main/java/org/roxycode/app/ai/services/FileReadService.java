@@ -11,6 +11,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
@@ -67,10 +69,7 @@ public class FileReadService {
 
     @AgentDoc(value = "Reads multiple files in a single batch call, returning a map of relativePath to file content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFiles(['pom.xml', 'src/main/java/Main.java'])")
     public Map<String, String> readFiles(@AgentDoc(DOC_FILE_PATHS) String... relativePaths) {
-        if (relativePaths == null) {
-            return readBatch(List.of(), false);
-        }
-        return readBatch(Arrays.asList(relativePaths), false);
+        return readBatch(Arrays.asList(ArrayUtils.nullToEmpty(relativePaths)), false);
     }
 
     public Map<String, String> readFiles(List<String> relativePaths) {
@@ -79,10 +78,7 @@ public class FileReadService {
 
     @AgentDoc(value = "Reads multiple files with 1-based line numbers ('<line>: <content>') in a single batch call, returning a map of relativePath to numbered content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFilesNumbered(['src/main/java/Main.java', 'src/main/java/App.java'])")
     public Map<String, String> readFilesNumbered(@AgentDoc(DOC_FILE_PATHS) String... relativePaths) {
-        if (relativePaths == null) {
-            return readBatch(List.of(), true);
-        }
-        return readBatch(Arrays.asList(relativePaths), true);
+        return readBatch(Arrays.asList(ArrayUtils.nullToEmpty(relativePaths)), true);
     }
 
     public Map<String, String> readFilesNumbered(List<String> relativePaths) {
@@ -146,11 +142,7 @@ public class FileReadService {
             }
             return formatNumberedLines(content.lines().toList(), 1, Integer.MAX_VALUE);
         } catch (Exception e) {
-            String msg = ExceptionUtils.getMessageOrSimpleName(e);
-            if (msg.startsWith(ERROR_PREFIX)) {
-                return msg;
-            }
-            return ERROR_PREFIX + msg;
+            return StringUtils.prependIfMissing(ExceptionUtils.getMessageOrSimpleName(e), ERROR_PREFIX);
         }
     }
 

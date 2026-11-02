@@ -24,9 +24,9 @@ public final class MarkdownPane extends JTextPane {
 
     private final List<Message> messages = new ArrayList<>();
     private final boolean taskMode;
-    private int copiedMessageIndex = -1;
-    private Timer copyFeedbackTimer;
-    private String lastCopiedMarkdown;
+    int copiedMessageIndex = -1;
+    Timer copyFeedbackTimer;
+    String lastCopiedMarkdown;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     public record ChatTranscriptEntry(String role, String content, String timestamp) {
@@ -136,18 +136,6 @@ public final class MarkdownPane extends JTextPane {
         });
         copyFeedbackTimer.setRepeats(false);
         copyFeedbackTimer.start();
-    }
-
-    int getCopiedMessageIndex() {
-        return copiedMessageIndex;
-    }
-
-    String getLastCopiedMarkdown() {
-        return lastCopiedMarkdown;
-    }
-
-    Timer getCopyFeedbackTimer() {
-        return copyFeedbackTimer;
     }
 
     private boolean updateCopyCellInPlace(int messageIndex, boolean copied) {

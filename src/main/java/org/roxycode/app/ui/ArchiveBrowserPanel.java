@@ -181,28 +181,22 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     CompletableFuture<?> executeSearchAsync() {
-        String query = "";
+        String searchQuery = "";
         if (searchField != null) {
-            query = searchField.getText();
+            searchQuery = searchField.getText();
         }
-        final String searchQuery = query;
-        return Edt.supplyAsync(() -> loadEntriesForQuery(searchQuery),
-                results -> applySearchResults(results, searchQuery), e -> {
-                    log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
-                    applySearchResults(List.of(), searchQuery);
-                }).thenCompose(results -> lastSelectionFuture);
+        final String q = searchQuery;
+        return Edt.supplyAsync(() -> loadEntriesForQuery(q), results -> applySearchResults(results, q), e -> {
+            log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
+            applySearchResults(List.of(), q);
+        }).thenCompose(results -> lastSelectionFuture);
     }
 
     private List<ArchiveEntrySummary> loadEntriesForQuery(String query) {
         if (memoryService == null) {
             return List.of();
         }
-        String trimmed;
-        if (query != null) {
-            trimmed = query.trim();
-        } else {
-            trimmed = "";
-        }
+        String trimmed = StringUtils.trimToEmpty(query);
         if (mode == ArchiveMode.TOPICS) {
             if (trimmed.isEmpty()) {
                 return memoryService.listArchivedTopicSummaries();
@@ -217,12 +211,7 @@ public final class ArchiveBrowserPanel extends JPanel {
 
     @SuppressWarnings("PMD.NullAssignment")
     private void applySearchResults(List<ArchiveEntrySummary> results, String query) {
-        List<ArchiveEntrySummary> safeResults;
-        if (results != null) {
-            safeResults = results;
-        } else {
-            safeResults = List.of();
-        }
+        List<ArchiveEntrySummary> safeResults = Objects.requireNonNullElse(results, List.of());
         String previousFilename = null;
         if (currentSelectedEntry != null) {
             previousFilename = currentSelectedEntry.filename();
@@ -286,11 +275,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     private void applyDetailContent(ArchiveEntrySummary entry, String rawMarkdown) {
-        if (rawMarkdown != null) {
-            this.currentRawMarkdown = rawMarkdown;
-        } else {
-            this.currentRawMarkdown = "";
-        }
+        this.currentRawMarkdown = StringUtils.defaultString(rawMarkdown);
         copyMarkdownButton.setEnabled(!this.currentRawMarkdown.isBlank());
         displayArea.setText(buildDetailHtml(entry, this.currentRawMarkdown, mode));
         displayArea.setCaretPosition(0);
@@ -304,12 +289,7 @@ public final class ArchiveBrowserPanel extends JPanel {
         String formattedDate = formatTimestampDisplay(entry.timestamp());
         String author = StringUtils.defaultIfBlank(entry.createdBy(), "User");
 
-        String dateDisplay;
-        if (formattedDate.isEmpty()) {
-            dateDisplay = entry.filename();
-        } else {
-            dateDisplay = formattedDate;
-        }
+        String dateDisplay = StringUtils.defaultIfEmpty(formattedDate, entry.filename());
         String messageCountSuffix = "";
         if (archiveMode == ArchiveMode.TOPICS && entry.messageCount() > 0) {
             messageCountSuffix = " &nbsp;&bull;&nbsp; <b>Messages:</b> " + entry.messageCount();
@@ -433,29 +413,15 @@ public final class ArchiveBrowserPanel extends JPanel {
         @Override
         public Component getListCellRendererComponent(JList<? extends ArchiveEntrySummary> list,
                 ArchiveEntrySummary value, int index, boolean isSelected, boolean cellHasFocus) {
-            Color bg;
-            Color fg;
-            Color muted;
-            Color iconColor;
-            if (isSelected) {
-                bg = list.getSelectionBackground();
-                fg = list.getSelectionForeground();
-                muted = fg;
-                iconColor = fg;
-            } else {
-                bg = list.getBackground();
-                fg = list.getForeground();
-                muted = SwingHtmlUtils.getMutedForegroundColor();
-                iconColor = SwingHtmlUtils.getAccentColor();
-            }
-
-            setBackground(bg);
+            UiComponents.ListCellColors colors = UiComponents.resolveListCellColors(list, isSelected);
+            Color muted = colors.muted();
+            setBackground(colors.background());
             setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
 
             if (value != null) {
                 titleLabel.setText(value.title());
-                titleLabel.setForeground(fg);
-                titleLabel.setIcon(FontIcon.of(mode.getIcon(), 14, iconColor));
+                titleLabel.setForeground(colors.foreground());
+                titleLabel.setIcon(FontIcon.of(mode.getIcon(), 14, colors.iconColor()));
 
                 String dateStr = formatTimestampDisplay(value.timestamp());
                 String author = StringUtils.defaultIfBlank(value.createdBy(), "User");

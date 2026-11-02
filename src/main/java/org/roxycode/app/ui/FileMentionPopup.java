@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Point;
@@ -80,9 +79,9 @@ public final class FileMentionPopup {
 
     private final JTextArea inputArea;
     private final JScrollPane inputScrollPane;
-    private final JPopupMenu popupMenu;
-    private final DefaultListModel<FileCandidate> listModel;
-    private final JList<FileCandidate> candidateList;
+    final JPopupMenu popupMenu;
+    final DefaultListModel<FileCandidate> listModel;
+    final JList<FileCandidate> candidateList;
     private final JScrollPane popupScrollPane;
 
     private volatile GrepService grepService;
@@ -448,18 +447,6 @@ public final class FileMentionPopup {
         }
     }
 
-    DefaultListModel<FileCandidate> getListModel() {
-        return listModel;
-    }
-
-    JList<FileCandidate> getCandidateList() {
-        return candidateList;
-    }
-
-    JPopupMenu getPopupMenu() {
-        return popupMenu;
-    }
-
     static Codicons resolveFileIcon(String fileNameLower) {
         String ext = PathUtils.getLowerExtension(fileNameLower, true);
         if (!ext.isEmpty() && CODE_EXTENSIONS.contains(ext)) {
@@ -488,44 +475,15 @@ public final class FileMentionPopup {
         @Override
         public Component getListCellRendererComponent(JList<? extends FileCandidate> list, FileCandidate value,
                 int index, boolean isSelected, boolean cellHasFocus) {
-            Color bg;
-            if (isSelected) {
-                bg = SwingHtmlUtils.getUiColor(list.getSelectionBackground(), "List.selectionBackground");
-            } else {
-                bg = SwingHtmlUtils.getUiColor(list.getBackground(), "List.background");
-            }
-            Color fg;
-            if (isSelected) {
-                fg = SwingHtmlUtils.getUiColor(list.getSelectionForeground(), "List.selectionForeground");
-            } else {
-                fg = SwingHtmlUtils.getUiColor(list.getForeground(), "Label.foreground");
-            }
-            setBackground(bg);
-
+            UiComponents.ListCellColors colors = UiComponents.resolveListCellColors(list, isSelected);
+            setBackground(colors.background());
             if (value != null) {
                 nameLabel.setText(value.fileName());
-                nameLabel.setForeground(fg);
-                Color iconColor;
-                if (isSelected) {
-                    iconColor = fg;
-                } else {
-                    iconColor = SwingHtmlUtils.getAccentColor();
-                }
-                nameLabel.setIcon(FontIcon.of(resolveFileIcon(value.fileNameLower()), 14, iconColor));
+                nameLabel.setForeground(colors.foreground());
+                nameLabel.setIcon(FontIcon.of(resolveFileIcon(value.fileNameLower()), 14, colors.iconColor()));
                 dirLabel.setText(value.parentDir());
-                Color dirFg;
-                if (isSelected) {
-                    dirFg = fg;
-                } else {
-                    dirFg = SwingHtmlUtils.getMutedForegroundColor();
-                }
-                dirLabel.setForeground(dirFg);
+                dirLabel.setForeground(colors.muted());
                 setToolTipText(value.relativePath());
-            } else {
-                nameLabel.setText("");
-                nameLabel.setIcon(null);
-                dirLabel.setText("");
-                setToolTipText(null);
             }
             return this;
         }

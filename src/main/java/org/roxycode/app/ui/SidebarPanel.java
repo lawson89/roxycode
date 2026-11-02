@@ -2,9 +2,7 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Font;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import javax.swing.JLabel;
@@ -22,7 +20,6 @@ public final class SidebarPanel extends JPanel {
     static final String TOOLS_ATTENTION_TOOLTIP = "Required system tools are missing";
     static final String BUILD_CONFIG_ATTENTION_TOOLTIP = "Please confirm or customize project build commands";
     private final Consumer<String> navigationAction;
-    private final List<NavButton> navButtons = new ArrayList<>();
     private final Map<String, NavButton> cardButtons = new LinkedHashMap<>();
     private NavButton qaBtn;
     private NavButton taskBtn;
@@ -100,63 +97,51 @@ public final class SidebarPanel extends JPanel {
     }
 
     public void setQaBusy(boolean busy) {
-        if (qaBtn != null) {
-            qaBtn.setBusy(busy);
-        }
+        qaBtn.setBusy(busy);
     }
 
     public boolean isQaBusy() {
-        return qaBtn != null && qaBtn.isBusy();
+        return qaBtn.isBusy();
     }
 
     public void setTaskBusy(boolean busy) {
-        if (taskBtn != null) {
-            taskBtn.setBusy(busy);
-        }
+        taskBtn.setBusy(busy);
     }
 
     public boolean isTaskBusy() {
-        return taskBtn != null && taskBtn.isBusy();
+        return taskBtn.isBusy();
     }
 
     public void setTaskWaitingApproval(boolean waitingApproval) {
-        if (taskBtn != null) {
-            taskBtn.setWaitingApproval(waitingApproval);
-        }
+        taskBtn.setWaitingApproval(waitingApproval);
     }
 
     public boolean isTaskWaitingApproval() {
-        return taskBtn != null && taskBtn.isWaitingApproval();
+        return taskBtn.isWaitingApproval();
     }
 
     public void setSettingsAttentionNeeded(boolean attentionNeeded) {
-        if (settingsBtn != null) {
-            settingsBtn.setWaitingApproval(attentionNeeded);
-        }
+        settingsBtn.setWaitingApproval(attentionNeeded);
     }
 
     public boolean isSettingsAttentionNeeded() {
-        return settingsBtn != null && settingsBtn.isWaitingApproval();
+        return settingsBtn.isWaitingApproval();
     }
 
     public void setToolsAttentionNeeded(boolean attentionNeeded) {
-        if (toolsBtn != null) {
-            toolsBtn.setWaitingApproval(attentionNeeded);
-        }
+        toolsBtn.setWaitingApproval(attentionNeeded);
     }
 
     public boolean isToolsAttentionNeeded() {
-        return toolsBtn != null && toolsBtn.isWaitingApproval();
+        return toolsBtn.isWaitingApproval();
     }
 
     public void setBuildConfigAttentionNeeded(boolean attentionNeeded) {
-        if (buildConfigBtn != null) {
-            buildConfigBtn.setWaitingApproval(attentionNeeded);
-        }
+        buildConfigBtn.setWaitingApproval(attentionNeeded);
     }
 
     public boolean isBuildConfigAttentionNeeded() {
-        return buildConfigBtn != null && buildConfigBtn.isWaitingApproval();
+        return buildConfigBtn.isWaitingApproval();
     }
 
     NavButton getCardButton(String cardName) {
@@ -164,7 +149,7 @@ public final class SidebarPanel extends JPanel {
     }
 
     private void updateSelection(NavButton selectedBtn) {
-        for (NavButton btn : navButtons) {
+        for (NavButton btn : cardButtons.values()) {
             btn.setSelected(btn.equals(selectedBtn));
         }
     }
@@ -182,7 +167,6 @@ public final class SidebarPanel extends JPanel {
             updateSelection(btn);
             navigationAction.accept(cardName);
         });
-        navButtons.add(btn);
         cardButtons.put(cardName, btn);
         return btn;
     }

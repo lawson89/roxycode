@@ -25,8 +25,10 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
@@ -376,6 +378,28 @@ final class UiComponents {
         String description = StringUtils.defaultString(selected.description());
         descArea.setText(description);
         descArea.setVisible(!description.isBlank());
+    }
+
+    static JTabbedPane createUnderlinedTabbedPane(JComponent trailingComponent) {
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE,
+                FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
+        tabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, trailingComponent);
+        return tabs;
+    }
+
+    record ListCellColors(Color background, Color foreground, Color muted, Color iconColor) {
+    }
+
+    static ListCellColors resolveListCellColors(JList<?> list, boolean isSelected) {
+        if (isSelected) {
+            Color bg = SwingHtmlUtils.getUiColor(list.getSelectionBackground(), "List.selectionBackground");
+            Color fg = SwingHtmlUtils.getUiColor(list.getSelectionForeground(), "List.selectionForeground");
+            return new ListCellColors(bg, fg, fg, fg);
+        }
+        return new ListCellColors(SwingHtmlUtils.getUiColor(list.getBackground(), "List.background"),
+                SwingHtmlUtils.getUiColor(list.getForeground(), "Label.foreground"),
+                SwingHtmlUtils.getMutedForegroundColor(), SwingHtmlUtils.getAccentColor());
     }
 
     private static final class ScrollableCardsPanel extends JPanel implements Scrollable {

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
@@ -158,12 +159,16 @@ public class MemoryService {
         return writeMarkdownFile(dir.resolve(MEMORY_INDEX_FILE), StringUtils.defaultString(content), successMsg);
     }
 
+    private static Path resolveNotePath(Path dir, String sanitizedSlug) {
+        return dir.resolve(NOTES_SUBDIR).resolve(sanitizedSlug + MD_EXTENSION);
+    }
+
     private static String readNote(Path dir, String slug) {
         String sanitized = sanitizeSlug(slug);
         if (dir == null) {
             return "";
         }
-        return readFileIfExists(dir.resolve(NOTES_SUBDIR).resolve(sanitized + MD_EXTENSION));
+        return readFileIfExists(resolveNotePath(dir, sanitized));
     }
 
     private String readArchivedFile(Path archiveDir, String filename, String label) {
@@ -251,23 +256,22 @@ public class MemoryService {
         if (entries == null || entries.isEmpty()) {
             return DEFAULT_TOPIC_TITLE;
         }
+        String fallback = "";
         for (ChatTranscriptEntry entry : entries) {
-            if (entry != null && "user".equalsIgnoreCase(entry.role())) {
-                String cleaned = cleanTopicTitle(entry.content());
-                if (!cleaned.isEmpty()) {
+            if (entry == null) {
+                continue;
+            }
+            String cleaned = cleanTopicTitle(entry.content());
+            if (!cleaned.isEmpty()) {
+                if (ROLE_USER.equalsIgnoreCase(entry.role())) {
                     return cleaned;
+                }
+                if (fallback.isEmpty()) {
+                    fallback = cleaned;
                 }
             }
         }
-        for (ChatTranscriptEntry entry : entries) {
-            if (entry != null) {
-                String cleaned = cleanTopicTitle(entry.content());
-                if (!cleaned.isEmpty()) {
-                    return cleaned;
-                }
-            }
-        }
-        return DEFAULT_TOPIC_TITLE;
+        return StringUtils.defaultIfEmpty(fallback, DEFAULT_TOPIC_TITLE);
     }
 
     static String cleanTopicTitle(String rawTitle) {
@@ -329,21 +333,12 @@ public class MemoryService {
         String type = StringUtils.defaultIfBlank(fm.get("type"), defaultType).trim();
         String title = StringUtils.defaultIfBlank(fm.get(KEY_TITLE), StringUtils.removeEnd(filename, MD_EXTENSION))
                 .trim();
-        String rawCreator = StringUtils.firstNonBlank(fm.get("createdBy"), fm.get("completedBy"), fm.get("approvedBy"),
-                "User");
-        String createdBy = StringUtils.defaultString(rawCreator).trim();
-        String rawTimestamp = StringUtils.firstNonBlank(fm.get("archivedOn"), fm.get("completedOn"),
-                fm.get("approvalTimestamp"), "");
-        String timestamp = StringUtils.defaultString(rawTimestamp).trim();
-        int messageCount = 0;
-        String msgCountStr = fm.get("messageCount");
-        if (StringUtils.isNotBlank(msgCountStr)) {
-            try {
-                messageCount = Integer.parseInt(msgCountStr.trim());
-            } catch (NumberFormatException ignored) {
-                messageCount = 0;
-            }
-        }
+        String createdBy = StringUtils
+                .firstNonBlank(fm.get("createdBy"), fm.get("completedBy"), fm.get("approvedBy"), "User").trim();
+        String timestamp = StringUtils.defaultString(
+                StringUtils.firstNonBlank(fm.get("archivedOn"), fm.get("completedOn"), fm.get("approvalTimestamp")))
+                .trim();
+        int messageCount = NumberUtils.toInt(StringUtils.trim(fm.get("messageCount")), 0);
         return new ArchiveEntrySummary(filename, type, title, createdBy, timestamp, messageCount, "");
     }
 
@@ -502,8 +497,7 @@ public class MemoryService {
             md.append(NL);
         }
 
-        Path notePath = memoryRoot.resolve(NOTES_SUBDIR).resolve(sanitizedSlug + MD_EXTENSION);
-        return writeMarkdownFile(notePath, md.toString(),
+        return writeMarkdownFile(resolveNotePath(memoryRoot, sanitizedSlug), md.toString(),
                 "Saved " + scope + " note: notes/" + sanitizedSlug + MD_EXTENSION);
     }
 
@@ -512,7 +506,7 @@ public class MemoryService {
         if (dir == null) {
             return new EditorResult(false, "", missingMsg);
         }
-        Path notePath = dir.resolve(NOTES_SUBDIR).resolve(sanitizedSlug + MD_EXTENSION);
+        Path notePath = resolveNotePath(dir, sanitizedSlug);
         try {
             if (!Files.exists(notePath)) {
                 return new EditorResult(false, "", "Note does not exist: notes/" + sanitizedSlug + MD_EXTENSION);

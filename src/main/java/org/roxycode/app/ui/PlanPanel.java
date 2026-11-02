@@ -24,10 +24,10 @@ public final class PlanPanel extends JPanel {
     private static final String COPY_BUTTON_TEXT = "Copy Plan as Markdown";
 
     private final transient PlanService planManagerService;
-    private final JEditorPane displayArea;
-    private final JButton copyMarkdownButton;
+    final JEditorPane displayArea;
+    final JButton copyMarkdownButton;
     private Timer copyFeedbackTimer;
-    private String lastCopiedMarkdown;
+    String lastCopiedMarkdown;
 
     public PlanPanel(PlanService planManagerService) {
         this.planManagerService = planManagerService;
@@ -74,18 +74,6 @@ public final class PlanPanel extends JPanel {
         this.lastCopiedMarkdown = markdown;
         copyFeedbackTimer = UiComponents.copyWithFeedback(copyMarkdownButton, copyFeedbackTimer, markdown,
                 COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
-    }
-
-    JEditorPane getDisplayArea() {
-        return displayArea;
-    }
-
-    JButton getCopyMarkdownButton() {
-        return copyMarkdownButton;
-    }
-
-    String getLastCopiedMarkdown() {
-        return lastCopiedMarkdown;
     }
 
     @Override

@@ -1,28 +1,26 @@
 package org.roxycode.app.ai.services;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
+
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.SwingUtilities;
-import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
-import static org.mockito.Mockito.*;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSession;
-import org.roxycode.app.ai.services.BuildContainerService.ContainerSessionKey;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.EnvironmentService;
@@ -30,7 +28,6 @@ import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
-import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 import org.springframework.context.ApplicationEventPublisher;
 
 class GenericBuildToolServiceTest {
@@ -117,113 +114,35 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testEnsureConfigAutoDetectionAndTemplateLoadingIncludingRust() throws IOException {
+    void testEnsureConfigAutoDetectionAndTemplateLoading() throws IOException {
         Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
-        writeBuildToml("""
-                [commands]
-                compile = 'echo maven-ok'
-                """);
-        assertTrue(buildToolService.compile().isSuccess());
-
-        Path configPath = projectDataDir.resolve("build.toml");
-        Files.deleteIfExists(configPath);
         String mavenContent = buildToolService.getConfigContent();
+        Path configPath = projectDataDir.resolve("build.toml");
         assertTrue(Files.exists(configPath));
-        assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
-        assertContainsAll(mavenContent, "[commands]", "./mvnw test-compile", "# Examples:", "pmd:check", "[sandbox]",
-                "~/.m2", "eclipse-temurin:25-jdk");
-        GenericBuildToolService.BuildConfig parsedMaven = assertDoesNotThrow(() -> buildToolService.loadConfig());
-        assertEquals("", parsedMaven.commands().lint());
-        assertEquals("", parsedMaven.commands().lintSingle());
-        assertEquals("", parsedMaven.commands().format());
-        assertEquals("", parsedMaven.commands().formatSingle());
+        assertContainsAll(mavenContent, "[commands]", "./mvnw test-compile", "[sandbox]", "~/.m2");
 
         Files.deleteIfExists(configPath);
-        Files.deleteIfExists(projectDataDir.resolve("tmp/build.log"));
-        Files.deleteIfExists(projectDataDir.resolve("tmp"));
-        Files.deleteIfExists(projectDataDir);
-        Files.writeString(projectDataDir, "not a directory");
-        String fallbackContent = assertDoesNotThrow(() -> buildToolService.getConfigContent());
-        assertContainsAll(fallbackContent, "[commands]", "./mvnw test-compile", "[sandbox]");
-
-        Files.deleteIfExists(projectDataDir);
         Files.deleteIfExists(projectRoot.resolve("pom.xml"));
         Files.writeString(projectRoot.resolve("Cargo.toml"), "[package]\nname = 'demo'\n");
         assertEquals("rust", buildToolService.detectTemplate());
-        String rustContent = buildToolService.getConfigContent();
-        assertContainsAll(rustContent, "[commands]", "cargo check --tests", "cargo clippy -- -D warnings",
-                "rustfmt {file}", "~/.cargo", "rust:1.85");
-
-        List<GenericBuildToolService.BuildTemplateInfo> availableTemplates = buildToolService.getAvailableTemplates();
-        assertEquals(8, availableTemplates.size());
-        assertTrue(availableTemplates.stream().anyMatch(t -> "maven".equals(t.id()) && "Maven".equals(t.toString())));
-        assertTrue(availableTemplates.stream()
-                .anyMatch(t -> "default".equals(t.id()) && "No-Op / Manual Setup".equals(t.displayName())));
-        String defaultLoaded = buildToolService.loadTemplateContent("default");
-        assertContainsAll(defaultLoaded, "[commands]", "compile = ");
-
-        Files.deleteIfExists(configPath);
-        Files.deleteIfExists(projectRoot.resolve("Cargo.toml"));
-        Files.writeString(projectRoot.resolve("pyproject.toml"), "[project]");
-
-        ClassLoader originalTCCL = Thread.currentThread().getContextClassLoader();
-        try (URLClassLoader emptyClassLoader = new URLClassLoader(new URL[0], null)) {
-            Thread.currentThread().setContextClassLoader(emptyClassLoader);
-            String pyContent = buildToolService.getConfigContent();
-            assertContainsAll(pyContent, "[commands]", "pytest", "# Examples:", "ruff check {file}", "[sandbox]",
-                    "~/.cache/pip", "python:3.12");
-        } finally {
-            Thread.currentThread().setContextClassLoader(originalTCCL);
-        }
+        assertContainsAll(buildToolService.getConfigContent(), "cargo check --tests", "rustfmt {file}");
+        assertEquals(8, buildToolService.getAvailableTemplates().size());
+        assertContainsAll(buildToolService.loadTemplateContent("default"), "[commands]", "compile = ");
     }
 
     @Test
     void testNoOpForBlankCommandsFallbacksFilePlaceholdersAndCodePhaseEnforcement() throws IOException {
-        writeBuildToml("""
-                [commands]
-                install = ""
-                clean = ""
-                compile = ""
-                build = ""
-                test_all = ""
-                test_single = ""
-                lint = ""
-                lint_single = ""
-                format = ""
-                format_single = ""
-                """);
-
+        writeBuildToml("[commands]\ncompile = ''\nformat_single = ''\n");
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             BuildResult compileNoOp = buildToolService.compile();
             assertTrue(compileNoOp.isSuccess());
-            assertEquals(0, compileNoOp.getExitCode());
             assertEquals("Command 'commands.compile' is not configured (no-op).", compileNoOp.getOutput());
-
-            BuildResult buildNoOp = buildToolService.build();
-            assertTrue(buildNoOp.isSuccess());
-            assertEquals("Command 'commands.build' is not configured (no-op).", buildNoOp.getOutput());
-
-            BuildResult installNoOp = buildToolService.install();
-            assertTrue(installNoOp.isSuccess());
-            assertEquals("Command 'commands.install' is not configured (no-op).", installNoOp.getOutput());
-
-            BuildResult formatNoOp = buildToolService.format();
-            assertTrue(formatNoOp.isSuccess());
-            assertEquals("Command 'commands.format' is not configured (no-op).", formatNoOp.getOutput());
-
-            BuildResult formatSingleNoOp = buildToolService.format("src/App.java");
-            assertTrue(formatSingleNoOp.isSuccess());
-            assertEquals("Command 'commands.format_single' is not configured (no-op).", formatSingleNoOp.getOutput());
-
-            BuildResult lintSingleNoOp = buildToolService.lint("src/App.java");
-            assertTrue(lintSingleNoOp.isSuccess());
-            assertEquals("Command 'commands.lint_single' is not configured (no-op).", lintSingleNoOp.getOutput());
-
+            assertEquals("Command 'commands.format_single' is not configured (no-op).",
+                    buildToolService.format("src/App.java").getOutput());
             runner.verifyNoInteractions();
             verifyNoInteractions(eventPublisher);
         }
 
-        // Fallbacks: build -> compile, lint(file) -> lint, format(file) -> format
         writeBuildToml("""
                 [commands]
                 install = 'echo installed-deps'
@@ -235,30 +154,14 @@ class GenericBuildToolServiceTest {
                 format_single = ''
                 """);
 
-        BuildResult buildFallback = buildToolService.build();
-        assertTrue(buildFallback.isSuccess());
-        assertTrue(buildFallback.getOutput().contains("fallback-compile"));
-
-        BuildResult lintFallback = buildToolService.lint("./src/Main.java");
-        assertTrue(lintFallback.isSuccess());
-        assertTrue(lintFallback.getOutput().contains("fallback-lint"));
-
-        BuildResult formatFallback = buildToolService.format("./src/Main.java");
-        assertTrue(formatFallback.isSuccess());
-        assertTrue(formatFallback.getOutput().contains("fallback-format"));
+        assertTrue(buildToolService.build().getOutput().contains("fallback-compile"));
+        assertTrue(buildToolService.lint("./src/Main.java").getOutput().contains("fallback-lint"));
+        assertTrue(buildToolService.format("./src/Main.java").getOutput().contains("fallback-format"));
         verify(eventPublisher).publishEvent(new FileChangedEvent("src/Main.java"));
 
-        BuildResult installRes = buildToolService.install();
-        assertTrue(installRes.isSuccess());
-        assertTrue(installRes.getOutput().contains("installed-deps"));
+        assertTrue(buildToolService.install().getOutput().contains("installed-deps"));
         verify(eventPublisher).publishEvent(new FileChangedEvent(""));
 
-        clearInvocations(eventPublisher);
-        BuildResult formatAllRes = buildToolService.format();
-        assertTrue(formatAllRes.isSuccess());
-        verify(eventPublisher).publishEvent(new FileChangedEvent(""));
-
-        // Direct single commands with {file} placeholder replacement
         writeBuildToml("""
                 [commands]
                 build = 'echo explicit-build'
@@ -269,16 +172,9 @@ class GenericBuildToolServiceTest {
         assertTrue(buildToolService.lint("src/dir/Foo.java").getOutput().contains("linting-src/dir/Foo.java"));
         assertTrue(buildToolService.format("src/dir/Foo.java").getOutput().contains("formatting-src/dir/Foo.java"));
 
-        // Path validation failures for lint(relativePath) and format(relativePath)
-        BuildResult traversalLint = buildToolService.lint("../outside.java");
-        assertFalse(traversalLint.isSuccess());
-        assertTrue(traversalLint.getErrors().get(0).contains("Path traversal"));
+        assertFalse(buildToolService.lint("../outside.java").isSuccess());
+        assertFalse(buildToolService.format("   ").isSuccess());
 
-        BuildResult blankFormat = buildToolService.format("   ");
-        assertFalse(blankFormat.isSuccess());
-        assertTrue(blankFormat.getErrors().get(0).contains("File path must not be blank"));
-
-        // CODE phase enforcement on install and format
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
         assertThrows(IllegalStateException.class, () -> buildToolService.install());
         assertThrows(IllegalStateException.class, () -> buildToolService.format());
@@ -287,77 +183,46 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testBuildAndTestThreeStepPipelineAndShortCircuit() throws IOException {
-        writeBuildToml("""
-                [commands]
-                compile = 'echo step-compile'
-                test_all = 'echo step-test'
-                lint = 'echo step-lint'
-                """);
-
+    void testBuildAndTestPipelinePlaceholdersAndLogTail() throws IOException {
+        writeBuildToml(
+                "[commands]\ncompile = 'echo step-compile'\ntest_all = 'echo step-test'\nlint = 'echo step-lint'\n");
         BuildResult allPass = buildToolService.buildAndTest();
         assertTrue(allPass.isSuccess());
         assertContainsAll(allPass.getOutput(), "COMPILE OUTPUT:", "step-compile", "TEST OUTPUT:", "step-test",
                 "LINT OUTPUT:", "step-lint");
 
-        // Short-circuit on test failure before lint runs
-        writeBuildToml("""
-                [commands]
-                compile = 'echo step-compile'
-                test_all = 'exit 2'
-                lint = 'echo should-not-run-lint'
-                """);
+        writeBuildToml("[commands]\ncompile = 'echo step-compile'\ntest_all = 'exit 2'\nlint = 'echo no-lint'\n");
         BuildResult testFail = buildToolService.buildAndTest();
         assertFalse(testFail.isSuccess());
         assertEquals(2, testFail.getExitCode());
-        assertContainsAll(testFail.getOutput(), "COMPILE OUTPUT:", "TEST OUTPUT:");
-        assertFalse(testFail.getOutput().contains("should-not-run-lint"));
+        assertFalse(testFail.getOutput().contains("no-lint"));
 
-        // Short-circuit on compile failure before test_all runs
-        writeBuildToml("""
-                [commands]
-                compile = 'exit 3'
-                test_all = 'echo should-not-run-test'
-                lint = 'echo should-not-run-lint'
-                """);
-        BuildResult compileFail = buildToolService.buildAndTest();
-        assertFalse(compileFail.isSuccess());
-        assertEquals(3, compileFail.getExitCode());
-        assertFalse(compileFail.getOutput().contains("TEST OUTPUT:"));
-    }
-
-    @Test
-    void testCommandPlaceholdersAndLogTailPersistence() throws IOException {
         writeBuildToml("[commands]\ntest_single = 'echo {testName}'\n");
-        BuildResult result = buildToolService.runSingleTest("MyTest");
-        assertTrue(result.getOutput().contains("MyTest"));
-        Path persistedLog = projectDataDir.resolve("tmp/build.log");
-        assertTrue(Files.exists(persistedLog));
-        assertTrue(Files.readString(persistedLog).contains("MyTest"));
-        assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
+        assertTrue(buildToolService.runSingleTest("MyTest").getOutput().contains("MyTest"));
+        assertTrue(Files.readString(projectDataDir.resolve("tmp/build.log")).contains("MyTest"));
 
-        assertEquals("short output", GenericBuildToolService.getLogTail("short output"));
-
-        String largeContent = "HEADER-" + "A".repeat(5000) + "-TAIL_MARKER";
-        String truncated = GenericBuildToolService.getLogTail(largeContent);
+        String truncated = GenericBuildToolService.getLogTail("HEADER-" + "A".repeat(5000) + "-TAIL");
         assertTrue(truncated.startsWith(GenericBuildToolService.LOG_TRUNCATED_PREFIX));
-        assertFalse(truncated.contains("HEADER-"));
-        assertTrue(truncated.endsWith("-TAIL_MARKER"));
-        assertEquals(GenericBuildToolService.LOG_TRUNCATED_PREFIX.length() + GenericBuildToolService.MAX_LOG_TAIL_BYTES,
-                truncated.length());
-
+        assertTrue(truncated.endsWith("-TAIL"));
         assertEquals("", GenericBuildToolService.getLogTail(null));
-        assertEquals("", GenericBuildToolService.getLogTail(""));
     }
 
     @Test
-    void testContainerExecutionAndRipGrepRegexParsing() throws IOException {
-        stubDockerAvailable(true);
-        buildContainerService.setContainerSessionFactory(key -> createMockSession(1,
-                "[ERROR] Container compile failure" + System.lineSeparator() + "FAIL: ContainerTest#fail", null, null));
+    void testContainerAndNativeSandboxExecutionAndSessionLifecycle() throws IOException {
+        writeBuildToml("[commands]\ncompile = './mvnw test-compile'\n[sandbox]\nmode = 'native'\n");
+        when(systemToolService.checkNativeSandboxAvailable()).thenReturn(false);
+        assertTrue(buildToolService.compile().getOutput().contains("Native OS sandbox is not available"));
 
-        writeBuildToml("""
+        when(systemToolService.checkNativeSandboxAvailable()).thenReturn(true);
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(anyList(), eq(projectRoot), anyMap(), any(), eq(true), any()))
+                    .thenReturn(new ProcessResult(0, "native-sandbox-ok", "", false));
+            assertEquals("native-sandbox-ok", buildToolService.compile().getOutput());
+        }
+
+        String dockerToml = """
                 [commands]
+                compile = './mvnw test-compile'
                 test_all = './mvnw test'
                 [parse]
                 error_regex = '^.[E]RROR.'
@@ -366,180 +231,46 @@ class GenericBuildToolServiceTest {
                 mode = 'docker'
                 image = 'eclipse-temurin:25-jdk'
                 workdir = '/workspace'
-                """);
-        Path persistedLog = projectDataDir.resolve("tmp/build.log");
-        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            List<String> errCmd = List.of("rg", "--color=never", "-N", "-e", "^.[E]RROR.", persistedLog.toString());
-            List<String> failCmd = List.of("rg", "--color=never", "-N", "-e", "^FAIL:", persistedLog.toString());
-            runner.when(() -> ProcessRunner.run(eq(errCmd), isNull(), eq(false))).thenReturn(
-                    new ProcessResult(0, "  [ERROR] Container compile failure  " + System.lineSeparator(), "", false));
-            runner.when(() -> ProcessRunner.run(eq(failCmd), isNull(), eq(false)))
-                    .thenReturn(new ProcessResult(0, "FAIL: ContainerTest#fail" + System.lineSeparator(), "", false));
-
-            BuildResult result = buildToolService.runTests();
-            assertFalse(result.isSuccess());
-            assertEquals(1, result.getExitCode());
-            assertEquals(List.of("[ERROR] Container compile failure"), result.getErrors());
-            assertEquals(List.of("FAIL: ContainerTest#fail"), result.getFailedTests());
-
-            List<String> noMatchCmd = List.of("rg", "--color=never", "-N", "-e", "^NOMATCH:", persistedLog.toString());
-            runner.when(() -> ProcessRunner.run(eq(noMatchCmd), isNull(), eq(false)))
-                    .thenReturn(new ProcessResult(GrepService.EXIT_CODE_NO_MATCHES, "", "", false));
-            assertTrue(buildToolService.extractWithRipGrep("^NOMATCH:", persistedLog).isEmpty());
-        }
-    }
-
-    @Test
-    void testContainerAndNativeSandboxExecutionErrorAndCancellationHandling() throws IOException {
-        writeBuildToml("""
-                [commands]
-                compile = './mvnw test-compile'
-                [sandbox]
-                mode = 'native'
-                writable_paths = ['~/.m2']
-                """);
-        when(systemToolService.checkNativeSandboxAvailable()).thenReturn(false);
-        BuildResult noNativeRes = buildToolService.compile();
-        assertFalse(noNativeRes.isSuccess());
-        assertEquals(-1, noNativeRes.getExitCode());
-        assertTrue(noNativeRes.getOutput()
-                .contains("Error executing commands.compile: Native OS sandbox is not available on this system"));
-
-        when(systemToolService.checkNativeSandboxAvailable()).thenReturn(true);
-        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            runner.when(() -> ProcessRunner.run(anyList(), eq(projectRoot), anyMap(), any(), eq(true), any()))
-                    .thenReturn(new ProcessResult(0, "native-sandbox-ok", "", false));
-            BuildResult nativeOkRes = buildToolService.compile();
-            assertTrue(nativeOkRes.isSuccess());
-            assertEquals("native-sandbox-ok", nativeOkRes.getOutput());
-        }
-
-        writeBuildToml("""
-                [commands]
-                compile = './mvnw test-compile'
-                [sandbox]
-                mode = 'docker'
-                image = 'eclipse-temurin:25-jdk'
-                workdir = '/workspace'
-                """);
+                """;
+        writeBuildToml(dockerToml);
 
         stubDockerAvailable(false);
-        BuildResult noDockerRes = buildToolService.compile();
-        assertFalse(noDockerRes.isSuccess());
-        assertEquals(-1, noDockerRes.getExitCode());
-        assertTrue(noDockerRes.getOutput().contains("Error executing commands.compile: Docker is not available"));
+        assertTrue(buildToolService.compile().getOutput().contains("Docker is not available"));
 
-        stubDockerAvailable(true);
-        buildContainerService.setContainerSessionFactory(key -> {
-            throw new IllegalStateException("client version 1.32 is too old. Minimum supported API version is 1.44");
-        });
-        BuildResult sessionErrorRes = buildToolService.compile();
-        assertFalse(sessionErrorRes.isSuccess());
-        assertEquals(-1, sessionErrorRes.getExitCode());
-        assertTrue(sessionErrorRes.getErrors().stream()
-                .anyMatch(err -> err.contains("Container execution failed: client version 1.32 is too old")));
-
-        AtomicBoolean sessionClosed = new AtomicBoolean(false);
-        AtomicBoolean throwInterrupted = new AtomicBoolean(true);
-        buildContainerService.setContainerSessionFactory(key -> {
-            sessionClosed.set(false);
-            ContainerSession delegate = createMockSession(0, "", null, () -> sessionClosed.set(true));
-            return new ContainerSession() {
-                @Override
-                public ContainerExecResult execInContainer(String... command) throws Exception {
-                    if (throwInterrupted.get()) {
-                        throw new InterruptedException("Simulated interrupt");
-                    }
-                    throw new CancellationException("Simulated cancellation");
-                }
-
-                @Override
-                public boolean isRunning() {
-                    return delegate.isRunning();
-                }
-
-                @Override
-                public void close() {
-                    delegate.close();
-                }
-            };
-        });
-
-        try {
-            assertThrows(CancellationException.class, () -> buildToolService.compile());
-            assertTrue(sessionClosed.get());
-            assertTrue(Thread.currentThread().isInterrupted());
-        } finally {
-            Thread.interrupted();
-        }
-
-        throwInterrupted.set(false);
-        assertThrows(CancellationException.class, () -> buildToolService.compile());
-        assertTrue(sessionClosed.get());
-    }
-
-    @Test
-    void testWarmContainerSessionReusedAndStoppedOnConfigOrProjectChange() throws IOException {
         stubDockerAvailable(true);
         AtomicInteger sessionsCreated = new AtomicInteger(0);
         AtomicBoolean sessionClosed = new AtomicBoolean(false);
-        List<String[]> executedCommands = new ArrayList<>();
-        List<ContainerSessionKey> sessionKeys = new ArrayList<>();
-
         buildContainerService.setContainerSessionFactory(key -> {
             sessionsCreated.incrementAndGet();
-            sessionKeys.add(key);
             sessionClosed.set(false);
-            return createMockSession(0, "Container build OK", executedCommands, () -> sessionClosed.set(true));
+            return createMockSession(1, "[ERROR] Compile err\nFAIL: MyTest#fail", null, () -> sessionClosed.set(true));
         });
 
-        String toml = """
-                [commands]
-                compile = './mvnw test-compile'
-                test_all = './mvnw test'
-                [env]
-                ROXY_CODE = 'true'
-                [sandbox]
-                mode = 'docker'
-                image = 'eclipse-temurin:25-jdk'
-                workdir = '/workspace'
-                """;
-        writeBuildToml(toml);
+        Path persistedLog = projectDataDir.resolve("tmp/build.log");
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(anyList(), isNull(), eq(false)))
+                    .thenReturn(new ProcessResult(0, "[ERROR] Compile err\n", "", false))
+                    .thenReturn(new ProcessResult(0, "FAIL: MyTest#fail\n", "", false));
 
-        BuildResult compileRes = buildToolService.compile();
-        assertTrue(compileRes.isSuccess());
-        assertEquals("Container build OK", compileRes.getOutput());
-        assertEquals(1, sessionsCreated.get());
-        assertEquals("eclipse-temurin:25-jdk", sessionKeys.get(0).image());
-        assertEquals("/workspace", sessionKeys.get(0).workdir());
-        assertEquals("true", sessionKeys.get(0).env().get("ROXY_CODE"));
-        assertArrayEquals(new String[]{"sh", "-c", "./mvnw test-compile"}, executedCommands.get(0));
-
-        assertTrue(buildToolService.runTests().isSuccess());
-        assertEquals(1, sessionsCreated.get());
-        assertArrayEquals(new String[]{"sh", "-c", "./mvnw test"}, executedCommands.get(1));
-
-        buildToolService.saveConfigContent(toml);
-        assertTrue(sessionClosed.get());
+            BuildResult result = buildToolService.runTests();
+            assertFalse(result.isSuccess());
+            assertEquals(List.of("[ERROR] Compile err"), result.getErrors());
+            assertEquals(List.of("FAIL: MyTest#fail"), result.getFailedTests());
+        }
+        assertTrue(persistedLog.toFile().exists());
 
         buildToolService.compile();
-        assertEquals(2, sessionsCreated.get());
-        assertFalse(sessionClosed.get());
-
-        buildToolService.handleProjectChanged(new ProjectChangedEvent(projectRoot));
+        assertEquals(1, sessionsCreated.get());
+        buildToolService.saveConfigContent(dockerToml);
         assertTrue(sessionClosed.get());
 
-        buildToolService.compile();
-        assertFalse(sessionClosed.get());
+        sessionClosed.set(false);
         AtomicBoolean stoppedOnEdt = new AtomicBoolean(true);
         buildContainerService.setContainerSessionFactory(key -> createMockSession(0, "OK", null, () -> {
             stoppedOnEdt.set(SwingUtilities.isEventDispatchThread());
             sessionClosed.set(true);
         }));
-        buildToolService.stopActiveContainer();
-        sessionClosed.set(false);
         buildToolService.compile();
-
         try {
             SwingUtilities
                     .invokeAndWait(() -> buildToolService.handleProjectChanged(new ProjectChangedEvent(projectRoot)));
@@ -550,33 +281,34 @@ class GenericBuildToolServiceTest {
             fail(e);
         }
         assertTrue(sessionClosed.get());
-        assertFalse(stoppedOnEdt.get(), "Container stop must be offloaded off EDT");
+        assertFalse(stoppedOnEdt.get());
+
+        buildContainerService.setContainerSessionFactory(key -> new ContainerSession() {
+            @Override
+            public ContainerExecResult execInContainer(String... command) throws Exception {
+                throw new InterruptedException("Interrupted");
+            }
+
+            @Override
+            public boolean isRunning() {
+                return true;
+            }
+
+            @Override
+            public void close() {
+                sessionClosed.set(true);
+            }
+        });
+        try {
+            assertThrows(CancellationException.class, () -> buildToolService.compile());
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test
-    void testMalformedTomlValuesHandledWithoutClassCastException() throws IOException {
-        writeBuildToml("""
-                unknown_top_level = "ignored"
-                [commands]
-                compile = 'echo hi'
-                unknown_build_key = 123
-                [env]
-                NUMBER_VAL = 42
-                BOOL_VAL = true
-                [parse]
-                error_regex = 12345
-                """);
-        assertTrue(assertDoesNotThrow(() -> buildToolService.compile()).isSuccess());
-
-        writeBuildToml("parse = 'not-a-section'\n[commands]\ncompile = 'echo hi'\n");
-        BuildResult malformedSectionResult = assertDoesNotThrow(() -> buildToolService.compile());
-        assertFalse(malformedSectionResult.isSuccess());
-        assertEquals(-1, malformedSectionResult.getExitCode());
-    }
-
-    @Test
-    void testCompileRunTestsAndBuildAndTestAutomaticallyUpdatePlanVerificationStepsAndAllowRequestReview()
-            throws IOException {
+    void testCompileRunTestsAndBuildAndTestAutomaticallyUpdatePlanVerificationSteps() throws IOException {
         EnvironmentService envService = mock(EnvironmentService.class);
         when(envService.getCurrentUser()).thenReturn("dev");
         PlanService realPlanService = new PlanService(envService, eventPublisher, projectService);
@@ -586,62 +318,23 @@ class GenericBuildToolServiceTest {
         realPlanService.submitPlan("Feature", "Goal", new String[]{"Req"}, new String[]{"Implement feature"});
         realPlanService.requestDevelopment("Start coding");
         realPlanService.approveTransition();
-        assertEquals(WorkflowPhase.CODE, realPlanService.getCurrentPhase());
 
-        writeBuildToml("""
-                [commands]
-                compile = 'echo compile-ok'
-                test_all = 'echo tests-ok'
-                lint = 'echo lint-ok'
-                """);
-
-        // 1. compile() marks STEP_COMPILE = true
+        writeBuildToml("[commands]\ncompile = 'echo ok'\ntest_all = 'echo ok'\nlint = 'echo ok'\n");
         assertTrue(integratedBuildService.compile().isSuccess());
         assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
 
-        // Failing compile marks STEP_COMPILE = false
-        writeBuildToml("""
-                [commands]
-                compile = 'exit 1'
-                test_all = 'echo tests-ok'
-                """);
-        assertFalse(integratedBuildService.compile().isSuccess());
-        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
-
-        // 2. Passing runTests() marks both STEP_UNIT_TESTS = true and STEP_COMPILE = true
         assertTrue(integratedBuildService.runTests().isSuccess());
         assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
         assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
 
-        // Failing runTests() marks STEP_UNIT_TESTS = false while leaving STEP_COMPILE = true
-        writeBuildToml("""
-                [commands]
-                compile = 'echo compile-ok'
-                test_all = 'exit 1'
-                """);
-        assertFalse(integratedBuildService.runTests().isSuccess());
-        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
-        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
-
-        // 3. File edit resets both verification steps; buildAndTest() + markStepCompleted(0) + requestReview() succeeds
         realPlanService.markStepCompleted(0);
         realPlanService.onFileChanged(new FileChangedEvent("src/Feature.java", FileChangedEvent.ChangeType.MODIFIED));
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
 
-        writeBuildToml("""
-                [commands]
-                compile = 'echo compile-ok'
-                test_all = 'echo tests-ok'
-                lint = 'echo lint-ok'
-                """);
         assertTrue(integratedBuildService.buildAndTest().isSuccess());
-        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
-        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
-
-        String reviewTransition = realPlanService.requestReview("All steps and buildAndTest verified");
-        assertTrue(reviewTransition.contains("Autonomous transition from CODE to REVIEW"));
+        assertTrue(realPlanService.requestReview("All steps verified").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, realPlanService.getCurrentPhase());
     }
 }

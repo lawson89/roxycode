@@ -9,8 +9,10 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.AiConfig;
@@ -56,11 +58,7 @@ public class SymbolService {
     public SymbolService(ProjectService projectService, GrepService grepService, ObjectMapper objectMapper) {
         this.projectService = projectService;
         this.grepService = grepService;
-        if (objectMapper != null) {
-            this.objectMapper = objectMapper;
-        } else {
-            this.objectMapper = AiConfig.SHARED_OBJECT_MAPPER;
-        }
+        this.objectMapper = Objects.requireNonNullElse(objectMapper, AiConfig.SHARED_OBJECT_MAPPER);
     }
 
     void setCtagsRunner(CtagsRunner ctagsRunner) {
@@ -307,11 +305,7 @@ public class SymbolService {
     }
 
     private static String formatSymbolNotFoundError(String symbolName, String relativePath) {
-        String resolvedName = "";
-        if (symbolName != null) {
-            resolvedName = symbolName;
-        }
-        return ERROR_PREFIX + "Symbol '" + resolvedName + "' not found in " + relativePath;
+        return ERROR_PREFIX + "Symbol '" + StringUtils.defaultString(symbolName) + "' not found in " + relativePath;
     }
 
     private static List<SymbolInfo> finalizeSymbolsForFile(List<CtagsEntry> entries, String relPath, Path filePath,
@@ -383,10 +377,7 @@ public class SymbolService {
                 }
             }
         }
-        if (fallbackRelativePath == null) {
-            return "";
-        }
-        return fallbackRelativePath.trim().replace(BACKSLASH_CHAR, SLASH_CHAR);
+        return StringUtils.trimToEmpty(fallbackRelativePath).replace(BACKSLASH_CHAR, SLASH_CHAR);
     }
 
     private static int countLinesSafely(Path filePath) {

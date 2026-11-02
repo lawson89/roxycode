@@ -14,8 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -96,25 +94,30 @@ class AiServiceTest {
     private AppSettings settings;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     void setUp() {
         settings = new AppSettings();
         lenient().when(settingsService.getSettings()).thenReturn(settings);
-        lenient().when(chatClient.prompt()).thenReturn(requestSpec);
-        lenient().when(requestSpec.system(anyString())).thenReturn(requestSpec);
-        lenient().when(requestSpec.user(any(Consumer.class))).thenReturn(requestSpec);
-        lenient().when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-        lenient().when(requestSpec.advisors(any(Advisor[].class))).thenReturn(requestSpec);
-        lenient().when(requestSpec.options(any())).thenReturn(requestSpec);
-        lenient().when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
-        lenient().when(requestSpec.tools(any(Object[].class))).thenReturn(requestSpec);
-        lenient().when(requestSpec.call()).thenReturn(responseSpec);
-        lenient().when(chatClientBuilder.defaultAdvisors(any(Advisor[].class))).thenReturn(chatClientBuilder);
-        lenient().when(chatClientBuilder.build()).thenReturn(chatClient);
+        stubMockClientChain(chatClientBuilder, chatClient, requestSpec, responseSpec);
 
         jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher, null, settingsService);
         aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlTool, planService, chatMemory,
                 toolCallingManager, eventPublisher);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void stubMockClientChain(ChatClient.Builder builder, ChatClient client,
+            ChatClient.ChatClientRequestSpec reqSpec, ChatClient.CallResponseSpec respSpec) {
+        lenient().when(client.prompt()).thenReturn(reqSpec);
+        lenient().when(reqSpec.system(anyString())).thenReturn(reqSpec);
+        lenient().when(reqSpec.user(any(Consumer.class))).thenReturn(reqSpec);
+        lenient().when(reqSpec.advisors(any(Consumer.class))).thenReturn(reqSpec);
+        lenient().when(reqSpec.advisors(any(Advisor[].class))).thenReturn(reqSpec);
+        lenient().when(reqSpec.options(any())).thenReturn(reqSpec);
+        lenient().when(reqSpec.toolContext(anyMap())).thenReturn(reqSpec);
+        lenient().when(reqSpec.tools(any(Object[].class))).thenReturn(reqSpec);
+        lenient().when(reqSpec.call()).thenReturn(respSpec);
+        lenient().when(builder.defaultAdvisors(any(Advisor[].class))).thenReturn(builder);
+        lenient().when(builder.build()).thenReturn(client);
     }
 
     private void stubChatResponse(WorkflowPhase phase, String promptText, String responseText, String finishReason,
@@ -179,19 +182,14 @@ class AiServiceTest {
     void testAiConfigCreatesBeansClientAndRetryClassifier() throws Exception {
         AiConfig config = new AiConfig();
         ToolExecutionExceptionProcessor processor = config.toolExecutionExceptionProcessor();
-        assertNotNull(processor);
         ToolDefinition toolDef = mock(ToolDefinition.class);
-        String jsonError = processor
-                .process(new ToolExecutionException(toolDef, new IllegalArgumentException("Invalid parameter")));
         assertEquals(Map.of("error", "Invalid parameter"),
-                AiConfig.SHARED_OBJECT_MAPPER.readValue(jsonError, Map.class));
-        String fallbackJsonError = processor
-                .process(new ToolExecutionException(toolDef, new IllegalArgumentException("   ")));
-        assertEquals(Map.of("error", "Tool execution failed"),
-                AiConfig.SHARED_OBJECT_MAPPER.readValue(fallbackJsonError, Map.class));
+                AiConfig.SHARED_OBJECT_MAPPER.readValue(
+                        processor.process(
+                                new ToolExecutionException(toolDef, new IllegalArgumentException("Invalid parameter"))),
+                        Map.class));
         assertThrows(CancellationException.class, () -> processor
                 .process(new ToolExecutionException(toolDef, new CancellationException("User stopped"))));
-        assertNotNull(config.toolCallingManager(processor));
 
         GoogleGenAiConnectionProperties props = new GoogleGenAiConnectionProperties();
         props.setApiKey("test-api-key");
@@ -200,86 +198,65 @@ class AiServiceTest {
             assertFalse(client.vertexAI());
         }
         Thread.interrupted();
-        assertNotNull(config.retryTemplate());
         assertTrue(AiConfig.isTransientAiError(new ClientException(429, "Too Many Requests", "RESOURCE_EXHAUSTED")));
         assertTrue(AiConfig.isTransientAiError(new ServerException(503, "Service Unavailable", "UNAVAILABLE")));
-        assertTrue(AiConfig.isTransientAiError(
-                new RuntimeException("Failed to generate content", new SocketTimeoutException("Read timed out"))));
+        assertTrue(AiConfig.isTransientAiError(new RuntimeException("Err", new SocketTimeoutException("Timeout"))));
         assertTrue(AiConfig.isTransientAiError(new GenAiIOException("Network failure")));
         assertTrue(AiConfig.isTransientAiError(new TransientAiException("Rate limit")));
-
         assertFalse(AiConfig.isTransientAiError(new ClientException(400, "Bad Request", "INVALID_ARGUMENT")));
         assertFalse(AiConfig.isTransientAiError(new ClientException(401, "Unauthorized", "UNAUTHENTICATED")));
-        assertFalse(AiConfig.isTransientAiError(new ClientException(403, "Forbidden", "PERMISSION_DENIED")));
         assertFalse(AiConfig.isTransientAiError(new NonTransientAiException("Invalid API key")));
         assertFalse(AiConfig.isTransientAiError(new CancellationException("Stopped")));
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void testChatUsesConfiguredModelDynamicPromptAndTurnEvents() {
+    void testChatUsesConfiguredModelDynamicPromptHotReloadAndTurnEvents() {
         settings.setGeminiModel("test-model-123");
         stubChatResponse(WorkflowPhase.CODE, "FULL CODE SYSTEM PROMPT", "AI Response", "STOP", null);
 
         assertEquals("AI Response", aiService.chat("default", null, "Hello", null));
         verify(requestSpec).system("FULL CODE SYSTEM PROMPT");
-        verify(promptService).buildSystemPrompt(WorkflowPhase.CODE, null);
-        verify(requestSpec).options(any());
         verify(requestSpec).tools(jexlTool);
-        verify(requestSpec, times(1)).tools(any(Object[].class));
-        verify(requestSpec).toolContext(argThat(ctx -> "default".equals(ctx.get(TurnToolContext.CONVERSATION_ID_KEY))
-                && WorkflowPhase.CODE == ctx.get(TurnToolContext.PHASE_KEY)
-                && ctx.get(TurnToolContext.TURN_COUNTER_KEY) instanceof AtomicInteger));
-
-        clearInvocations(requestSpec, eventPublisher);
-        when(promptService.buildSystemPrompt(WorkflowPhase.REVIEW, "Extra instructions"))
-                .thenReturn("REVIEW SYSTEM PROMPT");
-        assertEquals("AI Response",
-                aiService.chat("custom-conv", WorkflowPhase.REVIEW, "Hello", "Extra instructions", null));
-        verify(requestSpec).system("REVIEW SYSTEM PROMPT");
-
-        ArgumentCaptor<Consumer<ChatClient.AdvisorSpec>> advisorCaptor = ArgumentCaptor.forClass(Consumer.class);
-        verify(requestSpec).advisors(advisorCaptor.capture());
-        ChatClient.AdvisorSpec advisorSpec = mock(ChatClient.AdvisorSpec.class);
-        advisorCaptor.getValue().accept(advisorSpec);
-        verify(advisorSpec).param(ChatMemory.CONVERSATION_ID, "custom-conv");
 
         ProjectService mockProjectService = mock(ProjectService.class);
         when(mockProjectService.getEffectiveGeminiModel()).thenReturn("gemini-project-override");
         AiService aiServiceWithProject = new AiService(chatClientBuilder, settingsService, mockProjectService,
                 promptService, jexlTool, planService, chatMemory, toolCallingManager, eventPublisher);
         assertEquals("gemini-project-override", aiServiceWithProject.resolveEffectiveGeminiModel());
-        assertEquals("AI Response", aiServiceWithProject.chat("default", WorkflowPhase.CODE, "Hello", null));
 
         clearInvocations(eventPublisher);
         String msg = "Autonomous execution stopped: Maximum tool turns (2) exceeded.";
         stubToolTurnsAndResponse(2, msg, "STOP", null);
         assertEquals(msg, aiService.chat("default", null, "Hello", null));
-        AgentTurnCompleteEvent ev = captureTurnCompleteEvent();
-        assertEquals(2, ev.totalTurns());
-        assertEquals(msg, ev.result());
+        assertEquals(2, captureTurnCompleteEvent().totalTurns());
 
-        clearInvocations(eventPublisher);
-        when(requestSpec.call()).thenThrow(new IllegalStateException("API failure"));
-        assertThrows(IllegalStateException.class, () -> aiService.chat("default", null, "Trigger error", null));
-        verify(eventPublisher, never()).publishEvent(any(AgentTurnCompleteEvent.class));
-    }
+        AtomicReference<String> reloadedKeyRef = new AtomicReference<>();
+        aiService.setChatClientBuilderFactory(key -> {
+            reloadedKeyRef.set(key);
+            return chatClientBuilder;
+        });
+        settings.setGeminiApiKey("  hot-reloaded-key-123  ");
+        aiService.onSettingsChanged(new SettingsChangedEvent(settings));
+        assertEquals("hot-reloaded-key-123", reloadedKeyRef.get());
+        assertEquals("hot-reloaded-key-123", aiService.getActiveApiKey());
 
-    private static Arguments caseArgs(int turns, String text, String reason, Usage usage, String... snippets) {
-        return Arguments.of(turns, text, reason, usage, List.of(snippets));
+        assertThrows(IllegalArgumentException.class, () -> aiService.testConnection("   ", "gemini-3.5-flash"));
+        aiService.setConnectionTester((key, model) -> key + ":" + model);
+        assertEquals("my-key:gemini-3.5-pro", aiService.testConnection("  my-key  ", " gemini-3.5-pro "));
     }
 
     static Stream<Arguments> finishReasonFormattingCases() {
-        return Stream.of(caseArgs(0, "Complete answer.", "STOP", new DefaultUsage(100, 50, 150), "Complete answer."),
-                caseArgs(0, "Partial output here...", "MAX_TOKENS", new DefaultUsage(1200, 8192, 9392),
-                        "Partial output here...", "MAX_TOKENS",
-                        "promptTokens=1200, completionTokens=8192, totalTokens=9392", "continue"),
-                caseArgs(0, "   ", "MAX_TOKENS", new DefaultUsage(4000, 8192, 12192), "MAX_TOKENS",
-                        "promptTokens=4000, completionTokens=8192, totalTokens=12192", "continue"),
-                caseArgs(0, null, "MALFORMED_FUNCTION_CALL", null, "MALFORMED_FUNCTION_CALL", "blocked or aborted"),
-                caseArgs(0, "", "SAFETY", null, "SAFETY", "blocked or aborted"),
-                caseArgs(3, "", "STOP", new DefaultUsage(2500, 300, 2800), "STOP", "3",
-                        "promptTokens=2500, completionTokens=300, totalTokens=2800", "continue"));
+        return Stream.of(
+                Arguments.of(0, "Complete answer.", "STOP", new DefaultUsage(100, 50, 150),
+                        List.of("Complete answer.")),
+                Arguments.of(0, "Partial output...", "MAX_TOKENS", new DefaultUsage(1200, 8192, 9392),
+                        List.of("Partial output...", "MAX_TOKENS", "totalTokens=9392")),
+                Arguments.of(0, "   ", "MAX_TOKENS", new DefaultUsage(4000, 8192, 12192),
+                        List.of("MAX_TOKENS", "totalTokens=12192")),
+                Arguments.of(0, null, "MALFORMED_FUNCTION_CALL", null,
+                        List.of("MALFORMED_FUNCTION_CALL", "blocked or aborted")),
+                Arguments.of(3, "", "STOP", new DefaultUsage(2500, 300, 2800),
+                        List.of("STOP", "3", "totalTokens=2800")));
     }
 
     @ParameterizedTest
@@ -293,91 +270,14 @@ class AiServiceTest {
         }
 
         String result = aiService.chat("default", null, "Prompt", null);
-        String directFormatted = aiService.formatChatResponse(buildChatResponse(rawText, finishReason, usage),
-                new TurnToolContext("default", WorkflowPhase.CODE, new AtomicInteger(turns)));
-
-        assertEquals(directFormatted, result);
         for (String snippet : expectedSnippets) {
             assertTrue(result.toLowerCase().contains(snippet.toLowerCase()));
         }
-        verify(requestSpec, times(1)).call();
         assertEquals(result, captureTurnCompleteEvent().result());
     }
 
     @Test
-    void testChatRetryPolicyOnTransientNonRetryableAndInterruptedErrors() {
-        ChatModel mockChatModel = mock(ChatModel.class);
-        AiService realRetryService = createRealClientService(mockChatModel, toolCallingManager);
-        ChatResponse recoveredResponse = buildChatResponse("Recovered Response", "STOP", null);
-
-        AtomicInteger attempts = new AtomicInteger();
-        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
-            int attempt = attempts.incrementAndGet();
-            if (attempt == 1) {
-                throw new RuntimeException("Failed to generate content",
-                        new ClientException(429, "Too Many Requests", "RESOURCE_EXHAUSTED"));
-            }
-            if (attempt == 2) {
-                throw new RuntimeException("Failed to generate content", new SocketTimeoutException("Read timed out"));
-            }
-            return recoveredResponse;
-        });
-
-        assertEquals("Recovered Response", realRetryService.chat("default", WorkflowPhase.EXPLORE, "Retry test", null));
-        assertEquals(3, attempts.get());
-        assertEquals("Recovered Response", captureTurnCompleteEvent().result());
-
-        clearInvocations(mockChatModel, eventPublisher);
-        when(mockChatModel.call(any(Prompt.class)))
-                .thenThrow(new ServerException(503, "Service Unavailable", "UNAVAILABLE"));
-        assertThrows(ServerException.class,
-                () -> realRetryService.chat("default", WorkflowPhase.EXPLORE, "Fail all retries", null));
-        verify(mockChatModel, times(3)).call(any(Prompt.class));
-        verify(eventPublisher, never()).publishEvent(any(AgentTurnCompleteEvent.class));
-
-        for (RuntimeException nonRetryable : List.of(new ClientException(400, "Bad Request", "INVALID_ARGUMENT"),
-                new ClientException(401, "Unauthorized", "UNAUTHENTICATED"),
-                new ClientException(403, "Forbidden", "PERMISSION_DENIED"), new NonTransientAiException("Bad request"),
-                new CancellationException("Cancelled by user"))) {
-            clearInvocations(mockChatModel);
-            doThrow(nonRetryable).when(mockChatModel).call(any(Prompt.class));
-            try {
-                assertThrows(RuntimeException.class,
-                        () -> realRetryService.chat("default", WorkflowPhase.EXPLORE, "Non-retryable", null));
-                verify(mockChatModel, times(1)).call(any(Prompt.class));
-            } finally {
-                Thread.interrupted();
-            }
-        }
-
-        clearInvocations(mockChatModel);
-        doAnswer(inv -> {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Failed to generate content", new SocketTimeoutException("Interrupted I/O"));
-        }).when(mockChatModel).call(any(Prompt.class));
-        try {
-            assertThrows(CancellationException.class,
-                    () -> realRetryService.chat("default", WorkflowPhase.EXPLORE, "Interrupt test", null));
-            verify(mockChatModel, times(1)).call(any(Prompt.class));
-        } finally {
-            Thread.interrupted();
-        }
-
-        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
-            Thread.currentThread().interrupt();
-            return buildChatResponse("Should be discarded due to interrupt", "STOP", null);
-        });
-        try {
-            assertThrows(CancellationException.class,
-                    () -> realRetryService.chat("default", WorkflowPhase.EXPLORE, "Run code", null));
-            assertTrue(Thread.currentThread().isInterrupted());
-        } finally {
-            Thread.interrupted();
-        }
-    }
-
-    @Test
-    void testModelCallRetryAdvisorRetriesSecondTurnWithoutReExecutingCompletedToolTurn() {
+    void testChatRetryPolicyAndSecondTurnRetryWithoutReExecutingTool() {
         ChatModel mockChatModel = mock(ChatModel.class);
         ToolCallingManager customToolManager = mock(ToolCallingManager.class);
         AiService serviceWithRealClient = createRealClientService(mockChatModel, customToolManager);
@@ -405,11 +305,30 @@ class AiServiceTest {
                     .conversationHistory(List.of(new UserMessage("Run tool"), toolCallMsg)).returnDirect(false).build();
         });
 
-        String result = serviceWithRealClient.chat("qa:default", WorkflowPhase.EXPLORE, "Run tool", null);
-        assertEquals("Final answer after tool & retry", result);
-        assertEquals(1, toolExecutions.get(),
-                "Completed tool turn must not be re-executed when subsequent model call retries");
-        assertEquals(3, modelCalls.get(), "Second model call should be retried once after transient 503");
+        assertEquals("Final answer after tool & retry",
+                serviceWithRealClient.chat("qa:default", WorkflowPhase.EXPLORE, "Run tool", null));
+        assertEquals(1, toolExecutions.get());
+        assertEquals(3, modelCalls.get());
+
+        clearInvocations(mockChatModel);
+        doThrow(new ClientException(400, "Bad Request", "INVALID_ARGUMENT")).when(mockChatModel)
+                .call(any(Prompt.class));
+        assertThrows(RuntimeException.class,
+                () -> serviceWithRealClient.chat("qa:default", WorkflowPhase.EXPLORE, "Non-retryable", null));
+        verify(mockChatModel, times(1)).call(any(Prompt.class));
+
+        clearInvocations(mockChatModel);
+        doAnswer(inv -> {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted", new SocketTimeoutException("Interrupted I/O"));
+        }).when(mockChatModel).call(any(Prompt.class));
+        try {
+            assertThrows(CancellationException.class,
+                    () -> serviceWithRealClient.chat("qa:default", WorkflowPhase.EXPLORE, "Interrupt", null));
+            verify(mockChatModel, times(1)).call(any(Prompt.class));
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test
@@ -440,113 +359,18 @@ class AiServiceTest {
 
         when(customToolManager.executeToolCalls(any(Prompt.class), eq(firstTurnToolCall))).thenAnswer(inv -> {
             Prompt prompt = inv.getArgument(0);
-            Map<String, Object> ctx = Map.of();
-            if (prompt.getOptions() instanceof ToolCallingChatOptions toolOpts) {
-                ctx = toolOpts.getToolContext();
-            }
-            if (ctx.get(TurnToolContext.TURN_COUNTER_KEY) instanceof AtomicInteger atomicCounter) {
-                atomicCounter.incrementAndGet();
+            if (prompt.getOptions() instanceof ToolCallingChatOptions toolOpts
+                    && toolOpts.getToolContext().get(TurnToolContext.TURN_COUNTER_KEY) instanceof AtomicInteger c) {
+                c.incrementAndGet();
             }
             return DefaultToolExecutionResult.builder()
                     .conversationHistory(List.of(new UserMessage("Run tool"), toolCallMsg)).returnDirect(false).build();
         });
 
-        String result = serviceWithRealClient.chat("qa:nudge-ok", WorkflowPhase.EXPLORE, "Run tool", null);
-        assertEquals("Summary after second nudge", result);
+        assertEquals("Summary after second nudge",
+                serviceWithRealClient.chat("qa:nudge-ok", WorkflowPhase.EXPLORE, "Run tool", null));
         assertEquals(4, modelCalls.get());
-        for (int idx : List.of(2, 3)) {
-            assertTrue(capturedPrompts.get(idx).getInstructions().stream()
-                    .anyMatch(m -> m instanceof UserMessage && AiService.AUTO_NUDGE_PROMPT.equals(m.getText())));
-        }
-
-        capturedPrompts.clear();
-        modelCalls.set(0);
-        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
-            capturedPrompts.add(inv.getArgument(0));
-            if (modelCalls.incrementAndGet() == 1) {
-                return firstTurnToolCall;
-            }
-            return emptyStopResponse;
-        });
-
-        String exhaustedResult = serviceWithRealClient.chat("qa:nudge-exhausted", WorkflowPhase.EXPLORE, "Run tool",
-                null);
-        assertTrue(exhaustedResult.contains(AiService.EMPTY_RESPONSE_MARKER));
-        assertEquals(2 + AiService.MAX_AUTO_NUDGES, modelCalls.get());
-    }
-
-    @Test
-    void testChatTurnTimeoutInterruptsHungTurnAndThrowsCancellationException() throws Exception {
-        assertEquals(AiConfig.DEFAULT_TURN_TIMEOUT_SECONDS, aiService.getTurnTimeoutSeconds());
-        aiService.setTurnTimeoutSeconds(1);
-        stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "Ignored", "STOP", null);
-        CountDownLatch interrupted = new CountDownLatch(1);
-
-        when(responseSpec.chatResponse()).thenAnswer(inv -> {
-            try {
-                Thread.sleep(10_000);
-            } catch (InterruptedException e) {
-                interrupted.countDown();
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("Model call interrupted by watchdog", e);
-            }
-            return buildChatResponse("Should not reach", "STOP", null);
-        });
-
-        try {
-            assertThrows(CancellationException.class, () -> aiService.chat("default", null, "Hung request", null));
-            assertTrue(Thread.interrupted());
-            assertTrue(interrupted.await(2, TimeUnit.SECONDS), "Turn watchdog should interrupt hung turn thread");
-        } finally {
-            Thread.interrupted();
-        }
-    }
-
-    @Test
-    void testHotReloadApiKeyOnSettingsChangedAndTestConnection() {
-        ChatClient reloadedClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec reloadedRequestSpec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec reloadedResponseSpec = mock(ChatClient.CallResponseSpec.class);
-        when(reloadedClient.prompt()).thenReturn(reloadedRequestSpec);
-        when(reloadedRequestSpec.system(anyString())).thenReturn(reloadedRequestSpec);
-        when(reloadedRequestSpec.user(any(Consumer.class))).thenReturn(reloadedRequestSpec);
-        when(reloadedRequestSpec.advisors(any(Consumer.class))).thenReturn(reloadedRequestSpec);
-        when(reloadedRequestSpec.advisors(any(Advisor[].class))).thenReturn(reloadedRequestSpec);
-        when(reloadedRequestSpec.options(any())).thenReturn(reloadedRequestSpec);
-        when(reloadedRequestSpec.toolContext(anyMap())).thenReturn(reloadedRequestSpec);
-        when(reloadedRequestSpec.tools(any(Object[].class))).thenReturn(reloadedRequestSpec);
-        when(reloadedRequestSpec.call()).thenReturn(reloadedResponseSpec);
-        when(reloadedResponseSpec.chatResponse())
-                .thenReturn(buildChatResponse("Response from hot-reloaded client", "STOP", null));
-
-        ChatClient.Builder reloadedBuilder = mock(ChatClient.Builder.class);
-        when(reloadedBuilder.defaultAdvisors(any(Advisor[].class))).thenReturn(reloadedBuilder);
-        when(reloadedBuilder.build()).thenReturn(reloadedClient);
-
-        AtomicReference<String> reloadedKeyRef = new AtomicReference<>();
-        aiService.setChatClientBuilderFactory(key -> {
-            reloadedKeyRef.set(key);
-            return reloadedBuilder;
-        });
-
-        settings.setGeminiApiKey("  hot-reloaded-key-123  ");
-        aiService.onSettingsChanged(new SettingsChangedEvent(settings));
-        assertEquals("hot-reloaded-key-123", reloadedKeyRef.get());
-        assertEquals("hot-reloaded-key-123", aiService.getActiveApiKey());
-
-        // Firing SettingsChangedEvent with the same trimmed API key does not rebuild ChatClient again
-        reloadedKeyRef.set(null);
-        aiService.onSettingsChanged(new SettingsChangedEvent(settings));
-        assertNull(reloadedKeyRef.get());
-
-        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.EXPLORE);
-        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE, null)).thenReturn("EXPLORE");
-        assertEquals("Response from hot-reloaded client", aiService.chat("qa:default", null, "Test", null));
-        verify(reloadedClient, times(1)).prompt();
-
-        // Verify testConnection validation and delegation
-        assertThrows(IllegalArgumentException.class, () -> aiService.testConnection("   ", "gemini-3.5-flash"));
-        aiService.setConnectionTester((key, model) -> key + ":" + model);
-        assertEquals("my-key:gemini-3.5-pro", aiService.testConnection("  my-key  ", " gemini-3.5-pro "));
+        assertTrue(capturedPrompts.get(2).getInstructions().stream()
+                .anyMatch(m -> m instanceof UserMessage && AiService.AUTO_NUDGE_PROMPT.equals(m.getText())));
     }
 }

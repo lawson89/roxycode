@@ -64,22 +64,22 @@ public final class SettingsPanel extends JPanel {
     private final transient AiService aiService;
     private final JLabel titleLabel;
     private final JLabel subtitleLabel;
-    private final JComboBox<String> themeCombo;
-    private final JComboBox<GeminiModelConfig> modelCombo;
-    private final JLabel modelApiBadgeLabel;
-    private final JTextArea modelDescriptionArea;
-    private final JSpinner maxMessagesSpinner;
-    private final JPasswordField geminiApiKeyField;
-    private final JButton getApiKeyLinkButton;
-    private final JButton testConnectionButton;
-    private final JSpinner maxAgentToolTurnsSpinner;
-    private final JCheckBox logToolCallsCheckBox;
-    private final JButton saveButton;
+    final JComboBox<String> themeCombo;
+    final JComboBox<GeminiModelConfig> modelCombo;
+    final JLabel modelApiBadgeLabel;
+    final JTextArea modelDescriptionArea;
+    final JSpinner maxMessagesSpinner;
+    final JPasswordField geminiApiKeyField;
+    final JButton getApiKeyLinkButton;
+    final JButton testConnectionButton;
+    final JSpinner maxAgentToolTurnsSpinner;
+    final JCheckBox logToolCallsCheckBox;
+    final JButton saveButton;
     private final JPanel restartCalloutPanel;
     private final JLabel legendIconLabel;
-    private final JLabel legendLabel;
-    private final JLabel statusLabel;
-    private final Timer statusTimer;
+    final JLabel legendLabel;
+    final JLabel statusLabel;
+    final Timer statusTimer;
     private JLabel appearanceHeaderLabel;
     private JLabel aiModelHeaderLabel;
     private JLabel agentExecutionHeaderLabel;
@@ -483,61 +483,12 @@ public final class SettingsPanel extends JPanel {
         this.urlOpener = Objects.requireNonNull(urlOpener, "urlOpener must not be null");
     }
 
-    JButton getGetApiKeyLinkButton() {
-        return getApiKeyLinkButton;
-    }
-
-    JButton getTestConnectionButton() {
-        return testConnectionButton;
-    }
-
-    JLabel getLegendLabel() {
-        return legendLabel;
-    }
-
-    JLabel getStatusLabel() {
-        return statusLabel;
-    }
-
-    Timer getStatusTimer() {
-        return statusTimer;
-    }
-
-    JSpinner getMaxMessagesSpinner() {
-        return maxMessagesSpinner;
-    }
-
-    JSpinner getMaxAgentToolTurnsSpinner() {
-        return maxAgentToolTurnsSpinner;
-    }
-
-    JComboBox<GeminiModelConfig> getModelCombo() {
-        return modelCombo;
-    }
-
-    JLabel getModelApiBadgeLabel() {
-        return modelApiBadgeLabel;
-    }
-
-    JTextArea getModelDescriptionArea() {
-        return modelDescriptionArea;
-    }
-
-    JCheckBox getLogToolCallsCheckBox() {
-        return logToolCallsCheckBox;
-    }
-
     public static void applyTheme(String themeName) {
         Edt.runAndWait(() -> {
             try {
                 UIManager.put("TabbedPane.tabType", "card");
                 UIManager.put("TabbedPane.showTabSeparators", true);
-                String themeToApply;
-                if (themeName != null) {
-                    themeToApply = themeName;
-                } else {
-                    themeToApply = "";
-                }
+                String themeToApply = Objects.requireNonNullElse(themeName, "");
                 UIManager.setLookAndFeel(switch (themeToApply) {
                     case "FlatLaf Dark" -> new FlatDarkLaf();
                     case "IntelliJ" -> new FlatIntelliJLaf();

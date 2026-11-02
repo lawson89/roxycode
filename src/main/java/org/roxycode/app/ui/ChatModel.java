@@ -119,8 +119,9 @@ public final class ChatModel {
     }
 
     public static List<byte[]> encodeImagesToPngBytes(List<BufferedImage> images) {
-        if (images == null || images.isEmpty())
+        if (images == null || images.isEmpty()) {
             return List.of();
+        }
         List<byte[]> imageBytes = new ArrayList<>(images.size());
         for (BufferedImage bimg : images) {
             try {
@@ -136,8 +137,9 @@ public final class ChatModel {
 
     public String formatTurnStatus(AppSettings settings, ImplementationPlan plan) {
         StringBuilder sb = new StringBuilder("Turns: ").append(currentTurn);
-        if (settings != null)
+        if (settings != null) {
             sb.append(" / ").append(settings.getMaxAgentToolTurns());
+        }
         if (taskMode && plan != null && !plan.technicalSteps().isEmpty()) {
             long completed = plan.technicalSteps().stream().filter(ImplementationPlan.TechStep::completed).count();
             sb.append(" | Plan: ").append(completed).append("/").append(plan.technicalSteps().size()).append(" steps");

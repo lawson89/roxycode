@@ -40,10 +40,6 @@ public final class MainFrame extends JPanel {
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     private static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String FIRST_TIME_SETUP_TITLE = "First-Time Setup Required";
-    static final String MISSING_REQUIRED_TOOLS_TITLE = "Required System Tools Missing";
-    static final String MISSING_REQUIRED_TOOLS_MESSAGE = "RoxyCode requires Ripgrep and Universal Ctags to function properly. Please review the System Tools page to install or configure any missing required tools.";
-    static final String MISSING_API_KEY_TITLE = "Gemini API Key Required";
-    static final String MISSING_API_KEY_MESSAGE = "Welcome to RoxyCode! Please enter and save your Gemini API Key in Global Settings to get started.";
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
@@ -55,18 +51,14 @@ public final class MainFrame extends JPanel {
     private final HeaderPanel header;
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
-    private SidebarPanel sidebar;
+    SidebarPanel sidebar;
     private String title = "";
-    private String currentCard = QA_VIEW;
+    String currentCard = QA_VIEW;
     private boolean initialToolsCheckComplete;
     private List<SystemTool> lastStartupTools = List.of();
-    private String lastStartupAlertMessage;
-    private String lastMissingApiKeyMessage;
-    private String lastMissingToolsMessage;
+    String lastStartupAlertMessage;
     private boolean startupAlertPending;
     private transient Consumer<String> startupAlertPresenter;
-    private transient Consumer<String> missingApiKeyDialogPresenter;
-    private transient Consumer<String> missingToolsDialogPresenter;
 
     public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
             HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
@@ -262,7 +254,7 @@ public final class MainFrame extends JPanel {
             evaluateStartupSetupAlert();
             return;
         }
-        CompletableFuture<List<SystemTool>> future = systemToolsPanel.getInitialToolsFuture();
+        CompletableFuture<List<SystemTool>> future = systemToolsPanel.initialToolsFuture;
         if (future == null) {
             initialToolsCheckComplete = true;
             evaluateStartupSetupAlert();
@@ -320,26 +312,13 @@ public final class MainFrame extends JPanel {
         boolean missingTools = !missingToolNames.isEmpty();
         if (!missingKey && !missingTools) {
             lastStartupAlertMessage = null;
-            lastMissingApiKeyMessage = null;
-            lastMissingToolsMessage = null;
             startupAlertPending = false;
             return;
         }
         String message = buildFirstTimeSetupMessage(missingKey, missingToolNames);
         lastStartupAlertMessage = message;
-        if (missingKey) {
-            lastMissingApiKeyMessage = message;
-        } else {
-            lastMissingApiKeyMessage = null;
-        }
-        if (missingTools) {
-            lastMissingToolsMessage = message;
-        } else {
-            lastMissingToolsMessage = null;
-        }
-        Consumer<String> presenter = resolveStartupAlertPresenter(missingKey, missingTools);
-        if (presenter != null) {
-            presenter.accept(message);
+        if (startupAlertPresenter != null) {
+            startupAlertPresenter.accept(message);
         } else if (!GraphicsEnvironment.isHeadless()) {
             if (isShowing()) {
                 presentStartupAlert(message);
@@ -347,19 +326,6 @@ public final class MainFrame extends JPanel {
                 startupAlertPending = true;
             }
         }
-    }
-
-    private Consumer<String> resolveStartupAlertPresenter(boolean missingKey, boolean missingTools) {
-        if (startupAlertPresenter != null) {
-            return startupAlertPresenter;
-        }
-        if (missingKey && missingApiKeyDialogPresenter != null) {
-            return missingApiKeyDialogPresenter;
-        }
-        if (missingTools && missingToolsDialogPresenter != null) {
-            return missingToolsDialogPresenter;
-        }
-        return null;
     }
 
     private void presentStartupAlert(String message) {
@@ -389,34 +355,6 @@ public final class MainFrame extends JPanel {
 
     void setStartupAlertPresenter(Consumer<String> presenter) {
         this.startupAlertPresenter = presenter;
-    }
-
-    String getLastStartupAlertMessage() {
-        return lastStartupAlertMessage;
-    }
-
-    void setMissingToolsDialogPresenter(Consumer<String> presenter) {
-        this.missingToolsDialogPresenter = presenter;
-    }
-
-    String getLastMissingToolsMessage() {
-        return lastMissingToolsMessage;
-    }
-
-    void setMissingApiKeyDialogPresenter(Consumer<String> presenter) {
-        this.missingApiKeyDialogPresenter = presenter;
-    }
-
-    String getLastMissingApiKeyMessage() {
-        return lastMissingApiKeyMessage;
-    }
-
-    String getCurrentCard() {
-        return currentCard;
-    }
-
-    SidebarPanel getSidebar() {
-        return sidebar;
     }
 
     private void updateTitle() {

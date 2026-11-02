@@ -6,8 +6,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.SwingUtilities;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.concurrent.ConcurrentException;
 import org.apache.commons.lang3.concurrent.LazyInitializer;
 import org.roxycode.app.ai.AiConfig;
@@ -38,17 +40,9 @@ public class SettingsService {
     private volatile CompletableFuture<Void> lastSaveFuture = CompletableFuture.completedFuture(null);
 
     public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
-        if (mapper != null) {
-            this.mapper = mapper;
-        } else {
-            this.mapper = AiConfig.SHARED_TOML_MAPPER;
-        }
-        if (eventPublisher != null) {
-            this.eventPublisher = eventPublisher;
-        } else {
-            this.eventPublisher = event -> {
-            };
-        }
+        this.mapper = Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER);
+        this.eventPublisher = Objects.requireNonNullElse(eventPublisher, event -> {
+        });
     }
 
     public static Path getDefaultRoxyHomeDir() {
@@ -71,18 +65,7 @@ public class SettingsService {
     }
 
     public static AppSettings loadFromDisk(Path path, TomlMapper mapper) {
-        TomlMapper effectiveMapper = AiConfig.SHARED_TOML_MAPPER;
-        if (mapper != null) {
-            effectiveMapper = mapper;
-        }
-        if (path != null && Files.exists(path)) {
-            try {
-                return effectiveMapper.readValue(path.toFile(), AppSettings.class);
-            } catch (IOException e) {
-                log.warn("Failed to load settings from {}: {}", path, e.getMessage());
-            }
-        }
-        return new AppSettings();
+        return PathUtils.readTomlOrDefault(path, AppSettings.class, new AppSettings(), mapper);
     }
 
     public List<GeminiModelConfig> getAvailableModels() {
@@ -113,14 +96,10 @@ public class SettingsService {
     }
 
     public static String resolveGlobalGeminiModel(SettingsService settingsService) {
-        if (settingsService != null) {
-            AppSettings current = settingsService.getSettings();
-            if (current != null) {
-                String model = current.getGeminiModel();
-                if (model != null && !model.isBlank()) {
-                    return model.trim();
-                }
-            }
+        if (settingsService != null && settingsService.getSettings() != null) {
+            return StringUtils
+                    .defaultIfBlank(settingsService.getSettings().getGeminiModel(), AppSettings.DEFAULT_GEMINI_MODEL)
+                    .trim();
         }
         return AppSettings.DEFAULT_GEMINI_MODEL;
     }
@@ -130,16 +109,12 @@ public class SettingsService {
     }
 
     public synchronized boolean hasConfiguredApiKey() {
-        if (!hasSettingsFile()) {
-            return false;
-        }
-        String apiKey = getSettings().getGeminiApiKey();
-        return apiKey != null && !apiKey.isBlank();
+        return hasSettingsFile() && StringUtils.isNotBlank(getSettings().getGeminiApiKey());
     }
 
     public synchronized AppSettings getSettings() {
         if (settings == null) {
-            loadSettings();
+            settings = loadFromDisk(getSettingsPath(), mapper);
         }
         return settings;
     }
@@ -164,8 +139,7 @@ public class SettingsService {
     private void writeSettingsToDisk(Path path, AppSettings currentSettings) {
         synchronized (writeLock) {
             try {
-                PathUtils.createParentDirectories(path);
-                mapper.writeValue(path.toFile(), currentSettings);
+                PathUtils.writeToml(path, currentSettings, mapper);
             } catch (IOException e) {
                 log.error("Failed to save settings: {}", e.getMessage(), e);
             }
@@ -181,14 +155,7 @@ public class SettingsService {
         this.settings = null;
     }
 
-    private void loadSettings() {
-        settings = loadFromDisk(getSettingsPath(), mapper);
-    }
-
     private Path getSettingsPath() {
-        if (settingsPathOverride != null) {
-            return settingsPathOverride;
-        }
-        return getDefaultSettingsPath();
+        return Objects.requireNonNullElseGet(settingsPathOverride, SettingsService::getDefaultSettingsPath);
     }
 }

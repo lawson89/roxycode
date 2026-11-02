@@ -199,12 +199,8 @@ public final class BuildConfigPanel extends JPanel {
             if (fromService != null && !fromService.isEmpty()) {
                 templates = fromService;
             }
-            String detected = buildToolService.detectTemplate();
-            if (detected != null && !detected.isBlank()) {
-                detectedTemplateId = detected;
-            } else {
-                detectedTemplateId = DEFAULT_TEMPLATE_ID;
-            }
+            detectedTemplateId = org.apache.commons.lang3.StringUtils.defaultIfBlank(buildToolService.detectTemplate(),
+                    DEFAULT_TEMPLATE_ID);
         } else {
             detectedTemplateId = DEFAULT_TEMPLATE_ID;
         }
@@ -365,11 +361,7 @@ public final class BuildConfigPanel extends JPanel {
         }
         CompletableFuture<String> future = Edt.supplyAsync(() -> {
             try {
-                String content = buildToolService.getConfigContent();
-                if (content != null) {
-                    return content;
-                }
-                return "";
+                return org.apache.commons.lang3.StringUtils.defaultString(buildToolService.getConfigContent());
             } catch (IOException e) {
                 log.error("Failed to load build config", e);
                 return "# Error loading config: " + e.getMessage();
@@ -449,26 +441,6 @@ public final class BuildConfigPanel extends JPanel {
 
     void setErrorDialogPresenter(Consumer<String> errorDialogPresenter) {
         this.errorDialogPresenter = errorDialogPresenter;
-    }
-
-    JComboBox<GeminiModelConfig> getModelCombo() {
-        return modelCombo;
-    }
-
-    JLabel getModelApiBadgeLabel() {
-        return modelApiBadgeLabel;
-    }
-
-    JTextArea getModelDescriptionArea() {
-        return modelDescriptionArea;
-    }
-
-    JComboBox<BuildTemplateInfo> getTemplateCombo() {
-        return templateCombo;
-    }
-
-    JButton getApplyTemplateButton() {
-        return applyTemplateButton;
     }
 
     private void updateTextAreaTheme() {

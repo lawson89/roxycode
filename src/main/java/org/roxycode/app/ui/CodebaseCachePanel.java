@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
@@ -29,13 +30,13 @@ public final class CodebaseCachePanel extends JPanel {
     private final transient RepoMapPackerService packerService;
     private final transient PromptService promptService;
 
-    private final JLabel statusLabel = new JLabel("Status: Unknown");
+    final JLabel statusLabel = new JLabel("Status: Unknown");
     private final JProgressBar progressBar = new JProgressBar(0, 100);
-    private final JButton packButton = new JButton("Update Implicit Cache");
+    final JButton packButton = new JButton("Update Implicit Cache");
 
-    private final JTextArea repoMapArea = new JTextArea();
-    private final JTextArea stableContextArea = new JTextArea();
-    private final JTextArea sessionContextArea = new JTextArea();
+    final JTextArea repoMapArea = new JTextArea();
+    final JTextArea stableContextArea = new JTextArea();
+    final JTextArea sessionContextArea = new JTextArea();
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     record CacheStatusData(Optional<RepoMapSnapshot> snapshot, long stableTokens, String repoMapText,
@@ -60,18 +61,16 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     static String truncateForDisplay(String text) {
-        if (text == null) {
-            return "";
+        String safe = StringUtils.defaultString(text);
+        if (safe.length() <= MAX_DISPLAY_CHARS) {
+            return safe;
         }
-        if (text.length() <= MAX_DISPLAY_CHARS) {
-            return text;
-        }
-        return text.substring(0, MAX_DISPLAY_CHARS)
+        return safe.substring(0, MAX_DISPLAY_CHARS)
                 + """
 
 
                         ... [Display truncated at 200,000 characters for UI responsiveness; full content (%,d chars) is cached]"""
-                        .formatted(text.length());
+                        .formatted(safe.length());
     }
 
     private void initComponents() {
@@ -91,7 +90,7 @@ public final class CodebaseCachePanel extends JPanel {
         add(statusPanel, "growx, wrap");
 
         Font monoFont = new Font(Font.MONOSPACED, Font.PLAIN, 12);
-        for (JTextArea area : getTextAreas()) {
+        for (JTextArea area : new JTextArea[]{repoMapArea, stableContextArea, sessionContextArea}) {
             area.setEditable(false);
             area.setFont(monoFont);
         }
@@ -107,29 +106,6 @@ public final class CodebaseCachePanel extends JPanel {
         progressBar.setVisible(false);
     }
 
-    @Override
-    public void updateUI() {
-        super.updateUI();
-        if (repoMapArea != null) {
-            updateTheme();
-        }
-    }
-
-    public void updateTheme() {
-        Color bg = UIManager.getColor("TextArea.background");
-        Color fg = UIManager.getColor("TextArea.foreground");
-        Color caret = UIManager.getColor("TextArea.caretForeground");
-        for (JTextArea area : getTextAreas()) {
-            area.setBackground(bg);
-            area.setForeground(fg);
-            area.setCaretColor(caret);
-        }
-    }
-
-    private JTextArea[] getTextAreas() {
-        return new JTextArea[]{repoMapArea, stableContextArea, sessionContextArea};
-    }
-
     CompletableFuture<CacheStatusData> refreshStatus() {
         return Edt.supplyAsync(() -> {
             Optional<RepoMapSnapshot> snapshot = Optional.empty();
@@ -138,13 +114,18 @@ public final class CodebaseCachePanel extends JPanel {
             }
             if (snapshot.isPresent()) {
                 RepoMapSnapshot snap = snapshot.get();
-                String stableContext = getStableContextString();
+                String stableContext = "";
+                String sessionContext = "";
+                if (promptService != null) {
+                    stableContext = StringUtils.defaultString(promptService.getStableContext());
+                    sessionContext = StringUtils.trimToEmpty(promptService.getSessionContext());
+                }
                 return new CacheStatusData(snapshot, TokenUtils.estimateTokens(stableContext),
                         truncateForDisplay(snap.content()), truncateForDisplay(stableContext),
-                        truncateForDisplay(getSessionContextString()));
+                        truncateForDisplay(sessionContext));
             }
             return new CacheStatusData(snapshot, 0, truncateForDisplay("Repo Map will appear here after generation."),
-                    truncateForDisplay(""), truncateForDisplay(""));
+                    "", "");
         }, this::applyStatusDataOnEdt, e -> log.error("Failed to refresh codebase cache status", e));
     }
 
@@ -165,39 +146,6 @@ public final class CodebaseCachePanel extends JPanel {
         }
     }
 
-    private String getStableContextString() {
-        if (promptService != null) {
-            return promptService.getStableContext();
-        }
-        return "";
-    }
-
-    private String getSessionContextString() {
-        if (promptService != null) {
-            String session = promptService.getSessionContext();
-            if (session != null) {
-                return session.trim();
-            }
-        }
-        return "";
-    }
-
-    JLabel getStatusLabel() {
-        return statusLabel;
-    }
-
-    JTextArea getRepoMapArea() {
-        return repoMapArea;
-    }
-
-    JTextArea getStableContextArea() {
-        return stableContextArea;
-    }
-
-    JTextArea getSessionContextArea() {
-        return sessionContextArea;
-    }
-
     CompletableFuture<EditorResult> runPack() {
         packButton.setEnabled(false);
         progressBar.setVisible(true);
@@ -208,11 +156,9 @@ public final class CodebaseCachePanel extends JPanel {
             if (result != null && result.success()) {
                 statusLabel.setText("Repo Map updated successfully.");
             } else {
-                String hint;
+                String hint = "Unknown error";
                 if (result != null) {
                     hint = result.errorHint();
-                } else {
-                    hint = "Unknown error";
                 }
                 statusLabel.setText("Failed: " + hint);
             }

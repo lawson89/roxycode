@@ -3,12 +3,13 @@ package org.roxycode.app.service;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Objects;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -33,12 +34,10 @@ public class ProjectService {
 
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public record ProjectConfig(String geminiModel, boolean buildConfirmed) {
+        public static final ProjectConfig DEFAULT = new ProjectConfig("", false);
+
         public ProjectConfig {
-            if (geminiModel == null) {
-                geminiModel = "";
-            } else {
-                geminiModel = geminiModel.trim();
-            }
+            geminiModel = StringUtils.trimToEmpty(geminiModel);
         }
 
         public ProjectConfig(String geminiModel) {
@@ -52,17 +51,11 @@ public class ProjectService {
 
     public ProjectService(SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
-        if (eventPublisher != null) {
-            this.eventPublisher = eventPublisher;
-        } else {
-            this.eventPublisher = event -> {
-            };
-        }
+        this.eventPublisher = Objects.requireNonNullElse(eventPublisher, event -> {
+        });
         String savedPath = settingsService.getSettings().getCurrentProjectPath();
-        if (savedPath != null && !savedPath.isEmpty()) {
+        if (StringUtils.isNotEmpty(savedPath)) {
             this.currentProjectRoot = Paths.get(savedPath);
-        } else {
-            this.currentProjectRoot = null;
         }
     }
 
@@ -77,8 +70,7 @@ public class ProjectService {
     public void setCurrentProjectRoot(Path newRoot) {
         if (newRoot != null) {
             this.currentProjectRoot = newRoot;
-            AppSettings settings = settingsService.getSettings();
-            settings.setCurrentProjectPath(newRoot.toAbsolutePath().toString());
+            settingsService.getSettings().setCurrentProjectPath(newRoot.toAbsolutePath().toString());
             settingsService.saveSettings();
             eventPublisher.publishEvent(new ProjectChangedEvent(newRoot));
         }
@@ -90,30 +82,15 @@ public class ProjectService {
             return "No Project";
         }
         Path fileName = projectRoot.getFileName();
-        if (fileName != null) {
-            return fileName.toString();
-        }
-        return projectRoot.toString();
+        return Objects.requireNonNullElse(fileName, projectRoot).toString();
     }
 
     private ProjectConfig readProjectConfig() {
         if (!hasActiveProject()) {
-            return new ProjectConfig("", false);
+            return ProjectConfig.DEFAULT;
         }
-        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
-        if (configFile == null || !Files.exists(configFile)) {
-            return new ProjectConfig("", false);
-        }
-        try {
-            ProjectConfig config = AiConfig.SHARED_TOML_MAPPER.readValue(configFile.toFile(), ProjectConfig.class);
-            if (config != null) {
-                return config;
-            }
-            return new ProjectConfig("", false);
-        } catch (IOException e) {
-            log.warn("Failed to read project config {}: {}", configFile, e.getMessage());
-            return new ProjectConfig("", false);
-        }
+        return PathUtils.readTomlOrDefault(resolveProjectDataPath(PROJECT_CONFIG_FILE), ProjectConfig.class,
+                ProjectConfig.DEFAULT, AiConfig.SHARED_TOML_MAPPER);
     }
 
     private void writeProjectConfig(ProjectConfig config) {
@@ -122,8 +99,7 @@ public class ProjectService {
         }
         Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
         try {
-            PathUtils.createParentDirectories(configFile);
-            AiConfig.SHARED_TOML_MAPPER.writeValue(configFile.toFile(), config);
+            PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
         } catch (IOException e) {
             log.error("Failed to save project config {}: {}", configFile, e.getMessage());
             throw new UncheckedIOException("Failed to save project config", e);
@@ -138,12 +114,8 @@ public class ProjectService {
         if (!hasActiveProject()) {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
-        String normalized = "";
-        if (geminiModel != null) {
-            normalized = geminiModel.trim();
-        }
         ProjectConfig existing = readProjectConfig();
-        writeProjectConfig(new ProjectConfig(normalized, existing.buildConfirmed()));
+        writeProjectConfig(new ProjectConfig(StringUtils.trimToEmpty(geminiModel), existing.buildConfirmed()));
         AppSettings currentSettings = null;
         if (settingsService != null && settingsService.getSettings() != null) {
             currentSettings = settingsService.getSettings().copy();
@@ -176,14 +148,10 @@ public class ProjectService {
     }
 
     public static String resolveNormalizedProjectPath(ProjectService projectService) {
-        if (projectService == null) {
+        if (projectService == null || projectService.getCurrentProjectRoot() == null) {
             return "";
         }
-        Path projectRoot = projectService.getCurrentProjectRoot();
-        if (projectRoot == null) {
-            return "";
-        }
-        return projectRoot.toAbsolutePath().normalize().toString();
+        return projectService.getCurrentProjectRoot().toAbsolutePath().normalize().toString();
     }
 
     public Path resolvePath(String relativePath) {
@@ -198,9 +166,10 @@ public class ProjectService {
             }
             if (ROXYCODE_TMP_DIR.equals(normalized) || normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
                 Path tmpRoot = resolveProjectDataPath(DATA_TMP_DIR);
-                String subPath = ".";
-                if (normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
-                    subPath = normalized.substring(ROXYCODE_TMP_PREFIX.length());
+                String subPath = StringUtils.defaultIfEmpty(StringUtils.removeStart(normalized, ROXYCODE_TMP_PREFIX),
+                        ".");
+                if (ROXYCODE_TMP_DIR.equals(normalized)) {
+                    subPath = ".";
                 }
                 return resolveWithinSandbox(tmpRoot, subPath);
             }
@@ -214,16 +183,9 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         Path root = projectRoot.toAbsolutePath().normalize();
-        String target = ".";
-        if (relativePath != null && !relativePath.isBlank()) {
-            target = relativePath.trim();
-        }
+        String target = StringUtils.defaultIfBlank(relativePath, ".").trim();
         Path resolved = resolveWithinSandbox(root, target);
-        String rel = PathUtils.normalizeRelativePath(root.relativize(resolved).toString());
-        if (rel.isEmpty()) {
-            return ".";
-        }
-        return rel;
+        return StringUtils.defaultIfEmpty(PathUtils.normalizeRelativePath(root.relativize(resolved).toString()), ".");
     }
 
     public Path getProjectDataDir() {
@@ -233,10 +195,8 @@ public class ProjectService {
         }
         Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
         String dirName = sanitizeProjectName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
-        Path roxyHome = settingsService.getRoxyHomeDir();
-        if (roxyHome == null) {
-            roxyHome = SettingsService.getDefaultRoxyHomeDir();
-        }
+        Path roxyHome = Objects.requireNonNullElseGet(settingsService.getRoxyHomeDir(),
+                SettingsService::getDefaultRoxyHomeDir);
         return roxyHome.toAbsolutePath().normalize().resolve(PROJECTS_SUBDIR).resolve(dirName);
     }
 
@@ -246,11 +206,7 @@ public class ProjectService {
 
     private static Path resolveWithinSandbox(Path sandboxRoot, String relativePath) {
         Path root = sandboxRoot.toAbsolutePath().normalize();
-        String target = ".";
-        if (relativePath != null) {
-            target = relativePath;
-        }
-        Path resolved = root.resolve(target).toAbsolutePath().normalize();
+        Path resolved = root.resolve(Objects.requireNonNullElse(relativePath, ".")).toAbsolutePath().normalize();
         if (!resolved.startsWith(root)) {
             throw new SecurityException("Path traversal attempt detected: " + relativePath);
         }
@@ -258,13 +214,9 @@ public class ProjectService {
     }
 
     public static String sanitizeProjectName(Path projectRoot) {
-        Path fileName = null;
-        if (projectRoot != null) {
-            fileName = projectRoot.getFileName();
-        }
         String rawName = "";
-        if (fileName != null) {
-            rawName = fileName.toString();
+        if (projectRoot != null && projectRoot.getFileName() != null) {
+            rawName = projectRoot.getFileName().toString();
         }
         return PathUtils.sanitizeSlug(rawName, MAX_PROJECT_NAME_LENGTH, "project");
     }

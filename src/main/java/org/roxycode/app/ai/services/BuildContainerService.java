@@ -51,10 +51,7 @@ public class BuildContainerService {
         private static final String MODE_DOCKER = "docker";
 
         public static SandboxMode fromString(String value) {
-            if (value == null) {
-                return NONE;
-            }
-            String trimmed = value.trim();
+            String trimmed = StringUtils.trimToEmpty(value);
             if (MODE_NATIVE.equalsIgnoreCase(trimmed)) {
                 return NATIVE;
             }
@@ -72,26 +69,10 @@ public class BuildContainerService {
                 DEFAULT_CONTAINER_WORKDIR);
 
         public SandboxConfig {
-            if (mode != null && !mode.isBlank()) {
-                mode = mode.trim();
-            } else {
-                mode = "none";
-            }
-            if (writablePaths != null) {
-                writablePaths = List.copyOf(writablePaths);
-            } else {
-                writablePaths = List.of();
-            }
-            if (image != null && !image.isBlank()) {
-                image = image.trim();
-            } else {
-                image = DEFAULT_CONTAINER_IMAGE;
-            }
-            if (workdir != null && !workdir.isBlank()) {
-                workdir = workdir.trim();
-            } else {
-                workdir = DEFAULT_CONTAINER_WORKDIR;
-            }
+            mode = StringUtils.defaultIfBlank(mode, "none").trim();
+            writablePaths = List.copyOf(Objects.requireNonNullElse(writablePaths, List.of()));
+            image = StringUtils.defaultIfBlank(image, DEFAULT_CONTAINER_IMAGE).trim();
+            workdir = StringUtils.defaultIfBlank(workdir, DEFAULT_CONTAINER_WORKDIR).trim();
         }
 
         public SandboxMode resolvedMode() {

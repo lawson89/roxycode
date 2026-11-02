@@ -1,21 +1,14 @@
 package org.roxycode.app.ai.services;
 
 import java.util.List;
+import java.util.Objects;
 
 /** Result of a build tool command. */
 public record BuildResult(boolean success, int exitCode, String output, List<String> errors, List<String> failedTests) {
 
     public BuildResult {
-        if (errors == null) {
-            errors = List.of();
-        } else {
-            errors = List.copyOf(errors);
-        }
-        if (failedTests == null) {
-            failedTests = List.of();
-        } else {
-            failedTests = List.copyOf(failedTests);
-        }
+        errors = List.copyOf(Objects.requireNonNullElse(errors, List.of()));
+        failedTests = List.copyOf(Objects.requireNonNullElse(failedTests, List.of()));
     }
 
     public boolean isSuccess() {

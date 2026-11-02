@@ -31,8 +31,8 @@ public final class NavButton extends JButton {
     private boolean busy;
     private boolean waitingApproval;
     private String attentionTooltip = WAITING_APPROVAL_TOOLTIP;
-    private transient FontIcon statusIcon;
-    private Timer busyTimer;
+    transient FontIcon statusIcon;
+    Timer busyTimer;
     private int busyFrameIndex = 1;
 
     public NavButton(String text, Icon icon) {
@@ -77,14 +77,6 @@ public final class NavButton extends JButton {
         if (!busy && waitingApproval) {
             setToolTipText(this.attentionTooltip);
         }
-    }
-
-    FontIcon getStatusIcon() {
-        return statusIcon;
-    }
-
-    Timer getBusyTimer() {
-        return busyTimer;
     }
 
     void advanceBusyFrame() {

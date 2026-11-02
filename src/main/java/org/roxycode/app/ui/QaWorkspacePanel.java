@@ -53,10 +53,7 @@ public final class QaWorkspacePanel extends JPanel {
         applyBannerStyling();
         qaHeaderBar.add(mentorBanner, "right, center");
 
-        this.qaTabs = new JTabbedPane();
-        qaTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE,
-                FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
-        qaTabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, qaHeaderBar);
+        this.qaTabs = UiComponents.createUnderlinedTabbedPane(qaHeaderBar);
         this.qaChatPanel = exploreChatPanel;
         this.pastTopicsPanel = new ArchiveBrowserPanel(memoryService, ArchiveMode.TOPICS);
         qaTabs.addTab("Chat", FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, SwingHtmlUtils.getAccentColor()),

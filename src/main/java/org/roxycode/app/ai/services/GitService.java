@@ -8,6 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProcessRunner;
@@ -224,14 +225,8 @@ public class GitService {
     }
 
     private static String combineDiffs(String first, String second) {
-        String a = "";
-        if (first != null) {
-            a = first.trim();
-        }
-        String b = "";
-        if (second != null) {
-            b = second.trim();
-        }
+        String a = StringUtils.trimToEmpty(first);
+        String b = StringUtils.trimToEmpty(second);
         if (a.isEmpty()) {
             return b;
         }
