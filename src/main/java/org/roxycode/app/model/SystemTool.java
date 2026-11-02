@@ -11,6 +11,8 @@ public record SystemTool(String name, String version, String status, String desc
     public static final String TOOL_GIT = "Git";
     public static final String TOOL_CTAGS = "Universal Ctags";
     public static final String TOOL_DOCKER = "Docker";
+    public static final String TOOL_BUBBLEWRAP = "Bubblewrap";
+    public static final String TOOL_SEATBELT = "Seatbelt (sandbox-exec)";
 
     public static final List<String> REQUIRED_TOOL_NAMES = List.of(TOOL_RIPGREP, TOOL_CTAGS);
 
@@ -30,7 +32,13 @@ public record SystemTool(String name, String version, String status, String desc
             TOOL_DOCKER,
             new ToolMetadata(
                     "Powers BuildContainerService via Testcontainers for isolated, reproducible container-based build and test execution.",
-                    "Apache-2.0", "https://www.docker.com", false));
+                    "Apache-2.0", "https://www.docker.com", false),
+            TOOL_BUBBLEWRAP,
+            new ToolMetadata("Unprivileged user-namespace sandboxing tool used for native Linux build isolation.",
+                    "LGPL-2.0", "https://github.com/containers/bubblewrap", false),
+            TOOL_SEATBELT,
+            new ToolMetadata("macOS kernel sandbox utility (/usr/bin/sandbox-exec) used for native build isolation.",
+                    "macOS System", "https://developer.apple.com/documentation/security/app-sandbox", false));
 
     public SystemTool {
         name = StringUtils.defaultString(name);

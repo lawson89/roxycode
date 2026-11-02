@@ -21,7 +21,11 @@ ROXY_CODE = "true"
 error_regex = '^(E\s+|SyntaxError:|IndentationError:)'
 test_failure_regex = '^FAILED '
 
-[container]
-enabled = false
+[sandbox]
+# Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
+mode = "none"
+# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
+writable_paths = ["~/.cache/pip"]
+# Docker settings (used when mode = "docker")
 image = "python:3.12"
 workdir = "/workspace"

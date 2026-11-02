@@ -5,36 +5,29 @@ import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JComboBox;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.roxycode.app.ai.services.BuildContainerService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
-import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
-import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
-import org.roxycode.app.service.SystemToolService;
 
 class BuildConfigPanelTest {
 
     private GenericBuildToolService buildToolService;
     private SettingsService settingsService;
-    private SystemToolService systemToolService;
     private ProjectService projectService;
 
     @BeforeEach
     void setUp() throws Exception {
         buildToolService = mock(GenericBuildToolService.class);
         settingsService = mock(SettingsService.class);
-        systemToolService = mock(SystemToolService.class);
         projectService = mock(ProjectService.class);
 
         when(settingsService.getSettings()).thenReturn(new AppSettings());
@@ -47,16 +40,17 @@ class BuildConfigPanelTest {
                 [commands]
                 compile = './mvnw test-compile'
 
-                [container]
-                enabled = false
-                image = 'eclipse-temurin:25-jdk'
-                workdir = '/workspace'
+                [sandbox]
+                mode = "none"
+                writable_paths = ["~/.m2"]
+                image = "eclipse-temurin:25-jdk"
+                workdir = "/workspace"
                 """);
     }
 
     private BuildConfigPanel createPanelOnEdt() {
-        BuildConfigPanel panel = SwingTestUtils.callOnEdt(
-                () -> new BuildConfigPanel(buildToolService, settingsService, systemToolService, projectService));
+        BuildConfigPanel panel = SwingTestUtils
+                .callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService, projectService));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         return panel;
     }
@@ -85,7 +79,6 @@ class BuildConfigPanelTest {
             when(projectService.isBuildConfirmed()).thenReturn(inv.getArgument(0, Boolean.class));
             return null;
         }).when(projectService).setBuildConfirmed(anyBoolean());
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
 
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(loadCalledOnEdt.get());
@@ -138,96 +131,13 @@ class BuildConfigPanelTest {
     }
 
     @Test
-    void testDockerAvailableAndToggleCheckboxUpdatesTomlAndBanner() {
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(true));
-
-        BuildConfigPanel panel = createPanelOnEdt();
-        assertTrue(panel.dockerAvailable);
-        assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
-        assertTrue(panel.containerToggleCheckBox.isEnabled());
-        assertFalse(panel.containerToggleCheckBox.isSelected());
-        verify(systemToolService, never()).refreshDockerAvailable();
-        verify(systemToolService, never()).refreshTools();
-        verify(systemToolService, never()).checkDockerAvailable();
-
-        SwingTestUtils.clickOnEdt(panel.containerToggleCheckBox);
-        assertTrue(panel.containerToggleCheckBox.isSelected());
-        assertTrue(BuildContainerService.isContainerEnabledInToml(panel.textArea.getText()));
-        assertEquals(BuildConfigPanel.CONTAINER_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
-
-        SwingTestUtils.clickOnEdt(panel.containerToggleCheckBox);
-        assertFalse(panel.containerToggleCheckBox.isSelected());
-        assertFalse(BuildContainerService.isContainerEnabledInToml(panel.textArea.getText()));
-        assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
-
-        SwingTestUtils.runOnEdt(() -> panel.textArea.setText("""
-                [commands]
-                compile = 'mvn'
-
-                [container] # inline comment
-                enabled = true # keep enabled
-                """));
-        assertTrue(panel.containerToggleCheckBox.isSelected());
-        assertEquals(BuildConfigPanel.CONTAINER_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
-    }
-
-    @Test
-    void testRecheckDockerButtonUpdatesAvailabilityAndAppendsContainerSectionIfMissing() throws Exception {
-        when(buildToolService.getConfigContent()).thenReturn("""
-                [commands]
-                compile = 'mvn'
-                """);
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
-
-        BuildConfigPanel panel = createPanelOnEdt();
-        assertFalse(panel.containerToggleCheckBox.isEnabled());
-
-        CompletableFuture<Boolean> pendingRecheck = new CompletableFuture<>();
-        when(systemToolService.refreshDockerAvailable()).thenReturn(pendingRecheck);
-
-        SwingTestUtils.runOnEdt(() -> panel.recheckDockerButton.doClick());
-        SwingTestUtils.runOnEdt(() -> {
-            assertFalse(panel.recheckDockerButton.isEnabled());
-            assertEquals(BuildConfigPanel.CHECKING_DOCKER_TEXT, panel.recheckDockerButton.getText());
-        });
-
-        pendingRecheck.complete(true);
-        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-
-        assertTrue(panel.recheckDockerButton.isEnabled());
-        assertEquals(BuildConfigPanel.RECHECK_DOCKER_TEXT, panel.recheckDockerButton.getText());
-        assertTrue(panel.containerToggleCheckBox.isEnabled());
-
-        SwingTestUtils.clickOnEdt(panel.containerToggleCheckBox);
-        assertTrue(panel.textArea.getText().contains("[container]"));
-        assertTrue(BuildContainerService.isContainerEnabledInToml(panel.textArea.getText()));
-    }
-
-    @Test
-    void testOnSystemToolsUpdatedEventSynchronizesDockerAvailability() {
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
-
-        BuildConfigPanel panel = createPanelOnEdt();
-        assertFalse(panel.dockerAvailable);
-        assertEquals(BuildConfigPanel.DOCKER_MISSING_WARNING_TEXT, panel.bannerMessageLabel.getText());
-        assertFalse(panel.containerToggleCheckBox.isEnabled());
-        assertFalse(panel.containerToggleCheckBox.isSelected());
-
-        panel.onSystemToolsUpdated(
-                new SystemToolsUpdatedEvent(List.of(SystemTool.ofKnownTool("Docker", "28.0", "Detected")), true));
-        SwingTestUtils.flushEdt();
-
-        assertTrue(panel.dockerAvailable);
-        assertEquals(BuildConfigPanel.HOST_EXECUTION_ACTIVE_TEXT, panel.bannerMessageLabel.getText());
-        assertTrue(panel.containerToggleCheckBox.isEnabled());
-    }
-
-    @Test
     void testTemplateSelectorAndApplyTemplate() throws Exception {
-        when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
         when(buildToolService.getAvailableTemplates()).thenReturn(GenericBuildToolService.AVAILABLE_TEMPLATES);
         when(buildToolService.detectTemplate()).thenReturn("maven");
-        when(buildToolService.loadTemplateContent("rust")).thenReturn("[commands]\ncompile = 'cargo check'\n");
+        when(buildToolService.loadTemplateContent("rust")).thenReturn("""
+                [commands]
+                compile = 'cargo check'
+                """);
 
         BuildConfigPanel panel = createPanelOnEdt();
 

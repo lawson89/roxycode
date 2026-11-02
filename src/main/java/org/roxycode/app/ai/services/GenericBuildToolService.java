@@ -28,8 +28,9 @@ import org.jspecify.annotations.Nullable;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.WorkflowPhase;
-import org.roxycode.app.ai.services.BuildContainerService.ContainerConfig;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
+import org.roxycode.app.ai.services.BuildContainerService.SandboxConfig;
+import org.roxycode.app.ai.services.BuildContainerService.SandboxMode;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ImplementationPlan;
@@ -67,6 +68,15 @@ public class GenericBuildToolService {
             lint_single = ""
             format = ""
             format_single = ""
+
+            [sandbox]
+            # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
+            mode = "none"
+            # Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
+            writable_paths = []
+            # Docker settings (used when mode = "docker")
+            image = "ubuntu:24.04"
+            workdir = "/workspace"
             """;
 
     public record BuildTemplateInfo(String id, String displayName, String description, List<String> markerFiles) {
@@ -120,7 +130,7 @@ public class GenericBuildToolService {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record BuildConfig(CommandsSection commands, Map<String, String> env, ParseSection parse,
-            ContainerConfig container) {
+            SandboxConfig sandbox) {
         public BuildConfig {
             if (commands == null) {
                 commands = CommandsSection.EMPTY;
@@ -139,8 +149,8 @@ public class GenericBuildToolService {
             if (parse == null) {
                 parse = ParseSection.EMPTY;
             }
-            if (container == null) {
-                container = ContainerConfig.DEFAULT;
+            if (sandbox == null) {
+                sandbox = new SandboxConfig("none", List.of(), "ubuntu:24.04", "/workspace");
             }
         }
     }
@@ -393,10 +403,29 @@ public class GenericBuildToolService {
             String errorRegex = config.parse().errorRegex();
             String testFailureRegex = config.parse().testFailureRegex();
             Map<String, String> env = config.env();
-            ContainerConfig containerConfig = config.container();
+            SandboxConfig sandboxConfig = config.sandbox();
+            SandboxMode mode = sandboxConfig.resolvedMode();
             Path logFile = prepareBuildLogFile();
-            if (containerConfig.enabled()) {
-                return executeInContainer(command, containerConfig, env, logFile, errorRegex, testFailureRegex);
+            if (mode == SandboxMode.DOCKER) {
+                if (!buildContainerService.isDockerAvailable()) {
+                    stopActiveContainer();
+                    String msg = "Error executing " + commandLabel + ": Docker is not available, but [sandbox] mode = "
+                            + (char) 34 + "docker" + (char) 34 + " is configured in build.toml.";
+                    return new BuildResult(false, -1, msg, List.of(msg), List.of());
+                }
+                return executeInContainer(command, sandboxConfig, env, logFile, errorRegex, testFailureRegex);
+            }
+            if (mode == SandboxMode.NATIVE) {
+                stopActiveContainer();
+                if (!buildContainerService.isNativeSandboxAvailable()) {
+                    String msg = "Error executing " + commandLabel
+                            + ": Native OS sandbox is not available on this system, but [sandbox] mode = " + (char) 34
+                            + "native" + (char) 34 + " is configured in build.toml.";
+                    return new BuildResult(false, -1, msg, List.of(msg), List.of());
+                }
+                List<String> sandboxCmd = buildContainerService
+                        .buildNativeSandboxCommand(projectService.getCurrentProjectRoot(), sandboxConfig, command);
+                return executeCommandList(sandboxCmd, env, logFile, errorRegex, testFailureRegex);
             }
             stopActiveContainer();
             return execute(command, env, logFile, errorRegex, testFailureRegex);
@@ -477,23 +506,16 @@ public class GenericBuildToolService {
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")
-    private BuildResult executeInContainer(String command, ContainerConfig containerConfig, Map<String, String> env,
+    private BuildResult executeInContainer(String command, SandboxConfig sandboxConfig, Map<String, String> env,
             Path logFile, String errorRegex, String testFailureRegex) {
-        if (!buildContainerService.isDockerAvailable()) {
-            stopActiveContainer();
-            String msg = "Docker was not detected or the Docker daemon is not running. "
-                    + "Cannot run isolated build in Testcontainers. Please start Docker or set [container] enabled = false in build.toml.";
-            return new BuildResult(false, -1, msg, List.of(msg), List.of());
-        }
-
-        log.info("Executing build command in container ({}): {}", containerConfig.image(), command);
+        log.info("Executing build command in container ({}): {}", sandboxConfig.image(), command);
         List<String> errors = new ArrayList<>();
         int exitCode = -1;
         String fullOutput;
 
         try {
             ContainerExecResult result = buildContainerService.executeCommand(projectService.getCurrentProjectRoot(),
-                    containerConfig, env, command);
+                    sandboxConfig, env, command);
             fullOutput = result.combinedOutput();
             exitCode = result.exitCode();
             Files.writeString(logFile, fullOutput, StandardCharsets.UTF_8);
@@ -518,21 +540,25 @@ public class GenericBuildToolService {
     private BuildResult execute(String command, Map<String, String> env, Path logFile, String errorRegex,
             String testFailureRegex) {
         log.info("Executing build command: {}", command);
+        List<String> shellCommand;
+        if (SystemUtils.IS_OS_WINDOWS) {
+            shellCommand = List.of("cmd.exe", "/c", command);
+        } else {
+            shellCommand = List.of("sh", "-c", command);
+        }
+        return executeCommandList(shellCommand, env, logFile, errorRegex, testFailureRegex);
+    }
+
+    private BuildResult executeCommandList(List<String> commandList, Map<String, String> env, Path logFile,
+            String errorRegex, String testFailureRegex) {
         List<String> errors = new ArrayList<>();
         int exitCode = -1;
         String fullOutput = "";
 
         try {
-            List<String> shellCommand;
-            if (SystemUtils.IS_OS_WINDOWS) {
-                shellCommand = List.of("cmd.exe", "/c", command);
-            } else {
-                shellCommand = List.of("sh", "-c", command);
-            }
-
             ProcessResult result;
             try (OutputStream fileOut = Files.newOutputStream(logFile)) {
-                result = ProcessRunner.run(shellCommand, projectService.getCurrentProjectRoot(), env, BUILD_TIMEOUT,
+                result = ProcessRunner.run(commandList, projectService.getCurrentProjectRoot(), env, BUILD_TIMEOUT,
                         true, fileOut);
             }
             fullOutput = result.output();

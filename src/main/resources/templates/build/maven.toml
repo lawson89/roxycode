@@ -21,7 +21,11 @@ ROXY_CODE = "true"
 error_regex = '\[ERROR\].*\[\d+,\d+\]|PMD Failure:'
 test_failure_regex = '\[ERROR\]\s+[\w.#]+:\d+.*|<<< FAILURE!|<<< ERROR!'
 
-[container]
-enabled = false
+[sandbox]
+# Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
+mode = "none"
+# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
+writable_paths = ["~/.m2"]
+# Docker settings (used when mode = "docker")
 image = "eclipse-temurin:25-jdk"
 workdir = "/workspace"

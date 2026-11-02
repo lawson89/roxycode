@@ -1,18 +1,18 @@
 package org.roxycode.app.ai.services;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import jakarta.annotation.PreDestroy;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
-import org.roxycode.app.ai.AiConfig;
+import org.apache.commons.lang3.SystemUtils;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
 import org.slf4j.Logger;
@@ -37,19 +37,65 @@ public class BuildContainerService {
     static final String LABEL_APP = "app";
     static final String LABEL_APP_VALUE = "roxycode";
     static final String LABEL_PROJECT = "roxycode.project";
-    private static final String NL = "\n";
-    private static final Pattern CONTAINER_SECTION_PATTERN = Pattern
-            .compile("(?m)^[ \\t]*\\[[ \\t]*container[ \\t]*\\][ \\t]*(?:#.*)?$");
-    private static final Pattern ENABLED_LINE_PATTERN = Pattern
-            .compile("(?m)^([ \t]*enabled[ \t]*=[ \t]*)(true|false)([ \t]*(?:#.*)?)$");
+    private static final String NL = String.valueOf((char) 10);
+    private static final String BS = String.valueOf((char) 92);
+    private static final String DQ = String.valueOf((char) 34);
+    private static final String TILDE = "~";
+    private static final String TILDE_SLASH = "~/";
+    private static final String TILDE_BACKSLASH = "~" + BS;
+
+    public enum SandboxMode {
+        NONE, NATIVE, DOCKER;
+
+        private static final String MODE_NATIVE = "native";
+        private static final String MODE_DOCKER = "docker";
+
+        public static SandboxMode fromString(String value) {
+            if (value == null) {
+                return NONE;
+            }
+            String trimmed = value.trim();
+            if (MODE_NATIVE.equalsIgnoreCase(trimmed)) {
+                return NATIVE;
+            }
+            if (MODE_DOCKER.equalsIgnoreCase(trimmed)) {
+                return DOCKER;
+            }
+            return NONE;
+        }
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ContainerConfig(boolean enabled, String image, String workdir) {
-        public static final ContainerConfig DEFAULT = new ContainerConfig(false, DEFAULT_CONTAINER_IMAGE,
+    public record SandboxConfig(String mode, @JsonProperty("writable_paths") List<String> writablePaths, String image,
+            String workdir) {
+        public static final SandboxConfig DEFAULT = new SandboxConfig("none", List.of(), DEFAULT_CONTAINER_IMAGE,
                 DEFAULT_CONTAINER_WORKDIR);
 
-        public ContainerConfig {
-            image = StringUtils.defaultIfBlank(StringUtils.trim(image), DEFAULT_CONTAINER_IMAGE);
-            workdir = StringUtils.defaultIfBlank(StringUtils.trim(workdir), DEFAULT_CONTAINER_WORKDIR);
+        public SandboxConfig {
+            if (mode != null && !mode.isBlank()) {
+                mode = mode.trim();
+            } else {
+                mode = "none";
+            }
+            if (writablePaths != null) {
+                writablePaths = List.copyOf(writablePaths);
+            } else {
+                writablePaths = List.of();
+            }
+            if (image != null && !image.isBlank()) {
+                image = image.trim();
+            } else {
+                image = DEFAULT_CONTAINER_IMAGE;
+            }
+            if (workdir != null && !workdir.isBlank()) {
+                workdir = workdir.trim();
+            } else {
+                workdir = DEFAULT_CONTAINER_WORKDIR;
+            }
+        }
+
+        public SandboxMode resolvedMode() {
+            return SandboxMode.fromString(mode);
         }
     }
 
@@ -63,8 +109,8 @@ public class BuildContainerService {
                 sb.append(stdout);
             }
             if (StringUtils.isNotEmpty(stderr)) {
-                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n') {
-                    sb.append('\n');
+                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != (char) 10) {
+                    sb.append((char) 10);
                 }
                 sb.append(stderr);
             }
@@ -124,10 +170,135 @@ public class BuildContainerService {
         return systemToolService.checkDockerAvailable();
     }
 
-    public ContainerExecResult executeCommand(Path projectRoot, ContainerConfig containerConfig,
-            Map<String, String> env, String command) throws Exception {
+    public boolean isNativeSandboxAvailable() {
+        return systemToolService != null && systemToolService.checkNativeSandboxAvailable();
+    }
+
+    public List<String> buildNativeSandboxCommand(Path projectRoot, SandboxConfig sandboxConfig, String command) {
+        List<String> rawWritable = List.of();
+        if (sandboxConfig != null) {
+            rawWritable = sandboxConfig.writablePaths();
+        }
+        List<Path> writablePaths = resolveWritablePaths(rawWritable, projectRoot);
+        if (SystemUtils.IS_OS_MAC) {
+            return buildSeatbeltCommand(projectRoot, writablePaths, command);
+        }
+        if (SystemUtils.IS_OS_LINUX) {
+            return buildBubblewrapCommand(projectRoot, writablePaths, command);
+        }
+        throw new IllegalStateException("Native sandbox is not supported on OS: " + SystemUtils.OS_NAME);
+    }
+
+    static List<Path> resolveWritablePaths(List<String> rawPaths, Path projectRoot) {
+        if (rawPaths == null || rawPaths.isEmpty()) {
+            return List.of();
+        }
+        String userHomeProp = System.getProperty("user.home");
+        Path homeDir = null;
+        if (userHomeProp != null && !userHomeProp.isBlank()) {
+            homeDir = Path.of(userHomeProp).toAbsolutePath().normalize();
+        }
+        Set<Path> resolvedSet = new LinkedHashSet<>();
+        for (String raw : rawPaths) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String trimmed = raw.trim();
+            Path resolved;
+            if (TILDE.equals(trimmed)) {
+                if (homeDir == null) {
+                    continue;
+                }
+                resolved = homeDir;
+            } else if (trimmed.startsWith(TILDE_SLASH) || trimmed.startsWith(TILDE_BACKSLASH)) {
+                if (homeDir == null) {
+                    continue;
+                }
+                resolved = homeDir.resolve(trimmed.substring(2)).toAbsolutePath().normalize();
+            } else {
+                Path candidate = Path.of(trimmed);
+                if (candidate.isAbsolute()) {
+                    resolved = candidate.toAbsolutePath().normalize();
+                } else if (projectRoot != null) {
+                    resolved = projectRoot.toAbsolutePath().normalize().resolve(candidate).normalize();
+                } else {
+                    resolved = candidate.toAbsolutePath().normalize();
+                }
+            }
+            if (homeDir != null && resolved.startsWith(homeDir) && !Files.exists(resolved)) {
+                try {
+                    Files.createDirectories(resolved);
+                } catch (IOException e) {
+                    log.debug("Could not create writable cache directory {}: {}", resolved, e.getMessage());
+                }
+            }
+            if (Files.exists(resolved)) {
+                resolvedSet.add(resolved);
+            }
+        }
+        return List.copyOf(resolvedSet);
+    }
+
+    static List<String> buildBubblewrapCommand(Path projectRoot, List<Path> writablePaths, String command) {
+        String rootStr = projectRoot.toAbsolutePath().normalize().toString();
+        List<String> args = new ArrayList<>();
+        Collections.addAll(args, "bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp");
+        if (writablePaths != null) {
+            for (Path p : writablePaths) {
+                if (p != null) {
+                    String pathStr = p.toAbsolutePath().normalize().toString();
+                    Collections.addAll(args, "--bind", pathStr, pathStr);
+                }
+            }
+        }
+        Collections.addAll(args, "--bind", rootStr, rootStr, "--chdir", rootStr, "--die-with-parent", "sh", "-c",
+                command);
+        return List.copyOf(args);
+    }
+
+    static String buildSeatbeltProfile(Path projectRoot, List<Path> writablePaths) {
+        String rootStr = escapeSeatbeltPath(projectRoot.toAbsolutePath().normalize().toString());
+        StringBuilder sb = new StringBuilder();
+        sb.append("""
+                (version 1)
+                (allow default)
+                (deny file-write*)
+                (allow file-write*
+                  (subpath "/private/tmp")
+                  (subpath "/tmp")
+                  (subpath "/private/var/folders")
+                  (subpath "/var/folders")
+                  (literal "/dev/null")
+                  (literal "/dev/zero")
+                  (literal "/dev/random")
+                  (literal "/dev/urandom")
+                """);
+        sb.append("  (subpath ").append(DQ).append(rootStr).append(DQ).append(")").append(NL);
+        if (writablePaths != null) {
+            for (Path p : writablePaths) {
+                if (p != null) {
+                    String escaped = escapeSeatbeltPath(p.toAbsolutePath().normalize().toString());
+                    sb.append("  (subpath ").append(DQ).append(escaped).append(DQ).append(")").append(NL);
+                }
+            }
+        }
+        sb.append(")");
+        return sb.toString();
+    }
+
+    private static String escapeSeatbeltPath(String path) {
+        return path.replace(BS, BS + BS).replace(DQ, BS + DQ);
+    }
+
+    static List<String> buildSeatbeltCommand(Path projectRoot, List<Path> writablePaths, String command) {
+        String profile = buildSeatbeltProfile(projectRoot, writablePaths);
+        return List.of("/usr/bin/sandbox-exec", "-p", profile, "sh", "-c", command);
+    }
+
+    public ContainerExecResult executeCommand(Path projectRoot, SandboxConfig sandboxConfig, Map<String, String> env,
+            String command) throws Exception {
         ContainerSessionKey sessionKey = new ContainerSessionKey(projectRoot.toAbsolutePath().normalize(),
-                containerConfig.image(), containerConfig.workdir(), Map.copyOf(env));
+                sandboxConfig.image(), sandboxConfig.workdir(), Map.copyOf(env));
         try {
             return getOrCreateContainerSession(sessionKey).execInContainer("sh", "-c", command);
         } catch (InterruptedException | java.util.concurrent.CancellationException e) {
@@ -144,49 +315,6 @@ public class BuildContainerService {
         activeSession = containerSessionFactory.create(key);
         activeSessionKey = key;
         return activeSession;
-    }
-
-    public static boolean isContainerEnabledInToml(String toml) {
-        if (StringUtils.isBlank(toml)) {
-            return false;
-        }
-        try {
-            GenericBuildToolService.BuildConfig parsed = AiConfig.SHARED_TOML_MAPPER.readValue(toml,
-                    GenericBuildToolService.BuildConfig.class);
-            if (parsed != null && parsed.container() != null) {
-                return parsed.container().enabled();
-            }
-            return false;
-        } catch (Exception e) {
-            log.debug("Failed to parse TOML when checking container.enabled flag: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    public static String updateContainerEnabledInToml(String toml, boolean enabled) {
-        String safeToml = "";
-        if (toml != null) {
-            safeToml = toml;
-        }
-        Matcher sectionMatcher = CONTAINER_SECTION_PATTERN.matcher(safeToml);
-        if (!sectionMatcher.find()) {
-            String section = ("""
-                    [container]
-                    enabled = %s
-                    image = '%s'
-                    workdir = '%s'
-                    """).formatted(enabled, DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
-            if (safeToml.isEmpty()) {
-                return section;
-            }
-            return safeToml.stripTrailing() + NL + NL + section;
-        }
-        Matcher enabledMatcher = ENABLED_LINE_PATTERN.matcher(safeToml);
-        if (enabledMatcher.find()) {
-            return enabledMatcher.replaceFirst("$1" + enabled + "$3");
-        }
-        int insertPos = sectionMatcher.end();
-        return safeToml.substring(0, insertPos) + NL + "enabled = " + enabled + safeToml.substring(insertPos);
     }
 
     static String buildContainerName(Path projectRoot) {

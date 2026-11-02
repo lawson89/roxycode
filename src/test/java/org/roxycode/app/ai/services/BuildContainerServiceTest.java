@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.github.dockerjava.api.command.CreateContainerCmd;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,14 +12,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.commons.lang3.SystemUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
-import org.roxycode.app.ai.services.BuildContainerService.ContainerConfig;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSession;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSessionKey;
+import org.roxycode.app.ai.services.BuildContainerService.SandboxConfig;
+import org.roxycode.app.ai.services.BuildContainerService.SandboxMode;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.ui.SwingTestUtils;
@@ -123,11 +126,11 @@ class BuildContainerServiceTest {
             };
         });
 
-        ContainerConfig config = new ContainerConfig(true, "eclipse-temurin:25-jdk", "/workspace");
+        SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
         ContainerExecResult res1 = buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"),
                 "./mvnw compile");
         assertEquals(0, res1.exitCode());
-        assertEquals("out\nerr", res1.combinedOutput());
+        assertEquals("out" + (char) 10 + "err", res1.combinedOutput());
 
         buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"), "./mvnw test");
         assertEquals(1, sessionsCreated.get());
@@ -146,7 +149,7 @@ class BuildContainerServiceTest {
             throw new IllegalStateException("client version 1.32 is too old. Minimum supported API version is 1.44");
         });
 
-        ContainerConfig config = new ContainerConfig(true, "eclipse-temurin:25-jdk", "/workspace");
+        SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
         assertTrue(assertThrows(IllegalStateException.class,
                 () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw compile")).getMessage()
                 .contains("client version 1.32 is too old"));
@@ -180,7 +183,7 @@ class BuildContainerServiceTest {
             };
         });
 
-        ContainerConfig config = new ContainerConfig(true, "eclipse-temurin:25-jdk", "/workspace");
+        SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
         assertThrows(InterruptedException.class,
                 () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw test"));
         assertTrue(sessionClosed.get(), "Active container session must be stopped when interrupted");
@@ -192,47 +195,84 @@ class BuildContainerServiceTest {
     }
 
     @Test
-    void testIsAndUpdateContainerEnabledInToml() {
-        for (String invalid : new String[]{null, "", "   ", "[container\nenabled = true\n", "invalid = = toml"}) {
-            assertFalse(BuildContainerService.isContainerEnabledInToml(invalid));
+    void testSandboxModeAndSandboxConfigNormalization() {
+        assertEquals(SandboxMode.NONE, SandboxMode.fromString(null));
+        assertEquals(SandboxMode.NONE, SandboxMode.fromString(""));
+        assertEquals(SandboxMode.NONE, SandboxMode.fromString("  none  "));
+        assertEquals(SandboxMode.NONE, SandboxMode.fromString("unknown"));
+        assertEquals(SandboxMode.NATIVE, SandboxMode.fromString("native"));
+        assertEquals(SandboxMode.NATIVE, SandboxMode.fromString("  NATIVE "));
+        assertEquals(SandboxMode.DOCKER, SandboxMode.fromString("docker"));
+        assertEquals(SandboxMode.DOCKER, SandboxMode.fromString(" DOCKER "));
+
+        SandboxConfig defaultCfg = new SandboxConfig(null, null, "  ", null);
+        assertEquals("none", defaultCfg.mode());
+        assertEquals(SandboxMode.NONE, defaultCfg.resolvedMode());
+        assertTrue(defaultCfg.writablePaths().isEmpty());
+        assertEquals(BuildContainerService.DEFAULT_CONTAINER_IMAGE, defaultCfg.image());
+        assertEquals(BuildContainerService.DEFAULT_CONTAINER_WORKDIR, defaultCfg.workdir());
+
+        SandboxConfig customCfg = new SandboxConfig(" native ", List.of("~/.m2"), " eclipse-temurin:25-jdk ", " /app ");
+        assertEquals("native", customCfg.mode());
+        assertEquals(SandboxMode.NATIVE, customCfg.resolvedMode());
+        assertEquals(List.of("~/.m2"), customCfg.writablePaths());
+        assertEquals("eclipse-temurin:25-jdk", customCfg.image());
+        assertEquals("/app", customCfg.workdir());
+    }
+
+    @Test
+    void testResolveWritablePathsAndNativeSandboxCommandBuilders() throws Exception {
+        Path projectRoot = Files.createDirectories(tempDir.resolve("my-project"));
+        Path existingSubdir = Files.createDirectories(projectRoot.resolve("target-cache"));
+        Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        String originalHome = System.getProperty("user.home");
+        try {
+            System.setProperty("user.home", fakeHome.toString());
+            List<Path> resolved = BuildContainerService.resolveWritablePaths(
+                    List.of("~/.m2/repo", "target-cache", "non-existent-relative", "~/.m2/repo", "  "), projectRoot);
+            Path expectedHomeCache = fakeHome.resolve(".m2/repo").toAbsolutePath().normalize();
+            assertTrue(Files.isDirectory(expectedHomeCache), "Home cache directory should be created automatically");
+            assertEquals(List.of(expectedHomeCache, existingSubdir.toAbsolutePath().normalize()), resolved);
+
+            String rootStr = projectRoot.toAbsolutePath().normalize().toString();
+            List<String> bwrapCmd = BuildContainerService.buildBubblewrapCommand(projectRoot, resolved,
+                    "./mvnw compile");
+            assertEquals(List.of("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
+                    "--bind", expectedHomeCache.toString(), expectedHomeCache.toString(), "--bind",
+                    existingSubdir.toAbsolutePath().normalize().toString(),
+                    existingSubdir.toAbsolutePath().normalize().toString(), "--bind", rootStr, rootStr, "--chdir",
+                    rootStr, "--die-with-parent", "sh", "-c", "./mvnw compile"), bwrapCmd);
+
+            String dq = String.valueOf((char) 34);
+            String bs = String.valueOf((char) 92);
+            Path pathWithQuote = fakeHome.resolve("dir" + dq + "quote" + bs + "slash");
+            String seatbeltProfile = BuildContainerService.buildSeatbeltProfile(projectRoot, List.of(pathWithQuote));
+            SwingTestUtils.assertContainsAll(seatbeltProfile, "(version 1)", "(allow default)", "(deny file-write*)",
+                    "(subpath " + dq + "/private/tmp" + dq + ")", "(subpath " + dq + rootStr + dq + ")",
+                    "dir" + bs + dq + "quote" + bs + bs + "slash");
+
+            List<String> seatbeltCmd = BuildContainerService.buildSeatbeltCommand(projectRoot, resolved, "./mvnw test");
+            assertEquals("/usr/bin/sandbox-exec", seatbeltCmd.get(0));
+            assertEquals("-p", seatbeltCmd.get(1));
+            assertEquals(BuildContainerService.buildSeatbeltProfile(projectRoot, resolved), seatbeltCmd.get(2));
+            assertEquals("sh", seatbeltCmd.get(3));
+            assertEquals("-c", seatbeltCmd.get(4));
+            assertEquals("./mvnw test", seatbeltCmd.get(5));
+
+            SandboxConfig nativeCfg = new SandboxConfig("native", List.of("~/.m2/repo"), "ubuntu:24.04", "/workspace");
+            if (SystemUtils.IS_OS_LINUX) {
+                List<String> dispatched = buildContainerService.buildNativeSandboxCommand(projectRoot, nativeCfg,
+                        "echo ok");
+                assertEquals("bwrap", dispatched.get(0));
+            } else if (SystemUtils.IS_OS_MAC) {
+                List<String> dispatched = buildContainerService.buildNativeSandboxCommand(projectRoot, nativeCfg,
+                        "echo ok");
+                assertEquals("/usr/bin/sandbox-exec", dispatched.get(0));
+            }
+        } finally {
+            if (originalHome != null) {
+                System.setProperty("user.home", originalHome);
+            }
         }
-        String tomlWithDisabled = "[commands]\ncompile = './mvnw test-compile'\n\n[container]\nenabled = false # inline comment\nimage = 'eclipse-temurin:25-jdk'\n";
-
-        String enabledToml = BuildContainerService.updateContainerEnabledInToml(tomlWithDisabled, true);
-        assertTrue(BuildContainerService.isContainerEnabledInToml(enabledToml));
-        assertTrue(enabledToml.contains("enabled = true # inline comment"));
-        assertFalse(BuildContainerService
-                .isContainerEnabledInToml(BuildContainerService.updateContainerEnabledInToml(enabledToml, false)));
-
-        String appended = BuildContainerService.updateContainerEnabledInToml("""
-                [commands]
-                compile = './mvnw test-compile'
-                """, true);
-        SwingTestUtils.assertContainsAll(appended, "[container]",
-                "image = '" + BuildContainerService.DEFAULT_CONTAINER_IMAGE + "'",
-                "workdir = '" + BuildContainerService.DEFAULT_CONTAINER_WORKDIR + "'");
-        assertTrue(BuildContainerService.isContainerEnabledInToml(appended));
-
-        String commentedSectionToml = """
-                [commands]
-                compile = './mvnw'
-
-                [container] # container settings
-                enabled = false # comment
-                """;
-        String updatedCommented = BuildContainerService.updateContainerEnabledInToml(commentedSectionToml, true);
-        assertEquals(1, updatedCommented.lines().filter(l -> l.contains("[container]")).count());
-        assertTrue(updatedCommented.contains("[container] # container settings"));
-        assertTrue(updatedCommented.contains("enabled = true # comment"));
-        assertTrue(BuildContainerService.isContainerEnabledInToml(updatedCommented));
-
-        String spacedSectionToml = """
-                [ container ]
-                enabled = false
-                """;
-        String updatedSpaced = BuildContainerService.updateContainerEnabledInToml(spacedSectionToml, true);
-        assertEquals(1, updatedSpaced.lines().filter(l -> l.contains("container")).count());
-        assertTrue(updatedSpaced.contains("enabled = true"));
-        assertTrue(BuildContainerService.isContainerEnabledInToml(updatedSpaced));
     }
 }

@@ -21,7 +21,11 @@ ROXY_CODE = "true"
 error_regex = '(^error\b|ERROR in|TS\d+:)'
 test_failure_regex = '(^\s*✖|^\s*FAIL\s+)'
 
-[container]
-enabled = false
+[sandbox]
+# Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
+mode = "none"
+# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
+writable_paths = ["~/.npm", "~/.cache"]
+# Docker settings (used when mode = "docker")
 image = "node:22"
 workdir = "/workspace"

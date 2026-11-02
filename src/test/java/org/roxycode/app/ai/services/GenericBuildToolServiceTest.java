@@ -130,8 +130,8 @@ class GenericBuildToolServiceTest {
         String mavenContent = buildToolService.getConfigContent();
         assertTrue(Files.exists(configPath));
         assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
-        assertContainsAll(mavenContent, "[commands]", "./mvnw test-compile", "# Examples:", "pmd:check", "[container]",
-                "eclipse-temurin:25-jdk");
+        assertContainsAll(mavenContent, "[commands]", "./mvnw test-compile", "# Examples:", "pmd:check", "[sandbox]",
+                "~/.m2", "eclipse-temurin:25-jdk");
         GenericBuildToolService.BuildConfig parsedMaven = assertDoesNotThrow(() -> buildToolService.loadConfig());
         assertEquals("", parsedMaven.commands().lint());
         assertEquals("", parsedMaven.commands().lintSingle());
@@ -144,7 +144,7 @@ class GenericBuildToolServiceTest {
         Files.deleteIfExists(projectDataDir);
         Files.writeString(projectDataDir, "not a directory");
         String fallbackContent = assertDoesNotThrow(() -> buildToolService.getConfigContent());
-        assertContainsAll(fallbackContent, "[commands]", "./mvnw test-compile", "[container]");
+        assertContainsAll(fallbackContent, "[commands]", "./mvnw test-compile", "[sandbox]");
 
         Files.deleteIfExists(projectDataDir);
         Files.deleteIfExists(projectRoot.resolve("pom.xml"));
@@ -152,7 +152,7 @@ class GenericBuildToolServiceTest {
         assertEquals("rust", buildToolService.detectTemplate());
         String rustContent = buildToolService.getConfigContent();
         assertContainsAll(rustContent, "[commands]", "cargo check --tests", "cargo clippy -- -D warnings",
-                "rustfmt {file}", "rust:1.85");
+                "rustfmt {file}", "~/.cargo", "rust:1.85");
 
         List<GenericBuildToolService.BuildTemplateInfo> availableTemplates = buildToolService.getAvailableTemplates();
         assertEquals(8, availableTemplates.size());
@@ -170,8 +170,8 @@ class GenericBuildToolServiceTest {
         try (URLClassLoader emptyClassLoader = new URLClassLoader(new URL[0], null)) {
             Thread.currentThread().setContextClassLoader(emptyClassLoader);
             String pyContent = buildToolService.getConfigContent();
-            assertContainsAll(pyContent, "[commands]", "pytest", "# Examples:", "ruff check {file}", "[container]",
-                    "python:3.12");
+            assertContainsAll(pyContent, "[commands]", "pytest", "# Examples:", "ruff check {file}", "[sandbox]",
+                    "~/.cache/pip", "python:3.12");
         } finally {
             Thread.currentThread().setContextClassLoader(originalTCCL);
         }
@@ -362,8 +362,8 @@ class GenericBuildToolServiceTest {
                 [parse]
                 error_regex = '^.[E]RROR.'
                 test_failure_regex = '^FAIL:'
-                [container]
-                enabled = true
+                [sandbox]
+                mode = 'docker'
                 image = 'eclipse-temurin:25-jdk'
                 workdir = '/workspace'
                 """);
@@ -390,12 +390,35 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testContainerExecutionErrorAndCancellationHandling() throws IOException {
+    void testContainerAndNativeSandboxExecutionErrorAndCancellationHandling() throws IOException {
         writeBuildToml("""
                 [commands]
                 compile = './mvnw test-compile'
-                [container]
-                enabled = true
+                [sandbox]
+                mode = 'native'
+                writable_paths = ['~/.m2']
+                """);
+        when(systemToolService.checkNativeSandboxAvailable()).thenReturn(false);
+        BuildResult noNativeRes = buildToolService.compile();
+        assertFalse(noNativeRes.isSuccess());
+        assertEquals(-1, noNativeRes.getExitCode());
+        assertTrue(noNativeRes.getOutput()
+                .contains("Error executing commands.compile: Native OS sandbox is not available on this system"));
+
+        when(systemToolService.checkNativeSandboxAvailable()).thenReturn(true);
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(anyList(), eq(projectRoot), anyMap(), any(), eq(true), any()))
+                    .thenReturn(new ProcessResult(0, "native-sandbox-ok", "", false));
+            BuildResult nativeOkRes = buildToolService.compile();
+            assertTrue(nativeOkRes.isSuccess());
+            assertEquals("native-sandbox-ok", nativeOkRes.getOutput());
+        }
+
+        writeBuildToml("""
+                [commands]
+                compile = './mvnw test-compile'
+                [sandbox]
+                mode = 'docker'
                 image = 'eclipse-temurin:25-jdk'
                 workdir = '/workspace'
                 """);
@@ -404,7 +427,7 @@ class GenericBuildToolServiceTest {
         BuildResult noDockerRes = buildToolService.compile();
         assertFalse(noDockerRes.isSuccess());
         assertEquals(-1, noDockerRes.getExitCode());
-        assertTrue(noDockerRes.getOutput().contains("Docker was not detected"));
+        assertTrue(noDockerRes.getOutput().contains("Error executing commands.compile: Docker is not available"));
 
         stubDockerAvailable(true);
         buildContainerService.setContainerSessionFactory(key -> {
@@ -476,8 +499,8 @@ class GenericBuildToolServiceTest {
                 test_all = './mvnw test'
                 [env]
                 ROXY_CODE = 'true'
-                [container]
-                enabled = true
+                [sandbox]
+                mode = 'docker'
                 image = 'eclipse-temurin:25-jdk'
                 workdir = '/workspace'
                 """;

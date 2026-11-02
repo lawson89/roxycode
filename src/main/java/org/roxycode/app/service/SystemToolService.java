@@ -19,6 +19,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
@@ -42,6 +43,9 @@ public class SystemToolService {
     private static final String GIT = SystemTool.TOOL_GIT;
     private static final String CTAGS = SystemTool.TOOL_CTAGS;
     private static final String DOCKER = SystemTool.TOOL_DOCKER;
+    private static final String BUBBLEWRAP = SystemTool.TOOL_BUBBLEWRAP;
+    private static final String SEATBELT = SystemTool.TOOL_SEATBELT;
+    static final Path MACOS_SANDBOX_EXEC_PATH = Path.of("/usr/bin/sandbox-exec");
     private static final String ARG_VERSION = "--version";
     public static final String STATUS_DETECTED = "Detected";
     public static final String STATUS_ERROR = "Error";
@@ -241,6 +245,31 @@ public class SystemToolService {
         return STATUS_DETECTED.equals(detectDockerTool().status());
     }
 
+    public boolean checkNativeSandboxAvailable() {
+        try {
+            return isNativeSandboxDetected(detectTools().join());
+        } catch (Exception e) {
+            log.debug("Failed to check native sandbox availability: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    public static boolean isNativeSandboxDetected(List<SystemTool> tools) {
+        if (tools == null) {
+            return false;
+        }
+        for (SystemTool tool : tools) {
+            if (tool == null) {
+                continue;
+            }
+            if ((BUBBLEWRAP.equals(tool.name()) || SEATBELT.equals(tool.name()))
+                    && STATUS_DETECTED.equals(tool.status())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public boolean checkGitAvailable() {
         List<SystemTool> tools = getCachedTools();
         if (!tools.isEmpty()) {
@@ -292,8 +321,44 @@ public class SystemToolService {
     }
 
     private List<SystemTool> probeAllTools() {
-        return List.of(detectTool(RIPGREP, "rg", ARG_VERSION), detectTool(CTAGS, "ctags", ARG_VERSION),
-                detectTool(GIT, "git", ARG_VERSION), detectDockerTool());
+        List<SystemTool> tools = new ArrayList<>();
+        tools.add(detectTool(RIPGREP, "rg", ARG_VERSION));
+        tools.add(detectTool(CTAGS, "ctags", ARG_VERSION));
+        tools.add(detectTool(GIT, "git", ARG_VERSION));
+        tools.add(detectDockerTool());
+        if (SystemUtils.IS_OS_LINUX) {
+            tools.add(detectBubblewrapTool());
+        } else if (SystemUtils.IS_OS_MAC) {
+            tools.add(detectSeatbeltTool());
+        }
+        return List.copyOf(tools);
+    }
+
+    SystemTool detectBubblewrapTool() {
+        ProcessResult result = ProcessRunner.run(List.of("bwrap", ARG_VERSION));
+        String version = VERSION_NOT_FOUND;
+        String status = STATUS_MISSING;
+        if (result.isSuccess()) {
+            version = parseVersion(result.output());
+            status = STATUS_DETECTED;
+        } else {
+            log.warn("Tool {} detection failed with exit code {}", BUBBLEWRAP, result.exitCode());
+        }
+        return new SystemTool(BUBBLEWRAP, version, status,
+                "Unprivileged user-namespace sandboxing tool used for native Linux build isolation.", "LGPL-2.0",
+                "https://github.com/containers/bubblewrap", false);
+    }
+
+    SystemTool detectSeatbeltTool() {
+        String version = VERSION_NOT_FOUND;
+        String status = STATUS_MISSING;
+        if (Files.isExecutable(MACOS_SANDBOX_EXEC_PATH)) {
+            version = "Built-in (macOS)";
+            status = STATUS_DETECTED;
+        }
+        return new SystemTool(SEATBELT, version, status,
+                "macOS kernel sandbox utility (/usr/bin/sandbox-exec) used for native build isolation.", "macOS System",
+                "https://developer.apple.com/documentation/security/app-sandbox", false);
     }
 
     Path getCacheFilePath() {

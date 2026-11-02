@@ -188,6 +188,7 @@ public final class SystemToolsPanel extends JPanel {
             case SystemTool.TOOL_GIT -> Codicons.SOURCE_CONTROL;
             case SystemTool.TOOL_CTAGS -> Codicons.SYMBOL_CLASS;
             case SystemTool.TOOL_DOCKER -> Codicons.SERVER_ENVIRONMENT;
+            case SystemTool.TOOL_BUBBLEWRAP, SystemTool.TOOL_SEATBELT -> Codicons.SHIELD;
             default -> Codicons.TOOLS;
         };
     }
@@ -234,6 +235,7 @@ public final class SystemToolsPanel extends JPanel {
             case SystemTool.TOOL_CTAGS -> "sudo apt install universal-ctags";
             case SystemTool.TOOL_GIT -> "sudo apt install git";
             case SystemTool.TOOL_DOCKER -> "sudo apt install docker.io";
+            case SystemTool.TOOL_BUBBLEWRAP -> "sudo apt install bubblewrap";
             default -> "";
         };
     }

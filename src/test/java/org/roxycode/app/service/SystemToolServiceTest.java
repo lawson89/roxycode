@@ -50,6 +50,15 @@ class SystemToolServiceTest {
         assertTrue(SystemToolService.areAllRequiredToolsDetected(allRequiredDetectedGitAndDockerMissing));
         assertFalse(SystemToolService.isGitDetected(allRequiredDetectedGitAndDockerMissing));
         assertFalse(SystemToolService.isGitDetected(null));
+        assertFalse(SystemToolService.isNativeSandboxDetected(null));
+        assertFalse(SystemToolService.isNativeSandboxDetected(allRequiredDetectedGitAndDockerMissing));
+        assertTrue(SystemToolService.isNativeSandboxDetected(List
+                .of(SystemTool.ofKnownTool(SystemTool.TOOL_BUBBLEWRAP, "0.10.0", SystemToolService.STATUS_DETECTED))));
+        assertTrue(SystemToolService.isNativeSandboxDetected(List.of(SystemTool.ofKnownTool(SystemTool.TOOL_SEATBELT,
+                "Built-in (macOS)", SystemToolService.STATUS_DETECTED))));
+        assertFalse(SystemToolService.isNativeSandboxDetected(List.of(
+                SystemTool.ofKnownTool(SystemTool.TOOL_BUBBLEWRAP, "Not found", SystemToolService.STATUS_MISSING),
+                SystemTool.ofKnownTool(SystemTool.TOOL_SEATBELT, "Not found", SystemToolService.STATUS_MISSING))));
         assertFalse(
                 SystemTool.ofKnownTool(SystemTool.TOOL_GIT, "Not found", SystemToolService.STATUS_MISSING).required());
 

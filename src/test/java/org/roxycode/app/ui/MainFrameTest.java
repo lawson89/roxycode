@@ -74,7 +74,7 @@ class MainFrameTest {
         SettingsPanel settingsPanel = new SettingsPanel(settingsService);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         when(buildToolService.getConfigContent()).thenReturn("");
-        buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, systemToolService, projectService);
+        buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, projectService);
         ContextManagerPanel contextManagerPanel = new ContextManagerPanel(mock(PromptService.class));
 
         return new MainFrame(settingsService, projectService, chatMemory, headerPanel, statusPanel, qaWorkspacePanel,

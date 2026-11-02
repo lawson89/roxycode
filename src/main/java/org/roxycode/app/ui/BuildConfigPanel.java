@@ -14,16 +14,13 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.services.BuildContainerService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GenericBuildToolService.BuildTemplateInfo;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
-import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
-import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
@@ -44,19 +41,13 @@ public final class BuildConfigPanel extends JPanel {
     static final String SUBTITLE_TEXT = "Configure project-specific Gemini model override and build execution commands (build.toml).";
     static final String SECTION_AI_MODEL_TITLE = "AI Model Override";
     static final String SECTION_BUILD_CONFIG_TITLE = "Build Configuration (build.toml)";
-    static final String RECHECK_DOCKER_TEXT = "Re-check Docker";
-    static final String CHECKING_DOCKER_TEXT = "Checking...";
     static final String APPLY_TEMPLATE_TEXT = "Apply Template";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     private static final String DEFAULT_TEMPLATE_ID = "default";
-    static final String DOCKER_MISSING_WARNING_TEXT = "Docker was not detected in System Tools. Running builds in Testcontainers is unavailable — build and test commands will execute directly on your host machine and can potentially modify your system.";
-    static final String CONTAINER_ACTIVE_TEXT = "Testcontainers Isolation Active — Builds run inside an isolated Docker container.";
-    static final String HOST_EXECUTION_ACTIVE_TEXT = "Host Execution Active — Container isolation is available via Docker ([container] enabled = true). Builds currently run on your host machine.";
     static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below and click 'Confirm & Save Settings'.";
 
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
-    private final transient SystemToolService systemToolService;
     private final transient ProjectService projectService;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
@@ -71,17 +62,11 @@ public final class BuildConfigPanel extends JPanel {
     final JPanel unconfirmedBannerPanel;
     final JLabel unconfirmedBannerIconLabel;
     final JLabel unconfirmedBannerMessageLabel;
-    final JPanel bannerPanel;
-    final JLabel bannerIconLabel;
-    final JLabel bannerMessageLabel;
-    final JCheckBox containerToggleCheckBox;
-    final JButton recheckDockerButton;
     final RSyntaxTextArea textArea;
     final JButton saveButton;
     final JLabel statusLabel;
     private final Timer statusTimer;
 
-    boolean dockerAvailable = false;
     private boolean updatingTextProgrammatically = false;
     private boolean textEditedByUser = false;
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
@@ -91,12 +76,11 @@ public final class BuildConfigPanel extends JPanel {
 
     @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
-            SystemToolService systemToolService, @Nullable ProjectService projectService) {
+            @Nullable ProjectService projectService) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
-        this.systemToolService = systemToolService;
         this.projectService = projectService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[][][][][][][grow][]"));
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[][][][][][grow][]"));
         setOpaque(true);
 
         titleLabel = new JLabel(TITLE_TEXT);
@@ -170,23 +154,6 @@ public final class BuildConfigPanel extends JPanel {
         unconfirmedBannerPanel.setVisible(false);
         add(unconfirmedBannerPanel, "growx, wrap, gapbottom 8, hidemode 3");
 
-        bannerPanel = new JPanel(new MigLayout("fillx, insets 10 14 10 14", "[][grow][][]", "[]"));
-        bannerPanel.setOpaque(false);
-        bannerIconLabel = new JLabel();
-        bannerMessageLabel = new JLabel();
-        containerToggleCheckBox = new JCheckBox("Run builds in Testcontainers (Docker)");
-        containerToggleCheckBox.setOpaque(false);
-        containerToggleCheckBox.addActionListener(e -> setContainerEnabledInToml(containerToggleCheckBox.isSelected()));
-
-        recheckDockerButton = new JButton(RECHECK_DOCKER_TEXT);
-        recheckDockerButton.addActionListener(e -> refreshDockerStatus());
-
-        bannerPanel.add(bannerIconLabel, "gapright 8");
-        bannerPanel.add(bannerMessageLabel, "growx, wmin 100");
-        bannerPanel.add(containerToggleCheckBox, "gapleft 10");
-        bannerPanel.add(recheckDockerButton, "gapleft 10");
-        add(bannerPanel, "growx, wrap, gapbottom 10");
-
         textArea = new RSyntaxTextArea();
         textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_INI);
         textArea.setCodeFoldingEnabled(true);
@@ -210,10 +177,8 @@ public final class BuildConfigPanel extends JPanel {
         statusTimer.setRepeats(false);
 
         applySectionStyling();
-        CompletableFuture<String> configFuture = loadConfig();
+        lastAsyncFuture = loadConfig();
         updateBannerState();
-        CompletableFuture<Boolean> dockerFuture = loadInitialDockerStatus();
-        lastAsyncFuture = CompletableFuture.allOf(configFuture, dockerFuture);
     }
 
     String formatTemplateDisplayText(BuildTemplateInfo info) {
@@ -353,60 +318,6 @@ public final class BuildConfigPanel extends JPanel {
         });
     }
 
-    @EventListener
-    public void onSystemToolsUpdated(SystemToolsUpdatedEvent event) {
-        if (event != null) {
-            Edt.run(() -> setDockerAvailable(event.dockerAvailable()));
-        }
-    }
-
-    CompletableFuture<Boolean> loadInitialDockerStatus() {
-        if (systemToolService == null) {
-            setDockerAvailable(false);
-            CompletableFuture<Boolean> done = CompletableFuture.completedFuture(false);
-            lastAsyncFuture = done;
-            return done;
-        }
-        CompletableFuture<Boolean> future = Edt.supplyAsync(() -> {
-            try {
-                return systemToolService.isDockerAvailable().get();
-            } catch (Exception e) {
-                return false;
-            }
-        }, available -> setDockerAvailable(Boolean.TRUE.equals(available)));
-        lastAsyncFuture = future;
-        return future;
-    }
-
-    public CompletableFuture<Boolean> refreshDockerStatus() {
-        if (systemToolService == null) {
-            setDockerAvailable(false);
-            CompletableFuture<Boolean> done = CompletableFuture.completedFuture(false);
-            lastAsyncFuture = done;
-            return done;
-        }
-        recheckDockerButton.setEnabled(false);
-        recheckDockerButton.setText(CHECKING_DOCKER_TEXT);
-        CompletableFuture<Boolean> future = Edt.supplyAsync(() -> {
-            try {
-                return systemToolService.refreshDockerAvailable().get();
-            } catch (Exception e) {
-                return false;
-            }
-        }, available -> {
-            setDockerAvailable(Boolean.TRUE.equals(available));
-            recheckDockerButton.setText(RECHECK_DOCKER_TEXT);
-            recheckDockerButton.setEnabled(true);
-        });
-        lastAsyncFuture = future;
-        return future;
-    }
-
-    void setDockerAvailable(boolean available) {
-        this.dockerAvailable = available;
-        updateBannerState();
-    }
-
     private void onTomlTextEdited() {
         if (!updatingTextProgrammatically) {
             textEditedByUser = true;
@@ -420,7 +331,7 @@ public final class BuildConfigPanel extends JPanel {
         if (modelCardPanel != null) {
             applySectionStyling();
         }
-        if (bannerPanel != null) {
+        if (unconfirmedBannerPanel != null) {
             updateBannerState();
         }
     }
@@ -443,60 +354,6 @@ public final class BuildConfigPanel extends JPanel {
             unconfirmedBannerPanel.revalidate();
             unconfirmedBannerPanel.repaint();
         }
-        String currentText = "";
-        if (textArea != null) {
-            currentText = textArea.getText();
-        }
-        boolean containerEnabled = BuildContainerService.isContainerEnabledInToml(currentText);
-        containerToggleCheckBox.setSelected(containerEnabled);
-        containerToggleCheckBox.setEnabled(dockerAvailable);
-
-        if (!dockerAvailable) {
-            applyTintedBanner(Codicons.WARNING, SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06),
-                    "Component.warning.borderColor", "Actions.Yellow"), DOCKER_MISSING_WARNING_TEXT);
-        } else if (containerEnabled) {
-            applyTintedBanner(Codicons.SHIELD, SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"),
-                    CONTAINER_ACTIVE_TEXT);
-        } else {
-            Color infoColor = SwingHtmlUtils.getAccentColor();
-            Color borderColor = SwingHtmlUtils.getUiColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
-            Color panelBg = SwingHtmlUtils.getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background");
-            applyBannerStyle(
-                    Codicons.INFO, infoColor, "arc: 12; border: 1,1,1,1," + SwingHtmlUtils.toHex(borderColor)
-                            + ",1,12; background: darken(" + SwingHtmlUtils.toHex(panelBg) + ", 3%)",
-                    HOST_EXECUTION_ACTIVE_TEXT);
-        }
-        bannerPanel.revalidate();
-        bannerPanel.repaint();
-    }
-
-    private void applyTintedBanner(Codicons icon, Color color, String message) {
-        String hex = SwingHtmlUtils.toHex(color);
-        String bgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(color, 0.15));
-        applyBannerStyle(icon, color, "arc: 12; border: 1,1,1,1," + hex + ",1,12; background: " + bgHex, message);
-    }
-
-    private void applyBannerStyle(Codicons icon, Color iconColor, String style, String message) {
-        bannerIconLabel.setIcon(FontIcon.of(icon, 18, iconColor));
-        bannerMessageLabel.setText(message);
-        bannerPanel.putClientProperty(FlatClientProperties.STYLE, style);
-    }
-
-    @SuppressWarnings("PMD.UnusedAssignment")
-    void setContainerEnabledInToml(boolean enabled) {
-        String current = textArea.getText();
-        String updated = BuildContainerService.updateContainerEnabledInToml(current, enabled);
-        if (!updated.equals(current)) {
-            updatingTextProgrammatically = true;
-            try {
-                int caret = textArea.getCaretPosition();
-                textArea.setText(updated);
-                textArea.setCaretPosition(Math.min(caret, updated.length()));
-            } finally {
-                updatingTextProgrammatically = false;
-            }
-        }
-        updateBannerState();
     }
 
     @SuppressWarnings("PMD.UnusedAssignment")

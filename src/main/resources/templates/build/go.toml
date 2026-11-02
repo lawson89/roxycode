@@ -17,7 +17,11 @@ ROXY_CODE = "true"
 error_regex = '^.*:\d+:\d+: '
 test_failure_regex = '^--- FAIL:'
 
-[container]
-enabled = false
+[sandbox]
+# Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
+mode = "none"
+# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
+writable_paths = ["~/.cache/go-build", "~/go/pkg", "~/Library/Caches/go-build"]
+# Docker settings (used when mode = "docker")
 image = "golang:1.23"
 workdir = "/workspace"

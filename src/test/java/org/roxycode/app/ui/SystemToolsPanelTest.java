@@ -138,6 +138,12 @@ public class SystemToolsPanelTest {
                 SystemToolsPanel.resolveInstallCommand("Universal Ctags", "Linux"));
         assertEquals("sudo apt install git", SystemToolsPanel.resolveInstallCommand("Git", "Linux"));
         assertEquals("sudo apt install docker.io", SystemToolsPanel.resolveInstallCommand("Docker", "Linux"));
+        assertEquals("sudo apt install bubblewrap",
+                SystemToolsPanel.resolveInstallCommand(SystemTool.TOOL_BUBBLEWRAP, "Linux"));
+        assertEquals(org.kordamp.ikonli.codicons.Codicons.SHIELD,
+                SystemToolsPanel.resolveToolIcon(SystemTool.TOOL_BUBBLEWRAP));
+        assertEquals(org.kordamp.ikonli.codicons.Codicons.SHIELD,
+                SystemToolsPanel.resolveToolIcon(SystemTool.TOOL_SEATBELT));
         assertEquals("", SystemToolsPanel.resolveInstallCommand("UnknownTool", "Linux"));
         assertEquals("", SystemToolsPanel.resolveInstallCommand(null, "Linux"));
     }
