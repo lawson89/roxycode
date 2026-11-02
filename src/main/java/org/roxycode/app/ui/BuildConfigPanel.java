@@ -14,7 +14,6 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GenericBuildToolService.BuildTemplateInfo;
@@ -22,13 +21,11 @@ import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.GeminiModelConfig;
-import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
-import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,20 +47,16 @@ public final class BuildConfigPanel extends JPanel {
     static final String RECHECK_DOCKER_TEXT = "Re-check Docker";
     static final String CHECKING_DOCKER_TEXT = "Checking...";
     static final String APPLY_TEMPLATE_TEXT = "Apply Template";
-    static final String AUTO_DETECT_AI_TEXT = "✨ Auto-Detect with AI";
-    static final String DETECTING_AI_TEXT = "Detecting...";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
+    private static final String DEFAULT_TEMPLATE_ID = "default";
     static final String DOCKER_MISSING_WARNING_TEXT = "Docker was not detected in System Tools. Running builds in Testcontainers is unavailable — build and test commands will execute directly on your host machine and can potentially modify your system.";
     static final String CONTAINER_ACTIVE_TEXT = "Testcontainers Isolation Active — Builds run inside an isolated Docker container.";
     static final String HOST_EXECUTION_ACTIVE_TEXT = "Host Execution Active — Container isolation is available via Docker ([container] enabled = true). Builds currently run on your host machine.";
-    static final String AI_BUILD_DETECT_PROMPT_PATH = "prompts/build_detect.md";
-    static final String AI_BUILD_DETECT_PROMPT = loadAiBuildDetectPrompt();
 
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
     private final transient SystemToolService systemToolService;
     private final transient ProjectService projectService;
-    private final transient AiService aiService;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
     final JPanel modelCardPanel;
@@ -74,7 +67,6 @@ public final class BuildConfigPanel extends JPanel {
     final JLabel buildSectionHeaderLabel;
     final JComboBox<BuildTemplateInfo> templateCombo;
     final JButton applyTemplateButton;
-    final JButton autoDetectAiButton;
     final JPanel bannerPanel;
     final JLabel bannerIconLabel;
     final JLabel bannerMessageLabel;
@@ -88,25 +80,18 @@ public final class BuildConfigPanel extends JPanel {
     boolean dockerAvailable = false;
     private boolean updatingTextProgrammatically = false;
     private boolean textEditedByUser = false;
-    String detectedTemplateId = "default";
+    String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Consumer<String> errorDialogPresenter;
     private transient Runnable onConfirmSavedCallback;
-    CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
-
-    public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
-            SystemToolService systemToolService, @Nullable ProjectService projectService) {
-        this(buildToolService, settingsService, systemToolService, projectService, null);
-    }
+    transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
-            SystemToolService systemToolService, @Nullable ProjectService projectService,
-            @Nullable AiService aiService) {
+            SystemToolService systemToolService, @Nullable ProjectService projectService) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         this.systemToolService = systemToolService;
         this.projectService = projectService;
-        this.aiService = aiService;
         setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[][][][][][grow][]"));
         setOpaque(true);
 
@@ -145,7 +130,7 @@ public final class BuildConfigPanel extends JPanel {
                 "font: bold +1");
         add(buildSectionHeaderLabel, "growx, wrap, gapbottom 6");
 
-        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0", "[][grow][][]", "[]"));
+        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0", "[][grow][]", "[]"));
         templateToolbar.setOpaque(false);
         JLabel templateLabel = new JLabel("Build Template:");
         templateCombo = new JComboBox<>();
@@ -164,13 +149,10 @@ public final class BuildConfigPanel extends JPanel {
         });
         applyTemplateButton = new JButton(APPLY_TEMPLATE_TEXT);
         applyTemplateButton.addActionListener(e -> applySelectedTemplate());
-        autoDetectAiButton = new JButton(AUTO_DETECT_AI_TEXT);
-        autoDetectAiButton.addActionListener(e -> autoDetectWithAi());
 
         templateToolbar.add(templateLabel, "gapright 6");
         templateToolbar.add(templateCombo, "w 220:280:360, gapright 8");
-        templateToolbar.add(applyTemplateButton, "gapright 8");
-        templateToolbar.add(autoDetectAiButton);
+        templateToolbar.add(applyTemplateButton);
         add(templateToolbar, "growx, wrap, gapbottom 8");
 
         loadTemplateOptions();
@@ -225,7 +207,7 @@ public final class BuildConfigPanel extends JPanel {
         if (info == null) {
             return "";
         }
-        if (info.id().equals(detectedTemplateId) && !"default".equals(info.id())) {
+        if (info.id().equals(detectedTemplateId) && !DEFAULT_TEMPLATE_ID.equals(info.id())) {
             return info.displayName() + " (auto-detected)";
         }
         return info.displayName();
@@ -243,10 +225,10 @@ public final class BuildConfigPanel extends JPanel {
             if (detected != null && !detected.isBlank()) {
                 detectedTemplateId = detected;
             } else {
-                detectedTemplateId = "default";
+                detectedTemplateId = DEFAULT_TEMPLATE_ID;
             }
         } else {
-            detectedTemplateId = "default";
+            detectedTemplateId = DEFAULT_TEMPLATE_ID;
         }
         BuildTemplateInfo toSelect = null;
         for (BuildTemplateInfo info : templates) {
@@ -263,6 +245,7 @@ public final class BuildConfigPanel extends JPanel {
         }
     }
 
+    @SuppressWarnings("PMD.UnusedAssignment")
     void applySelectedTemplate() {
         BuildTemplateInfo selected = (BuildTemplateInfo) templateCombo.getSelectedItem();
         if (selected == null || buildToolService == null) {
@@ -290,71 +273,6 @@ public final class BuildConfigPanel extends JPanel {
             statusLabel.setText("Applied '" + selected.displayName() + "' template.");
             statusTimer.restart();
         }
-    }
-
-    public CompletableFuture<String> autoDetectWithAi() {
-        if (aiService == null) {
-            showSaveErrorDialog("AI Service is not available.");
-            CompletableFuture<String> done = CompletableFuture.completedFuture("");
-            lastAsyncFuture = done;
-            return done;
-        }
-        autoDetectAiButton.setEnabled(false);
-        autoDetectAiButton.setText(DETECTING_AI_TEXT);
-        CompletableFuture<String> future = Edt.supplyAsync(() -> {
-            String rawResponse = aiService.chat("build-detect:default", WorkflowPhase.EXPLORE, AI_BUILD_DETECT_PROMPT,
-                    List.of());
-            return stripMarkdownCodeFences(rawResponse);
-        }, tomlContent -> {
-            autoDetectAiButton.setText(AUTO_DETECT_AI_TEXT);
-            autoDetectAiButton.setEnabled(true);
-            if (tomlContent != null && !tomlContent.isBlank()) {
-                updatingTextProgrammatically = true;
-                try {
-                    textArea.setText(tomlContent);
-                    textArea.setCaretPosition(0);
-                    textEditedByUser = false;
-                } finally {
-                    updatingTextProgrammatically = false;
-                }
-                updateBannerState();
-                statusLabel.setText("AI build configuration generated! Review and click Confirm & Save Settings.");
-                statusTimer.restart();
-            }
-        }, ex -> {
-            autoDetectAiButton.setText(AUTO_DETECT_AI_TEXT);
-            autoDetectAiButton.setEnabled(true);
-            Throwable cause = ExceptionUtils.getRootCause(ex);
-            log.error("AI build auto-detection failed: {}", cause.getMessage());
-            showSaveErrorDialog("AI auto-detection failed: " + cause.getMessage());
-        });
-        lastAsyncFuture = future;
-        return future;
-    }
-
-    private static String loadAiBuildDetectPrompt() {
-        try {
-            return PathUtils.readClasspathResourceUtf8(AI_BUILD_DETECT_PROMPT_PATH, BuildConfigPanel.class).strip();
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to load " + AI_BUILD_DETECT_PROMPT_PATH, e);
-        }
-    }
-
-    static String stripMarkdownCodeFences(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        String trimmed = raw.trim();
-        if (trimmed.startsWith("```")) {
-            int firstNewline = trimmed.indexOf('\n');
-            if (firstNewline >= 0) {
-                trimmed = trimmed.substring(firstNewline + 1);
-            }
-            if (trimmed.endsWith("```")) {
-                trimmed = trimmed.substring(0, trimmed.length() - 3);
-            }
-        }
-        return trimmed.trim();
     }
 
     private String resolveGlobalDefaultModel() {
@@ -551,6 +469,7 @@ public final class BuildConfigPanel extends JPanel {
         updateBannerState();
     }
 
+    @SuppressWarnings("PMD.UnusedAssignment")
     CompletableFuture<String> loadConfig() {
         if (buildToolService == null) {
             CompletableFuture<String> done = CompletableFuture.completedFuture("");
@@ -663,10 +582,6 @@ public final class BuildConfigPanel extends JPanel {
 
     JButton getApplyTemplateButton() {
         return applyTemplateButton;
-    }
-
-    JButton getAutoDetectAiButton() {
-        return autoDetectAiButton;
     }
 
     private void updateTextAreaTheme() {

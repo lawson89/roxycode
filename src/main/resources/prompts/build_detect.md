@@ -1,3 +1,0 @@
-Analyze the active project's build files (such as pom.xml, build.gradle, package.json, Makefile, CMakeLists.txt, pyproject.toml, Cargo.toml, go.mod, or root scripts) using fileReadService or grepService.
-Return ONLY a valid TOML configuration for RoxyCode's build.toml with [commands] (install, clean, compile, build, test_all, test_single, lint, lint_single, format, format_single), [env], [parse] (error_regex, test_failure_regex), and [container] (enabled = false, image = "ubuntu:24.04", workdir = "/workspace").
-Do not wrap the response in markdown code fences or include any explanations outside the TOML.

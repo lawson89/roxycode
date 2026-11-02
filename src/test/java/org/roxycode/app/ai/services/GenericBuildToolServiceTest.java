@@ -129,12 +129,13 @@ class GenericBuildToolServiceTest {
         String mavenContent = buildToolService.getConfigContent();
         assertTrue(Files.exists(configPath));
         assertFalse(Files.exists(projectRoot.resolve(".roxycode")));
-        assertContainsAll(mavenContent, "[commands]", "./mvnw test-compile", "./mvnw pmd:check spotless:check",
-                "[container]", "eclipse-temurin:25-jdk");
+        assertContainsAll(mavenContent, "[commands]", "./mvnw test-compile", "# Examples:", "pmd:check", "[container]",
+                "eclipse-temurin:25-jdk");
         GenericBuildToolService.BuildConfig parsedMaven = assertDoesNotThrow(() -> buildToolService.loadConfig());
-        assertEquals("./mvnw pmd:check spotless:check", parsedMaven.commands().lint());
-        assertTrue(parsedMaven.commands().lintSingle().contains("{file}"));
-        assertTrue(parsedMaven.commands().formatSingle().contains("{file}"));
+        assertEquals("", parsedMaven.commands().lint());
+        assertEquals("", parsedMaven.commands().lintSingle());
+        assertEquals("", parsedMaven.commands().format());
+        assertEquals("", parsedMaven.commands().formatSingle());
 
         Files.deleteIfExists(configPath);
         Files.deleteIfExists(projectDataDir.resolve("tmp/build.log"));
@@ -168,7 +169,8 @@ class GenericBuildToolServiceTest {
         try (URLClassLoader emptyClassLoader = new URLClassLoader(new URL[0], null)) {
             Thread.currentThread().setContextClassLoader(emptyClassLoader);
             String pyContent = buildToolService.getConfigContent();
-            assertContainsAll(pyContent, "[commands]", "pytest", "ruff check {file}", "[container]", "python:3.12");
+            assertContainsAll(pyContent, "[commands]", "pytest", "# Examples:", "ruff check {file}", "[container]",
+                    "python:3.12");
         } finally {
             Thread.currentThread().setContextClassLoader(originalTCCL);
         }

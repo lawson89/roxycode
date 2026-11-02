@@ -216,19 +216,13 @@ class BuildConfigPanelTest {
     }
 
     @Test
-    void testTemplateSelectorApplyTemplateAndAutoDetectWithAi() throws Exception {
+    void testTemplateSelectorAndApplyTemplate() throws Exception {
         when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
         when(buildToolService.getAvailableTemplates()).thenReturn(GenericBuildToolService.AVAILABLE_TEMPLATES);
         when(buildToolService.detectTemplate()).thenReturn("maven");
         when(buildToolService.loadTemplateContent("rust")).thenReturn("[commands]\ncompile = 'cargo check'\n");
 
-        org.roxycode.app.service.AiService aiService = mock(org.roxycode.app.service.AiService.class);
-        when(aiService.chat(anyString(), eq(org.roxycode.app.ai.WorkflowPhase.EXPLORE), anyString(), anyList()))
-                .thenReturn("```toml\n[commands]\ncompile = 'make build'\n```");
-
-        BuildConfigPanel panel = SwingTestUtils.callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService,
-                systemToolService, projectService, aiService));
-        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        BuildConfigPanel panel = createPanelOnEdt();
 
         GenericBuildToolService.BuildTemplateInfo selected = (GenericBuildToolService.BuildTemplateInfo) panel
                 .getTemplateCombo().getSelectedItem();
@@ -247,10 +241,5 @@ class BuildConfigPanelTest {
             panel.getApplyTemplateButton().doClick();
         });
         assertTrue(panel.textArea.getText().contains("cargo check"));
-
-        SwingTestUtils.runOnEdt(() -> panel.getAutoDetectAiButton().doClick());
-        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-        assertTrue(panel.textArea.getText().contains("make build"));
-        assertFalse(panel.textArea.getText().contains("```"));
     }
 }
