@@ -33,7 +33,7 @@ public final class MainFrame extends JPanel {
 
     static final String QA_VIEW = "QA_VIEW";
     static final String TASK_VIEW = "TASK_VIEW";
-    private static final String CACHE_VIEW = "CACHE";
+    static final String CACHE_VIEW = "CACHE";
     private static final String API_VIEW = "API";
     static final String TOOLS_VIEW = "TOOLS";
     static final String SETTINGS_VIEW = "SETTINGS";
@@ -51,6 +51,7 @@ public final class MainFrame extends JPanel {
     private final HeaderPanel header;
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
+    private final CodebaseCachePanel codebaseCachePanel;
     SidebarPanel sidebar;
     String currentCard = QA_VIEW;
     private boolean initialToolsCheckComplete;
@@ -70,6 +71,7 @@ public final class MainFrame extends JPanel {
         this.header = header;
         this.qaWorkspacePanel = qaWorkspacePanel;
         this.taskWorkspacePanel = taskWorkspacePanel;
+        this.codebaseCachePanel = codebaseCachePanel;
         if (GraphicsEnvironment.isHeadless()) {
             this.hostFrame = null;
         } else {
@@ -344,6 +346,8 @@ public final class MainFrame extends JPanel {
             qaWorkspacePanel.focusChatInput();
         } else if (TASK_VIEW.equals(cardName) && taskWorkspacePanel != null) {
             taskWorkspacePanel.onViewShown();
+        } else if (CACHE_VIEW.equals(cardName) && codebaseCachePanel != null) {
+            codebaseCachePanel.refreshStatus();
         }
     }
 

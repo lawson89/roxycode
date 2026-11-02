@@ -28,6 +28,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.AiConfig;
+import org.roxycode.app.ai.AiMemoryConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.TurnToolContext;
@@ -42,6 +43,8 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -239,6 +242,31 @@ class AiServiceTest {
         aiService.onSettingsChanged(new SettingsChangedEvent(settings));
         assertEquals("hot-reloaded-key-123", reloadedKeyRef.get());
         assertEquals("hot-reloaded-key-123", aiService.getActiveApiKey());
+
+        settings.setGeminiApiKey("   ");
+        aiService.onSettingsChanged(new SettingsChangedEvent(settings));
+        assertEquals("", aiService.getActiveApiKey());
+
+        AiMemoryConfig memoryConfig = new AiMemoryConfig();
+        ChatMemory dynamicMemory = memoryConfig.chatMemory(memoryConfig.chatMemoryRepository(), settingsService);
+        settings.setMaxChatMemoryMessages(5);
+        dynamicMemory.add("conv-1", List.of(new SystemMessage("sys"), new UserMessage("u1"), new AssistantMessage("a1"),
+                new UserMessage("u2"), new AssistantMessage("a2")));
+        assertEquals(5, dynamicMemory.get("conv-1").size());
+
+        settings.setMaxChatMemoryMessages(3);
+        List<Message> shrunkOnGet = dynamicMemory.get("conv-1");
+        assertEquals(3, shrunkOnGet.size());
+        assertTrue(shrunkOnGet.get(0) instanceof SystemMessage);
+        assertEquals("u2", shrunkOnGet.get(1).getText());
+        assertEquals("a2", shrunkOnGet.get(2).getText());
+
+        dynamicMemory.add("conv-1", List.of(new UserMessage("u3")));
+        List<Message> shrunkOnAdd = dynamicMemory.get("conv-1");
+        assertEquals(3, shrunkOnAdd.size());
+        assertTrue(shrunkOnAdd.get(0) instanceof SystemMessage);
+        assertEquals("a2", shrunkOnAdd.get(1).getText());
+        assertEquals("u3", shrunkOnAdd.get(2).getText());
 
         assertThrows(IllegalArgumentException.class, () -> aiService.testConnection("   ", "gemini-3.5-flash"));
         aiService.setConnectionTester((key, model) -> key + ":" + model);

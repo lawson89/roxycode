@@ -218,14 +218,11 @@ public class PromptService {
             case REVIEW -> REVIEW_PROMPT_PATH;
         };
         String raw = readClasspathResource(path);
-        if (phase == WorkflowPhase.EXPLORE) {
-            int maxTurns = AppSettings.DEFAULT_MAX_AGENT_TOOL_TURNS;
-            if (settingsService != null && settingsService.getSettings() != null) {
-                maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
-            }
-            return StringSubstitutor.replace(raw, Map.of("maxTurns", maxTurns));
+        int maxTurns = AppSettings.DEFAULT_MAX_AGENT_TOOL_TURNS;
+        if (settingsService != null && settingsService.getSettings() != null) {
+            maxTurns = settingsService.getSettings().getMaxAgentToolTurns();
         }
-        return raw;
+        return StringSubstitutor.replace(raw, Map.of("maxTurns", maxTurns));
     }
 
     public String loadJexlContext() {

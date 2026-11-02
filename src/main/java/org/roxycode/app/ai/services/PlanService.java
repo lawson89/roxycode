@@ -24,6 +24,7 @@ import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
@@ -119,11 +120,19 @@ public class PlanService {
     }
 
     @EventListener
+    public synchronized void onProjectChanged(ProjectChangedEvent event) {
+        resetWorkflow();
+    }
+
+    @EventListener
     public synchronized void onFileChanged(FileChangedEvent event) {
-        if (event == null || StringUtils.isBlank(event.path()) || currentPlan == null) {
+        if (event == null || currentPlan == null) {
             return;
         }
-        ImplementationPlan updated = currentPlan.withRecordedFileChange(event.path(), event.changeType());
+        ImplementationPlan updated = currentPlan;
+        if (StringUtils.isNotBlank(event.path())) {
+            updated = updated.withRecordedFileChange(event.path(), event.changeType());
+        }
         if (currentPhase == WorkflowPhase.CODE) {
             updated = updated.withVerificationStepCompleted(ImplementationPlan.STEP_COMPILE, false)
                     .withVerificationStepCompleted(ImplementationPlan.STEP_UNIT_TESTS, false);

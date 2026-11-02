@@ -21,6 +21,7 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
@@ -139,6 +140,15 @@ class PlanServiceTest {
 
         archivingService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
         archivingService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
+        int eventsBeforeBlankChange = planEvents.get();
+        archivingService.onFileChanged(new FileChangedEvent("", FileChangedEvent.ChangeType.MODIFIED));
+        assertFalse(archivingService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertFalse(archivingService.getCurrentPlan().technicalSteps().get(2).completed());
+        assertTrue(planEvents.get() > eventsBeforeBlankChange);
+        assertEquals("MODIFIED src/Main.java", archivingService.getCurrentPlan().formatChangesText());
+
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
         assertTrue(archivingService.requestReview("Ready for review").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
 
@@ -166,7 +176,15 @@ class PlanServiceTest {
                 "MODIFIED src/Main.java");
         verify(eventPublisher).publishEvent(argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent));
 
-        archivingService.resetWorkflow();
+        archivingService.submitPlan("Temp Plan", "Goal", new String[0], new String[]{"Step"});
+        archivingService.requestDevelopment("Go");
+        assertNotNull(archivingService.getCurrentPlan());
+        assertEquals(WorkflowPhase.CODE, archivingService.getPendingPhase());
+
+        archivingService.onProjectChanged(new ProjectChangedEvent(projectRoot));
+        assertNull(archivingService.getCurrentPlan());
+        assertNull(archivingService.getPendingPhase());
+        assertEquals(WorkflowPhase.PLAN, archivingService.getCurrentPhase());
         assertEquals(Set.of(WorkflowPhase.PLAN), archivingService.getVisitedPhases());
     }
 }

@@ -6,6 +6,9 @@ public final class TokenUtils {
     }
 
     public static long estimateTokens(String text) {
-        return text == null ? 0 : text.length() / 4;
+        if (text == null) {
+            return 0;
+        }
+        return text.length() / 4;
     }
 }

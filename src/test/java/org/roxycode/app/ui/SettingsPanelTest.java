@@ -77,14 +77,16 @@ class SettingsPanelTest {
         settingsPanel.maxMessagesSpinner.setValue(120);
         settingsPanel.saveButton.doClick();
         assertEquals(120, settings.getMaxChatMemoryMessages());
-        assertEquals(SettingsPanel.SAVED_RESTART_REQUIRED_TEXT, settingsPanel.statusLabel.getText());
+        assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.statusLabel.getText());
 
+        settings.setGeminiApiKey("synced-from-event-key");
         settings.setGeminiModel(modelCombo.getItemAt(1).apiName());
         settings.setMaxAgentToolTurns(100);
         settings.setMaxChatMemoryMessages(250);
         settings.setLogToolCalls(false);
         settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
         SwingTestUtils.flushEdt();
+        assertEquals("synced-from-event-key", new String(settingsPanel.geminiApiKeyField.getPassword()));
         assertEquals(modelCombo.getItemAt(1).apiName(), ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
         assertEquals(100, settingsPanel.maxAgentToolTurnsSpinner.getValue());
         assertEquals(250, settingsPanel.maxMessagesSpinner.getValue());
@@ -94,7 +96,6 @@ class SettingsPanelTest {
             listener.actionPerformed(null);
         }
         assertEquals("", settingsPanel.statusLabel.getText());
-        assertEquals(SettingsPanel.RESTART_LEGEND_TEXT, settingsPanel.legendLabel.getText());
     }
 
     @Test

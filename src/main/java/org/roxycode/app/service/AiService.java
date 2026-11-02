@@ -152,9 +152,15 @@ public class AiService implements AutoCloseable {
             newApiKey = resolveConfiguredApiKey();
         }
         String trimmedKey = StringUtils.trimToEmpty(newApiKey);
-        if (!trimmedKey.isEmpty() && !Objects.equals(trimmedKey, this.activeApiKey)) {
-            reloadChatClient(trimmedKey);
+        if (Objects.equals(trimmedKey, this.activeApiKey)) {
+            return;
         }
+        if (trimmedKey.isEmpty()) {
+            this.activeApiKey = "";
+            close();
+            return;
+        }
+        reloadChatClient(trimmedKey);
     }
 
     synchronized void reloadChatClient(String apiKey) {

@@ -40,6 +40,9 @@ class MainFrameTest {
 
     private ProjectService projectService;
     private PlanService planService;
+    private RepoMapPackerService repoMapPackerService;
+    private JexlServiceRegistry jexlServiceRegistry;
+    private JexlApiPanel jexlApiPanel;
     private TaskWorkspacePanel taskWorkspacePanel;
     private BuildConfigPanel buildConfigPanel;
 
@@ -68,9 +71,11 @@ class MainFrameTest {
         taskWorkspacePanel = new TaskWorkspacePanel(
                 ChatPanel.createFeaturePanel(aiService, planService, pub, chatMemory, settingsService, null),
                 planService, new PlanPanel(planService), null);
-        CodebaseCachePanel codebaseCachePanel = new CodebaseCachePanel(mock(RepoMapPackerService.class),
-                mock(PromptService.class));
-        JexlApiPanel jexlApiPanel = new JexlApiPanel(new JexlServiceRegistry());
+        repoMapPackerService = mock(RepoMapPackerService.class);
+        CodebaseCachePanel codebaseCachePanel = new CodebaseCachePanel(repoMapPackerService, mock(PromptService.class));
+        jexlServiceRegistry = mock(JexlServiceRegistry.class);
+        when(jexlServiceRegistry.getDocumentation(null)).thenReturn("// initial doc");
+        jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
 
         SystemToolService systemToolService = mock(SystemToolService.class);
         when(systemToolService.detectTools()).thenReturn(toolsFuture);
@@ -185,6 +190,15 @@ class MainFrameTest {
             taskWorkspacePanel.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
             SwingTestUtils.flushEdt();
             assertFalse(frame.sidebar.isTaskWaitingApproval());
+
+            clearInvocations(repoMapPackerService);
+            frame.showCard(MainFrame.CACHE_VIEW);
+            verify(repoMapPackerService, timeout(2000).atLeastOnce()).getCachedSnapshot();
+
+            when(jexlServiceRegistry.getDocumentation(null)).thenReturn("// updated git doc");
+            jexlApiPanel.onSystemToolsUpdated(new SystemToolsUpdatedEvent(allDetectedTools, false));
+            SwingTestUtils.flushEdt();
+            assertTrue(jexlApiPanel.textPane.getText().contains("updated git doc"));
         } finally {
             frame.dispose();
         }

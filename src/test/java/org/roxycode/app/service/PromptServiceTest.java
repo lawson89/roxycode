@@ -141,6 +141,11 @@ class PromptServiceTest {
                 "M file.java");
         SwingTestUtils.assertContainsNone(session, "## CURRENT PLAN PROGRESS");
 
+        settings.setMaxAgentToolTurns(77);
+        assertTrue(promptService.loadPhasePrompt(WorkflowPhase.EXPLORE).contains("77"));
+        assertFalse(promptService.loadPhasePrompt(WorkflowPhase.PLAN).contains("${maxTurns}"));
+        assertFalse(promptService.loadPhasePrompt(WorkflowPhase.CODE).contains("${maxTurns}"));
+        assertFalse(promptService.loadPhasePrompt(WorkflowPhase.REVIEW).contains("${maxTurns}"));
         SwingTestUtils.assertContainsAll(promptService.buildSystemPrompt(WorkflowPhase.CODE), stable,
                 "REPO MAP CONTENT", session);
 

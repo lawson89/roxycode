@@ -40,9 +40,6 @@ public final class SettingsPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(SettingsPanel.class);
 
     static final String SUBTITLE_TEXT = "Configure appearance, Gemini model credentials, agent execution limits, and diagnostics.";
-    static final String RESTART_BADGE_TEXT = "Restart Required";
-    static final String RESTART_LEGEND_TEXT = "(*) Restart required for Max Chat History Messages";
-    static final String SAVED_RESTART_REQUIRED_TEXT = "Settings saved. Please restart RoxyCode for Chat History changes to take effect.";
     static final String SAVED_APPLIED_TEXT = "Settings saved and applied.";
     static final String GET_API_KEY_BUTTON_TEXT = "Get a Gemini API Key";
     static final String GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
@@ -80,9 +77,6 @@ public final class SettingsPanel extends JPanel {
     final JSpinner maxAgentToolTurnsSpinner;
     final JCheckBox logToolCallsCheckBox;
     final JButton saveButton;
-    private final JPanel restartCalloutPanel;
-    private final JLabel legendIconLabel;
-    final JLabel legendLabel;
     final JLabel statusLabel;
     final Timer statusTimer;
     private JLabel appearanceHeaderLabel;
@@ -171,16 +165,6 @@ public final class SettingsPanel extends JPanel {
         cardsContainer.add(buildAiModelCard(), GROWX_WMIN_0);
         cardsContainer.add(buildAgentExecutionCard(), GROWX_WMIN_0);
 
-        restartCalloutPanel = new JPanel(
-                new MigLayout("fillx, insets 10 14 10 14, gapx 10", "[][0:0, grow, fill]", "[center]"));
-        restartCalloutPanel.setOpaque(true);
-        legendIconLabel = new JLabel();
-        legendLabel = new JLabel(RESTART_LEGEND_TEXT);
-        legendLabel.setFont(legendLabel.getFont().deriveFont(Font.ITALIC, 11.5f));
-        restartCalloutPanel.add(legendIconLabel);
-        restartCalloutPanel.add(legendLabel, GROWX_WMIN_0);
-        cardsContainer.add(restartCalloutPanel, GROWX_WMIN_0);
-
         add(UiComponents.createBorderlessScrollPane(cardsContainer), "grow, wmin 0");
 
         statusTimer = new Timer(3000, e -> statusLabel.setText(""));
@@ -255,9 +239,10 @@ public final class SettingsPanel extends JPanel {
 
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
-        card.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Max Chat History Messages",
-                "Maximum number of conversation messages retained in active chat memory (1–500).",
-                createRestartBadge()), maxMessagesSpinner, "w 100:120:140"), GROWX_WMIN_0);
+        card.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Max Chat History Messages",
+                        "Maximum number of conversation messages retained in active chat memory (1–500).", null),
+                maxMessagesSpinner, "w 100:120:140"), GROWX_WMIN_0);
 
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
@@ -269,12 +254,6 @@ public final class SettingsPanel extends JPanel {
         card.add(logRow, GROWX_WMIN_0);
 
         return card;
-    }
-
-    private JLabel createRestartBadge() {
-        JLabel badge = new JLabel(RESTART_BADGE_TEXT);
-        badge.setIconTextGap(4);
-        return badge;
     }
 
     private static JSeparator createRowSeparator() {
@@ -298,8 +277,6 @@ public final class SettingsPanel extends JPanel {
 
     void applyThemeStyling() {
         Color accentColor = SwingHtmlUtils.getAccentColor();
-        Color mutedColor = SwingHtmlUtils.getUiColor(new Color(0x6c, 0x75, 0x7d), "Label.disabledForeground",
-                "Component.infoForeground");
         Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
 
         statusLabel.setForeground(greenColor);
@@ -332,13 +309,6 @@ public final class SettingsPanel extends JPanel {
 
         testConnectionButton.setIcon(FontIcon.of(Codicons.PLUG, 14, accentColor));
         testConnectionButton.putClientProperty(FlatClientProperties.STYLE, "arc: 8; margin: 5,12,5,12");
-
-        String borderHex = UiComponents.getCardBorderHex();
-        String calloutBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(accentColor, 0.10));
-        restartCalloutPanel.putClientProperty(FlatClientProperties.STYLE,
-                "arc: 10; border: 1,1,1,1," + borderHex + ",1,10; background: " + calloutBgHex);
-        legendIconLabel.setIcon(FontIcon.of(Codicons.INFO, 16, accentColor));
-        legendLabel.setForeground(mutedColor);
     }
 
     @Override
@@ -364,6 +334,10 @@ public final class SettingsPanel extends JPanel {
                 } finally {
                     updatingFromSettings = false;
                 }
+            }
+            String apiKey = event.settings().getGeminiApiKey();
+            if (apiKey != null) {
+                geminiApiKeyField.setText(apiKey);
             }
             String modelId = event.settings().getGeminiModel();
             if (modelId != null) {
@@ -461,9 +435,7 @@ public final class SettingsPanel extends JPanel {
 
         AppSettings settings = settingsService.getSettings();
         String newApiKey = new String(geminiApiKeyField.getPassword());
-        int oldMaxMessages = settings.getMaxChatMemoryMessages();
         int newMaxMessages = (Integer) maxMessagesSpinner.getValue();
-        boolean restartRequiredChanged = oldMaxMessages != newMaxMessages;
 
         settings.setGeminiApiKey(newApiKey);
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
@@ -475,11 +447,7 @@ public final class SettingsPanel extends JPanel {
         settings.setLogToolCalls(logToolCallsCheckBox.isSelected());
         settingsService.saveSettings();
 
-        if (restartRequiredChanged) {
-            showStatusMessage(SAVED_RESTART_REQUIRED_TEXT, true);
-        } else {
-            showStatusMessage(SAVED_APPLIED_TEXT, true);
-        }
+        showStatusMessage(SAVED_APPLIED_TEXT, true);
     }
 
     void setUrlOpener(Consumer<String> urlOpener) {

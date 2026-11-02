@@ -3,7 +3,10 @@ package org.roxycode.app.ui;
 import java.awt.*;
 import javax.swing.*;
 import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.events.SystemToolsUpdatedEvent;
+import org.roxycode.app.util.Edt;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -14,7 +17,7 @@ public final class JexlApiPanel extends JPanel {
     static final String COPY_BUTTON_TEXT = "Copy";
 
     private final transient JexlServiceRegistry registry;
-    private final JEditorPane textPane = SwingHtmlUtils.createHtmlEditorPane();
+    final JEditorPane textPane = SwingHtmlUtils.createHtmlEditorPane();
     private final JButton copyBtn;
     private Timer copyFeedbackTimer;
 
@@ -34,6 +37,11 @@ public final class JexlApiPanel extends JPanel {
         toolbar.add(copyBtn);
         toolbar.add(refreshBtn);
         add(toolbar, BorderLayout.NORTH);
+    }
+
+    @EventListener
+    public void onSystemToolsUpdated(SystemToolsUpdatedEvent event) {
+        Edt.run(this::refresh);
     }
 
     private void copyDocumentation() {
