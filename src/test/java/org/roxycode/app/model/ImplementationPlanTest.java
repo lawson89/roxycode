@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.ui.SwingTestUtils;
@@ -69,8 +70,9 @@ class ImplementationPlanTest {
         assertEquals(0, TokenUtils.computeCacheHitPercent(0, 0));
 
         ImplementationPlan plan = emptyPlan
-                .withRecordedTokenUsage(new TokenUsageEvent("task:default", "gemini-3.5-flash", 1_048_576, 40_000,
-                        30_000, 10_000, 1_500, 500, 42_000, 0.01025))
+                .withRecordedTokenUsage(
+                        new TokenUsageEvent("task:default", "gemini-3.5-flash", 1_048_576, 40_000, 30_000, 10_000,
+                                1_500, 500, 42_000, WorkflowPhase.CODE, 0.0075, 0.00225, 0.005625, 0.001875, 0.01725))
                 .withRecordedFileChange("src/NewFile.java", FileChangedEvent.ChangeType.CREATED)
                 .withRecordedFileChange("src/NewFile.java", FileChangedEvent.ChangeType.MODIFIED)
                 .withRecordedFileChange("src/App.java", FileChangedEvent.ChangeType.MODIFIED)
@@ -90,12 +92,18 @@ class ImplementationPlanTest {
                 "completedOn: ", "2025-05-14T14:32:10Z", "# Implementation Plan: Archive Feature", "## Approvals",
                 "- **Move to Code:** Approved by alice on 2025-05-14T14:10:00Z",
                 "- **Final Acceptance:** Accepted by bob on 2025-05-14T14:32:10Z", "## Token Usage & Cost",
-                "- **Model Calls:** 1", "- **Total Tokens:** 42.0k (42000)",
-                "- **Input Tokens:** 40.0k (Cached: 30.0k, Cache Hit: 75%)",
-                "- **Output + Thinking Tokens:** 2.0k (Output: 1.5k, Thinking: 500)", "- **Estimated Cost:** $0.01",
-                "totalTokens: 42000", "cachedTokens: 30000", "cacheHitPercent: 75", "## Handoff Log",
-                "REVIEW -> PLAN (User Approved): Complete", "## Changes" + LF, "CREATED src/NewFile.java",
-                "MODIFIED src/App.java", "DELETED src/Temp.java");
+                "### Cost by Token Category", "| Uncached Input | 10.0k | 25% | $0.0075 |",
+                "| Cached Input | 30.0k | 75% hit | $0.0023 |",
+                "| **Input Subtotal** | **40.0k** | **100% in** | **$0.0098** |", "| Output | 1.5k | 75% | $0.0056 |",
+                "| Thinking | 500 | 25% | $0.0019 |",
+                "| **Output + Thinking Subtotal** | **2.0k** | **100% out** | **$0.0075** |",
+                "| **Total (1 calls)** | **42.0k (42000)** | — | **$0.02** |", "### Cost by Workflow Phase",
+                "| Plan | 0 | 0 | $0.00 |", "| Code | 1 | 42.0k | $0.02 |", "| Review | 0 | 0 | $0.00 |",
+                "totalTokens: 42000", "cachedTokens: 30000", "cacheHitPercent: 75", "uncachedInputCostUsd: ", "0.0075",
+                "cachedInputCostUsd: ", "0.0023", "outputCostUsd: ", "0.0056", "thoughtsCostUsd: ", "0.0019",
+                "planCostUsd: ", "0.0000", "codeCostUsd: ", "0.0173", "reviewCostUsd: ", "0.0000", "estimatedCostUsd: ",
+                "0.0173", "## Handoff Log", "REVIEW -> PLAN (User Approved): Complete", "## Changes" + LF,
+                "CREATED src/NewFile.java", "MODIFIED src/App.java", "DELETED src/Temp.java");
 
         assertEquals("---" + LF + "---" + LF + LF, FrontmatterUtils.formatFrontmatter(null));
         Map<String, Object> fm = new LinkedHashMap<>();

@@ -65,12 +65,21 @@ public record GeminiModelConfig(String apiName, String name, String description,
         return DEFAULT_FLASH_OUTPUT_PRICE;
     }
 
+    public double calculateUncachedInputCostUsd(long uncachedInputTokens) {
+        return (Math.max(0L, uncachedInputTokens) * inputPricePerMillion) / TOKENS_PER_MILLION;
+    }
+
+    public double calculateCachedInputCostUsd(long cachedInputTokens) {
+        return (Math.max(0L, cachedInputTokens) * cachedInputPricePerMillion) / TOKENS_PER_MILLION;
+    }
+
+    public double calculateOutputCostUsd(long tokens) {
+        return (Math.max(0L, tokens) * outputPricePerMillion) / TOKENS_PER_MILLION;
+    }
+
     public double calculateCostUsd(long uncachedInputTokens, long cachedInputTokens, long outputAndThinkingTokens) {
-        long safeUncached = Math.max(0L, uncachedInputTokens);
-        long safeCached = Math.max(0L, cachedInputTokens);
-        long safeOutput = Math.max(0L, outputAndThinkingTokens);
-        return ((safeUncached * inputPricePerMillion) + (safeCached * cachedInputPricePerMillion)
-                + (safeOutput * outputPricePerMillion)) / TOKENS_PER_MILLION;
+        return calculateUncachedInputCostUsd(uncachedInputTokens) + calculateCachedInputCostUsd(cachedInputTokens)
+                + calculateOutputCostUsd(outputAndThinkingTokens);
     }
 
     @Override

@@ -103,6 +103,9 @@ class SettingsServiceTest {
         assertEquals(2.00, proCfg.inputPricePerMillion(), 1e-6);
         assertEquals(0.10, proCfg.cachedInputPricePerMillion(), 1e-6);
         assertEquals(10.00, proCfg.outputPricePerMillion(), 1e-6);
+        assertEquals(0.004, proCfg.calculateUncachedInputCostUsd(2_000), 1e-7);
+        assertEquals(0.001, proCfg.calculateCachedInputCostUsd(10_000), 1e-7);
+        assertEquals(0.006, proCfg.calculateOutputCostUsd(600), 1e-7);
         assertEquals(0.011, proCfg.calculateCostUsd(2_000, 10_000, 600), 1e-7);
 
         Path edtSettingsFile = tempDir.resolve("edt_settings.toml");

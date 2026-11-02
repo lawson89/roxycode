@@ -370,6 +370,13 @@ class AiServiceTest {
         assertEquals(200, usageEvent.thoughtsTokens());
         assertEquals(600, usageEvent.outputAndThinkingTokens());
         assertEquals(10_600, usageEvent.totalTokens());
+        assertEquals(WorkflowPhase.EXPLORE, usageEvent.phase());
+        assertEquals(0.0006, usageEvent.uncachedInputCostUsd(), 1e-6);
+        assertEquals(0.0006, usageEvent.cachedInputCostUsd(), 1e-6);
+        assertEquals(0.0012, usageEvent.inputCostUsd(), 1e-6);
+        assertEquals(0.0010, usageEvent.outputCostUsd(), 1e-6);
+        assertEquals(0.0005, usageEvent.thoughtsCostUsd(), 1e-6);
+        assertEquals(0.0015, usageEvent.outputAndThinkingCostUsd(), 1e-6);
         assertEquals(0.0027, usageEvent.estimatedCostUsd(), 1e-6);
 
         clearInvocations(mockChatModel);

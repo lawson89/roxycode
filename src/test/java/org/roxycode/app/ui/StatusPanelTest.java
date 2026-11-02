@@ -30,14 +30,15 @@ class StatusPanelTest {
         assertEquals("Session: 0 tok ($0.00)", panel.tokenCostLabel.getText());
 
         panel.onTokenUsage(new TokenUsageEvent("task:default", "gemini-3.5-flash", 1_000_000, 50_000, 40_000, 10_000,
-                1_500, 500, 52_000, 0.011));
+                1_500, 500, 52_000, null, 0.0030, 0.0030, 0.00375, 0.00125, 0.011));
         SwingTestUtils.flushEdt();
 
         assertEquals("Ctx: 50.0k / 1.0M (5%) | Cache: 80%", panel.ctxLabel.getText());
         assertEquals(5, panel.ctxProgressBar.getValue());
         assertEquals("Session: 52.0k tok ($0.01)", panel.tokenCostLabel.getText());
-        assertContainsAll(panel.tokenCostLabel.getToolTipText(), "Calls: 1", "52,000 tok", "Cached In: 40,000 (80%)",
-                "$0.01");
+        assertContainsAll(panel.tokenCostLabel.getToolTipText(), "Calls: 1", "52,000 tok",
+                "Uncached In: 10,000 ($0.0030)", "Cached In: 40,000 (80%, $0.0030)", "Out+Think: 2,000 ($0.0050)",
+                "Total Cost: $0.01");
 
         panel.onTokenUsage(new TokenUsageEvent("qa:default", "gemini-3.5-flash", 1_000_000, 100_000, 75_000, 25_000,
                 2_000, 1_000, 103_000, 0.0206));

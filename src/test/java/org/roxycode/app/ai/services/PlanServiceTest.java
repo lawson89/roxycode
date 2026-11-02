@@ -116,11 +116,14 @@ class PlanServiceTest {
         assertEquals(1, archivingService.getCurrentPlan().usageSummary().modelCalls());
         assertEquals(21_000L, archivingService.getCurrentPlan().usageSummary().totalTokens());
 
-        archivingService.onTokenUsage(new TokenUsageEvent(PlanService.TASK_CONVERSATION_ID, "gemini-3.5-flash",
-                1_048_576, 30_000, 25_000, 5_000, 1_200, 300, 31_500, 0.0071));
+        archivingService.onTokenUsage(
+                new TokenUsageEvent(PlanService.TASK_CONVERSATION_ID, "gemini-3.5-flash", 1_048_576, 30_000, 25_000,
+                        5_000, 1_200, 300, 31_500, WorkflowPhase.CODE, 0.0020, 0.0015, 0.0028, 0.0008, 0.0071));
         assertEquals(2, archivingService.getCurrentPlan().usageSummary().modelCalls());
         assertEquals(52_500L, archivingService.getCurrentPlan().usageSummary().totalTokens());
         assertEquals(80, archivingService.getCurrentPlan().usageSummary().cacheHitPercent());
+        assertEquals(1, archivingService.getCurrentPlan().usageSummary().planPhaseUsage().modelCalls());
+        assertEquals(1, archivingService.getCurrentPlan().usageSummary().codePhaseUsage().modelCalls());
         assertThrows(IllegalStateException.class, () -> archivingService.markStepCompleted(0));
         assertThrows(IllegalStateException.class, () -> archivingService.requestReview("done"));
 
@@ -187,8 +190,10 @@ class PlanServiceTest {
         assertEquals(1, archivedFiles.size());
         String content = Files.readString(archivedFiles.get(0));
         assertContainsAll(content, "project: ", "my-project", "approvedBy: ", "alice", "completedBy: ", "bob",
-                "totalTokens: 52500", "cachedTokens: 40000", "cacheHitPercent: 80", "estimatedCostUsd: ", "0.0122",
-                "## Token Usage & Cost", "**Model Calls:** 2", "**Total Tokens:** 52.5k (52500)",
+                "totalTokens: 52500", "cachedTokens: 40000", "cacheHitPercent: 80", "planCostUsd: ", "0.0051",
+                "codeCostUsd: ", "0.0071", "estimatedCostUsd: ", "0.0122", "## Token Usage & Cost",
+                "### Cost by Token Category", "| **Total (2 calls)** | **52.5k (52500)** | — | **$0.01** |",
+                "### Cost by Workflow Phase", "| Plan | 1 | 21.0k | $0.0051 |", "| Code | 1 | 31.5k | $0.0071 |",
                 "MODIFIED src/Main.java");
         verify(eventPublisher).publishEvent(argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent));
 

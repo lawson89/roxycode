@@ -236,7 +236,7 @@ public class AiService implements AutoCloseable {
         try {
             ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, images);
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-            ChatResponse chatResponse = executeChatCall(promptSpec, convId);
+            ChatResponse chatResponse = executeChatCall(promptSpec, convId, resolvedPhase);
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
             String content = formatChatResponse(chatResponse, turnContext);
             publishTurnComplete(convId, turnContext.turnCounter().get(), content);
@@ -250,8 +250,14 @@ public class AiService implements AutoCloseable {
         }
     }
 
-    private ChatResponse executeChatCall(ChatClient.ChatClientRequestSpec promptSpec, String convId) {
-        return promptSpec.advisors(a -> a.param(ChatMemory.CONVERSATION_ID, convId)).call().chatResponse();
+    private ChatResponse executeChatCall(ChatClient.ChatClientRequestSpec promptSpec, String convId,
+            WorkflowPhase phase) {
+        return promptSpec.advisors(a -> {
+            a.param(ChatMemory.CONVERSATION_ID, convId);
+            if (phase != null) {
+                a.param(TurnToolContext.PHASE_KEY, phase);
+            }
+        }).call().chatResponse();
     }
 
     private final class ModelCallRetryAdvisor implements CallAdvisor {
@@ -273,7 +279,8 @@ public class AiService implements AutoCloseable {
             });
             if (response != null) {
                 publishTokenUsageIfPresent(resolveConversationId(chatClientRequest),
-                        resolveRequestModelName(chatClientRequest), response.chatResponse());
+                        resolveRequestModelName(chatClientRequest), resolveWorkflowPhase(chatClientRequest),
+                        response.chatResponse());
             }
             return response;
         }
@@ -289,6 +296,27 @@ public class AiService implements AutoCloseable {
         return "";
     }
 
+    @Nullable
+    private WorkflowPhase resolveWorkflowPhase(ChatClientRequest request) {
+        if (request != null && request.context() != null) {
+            Object phaseObj = request.context().get(TurnToolContext.PHASE_KEY);
+            if (phaseObj instanceof WorkflowPhase wp) {
+                return wp;
+            }
+            if (phaseObj instanceof String s) {
+                try {
+                    return WorkflowPhase.valueOf(s);
+                } catch (IllegalArgumentException ignored) {
+                    // fall through to planService
+                }
+            }
+        }
+        if (planService != null) {
+            return planService.getCurrentPhase();
+        }
+        return null;
+    }
+
     private String resolveRequestModelName(ChatClientRequest request) {
         if (request != null && request.prompt() != null && request.prompt().getOptions() != null) {
             String optionModel = request.prompt().getOptions().getModel();
@@ -300,6 +328,11 @@ public class AiService implements AutoCloseable {
     }
 
     void publishTokenUsageIfPresent(String conversationId, String modelName, @Nullable ChatResponse chatResponse) {
+        publishTokenUsageIfPresent(conversationId, modelName, null, chatResponse);
+    }
+
+    void publishTokenUsageIfPresent(String conversationId, String modelName, @Nullable WorkflowPhase phase,
+            @Nullable ChatResponse chatResponse) {
         if (eventPublisher == null || chatResponse == null || chatResponse.getMetadata() == null) {
             return;
         }
@@ -346,11 +379,15 @@ public class AiService implements AutoCloseable {
             modelConfig = GeminiModelConfig.defaultForApiName(resolvedModel);
         }
 
-        double costUsd = modelConfig.calculateCostUsd(uncachedInputTokens, cachedInputTokens,
-                (long) candidatesTokens + thoughtsTokens);
+        double uncachedInputCostUsd = modelConfig.calculateUncachedInputCostUsd(uncachedInputTokens);
+        double cachedInputCostUsd = modelConfig.calculateCachedInputCostUsd(cachedInputTokens);
+        double outputCostUsd = modelConfig.calculateOutputCostUsd(candidatesTokens);
+        double thoughtsCostUsd = modelConfig.calculateOutputCostUsd(thoughtsTokens);
+        double costUsd = uncachedInputCostUsd + cachedInputCostUsd + outputCostUsd + thoughtsCostUsd;
         eventPublisher.publishEvent(new TokenUsageEvent(StringUtils.defaultString(conversationId), resolvedModel,
                 modelConfig.contextWindowTokens(), promptTokens, cachedInputTokens, uncachedInputTokens,
-                candidatesTokens, thoughtsTokens, totalTokens, costUsd));
+                candidatesTokens, thoughtsTokens, totalTokens, phase, uncachedInputCostUsd, cachedInputCostUsd,
+                outputCostUsd, thoughtsCostUsd, costUsd));
     }
 
     private static int safeNonNegativeInt(@Nullable Integer value) {

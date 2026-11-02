@@ -148,10 +148,14 @@ public class PlanService {
         if (event == null || !TASK_CONVERSATION_ID.equals(event.conversationId())) {
             return;
         }
+        WorkflowPhase effectivePhase = event.phase();
+        if (effectivePhase == null) {
+            effectivePhase = currentPhase;
+        }
         if (currentPlan != null) {
-            setCurrentPlan(currentPlan.withRecordedTokenUsage(event));
+            setCurrentPlan(currentPlan.withRecordedTokenUsage(event, effectivePhase));
         } else {
-            unassignedTaskUsage = unassignedTaskUsage.addEvent(event);
+            unassignedTaskUsage = unassignedTaskUsage.addEvent(event, effectivePhase);
         }
     }
 
