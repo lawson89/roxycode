@@ -10,25 +10,15 @@ public class ChatHtmlTemplates {
     private static final String CAT_EARS = "/" + (char) 92 + "_/" + (char) 92;
     public static final String COPY_CELL_ID_PREFIX = "copy-cell-";
 
-    public static String renderCopyActionHtml(int messageIndex, boolean copied, boolean speaking) {
-        String speakLabel;
-        if (speaking) {
-            speakLabel = "[Stop]";
-        } else {
-            speakLabel = "[Speak]";
-        }
-        String speakHtml = "<a class='copy-action' href='speak:" + messageIndex + "'>" + speakLabel + "</a>";
-        String copyHtml;
+    public static String renderCopyActionHtml(int messageIndex, boolean copied) {
         if (copied) {
-            copyHtml = "<span class='copy-feedback'>&#10003; Copied!</span>";
-        } else {
-            copyHtml = "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
+            return "<span class='copy-feedback'>&#10003; Copied!</span>";
         }
-        return speakHtml + "&nbsp;&nbsp;" + copyHtml;
+        return "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
     }
 
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
-            boolean copied, boolean speaking) {
+            boolean copied) {
         String normalizedRole = StringUtils.defaultString(role);
         String safeRole = SwingHtmlUtils.escapeHtml(normalizedRole);
         String indicator = switch (normalizedRole) {
@@ -40,8 +30,8 @@ public class ChatHtmlTemplates {
         String actionCell = "";
         if (ROLE_AI.equals(role) && messageIndex >= 0) {
             actionCell = "<td id='" + COPY_CELL_ID_PREFIX + messageIndex
-                    + "' align='right' valign='middle' nowrap='nowrap'>"
-                    + renderCopyActionHtml(messageIndex, copied, speaking) + "</td>";
+                    + "' align='right' valign='middle' nowrap='nowrap'>" + renderCopyActionHtml(messageIndex, copied)
+                    + "</td>";
         }
 
         return """

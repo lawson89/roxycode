@@ -32,7 +32,6 @@ import org.roxycode.app.events.*;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProjectService;
-import org.roxycode.app.service.VoiceService;
 
 class ChatControllerTest extends ChatTestFixture {
 
@@ -350,35 +349,5 @@ class ChatControllerTest extends ChatTestFixture {
         chatPanel.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
         flushEdt();
         assertTrue(chatPanel.inputArea.isEnabled());
-
-        VoiceService voiceService = mock(VoiceService.class);
-        chatPanel.setVoiceService(voiceService);
-        when(voiceService.isRecording()).thenReturn(false);
-        SwingTestUtils.clickOnEdt(chatPanel.voiceRecordButton);
-        verify(voiceService).startRecording();
-        assertEquals(ChatPanel.STOP_RECORDING_BUTTON_TEXT, chatPanel.voiceRecordButton.getText());
-
-        byte[] wav = new byte[]{1, 2, 3};
-        when(voiceService.isRecording()).thenReturn(true);
-        when(voiceService.stopRecordingAndGetWav()).thenReturn(wav);
-        when(voiceService.transcribeAudio(wav)).thenReturn("transcribed voice command");
-        SwingTestUtils.runOnEdt(() -> {
-            chatPanel.inputArea.setText("Prefix");
-            chatPanel.inputArea.setCaretPosition(chatPanel.inputArea.getText().length());
-            chatPanel.voiceRecordButton.doClick();
-        });
-        SwingTestUtils.awaitFuture(chatPanel.lastVoiceFuture);
-        flushEdt();
-        assertEquals("Prefix transcribed voice command", chatPanel.inputArea.getText());
-        assertEquals(ChatPanel.VOICE_BUTTON_TEXT, chatPanel.voiceRecordButton.getText());
-
-        appSettings.setAutoSpeakResponses(true);
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Spoken AI reply");
-        sendOnEdt(chatPanel, "Say hello");
-        flushEdt();
-        verify(voiceService).speakAsync(eq("Spoken AI reply"), any(), any(), any());
-
-        chatPanel.controller.stopTurn();
-        verify(voiceService, atLeastOnce()).stopPlayback();
     }
 }

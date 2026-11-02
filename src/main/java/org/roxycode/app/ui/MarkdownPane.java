@@ -6,7 +6,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.BiConsumer;
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
@@ -19,7 +18,6 @@ import org.apache.commons.lang3.StringUtils;
 public final class MarkdownPane extends JTextPane {
     private static final long serialVersionUID = 1L;
     private static final String COPY_PREFIX = "copy:";
-    private static final String SPEAK_PREFIX = "speak:";
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final int INITIAL_MESSAGE_COUNT = 1;
     private static final String ERROR_RENDERING_HTML = "<div>Error rendering message</div>";
@@ -27,10 +25,8 @@ public final class MarkdownPane extends JTextPane {
     private final List<Message> messages = new ArrayList<>();
     private final boolean taskMode;
     int copiedMessageIndex = -1;
-    int speakingMessageIndex = -1;
     Timer copyFeedbackTimer;
     String lastCopiedMarkdown;
-    private transient BiConsumer<Integer, String> speakActionHandler;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     public record ChatTranscriptEntry(String role, String content, String timestamp) {
@@ -59,62 +55,12 @@ public final class MarkdownPane extends JTextPane {
     }
 
     private void handleHyperlinkActivated(String desc) {
-        if (desc == null) {
+        if (desc == null || !desc.startsWith(COPY_PREFIX)) {
             return;
         }
-        if (desc.startsWith(COPY_PREFIX)) {
-            try {
-                copyMessageMarkdown(Integer.parseInt(desc.substring(COPY_PREFIX.length())));
-            } catch (NumberFormatException ignored) {
-            }
-        } else if (desc.startsWith(SPEAK_PREFIX)) {
-            try {
-                toggleSpeakMessage(Integer.parseInt(desc.substring(SPEAK_PREFIX.length())));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-    }
-
-    public void setSpeakActionHandler(BiConsumer<Integer, String> speakActionHandler) {
-        this.speakActionHandler = speakActionHandler;
-    }
-
-    public int getSpeakingMessageIndex() {
-        return speakingMessageIndex;
-    }
-
-    public int getMessageCount() {
-        return messages.size();
-    }
-
-    public void setSpeakingMessageIndex(int index) {
-        int previousSpeakingIndex = this.speakingMessageIndex;
-        if (previousSpeakingIndex == index) {
-            return;
-        }
-        this.speakingMessageIndex = index;
-        boolean updated = true;
-        if (previousSpeakingIndex >= 0) {
-            updated = updateActionCellInPlace(previousSpeakingIndex);
-        }
-        if (index >= 0) {
-            updated = updateActionCellInPlace(index) && updated;
-        }
-        if (!updated && !messages.isEmpty()) {
-            renderAll(false);
-        }
-    }
-
-    public void toggleSpeakMessage(int index) {
-        if (index < 0 || index >= messages.size()) {
-            return;
-        }
-        Message msg = messages.get(index);
-        if (msg.isTool()) {
-            return;
-        }
-        if (speakActionHandler != null) {
-            speakActionHandler.accept(index, msg.content());
+        try {
+            copyMessageMarkdown(Integer.parseInt(desc.substring(COPY_PREFIX.length())));
+        } catch (NumberFormatException ignored) {
         }
     }
 
@@ -203,8 +149,7 @@ public final class MarkdownPane extends JTextPane {
         int savedCaret = getCaretPosition();
         try {
             boolean copied = messageIndex == this.copiedMessageIndex;
-            boolean speaking = messageIndex == this.speakingMessageIndex;
-            doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderCopyActionHtml(messageIndex, copied, speaking));
+            doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderCopyActionHtml(messageIndex, copied));
             setCaretPosition(Math.min(savedCaret, doc.getLength()));
             return true;
         } catch (BadLocationException | IOException e) {
@@ -279,7 +224,7 @@ public final class MarkdownPane extends JTextPane {
                 safeRole = msg.role().toLowerCase(Locale.ROOT);
             }
             return ChatHtmlTemplates.renderChatEntry(safeRole, msg.renderedHtml(), msg.timestamp(), index,
-                    index == copiedMessageIndex, index == speakingMessageIndex);
+                    index == copiedMessageIndex);
         } catch (Exception e) {
             return ERROR_RENDERING_HTML;
         }
@@ -320,7 +265,6 @@ public final class MarkdownPane extends JTextPane {
             copyFeedbackTimer.stop();
         }
         copiedMessageIndex = -1;
-        speakingMessageIndex = -1;
         messages.clear();
         renderAll(true);
     }
