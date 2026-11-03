@@ -530,6 +530,9 @@ public class AiService implements AutoCloseable {
         GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
                 .model(resolveEffectiveGeminiModel());
         resolveEffectiveThinkingLevel().applyTo(optionsBuilder);
+        if (settingsService.getSettings().isGoogleGroundingEnabled()) {
+            optionsBuilder.googleSearchRetrieval(true);
+        }
         ChatClient.ChatClientRequestSpec promptSpec = chatClient.prompt()
                 .system(promptService.buildSystemPrompt(currentPhase)).user(u -> {
                     u.text(message);

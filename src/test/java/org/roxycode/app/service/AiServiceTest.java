@@ -301,6 +301,20 @@ class AiServiceTest {
         assertEquals("my-key:gemini-3.5-pro", aiService.testConnection("  my-key  ", " gemini-3.5-pro "));
     }
 
+    @Test
+    void testGoogleSearchGroundingOptionIsApplied() {
+        settings.setGoogleGroundingEnabled(true);
+        stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "AI Response", "STOP", null);
+
+        aiService.chat("default", null, "Hello", null);
+
+        ArgumentCaptor<GoogleGenAiChatOptions.Builder> optionsCaptor = ArgumentCaptor
+                .forClass(GoogleGenAiChatOptions.Builder.class);
+        verify(requestSpec).options(optionsCaptor.capture());
+        GoogleGenAiChatOptions builtOptions = optionsCaptor.getValue().build();
+        assertTrue(builtOptions.getGoogleSearchRetrieval());
+    }
+
     static Stream<Arguments> finishReasonFormattingCases() {
         return Stream.of(
                 Arguments.of(0, "Complete answer.", "STOP", new DefaultUsage(100, 50, 150),

@@ -37,6 +37,8 @@ public final class HeaderPanel extends JPanel {
     private static final Color BRANCH_ACCENT_DARK = new Color(0x2d, 0xd4, 0xbf);
     private static final Color MODEL_ACCENT_LIGHT = new Color(0x7c, 0x3a, 0xed);
     private static final Color MODEL_ACCENT_DARK = new Color(0xa7, 0x8b, 0xfa);
+    private static final String PILL_STYLE_PREFIX = "font: bold -1; background: ";
+    private static final String PILL_STYLE_SUFFIX = "; arc: 10; border: 3,8,3,8";
 
     private final transient ProjectService projectService;
     private final transient GitService gitService;
@@ -47,6 +49,7 @@ public final class HeaderPanel extends JPanel {
     final JLabel noProjectNoticeLabel;
     final JLabel branchLabel;
     final JLabel modelLabel;
+    final JLabel groundingLabel;
     final JButton themeToggleButton;
 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService) {
@@ -76,15 +79,20 @@ public final class HeaderPanel extends JPanel {
         leftPanel.add(branchLabel);
         add(leftPanel, "left");
 
-        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]8[]", LAYOUT_CENTER));
+        JPanel rightPanel = new JPanel(new MigLayout("insets 0", "[]8[]8[]", LAYOUT_CENTER));
         rightPanel.setOpaque(false);
 
         modelLabel = new JLabel();
         modelLabel.setToolTipText("Active Gemini model");
+
+        groundingLabel = new JLabel();
+        groundingLabel.setToolTipText("Google Search Grounding enabled");
+
         updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel(null));
         themeToggleButton = createIconButton(Codicons.COLOR_MODE, "Toggle Light/Dark Theme", e -> toggleTheme());
 
         rightPanel.add(modelLabel);
+        rightPanel.add(groundingLabel);
         rightPanel.add(themeToggleButton);
         add(rightPanel, "right");
 
@@ -192,19 +200,23 @@ public final class HeaderPanel extends JPanel {
         noProjectNoticeLabel.setForeground(warnColor);
         noProjectNoticeLabel.setIcon(FontIcon.of(Codicons.WARNING, 14, warnColor));
         noProjectNoticeLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -1; background: " + warnBgHex + "; arc: 10; border: 3,8,3,8");
+                PILL_STYLE_PREFIX + warnBgHex + PILL_STYLE_SUFFIX);
 
         branchLabel.setForeground(branchAccent);
-        branchLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -1; background: " + branchBgHex + "; arc: 10; border: 3,8,3,8");
+        branchLabel.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE_PREFIX + branchBgHex + PILL_STYLE_SUFFIX);
         if (branchLabel.getText() != null && !branchLabel.getText().isEmpty()) {
             branchLabel.setIcon(FontIcon.of(Codicons.SOURCE_CONTROL, 14, branchAccent));
         }
 
         modelLabel.setForeground(modelAccent);
-        modelLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -1; background: " + modelBgHex + "; arc: 10; border: 3,8,3,8");
+        modelLabel.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE_PREFIX + modelBgHex + PILL_STYLE_SUFFIX);
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, modelAccent));
+
+        groundingLabel.setForeground(modelAccent);
+        groundingLabel.putClientProperty(FlatClientProperties.STYLE,
+                PILL_STYLE_PREFIX + modelBgHex + PILL_STYLE_SUFFIX);
+        groundingLabel.setIcon(FontIcon.of(Codicons.GLOBE, 14, modelAccent));
+
         themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, resolveForegroundColor()));
     }
 
@@ -303,6 +315,7 @@ public final class HeaderPanel extends JPanel {
     }
 
     private void updateModelDisplay(String modelName, ThinkingLevel thinkingLevel) {
+        groundingLabel.setVisible(settingsService.getSettings().isGoogleGroundingEnabled());
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, resolveModelAccentColor()));
         String baseModelText = java.util.Objects.requireNonNullElse(modelName, "No model selected");
         ThinkingLevel resolvedLevel = java.util.Objects.requireNonNullElse(thinkingLevel, ThinkingLevel.DEFAULT);

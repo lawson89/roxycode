@@ -22,6 +22,7 @@ public class AppSettings {
     private int maxAgentToolTurns = DEFAULT_MAX_AGENT_TOOL_TURNS;
     private int maxChatMemoryMessages = 50;
     private boolean logToolCalls = false;
+    private boolean googleGroundingEnabled = false;
     private List<String> globalContextFolders = new ArrayList<>();
 
     public AppSettings() {
@@ -37,6 +38,7 @@ public class AppSettings {
             this.maxAgentToolTurns = other.maxAgentToolTurns;
             this.maxChatMemoryMessages = other.maxChatMemoryMessages;
             this.logToolCalls = other.logToolCalls;
+            this.googleGroundingEnabled = other.googleGroundingEnabled;
             this.globalContextFolders = new ArrayList<>(
                     Objects.requireNonNullElse(other.globalContextFolders, List.of()));
         }
@@ -108,6 +110,14 @@ public class AppSettings {
 
     public void setLogToolCalls(boolean logToolCalls) {
         this.logToolCalls = logToolCalls;
+    }
+
+    public boolean isGoogleGroundingEnabled() {
+        return googleGroundingEnabled;
+    }
+
+    public void setGoogleGroundingEnabled(boolean googleGroundingEnabled) {
+        this.googleGroundingEnabled = googleGroundingEnabled;
     }
 
     public List<String> getGlobalContextFolders() {

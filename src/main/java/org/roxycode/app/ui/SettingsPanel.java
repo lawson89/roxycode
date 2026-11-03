@@ -79,6 +79,7 @@ public final class SettingsPanel extends JPanel {
     final JButton testConnectionButton;
     final JSpinner maxAgentToolTurnsSpinner;
     final JCheckBox logToolCallsCheckBox;
+    final JCheckBox googleGroundingCheckBox;
     final JPanel onboardingBannerPanel;
     final JLabel onboardingBannerIconLabel;
     final JLabel onboardingBannerMessageLabel;
@@ -177,6 +178,10 @@ public final class SettingsPanel extends JPanel {
         logToolCallsCheckBox.setOpaque(false);
         logToolCallsCheckBox.setSelected(settingsService.getSettings().isLogToolCalls());
 
+        googleGroundingCheckBox = new JCheckBox("Enable Google Search Grounding for real-time information retrieval");
+        googleGroundingCheckBox.setOpaque(false);
+        googleGroundingCheckBox.setSelected(settingsService.getSettings().isGoogleGroundingEnabled());
+
         JPanel cardsContainer = UiComponents
                 .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
         cardsContainer.add(buildAppearanceCard(), GROWX_WMIN_0);
@@ -231,6 +236,12 @@ public final class SettingsPanel extends JPanel {
                 UiComponents.createFieldTextBlock("Thinking Level",
                         "Default reasoning effort used by Gemini models when generating responses.", null),
                 thinkingLevelCombo, CONTROL_WIDTH_CONSTRAINTS), GROWX_WMIN_0);
+
+        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
+
+        card.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Google Search Grounding",
+                "Allow Gemini to use Google Search to ground its responses with up-to-date web information.", null),
+                googleGroundingCheckBox, ""), GROWX_WMIN_0);
 
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
@@ -420,6 +431,10 @@ public final class SettingsPanel extends JPanel {
             if (logToolCalls != logToolCallsCheckBox.isSelected()) {
                 logToolCallsCheckBox.setSelected(logToolCalls);
             }
+            boolean groundingEnabled = event.settings().isGoogleGroundingEnabled();
+            if (groundingEnabled != googleGroundingCheckBox.isSelected()) {
+                googleGroundingCheckBox.setSelected(groundingEnabled);
+            }
             updateOnboardingBannerState();
         });
     }
@@ -511,6 +526,7 @@ public final class SettingsPanel extends JPanel {
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
         settings.setLogToolCalls(logToolCallsCheckBox.isSelected());
+        settings.setGoogleGroundingEnabled(googleGroundingCheckBox.isSelected());
         settingsService.saveSettings();
         updateOnboardingBannerState();
 
