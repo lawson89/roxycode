@@ -1,4 +1,4 @@
-#RoxyCode Request Lifecycle: User Input to LLM Response
+# RoxyCode Request Lifecycle: User Input to LLM Response
 
 This document outlines the execution path when a user submits a prompt in the RoxyCode UI. The architecture follows a strict Model-View-Controller (MVC) pattern combined with an event-driven autonomous agent loop.
 

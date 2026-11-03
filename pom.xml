@@ -11,21 +11,16 @@
     <groupId>org.roxycode</groupId>
     <artifactId>roxycode</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name/>
-    <description/>
-    <url/>
+    <name>RoxyCode</name>
+    <description>Desktop AI coding assistant built with Java 21, Spring Boot, Spring AI, and FlatLaf Swing.</description>
+    <url>https://github.com/lawson89/roxycode</url>
     <licenses>
-        <license/>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
     </licenses>
-    <developers>
-        <developer/>
-    </developers>
-    <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
-    </scm>
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -165,7 +160,7 @@
                 <version>3.28.0</version> <!-- Check for the latest version -->
                 <configuration>
                     <!-- Fails the build if PMD finds any errors -->
-                    <failOnViolation>false</failOnViolation>
+                    <failOnViolation>true</failOnViolation>
                     <!-- Prints the specific errors in the console output -->
                     <printFailingErrors>true</printFailingErrors>
                     <rulesets>

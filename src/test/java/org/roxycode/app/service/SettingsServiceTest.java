@@ -3,8 +3,10 @@ package org.roxycode.app.service;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -70,6 +72,13 @@ class SettingsServiceTest {
         assertTrue(service2.getSettings().isLogToolCalls());
         assertEquals(List.of("/tmp/global-a", "/tmp/global-b"), service2.getSettings().getGlobalContextFolders());
         assertTrue(Files.exists(settingsFile));
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            try {
+                assertEquals(PosixFilePermissions.fromString("rw-------"), Files.getPosixFilePermissions(settingsFile));
+            } catch (IOException e) {
+                fail("Failed to read POSIX permissions: " + e.getMessage());
+            }
+        }
 
         AppSettings staticLoaded = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
         assertEquals("Darcula", staticLoaded.getTheme());

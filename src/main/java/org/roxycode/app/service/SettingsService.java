@@ -157,6 +157,7 @@ public class SettingsService {
         synchronized (writeLock) {
             try {
                 PathUtils.writeToml(path, currentSettings, mapper);
+                PathUtils.setOwnerOnlyPermissionsIfPosix(path);
             } catch (IOException e) {
                 log.error("Failed to save settings: {}", e.getMessage(), e);
             }

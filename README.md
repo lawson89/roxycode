@@ -25,9 +25,11 @@ Instead of issuing one tool call per file read or search, the agent executes scr
 - `grepService`: Fast regex, literal, and file-glob searches powered by Ripgrep (`rg`).
 - `symbolService`: File symbol outlines and symbol body extraction powered by Universal Ctags (`ctags`).
 - `gitService`: Inspect branch status, working tree diffs, blame ranges, and commit history.
-- `buildToolService`: Run project compilation, full test suites, or single tests.
+- `buildToolService`: Run project compilation, full test suites, single tests, linting (`lint`), and code formatting (`format`).
 - `memoryService`: Read, write, and search persistent global and project agent memory.
 - `planService`: Manage implementation plans, step checklists, handoff logs, and workflow phase transitions.
+- `userInputService`: Render inline user confirmation, text input, single-select, and multi-select prompts in the chat panel.
+- `webSearchService`: Perform live web searches with grounded citations using Google Search grounding.
 
 Only methods explicitly annotated with `@AgentService` and `@AgentDoc` and permitted for the active workflow phase are accessible from JEXL.
 
@@ -41,10 +43,12 @@ Only methods explicitly annotated with `@AgentService` and `@AgentDoc` and permi
 - **Project Memory (`~/.roxycode/projects/<project>/memory/`)**: Stores project-specific architecture notes and build/test details.
 - **Searchable Archives**: Completed implementation plans and past Q&A topics are automatically archived as Markdown files with frontmatter and can be browsed or searched from the UI or via `memoryService`.
 
-### 5. Configurable Builds & Optional Container Isolation
-Each project has a customizable `build.toml` configuration (auto-initialized from built-in templates for Maven, Gradle, npm, Python, Go, or CMake) that defines compile, clean, and test commands along with regex patterns for parsing compiler errors and test failures.
+### 5. Configurable Builds & Sandboxing
+Each project has a customizable `build.toml` configuration (auto-initialized from built-in templates for Maven, Gradle, Rust, Go, Python, npm, or CMake) that defines install, clean, compile, build, test, lint, and format commands along with regex patterns and JUnit XML paths for parsing compiler errors and test failures.
 
-When Docker is available, builds and tests can optionally run inside an isolated Testcontainers container with the project workspace bind-mounted.
+Build and test execution supports configurable sandboxing via the `[sandbox]` section in `build.toml` (`mode = "none" | "native" | "docker"`):
+- **Native OS Sandboxing (`mode = "native"`)**: Uses Linux Bubblewrap (`bwrap`) or macOS Seatbelt (`sandbox-exec`) to mount the host filesystem read-only while restricting writes to the project workspace and configured `writable_paths`.
+- **Docker Container Isolation (`mode = "docker"`)**: Runs build and test commands inside an isolated Testcontainers Docker container with the project workspace bind-mounted.
 
 ## Prerequisites
 
@@ -57,17 +61,21 @@ RoxyCode checks for the following CLI tools on startup (and provides a **System 
 - **Universal Ctags (`ctags`)**: JSON-capable ctags binary for symbol outlines and repository map generation
 
 ### Optional Tools
-- **Docker**: Required only if you enable container-isolated builds (`[container] enabled = true` in `build.toml`).
+- **Bubblewrap (`bwrap`)** (Linux) or **Seatbelt (`sandbox-exec`)** (macOS): Used when native OS build sandboxing is enabled (`[sandbox] mode = "native"` in `build.toml`).
+- **Docker**: Required only if you enable Docker container-isolated builds (`[sandbox] mode = "docker"` in `build.toml`).
 
 ### API Credentials
-- A **Google Gemini API key** (configured in the application **Settings** panel or via the `GEMINI_API_KEY` / `GOOGLE_API_KEY` environment variable).
+- A **Google Gemini API key** (configured in the application **Settings** panel or via the `GOOGLE_API_KEY` environment variable).
 
 ## Getting Started
 
 ### Build and Run from Source
-Use the included Maven Wrapper (`./mvnw` on Linux/macOS or `mvnw.cmd` on Windows):
+Clone the repository and use the included Maven Wrapper (`./mvnw` on Linux/macOS or `mvnw.cmd` on Windows):
 
 ```bash
+git clone https://github.com/lawson89/roxycode.git
+cd roxycode
+
 # Compile and run the desktop application
 ./mvnw spring-boot:run
 ```
@@ -101,14 +109,15 @@ RoxyCode stores user settings, caches, memory, and per-project metadata under `~
 ├── settings.toml                # Theme, Gemini model, API key, turn/memory limits, global context folders
 ├── system-tools.toml            # Cached CLI tool detection results
 ├── logs/
-│   ├── roxycode.log             # Application log
-│   └── tool-calls.log           # Optional JEXL tool execution log (when enabled in Settings)
+│   ├── roxy.log                 # Application log
+│   └── toolcalls.log            # Optional JEXL tool execution log (when enabled in Settings)
 ├── memory/
 │   ├── MEMORY.md                # Pinned global memory cheat-sheet
 │   └── notes/                   # Global topic notes (*.md)
 └── projects/
     └── <project-name>-<hash>/
-        ├── build.toml           # Project build/test commands and container settings
+        ├── project.toml         # Per-project model, thinking level, and build confirmation state
+        ├── build.toml           # Project build/test/lint/format commands and sandbox settings
         ├── context.toml         # Project-scoped context folder paths
         ├── tmp/repo_cache.txt   # Cached repository map snapshot
         ├── memory/
@@ -121,7 +130,7 @@ RoxyCode stores user settings, caches, memory, and per-project metadata under `~
 
 ## Technology Stack
 
-- **Runtime & Framework**: Java 21, Spring Boot 3.5, Spring AI (Google GenAI / Gemini)
+- **Runtime & Framework**: Java 21, Spring Boot 4.1, Spring AI 2.0 (Google GenAI / Gemini)
 - **Desktop UI**: Swing, FlatLaf (Light & Dark themes), MigLayout, RSyntaxTextArea, Flexmark (Markdown rendering), Ikonli (Codicons & FontAwesome icons)
 - **Agent Sandbox & Caching**: Apache Commons JEXL 3, Caffeine, Jackson (JSON & TOML), Testcontainers
 

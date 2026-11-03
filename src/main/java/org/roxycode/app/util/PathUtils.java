@@ -6,11 +6,14 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -22,6 +25,7 @@ public final class PathUtils {
     private static final String MD_EXTENSION = ".md";
     private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss",
             Locale.ROOT);
+    private static final Set<PosixFilePermission> OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------");
 
     public record ArchiveFileTarget(String id, Path file) {
     }
@@ -50,6 +54,20 @@ public final class PathUtils {
     public static void writeToml(Path path, Object value, TomlMapper mapper) throws IOException {
         createParentDirectories(path);
         Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER).writeValue(path.toFile(), value);
+    }
+
+    public static void setOwnerOnlyPermissionsIfPosix(Path path) throws IOException {
+        if (path == null || !Files.exists(path)) {
+            return;
+        }
+        if (!path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            return;
+        }
+        try {
+            Files.setPosixFilePermissions(path, OWNER_ONLY_PERMISSIONS);
+        } catch (UnsupportedOperationException ignored) {
+            // Ignore on non-POSIX filesystems
+        }
     }
 
     public static String normalizeRelativePath(String path) {

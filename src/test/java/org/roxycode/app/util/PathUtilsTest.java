@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -64,5 +66,18 @@ class PathUtilsTest {
         assertEquals("20250514-153000", PathUtils.formatArchiveTimestamp("2025-05-14T15:30:00Z"));
         assertTrue(PathUtils.formatArchiveTimestamp(null).matches("[0-9]{8}-[0-9]{6}"));
         assertTrue(PathUtils.formatArchiveTimestamp("not-a-timestamp").matches("[0-9]{8}-[0-9]{6}"));
+    }
+
+    @Test
+    void testSetOwnerOnlyPermissionsIfPosixRestrictsTo0600() throws IOException {
+        PathUtils.setOwnerOnlyPermissionsIfPosix(null);
+        PathUtils.setOwnerOnlyPermissionsIfPosix(tempDir.resolve("missing.toml"));
+
+        Path file = Files.writeString(tempDir.resolve("secret.toml"), "key = 'val'");
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r--r--"));
+            PathUtils.setOwnerOnlyPermissionsIfPosix(file);
+            assertEquals(PosixFilePermissions.fromString("rw-------"), Files.getPosixFilePermissions(file));
+        }
     }
 }
