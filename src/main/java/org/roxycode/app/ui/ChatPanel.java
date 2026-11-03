@@ -160,12 +160,14 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         this.inlineActionPanel = createInlineActionPanel();
         this.userInputPromptPanel = createUserInputPromptPanel();
         Component topComponent = createOutputSection(isTaskMode);
+        JPanel telemetrySection = createTelemetrySection();
         JPanel inputSection = createInputSection(isTaskMode);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
         splitPane.setResizeWeight(1.0);
         splitPane.setBorder(BorderFactory.createEmptyBorder());
         add(splitPane, BorderLayout.CENTER);
+        add(telemetrySection, BorderLayout.SOUTH);
 
         SwingHtmlUtils.installTextContextMenu(inputArea);
         setupUndoRedo();
@@ -256,27 +258,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         JPanel inputSection = new JPanel(new MigLayout("fill, insets 8 12 10 12", GROW_FILL_COL, GROW_FILL_COL));
         inputSection.setMinimumSize(new Dimension(0, 95));
 
-        JPanel telemetryBar = new JPanel(new MigLayout("insets 0 4 4 4", "[] 6 [] 12 [] 6 []", "center"));
-        telemetryBar.setOpaque(false);
-
-        Font statusFont = getFont().deriveFont(11f);
-        ctxLabel = new JLabel();
-        ctxLabel.setFont(statusFont);
-        ctxProgressBar = new JProgressBar(0, 100);
-        ctxProgressBar.setStringPainted(false);
-        ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
-
-        cacheLabel = new JLabel();
-        cacheLabel.setFont(statusFont);
-        cacheProgressBar = new JProgressBar(0, 100);
-        cacheProgressBar.setStringPainted(false);
-        cacheProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
-
-        telemetryBar.add(ctxLabel);
-        telemetryBar.add(ctxProgressBar, "w 60!, h 8!");
-        telemetryBar.add(cacheLabel);
-        telemetryBar.add(cacheProgressBar, "w 60!, h 8!");
-
         JPanel composerCard = new JPanel(new BorderLayout());
         composerCard.putClientProperty(FlatClientProperties.STYLE,
                 "arc: 12; background: $TextArea.background; border: 1,1,1,1,$Component.borderColor");
@@ -344,9 +325,32 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         composerCard.add(inputScrollPane, BorderLayout.CENTER);
         composerCard.add(actionToolbar, BorderLayout.SOUTH);
 
-        inputSection.add(telemetryBar, "wrap");
         inputSection.add(composerCard, "grow");
         return inputSection;
+    }
+
+    private JPanel createTelemetrySection() {
+        JPanel telemetryBar = new JPanel(new MigLayout("insets 0 12 8 12", "[] 6 [] 12 [] 6 []", "center"));
+        telemetryBar.setOpaque(false);
+
+        Font statusFont = getFont().deriveFont(11f);
+        ctxLabel = new JLabel();
+        ctxLabel.setFont(statusFont);
+        ctxProgressBar = new JProgressBar(0, 100);
+        ctxProgressBar.setStringPainted(false);
+        ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
+
+        cacheLabel = new JLabel();
+        cacheLabel.setFont(statusFont);
+        cacheProgressBar = new JProgressBar(0, 100);
+        cacheProgressBar.setStringPainted(false);
+        cacheProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
+
+        telemetryBar.add(ctxLabel);
+        telemetryBar.add(ctxProgressBar, "w 60!, h 8!");
+        telemetryBar.add(cacheLabel);
+        telemetryBar.add(cacheProgressBar, "w 60!, h 8!");
+        return telemetryBar;
     }
 
     private static JButton createActionButton(String text, Codicons icon, Insets margin, boolean borderless,
